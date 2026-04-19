@@ -12,6 +12,10 @@ thiserror.workspace = true
 tracing.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
+tree-sitter.workspace = true
+tree-sitter-c-sharp.workspace = true
+ignore.workspace = true
+blake3.workspace = true
 
 [lints]
 workspace = true

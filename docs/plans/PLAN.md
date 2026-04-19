@@ -28,24 +28,25 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 
 ## TODO
 
-### P0 Scaffold
-- [ ] Workspace: `crates/codededup-core` (lib), `crates/codededup` (bin)
-- [ ] Strict `[workspace.lints]`: clippy pedantic + nursery, `unsafe_code = "deny"`, forbid `#[allow]`
-- [ ] `Makefile` with exactly 7 targets: build, test, lint, fmt, clean, ci, setup
-- [ ] `coverage-thresholds.json` at repo root
-- [ ] `.github/workflows/ci.yml` runs `make ci`; pin dep versions
-- [ ] `.devcontainer/Dockerfile` mirrors CI versions
-- [ ] `tracing` + `tracing-subscriber` wired; lint forbids `println!`/`eprintln!`
-- [ ] E2E: CLI `--version` exits 0
-- [ ] `make ci` green
+### P0 Scaffold — COMPLETE
+- [x] Workspace: `crates/codededup-core` (lib), `crates/codededup` (bin)
+- [x] Strict `[workspace.lints]`: clippy pedantic + nursery, `unsafe_code = "deny"`, `expect_used = "deny"`, `arithmetic_side_effects = "deny"`
+- [x] `Makefile` with exactly 7 targets: build, test, lint, fmt, clean, ci, setup (cross-platform, AgentPMO-stamped)
+- [x] `coverage-thresholds.json` at repo root (ratcheted to 37)
+- [x] `.github/workflows/ci.yml` runs `make ci`; pinned dep versions; 10-min timeout
+- [x] `.devcontainer/devcontainer.json` mirrors CI versions
+- [x] `tracing` + `tracing-subscriber` wired; workspace lints forbid `print_stdout`/`print_stderr`
+- [x] AgentPMO remediation: CLAUDE.md canonical, pointer files (AGENTS.md, .clinerules, .cursorrules, .windsurfrules, copilot-instructions, opencode.json), `.claude/skills/{ci-prep,code-dedup,submit-pr}`, PR template
+- [x] E2E: `--version`, `--help` mentions `--min-nodes`, empty-path-no-panic — 3/3 green
+- [x] `make ci` green (lint + fmt + test + build)
 
 ### P1 C# parse + normalize
+- [x] `src/state.rs` — `FileId ↔ path` registry (only global state; scaffolded)
 - [ ] `LanguageParser` trait in core
-- [ ] `tree-sitter-c-sharp` impl; version pinned in CI + Dockerfile
+- [ ] `tree-sitter-c-sharp` impl; version pinned in CI + devcontainer
 - [ ] `NormalizedNode { kind, children, byte_range, file_id }`
 - [ ] Normalization collapses identifiers, literals, comments, whitespace
 - [ ] `ignore`-crate file walk
-- [ ] `src/state.rs` — `FileId ↔ path` registry (only global state)
 - [ ] `--debug-ast` dump
 - [ ] Fixture `tests/fixtures/csharp-small/`
 - [ ] E2E: parse fixture, golden AST dump

@@ -168,7 +168,7 @@ The pipeline fuses three signals:
 
 All three run by default. The research doesn't support shipping without embeddings — it's a measurable accuracy loss on Type-3/4.
 
-### Embedding layer — concrete choices
+### [FUSION-EMBED-PROVIDER] Embedding layer — concrete choices
 
 - **Provider and model are not hard-coded.** Both are CLI flags (`--embedding-provider`, `--embedding-model`), backed by config file and env var fallbacks. The core crate exposes an `EmbeddingProvider` trait; providers are selected at runtime by name. v1 ships with an `ollama` provider; a local `onnx` provider and a stub/null provider are on the roadmap. The research picks a *default*, not a lock-in.
 - **Default provider + model (overridable).** Provider defaults to `ollama` (local, no network) and model defaults to `nomic-embed-code` — these are recommended starting points from the 2025 ensemble paper's finding that *"smaller embedding sizes, smaller tokenizer vocabularies and tailored datasets are advantageous"*. CodeT5+110M and UniXCoder are alternate top performers cited in the literature; either should be selectable via `--embedding-model` once exposed through a provider.
@@ -179,7 +179,7 @@ All three run by default. The research doesn't support shipping without embeddin
 - **Index granularity: AST subtrees above min-node threshold**, not whole files. We already have those subtrees from the structural pass — embed them directly. This keeps embeddings byte-range-addressable and dramatically reduces the N in k-NN.
 - **Determinism caveat.** Embedding + ANN is approximate. Mitigate by: (a) recording `provider_id`, `model_id`, and `model_version` in the `.codededup-cache` header and the report, (b) using deterministic ANN parameters (fixed seed, fixed ef_construction), (c) final ranking is still computed over the *union* of structural + LSH + embedding candidates, so a missed ANN neighbor only loses recall, never changes existing cluster content.
 
-### Fusion strategy (how the three signals combine)
+### [FUSION-STRATEGY-MAX-SUM] Fusion strategy (how the three signals combine)
 
 Per the ensemble-LLM 2025 findings (max/sum with normalization):
 
@@ -193,7 +193,9 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 
 ---
 
-## 4. Concrete recommendations for CodeDedup v1 (hybrid by default)
+## Pipeline stages (v1, hybrid by default)
+
+### [PIPELINE-V1-STAGES] Ordered stages
 
 1. **Parser:** tree-sitter per language (C#, Rust, Python) — already mandated by CLAUDE.md.
 2. **Normalization:** strip identifiers, literals, comments, whitespace. Keep operators, keywords, and structural node kinds. Per-language rules; identical output format across languages so downstream layers are language-agnostic.
@@ -229,7 +231,9 @@ Ship both passes. Sibling-extension runs first because it is cheaper and produce
 
 ---
 
-## 6. Reading list (deduplicated)
+## Reading list
+
+### [READ-LIST-DEDUPED] Deduplicated reading list
 
 Canonical:
 - [Baxter et al. 1998 — AST clone detection](https://leodemoura.github.io/files/ICSM98.pdf)

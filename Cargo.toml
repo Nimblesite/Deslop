@@ -21,6 +21,10 @@ serde_json = "=1.0.128"
 assert_cmd = "=2.0.16"
 predicates = "=3.1.2"
 tempfile = "=3.12.0"
+tree-sitter = "=0.22.6"
+tree-sitter-c-sharp = "=0.21.3"
+ignore = "=0.4.23"
+blake3 = "=1.5.4"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
