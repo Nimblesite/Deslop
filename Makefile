@@ -41,7 +41,7 @@ build:
 test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
-	cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info -- --fail-fast
+	cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info
 	$(MAKE) _coverage_check
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.

@@ -2,7 +2,7 @@
 
 This doc captures formal research on code clone / duplication detection that informs CodeDedup's design. **Primary goal:** pick techniques that are (a) fast enough for a CLI to run on a whole repo, (b) accurate across Type-1 → Type-3 clones (and Type-4 where feasible), and (c) compatible with a future **long-running MCP/LSP** mode — incremental, per-file, byte-range-addressable, and cheap to keep live under a file watcher.
 
-### Audience for the report: AI coding agents
+### [PRINCIPLES-AUDIENCE-AGENT] Audience for the report: AI coding agents
 
 The report is not just for humans scanning a terminal — **the primary consumer is an AI coding agent using CodeDedup as a tool**. Design choices follow from that:
 
@@ -12,9 +12,9 @@ The report is not just for humans scanning a terminal — **the primary consumer
 - No ANSI colour codes, no unicode box-drawing, no paging — the agent needs a clean stream. The `text` format is ASCII-only and line-oriented.
 - Per-cluster entries include a short natural-language `summary` field written for an agent reader ("3 near-identical copies of a 42-node `switch` block across `Foo.cs:120-180`, `Bar.cs:55-112`, and `Baz.cs:200-260`; structural=1.0, token_jaccard=0.97, embedding_cos=0.91 — safe to extract"). This is a synthesised description, not a log, and it's computed from the same signals the score uses.
 
-See §4 "Output" for the JSON schema. The report format is a first-class interface — changes go through the same review bar as the ranking formula.
+See [OUTPUT-SCHEMA-JSON] for the JSON schema. The report format is a first-class interface — changes go through the same review bar as the ranking formula.
 
-### Long-running mode (MCP/LSP) as a load-bearing constraint
+### [PRINCIPLES-LONG-RUNNING-DAEMON] Long-running mode (MCP/LSP) as a load-bearing constraint
 
 CodeDedup v1 is a batch CLI, but the architecture must not foreclose a future daemon mode:
 
@@ -27,7 +27,9 @@ CodeDedup v1 is a batch CLI, but the architecture must not foreclose a future da
 
 ---
 
-## 1. Clone Type Taxonomy (ground rules)
+## Clone Type Taxonomy
+
+### [CLONE-TYPE-TAXONOMY] Ground rules
 
 - **Type-1** — identical code, ignoring whitespace/comments.
 - **Type-2** — identical up to renaming of identifiers/literals/types.
@@ -40,11 +42,11 @@ Recent work reframes Type-4 specifically as *"code segments deliver identical fu
 
 ---
 
-## 2. Landscape of Techniques (2009 → 2026)
+## Landscape of Techniques (2009 → 2026)
 
 Ordered from cheapest/oldest to most expensive/newest.
 
-### 2.1 Token-based (SourcererCC, CCFinder, NiCad)
+### [TECH-TOKEN-SOURCERERCC] Token-based (SourcererCC, CCFinder, NiCad)
 
 - **SourcererCC**: bag-of-tokens + inverted index + overlap filter. Scales to **250 MLOC on a workstation**, targets Type-1/2/3. Still the scalability benchmark.
 - **NiCad**: pretty-printed, normalized token sequences compared via **LCS**. Higher precision than SourcererCC but slower (34 min vs 13 min on the same corpus in one benchmark).
@@ -56,7 +58,7 @@ URLs:
 - [TACC vs SourcererCC/NiCad, ICSE 2023 (PDF)](https://wu-yueming.github.io/Files/ICSE2023_TACC.pdf)
 - [Scalable clone detection via adaptive prefix filtering (PDF)](https://damevski.github.io/files/nishi_scalable_2017_preprint.pdf)
 
-### 2.2 AST fingerprinting (Baxter 1998, Chilowicz 2009)
+### [TECH-AST-FINGERPRINT] AST fingerprinting (Baxter 1998, Chilowicz 2009)
 
 - **Baxter et al.** — seminal work: hash AST subtrees, cluster by hash, then extend to near-miss via tree edit distance.
 - **Chilowicz et al.** — *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* — allows exact subtree clustering + approximate extension over sibling sequences. This is effectively what CodeDedup is building.
@@ -70,7 +72,7 @@ URLs:
 - [Source Code Plagiarism via AST Fingerprinting, IEEE 2022](https://ieeexplore.ieee.org/document/9960266)
 - [ASPDup: AST-Sequence Progressive Duplicate Detection (ACM)](https://dl.acm.org/doi/10.1145/3457913.3457938)
 
-### 2.3 Near-duplicate hashing primitives (the plumbing)
+### [TECH-HASH-PRIMITIVES] Near-duplicate hashing primitives (the plumbing)
 
 These are the building blocks used inside token-based and AST-based detectors for fast approximate matching at scale:
 
@@ -87,7 +89,7 @@ URLs:
 - [Locality-Sensitive Hashing (Wikipedia)](https://en.wikipedia.org/wiki/Locality-sensitive_hashing)
 - [In Defense of MinHash Over SimHash (PMLR)](http://proceedings.mlr.press/v33/shrivastava14.pdf)
 
-### 2.4 Neural embeddings (CodeBERT, GraphCodeBERT, UniXCoder, CodeT5+)
+### [TECH-EMBED-NEURAL] Neural embeddings (CodeBERT, GraphCodeBERT, UniXCoder, CodeT5+)
 
 - On **BigCloneBench**: CodeBERT F1 = 0.965, GraphCodeBERT F1 = 0.971, UniXCoder F1 ≈ 0.918 (lower variance).
 - **SSCD** (Ahmed et al., 2024) — BERT-derived embeddings + **approximate nearest neighbor (ANN) search** for large-scale Type-3/4 recall. Beats SourcererCC and SAGA at industrial scale. **This is the most relevant "RAG-style" prior art for us** — embeddings indexed in a vector store, queried by k-NN.
@@ -104,7 +106,7 @@ URLs:
 - [CloReCo: Benchmarking Platform for Clone Detection, 2025 (PDF)](https://www.scitepress.org/Papers/2025/136449/136449.pdf)
 - [Generalizability of Clone Detection on CodeBERT, ASE 2022 (ACM)](https://dl.acm.org/doi/abs/10.1145/3551349.3561165)
 
-### 2.5 LLM + execution / hybrid approaches (Type-4 frontier)
+### [TECH-LLM-HYBRID] LLM + execution / hybrid approaches (Type-4 frontier)
 
 - **HyClone** (arXiv 2508.01357, 2025) — two-stage: (1) LLM filters obvious non-clones, (2) LLM-generated test inputs drive **cross-execution validation** of remaining pairs. Targets Python Type-4.
 - **Rator** (Springer Cybersecurity 2025) — tree-encoding by **node degrees-of-freedom** → vector per subtree → similarity features → ML classifier. F1 = 0.99 on BigCloneBench, 0.91 on Google Code Jam, **93× faster than ASTNN**. Also provides *fine-grained* localization (Top-2/Top-3 ranking of the specific clone subtree).
@@ -126,11 +128,13 @@ URLs:
 
 ---
 
-## 3. Pure-RAG vs hybrid: what the research actually says
+## Pipeline design — hybrid, not pure-RAG
 
-**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** CodeDedup should be hybrid.
+### [FUSION-POLICY-HYBRID] The state of the art is HYBRID, not pure-RAG
 
-### Does any paper recommend pure embeddings / pure RAG?
+**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** CodeDedup is hybrid.
+
+### [FUSION-POLICY-NO-PURE-RAG] No paper recommends pure embeddings / pure RAG
 
 **No.** Across every 2024–2026 paper surveyed, no top-performing system is pure vector search. The strongest embedding-only approach (SSCD, Wiley 2024) frames itself as *"a BERT-based clone detection approach that targets high recall of Type 3 and Type 4 clones at scale"* — i.e. a **recall layer**, explicitly paired with structural/token methods in the surrounding pipeline. Every system that reports SOTA numbers fuses at least two representations.
 
@@ -148,13 +152,13 @@ Concretely:
 
 The pattern is consistent: **structure (AST/graph) + learned representation (embedding) + sometimes a third verification signal (execution, normalization, ensembling).**
 
-### Why pure-RAG loses
+### [FUSION-RATIONALE-AGAINST-PURE-RAG] Why pure-RAG loses
 - **Empirical Study of LLM-Based Clone Detection** (arXiv 2511.01176, 2025): LLMs hit F1 0.943 on CodeNet but **drop significantly on BigCloneBench**. Pure-learned approaches are dataset-brittle. Structural signals anchor them.
 - **Cross-Lingual LLM Clone Detection Struggles** (arXiv 2408.04430): *"Embedding models enable the training of classifiers that outperform LLMs by ~1–20 percentage points"* — and those classifiers take structural features as input.
 - **Smaller embedding sizes beat larger ones** for clone detection. This directly contradicts the "bigger vector DB = better" intuition of pure-RAG.
 - **Reports must cite exact byte ranges** (LSP requirement per CLAUDE.md). Pure embedding similarity gives you "these two fragments are similar" but not "this specific subtree of fragment A matches this specific subtree of fragment B." AST fingerprinting gives that natively; Rator showed it's also achievable from tree encoding with Top-2/Top-3 localization.
 
-### Therefore: CodeDedup is hybrid by design
+### [FUSION-SIGNALS-THREE-LAYER] CodeDedup is hybrid by design
 
 The pipeline fuses three signals:
 
@@ -209,11 +213,19 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 
 ---
 
-## 5. Open questions
+## Decisions with fallback rules
 
-- Minimum subtree size threshold: too low → noise (every `return x;` is a "clone"); too high → misses small-but-real duplication. Start at 30 nodes, expose as `--min-nodes`, tune on fixture repos.
-- Cross-language clones (Python helper reimplemented in Rust) — current research says LLMs struggle here and dedicated cross-lingual work is nascent. Out of scope for v1; the normalization format being identical across languages keeps the door open.
-- How much of the Type-3 gap does AST + sibling-extension actually close vs. needing MinHash/LSH? Needs empirical measurement on fixture repos before we commit to the two-pass design.
+### [DECISION-MIN-NODES] Minimum subtree size
+
+Default `--min-nodes` = **30**. Subtrees below this threshold are excluded from fingerprinting, clustering, and embedding. Rationale: smaller subtrees (`return x;`, single-statement blocks) are noise and dominate the report. If the top-50 clusters on a real C# corpus are dominated by trivial fragments, raise the default to 40 before the next release. If large real duplicates are being missed, lower to 20. The flag is always user-overridable. Never ship a default below 15 or above 60.
+
+### [DECISION-CROSS-LANGUAGE] Cross-language clones
+
+Out of scope for v1. The normalization format is identical across languages so that a future cross-language pass can compare fingerprints directly without rework. Do not add heuristics, mappings, or type-system bridges until cross-language is an explicit feature goal.
+
+### [DECISION-TYPE3-TWO-PASS] Type-3 recall via AST sibling-extension + token LSH
+
+Ship both passes. Sibling-extension runs first because it is cheaper and produces byte-range-accurate matches. Token LSH runs second and surfaces Type-3 candidates whose structure diverged too far for sibling-extension. Fallback rule: if the LSH pass contributes fewer than 5% additional clusters on three consecutive representative corpora (measured in a calibration run), mark it as a future removal candidate and raise the issue — do not silently disable it.
 
 ---
 

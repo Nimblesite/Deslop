@@ -38,8 +38,12 @@ enum OutputFormat {
     Json,
 }
 
+/// Entry point. Parses args, wires tracing, and (once implemented) invokes
+/// the analysis pipeline. Returns an [`anyhow::Result`] because every
+/// downstream pipeline stage is fallible — the `Result` is load-bearing as
+/// soon as the real work lands.
 fn main() -> Result<()> {
-    init_tracing();
+    init_tracing()?;
     let args = Cli::parse();
     tracing::info!(
         path = %args.path.display(),
@@ -51,11 +55,16 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn init_tracing() {
+/// Configures the global `tracing` subscriber. Honours `RUST_LOG` when set
+/// and defaults to `info`-level events otherwise. Writes to stderr so that
+/// stdout stays reserved for the (future) report stream.
+fn init_tracing() -> Result<()> {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
         .with_writer(std::io::stderr)
-        .init();
+        .try_init()
+        .map_err(|source| anyhow::anyhow!("failed to initialise tracing: {source}"))?;
+    Ok(())
 }
