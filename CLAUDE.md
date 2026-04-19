@@ -14,6 +14,7 @@
 **CodeDedup** is a Rust CLI that detects duplicated code across a codebase and reports the **worst offenders first** (highest weighted duplication impact at the top). Language support starts with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
 
 Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
+- ALL SPEC SECTIONS HAVE NON-NUMERIC HIERARCHICALLY STRUCTURED SECTIONS. ALL TESTS REFER TO SPEC IDs. ALL CODE REFERS TO SPEC IDS.
 
 **Primary language:** Rust
 **Build command:** `make ci`
