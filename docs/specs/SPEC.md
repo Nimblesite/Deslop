@@ -195,7 +195,28 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 
 ## Pipeline stages (v1, hybrid by default)
 
-### [PIPELINE-V1-STAGES] Ordered stages
+### [PIPELINE-LANG-TRAIT] Language plugin trait
+The single extension point. Implementations live in `codededup-core::lang::<name>`. Each implementation provides: (a) tree-sitter grammar factory, (b) file-extension filter, (c) per-language node-kind normalization rules that collapse identifier / literal / trivia nodes into their structural kind. The trait output type (`NormalizedNode`) is identical across languages so downstream stages are language-agnostic.
+
+### [PIPELINE-DISCOVER-FILES] File discovery
+Walk the target path with the `ignore` crate, respecting `.gitignore` and Git's standard ignore rules. Filter by the set of file extensions contributed by registered `LanguageParser`s. Every discovered path is registered with [STATE-FILE-REGISTRY] and downstream code traffics in `FileId`, never `Path`.
+
+### [PIPELINE-NORMALIZE-AST] AST normalization
+For each file, parse with the selected language's tree-sitter grammar and walk the resulting tree bottom-up, producing `NormalizedNode { kind: &'static str, children: Vec<Self>, byte_range, file_id }`. Identifier / literal / comment / whitespace nodes are collapsed to their structural kind so Type-2 clones (renamed identifiers) hash identically. Byte ranges are preserved and are the source of truth for any later rendering — line numbers are derived.
+
+### [PIPELINE-FINGERPRINT-MERKLE] Structural fingerprint (Merkle)
+Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `kind` string with the ordered hashes of its children using `blake3`. Each node stores `(hash, subtree_node_count, byte_range, file_id)`. Nodes whose subtree size is below `--min-nodes` are excluded from clustering per [DECISION-MIN-NODES].
+
+### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
+Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n).
+
+### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
+`weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM].
+
+### [STATE-FILE-REGISTRY] File registry (the only global state)
+`codededup-core::state::FileRegistry` maps `FileId ↔ PathBuf`. This is the *only* place mutable state associated with a pipeline run may live. Instances are per-run (not process-global) so a future long-running daemon can keep multiple analyses side-by-side.
+
+
 
 1. **Parser:** tree-sitter per language (C#, Rust, Python) — already mandated by CLAUDE.md.
 2. **Normalization:** strip identifiers, literals, comments, whitespace. Keep operators, keywords, and structural node kinds. Per-language rules; identical output format across languages so downstream layers are language-agnostic.

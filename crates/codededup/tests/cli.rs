@@ -42,3 +42,29 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
     let _assertion = cmd.arg(tmp.path()).assert().success();
     Ok(())
 }
+
+// Implements [PIPELINE-CLUSTER-EXACT] + [PIPELINE-NORMALIZE-AST]: two C# files
+// with the same structure but renamed identifiers (Type-2 clone) must produce
+// a cluster of size 2 in the rendered JSON report.
+#[test]
+fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("csharp-small");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&fixture)
+        .arg("--format")
+        .arg("json")
+        .arg("--min-nodes")
+        .arg("8")
+        .assert()
+        .success()
+        .stdout(contains("\"report_schema_version\": 1"))
+        .stdout(contains("\"files_analysed\": 2"))
+        .stdout(contains("\"size\": 2"))
+        .stdout(contains("Alpha.cs"))
+        .stdout(contains("Beta.cs"));
+    Ok(())
+}

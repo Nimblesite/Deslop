@@ -1,14 +1,10 @@
 //! Centralised global state for the analysis pipeline.
 //!
+//! Implements [STATE-FILE-REGISTRY]: per-run mapping of `FileId ↔ PathBuf`,
+//! scoped to a single pipeline instance so a future long-running daemon can
+//! hold multiple analyses live in one process without cross-contamination.
 //! Per the project charter (see `CLAUDE.md`), this is the **only** module
-//! permitted to hold mutable process-wide state. Anything that would otherwise
-//! be a `static mut`, `lazy_static!`, or per-pipeline singleton belongs here.
-//!
-//! The [`FileRegistry`] maps stable [`FileId`] tokens to paths so that later
-//! pipeline stages can traffic in small integers instead of cloning
-//! `PathBuf`s. It is deliberately non-global (an instance per run) so that a
-//! future long-running daemon can keep multiple analyses live in one process
-//! without cross-contamination.
+//! permitted to hold mutable state shared across pipeline stages.
 
 use std::{collections::HashMap, path::PathBuf};
 

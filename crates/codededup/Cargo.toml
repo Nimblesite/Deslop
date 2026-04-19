@@ -15,6 +15,7 @@ path = "src/main.rs"
 codededup-core = { path = "../codededup-core" }
 anyhow.workspace = true
 clap.workspace = true
+serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

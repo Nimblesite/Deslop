@@ -196,6 +196,7 @@ dependencies = [
  "clap",
  "codededup-core",
  "predicates",
+ "serde_json",
  "tempfile",
  "tracing",
  "tracing-subscriber",
