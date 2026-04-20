@@ -12,7 +12,7 @@ async function openFixture(name: string): Promise<vscode.TextEditor> {
   const doc = await vscode.workspace.openTextDocument(
     vscode.Uri.file(`${fixture}/${name}`),
   );
-  return vscode.window.showTextDocument(doc);
+  return await vscode.window.showTextDocument(doc);
 }
 
 suite("surfaces", () => {

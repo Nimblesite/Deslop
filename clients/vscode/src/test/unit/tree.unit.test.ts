@@ -85,7 +85,7 @@ suite("TopOffendersProvider", () => {
     store.setSnapshot(report([c]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const roots = provider.getChildren();
-    const kids = provider.getChildren(roots[0]!);
+    const kids = provider.getChildren(roots[0]);
     assert.equal(kids.length, c.occurrences.length);
   });
 
@@ -135,7 +135,7 @@ suite("FocusedFileProvider", () => {
     const provider = new FocusedFileProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.ok(nodes.length >= 1);
-    const kids = provider.getChildren(nodes[0]!);
+    const kids = provider.getChildren(nodes[0]);
     assert.ok(kids.length >= 1);
   });
 
@@ -160,7 +160,7 @@ suite("SessionProvider", () => {
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 5);
-    assert.equal(provider.getChildren(nodes[0]!).length, 0);
+    assert.equal(provider.getChildren(nodes[0]).length, 0);
   });
 
   test("renders a 'no session' placeholder before a report arrives", () => {

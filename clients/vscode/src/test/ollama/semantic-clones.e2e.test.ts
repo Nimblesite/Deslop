@@ -129,7 +129,7 @@ async function setProvider(
   client: LanguageClient,
   providerId: "ollama" | "stub",
 ): Promise<SetModelResponse> {
-  return client.sendRequest<SetModelResponse>("deslop/embeddingSetModel", {
+  return await client.sendRequest<SetModelResponse>("deslop/embeddingSetModel", {
     provider_id: providerId,
     model_id: providerId === "ollama" ? OLLAMA_MODEL : "stub-embedder",
     endpoint: providerId === "ollama" ? OLLAMA_ENDPOINT : null,

@@ -23,6 +23,6 @@ suite("webviews", () => {
     await vscode.commands.executeCommand("deslop.showSchemaDoc");
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "schema doc should open in an editor");
-    assert.match(active!.document.getText(), /schema/i);
+    assert.match(active.document.getText(), /schema/i);
   });
 });

@@ -93,7 +93,7 @@ export class LiveBubble implements vscode.Disposable {
     const cfg = vscode.workspace.getConfiguration("deslop");
     if (!cfg.get<boolean>("liveBubble.enabled", true)) return;
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document !== event.document) return;
+    if (editor?.document !== event.document) return;
     if (event.contentChanges.length === 0) return;
     const lastChange = event.contentChanges[event.contentChanges.length - 1];
     if (!lastChange) return;
@@ -160,7 +160,6 @@ export class LiveBubble implements vscode.Disposable {
     const anchor = new vscode.Range(lineEnd, lineEnd);
 
     if (mode === "ghost") {
-      this.bubbleDecoration.dispose;
       editor.setDecorations(this.bubbleDecoration, []);
       editor.setDecorations(this.ghostDecoration, [
         {
@@ -245,7 +244,10 @@ export function ghostText(cluster: ReportCluster, severity: Severity): string {
 }
 
 export function signalStrip(cluster: ReportCluster): string {
-  const bar = (v: number) => BARS[Math.min(BARS.length - 1, Math.max(0, Math.round(v * (BARS.length - 1))))];
+  const bar = (v: number): string => {
+    const idx = Math.min(BARS.length - 1, Math.max(0, Math.round(v * (BARS.length - 1))));
+    return BARS[idx] ?? "█";
+  };
   const s = cluster.signals;
   return `${bar(s.structural)}${bar(s.token_jaccard)}${bar(s.embedding_cos)}`;
 }

@@ -9,7 +9,7 @@ suite("commands", () => {
   suiteSetup(async () => {
     const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
     assert.ok(ext, "extension should be registered");
-    await ext!.activate();
+    await ext.activate();
     // Give the LSP a beat to produce the initial report.
     await sleep(1500);
   });

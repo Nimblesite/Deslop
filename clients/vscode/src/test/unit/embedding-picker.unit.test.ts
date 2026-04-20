@@ -129,7 +129,7 @@ suite("embeddingPicker helpers", () => {
     });
     const swap = calls.find((call) => call.method === "deslop/embeddingSetModel");
     assert.ok(swap, `expected embeddingSetModel request; got ${JSON.stringify(calls)}`);
-    assert.deepEqual(swap!.params, {
+    assert.deepEqual(swap.params, {
       provider_id: "ollama",
       model_id: "nomic-embed-text",
     });
@@ -143,7 +143,7 @@ suite("embeddingPicker helpers", () => {
     const header = items.find((i) => i.label === "Ollama models");
     assert.ok(header, "header row should exist");
     assert.equal(
-      header!.kind,
+      header.kind,
       vscode.QuickPickItemKind.Separator,
       "header must be a Separator so VS Code filters it out of selectedItems",
     );
@@ -166,7 +166,7 @@ suite("embeddingPicker helpers", () => {
     );
     const nomic = items.find((i) => i.label?.includes("nomic-embed-text"));
     assert.ok(nomic, "nomic entry should exist");
-    assert.match(nomic!.label, /active/);
+    assert.match(nomic.label, /active/);
     // The unknown model should be labelled 'may not embed' since is_embedding_model=false.
     const unknown = items.find((i) => i.label?.includes("unknown-model"));
     assert.match(unknown!.description ?? "", /may not embed/);

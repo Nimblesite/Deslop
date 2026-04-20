@@ -30,6 +30,7 @@ import { StatusBar } from "./commands/statusBar";
 import {
   Report,
   ReportChangedNotification,
+  ReportDelta,
   AnalysisState,
 } from "./types/report";
 
@@ -187,6 +188,11 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
     async (payload: ReportChangedNotification) => {
       store.notifyChange(payload.summary);
       try {
+        const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
+        if (delta) {
+          store.applyDelta(delta);
+          return;
+        }
         const snapshot = await c.sendRequest<Report>("deslop/reportGet");
         store.setSnapshot(snapshot, payload.generation);
       } catch (err) {
@@ -255,7 +261,7 @@ export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
   const isUnsupported = err instanceof UnsupportedPlatformError;
   const message =
     isMissing || isUnsupported
-      ? (err as Error).message
+      ? (err).message
       : "Deslop failed to start its analysis server. See the Deslop output channel.";
   store?.setLifecycle({ kind: "failed", message });
   vscode.window

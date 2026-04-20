@@ -61,9 +61,9 @@ suite("decorations helpers", () => {
     };
     const range = byteRangeToRange(doc, occurrence);
     assert.ok(range);
-    assert.equal(range!.start.line, 0);
-    assert.equal(range!.start.character, 0);
-    assert.equal(range!.end.line, 0);
-    assert.equal(range!.end.character, 5);
+    assert.equal(range.start.line, 0);
+    assert.equal(range.start.character, 0);
+    assert.equal(range.end.line, 0);
+    assert.equal(range.end.character, 5);
   });
 });

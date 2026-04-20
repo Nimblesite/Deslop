@@ -141,7 +141,7 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
   const m = message as { kind?: string } & Record<string, unknown>;
   switch (m.kind) {
     case "open/cluster": {
-      const id = typeof m["id"] === "string" ? (m["id"] as string) : null;
+      const id = typeof m["id"] === "string" ? (m["id"]) : null;
       if (id) await vscode.commands.executeCommand("deslop.openCluster", id);
       return;
     }
@@ -151,7 +151,7 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
       return;
     }
     case "compare/canonical": {
-      const id = typeof m["clusterId"] === "string" ? (m["clusterId"] as string) : null;
+      const id = typeof m["clusterId"] === "string" ? (m["clusterId"]) : null;
       if (id) await vscode.commands.executeCommand("deslop.compareWithCanonical", id);
       return;
     }
