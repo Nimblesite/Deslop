@@ -2,10 +2,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/codededup-core",
-    "crates/codededup",
-    "crates/codededup-lsp",
-    "crates/codededup-mcp",
+    "crates/deslop-core",
+    "crates/deslop",
+    "crates/deslop-lsp",
+    "crates/deslop-mcp",
 ]
 
 [workspace.package]

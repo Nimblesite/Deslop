@@ -5,7 +5,13 @@ import * as vscode from "vscode";
 
 import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
-import { ReportCluster, ReportOccurrence, Severity } from "../types/report";
+import {
+  bucketLabels,
+  ReportCluster,
+  ReportOccurrence,
+  resolveBucket,
+  Severity,
+} from "../types/report";
 
 const SEVERITIES: Severity[] = ["worst", "top10", "mid", "faint"];
 
@@ -75,10 +81,16 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
   });
 }
 
+// Decoration hover is a shared-text surface per [CLONE-BUCKETS-DUAL-LABEL]
+// (humans read it on hover, agents scrape it via LSP/MCP). Uses
+// hybridTitle + actionSentence so the label class stays consistent
+// with the LSP diagnostic message, live bubble hover, and Problems
+// panel — one shared-text vocabulary across every hover in the IDE.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
-  md.appendMarkdown(`**${cluster.interpretation}**\n\n`);
+  const labels = bucketLabels(resolveBucket(cluster));
+  md.appendMarkdown(`**${labels.hybridTitle}** — ${labels.actionSentence}\n\n`);
   md.appendMarkdown(
     `structural \`${cluster.signals.structural.toFixed(2)}\` · ` +
       `jaccard \`${cluster.signals.token_jaccard.toFixed(2)}\` · ` +

@@ -57,22 +57,22 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: linux-x64
-            bin: codededup
+            bin: deslop
             archive_ext: tar.gz
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: macos-x64
-            bin: codededup
+            bin: deslop
             archive_ext: tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-arm64
-            bin: codededup
+            bin: deslop
             archive_ext: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x64
-            bin: codededup.exe
+            bin: deslop.exe
             archive_ext: zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -97,14 +97,14 @@ jobs:
             ${{ runner.os }}-${{ matrix.target }}-release-
 
       - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }} --bin codededup
+        run: cargo build --release --locked --target ${{ matrix.target }} --bin deslop
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
         shell: bash
         run: |
           set -euo pipefail
-          stage="codededup-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
+          stage="deslop-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
           mkdir -p "dist/${stage}"
           cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/${stage}/"
           cp README.md LICENSE* "dist/${stage}/" 2>/dev/null || true
@@ -116,7 +116,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $stage = "codededup-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
+          $stage = "deslop-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
           New-Item -ItemType Directory -Force -Path "dist/$stage" | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/$stage/"
           if (Test-Path README.md) { Copy-Item README.md "dist/$stage/" }
@@ -130,10 +130,10 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: |
-            dist/codededup-*.tar.gz
-            dist/codededup-*.tar.gz.sha256
-            dist/codededup-*.zip
-            dist/codededup-*.zip.sha256
+            dist/deslop-*.tar.gz
+            dist/deslop-*.tar.gz.sha256
+            dist/deslop-*.zip
+            dist/deslop-*.zip.sha256
           if-no-files-found: error
 
   release:
@@ -167,7 +167,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: codededup ${{ needs.version.outputs.version }}
+          name: deslop ${{ needs.version.outputs.version }}
           files: release-files/*
           generate_release_notes: true
           fail_on_unmatched_files: true

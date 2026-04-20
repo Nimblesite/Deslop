@@ -111,7 +111,7 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
     entryKind: "model",
     label: `$(circuit-board) stub${isActive(active, stub) ? "  ✓ active" : ""}`,
     description: "deterministic · 64-dim · CI-friendly",
-    detail: "Turns off semantic recall. Use for Type-1/2/3 detection only.",
+    detail: "Turns off semantic recall. Keeps identical, nearly identical, and loosely similar detection.",
     model: stub ?? {
       provider_id: "stub",
       model_id: "stub",
@@ -133,7 +133,7 @@ export async function setModel(client: LanguageClient, model: EmbeddingModelInfo
   try {
     if (model.provider_id === "stub") {
       const confirm = await vscode.window.showWarningMessage(
-        "The stub provider is deterministic but not semantically meaningful. Type-4 recall is disabled.",
+        "The stub provider is deterministic but not semantically meaningful. \"Same behavior, different code\" (AI) recall is disabled.",
         { modal: true },
         "Use stub anyway",
       );

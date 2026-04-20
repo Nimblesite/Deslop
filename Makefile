@@ -47,8 +47,8 @@ build:
 test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
-	cargo llvm-cov --workspace --all-targets --features codededup-core/live \
-	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|codededup-lsp/src/main\.rs|codededup-mcp/src/main\.rs|codededup-mcp/src/server\.rs)' \
+	cargo llvm-cov --workspace --all-targets --features deslop-core/live \
+	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|deslop-lsp/src/main\.rs|deslop-mcp/src/main\.rs|deslop-mcp/src/server\.rs)' \
 	    --lcov --output-path lcov.info -- --skip ollama_
 	$(MAKE) _coverage_check
 
@@ -117,37 +117,37 @@ test-ollama:
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
 
-## build-release: Build the release binary for the codededup CLI
+## build-release: Build the release binary for the deslop CLI
 build-release:
 	@echo "==> Building release binary..."
-	cargo build --release --package codededup
+	cargo build --release --package deslop
 
 ## install-binary: Clean, build release, and install the binary onto the user's PATH.
 ##                 Deletes the installed binary and runs `cargo clean` first so a
 ##                 stale build artifact can never shadow the source on disk.
 install-binary:
-	@echo "==> Removing previously installed codededup binary..."
-	cargo uninstall codededup 2>/dev/null || true
-	$(RM) "$(HOME)/.cargo/bin/codededup"
+	@echo "==> Removing previously installed deslop binary..."
+	cargo uninstall deslop 2>/dev/null || true
+	$(RM) "$(HOME)/.cargo/bin/deslop"
 	@echo "==> Cleaning build artifacts..."
-	cargo clean --release --package codededup
+	cargo clean --release --package deslop
 	@echo "==> Building release binary from clean state..."
-	cargo build --release --package codededup
-	@echo "==> Installing codededup binary..."
-	cargo install --locked --path crates/codededup --force
+	cargo build --release --package deslop
+	@echo "==> Installing deslop binary..."
+	cargo install --locked --path crates/deslop --force
 
 ## vsix-install: Install Node deps for clients/vscode + webview-ui
 vsix-install:
 	cd clients/vscode && npm install --no-audit --no-fund
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
 
-## vsix-build: Build codededup-lsp + codededup-mcp + VSIX bundle + webview UI.
+## vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 vsix-build:
-	cargo build --release -p codededup-lsp -p codededup-mcp -p codededup
+	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
 
-## vsix-test: Run VS Code E2E tests against the REAL codededup-lsp binary.
+## vsix-test: Run VS Code E2E tests against the REAL deslop-lsp binary.
 vsix-test: vsix-install vsix-build
 	cd clients/vscode && npm test
 
@@ -157,7 +157,7 @@ vsix-coverage: vsix-install vsix-build
 	cd clients/vscode && npm run coverage
 
 ## vsix-package: Build the .vsix artifact (does not publish).
-##               Stages the host-platform codededup-lsp + codededup-mcp + codededup
+##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
 ##               binaries into clients/vscode/bin/<platform>/ so the installed
 ##               extension can resolve them via the bundled path
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
@@ -178,7 +178,7 @@ _vsix-stage-and-package:
 	 _dest=clients/vscode/bin/$$_platform; \
 	 echo "==> Staging bundled binaries into $$_dest"; \
 	 $(RM) "$$_dest"; $(MKDIR) "$$_dest"; \
-	 for _bin in codededup-lsp codededup-mcp codededup; do \
+	 for _bin in deslop-lsp deslop-mcp deslop; do \
 	   _src=target/release/$$_bin$$_ext; \
 	   if [ ! -f "$$_src" ]; then echo "FAIL: $$_src missing (vsix-build should have produced it)"; exit 1; fi; \
 	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
@@ -198,13 +198,13 @@ vsix-rebuild:
 	$(RM) clients/vscode/webview-ui/node_modules
 	$(RM) clients/vscode/out
 	$(RM) clients/vscode/dist
-	$(RM) clients/vscode/codededup-vscode.vsix
+	$(RM) clients/vscode/deslop-vscode.vsix
 	$(RM) clients/vscode/coverage
 	@echo "==> [2/6] Reinstalling npm deps (extension + webview-ui)..."
 	cd clients/vscode && npm install --no-audit --no-fund
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
-	@echo "==> [3/6] Rebuilding rust binaries (codededup, codededup-lsp, codededup-mcp)..."
-	cargo build --release -p codededup -p codededup-lsp -p codededup-mcp
+	@echo "==> [3/6] Rebuilding rust binaries (deslop, deslop-lsp, deslop-mcp)..."
+	cargo build --release -p deslop -p deslop-lsp -p deslop-mcp
 	@echo "==> [4/6] Rebuilding webview UI + extension bundle..."
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
@@ -212,9 +212,9 @@ vsix-rebuild:
 	$(MAKE) _vsix-stage-and-package
 	@echo "==> [6/6] Installing the fresh .vsix into the VS Code CLI..."
 	@if command -v code >/dev/null 2>&1; then \
-	  code --install-extension clients/vscode/codededup-vscode.vsix --force; \
+	  code --install-extension clients/vscode/deslop-vscode.vsix --force; \
 	else \
-	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/codededup-vscode.vsix"; \
+	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-vscode.vsix"; \
 	fi
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 
@@ -232,7 +232,7 @@ help:
 	@echo "Repo-specific targets:"
 	@echo "  test-ollama    - Run only the Ollama-gated tests (ollama_*)"
 	@echo "  ci-ollama      - make ci plus make test-ollama"
-	@echo "  build-release  - Build the release binary for the codededup CLI"
+	@echo "  build-release  - Build the release binary for the deslop CLI"
 	@echo "  install-binary - Build release and install binary onto PATH"
 	@echo "  vsix-install   - Install Node deps for clients/vscode + webview-ui"
 	@echo "  vsix-build     - Build LSP + MCP + VSIX bundle + webview UI"

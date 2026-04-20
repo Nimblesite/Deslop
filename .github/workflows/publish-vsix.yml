@@ -42,16 +42,16 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Cargo build
         run: |
-          cargo build --release --target ${{ matrix.target }} -p codededup-lsp -p codededup-mcp -p codededup
+          cargo build --release --target ${{ matrix.target }} -p deslop-lsp -p deslop-mcp -p deslop
       - name: Collect binaries
         shell: bash
         run: |
           mkdir -p dist/${{ matrix.platform }}
           ext=""
           if [[ "${{ matrix.platform }}" == win32-* ]]; then ext=".exe"; fi
-          cp target/${{ matrix.target }}/release/codededup-lsp${ext} dist/${{ matrix.platform }}/
-          cp target/${{ matrix.target }}/release/codededup-mcp${ext} dist/${{ matrix.platform }}/
-          cp target/${{ matrix.target }}/release/codededup${ext} dist/${{ matrix.platform }}/
+          cp target/${{ matrix.target }}/release/deslop-lsp${ext} dist/${{ matrix.platform }}/
+          cp target/${{ matrix.target }}/release/deslop-mcp${ext} dist/${{ matrix.platform }}/
+          cp target/${{ matrix.target }}/release/deslop${ext} dist/${{ matrix.platform }}/
       - uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.platform }}
@@ -69,7 +69,7 @@ jobs:
           vsix_version=$(jq -r .version clients/vscode/package.json)
           cargo_version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
           if [[ -z "$cargo_version" ]]; then
-            cargo_version=$(grep -m1 '^version' crates/codededup/Cargo.toml | cut -d'"' -f2)
+            cargo_version=$(grep -m1 '^version' crates/deslop/Cargo.toml | cut -d'"' -f2)
           fi
           echo "vsix=$vsix_version cargo=$cargo_version"
           if [[ "$vsix_version" != "$cargo_version" ]]; then
@@ -102,7 +102,7 @@ jobs:
             mv "$dir"/* "$platform"/
             rmdir "$dir"
           done
-          chmod +x */codededup-lsp */codededup-mcp */codededup || true
+          chmod +x */deslop-lsp */deslop-mcp */deslop || true
       - name: Install extension deps
         working-directory: clients/vscode
         run: npm install
@@ -120,20 +120,20 @@ jobs:
         run: npm run typecheck
       - name: Package VSIX
         working-directory: clients/vscode
-        run: npx vsce package --no-dependencies -o codededup-vscode-${{ needs.version-check.outputs.version }}.vsix
+        run: npx vsce package --no-dependencies -o deslop-vscode-${{ needs.version-check.outputs.version }}.vsix
       - uses: actions/upload-artifact@v4
         with:
-          name: codededup-vscode
-          path: clients/vscode/codededup-vscode-*.vsix
+          name: deslop-vscode
+          path: clients/vscode/deslop-vscode-*.vsix
       - name: Publish to Marketplace
         if: ${{ github.event_name == 'push' || github.event.inputs.dry_run == 'false' }}
         working-directory: clients/vscode
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx vsce publish --no-dependencies --packagePath codededup-vscode-${{ needs.version-check.outputs.version }}.vsix
+        run: npx vsce publish --no-dependencies --packagePath deslop-vscode-${{ needs.version-check.outputs.version }}.vsix
       - name: Publish to Open VSX
         if: ${{ github.event_name == 'push' || github.event.inputs.dry_run == 'false' }}
         working-directory: clients/vscode
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx ovsx publish codededup-vscode-${{ needs.version-check.outputs.version }}.vsix -p "$OVSX_PAT"
+        run: npx ovsx publish deslop-vscode-${{ needs.version-check.outputs.version }}.vsix -p "$OVSX_PAT"
