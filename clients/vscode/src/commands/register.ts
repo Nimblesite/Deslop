@@ -9,6 +9,7 @@ import { ReportStore } from "../reportStore";
 import { openClusterPanel, openReportPanel } from "../webview/panels";
 import { pickEmbeddingModel } from "./embeddingPicker";
 import { ReportCluster, ReportOccurrence } from "../types/report";
+import { buildCompareUri } from "../compare/provider";
 
 type ClientFactory = () => LanguageClient | undefined;
 
@@ -103,10 +104,13 @@ export async function compareWithCanonical(store: ReportStore, clusterId: string
   if (!cluster || cluster.occurrences.length < 2) return;
   const [a, b] = cluster.occurrences;
   if (!a || !b) return;
+  // Always diff occurrence bytes via the deslop-compare provider — same-file
+  // clusters would otherwise collapse to "whole file vs. itself" because
+  // `vscode.diff` dedupes identical URIs into a single editor pane.
   await vscode.commands.executeCommand(
     "vscode.diff",
-    resolveOccurrenceUri(a.path),
-    resolveOccurrenceUri(b.path),
+    buildCompareUri(a, "a", cluster.id),
+    buildCompareUri(b, "b", cluster.id),
     `Compare (cluster ${cluster.id})`,
   );
 }

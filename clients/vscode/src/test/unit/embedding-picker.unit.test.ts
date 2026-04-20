@@ -4,7 +4,13 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
-import { buildItems, formatSize, isActive, setModel } from "../../commands/embeddingPicker";
+import {
+  buildItems,
+  formatSize,
+  isActive,
+  setModel,
+  setModelFromPicker,
+} from "../../commands/embeddingPicker";
 import { ReportStore } from "../../reportStore";
 import { EmbeddingModelInfo } from "../../types/report";
 
@@ -133,6 +139,40 @@ suite("embeddingPicker helpers", () => {
       provider_id: "ollama",
       model_id: "nomic-embed-text",
     });
+  });
+
+  test("setModelFromPicker marks the store's pending model BEFORE dispatching the RPC", async () => {
+    const store = newStore();
+    const events: string[] = [];
+    const recorded: Array<string | null> = [];
+    store.onDidChange((s) => {
+      events.push("change");
+      recorded.push(s.pendingEmbeddingModel);
+    });
+    const client = {
+      sendRequest: () => {
+        // Capture the store's pending state at the moment the RPC is issued.
+        events.push(`rpc(${store.current.pendingEmbeddingModel ?? "null"})`);
+        return Promise.resolve(undefined);
+      },
+    } as unknown as LanguageClient;
+    await setModelFromPicker(client, store, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      model_version: "0",
+      dimensions: 768,
+      size_bytes: null,
+      is_embedding_model: true,
+    });
+    assert.ok(
+      events.includes("rpc(nomic-embed-text)"),
+      `RPC must fire with pending model already set; got ${JSON.stringify(events)}`,
+    );
+    assert.equal(
+      store.current.pendingEmbeddingModel,
+      "nomic-embed-text",
+      "pending model stays set until the new report arrives",
+    );
   });
 
   test("buildItems marks the 'Ollama models' header as a non-pickable separator", () => {

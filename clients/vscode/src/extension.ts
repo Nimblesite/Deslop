@@ -27,6 +27,7 @@ import {
 import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
+import { registerCompareProvider } from "./compare/provider";
 import {
   Report,
   ReportChangedNotification,
@@ -102,6 +103,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   const statusBar = new StatusBar(reportStore);
   context.subscriptions.push(statusBar);
 
+  registerCompareProvider(context);
   registerCommands(context, reportStore, () => client);
   context.subscriptions.push(
     vscode.commands.registerCommand("deslop.revealActiveBinary", () =>

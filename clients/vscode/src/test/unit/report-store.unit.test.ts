@@ -118,4 +118,22 @@ suite("ReportStore", () => {
     const store = new ReportStore();
     store.dispose();
   });
+
+  test("setPendingEmbeddingModel exposes the pending id and fires onDidChange", () => {
+    const store = new ReportStore();
+    let fired = 0;
+    store.onDidChange(() => {
+      fired += 1;
+    });
+    store.setPendingEmbeddingModel("nomic-embed-text");
+    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
+    assert.equal(fired, 1);
+  });
+
+  test("setSnapshot clears any pending embedding model once a fresh report arrives", () => {
+    const store = new ReportStore();
+    store.setPendingEmbeddingModel("nomic-embed-text");
+    store.setSnapshot(emptyReport(), 1);
+    assert.equal(store.current.pendingEmbeddingModel, null);
+  });
 });

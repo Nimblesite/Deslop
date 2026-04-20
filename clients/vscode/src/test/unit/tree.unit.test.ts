@@ -179,4 +179,21 @@ suite("SessionProvider", () => {
     const state = nodes.find((n) => typeof n.label === "string" && n.label === "State");
     assert.ok(state);
   });
+
+  test("Embedding model row shows the pending id with a loading suffix while a swap is in flight", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([]), 0);
+    store.setPendingEmbeddingModel("nomic-embed-text");
+    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
+    const nodes = provider.getChildren();
+    const embeddingRow = nodes.find(
+      (n) => typeof n.label === "string" && n.label === "Embedding model",
+    );
+    assert.ok(embeddingRow, "Embedding model row must be rendered");
+    assert.match(
+      String(embeddingRow.description ?? ""),
+      /nomic-embed-text.*loading/i,
+      "pending model id must be visible with a loading hint",
+    );
+  });
 });
