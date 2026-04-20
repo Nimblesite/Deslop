@@ -61,6 +61,40 @@ fn with_ext(base: &Path, ext: &str) -> PathBuf {
     path
 }
 
+/// Copies every top-level entry in `src` into a freshly created `dst`.
+/// Used by tests that need a mutable scan root seeded from an
+/// immutable fixture (cache/embedding tests write siblings next to the
+/// sources).
+fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
+    }
+    Ok(())
+}
+
+/// Collects every `codededup-*.log` file sitting in `dir`. The default
+/// logging path writes a timestamped file next to the report; tests
+/// need to locate it without hardcoding the stamp.
+fn find_timestamped_logs(dir: &Path) -> Result<Vec<PathBuf>> {
+    let matches = fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    name.starts_with("codededup-")
+                        && Path::new(name)
+                            .extension()
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
+                })
+        })
+        .collect();
+    Ok(matches)
+}
+
 // Implements [CLI-INVOCATION-VERSION]: `codededup --version` prints the
 // binary name and exits 0.
 #[test]
@@ -654,11 +688,7 @@ fn stub_provider_records_provenance_and_runs_embedding_pass() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-type3"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-type3"), &scan_root)?;
     let mut cmd = Command::cargo_bin("codededup")?;
     let _assertion = cmd
         .arg(&scan_root)
@@ -709,11 +739,7 @@ fn stub_provider_records_provenance_and_runs_embedding_pass() -> Result<()> {
 fn stub_provider_populates_embedding_cache() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-small"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut first = Command::cargo_bin("codededup")?;
     let _assertion = first
         .arg(&scan_root)
@@ -768,11 +794,7 @@ fn stub_provider_under_auto_mode_runs_embedding_pass() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-small"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = Command::cargo_bin("codededup")?;
     let _assertion = cmd
         .arg(&scan_root)
@@ -824,11 +846,7 @@ fn ollama_type4_pass_records_provenance_and_produces_signal() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-type4"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
     let mut cmd = Command::cargo_bin("codededup")?;
     let _assertion = cmd
         .arg(&scan_root)
@@ -934,11 +952,7 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
 fn incremental_cache_hits_on_second_run() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-small"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut first = Command::cargo_bin("codededup")?;
     let _assertion = first
         .arg(&scan_root)
@@ -1006,11 +1020,7 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
 fn default_run_skips_the_cache() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-small"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = Command::cargo_bin("codededup")?;
     let _assertion = cmd
         .arg(&scan_root)
@@ -1046,11 +1056,7 @@ fn default_run_skips_the_cache() -> Result<()> {
 fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
-    fs::create_dir_all(&scan_root)?;
-    for entry in fs::read_dir(fixture("csharp-small"))? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
-    }
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut first = Command::cargo_bin("codededup")?;
     let _assertion = first
         .arg(&scan_root)
@@ -1108,6 +1114,54 @@ fn help_text_documents_incremental_flag() -> Result<()> {
         .assert()
         .success()
         .stdout(contains("--incremental"));
+    Ok(())
+}
+
+// Implements [PIPELINE-INCREMENTAL] cache-write degradation: when
+// the cache directory is read-only, the pipeline must log a warning
+// and still produce a complete report. Exercises the
+// `tracing::warn!(error, "fingerprint cache write failed")` branch
+// that is otherwise only reachable on a genuine disk failure.
+#[cfg(unix)]
+#[test]
+fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    for entry in fs::read_dir(fixture("csharp-small"))? {
+        let entry = entry?;
+        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
+    }
+    let locked_dir = scan_root
+        .join(".codededup-cache")
+        .join("fingerprints")
+        .join("csharp")
+        .join(env!("CARGO_PKG_VERSION"))
+        .join("8");
+    fs::create_dir_all(&locked_dir)?;
+    let mut perms = fs::metadata(&locked_dir)?.permissions();
+    perms.set_mode(0o555);
+    fs::set_permissions(&locked_dir, perms)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let mut restore = fs::metadata(&locked_dir)?.permissions();
+    restore.set_mode(0o755);
+    fs::set_permissions(&locked_dir, restore)?;
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        json.contains("\"files_analysed\": 2"),
+        "pipeline must still report both files: {json}"
+    );
     Ok(())
 }
 
@@ -1237,21 +1291,12 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
         stderr.contains("done"),
         "default stderr must carry the success footer: {stderr}"
     );
-    assert!(out.json.exists(), "json still written: {}", out.json.display());
-    let log_files: Vec<PathBuf> = fs::read_dir(tmp.path())?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| {
-                name.starts_with("codededup-")
-                    && Path::new(name)
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
-            })
-        })
-        .collect();
+    assert!(
+        out.json.exists(),
+        "json still written: {}",
+        out.json.display()
+    );
+    let log_files = find_timestamped_logs(tmp.path())?;
     assert_eq!(
         log_files.len(),
         1,
@@ -1290,20 +1335,7 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
         stderr.contains("codededup invoked"),
         "--log-to-console must surface the invoked event on stderr: {stderr}"
     );
-    let log_files: Vec<PathBuf> = fs::read_dir(tmp.path())?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| {
-                name.starts_with("codededup-")
-                    && Path::new(name)
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
-            })
-        })
-        .collect();
+    let log_files = find_timestamped_logs(tmp.path())?;
     assert!(
         log_files.is_empty(),
         "--log-to-console must not create a log file: {log_files:?}",
@@ -1329,19 +1361,9 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
         .arg("--no-color")
         .assert()
         .success();
-    let log_path = fs::read_dir(tmp.path())?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .find(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| {
-                name.starts_with("codededup-")
-                    && Path::new(name)
-                        .extension()
-                        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
-            })
-        })
+    let log_path = find_timestamped_logs(tmp.path())?
+        .into_iter()
+        .next()
         .ok_or_else(|| anyhow::anyhow!("no timestamped log file written"))?;
     let log_body = fs::read_to_string(&log_path)?;
     assert!(
@@ -1405,6 +1427,57 @@ fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
     assert!(
         !stderr.contains('\x1b'),
         "--no-color must strip ANSI escapes: {stderr:?}"
+    );
+    Ok(())
+}
+
+// Implements [UX-COLOR-FORCE]: `CODEDEDUP_FORCE_COLOR=1` forces ANSI
+// escapes even when stderr isn't a TTY (useful in CI logs). The flag
+// combination also exercises the `ColorChoice::Always` branch in
+// coverage.
+#[test]
+fn color_force_env_emits_ansi_escapes() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .env("CODEDEDUP_FORCE_COLOR", "1")
+        .env_remove("NO_COLOR")
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        stderr.contains('\x1b'),
+        "CODEDEDUP_FORCE_COLOR must emit ANSI escapes: {stderr:?}"
+    );
+    Ok(())
+}
+
+// Implements [UX-COLOR-NO-COLOR-ENV]: `NO_COLOR=1` disables ANSI
+// escapes even when `CODEDEDUP_FORCE_COLOR` is also set — standard
+// NO_COLOR precedence per <https://no-color.org>.
+#[test]
+fn no_color_env_overrides_force_color() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .env("NO_COLOR", "1")
+        .env("CODEDEDUP_FORCE_COLOR", "1")
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        !stderr.contains('\x1b'),
+        "NO_COLOR must override the force flag: {stderr:?}"
     );
     Ok(())
 }

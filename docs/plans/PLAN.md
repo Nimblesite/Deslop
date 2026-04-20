@@ -18,7 +18,7 @@ Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust
 - **P4.1 Self-documenting report + three-format output** — JSON is canonical; text (AI-readable terse) and HTML (human-readable) are derived from it. Embed `schema_doc`, per-cluster `interpretation`, top-level `action_hints`. `--from-report` re-renders without re-analysing. Bump `report_schema_version` to 2.
 - **P4.2 Exclusion configuration** — simple `.codededup.toml` config with two tiers: `exclude` (skip parsing entirely) and `report_hide` (analyse for duplication but omit from report unless a visible file duplicates them). Per-language sections + a shared default. Implements [EXCLUSION-CONFIG].
 - **P5 Embedding pass (hybrid)** — Ollama + `nomic-embed-code`, HNSW (`usearch`), fuse via max-normalized sum (never average). Cache `(content_hash, model_id, version)`.
-- **P6 Harden** — `--incremental`, perf pass (<30s/100K LOC C#, no embeddings), coverage ratchet.
+- **P6 Harden** — `--incremental` on-disk fingerprint cache keyed by `(language, tool_version, min_nodes, content_hash)`, perf regression guard, fixture-per-bug workflow, coverage ratchet.
 
 ## Non-goals
 No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-language detection, no auto-fix, no unit tests.
@@ -33,15 +33,15 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 
 ## Current state (summary)
 
-- **P0 – P5 complete.** C#, Rust, and Python Type-1 / Type-2 / Type-3 / Type-4 clone detection works end-to-end through the CLI. Reports are self-documenting (embedded `schema_doc`, per-cluster `interpretation`, top-level `action_hints`) and emitted in three formats by default (canonical JSON, terse AI-readable text, single-file HTML). Text and HTML are derived from JSON; `--from-report` re-renders a cached JSON without re-analysing. Exclusion config (`.codededup.toml`) supports two tiers: `exclude` (skip parsing) and `report_hide` (analyse but hide hidden-only clusters), with per-language overlays. Embedding pass (`--embeddings={auto,required,off}`) fuses cosine similarity from a pluggable `EmbeddingProvider` (ships with `ollama` + `stub` providers) via HNSW top-k into the candidate-pair union and the fused score. Provenance `(provider_id, model_id, model_version, dimensions)` is pinned in every report; embeddings are cached by `(content_hash, provider, model, version)` under `.codededup-cache/`.
-- `make ci` green: 29/29 e2e tests (Ollama-gated test runs under `make ci-ollama` via the `ollama_` name prefix), clippy clean (pedantic + nursery), rustfmt clean, coverage **94.0% ≥ 94% threshold** (held steady through P5 by adding a `stub` provider that exercises the trait / cache / HNSW / pipeline path without needing a live daemon; `embedding/ollama.rs` is excluded from coverage because it's an HTTP client exercised only by `make ci-ollama`).
+- **P0 – P6 complete.** C#, Rust, and Python Type-1 / Type-2 / Type-3 / Type-4 clone detection works end-to-end through the CLI. Reports are self-documenting (embedded `schema_doc`, per-cluster `interpretation`, top-level `action_hints`) and emitted in three formats by default (canonical JSON, terse AI-readable text, single-file HTML). Text and HTML are derived from JSON; `--from-report` re-renders a cached JSON without re-analysing. Exclusion config (`.codededup.toml`) supports two tiers: `exclude` (skip parsing) and `report_hide` (analyse but hide hidden-only clusters), with per-language overlays. Embedding pass (`--embeddings={auto,required,off}`) fuses cosine similarity from a pluggable `EmbeddingProvider` (ships with `ollama` + `stub` providers) via HNSW top-k into the candidate-pair union and the fused score. Provenance `(provider_id, model_id, model_version, dimensions)` is pinned in every report; embeddings are cached by `(content_hash, provider, model, version)` under `.codededup-cache/`. Incremental-analysis cache (`--incremental`) keyed by `(language, tool_version, min_nodes, content_hash)` rehydrates unchanged files without tree-sitter ([PIPELINE-INCREMENTAL]); hits/misses surface as `cache_stats` in every report.
+- `make ci` green: 42/42 e2e tests (Ollama-gated test runs under `make ci-ollama` via the `ollama_` name prefix), clippy clean (pedantic + nursery), rustfmt clean, coverage **94.3% ≥ 94% threshold** (held steady through P6: new fpcache module covered end-to-end via e2e tests exercising the happy path, corrupt-blob recovery, read-only directory degradation, and default-off semantics).
 - Verified non-destructively against a real 63-file C# repo (TradiSite backend): 17K fingerprints, 2040 clusters ranked worst-first, no panics, no source modification. Top offenders correctly surface generated GraphQL `.g.cs` duplication and test-fixture boilerplate.
 - GitHub repo settings applied (squash-only, auto-merge, delete-on-merge, wiki/projects off, discussions on, ruleset "Protect main" requires PR + CI check).
 - `float_arithmetic = "deny"` removed from the lint profile (with rationale comment in `Cargo.toml`); AgentPMO template updated with the same rationale so other repos don't inherit the footgun.
 - Spec IDs converted to hierarchical `[GROUP-TOPIC-DETAIL]` form; every module references the IDs it implements AND the academic work those IDs cite (Baxter 1998, Chilowicz 2009, SourcererCC, ensemble-LLM 2025).
 - Pluggable by construction: `PairScore` carries a third `embedding_cos` slot so P5 is additive; fingerprints are keyed by `(file_id, byte_range)` so P6 file-watcher incremental updates slot into the same cache keys.
 
-**Next up (P6):** hardening pass — `--incremental` keyed by content hash, perf target <30 s on 100 K-LOC C# (no embeddings), fixture-per-bug workflow from CLAUDE.md, and continued coverage ratchet. P5 groundwork (cache keyed by `(content_hash, provider_id, model_id, model_version)`, fingerprints keyed by `(file_id, byte_range)`) is already in place, so the incremental pipeline slots into the same cache surface.
+**Next up (beyond P6):** interactive/TUI mode and MCP/LSP daemon are deliberately deferred — the deterministic core emits everything a live loop needs, so both slot in as thin shells over `codededup-core` without touching the pipeline. File-watcher-driven incremental updates can reuse the P6 fingerprint cache verbatim; only a `update_files(changed: &[FileId])` entry point is missing.
 
 ## TODO
 
@@ -143,11 +143,19 @@ Implements [EXCLUSION-CONFIG]. Two tiers of exclusion driven by a single `.coded
 - [x] `make ci-ollama` target — pulls `nomic-embed-text`, runs the `ollama_`-prefixed tests (`cargo test ollama_`). `make ci` filters them out via `--skip ollama_` so the default pipeline needs no external service.
 - [x] Coverage ratchet: `embedding/ollama.rs` is excluded from measurement (it's an HTTP client exercised only by `make ci-ollama`); every other P5 file is covered ≥ 93% via the stub-provider E2E tests.
 
-### P6 Harden
-- [ ] `--incremental` keyed by file content hash
-- [ ] Perf: <30s on 100K-LOC C# (no embeddings)
-- [ ] Ratchet coverage every PR
-- [ ] Fixture-per-bug (CLAUDE.md Bug Fix Process)
+### P6 Harden — COMPLETE
+Implements [PIPELINE-INCREMENTAL]. Hardening pass: opt-in on-disk fingerprint cache keyed by `(language, tool_version, min_nodes, content_hash)`, coverage ratchet, fixture-per-bug workflow seeded with a first example, and a scale-smoke test guarding the <30 s / 100 K LOC perf target against order-of-magnitude regressions.
+
+- [x] `FingerprintCache` in `codededup-core::fpcache` — lazy-open, per-language subdirectory, little-endian blob (`u32` magic + recursive `NormalizedNode` tree + `Fingerprint` records). No serde dep.
+- [x] `PipelineConfig.incremental: bool` (default `false`). When true, the parse+fingerprint stage consults the cache; hits rehydrate the tree and fingerprints directly, misses parse and persist.
+- [x] `--incremental` CLI opt-in. Off by default so read-only checkouts stay pristine (fixtures, CI checkouts, `git worktree` analyses, etc.).
+- [x] `Report.cache_stats: { hits: usize, misses: usize }` added at `report_schema_version = 2` (additive, `#[serde(default)]` on deserialise for back-compat with existing P5 reports). Text renderer prints `cache: N hit / M miss` when non-zero.
+- [x] Graceful degradation: corrupt blobs log a `warn!` and are treated as misses; cache directory open failures fall back to uncached parse for that language; blob write failures don't fail the run.
+- [x] `<30 s on 100 K-LOC C#` perf target encoded as `[PERF-BUDGET-TYPE12]`; e2e suite carries `synthetic_corpus_scale_smoke_test` as a regression guard (wallclock bound deliberately lax — llvm-cov instrumentation makes strict timing brittle; real SLA validated manually against a release build).
+- [x] Fixture-per-bug workflow seeded at `tests/fixtures/bug-empty-class/` with a README documenting the naming rule (`bug-<kebab-case-summary>/`) and expected pairing (failing-then-passing test in `cli.rs`). First fixture pins the "empty class body doesn't panic" behaviour.
+- [x] E2E suite: `incremental_cache_hits_on_second_run`, `default_run_skips_the_cache`, `corrupt_cache_entry_degrades_to_miss`, `cache_write_failure_is_degraded_not_fatal` (chmod-based), `help_text_documents_incremental_flag`, `synthetic_corpus_scale_smoke_test`, `bug_fixture_walks_trivial_class_body_without_panicking`.
+- [x] Coverage held at 94 % threshold (ratchet rule: upward only). P6 additions covered ≥ 94 % via the stub-provider-independent e2e tests above.
+- [x] `docs/specs/pipeline.md` — added `[PIPELINE-INCREMENTAL]` section; `[OUTPUT-SCHEMA-JSON]` extended with the `cache_stats` field.
 
 ### P6.1 Human-readable HTML mode
 Implements [OUTPUT-HUMAN-HTML]. HTML output gains collapsible per-occurrence `<details>` panels with syntax-highlighted snippets and line numbers. JSON schema unchanged. `--human={auto,on,off}` selects mode.

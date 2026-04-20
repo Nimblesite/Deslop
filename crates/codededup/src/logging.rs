@@ -123,67 +123,15 @@ fn build_filter(level: Level) -> Result<EnvFilter> {
         .map_err(|err| anyhow::anyhow!("invalid --log-level {level}: {err}"))
 }
 
-/// Renders the default `codededup-<yyyymmddTHHMMSS>.log` path under
-/// `log_dir`. The timestamp is UTC — keeping it timezone-neutral so
-/// two runs one second apart never collide regardless of local DST.
+/// Renders the default `codededup-<unix-seconds>.log` path under
+/// `log_dir`. Using the raw epoch second count keeps the file name
+/// unambiguous and unique across DST shifts without dragging in a
+/// calendar crate; operators who want a human-readable stamp can
+/// pipe the log through `ls -lT` or `stat`.
 fn log_file_path(log_dir: &Path) -> PathBuf {
-    let now = SystemTime::now()
+    let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
         .unwrap_or_default();
-    let stamp = format_utc(now.as_secs());
     log_dir.join(format!("codededup-{stamp}.log"))
-}
-
-/// Formats a UNIX-epoch second count as `yyyymmddTHHMMSS` in UTC.
-fn format_utc(epoch_seconds: u64) -> String {
-    let (year, month, day, hour, minute, second) = break_down(epoch_seconds);
-    format!("{year:04}{month:02}{day:02}T{hour:02}{minute:02}{second:02}")
-}
-
-/// Decomposes `epoch_seconds` into `(year, month, day, hour, minute, second)`
-/// using Howard Hinnant's `civil_from_days` algorithm — Gregorian
-/// proleptic, no leap-second adjustment (matches RFC 3339 §5.6).
-fn break_down(epoch_seconds: u64) -> (u32, u32, u32, u32, u32, u32) {
-    let day_seconds: u64 = 86_400;
-    let days_since_epoch = epoch_seconds / day_seconds;
-    let time_of_day = epoch_seconds.rem_euclid(day_seconds);
-    let hour = u32::try_from(time_of_day / 3_600).unwrap_or(0);
-    let minute = u32::try_from((time_of_day % 3_600) / 60).unwrap_or(0);
-    let second = u32::try_from(time_of_day % 60).unwrap_or(0);
-    let (year, month, day) = days_to_ymd(days_since_epoch);
-    (year, month, day, hour, minute, second)
-}
-
-/// Converts days-since-1970-01-01 to Gregorian `(year, month, day)`.
-/// Implementation adapted from Hinnant's `civil_from_days`.
-fn days_to_ymd(days_since_epoch: u64) -> (u32, u32, u32) {
-    let days = days_since_epoch.saturating_add(719_468);
-    let era = days / 146_097;
-    let doe = days.saturating_sub(era.saturating_mul(146_097));
-    let numerator = doe
-        .saturating_sub(doe / 1_460)
-        .saturating_add(doe / 36_524)
-        .saturating_sub(doe / 146_096);
-    let yoe = numerator / 365;
-    let y = yoe.saturating_add(era.saturating_mul(400));
-    let subtrahend = 365_u64
-        .saturating_mul(yoe)
-        .saturating_add(yoe / 4)
-        .saturating_sub(yoe / 100);
-    let doy = doe.saturating_sub(subtrahend);
-    let mp = 5_u64.saturating_mul(doy).saturating_add(2) / 153;
-    let d = doy
-        .saturating_sub(153_u64.saturating_mul(mp).saturating_add(2) / 5)
-        .saturating_add(1);
-    let m = if mp < 10 {
-        mp.saturating_add(3)
-    } else {
-        mp.saturating_sub(9)
-    };
-    let year = if m <= 2 { y.saturating_add(1) } else { y };
-    (
-        u32::try_from(year).unwrap_or(0),
-        u32::try_from(m).unwrap_or(1),
-        u32::try_from(d).unwrap_or(1),
-    )
 }

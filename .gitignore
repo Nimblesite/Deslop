@@ -63,3 +63,7 @@ Cargo.lock.bak
 # CodeDedup-specific
 # =============================================================================
 .codededup-cache/
+codededup-report.json
+codededup-report.txt
+codededup-report.html
+codededup-*.log

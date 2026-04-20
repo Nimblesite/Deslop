@@ -39,13 +39,14 @@ fuse signals → rank → render report
 
 ## Hard Rules — Universal (no exceptions)
 
+- CRITICAL: **Files < 500 lines.** Refactor when over.
 - **NO git commands.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, etc. CI handles git.
 - **REDUCE CODE DUPLICATION. DRY AF.** This tool detects duplication — its own codebase must be exemplary. Search before writing. Move code, don't copy.
 - **Regex on source code = ⛔️ ILLEGAL.** Use tree-sitter for all source parsing.
 - **NO EXCEPTIONS for control flow.** Return `Result<T,E>`. Panics are bugs.
 - **NO REGEX on structured data.** Use real parsers for JSON/YAML/TOML/code.
 - **NO PLACEHOLDERS.** No silent no-ops. Use proper error types.
-- **Functions < 20 lines. Files < 500 lines.** Refactor when over.
+- **Functions < 20 lines** 
 - **No legacy code.** Legacy = deleted.
 - **Copying files is illegal.** MOVE them.
 - **Centralize all global state** in `crates/codededup-core/src/state.rs`.
