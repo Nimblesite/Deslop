@@ -1,0 +1,173 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Bump workspace version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: extract
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp version into workspace Cargo.toml
+        run: |
+          set -euo pipefail
+          sed -i 's/^version = ".*"$/version = "${{ steps.extract.outputs.version }}"/' Cargo.toml
+          grep -E '^version = "${{ steps.extract.outputs.version }}"$' Cargo.toml
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Refresh Cargo.lock
+        run: cargo update --workspace --offline || cargo generate-lockfile
+
+      - name: Commit and push version bump
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git diff --staged --quiet && exit 0
+          git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
+          git push origin HEAD:main
+
+  build:
+    name: Build (${{ matrix.artifact_name }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: linux-x64
+            bin: codededup
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: macos-x64
+            bin: codededup
+            archive_ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: macos-arm64
+            bin: codededup
+            archive_ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: windows-x64
+            bin: codededup.exe
+            archive_ext: zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-release-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-release-
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }} --bin codededup
+
+      - name: Package archive (unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="codededup-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
+          mkdir -p "dist/${stage}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/${stage}/"
+          cp README.md LICENSE* "dist/${stage}/" 2>/dev/null || true
+          tar -C dist -czf "dist/${stage}.tar.gz" "${stage}"
+          shasum -a 256 "dist/${stage}.tar.gz" | awk '{print $1"  "$2}' | sed "s|dist/||" > "dist/${stage}.tar.gz.sha256"
+
+      - name: Package archive (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = "codededup-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
+          New-Item -ItemType Directory -Force -Path "dist/$stage" | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/$stage/"
+          if (Test-Path README.md) { Copy-Item README.md "dist/$stage/" }
+          Get-ChildItem -Path . -Filter "LICENSE*" | ForEach-Object { Copy-Item $_.FullName "dist/$stage/" }
+          Compress-Archive -Path "dist/$stage" -DestinationPath "dist/$stage.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 "dist/$stage.zip").Hash.ToLower()
+          "$hash  $stage.zip" | Out-File -FilePath "dist/$stage.zip.sha256" -Encoding ascii
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            dist/codededup-*.tar.gz
+            dist/codededup-*.tar.gz.sha256
+            dist/codededup-*.zip
+            dist/codededup-*.zip.sha256
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Flatten artifacts and build combined checksum file
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' \) -exec cp {} release-files/ \;
+          cd release-files
+          : > SHA256SUMS
+          for f in *.tar.gz *.zip; do
+            [ -e "$f" ] || continue
+            sha256sum "$f" >> SHA256SUMS
+          done
+          cat SHA256SUMS
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: codededup ${{ needs.version.outputs.version }}
+          files: release-files/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
