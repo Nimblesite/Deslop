@@ -1,4 +1,4 @@
-//! MinHash signature construction shared by [`super::run`] and
+//! `MinHash` signature construction shared by [`super::run`] and
 //! [`super::session`]. Feeds the token-LSH pass in [`crate::lsh`].
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     tokens::{kgrams, token_stream_for_fingerprint, KGRAM_WIDTH},
 };
 
-/// Computes a MinHash signature per fingerprint. Each signature is
+/// Computes a `MinHash` signature per fingerprint. Each signature is
 /// generated from k-grams of the normalised token stream of the
 /// fingerprint's subtree — token Jaccard then acts as the Type-3
 /// recall signal per [DECISION-TYPE3-TWO-PASS].

@@ -1,7 +1,10 @@
 # agent-pmo:424c8f8
 [workspace]
 resolver = "2"
-members = ["crates/codededup-core", "crates/codededup"]
+members = [
+    "crates/codededup-core",
+    "crates/codededup",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -30,6 +33,7 @@ ignore = "=0.4.23"
 blake3 = "=1.5.4"
 ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
+notify = { version = "=6.1.1", default-features = false, features = ["macos_fsevent"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

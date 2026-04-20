@@ -292,3 +292,60 @@ fn entry_matches(entry: &TagEntry, model: &str) -> bool {
         None => false,
     }
 }
+
+/// Summary of one locally-installed Ollama model, suitable for the
+/// VSIX embedding-model picker ([VSIX-EMBED-PICKER]) and the daemon's
+/// `embedding/listModels` query ([LIVE-QUERY-API]).
+#[derive(Debug, Clone)]
+pub struct OllamaModelInfo {
+    /// Full model tag as installed (e.g. `nomic-embed-text:latest`).
+    pub name: String,
+    /// Bare model id with the tag stripped. This is the value
+    /// callers should feed into `--embedding-model` or
+    /// [`OllamaProvider::connect`].
+    pub bare_id: String,
+    /// Shortened content digest (12 hex chars), same truncation as
+    /// the on-disk cache-key path segment.
+    pub digest: String,
+    /// Packaged model size in bytes.
+    pub size_bytes: u64,
+    /// `true` when the model answered the dimension probe with a
+    /// non-empty vector at listing time. `false` means the model
+    /// exists but does not produce embeddings (chat-only model); the
+    /// picker should still show it but tag it as non-embedding.
+    pub is_embedding_model: bool,
+}
+
+/// Enumerates models currently installed on the Ollama host at
+/// `endpoint`. For each model, runs one short embedding probe to
+/// classify it as an embedding model — non-embedding models are
+/// returned with `is_embedding_model: false` rather than omitted so
+/// the VSIX picker can show the full list with an inline badge.
+///
+/// # Errors
+///
+/// Returns [`ProviderError::Unreachable`] when `/api/tags` cannot be
+/// reached, [`ProviderError::ProviderFailed`] when it responds with
+/// a non-2xx status, and [`ProviderError::Malformed`] when the
+/// response cannot be parsed.
+pub fn list_models(endpoint: &str) -> Result<Vec<OllamaModelInfo>, ProviderError> {
+    let endpoint = endpoint.trim_end_matches('/');
+    let tags = fetch_tags(endpoint)?;
+    let mut out: Vec<OllamaModelInfo> = Vec::with_capacity(tags.models.len());
+    for entry in tags.models {
+        let bare_id = match entry.name.split_once(':') {
+            Some((bare, _tag)) => bare.to_owned(),
+            None => entry.name.clone(),
+        };
+        let digest = truncate_digest(&entry.digest);
+        let is_embedding_model = probe_dimensions(endpoint, &bare_id).is_ok_and(|dims| dims > 0);
+        out.push(OllamaModelInfo {
+            name: entry.name,
+            bare_id,
+            digest,
+            size_bytes: entry.size,
+            is_embedding_model,
+        });
+    }
+    Ok(out)
+}

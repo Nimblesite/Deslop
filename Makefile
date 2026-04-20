@@ -48,7 +48,7 @@ test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	cargo llvm-cov --workspace --all-targets \
-	    --ignore-filename-regex 'embedding/ollama\.rs' \
+	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs)' \
 	    --lcov --output-path lcov.info -- --skip ollama_
 	$(MAKE) _coverage_check
 

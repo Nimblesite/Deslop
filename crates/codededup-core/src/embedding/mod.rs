@@ -19,7 +19,10 @@ pub mod stub;
 
 pub use cache::{content_hash, EmbeddingCache};
 pub use mode::{EmbeddingMode, ParseModeError};
-pub use ollama::{OllamaProvider, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL};
+pub use ollama::{
+    list_models as list_ollama_models, OllamaModelInfo, OllamaProvider, DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OLLAMA_MODEL,
+};
 pub use pairs::{embedding_pairs, EmbeddingPair};
 pub use provider::{EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_PROVIDER_ID};
 pub use stub::{StubProvider, PROVIDER_ID as STUB_PROVIDER_ID};

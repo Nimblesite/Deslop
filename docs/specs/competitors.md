@@ -90,7 +90,7 @@ Axis-by-axis, the bar we are held to — and the plus-one that wins the category
 Things no competitor does that we commit to ship. If any of these slip, we are no longer the obvious choice on our axis:
 
 - [ ] **In-editor live duplication bubble** ([VSIX-LIVE-BUBBLE]) — tells the developer they are duplicating code **as they type**, inline with their cursor. No competitor surfaces duplication at this latency or this granularity. This is the category-defining feature.
-- [ ] **Live daemon** — [DAEMON-BINARY] + [DAEMON-WATCHER] with < 500 ms incremental re-analysis for ≤ 10-file changesets.
+- [ ] **Live daemon** — [LIVE-BINARY] + [LIVE-WATCHER] with < 500 ms incremental re-analysis for ≤ 10-file changesets.
 - [ ] **MCP `find-similar` tool** ([MCP-TOOL-FINDSIMILAR]) — the only production-ready clone-aware MCP tool in the market.
 - [ ] **Ollama model picker in VSIX** ([VSIX-EMBED-PICKER]) — lists installed local models, swaps live, invalidates only the embedding layer.
 - [ ] **Stable cluster ids across runs** — ✅ already in v1; no competitor except JetBrains/Teamscale has this, and theirs are per-project.

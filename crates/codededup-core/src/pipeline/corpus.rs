@@ -95,8 +95,9 @@ pub fn fingerprint_corpus(
 }
 
 /// Parses one file, consulting the incremental cache when enabled.
-/// Exposed so the session can splice an updated file into an existing
-/// corpus without re-running the full [`fingerprint_corpus`] walk.
+/// Used exclusively by [`super::session::PipelineSession`] to splice
+/// an updated file into an existing corpus. The batch entry point
+/// calls [`fingerprint_corpus`] instead.
 ///
 /// # Errors
 ///
@@ -220,9 +221,7 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
 /// [`crate::discover::discover_files`] check [`crate::config::ExclusionConfig`]
 /// before the parser is selected.
 #[must_use]
-pub fn build_extension_map(
-    parsers: &[Box<dyn LanguageParser>],
-) -> HashMap<String, &'static str> {
+pub fn build_extension_map(parsers: &[Box<dyn LanguageParser>]) -> HashMap<String, &'static str> {
     let mut out: HashMap<String, &'static str> = HashMap::new();
     for parser in parsers {
         for extension in parser.file_extensions() {

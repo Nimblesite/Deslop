@@ -1,6 +1,6 @@
 # MCP shell — feeding the agent in real time
 
-Thin Model Context Protocol shell over [DAEMON-BINARY]. Lets an AI coding agent (Claude Code, Claude Desktop, Cursor, Continue, or anything that speaks MCP) **ask live questions of the running dedup analysis**: *"as I'm working on this file, which ranges I'm about to touch are already duplicated elsewhere?"* and *"before I write this block, is something like it already in the repo?"*
+Thin Model Context Protocol shell over [LIVE-BINARY]. Lets an AI coding agent (Claude Code, Claude Desktop, Cursor, Continue, or anything that speaks MCP) **ask live questions of the running dedup analysis**: *"as I'm working on this file, which ranges I'm about to touch are already duplicated elsewhere?"* and *"before I write this block, is something like it already in the repo?"*
 
 Crate: `crates/codededup-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Stays under 100 LOC of glue; all logic lives in `codededup-daemon`.
 
@@ -8,7 +8,7 @@ The MCP shell and the LSP shell ([lsp.md](lsp.md)) are peers — same daemon, di
 
 ### [MCP-WHY-LIVE] Why live, not batch
 
-An agent that runs the CLI once at the start of a session sees a stale report after its first edit. A long session with a stale report means the agent is acting on duplication data that no longer reflects the code it's been writing. The live MCP is the fix: the report **re-runs incrementally on every save** ([DAEMON-SCHEDULER]), and the agent can subscribe to change notifications or pull the latest snapshot at any point.
+An agent that runs the CLI once at the start of a session sees a stale report after its first edit. A long session with a stale report means the agent is acting on duplication data that no longer reflects the code it's been writing. The live MCP is the fix: the report **re-runs incrementally on every save** ([LIVE-SCHEDULER]), and the agent can subscribe to change notifications or pull the latest snapshot at any point.
 
 Concretely: an agent working on a feature can, after every significant edit, call `find-similar` with the snippet it's about to write, see what's already in the repo, and refactor into a shared helper instead of introducing a new clone. Before the MCP existed, the agent had no cheap way to know.
 
@@ -37,7 +37,7 @@ All tools are pure reads except `set-embedding-model`. No tool writes source fil
 
 This is the tool that changes how the agent works. Input variants:
 
-1. **Range on an open file:** `{ path, start_byte, end_byte }` — the daemon already has this parsed and fingerprinted; the query is a cache lookup plus an LSH + ANN probe. Budget: < 250 ms ([DAEMON-PERF-BUDGETS]).
+1. **Range on an open file:** `{ path, start_byte, end_byte }` — the daemon already has this parsed and fingerprinted; the query is a cache lookup plus an LSH + ANN probe. Budget: < 250 ms ([LIVE-PERF-BUDGETS]).
 2. **Snippet + language:** `{ snippet, language }` — for code the agent is *about to write*. The daemon parses the snippet in-memory with the matching `LanguageParser`, normalises it, fingerprints it, probes LSH + ANN, and returns matching clusters. Nothing is written to the cache. Budget: < 250 ms.
 
 Output: the top-N clusters (default N=5) by fused score, each with signals, interpretation, action hints, and occurrences. The agent decides whether to refactor by reading the same fields a human would.

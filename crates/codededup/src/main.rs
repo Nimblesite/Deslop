@@ -15,9 +15,9 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use codededup_core::{
-    debug_ast_dump, render::render_html, render::render_text, run, EmbeddingMode, EmbeddingSettings,
-    OllamaProvider, PipelineConfig, Report, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
-    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    debug_ast_dump, render::render_html, render::render_text, run, EmbeddingMode,
+    EmbeddingSettings, OllamaProvider, PipelineConfig, Report, StubProvider,
+    DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 use tracing::Level;
 
@@ -209,7 +209,7 @@ fn run_cli() -> Result<()> {
             return Err(err);
         }
     };
-    let written = emit_all(&report, &formats, &output)?;
+    let written = emit_all(&report, &formats, &output, &args.path)?;
     summary::summary(color, &report, args.technical);
     summary::finish_ok(
         color,
@@ -296,11 +296,10 @@ fn build_ollama_provider(
     args: &Cli,
     mode: EmbeddingMode,
 ) -> Result<Option<Box<dyn codededup_core::EmbeddingProvider>>> {
-    let source =
-        match OllamaProvider::connect(&args.embedding_endpoint, &args.embedding_model) {
-            Ok(provider) => return Ok(Some(Box::new(provider))),
-            Err(source) => source,
-        };
+    let source = match OllamaProvider::connect(&args.embedding_endpoint, &args.embedding_model) {
+        Ok(provider) => return Ok(Some(Box::new(provider))),
+        Err(source) => source,
+    };
     if matches!(mode, EmbeddingMode::Required) {
         return Err(anyhow::anyhow!(
             "embedding provider required but unreachable: {source}"
@@ -390,6 +389,7 @@ fn emit_all(
     report: &Report,
     formats: &FormatSelection,
     output: &OutputPaths,
+    scan_root: &std::path::Path,
 ) -> Result<Vec<PathBuf>> {
     let mut written: Vec<PathBuf> = Vec::with_capacity(3);
     if formats.json {
@@ -405,7 +405,7 @@ fn emit_all(
         written.push(path);
     }
     if formats.html {
-        let html = render_html(report);
+        let html = render_html(report, Some(scan_root));
         let path = output.with_extension("html");
         write_file(&path, html.as_bytes())?;
         written.push(path);
@@ -416,8 +416,7 @@ fn emit_all(
 /// Writes `payload` to `path`, creating parent directories as needed.
 fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    fs::create_dir_all(parent)
-        .with_context(|| format!("create parent {}", parent.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("create parent {}", parent.display()))?;
     let mut file =
         fs::File::create(path).with_context(|| format!("create report file {}", path.display()))?;
     file.write_all(payload)

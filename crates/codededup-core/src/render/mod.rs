@@ -6,6 +6,7 @@
 //! directly so formatting a cached report never re-parses a codebase.
 
 pub mod ast;
+pub mod highlight;
 pub mod html;
 pub mod text;
 

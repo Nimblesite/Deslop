@@ -1015,8 +1015,10 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
             .is_some_and(|d| d > 0),
         "dimensions must be positive: {provenance:?}",
     );
-    let cluster = find_cross_file_cluster(&json, &["Recursive.cs", "Iterative.cs"])
-        .ok_or_else(|| anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs"))?;
+    let cluster =
+        find_cross_file_cluster(&json, &["Recursive.cs", "Iterative.cs"]).ok_or_else(|| {
+            anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs")
+        })?;
     let signals = cluster
         .get("signals")
         .and_then(|v| v.as_object())
@@ -1078,7 +1080,9 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
     let provenance = json
         .get("embedding_provenance")
         .and_then(|v| v.as_object())
-        .ok_or_else(|| anyhow::anyhow!("auto mode with reachable Ollama must populate provenance"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("auto mode with reachable Ollama must populate provenance")
+        })?;
     assert_eq!(
         provenance.get("provider_id").and_then(|v| v.as_str()),
         Some("ollama"),
@@ -1246,7 +1250,9 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         "first incremental run must be a clean miss",
     );
     assert_eq!(
-        first_stats.get("misses").and_then(serde_json::Value::as_u64),
+        first_stats
+            .get("misses")
+            .and_then(serde_json::Value::as_u64),
         Some(2),
         "first incremental run must register both files as misses",
     );
@@ -1276,7 +1282,9 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         "second run must hit the fingerprint cache for both files",
     );
     assert_eq!(
-        second_stats.get("misses").and_then(serde_json::Value::as_u64),
+        second_stats
+            .get("misses")
+            .and_then(serde_json::Value::as_u64),
         Some(0),
         "second run must have zero fingerprint-cache misses",
     );
@@ -1707,7 +1715,8 @@ fn debug_ast_dump_matches_committed_golden() -> Result<()> {
         .clone();
     let actual = String::from_utf8(output)?;
     assert_eq!(
-        actual, expected,
+        actual,
+        expected,
         "AST dump drifted from {}. If this is intentional, regenerate with \
          `cargo run -q -- --debug-ast {}` and commit the updated .expected.ast.",
         expected_path.display(),

@@ -167,12 +167,12 @@ Implements [OUTPUT-HUMAN-HTML]. HTML output gains collapsible per-occurrence `<d
 ### P7 Daemon foundation
 Implements [daemon.md](../specs/daemon.md). Long-running analysis service on which both the LSP shell (P8) and the MCP shell (P9) sit. The CLI binary is unaffected.
 
-- [ ] New crate `crates/codededup-daemon` depending on `codededup-core`. No new global state; `AnalysisSession` is the only live struct ([DAEMON-STATE]).
+- [ ] New crate `crates/codededup-daemon` depending on `codededup-core`. No new global state; `AnalysisSession` is the only live struct ([LIVE-STATE]).
 - [ ] Add `update_files(changed: &[FileId]) -> ReportDelta` entry point on `codededup-core::pipeline`. Internally reuses the P6 fingerprint cache and the P5 embedding cache; touches no new cache keys.
-- [ ] File watcher via `notify` with 250 ms debounce / 2 s cap ([DAEMON-WATCHER]). Excluded paths filtered before debounce.
-- [ ] Single-flight scheduler with queued coalescing. Budget: < 500 ms for ≤ 10 changed files on 100 K LOC ([DAEMON-PERF-BUDGETS]).
+- [ ] File watcher via `notify` with 250 ms debounce / 2 s cap ([LIVE-WATCHER]). Excluded paths filtered before debounce.
+- [ ] Single-flight scheduler with queued coalescing. Budget: < 500 ms for ≤ 10 changed files on 100 K LOC ([LIVE-PERF-BUDGETS]).
 - [ ] `ReportDelta` type at `codededup-core::report::delta`; stable cluster ids are already in place (P3), so deltas are a pure projection.
-- [ ] Query API transport-agnostic (`DaemonApi` trait): `report/get`, `report/delta`, `report/forFile`, `report/forRange`, `cluster/byId`, `duplicates/findSimilar`, `embedding/listModels`, `embedding/setModel`, `session/config` ([DAEMON-QUERY-API]).
+- [ ] Query API transport-agnostic (`DaemonApi` trait): `report/get`, `report/delta`, `report/forFile`, `report/forRange`, `cluster/byId`, `duplicates/findSimilar`, `embedding/listModels`, `embedding/setModel`, `session/config` ([LIVE-QUERY-API]).
 - [ ] `duplicates/findSimilar` with two input variants: open-buffer range (cache lookup) and `snippet + language` (in-memory parse, no cache mutation). Error types for unparseable / unsupported-language / below-min-nodes inputs.
 - [ ] `embedding/listModels` probes Ollama `/api/tags` and annotates each entry with `is_embedding_model` via one cached probe of `/api/embeddings`. Falls back to stub-only when Ollama is unreachable.
 - [ ] `embedding/setModel` swaps providers atomically, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), re-runs the embedding pass on existing subtrees. Returns the new `EmbeddingProvenance`.

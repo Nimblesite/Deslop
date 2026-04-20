@@ -1,6 +1,6 @@
 # LSP shell
 
-Thin Language Server Protocol shell over [DAEMON-BINARY]. Makes the live CodeDedup report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
+Thin Language Server Protocol shell over [LIVE-BINARY]. Makes the live CodeDedup report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
 
 Crate: `crates/codededup-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-lsp` (pure Rust, no C deps; already used by `rust-analyzer` and dozens of other servers).
 
@@ -90,7 +90,7 @@ The daemon is the authority — virtual docs are regenerated per request, not st
 
 ### [LSP-CUSTOM-METHODS] Custom LSP methods
 
-Standard LSP does not have a "give me the live dedup report" request, so the shell exposes a small custom namespace. These are the thin forwarding layer over [DAEMON-QUERY-API]:
+Standard LSP does not have a "give me the live dedup report" request, so the shell exposes a small custom namespace. These are the thin forwarding layer over [LIVE-QUERY-API]:
 
 | LSP method | Forwards to |
 |---|---|

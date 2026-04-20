@@ -1,6 +1,6 @@
 //! Report diff between two analysis generations.
 //!
-//! Implements the delta half of [DAEMON-DELTA]: a pure projection over
+//! Implements the delta half of [LIVE-DELTA]: a pure projection over
 //! two [`Report`] snapshots that exploits stable cluster ids
 //! ([PIPELINE-CLUSTER-EXACT] / [PIPELINE-RANK-WORST-FIRST] assign the
 //! id from the smallest member's hash) to classify every cluster as
@@ -63,11 +63,7 @@ impl ReportDelta {
     /// by id so the wire representation is deterministic for diff
     /// testing.
     #[must_use]
-    pub fn between(
-        prev: Option<(u64, &Report)>,
-        to_generation: u64,
-        next: &Report,
-    ) -> Self {
+    pub fn between(prev: Option<(u64, &Report)>, to_generation: u64, next: &Report) -> Self {
         let prev_clusters = prev
             .map(|(_, report)| clusters_by_id(report))
             .unwrap_or_default();
@@ -107,7 +103,7 @@ impl ReportDelta {
 
     /// Returns `true` when the delta carries no cluster changes. Used
     /// by the scheduler to decide whether to fire a `report/changed`
-    /// notification ([DAEMON-NOTIFICATIONS]) — a generation whose only
+    /// notification ([LIVE-NOTIFICATIONS]) — a generation whose only
     /// change is cache stats is not user-visible.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -143,10 +139,7 @@ fn clusters_equal(left: &ReportCluster, right: &ReportCluster) -> bool {
 }
 
 /// Bit-approximate equality for the four signal components.
-fn signals_equal(
-    left: crate::report::ReportSignals,
-    right: crate::report::ReportSignals,
-) -> bool {
+fn signals_equal(left: crate::report::ReportSignals, right: crate::report::ReportSignals) -> bool {
     (left.structural - right.structural).abs() <= f64::EPSILON
         && (left.token_jaccard - right.token_jaccard).abs() <= f64::EPSILON
         && (left.embedding_cos - right.embedding_cos).abs() <= f64::EPSILON

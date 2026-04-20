@@ -1,4 +1,4 @@
-//! Incremental pipeline session used by the daemon ([DAEMON-STATE]).
+//! Incremental pipeline session used by the daemon ([LIVE-STATE]).
 //!
 //! A [`PipelineSession`] keeps the last run's normalised trees,
 //! fingerprints, and source bytes live in memory keyed by [`FileId`].
@@ -40,7 +40,7 @@ use super::{
 };
 
 /// A long-running analysis context. Owned by the daemon; one instance
-/// per workspace root ([DAEMON-LIFECYCLE]).
+/// per workspace root ([LIVE-LIFECYCLE]).
 ///
 /// The session owns the [`FileRegistry`] used by its fingerprints, so
 /// `FileId`s issued by a session are only meaningful within that

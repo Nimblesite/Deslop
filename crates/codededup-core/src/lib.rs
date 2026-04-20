@@ -37,9 +37,9 @@ pub mod tokens;
 pub use config::{ExclusionConfig, DEFAULT_CONFIG_FILENAME};
 pub use delta::ReportDelta;
 pub use embedding::{
-    EmbeddingMode, EmbeddingProvider, EmbeddingSpec, OllamaProvider, ParseModeError,
-    ProviderError, StubProvider, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
-    DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    list_ollama_models, EmbeddingMode, EmbeddingProvider, EmbeddingSpec, OllamaModelInfo,
+    OllamaProvider, ParseModeError, ProviderError, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
