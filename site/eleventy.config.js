@@ -217,6 +217,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="theme-color" content="{{ site.themeColor | default('#0066cc') }}">
 
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg">
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
 
   {% for langCode in supportedLanguages %}
@@ -313,9 +314,15 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
 
   <header class="site-header">
     <nav class="nav">
-      <a href="{% if lang and lang != defaultLanguage %}/{{ lang }}/{% else %}/{% endif %}" class="logo">
-        {{ site.name | default(site.title) }}
-      </a>
+      <div class="logo-wrap">
+        <a href="{% if lang and lang != defaultLanguage %}/{{ lang }}/{% else %}/{% endif %}" class="logo">
+          <img src="/assets/img/logo.svg" alt="" class="logo-mark" width="28" height="28" aria-hidden="true">
+          <span class="logo-word">{{ site.name | default(site.title) }}</span>
+        </a>
+        <span class="logo-badge" aria-label="Live analysis server">
+          <span class="logo-badge__dot" aria-hidden="true"></span>live
+        </span>
+      </div>
 
       <ul class="nav-links">
         {% set navData = navigation %}
