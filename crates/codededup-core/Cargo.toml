@@ -14,6 +14,8 @@ serde = { workspace = true }
 serde_json.workspace = true
 tree-sitter.workspace = true
 tree-sitter-c-sharp.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-python.workspace = true
 ignore.workspace = true
 blake3.workspace = true
 

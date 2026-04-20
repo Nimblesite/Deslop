@@ -21,9 +21,13 @@ pub mod discover;
 pub mod error;
 pub mod fingerprint;
 pub mod lang;
+pub mod lsh;
+pub mod pair;
 pub mod pipeline;
 pub mod report;
+pub mod sibling;
 pub mod state;
+pub mod tokens;
 
 pub use error::CoreError;
 pub use pipeline::{run, PipelineConfig};

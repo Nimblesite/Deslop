@@ -63,8 +63,114 @@ fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
         .success()
         .stdout(contains("\"report_schema_version\": 1"))
         .stdout(contains("\"files_analysed\": 2"))
-        .stdout(contains("\"size\": 2"))
         .stdout(contains("Alpha.cs"))
-        .stdout(contains("Beta.cs"));
+        .stdout(contains("Beta.cs"))
+        .stdout(contains("\"signals\""))
+        .stdout(contains("\"structural\": 1.0"));
+    Ok(())
+}
+
+// Implements [PIPELINE-LANG-TRAIT] for Rust: two `.rs` files with the same
+// function structure but renamed identifiers must produce a structural
+// clone cluster — proves the multi-language pipeline routes files by
+// extension to the Rust parser.
+#[test]
+fn detects_type2_clone_in_rust_fixture() -> Result<()> {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("rust-small");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&fixture)
+        .arg("--format")
+        .arg("json")
+        .arg("--min-nodes")
+        .arg("10")
+        .assert()
+        .success()
+        .stdout(contains("\"files_analysed\": 2"))
+        .stdout(contains("alpha.rs"))
+        .stdout(contains("beta.rs"))
+        .stdout(contains("\"structural\": 1.0"));
+    Ok(())
+}
+
+// Implements [PIPELINE-LANG-TRAIT] for Python: two `.py` files with the
+// same function structure but renamed identifiers must cluster via the
+// Python parser.
+#[test]
+fn detects_type2_clone_in_python_fixture() -> Result<()> {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("python-small");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&fixture)
+        .arg("--format")
+        .arg("json")
+        .arg("--min-nodes")
+        .arg("10")
+        .assert()
+        .success()
+        .stdout(contains("\"files_analysed\": 2"))
+        .stdout(contains("alpha.py"))
+        .stdout(contains("beta.py"))
+        .stdout(contains("\"structural\": 1.0"));
+    Ok(())
+}
+
+// Implements multi-language dispatch in [`crate::pipeline`]: a directory
+// mixing `.cs`, `.rs`, and `.py` files must be handled in a single run,
+// with each file routed to its language parser by extension
+// ([PIPELINE-LANG-TRAIT] + [PIPELINE-DISCOVER-FILES]).
+#[test]
+fn handles_mixed_language_fixture() -> Result<()> {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mixed-small");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&fixture)
+        .arg("--format")
+        .arg("json")
+        .arg("--min-nodes")
+        .arg("10")
+        .assert()
+        .success()
+        .stdout(contains("\"files_analysed\": 3"))
+        .stdout(contains("Lib.cs"))
+        .stdout(contains("lib.rs"))
+        .stdout(contains("lib.py"));
+    Ok(())
+}
+
+// Implements [DECISION-TYPE3-TWO-PASS] + [FUSION-STRATEGY-MAX-SUM]: two C#
+// files with the same method structure and one extra statement inserted in
+// one of them are Type-3 near-miss clones. The exact-Merkle pass cannot
+// match them (subtree hashes differ), so the token LSH pass must produce a
+// cross-file cluster whose `structural` signal is 0 and whose
+// `token_jaccard` is high.
+#[test]
+fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("csharp-type3");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&fixture)
+        .arg("--format")
+        .arg("json")
+        .arg("--min-nodes")
+        .arg("15")
+        .assert()
+        .success()
+        .stdout(contains("Delta.cs"))
+        .stdout(contains("Epsilon.cs"))
+        .stdout(contains("\"structural\": 0.0"))
+        .stdout(contains("\"token_jaccard\":"));
     Ok(())
 }

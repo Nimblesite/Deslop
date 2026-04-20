@@ -8,11 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::{
-    ast::ByteRange,
-    cluster::Cluster,
-    state::FileRegistry,
-};
+use crate::{ast::ByteRange, cluster::Cluster, pair::PairScore, state::FileRegistry};
 
 /// Current report schema version. Bumped on breaking changes only.
 pub const REPORT_SCHEMA_VERSION: u32 = 1;
@@ -43,11 +39,42 @@ pub struct ReportCluster {
     pub size: usize,
     /// AST node count of one canonical member.
     pub canonical_node_count: usize,
+    /// Per-cluster signal breakdown so agent consumers can tell **why**
+    /// the cluster was flagged ([PRINCIPLES-AUDIENCE-AGENT],
+    /// [FUSION-STRATEGY-MAX-SUM]).
+    pub signals: ReportSignals,
     /// Every occurrence of the clone.
     pub occurrences: Vec<ReportOccurrence>,
     /// Agent-oriented one-line synthesis (see
     /// [PRINCIPLES-AUDIENCE-AGENT]).
     pub summary: String,
+}
+
+/// Per-cluster signal breakdown; mirrors
+/// [`crate::pair::PairScore`] but kept separate so the report schema is
+/// decoupled from the internal struct.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct ReportSignals {
+    /// Mean structural signal across the pairs that formed the cluster.
+    pub structural: f64,
+    /// Mean token Jaccard estimate across the pairs.
+    pub token_jaccard: f64,
+    /// Mean embedding cosine similarity across the pairs. 0.0 until
+    /// the P5 embedding pass lands.
+    pub embedding_cos: f64,
+    /// Max-normalized sum of the three components ([0, 3]).
+    pub fused: f64,
+}
+
+impl From<PairScore> for ReportSignals {
+    fn from(score: PairScore) -> Self {
+        Self {
+            structural: score.structural,
+            token_jaccard: score.token_jaccard,
+            embedding_cos: score.embedding_cos,
+            fused: score.fused(),
+        }
+    }
 }
 
 /// A single clone occurrence — a specific `(file, byte_range)`.
@@ -100,12 +127,19 @@ fn cluster_to_report(
         .iter()
         .map(|member| occurrence(member.file_id, member.byte_range, registry, scan_root))
         .collect();
-    let summary = summarise(cluster.members.len(), canonical_node_count, &occurrences);
+    let signals: ReportSignals = cluster.signals.into();
+    let summary = summarise(
+        cluster.members.len(),
+        canonical_node_count,
+        &occurrences,
+        signals,
+    );
     ReportCluster {
         id: cluster.id.clone(),
         weight: cluster.weight,
         size: cluster.members.len(),
         canonical_node_count,
+        signals,
         occurrences,
         summary,
     }
@@ -118,11 +152,13 @@ fn occurrence(
     registry: &FileRegistry,
     scan_root: &Path,
 ) -> ReportOccurrence {
-    let path = registry.path(file_id).map_or_else(PathBuf::new, |absolute| {
-        absolute
-            .strip_prefix(scan_root)
-            .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf)
-    });
+    let path = registry
+        .path(file_id)
+        .map_or_else(PathBuf::new, |absolute| {
+            absolute
+                .strip_prefix(scan_root)
+                .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf)
+        });
     ReportOccurrence {
         path,
         start_byte: byte_range.start,
@@ -131,19 +167,16 @@ fn occurrence(
 }
 
 /// Produces a short, agent-readable one-line summary for the cluster.
-fn summarise(size: usize, canonical_node_count: usize, occurrences: &[ReportOccurrence]) -> String {
-    let locations: Vec<String> = occurrences
-        .iter()
-        .take(3)
-        .map(|occurrence| {
-            format!(
-                "{}:{}-{}",
-                occurrence.path.display(),
-                occurrence.start_byte,
-                occurrence.end_byte
-            )
-        })
-        .collect();
+/// Includes the per-signal breakdown so a downstream agent can tell
+/// whether the cluster fired on structure, tokens, or both
+/// ([PRINCIPLES-AUDIENCE-AGENT]).
+fn summarise(
+    size: usize,
+    canonical_node_count: usize,
+    occurrences: &[ReportOccurrence],
+    signals: ReportSignals,
+) -> String {
+    let locations: Vec<String> = occurrences.iter().take(3).map(format_location).collect();
     let suffix = if occurrences.len() > locations.len() {
         format!(
             " (+{} more)",
@@ -153,7 +186,22 @@ fn summarise(size: usize, canonical_node_count: usize, occurrences: &[ReportOccu
         String::new()
     };
     format!(
-        "{size} copies of a {canonical_node_count}-node subtree at {locs}{suffix}",
+        "{size} copies of a {canonical_node_count}-node subtree at {locs}{suffix} \
+         [structural={structural:.2}, token_jaccard={token:.2}, embedding_cos={embed:.2}]",
         locs = locations.join(", "),
+        structural = signals.structural,
+        token = signals.token_jaccard,
+        embed = signals.embedding_cos,
+    )
+}
+
+/// Formats one occurrence as `path:start-end`. Extracted so
+/// [`summarise`] stays under the 20-line function budget.
+fn format_location(occurrence: &ReportOccurrence) -> String {
+    format!(
+        "{}:{}-{}",
+        occurrence.path.display(),
+        occurrence.start_byte,
+        occurrence.end_byte
     )
 }

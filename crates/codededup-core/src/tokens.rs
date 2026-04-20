@@ -28,11 +28,15 @@ pub fn token_stream(root: &NormalizedNode) -> Vec<&'static str> {
 /// its byte range. Used by the token LSH pass so that each fingerprint
 /// corresponds to a known (file, subtree) occurrence.
 #[must_use]
-pub fn token_stream_for_fingerprint<'a>(
-    root: &'a NormalizedNode,
+pub fn token_stream_for_fingerprint(
+    root: &NormalizedNode,
     fingerprint: &Fingerprint,
 ) -> Option<Vec<&'static str>> {
-    let node = locate(root, fingerprint.byte_range.start, fingerprint.byte_range.end)?;
+    let node = locate(
+        root,
+        fingerprint.byte_range.start,
+        fingerprint.byte_range.end,
+    )?;
     Some(token_stream(node))
 }
 
@@ -45,7 +49,9 @@ pub fn kgrams<'a>(tokens: &'a [&'static str], k: usize) -> Vec<&'a [&'static str
         return Vec::new();
     }
     let last_start = tokens.len().saturating_sub(k);
-    (0..=last_start).map(|start| window(tokens, start, k)).collect()
+    (0..=last_start)
+        .map(|start| window(tokens, start, k))
+        .collect()
 }
 
 /// Returns the k-wide slice of `tokens` starting at `start`. Split into its

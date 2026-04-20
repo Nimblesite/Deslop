@@ -7,7 +7,7 @@
 //! 2. Score each pair on two signals in `[0, 1]`: `structural_sim` (1.0 for
 //!    members of the same Merkle bucket, else the best-achievable subtree
 //!    overlap which is 0.0 for cross-bucket token-only candidates) and
-//!    `token_jaccard` estimated from the MinHash signatures.
+//!    `token_jaccard` estimated from the `MinHash` signatures.
 //! 3. Apply the fused threshold and form clusters via transitive closure.
 //!
 //! Pair scores go into the final report (see [PRINCIPLES-AUDIENCE-AGENT])
@@ -20,40 +20,70 @@ use crate::{
     lsh::{estimate_jaccard, Signature},
 };
 
-/// Minimum fused score required before a pair enters a cluster. Fused score
-/// is `structural_sim + token_jaccard` (max is 2.0); the 0.70 threshold
-/// accepts any exact structural match and any Type-3 pair with Jaccard
-/// ≥ 0.70.
-pub const FUSED_THRESHOLD: f64 = 0.70;
+/// Minimum fused score required before a pair enters a cluster. The
+/// threshold is calibrated against the two deterministic signals only —
+/// exact structural matches score 2.0 (1.0 structural + 1.0 Jaccard);
+/// Type-3 candidates discovered by LSH alone need `token_jaccard` ≥
+/// [`LSH_ONLY_MIN_JACCARD`] *and* the fused threshold below, which
+/// together keep LSH-only noise out of clusters. The literature
+/// ([TECH-TOKEN-SOURCERERCC]) treats Jaccard ≥ 0.7 as a typical Type-3
+/// cutoff; we go higher for LSH-only because those pairs have no
+/// structural anchor.
+pub const FUSED_THRESHOLD: f64 = 0.85;
+/// Additional Jaccard floor applied to pairs that fired only on the LSH
+/// path (no structural hash match). Keeps thousands of tiny "same
+/// `using` / `namespace` structure" sibling windows from merging into
+/// one mega-cluster via transitive closure.
+pub const LSH_ONLY_MIN_JACCARD: f64 = 0.90;
+/// Minimum node count required at **both endpoints** for an LSH-only pair
+/// to survive clustering. Small subtrees have low information content —
+/// an 18-node k-gram set is mostly grammar scaffolding (`using`,
+/// `namespace`, `method_declaration`), so tens of thousands of such
+/// subtrees reach Jaccard ≈ 1.0 purely by accident. Requiring a
+/// substantive node count forces LSH-only matches to carry real signal.
+pub const LSH_ONLY_MIN_NODE_COUNT: usize = 40;
 
 /// Per-pair score breakdown in `[0, 1]`. See
-/// [FUSION-STRATEGY-MAX-SUM] for the semantics.
+/// [FUSION-STRATEGY-MAX-SUM] for the semantics. Three slots are reserved
+/// from v1 so the embedding pass in P5 is additive, not a schema bump:
+/// the ensemble-LLM 2025 finding is that sum/max fusion (never average)
+/// gives the biggest gain.
 #[derive(Debug, Clone, Copy)]
 pub struct PairScore {
-    /// 1.0 when the pair shares an exact Merkle bucket, else 0.0. The
-    /// embedding pass in P5 will broaden this to `[0, 1]`.
+    /// 1.0 when the pair shares an exact Merkle bucket, else 0.0.
     pub structural: f64,
     /// Estimated k-gram Jaccard in `[0, 1]`.
     pub token_jaccard: f64,
+    /// Cosine similarity from the embedding pass, in `[0, 1]`. Populated
+    /// in P5 once the `EmbeddingProvider` trait is wired; 0.0 today so
+    /// the fused score is a sum of the two deterministic signals.
+    pub embedding_cos: f64,
 }
 
 impl PairScore {
-    /// Max-normalized sum. Each component is already normalised to `[0, 1]`
-    /// so the sum lives in `[0, 2]`.
+    /// Max-normalized sum of all three component scores. Each component is
+    /// already in `[0, 1]`, so the fused value lives in `[0, 3]`. The
+    /// ensemble-LLM 2025 paper is explicit that *averaging* hurts; sum /
+    /// max help.
     #[must_use]
     pub fn fused(self) -> f64 {
-        self.structural + self.token_jaccard
+        self.structural + self.token_jaccard + self.embedding_cos
     }
 }
 
 /// A candidate clone pair identified by fingerprint indices into the
-/// flattened fingerprint list, plus its score.
+/// flattened fingerprint list, plus its score and the node counts of
+/// both endpoints (needed by [`is_surviving`] to reject low-information
+/// LSH-only matches).
 #[derive(Debug, Clone, Copy)]
 pub struct CandidatePair {
     /// Lower fingerprint index.
     pub left: usize,
     /// Higher fingerprint index.
     pub right: usize,
+    /// Node count of the smaller endpoint — used as the LSH-only
+    /// information-content floor.
+    pub min_node_count: usize,
     /// Computed signal breakdown.
     pub score: PairScore,
 }
@@ -84,10 +114,17 @@ pub fn candidate_pairs(
     let mut scores: HashMap<(usize, usize), f64> = HashMap::new();
     collect_structural_pairs(fingerprints, &mut scores);
     add_lsh_pairs(lsh_pairs, &mut scores);
-    finalise_pairs(signatures, scores)
+    finalise_pairs(fingerprints, signatures, scores)
 }
 
-/// Populates `scores` with `1.0` for every pair sharing a Merkle hash.
+/// Populates `scores` with `1.0` for every structural (Merkle-hash) pair.
+///
+/// Uses a **star topology** per bucket rather than a full N² enumeration:
+/// the canonical member of the bucket is paired with every other member,
+/// which is `O(n)` per bucket and still produces the same connected
+/// component under transitive closure. For a bucket of `2_000` clones this
+/// is `2_000` pairs instead of `2_000_000` — critical on large
+/// generated-code corpora.
 fn collect_structural_pairs(
     fingerprints: &[Fingerprint],
     scores: &mut HashMap<(usize, usize), f64>,
@@ -97,11 +134,14 @@ fn collect_structural_pairs(
         by_hash.entry(fingerprint.hash).or_default().push(index);
     }
     for bucket in by_hash.values() {
-        for (i_pos, left) in bucket.iter().enumerate() {
-            for right in bucket.iter().skip(i_pos.saturating_add(1)) {
-                let key = order(*left, *right);
-                let _previous = scores.insert(key, 1.0_f64);
-            }
+        let mut sorted = bucket.clone();
+        sorted.sort_unstable();
+        let Some(canonical) = sorted.first().copied() else {
+            continue;
+        };
+        for other in sorted.iter().skip(1) {
+            let key = order(canonical, *other);
+            let _previous = scores.insert(key, 1.0_f64);
         }
     }
 }
@@ -117,8 +157,10 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
 }
 
 /// Converts raw `(left, right) → structural_score` map into a sorted
-/// [`CandidatePair`] list with token Jaccard filled in from the signatures.
+/// [`CandidatePair`] list with token Jaccard filled in from the signatures
+/// and the minimum endpoint node count attached for downstream filtering.
 fn finalise_pairs(
+    fingerprints: &[Fingerprint],
     signatures: &[Signature],
     scores: HashMap<(usize, usize), f64>,
 ) -> Vec<CandidatePair> {
@@ -127,14 +169,25 @@ fn finalise_pairs(
         .map(|((left, right), structural)| CandidatePair {
             left,
             right,
+            min_node_count: min_node_count(fingerprints, left, right),
             score: PairScore {
                 structural,
                 token_jaccard: jaccard_for(signatures, left, right),
+                embedding_cos: 0.0,
             },
         })
         .collect();
-    pairs.sort_unstable_by(|a, b| (a.left, a.right).cmp(&(b.left, b.right)));
+    pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
     pairs
+}
+
+/// Returns the smaller endpoint node count. Defaults to 0 when either
+/// index is out of bounds — an impossible state in the current pipeline,
+/// but keeps the helper total.
+fn min_node_count(fingerprints: &[Fingerprint], left: usize, right: usize) -> usize {
+    let l = fingerprints.get(left).map_or(0, |f| f.node_count);
+    let r = fingerprints.get(right).map_or(0, |f| f.node_count);
+    l.min(r)
 }
 
 /// Looks up both signatures and returns their estimated Jaccard. Returns
@@ -159,15 +212,31 @@ const fn order(a: usize, b: usize) -> (usize, usize) {
     }
 }
 
+/// Applies the compound "survives clustering?" decision to a single pair.
+/// Exact structural pairs (`structural == 1.0`) always survive when they
+/// clear [`FUSED_THRESHOLD`]. LSH-only pairs additionally have to clear
+/// [`LSH_ONLY_MIN_JACCARD`] so tiny sibling-window collisions do not
+/// merge thousands of unrelated fingerprints via transitive closure.
+fn is_surviving(pair: &CandidatePair) -> bool {
+    if pair.score.fused() < FUSED_THRESHOLD {
+        return false;
+    }
+    let lsh_only = pair.score.structural <= 0.0;
+    if lsh_only && pair.score.token_jaccard < LSH_ONLY_MIN_JACCARD {
+        return false;
+    }
+    if lsh_only && pair.min_node_count < LSH_ONLY_MIN_NODE_COUNT {
+        return false;
+    }
+    true
+}
+
 /// Filters `pairs` by the fused threshold and returns the connected
 /// components as [`FusedCluster`]s. Members inside each cluster are sorted
 /// ascending so the final output is deterministic.
 #[must_use]
 pub fn cluster_by_transitive_closure(pairs: &[CandidatePair]) -> Vec<FusedCluster> {
-    let surviving: Vec<&CandidatePair> = pairs
-        .iter()
-        .filter(|pair| pair.score.fused() >= FUSED_THRESHOLD)
-        .collect();
+    let surviving: Vec<&CandidatePair> = pairs.iter().filter(|pair| is_surviving(pair)).collect();
     if surviving.is_empty() {
         return Vec::new();
     }
@@ -186,7 +255,8 @@ fn build_clusters(
     surviving: &[&CandidatePair],
 ) -> Vec<FusedCluster> {
     let mut groups: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
-    for (&member, _) in parents.clone().iter() {
+    let members: Vec<usize> = parents.keys().copied().collect();
+    for member in members {
         let root = find(parents, member);
         let _inserted = groups.entry(root).or_default().insert(member);
     }
@@ -218,12 +288,14 @@ fn build_cluster(
         PairScore {
             structural: 0.0,
             token_jaccard: 0.0,
+            embedding_cos: 0.0,
         }
     } else {
         let divisor = f64::from(count);
         PairScore {
             structural: structural_sum / divisor,
             token_jaccard: jaccard_sum / divisor,
+            embedding_cos: 0.0,
         }
     };
     FusedCluster {
@@ -237,15 +309,24 @@ fn ensure_root(parents: &mut BTreeMap<usize, usize>, id: usize) -> usize {
     *parents.entry(id).or_insert(id)
 }
 
-/// Union-find find with path compression.
+/// Iterative union-find with path compression. Iterative so the
+/// recursion depth cannot overflow the stack on corpora with long
+/// equivalence chains (≥17K fingerprints observed on real C# repos).
 fn find(parents: &mut BTreeMap<usize, usize>, id: usize) -> usize {
-    let parent = parents.get(&id).copied().unwrap_or(id);
-    if parent == id {
-        return id;
+    let mut current = id;
+    let mut path: Vec<usize> = Vec::new();
+    loop {
+        let parent = parents.get(&current).copied().unwrap_or(current);
+        if parent == current {
+            break;
+        }
+        path.push(current);
+        current = parent;
     }
-    let root = find(parents, parent);
-    let _previous = parents.insert(id, root);
-    root
+    for node in path {
+        let _previous = parents.insert(node, current);
+    }
+    current
 }
 
 /// Union-find union.

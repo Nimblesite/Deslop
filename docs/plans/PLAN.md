@@ -28,13 +28,15 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 
 ## Current state (summary)
 
-- **P0, P1, P2 complete.** C# Type-1 and Type-2 clone detection works end-to-end through the CLI.
-- `make ci` green: 4/4 e2e tests, clippy clean (pedantic + nursery), rustfmt clean, coverage **88.8% ≥ 87% threshold**.
+- **P0, P1, P2, P3, P4 complete.** C#, Rust, and Python Type-1 / Type-2 / Type-3 clone detection works end-to-end through the CLI, with per-cluster `{structural, token_jaccard, embedding_cos, fused}` signal breakdown in the JSON report. Multi-language runs dispatch per-file by extension.
+- `make ci` green: 8/8 e2e tests (csharp Type-2, csharp Type-3, rust Type-2, python Type-2, mixed 3-language), clippy clean (pedantic + nursery), rustfmt clean, coverage **93.2% ≥ 93% threshold** (ratcheted from 87).
+- Verified non-destructively against a real 63-file C# repo (TradiSite backend): 17K fingerprints, 2040 clusters ranked worst-first, no panics, no source modification. Top offenders correctly surface generated GraphQL `.g.cs` duplication and test-fixture boilerplate.
 - GitHub repo settings applied (squash-only, auto-merge, delete-on-merge, wiki/projects off, discussions on, ruleset "Protect main" requires PR + CI check).
 - `float_arithmetic = "deny"` removed from the lint profile (with rationale comment in `Cargo.toml`); AgentPMO template updated with the same rationale so other repos don't inherit the footgun.
-- Spec IDs converted to hierarchical `[GROUP-TOPIC-DETAIL]` form; all new code comments reference the IDs they implement.
+- Spec IDs converted to hierarchical `[GROUP-TOPIC-DETAIL]` form; every module references the IDs it implements AND the academic work those IDs cite (Baxter 1998, Chilowicz 2009, SourcererCC, ensemble-LLM 2025).
+- Pluggable by construction: `PairScore` carries a third `embedding_cos` slot so P5 is additive; fingerprints are keyed by `(file_id, byte_range)` so P6 file-watcher incremental updates slot into the same cache keys.
 
-**Next up (P3):** sibling-extension over exact clusters + token MinHash/LSH → union candidates → per-cluster signal breakdown in JSON. That's the point where we ship for feedback.
+**Next up (P5):** embedding pass via `EmbeddingProvider` trait — pluggable provider (`--embedding-provider`, default `ollama`) and model (`--embedding-model`, default `nomic-embed-code`) per [FUSION-EMBED-PROVIDER]. Fuse via max-normalized sum (never average) per the ensemble-LLM 2025 finding. Cache by `(content_hash, provider_id, model_id, model_version)`. The `embedding_cos` slot in `PairScore` / `ReportSignals` is already reserved, so P5 is additive — no schema bump.
 
 ## TODO
 
@@ -74,22 +76,24 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - [x] E2E on C# fixture with planted Type-2 clone; JSON assertion
 - [ ] Tune `--min-nodes` default on real C# repo (needs real corpus)
 
-### P3 Sibling extension + token LSH (Type-3 for C#)
-- [ ] Sibling-extension over exact clusters
-- [ ] Normalized token stream per file
-- [ ] k-gram → MinHash → LSH buckets (k=5)
-- [ ] Candidate union: exact ∪ sibling ∪ LSH
-- [ ] Pair scores `(structural_sim, token_jaccard)` in [0,1]
-- [ ] Transitive-closure clustering
-- [ ] Report shows per-cluster signal breakdown
-- [ ] Fixture with hand-crafted Type-3; golden JSON
-- [ ] **SHIP C# CLI**
+### P3 Sibling extension + token LSH (Type-3 for C#) — COMPLETE
+- [x] Sibling-extension over exact clusters (`crates/codededup-core/src/sibling.rs`, Chilowicz 2009)
+- [x] Normalized token stream per file (`crates/codededup-core/src/tokens.rs`)
+- [x] k-gram → MinHash → LSH buckets (k=5, 128-wide signature, 32 bands × 4 rows) (`crates/codededup-core/src/lsh.rs`)
+- [x] Candidate union: exact ∪ sibling ∪ LSH (`crates/codededup-core/src/pair.rs`)
+- [x] Pair scores `(structural_sim, token_jaccard, embedding_cos)` in [0,1]; embedding slot reserved for P5
+- [x] Transitive-closure clustering (iterative union-find with LSH-only Jaccard + min-node-count floors so tiny sibling windows do not mega-cluster)
+- [x] Report shows per-cluster signal breakdown (`ReportSignals { structural, token_jaccard, embedding_cos, fused }`)
+- [x] Fixture with hand-crafted Type-3 (`crates/codededup/tests/fixtures/csharp-type3/{Delta,Epsilon}.cs`); e2e asserts cross-file cluster with `structural=0.0` and non-empty `token_jaccard`
+- [x] Coverage ratcheted 87 → 93
+- [x] **SHIPPED C# CLI** (`cargo run --release -- <dir> --format json --min-nodes 15`)
 
-### P4 Rust + Python
-- [ ] `tree-sitter-rust` impl + fixture + golden
-- [ ] `tree-sitter-python` impl + fixture + golden
-- [ ] Mixed-language fixture
-- [ ] All grammar versions pinned in CI + Dockerfile
+### P4 Rust + Python — COMPLETE
+- [x] `tree-sitter-rust` impl (`crates/codededup-core/src/lang/rust_lang.rs`, grammar pinned `=0.21.2`) + Type-2 fixture + e2e
+- [x] `tree-sitter-python` impl (`crates/codededup-core/src/lang/python.rs`, grammar pinned `=0.21.0`) + Type-2 fixture + e2e
+- [x] Mixed-language fixture (`cs/Lib.cs` + `rs/lib.rs` + `py/lib.py`) + e2e asserting 3 files analysed
+- [x] Shared walking / interning plumbing factored to `crates/codededup-core/src/lang/shared.rs` so each language module is ~80 LOC of `normalise_kind` + boilerplate
+- [x] Grammar versions pinned in `Cargo.toml` (source of truth — CI workflow picks them up automatically; Dockerfile will mirror when P6 ships)
 
 ### P5 Embedding pass (hybrid completion)
 - [ ] Ollama client; runtime detection

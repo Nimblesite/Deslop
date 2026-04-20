@@ -1,8 +1,8 @@
-//! MinHash + banded LSH for Type-3 candidate discovery.
+//! `MinHash` + banded LSH for Type-3 candidate discovery.
 //!
 //! Implements the token LSH stage of [FUSION-SIGNALS-THREE-LAYER] and the
 //! second pass of [DECISION-TYPE3-TWO-PASS]. Computes a deterministic
-//! MinHash signature over k-grams of normalised node kinds and splits the
+//! `MinHash` signature over k-grams of normalised node kinds and splits the
 //! signature into `BANDS × ROWS_PER_BAND` bands; pairs of fingerprints
 //! sharing at least one identical band are returned as candidate Type-3
 //! clones. Jaccard similarity is estimated from the full signatures.
@@ -32,8 +32,8 @@ pub const ROWS_PER_BAND: usize = 4;
 /// treat the feature as "infinitely far."
 const EMPTY_HASH_SENTINEL: u64 = u64::MAX;
 
-/// MinHash signature for one subtree. Fixed-length array to avoid per-call
-/// allocation in the hot loop.
+/// `MinHash` signature for one subtree. Fixed-length array to avoid
+/// per-call allocation in the hot loop.
 pub type Signature = [u64; SIGNATURE_LEN];
 
 /// Computes a [`Signature`] for a set of k-grams of normalised node kinds.
@@ -83,18 +83,25 @@ pub fn band_collisions(signatures: &[Signature]) -> Vec<(usize, usize)> {
     collect_pairs(&buckets)
 }
 
-/// Extracts and deduplicates all pairs from LSH buckets. Split out of
-/// [`band_collisions`] so each function stays under the 20-line budget.
+/// Extracts deduplicated pairs from LSH buckets using a star topology per
+/// bucket (the canonical member is paired with every other), matching the
+/// structural-pass strategy in [`crate::pair::collect_structural_pairs`].
+/// This keeps the LSH pair count linear in bucket size, which matters for
+/// popular bands on large corpora where a single bucket can hold
+/// thousands of fingerprints.
 fn collect_pairs(buckets: &HashMap<[u8; 32], Vec<usize>>) -> Vec<(usize, usize)> {
     let mut pairs: Vec<(usize, usize)> = Vec::new();
     for members in buckets.values() {
         if members.len() < 2 {
             continue;
         }
-        for (a_pos, a_index) in members.iter().enumerate() {
-            for b_index in members.iter().skip(a_pos.saturating_add(1)) {
-                pairs.push(ordered_pair(*a_index, *b_index));
-            }
+        let mut sorted = members.clone();
+        sorted.sort_unstable();
+        let Some(canonical) = sorted.first().copied() else {
+            continue;
+        };
+        for other in sorted.iter().skip(1) {
+            pairs.push(ordered_pair(canonical, *other));
         }
     }
     pairs.sort_unstable();
@@ -113,7 +120,7 @@ const fn ordered_pair(a: usize, b: usize) -> (usize, usize) {
 }
 
 /// Hashes one band of a signature into a stable 32-byte key used as a
-/// HashMap bucket.
+/// `HashMap` bucket.
 fn band_key(signature: &Signature, band: usize) -> [u8; 32] {
     let mut hasher = Hasher::new();
     let start = band.saturating_mul(ROWS_PER_BAND);

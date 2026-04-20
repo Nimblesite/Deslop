@@ -196,7 +196,7 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 ## Pipeline stages (v1, hybrid by default)
 
 ### [PIPELINE-LANG-TRAIT] Language plugin trait
-The single extension point. Implementations live in `codededup-core::lang::<name>`. Each implementation provides: (a) tree-sitter grammar factory, (b) file-extension filter, (c) per-language node-kind normalization rules that collapse identifier / literal / trivia nodes into their structural kind. The trait output type (`NormalizedNode`) is identical across languages so downstream stages are language-agnostic.
+The single extension point. Implementations live in `codededup-core::lang::<name>`. Each implementation provides: (a) tree-sitter grammar factory, (b) file-extension filter, (c) per-language node-kind normalization rules that collapse identifier / literal / trivia nodes into their structural kind. The trait output type (`NormalizedNode`) is identical across languages so downstream stages are language-agnostic. v1 ships with three plug-ins: `csharp` (`tree-sitter-c-sharp`), `rust` (`tree-sitter-rust`), and `python` (`tree-sitter-python`). Adding a language = one `LanguageParser` impl + pinning the grammar version in `Cargo.toml`. Shared walking / interning plumbing lives in `lang::shared` so every language module is just a `normalise_kind` match plus boilerplate.
 
 ### [PIPELINE-DISCOVER-FILES] File discovery
 Walk the target path with the `ignore` crate, respecting `.gitignore` and Git's standard ignore rules. Filter by the set of file extensions contributed by registered `LanguageParser`s. Every discovered path is registered with [STATE-FILE-REGISTRY] and downstream code traffics in `FileId`, never `Path`.

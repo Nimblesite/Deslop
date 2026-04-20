@@ -56,15 +56,19 @@ fn emit_windows(siblings: &[NormalizedNode], min_nodes: usize, out: &mut Vec<Fin
     let cumulative = cumulative_node_counts(siblings);
     let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
     for start in 0..siblings.len() {
-        let max_end = start
-            .saturating_add(MAX_WINDOW_WIDTH)
-            .min(siblings.len());
+        let max_end = start.saturating_add(MAX_WINDOW_WIDTH).min(siblings.len());
         for end in start.saturating_add(2)..=max_end {
             let node_count = window_node_count(&cumulative, start, end);
             if node_count < min_nodes {
                 continue;
             }
-            out.push(window_fingerprint(siblings, &child_hashes, start, end, node_count));
+            out.push(window_fingerprint(
+                siblings,
+                &child_hashes,
+                start,
+                end,
+                node_count,
+            ));
         }
     }
 }

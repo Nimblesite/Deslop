@@ -1,10 +1,13 @@
-//! Exact subtree clustering and ranking.
+//! Clone cluster materialisation and ranking.
 //!
-//! Implements [PIPELINE-CLUSTER-EXACT] and [PIPELINE-RANK-WORST-FIRST].
-//! Groups fingerprints by hash, drops singletons, and sorts by the
-//! "worst offenders first" weighting formula.
-
-use std::collections::HashMap;
+//! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
+//! [FUSION-STRATEGY-MAX-SUM], and the "worst offenders first" scoring of
+//! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
+//! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
+//! contributing to those clusters are (a) exact structural buckets per
+//! [PIPELINE-CLUSTER-EXACT] / Baxter 1998 ([TECH-AST-FINGERPRINT]) and
+//! (b) token LSH bucket collisions per `SourcererCC`
+//! ([TECH-TOKEN-SOURCERERCC]).
 
 use crate::{
     fingerprint::Fingerprint,
@@ -30,18 +33,23 @@ pub struct Cluster {
     pub signals: PairScore,
 }
 
-/// Builds clusters from a flat fingerprint list and ranks them. Singleton
-/// hash buckets are filtered out: a single occurrence is not duplication.
+/// Builds ranked clusters from a fused-cluster list produced by
+/// [`crate::pair::cluster_by_transitive_closure`]. Each `FusedCluster`
+/// references fingerprint indices; this function materialises the full
+/// [`Cluster`] so the ranking and rendering stages do not have to know
+/// how the cluster was discovered.
+///
+/// Signal breakdown comes from `cluster.mean_score`. Cluster ids are
+/// derived from the smallest member's hash so identical fused clusters
+/// across runs always report the same id.
 #[must_use]
-pub fn build_ranked_clusters(fingerprints: Vec<Fingerprint>) -> Vec<Cluster> {
-    let mut by_hash: HashMap<[u8; 32], Vec<Fingerprint>> = HashMap::new();
-    for fingerprint in fingerprints {
-        by_hash.entry(fingerprint.hash).or_default().push(fingerprint);
-    }
-    let mut clusters: Vec<Cluster> = by_hash
-        .into_iter()
-        .filter(|(_, members)| members.len() >= 2)
-        .map(|(hash, members)| build_cluster(hash, members))
+pub fn build_ranked_fused_clusters(
+    fingerprints: &[Fingerprint],
+    fused_clusters: &[FusedCluster],
+) -> Vec<Cluster> {
+    let mut clusters: Vec<Cluster> = fused_clusters
+        .iter()
+        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
         .collect();
     clusters.sort_by(|left, right| {
         right
@@ -53,20 +61,39 @@ pub fn build_ranked_clusters(fingerprints: Vec<Fingerprint>) -> Vec<Cluster> {
     clusters
 }
 
-/// Finalises a hash bucket into a [`Cluster`], computing the weight.
-fn build_cluster(hash: [u8; 32], members: Vec<Fingerprint>) -> Cluster {
+/// Rehydrates a single `FusedCluster` into a [`Cluster`], or returns
+/// `None` when the cluster is empty (should not happen — the fused
+/// clusterer discards single-member components).
+fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Option<Cluster> {
+    let members: Vec<Fingerprint> = fused
+        .members
+        .iter()
+        .filter_map(|index| fingerprints.get(*index).cloned())
+        .collect();
+    if members.len() < 2 {
+        return None;
+    }
     let size = members.len();
-    let first_member = members.first().map_or(0, |m| m.node_count);
+    let smallest_nodes = members
+        .iter()
+        .map(|member| member.node_count)
+        .min()
+        .unwrap_or(0);
     let spanned_bytes: u64 = members
         .iter()
-        .map(|m| u64::try_from(m.byte_range.len()).unwrap_or(u64::MAX))
+        .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
         .fold(0_u64, u64::saturating_add);
-    let weight = rank_weight(first_member, size, spanned_bytes);
-    Cluster {
-        id: encode_short_id(hash),
+    let weight = rank_weight(smallest_nodes, size, spanned_bytes);
+    let id_source = members
+        .iter()
+        .min_by_key(|member| member.hash)
+        .map_or([0_u8; 32], |member| member.hash);
+    Some(Cluster {
+        id: encode_short_id(id_source),
         members,
         weight,
-    }
+        signals: fused.mean_score,
+    })
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.

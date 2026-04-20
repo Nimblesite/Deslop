@@ -4,12 +4,7 @@
 //! dispatches to the library. A future MCP/LSP daemon will be a sibling
 //! binary over the same crate.
 
-use std::{
-    fmt::Write as _,
-    fs,
-    io::Write as _,
-    path::PathBuf,
-};
+use std::{fmt::Write as _, fs, io::Write as _, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -90,9 +85,7 @@ fn emit_report(
     guard
         .write_all(payload.as_bytes())
         .context("write report to stdout")?;
-    guard
-        .write_all(b"\n")
-        .context("write trailing newline")?;
+    guard.write_all(b"\n").context("write trailing newline")?;
     Ok(())
 }
 
