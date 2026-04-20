@@ -60,7 +60,7 @@ lint:
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 fmt:
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
-	cargo fmt --all$(if $(CHECK), --check,)
+	@set -o pipefail; cargo fmt --all$(if $(CHECK), --check,) 2>&1 | grep -v "unstable features are only available in nightly channel" || true; exit $${PIPESTATUS[0]}
 
 ## clean: Remove all build artifacts
 clean:
@@ -69,8 +69,12 @@ clean:
 	$(RM) lcov.info
 	$(RM) .codededup-cache
 
-## ci: lint + test + build (full CI simulation — no Ollama required)
-ci: lint test build
+## ci: fmt check + lint + test + build (full CI simulation — no Ollama required)
+ci:
+	@$(MAKE) fmt CHECK=1
+	@$(MAKE) lint
+	@$(MAKE) test
+	@$(MAKE) build
 
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:

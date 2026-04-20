@@ -221,8 +221,14 @@ fn long_clone_html_caps_inline_preview_and_folds_rest() -> Result<()> {
     let scan_root = tmp.path().join("src");
     fs::create_dir_all(&scan_root)?;
     let body = build_long_clone_body(60);
-    fs::write(scan_root.join("Alpha.cs"), wrap_clone_in_class("Alpha", &body))?;
-    fs::write(scan_root.join("Beta.cs"), wrap_clone_in_class("Beta", &body))?;
+    fs::write(
+        scan_root.join("Alpha.cs"),
+        wrap_clone_in_class("Alpha", &body),
+    )?;
+    fs::write(
+        scan_root.join("Beta.cs"),
+        wrap_clone_in_class("Beta", &body),
+    )?;
     let out = outputs_under(tmp.path());
     let mut cmd = Command::cargo_bin("codededup")?;
     let _assertion = cmd
@@ -259,9 +265,7 @@ fn build_long_clone_body(statements: usize) -> String {
 /// Wraps `body` in a minimal C# class so the C# parser produces a
 /// real method-level subtree the clusterer can fingerprint.
 fn wrap_clone_in_class(class: &str, body: &str) -> String {
-    format!(
-        "public class {class} {{\n    public void Run() {{\n{body}    }}\n}}\n",
-    )
+    format!("public class {class} {{\n    public void Run() {{\n{body}    }}\n}}\n",)
 }
 
 // Implements [OUTPUT-FORMAT-DERIVED] suppression flags: `--nojson
