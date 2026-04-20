@@ -518,9 +518,11 @@ fn malformed_config_file_reports_error() -> Result<()> {
         .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
+        .arg("--no-color")
         .assert()
         .failure()
-        .stderr(contains("failed to parse exclusion config"));
+        .stderr(contains("failed to parse exclusion config"))
+        .stderr(contains("failed"));
     Ok(())
 }
 
@@ -1242,16 +1244,24 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
         .filter(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("codededup-") && name.ends_with(".log"))
+                .is_some_and(|name| {
+                name.starts_with("codededup-")
+                    && Path::new(name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
+            })
         })
         .collect();
     assert_eq!(
         log_files.len(),
         1,
-        "expected exactly one timestamped log file, found {:?}",
-        log_files
+        "expected exactly one timestamped log file, found {log_files:?}",
     );
-    let log_body = fs::read_to_string(&log_files[0])?;
+    let log_file = log_files
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("log_files vec unexpectedly empty"))?;
+    let log_body = fs::read_to_string(&log_file)?;
     assert!(
         log_body.contains("codededup invoked"),
         "log file missing the invoked event: {log_body}"
@@ -1286,13 +1296,17 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
         .filter(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("codededup-") && name.ends_with(".log"))
+                .is_some_and(|name| {
+                name.starts_with("codededup-")
+                    && Path::new(name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
+            })
         })
         .collect();
     assert!(
         log_files.is_empty(),
-        "--log-to-console must not create a log file: {:?}",
-        log_files,
+        "--log-to-console must not create a log file: {log_files:?}",
     );
     Ok(())
 }
@@ -1321,7 +1335,12 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
         .find(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("codededup-") && name.ends_with(".log"))
+                .is_some_and(|name| {
+                name.starts_with("codededup-")
+                    && Path::new(name)
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
+            })
         })
         .ok_or_else(|| anyhow::anyhow!("no timestamped log file written"))?;
     let log_body = fs::read_to_string(&log_path)?;

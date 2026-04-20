@@ -88,18 +88,26 @@ struct FileSink {
 
 impl io::Write for FileSink {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let Ok(mut guard) = self.inner.lock() else {
-            return Err(io::Error::other("log mutex poisoned"));
-        };
-        guard.write(buf)
+        with_guard(self.inner, |file| file.write(buf))
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        let Ok(mut guard) = self.inner.lock() else {
-            return Err(io::Error::other("log mutex poisoned"));
-        };
-        guard.flush()
+        with_guard(self.inner, io::Write::flush)
     }
+}
+
+/// Runs `action` under the shared log-file mutex, turning a poisoned
+/// mutex into an `io::Error::other`. Shared by [`FileSink::write`]
+/// and [`FileSink::flush`] so the `tracing` writer code path is
+/// exercised by both.
+fn with_guard<T>(
+    lock: &Mutex<fs::File>,
+    action: impl FnOnce(&mut fs::File) -> io::Result<T>,
+) -> io::Result<T> {
+    let Ok(mut guard) = lock.lock() else {
+        return Err(io::Error::other("log mutex poisoned"));
+    };
+    action(&mut guard)
 }
 
 /// Parses `--log-level <level>` and composes it with `RUST_LOG`.
