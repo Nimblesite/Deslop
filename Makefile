@@ -60,7 +60,9 @@ lint:
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 fmt:
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
-	@set -o pipefail; cargo fmt --all$(if $(CHECK), --check,) 2>&1 | grep -v "unstable features are only available in nightly channel" || true; exit $${PIPESTATUS[0]}
+	@_fmt_out=$$(cargo fmt --all$(if $(CHECK), --check,) 2>&1); _fmt_rc=$$?; \
+	 echo "$$_fmt_out" | grep -v "unstable features are only available in nightly channel" || true; \
+	 exit $$_fmt_rc
 
 ## clean: Remove all build artifacts
 clean:

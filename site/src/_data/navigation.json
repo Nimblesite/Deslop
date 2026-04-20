@@ -1,7 +1,6 @@
 {
   "main": [
     { "text": "Docs", "url": "/docs/" },
-    { "text": "Design", "url": "/docs/design-system/" },
     { "text": "Blog", "url": "/blog/" },
     { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/CodeDedup", "external": true }
   ],
@@ -13,13 +12,6 @@
         { "text": "How It Works", "url": "/docs/how-it-works/" },
         { "text": "AI Integration", "url": "/docs/ai-integration/" },
         { "text": "Output Formats", "url": "/docs/output-formats/" }
-      ]
-    },
-    {
-      "title": "Design",
-      "items": [
-        { "text": "Design System", "url": "/docs/design-system/" },
-        { "text": "Principles", "url": "/docs/design-system/#principles" }
       ]
     },
     {
