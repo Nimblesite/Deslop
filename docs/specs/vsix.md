@@ -122,6 +122,38 @@ Occurrences in the active editor get a subtle gutter decoration (a thin coloured
 
 No background highlighting, no border boxes, no emoji markers in the gutter. The decoration is visible at a glance but doesn't fight with any existing theme.
 
+### [VSIX-STATE] Centralised state store
+
+**All VSIX state lives in one place.** The extension owns a single in-process state container — the `ReportStore` — that every surface (tree, decorations, bubble, webviews, status bar, picker) reads from. Nothing renders from ad-hoc locals, nothing caches a parallel copy of the report, nothing keeps a "last-known" snapshot on the side. One truth, one listener tree, one invalidation path. This mirrors the `crates/codededup-core/src/state.rs` rule on the Rust side: centralised state is the contract, not an implementation detail.
+
+Rules that fall out of that:
+
+- The LSP's `codededup/reportChanged` notification is the **only** writer of the current report snapshot. The tree view does not call `reportGet` on its own, nor does the webview, nor the status bar — they all observe the store.
+- Settings changes route through the LSP (`workspace/didChangeConfiguration`) and come back through the same store update path, so there's no "UI thinks the model is nomic-embed-text, LSP is actually using stub" drift window.
+- When the LSP reconnects, the store is reset and every surface re-renders from empty — no stale colour on a tree node, no stale verdict on the bubble, no stale percentage on the status bar.
+- Disposables are attached to the store, not scattered across provider objects, so extension shutdown tears everything down deterministically.
+
+Centralisation is the enabler for [VSIX-WEBVIEW-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
+
+### [VSIX-WEBVIEW-REACTIVITY] Preact Signals for every reactive surface
+
+**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** Every observable value — the current `Report`, the selected cluster id, the severity-bucketed rank map, the active embedding provenance, the `analysis/state` flag — is exposed as a `signal<T>` derived from the central store. UI components read signals synchronously; the framework tracks dependencies and re-renders the minimum necessary subtree when a signal changes.
+
+This gives us three hard guarantees:
+
+1. **Zero stale UI.** The moment the store receives a `ReportDelta`, every dependent signal updates in the same microtask. A cluster that disappeared from the report cannot remain on screen. A verdict whose signals changed cannot keep its old colour. "Last-known-good" rendering is impossible by construction because there is no imperative render loop that could fall behind.
+2. **Deterministic updates.** Signals settle transactionally — batches of updates during one delta application produce a single render. No intermediate flash of a partially-updated webview.
+3. **Shared code between tree and webview.** Tree providers compute their own `TreeDataProvider` events from the same signals the webviews consume, so a user who has the activity-bar view and a cluster webview open at once sees them update in lock-step.
+
+Implementation shape:
+
+- `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`).
+- The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state.
+- Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle.
+- No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed.
+
+**Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the bubble is showing a cluster that was refuted 300 ms ago, we've broken the brand promise.
+
 ### [VSIX-WEBVIEW] Cluster detail webview
 
 Command `codededup.openCluster` opens a webview tab. The tab renders a single cluster with:

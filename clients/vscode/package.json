@@ -32,8 +32,7 @@
     "onLanguage:python",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
-    "workspaceContains:**/*.py",
-    "onCommand:codededup.openReport"
+    "workspaceContains:**/*.py"
   ],
   "contributes": {
     "commands": [
@@ -45,7 +44,8 @@
       { "command": "codededup.refreshReport", "title": "CodeDedup: Refresh Report (force full re-analysis)" },
       { "command": "codededup.toggleShowAllLenses", "title": "CodeDedup: Toggle Show All Code Lenses" },
       { "command": "codededup.showSchemaDoc", "title": "CodeDedup: Show Schema Documentation" },
-      { "command": "codededup.openCluster", "title": "CodeDedup: Open Cluster" }
+      { "command": "codededup.openCluster", "title": "CodeDedup: Open Cluster" },
+      { "command": "codededup.revealActiveBinary", "title": "CodeDedup: Reveal Active Binary" }
     ],
     "viewsContainers": {
       "activitybar": [

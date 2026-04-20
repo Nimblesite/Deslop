@@ -9,7 +9,12 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 
-import { resolveBinary, BundledBinaryMissingError, UnsupportedPlatformError } from "./binary";
+import {
+  resolveBinary,
+  BundledBinaryMissingError,
+  UnsupportedPlatformError,
+  ResolvedBinary,
+} from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
@@ -25,6 +30,8 @@ import {
 } from "./types/report";
 
 let client: LanguageClient | undefined;
+let resolvedLsp: ResolvedBinary | undefined;
+let resolvedMcp: ResolvedBinary | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   initOutputChannel();
@@ -34,7 +41,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(reportStore);
 
   try {
-    client = startLanguageClient(context);
+    resolvedLsp = resolveBinary(context.extensionPath, "lsp", currentExtensionVersion(context));
+    resolvedMcp = tryResolveOptional(context.extensionPath, "mcp", currentExtensionVersion(context));
+    log(
+      `lsp: ${resolvedLsp.path} (${resolvedLsp.source}, version=${resolvedLsp.version ?? "unknown"})`,
+    );
+    if (resolvedMcp) {
+      log(
+        `mcp: ${resolvedMcp.path} (${resolvedMcp.source}, version=${resolvedMcp.version ?? "unknown"})`,
+      );
+    }
+    client = startLanguageClient(resolvedLsp);
   } catch (err) {
     surfaceStartupFailure(err);
     return;
@@ -59,6 +76,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(statusBar);
 
   registerCommands(context, reportStore, () => client);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("codededup.revealActiveBinary", () =>
+      revealActiveBinary(resolvedLsp, resolvedMcp),
+    ),
+  );
 
   await client.start();
   wireNotifications(client, reportStore);
@@ -72,11 +94,10 @@ export async function deactivate(): Promise<void> {
   }
 }
 
-function startLanguageClient(context: vscode.ExtensionContext): LanguageClient {
-  const binaryPath = resolveBinary(context.extensionPath, "lsp");
+function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
   const serverOptions: ServerOptions = {
-    run: { command: binaryPath, transport: TransportKind.stdio, args: [] },
-    debug: { command: binaryPath, transport: TransportKind.stdio, args: ["--debug"] },
+    run: { command: lsp.path, transport: TransportKind.stdio, args: [] },
+    debug: { command: lsp.path, transport: TransportKind.stdio, args: ["--debug"] },
   };
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
@@ -137,6 +158,39 @@ async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise
   } catch (err) {
     logError(err, "seed initial report");
   }
+}
+
+function tryResolveOptional(
+  extensionPath: string,
+  kind: "mcp",
+  version: string,
+): ResolvedBinary | undefined {
+  try {
+    return resolveBinary(extensionPath, kind, version);
+  } catch (err) {
+    logError(err, `resolve ${kind} (optional)`);
+    return undefined;
+  }
+}
+
+function currentExtensionVersion(context: vscode.ExtensionContext): string {
+  const raw = context.extension.packageJSON as { version?: unknown };
+  return typeof raw.version === "string" ? raw.version : "0.0.0";
+}
+
+function revealActiveBinary(
+  lsp: ResolvedBinary | undefined,
+  mcp: ResolvedBinary | undefined,
+): void {
+  const lines = [
+    lsp
+      ? `codededup-lsp → ${lsp.path}  [${lsp.source}, version=${lsp.version ?? "unknown"}]`
+      : "codededup-lsp → not resolved",
+    mcp
+      ? `codededup-mcp → ${mcp.path}  [${mcp.source}, version=${mcp.version ?? "unknown"}]`
+      : "codededup-mcp → not bundled",
+  ];
+  vscode.window.showInformationMessage(lines.join("\n"), { modal: true });
 }
 
 function surfaceStartupFailure(err: unknown): void {

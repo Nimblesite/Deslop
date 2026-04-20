@@ -7,11 +7,7 @@
 //! read through the injected [`Clock`] so the unit-of-coverage E2E
 //! test can drive the debouncer without `sleep`.
 
-use std::{
-    collections::BTreeSet,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
 
 use super::clock::Clock;
 

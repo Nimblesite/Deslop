@@ -1,4 +1,4 @@
-//! MCP (Model Context Protocol) server exposing CodeDedup live analysis
+//! MCP (Model Context Protocol) server exposing `CodeDedup` live analysis
 //! to AI agents over JSON-RPC 2.0 / stdio.
 //!
 //! Implements [mcp.md]: peer of the LSP shell ([lsp.md]), thin wrapper

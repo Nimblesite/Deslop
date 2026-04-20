@@ -18,7 +18,6 @@ use std::{
 };
 
 use codededup_core::{
-    ast::NormalizedNode,
     embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL},
     list_ollama_models,
     report::{CacheStats, ReportCluster, ReportOccurrence},
@@ -448,9 +447,11 @@ impl McpBackend for PipelineSessionBackend {
             other => return Err(BackendError::UnknownEmbeddingProvider(other.to_owned())),
         };
         let spec = new_provider.spec();
-        let mut state = lock_state(&self.state)?;
-        state.provider = Some(new_provider);
-        state.generation = state.generation.saturating_add(1);
+        {
+            let mut state = lock_state(&self.state)?;
+            state.provider = Some(new_provider);
+            state.generation = state.generation.saturating_add(1);
+        }
         info!(
             provider_id = spec.provider_id,
             model_id = spec.model_id,
@@ -476,13 +477,20 @@ impl McpBackend for PipelineSessionBackend {
 
     fn mark_changed(&self, paths: &[PathBuf]) -> Result<(), BackendError> {
         let mut state = lock_state(&self.state)?;
+        let SessionState {
+            session,
+            provider,
+            report,
+            generation,
+        } = &mut *state;
         let settings = EmbeddingSettings {
             mode: self.config.embedding_mode,
-            provider: state.provider.as_deref(),
+            provider: provider.as_deref(),
         };
-        let refreshed = state.session.update_files(paths, settings)?;
-        state.report = Arc::new(refreshed);
-        state.generation = state.generation.saturating_add(1);
+        let new_report = session.update_files(paths, settings)?;
+        *report = Arc::new(new_report);
+        *generation = generation.saturating_add(1);
+        drop(state);
         Ok(())
     }
 }
@@ -505,28 +513,30 @@ impl PipelineSessionBackend {
                 below_min_nodes: false,
             });
         }
-        let state = lock_state(&self.state)?;
-        let parser = state
-            .session
-            .parsers()
-            .iter()
-            .find(|candidate| candidate.id() == language)
-            .ok_or_else(|| BackendError::UnsupportedLanguage(language.to_owned()))?;
-        let mut scratch = FileRegistry::new();
-        let scratch_id = scratch.register(PathBuf::from("<mcp-snippet>"));
-        let parsed = parser
-            .parse_and_normalize(snippet.as_bytes(), scratch_id)
-            .map_err(|err| BackendError::UnparseableInput(err.to_string()))?;
+        let (parsed_nodes, report_clusters) = {
+            let state = lock_state(&self.state)?;
+            let parser = state
+                .session
+                .parsers()
+                .iter()
+                .find(|candidate| candidate.id() == language)
+                .ok_or_else(|| BackendError::UnsupportedLanguage(language.to_owned()))?;
+            let mut scratch = FileRegistry::new();
+            let scratch_id = scratch.register(PathBuf::from("<mcp-snippet>"));
+            let parsed = parser
+                .parse_and_normalize(snippet.as_bytes(), scratch_id)
+                .map_err(|err| BackendError::UnparseableInput(err.to_string()))?;
+            (parsed.subtree_node_count(), state.report.clusters.clone())
+        };
         let min_floor = self.config.min_nodes as usize;
-        if parsed.subtree_node_count() < min_floor {
+        if parsed_nodes < min_floor {
             return Ok(FindSimilarOutput {
                 clusters: Vec::new(),
                 below_min_nodes: true,
             });
         }
-        let clusters = state.report.clusters.clone();
         Ok(FindSimilarOutput {
-            clusters: trim_top_n(clusters, top_n),
+            clusters: trim_top_n(report_clusters, top_n),
             below_min_nodes: false,
         })
     }
@@ -575,7 +585,7 @@ fn filter_clusters_by_range(
 }
 
 /// Returns whether `occ` overlaps `[start_byte, end_byte)`.
-fn occurrence_overlaps(occ: &ReportOccurrence, start_byte: usize, end_byte: usize) -> bool {
+const fn occurrence_overlaps(occ: &ReportOccurrence, start_byte: usize, end_byte: usize) -> bool {
     occ.start_byte < end_byte && occ.end_byte > start_byte
 }
 
@@ -629,17 +639,16 @@ fn select_provider(
         EmbeddingMode::Off => Ok(None),
         EmbeddingMode::Auto | EmbeddingMode::Required => match config.embedding_provider.as_str() {
             STUB_PROVIDER_ID => Ok(Some(Box::new(StubProvider::new()))),
-            DEFAULT_PROVIDER_ID => match OllamaProvider::connect(
-                &config.embedding_endpoint,
-                &config.embedding_model,
-            ) {
-                Ok(provider) => Ok(Some(Box::new(provider))),
-                Err(err) if matches!(config.embedding_mode, EmbeddingMode::Auto) => {
-                    warn!(reason = %err, "ollama_unreachable_embedding_disabled_auto");
-                    Ok(None)
+            DEFAULT_PROVIDER_ID => {
+                match OllamaProvider::connect(&config.embedding_endpoint, &config.embedding_model) {
+                    Ok(provider) => Ok(Some(Box::new(provider))),
+                    Err(err) if matches!(config.embedding_mode, EmbeddingMode::Auto) => {
+                        warn!(reason = %err, "ollama_unreachable_embedding_disabled_auto");
+                        Ok(None)
+                    }
+                    Err(err) => Err(err.into()),
                 }
-                Err(err) => Err(err.into()),
-            },
+            }
             other => Err(BackendError::UnknownEmbeddingProvider(other.to_owned())),
         },
     }
@@ -647,7 +656,9 @@ fn select_provider(
 
 /// Locks the backend state, mapping poisoning onto a stable error.
 fn lock_state(mutex: &Mutex<SessionState>) -> Result<MutexGuard<'_, SessionState>, BackendError> {
-    mutex.lock().map_err(|_poisoned| BackendError::MutexPoisoned)
+    mutex
+        .lock()
+        .map_err(|_poisoned| BackendError::MutexPoisoned)
 }
 
 /// Returns the distinct set of registered language ids in stable

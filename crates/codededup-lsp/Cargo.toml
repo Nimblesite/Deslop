@@ -1,33 +1,34 @@
 [package]
-name = "codededup-mcp"
+name = "codededup-lsp"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Model Context Protocol (MCP) server over stdio exposing CodeDedup live analysis to AI agents."
+description = "Language Server Protocol binary for CodeDedup."
 
 [[bin]]
-name = "codededup-mcp"
+name = "codededup-lsp"
 path = "src/main.rs"
 
 [lib]
-name = "codededup_mcp"
+name = "codededup_lsp"
 path = "src/lib.rs"
 
 [dependencies]
-codededup-core = { path = "../codededup-core" }
-thiserror.workspace = true
+codededup-core = { path = "../codededup-core", features = ["live"] }
+tower-lsp.workspace = true
+tokio.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-clap.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
-anyhow.workspace = true
 assert_cmd.workspace = true
-predicates.workspace = true
 tempfile.workspace = true
 
 [lints]
