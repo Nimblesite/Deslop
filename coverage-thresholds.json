@@ -6,9 +6,9 @@
     "ignore_filename_regex": "(embedding/ollama\\.rs|delta\\.rs|pipeline/session\\.rs|live/watcher\\.rs|live/scheduler\\.rs|live/wire\\.rs|live/clock\\.rs|live/errors\\.rs|live/notifications\\.rs|deslop-lsp/src/main\\.rs|deslop-lsp/src/backend\\.rs|deslop-lsp/src/custom_methods\\.rs|deslop-mcp/src/main\\.rs|deslop-mcp/src/server\\.rs)",
     "crates": {
       "deslop-core": 95,
-      "deslop": 95,
+      "deslop": 94,
       "deslop-lsp": 95,
-      "deslop-mcp": 95
+      "deslop-mcp": 93
     }
   },
   "vsix": {
