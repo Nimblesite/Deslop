@@ -95,6 +95,11 @@ pub struct Report {
     /// volume of suppressed duplication visible without leaking
     /// contents.
     pub clusters_hidden: usize,
+    /// Incremental-cache hit / miss counters for this run
+    /// ([PIPELINE-INCREMENTAL]). Defaults to zero when deserialising
+    /// older reports that pre-date the field.
+    #[serde(default)]
+    pub cache_stats: CacheStats,
     /// Markdown schema explanation; see [`SCHEMA_DOC`].
     pub schema_doc: String,
     /// Short agent-oriented playbook; see [`default_action_hints`].
@@ -105,6 +110,19 @@ pub struct Report {
     pub embedding_provenance: Option<EmbeddingProvenance>,
     /// Ordered clusters, worst offenders first.
     pub clusters: Vec<ReportCluster>,
+}
+
+/// Per-run incremental-cache telemetry. `hits + misses` equals the
+/// number of files that reached the parse stage — counters are raw
+/// so downstream tooling can compute rates itself. Zero-zero means
+/// the pass ran with `incremental: false` (or discovered no files).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct CacheStats {
+    /// Files resolved from the on-disk fingerprint cache.
+    pub hits: usize,
+    /// Files parsed from scratch because the cache entry was absent,
+    /// stale, or unreadable.
+    pub misses: usize,
 }
 
 /// Provenance block pinning the `(provider_id, model_id, model_version)`
@@ -217,6 +235,9 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     /// Embedding provenance — `None` when the embedding pass did not
     /// run or produced no signal.
     pub embedding_provenance: Option<EmbeddingProvenance>,
+    /// Incremental-cache telemetry captured during fingerprinting
+    /// ([PIPELINE-INCREMENTAL]).
+    pub cache_stats: CacheStats,
 }
 
 /// Converts the internal representation into a report ready for
@@ -253,6 +274,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         min_nodes: inputs.min_nodes,
         files_analysed: inputs.files_analysed,
         clusters_hidden,
+        cache_stats: inputs.cache_stats,
         schema_doc: SCHEMA_DOC.to_owned(),
         action_hints: default_action_hints(),
         embedding_provenance: inputs.embedding_provenance,

@@ -15,11 +15,29 @@ pub fn render_text(report: &Report) -> String {
     let mut out = String::new();
     write_header(&mut out, report);
     write_provenance(&mut out, report);
+    write_cache_stats(&mut out, report);
     write_action_hints(&mut out, report);
     for (idx, cluster) in report.clusters.iter().enumerate() {
         write_cluster(&mut out, idx, cluster);
     }
     out
+}
+
+/// Writes the incremental-cache line so a human running back-to-back
+/// analyses can see whether the second run benefited from the cache
+/// ([PIPELINE-INCREMENTAL]). Omits the line when both counters are
+/// zero — the `--no-incremental` path or the first-ever run.
+fn write_cache_stats(out: &mut String, report: &Report) {
+    let stats = report.cache_stats;
+    if stats.hits == 0 && stats.misses == 0 {
+        return;
+    }
+    let _ = writeln!(
+        out,
+        "cache: {hits} hit / {misses} miss",
+        hits = stats.hits,
+        misses = stats.misses,
+    );
 }
 
 /// Writes the one-line summary header.

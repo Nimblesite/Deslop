@@ -1,20 +1,30 @@
 //! `CodeDedup` CLI binary.
 //!
-//! Thin shell over `codededup-core`. Parses args, initialises tracing,
+//! Thin shell over `codededup-core`. Parses args, initialises tracing
+//! (to a timestamped log file by default; see [`logging`]), prints a
+//! human-readable preamble + summary on stderr (see [`summary`]),
 //! and either runs the pipeline or re-renders an existing JSON report
 //! (`--from-report`). Always emits the canonical JSON plus derived
 //! text and HTML views unless suppressed ([OUTPUT-SCHEMA-JSON]).
 
-use std::{env, fs, io::Write as _, path::PathBuf};
+mod logging;
+mod summary;
+
+use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use codededup_core::{
-    render::render_html, render::render_text, run, EmbeddingMode, EmbeddingSettings, OllamaProvider,
-    PipelineConfig, Report, StubProvider, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
-    DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    render::render_html, render::render_text, run, EmbeddingMode, EmbeddingSettings,
+    OllamaProvider, PipelineConfig, Report, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
-use tracing_subscriber::EnvFilter;
+use tracing::Level;
+
+use crate::{
+    logging::LogSink,
+    summary::{ColorChoice, PreambleKnobs, WrittenArtefacts},
+};
 
 /// Default base name for the three-format output written to CWD when
 /// `--output` is not provided.
@@ -53,17 +63,10 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     config: Option<PathBuf>,
 
-    /// Suppress the canonical JSON output.
-    #[arg(long)]
-    nojson: bool,
-
-    /// Suppress the terse AI-readable text output.
-    #[arg(long)]
-    notext: bool,
-
-    /// Suppress the human-readable HTML output.
-    #[arg(long)]
-    nohtml: bool,
+    /// Output-format suppression flags (`--nojson`, `--notext`,
+    /// `--nohtml`).
+    #[command(flatten)]
+    suppress: SuppressFlags,
 
     /// Embedding-layer policy. `auto` probes the provider and falls
     /// back with a warning; `required` hard-fails when the provider
@@ -85,14 +88,92 @@ struct Cli {
     /// URL.
     #[arg(long, value_name = "URL", default_value = DEFAULT_OLLAMA_ENDPOINT)]
     embedding_endpoint: String,
+
+    /// Runtime-behaviour flags (`--no-incremental`, `--log-*`,
+    /// `--no-color`).
+    #[command(flatten)]
+    behaviour: BehaviourFlags,
 }
 
-fn main() -> Result<()> {
-    init_tracing()?;
+/// Suppression flags for each output format. Packed into their own
+/// struct so the top-level `Cli` stays under the `pedantic`
+/// three-bool ceiling.
+#[derive(Debug, clap::Args)]
+struct SuppressFlags {
+    /// Suppress the canonical JSON output.
+    #[arg(long)]
+    nojson: bool,
+    /// Suppress the terse AI-readable text output.
+    #[arg(long)]
+    notext: bool,
+    /// Suppress the human-readable HTML output.
+    #[arg(long)]
+    nohtml: bool,
+}
+
+/// Runtime-behaviour flags — caching, logging, colour. Same packing
+/// rationale as [`SuppressFlags`].
+#[derive(Debug, clap::Args)]
+struct BehaviourFlags {
+    /// Enable the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]).
+    /// When set, the pipeline caches parsed AST + fingerprints under
+    /// `<root>/.codededup-cache/fingerprints/...` keyed by
+    /// `(language, tool_version, min_nodes, content_hash)`. On the
+    /// next run, unchanged files skip tree-sitter entirely. Off by
+    /// default — analysing a read-only checkout should not mutate it.
+    #[arg(long)]
+    incremental: bool,
+    /// Send log events to stderr instead of a timestamped file. By
+    /// default the CLI writes logs to `codededup-<timestamp>.log`
+    /// next to the report so the stderr stream stays readable.
+    #[arg(long)]
+    log_to_console: bool,
+    /// Minimum log severity emitted. Accepts `error`, `warn`, `info`,
+    /// `debug`, `trace`. Overridden by `RUST_LOG` when set.
+    #[arg(long, value_name = "LEVEL", default_value = "info")]
+    log_level: String,
+    /// Disable colour in the stderr preamble / summary. Colour is
+    /// also suppressed automatically when stderr is not a TTY or the
+    /// `NO_COLOR` environment variable is set.
+    #[arg(long)]
+    no_color: bool,
+}
+
+fn main() {
+    match run_cli() {
+        Ok(()) => {}
+        Err(err) => {
+            // `run_cli` already printed the colored failure footer
+            // (when tracing was up). Fall back to a plain eprintln!
+            // so failures before logging initialises still surface.
+            eprintln!("codededup: {err:#}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Top-level flow. Kept separate from `main` so the error path can
+/// be wrapped with a non-zero exit code without losing the
+/// `anyhow::Error` chain.
+fn run_cli() -> Result<()> {
     let args = Cli::parse();
     let formats = FormatSelection::from_args(&args)?;
     let output = OutputPaths::new(args.output.as_deref());
     let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
+    let log_level = parse_log_level(&args.behaviour.log_level)?;
+    let color = ColorChoice::resolve(args.behaviour.no_color);
+    let log_sink = logging::init(output.directory(), args.behaviour.log_to_console, log_level)?;
+    summary::preamble(
+        color,
+        &args.path,
+        &output.base,
+        &log_sink,
+        &PreambleKnobs {
+            min_nodes: args.min_nodes,
+            embedding_mode: mode.as_str(),
+            incremental: args.behaviour.incremental,
+        },
+    );
     tracing::info!(
         path = %args.path.display(),
         min_nodes = args.min_nodes,
@@ -100,26 +181,50 @@ fn main() -> Result<()> {
         text = formats.text,
         html = formats.html,
         embeddings = mode.as_str(),
+        incremental = args.behaviour.incremental,
         "codededup invoked",
     );
-    let report = if let Some(source) = &args.from_report {
-        load_report(source)?
-    } else {
-        let provider = configured_provider(&args, mode)?;
-        let provider_ref: Option<&dyn codededup_core::EmbeddingProvider> = provider.as_deref();
-        let pipeline_config = PipelineConfig {
-            root: args.path.clone(),
-            min_nodes: args.min_nodes,
-            config_path: args.config.clone(),
-            embedding: EmbeddingSettings {
-                mode,
-                provider: provider_ref,
-            },
-        };
-        run(&pipeline_config).context("analysis pipeline failed")?
+    let report = match produce_report(&args, mode, &formats) {
+        Ok(report) => report,
+        Err(err) => {
+            summary::finish_err(color, &log_sink, &err);
+            return Err(err);
+        }
     };
-    emit_all(&report, &formats, &output)?;
+    let written = emit_all(&report, &formats, &output)?;
+    summary::summary(color, &report);
+    summary::finish_ok(
+        color,
+        &WrittenArtefacts {
+            reports: &written,
+            log: match &log_sink {
+                LogSink::File(path) => Some(path.as_path()),
+                LogSink::Console => None,
+            },
+        },
+    );
     Ok(())
+}
+
+/// Either loads a cached report (`--from-report`) or runs the
+/// pipeline end-to-end.
+fn produce_report(args: &Cli, mode: EmbeddingMode, _formats: &FormatSelection) -> Result<Report> {
+    if let Some(source) = &args.from_report {
+        return load_report(source);
+    }
+    let provider = configured_provider(args, mode)?;
+    let provider_ref: Option<&dyn codededup_core::EmbeddingProvider> = provider.as_deref();
+    let pipeline_config = PipelineConfig {
+        root: args.path.clone(),
+        min_nodes: args.min_nodes,
+        config_path: args.config.clone(),
+        embedding: EmbeddingSettings {
+            mode,
+            provider: provider_ref,
+        },
+        incremental: args.behaviour.incremental,
+    };
+    run(&pipeline_config).context("analysis pipeline failed")
 }
 
 /// Parses `--embeddings` into the core enum, surfacing a user-facing
@@ -129,6 +234,11 @@ fn parse_embedding_mode(source: &str) -> Result<EmbeddingMode> {
     source
         .parse::<EmbeddingMode>()
         .map_err(|err| anyhow::anyhow!("invalid --embeddings value {:?}: {err}", err.value))
+}
+
+/// Parses `--log-level` into `tracing::Level`.
+fn parse_log_level(source: &str) -> Result<Level> {
+    Level::from_str(source).map_err(|err| anyhow::anyhow!("invalid --log-level {source:?}: {err}"))
 }
 
 /// Instantiates the embedding provider. Returns `None` for
@@ -171,6 +281,7 @@ fn build_ollama_provider(
 }
 
 /// Which of the three output formats are enabled for this run.
+#[derive(Debug)]
 struct FormatSelection {
     /// Emit canonical JSON (`<base>.json`).
     json: bool,
@@ -186,9 +297,9 @@ impl FormatSelection {
     /// helpful.
     fn from_args(args: &Cli) -> Result<Self> {
         let selection = Self {
-            json: !args.nojson,
-            text: !args.notext,
-            html: !args.nohtml,
+            json: !args.suppress.nojson,
+            text: !args.suppress.notext,
+            html: !args.suppress.nohtml,
         };
         if !selection.json && !selection.text && !selection.html {
             bail!("at least one of --nojson/--notext/--nohtml must remain enabled");
@@ -198,6 +309,7 @@ impl FormatSelection {
 }
 
 /// Resolved output base path; renderers append their own extension.
+#[derive(Debug)]
 struct OutputPaths {
     /// `<base>` such that `<base>.json` etc. are the final paths.
     base: PathBuf,
@@ -232,24 +344,43 @@ impl OutputPaths {
         path.set_file_name(new_name);
         path
     }
+
+    /// Directory that the report files sit in. Used as the default
+    /// location for the timestamped log file so all per-run output
+    /// lives together.
+    fn directory(&self) -> &std::path::Path {
+        self.base.parent().unwrap_or(std::path::Path::new("."))
+    }
 }
 
 /// Writes every enabled format for `report` to its derived path under
-/// `output`.
-fn emit_all(report: &Report, formats: &FormatSelection, output: &OutputPaths) -> Result<()> {
+/// `output`, returning the paths actually written (for the finish
+/// footer).
+fn emit_all(
+    report: &Report,
+    formats: &FormatSelection,
+    output: &OutputPaths,
+) -> Result<Vec<PathBuf>> {
+    let mut written: Vec<PathBuf> = Vec::with_capacity(3);
     if formats.json {
         let json = serde_json::to_string_pretty(report).context("serialise report as JSON")?;
-        write_file(&output.with_extension("json"), json.as_bytes())?;
+        let path = output.with_extension("json");
+        write_file(&path, json.as_bytes())?;
+        written.push(path);
     }
     if formats.text {
         let text = render_text(report);
-        write_file(&output.with_extension("txt"), text.as_bytes())?;
+        let path = output.with_extension("txt");
+        write_file(&path, text.as_bytes())?;
+        written.push(path);
     }
     if formats.html {
         let html = render_html(report);
-        write_file(&output.with_extension("html"), html.as_bytes())?;
+        let path = output.with_extension("html");
+        write_file(&path, html.as_bytes())?;
+        written.push(path);
     }
-    Ok(())
+    Ok(written)
 }
 
 /// Writes `payload` to `path`, creating parent directories as needed.
@@ -274,18 +405,4 @@ fn load_report(path: &std::path::Path) -> Result<Report> {
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
     serde_json::from_str::<Report>(&source)
         .with_context(|| format!("parse report {}", path.display()))
-}
-
-/// Configures the global `tracing` subscriber. Honours `RUST_LOG` when set
-/// and defaults to `info`-level events otherwise. Writes to stderr so that
-/// stdout stays reserved for the report stream.
-fn init_tracing() -> Result<()> {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .with_writer(std::io::stderr)
-        .try_init()
-        .map_err(|source| anyhow::anyhow!("failed to initialise tracing: {source}"))?;
-    Ok(())
 }

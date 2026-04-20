@@ -22,6 +22,7 @@ pub mod discover;
 pub mod embedding;
 pub mod error;
 pub mod fingerprint;
+pub mod fpcache;
 pub mod lang;
 pub mod lsh;
 pub mod pair;
@@ -39,9 +40,7 @@ pub use embedding::{
 };
 pub use error::CoreError;
 pub use pipeline::{run, EmbeddingSettings, PipelineConfig};
-pub use report::{
-    render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION,
-};
+pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
 
 /// Semantic version of the `codededup-core` library.
 #[must_use]

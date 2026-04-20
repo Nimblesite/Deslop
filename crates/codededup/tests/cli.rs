@@ -13,7 +13,7 @@
 //! non-hidden file duplicates hidden code but drops them when every
 //! member is hidden ([EXCLUSION-CONFIG]).
 
-use std::{fs, path::Path, path::PathBuf};
+use std::{fmt::Write as _, fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
 use assert_cmd::Command;
@@ -92,7 +92,10 @@ fn prints_help_and_mentions_min_nodes_flag() -> Result<()> {
         .stdout(contains("--embeddings"))
         .stdout(contains("--embedding-provider"))
         .stdout(contains("--embedding-model"))
-        .stdout(contains("--embedding-endpoint"));
+        .stdout(contains("--embedding-endpoint"))
+        .stdout(contains("--log-to-console"))
+        .stdout(contains("--log-level"))
+        .stdout(contains("--no-color"));
     Ok(())
 }
 
@@ -913,6 +916,476 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
     assert!(
         json.contains("\"clusters_hidden\": 1"),
         "clusters_hidden must count the suppressed cluster"
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// P6 — incremental, perf, fixture-per-bug
+// ===========================================================================
+
+// Implements [PIPELINE-INCREMENTAL]: `--incremental` populates the
+// fingerprint cache on the first pass and reports every file as a
+// miss. A second run over the same unchanged tree must report every
+// file as a hit and still surface the duplicated cluster.
+#[test]
+fn incremental_cache_hits_on_second_run() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    for entry in fs::read_dir(fixture("csharp-small"))? {
+        let entry = entry?;
+        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
+    }
+    let mut first = Command::cargo_bin("codededup")?;
+    let _assertion = first
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--output")
+        .arg(tmp.path().join("first"))
+        .assert()
+        .success();
+    let first_json = fs::read_to_string(tmp.path().join("first.json"))?;
+    assert!(
+        first_json.contains("\"hits\": 0"),
+        "first run must be a clean miss: {first_json}"
+    );
+    assert!(
+        first_json.contains("\"misses\": 2"),
+        "first run must register two misses: {first_json}"
+    );
+    let cache_dir = scan_root.join(".codededup-cache").join("fingerprints");
+    assert!(
+        cache_dir.is_dir(),
+        "fingerprint cache directory missing: {}",
+        cache_dir.display()
+    );
+    let mut second = Command::cargo_bin("codededup")?;
+    let _assertion = second
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--output")
+        .arg(tmp.path().join("second"))
+        .assert()
+        .success();
+    let second_json = fs::read_to_string(tmp.path().join("second.json"))?;
+    assert!(
+        second_json.contains("\"hits\": 2"),
+        "second run must hit the cache for both files: {second_json}"
+    );
+    assert!(
+        second_json.contains("\"misses\": 0"),
+        "second run must have zero misses: {second_json}"
+    );
+    // Deduplication must still fire even when the fingerprints came
+    // from the cache — the rehydration is only useful if downstream
+    // clustering sees identical results.
+    assert!(
+        second_json.contains("\"structural\": 1.0"),
+        "cached run must still detect the Type-2 cluster: {second_json}"
+    );
+    let second_txt = fs::read_to_string(tmp.path().join("second.txt"))?;
+    assert!(
+        second_txt.contains("cache: 2 hit / 0 miss"),
+        "text renderer must surface cache stats: {second_txt}"
+    );
+    Ok(())
+}
+
+// Implements [PIPELINE-INCREMENTAL] default-off: without
+// `--incremental` the cache is neither read nor written. Stats read
+// as a clean no-cache run (both counters zero) and no blobs land on
+// disk — analysing a read-only checkout must never mutate it.
+#[test]
+fn default_run_skips_the_cache() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    for entry in fs::read_dir(fixture("csharp-small"))? {
+        let entry = entry?;
+        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
+    }
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        json.contains("\"hits\": 0"),
+        "default run must record zero hits: {json}"
+    );
+    assert!(
+        json.contains("\"misses\": 0"),
+        "default run must not increment misses either: {json}"
+    );
+    assert!(
+        !scan_root
+            .join(".codededup-cache")
+            .join("fingerprints")
+            .exists(),
+        "default run must not populate the fingerprint cache",
+    );
+    Ok(())
+}
+
+// Implements [PIPELINE-INCREMENTAL] stale-blob recovery: a corrupt
+// cache entry must be treated as a miss and overwritten, not surfaced
+// as a hard error. The pipeline still produces a correct report.
+#[test]
+fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    for entry in fs::read_dir(fixture("csharp-small"))? {
+        let entry = entry?;
+        let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
+    }
+    let mut first = Command::cargo_bin("codededup")?;
+    let _assertion = first
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--output")
+        .arg(tmp.path().join("first"))
+        .assert()
+        .success();
+    let fingerprints_root = scan_root.join(".codededup-cache").join("fingerprints");
+    for language_dir in fs::read_dir(&fingerprints_root)? {
+        let language_path = language_dir?.path();
+        for version_dir in fs::read_dir(&language_path)? {
+            let version_path = version_dir?.path();
+            for min_nodes_dir in fs::read_dir(&version_path)? {
+                let min_nodes_path = min_nodes_dir?.path();
+                for blob in fs::read_dir(&min_nodes_path)? {
+                    let blob = blob?.path();
+                    fs::write(&blob, b"not a valid cache blob")?;
+                }
+            }
+        }
+    }
+    let mut second = Command::cargo_bin("codededup")?;
+    let _assertion = second
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--output")
+        .arg(tmp.path().join("second"))
+        .assert()
+        .success();
+    let second_json = fs::read_to_string(tmp.path().join("second.json"))?;
+    assert!(
+        second_json.contains("\"misses\": 2"),
+        "corrupt entries must be treated as misses: {second_json}"
+    );
+    assert!(
+        second_json.contains("\"structural\": 1.0"),
+        "analysis still produces the cluster after recovery: {second_json}"
+    );
+    Ok(())
+}
+
+// Implements [PIPELINE-INCREMENTAL] help-text exposure: the
+// `--incremental` opt-in must be documented so users can discover
+// the cache without reading the source.
+#[test]
+fn help_text_documents_incremental_flag() -> Result<()> {
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("--incremental"));
+    Ok(())
+}
+
+// Implements the P6 "perf pass" target in PLAN.md. The user-facing
+// budget is <30 s on 100K-LOC C# with no embeddings. We can't assert
+// on wallclock directly from `cargo test` (coverage instrumentation
+// triples debug runtime), so this test exercises the pipeline on a
+// modest synthetic C# corpus and asserts every file parsed + at
+// least one cluster was ranked. The wallclock bound is deliberately
+// lax — a pure regression guard against infinite loops or
+// catastrophic quadratic explosions. The true SLA lives in
+// [PERF-BUDGET-TYPE12] and is validated manually against a release
+// binary on a real corpus.
+#[test]
+fn synthetic_corpus_scale_smoke_test() -> Result<()> {
+    use std::time::Instant;
+
+    let tmp = tempfile::tempdir()?;
+    let corpus = tmp.path().join("corpus");
+    fs::create_dir_all(&corpus)?;
+    let files: u32 = 10;
+    let methods_per_file: u32 = 10;
+    for file_index in 0..files {
+        let mut source = String::with_capacity(2048);
+        source.push_str("namespace Generated;\npublic class Class");
+        source.push_str(&file_index.to_string());
+        source.push_str(" {\n");
+        for method_index in 0..methods_per_file {
+            let _ = writeln!(
+                &mut source,
+                "    public int Method{method_index}(int a, int b) {{ int x = a + b; int y = x * 2; if (y > 0) {{ return y; }} return x - a; }}",
+            );
+        }
+        source.push_str("}\n");
+        fs::write(corpus.join(format!("Class{file_index}.cs")), source)?;
+    }
+    let started = Instant::now();
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&corpus)
+        .arg("--min-nodes")
+        .arg("30")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let elapsed = started.elapsed();
+    // 180 s is a regression guard, not a performance SLA. The real
+    // budget is validated manually. A release-mode run against this
+    // corpus takes well under a second.
+    assert!(
+        elapsed.as_secs() < 180,
+        "synthetic corpus ran for {elapsed:?} — something is catastrophically wrong",
+    );
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        json.contains("\"files_analysed\": 10"),
+        "synthetic corpus must analyse every generated file: {json}"
+    );
+    // Every file shares the identical method template, so the
+    // ranked output must contain at least one cluster — catches
+    // pipelines that silently drop everything.
+    assert!(
+        json.contains("\"weight\":"),
+        "synthetic corpus produced no clusters: {json}"
+    );
+    Ok(())
+}
+
+// Implements the [BUG-FIXTURE] workflow from CLAUDE.md: every bug
+// reproduced into `tests/fixtures/bug-*/` becomes a permanent e2e
+// test. This is the seed example — an empty C# class body used to
+// be silently dropped before the sibling-window fingerprint pass
+// existed; the cluster test below pins that behaviour so the bug
+// cannot regress.
+#[test]
+fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(fixture("bug-empty-class"))
+        .arg("--min-nodes")
+        .arg("4")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        json.contains("\"files_analysed\": 1"),
+        "empty-class fixture must still analyse its one file: {json}"
+    );
+    Ok(())
+}
+
+// ===========================================================================
+// UX — timestamped-log-by-default, colored summary, console overrides
+// ===========================================================================
+
+// Implements [UX-LOG-FILE-DEFAULT]: a default run must write log
+// events to a timestamped file next to the report and keep stderr
+// clean of INFO-level log lines.
+#[test]
+fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--no-color")
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        !stderr.contains(" INFO "),
+        "default stderr must not carry tracing INFO lines: {stderr}"
+    );
+    assert!(
+        stderr.contains("Summary"),
+        "default stderr must carry the summary block: {stderr}"
+    );
+    assert!(
+        stderr.contains("done"),
+        "default stderr must carry the success footer: {stderr}"
+    );
+    assert!(out.json.exists(), "json still written: {}", out.json.display());
+    let log_files: Vec<PathBuf> = fs::read_dir(tmp.path())?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("codededup-") && name.ends_with(".log"))
+        })
+        .collect();
+    assert_eq!(
+        log_files.len(),
+        1,
+        "expected exactly one timestamped log file, found {:?}",
+        log_files
+    );
+    let log_body = fs::read_to_string(&log_files[0])?;
+    assert!(
+        log_body.contains("codededup invoked"),
+        "log file missing the invoked event: {log_body}"
+    );
+    Ok(())
+}
+
+// Implements [UX-LOG-CONSOLE]: `--log-to-console` routes log events
+// back to stderr instead of the file.
+#[test]
+fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--log-to-console")
+        .arg("--no-color")
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        stderr.contains("codededup invoked"),
+        "--log-to-console must surface the invoked event on stderr: {stderr}"
+    );
+    let log_files: Vec<PathBuf> = fs::read_dir(tmp.path())?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("codededup-") && name.ends_with(".log"))
+        })
+        .collect();
+    assert!(
+        log_files.is_empty(),
+        "--log-to-console must not create a log file: {:?}",
+        log_files,
+    );
+    Ok(())
+}
+
+// Implements [UX-LOG-LEVEL]: `--log-level warn` suppresses INFO
+// events. The canonical "codededup invoked" INFO message must not
+// appear in the log file when the level is raised.
+#[test]
+fn log_level_warn_suppresses_info_events() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--log-level")
+        .arg("warn")
+        .arg("--no-color")
+        .assert()
+        .success();
+    let log_path = fs::read_dir(tmp.path())?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("codededup-") && name.ends_with(".log"))
+        })
+        .ok_or_else(|| anyhow::anyhow!("no timestamped log file written"))?;
+    let log_body = fs::read_to_string(&log_path)?;
+    assert!(
+        !log_body.contains("codededup invoked"),
+        "warn level must suppress the INFO invoked event: {log_body}"
+    );
+    Ok(())
+}
+
+// Implements [UX-PREAMBLE]: the preamble line is emitted before the
+// pipeline runs and names the scan path + knobs + output paths.
+#[test]
+fn preamble_announces_what_the_run_will_do() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--no-color")
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        stderr.contains("codededup analysing"),
+        "preamble must announce the analysis: {stderr}"
+    );
+    assert!(
+        stderr.contains("min-nodes=8"),
+        "preamble must surface the min-nodes knob: {stderr}"
+    );
+    assert!(
+        stderr.contains("report →"),
+        "preamble must show where the report goes: {stderr}"
+    );
+    assert!(
+        stderr.contains("log    →"),
+        "preamble must show where the log goes: {stderr}"
+    );
+    Ok(())
+}
+
+// Implements [UX-NO-COLOR]: the `--no-color` flag suppresses ANSI
+// escape sequences in the stderr output. Used by CI and by pipes.
+#[test]
+fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--no-color")
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        !stderr.contains('\x1b'),
+        "--no-color must strip ANSI escapes: {stderr:?}"
     );
     Ok(())
 }

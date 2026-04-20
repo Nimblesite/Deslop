@@ -240,6 +240,10 @@ Top level at `report_schema_version = 2`:
 
 The default invocation writes all three formats to disk (`codededup-report.{json,txt,html}` in CWD, or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
 
+### [OUTPUT-HUMAN-HTML] Human-readable HTML mode
+
+The default HTML renderer embeds, for each occurrence, the source bytes covered by `[start_byte, end_byte)` inside a collapsible `<details>` panel with line numbers and tree-sitter-driven syntax highlighting (server-side, no JS). Snippets are computed at render time from the source tree — not added to the JSON schema. `--human=off` falls back to the terse byte-offset-only HTML.
+
 ### [EXCLUSION-CONFIG] Exclusion configuration
 A single opt-in configuration file — `.codededup.toml` in the scan root, or `--config <path>` — controls two orthogonal exclusion tiers. Motivating case: generated code. We want to know when hand-written code duplicates a generated file, but we do not want the generated file itself to dominate the top of the report.
 

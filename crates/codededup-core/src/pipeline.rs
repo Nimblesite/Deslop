@@ -18,15 +18,16 @@ use crate::{
     config::ExclusionConfig,
     discover::{discover_files, DiscoveredFile},
     embedding::{
-        cache::DEFAULT_CACHE_DIR_NAME, content_hash, embedding_pairs, EmbeddingCache, EmbeddingMode,
-        EmbeddingPair, EmbeddingProvider, EmbeddingSpec,
+        cache::DEFAULT_CACHE_DIR_NAME, content_hash, embedding_pairs, EmbeddingCache,
+        EmbeddingMode, EmbeddingPair, EmbeddingProvider, EmbeddingSpec,
     },
     error::CoreError,
     fingerprint::{collect_fingerprints, Fingerprint},
+    fpcache::{CachedFile, FingerprintCache},
     lang::{csharp::CSharpParser, python::PythonParser, rust_lang::RustParser, LanguageParser},
     lsh::{band_collisions, minhash_signature, Signature},
     pair::{candidate_pairs, cluster_by_transitive_closure},
-    report::{render_report, EmbeddingProvenance, Report, ReportInputs},
+    report::{render_report, CacheStats, EmbeddingProvenance, Report, ReportInputs},
     sibling::collect_sibling_fingerprints,
     state::FileId,
     tokens::{kgrams, token_stream_for_fingerprint, KGRAM_WIDTH},
@@ -46,6 +47,13 @@ pub struct PipelineConfig<'a> {
     pub config_path: Option<std::path::PathBuf>,
     /// How the embedding pass should behave.
     pub embedding: EmbeddingSettings<'a>,
+    /// When true, the parse+fingerprint stage consults an on-disk
+    /// cache keyed by `(language, tool_version, min_nodes,
+    /// content_hash)` and rehydrates unchanged files without invoking
+    /// tree-sitter ([PIPELINE-INCREMENTAL]). Missed entries are
+    /// populated after a successful parse. Safe to leave enabled —
+    /// key changes guarantee stale blobs can never leak into a run.
+    pub incremental: bool,
 }
 
 /// Embedding policy for a pipeline run. The provider is borrowed so
@@ -86,6 +94,9 @@ pub fn run(config: &PipelineConfig<'_>) -> Result<Report, CoreError> {
 
     tracing::info!(
         fingerprint_count = corpus.fingerprints.len(),
+        files_cache_hit = corpus.cache_stats.hits,
+        files_cache_miss = corpus.cache_stats.misses,
+        incremental = config.incremental,
         "fingerprinting complete",
     );
 
@@ -121,14 +132,13 @@ pub fn run(config: &PipelineConfig<'_>) -> Result<Report, CoreError> {
         scan_root: &config.root,
         exclusion: &exclusion,
         embedding_provenance: embedding_outcome.provenance,
+        cache_stats: corpus.cache_stats,
     }))
 }
 
 /// Builds a `FileId → language_id` map so the renderer can apply
 /// per-language `report_hide` overlays ([EXCLUSION-CONFIG]).
-fn build_file_language_map(
-    files: &[DiscoveredFile],
-) -> HashMap<FileId, &'static str> {
+fn build_file_language_map(files: &[DiscoveredFile]) -> HashMap<FileId, &'static str> {
     let mut out: HashMap<FileId, &'static str> = HashMap::new();
     for file in files {
         let _previous = out.insert(file.file_id, file.language);
@@ -157,10 +167,15 @@ struct FingerprintCorpus {
     /// read the exact bytes referenced by a fingerprint without
     /// re-reading the file once per subtree.
     sources: HashMap<FileId, Vec<u8>>,
+    /// Per-run incremental-cache hit/miss counters
+    /// ([PIPELINE-INCREMENTAL]).
+    cache_stats: CacheStats,
 }
 
 /// Parses every discovered file and collects its structural + sibling
 /// fingerprints plus the normalised tree kept for token extraction.
+/// Honours [`PipelineConfig::incremental`] — on a hit, parse + normalise
+/// + collect is replaced by a single cache read.
 fn fingerprint_corpus(
     files: &[DiscoveredFile],
     parsers: &[Box<dyn LanguageParser>],
@@ -170,25 +185,104 @@ fn fingerprint_corpus(
     let mut all_fingerprints: Vec<Fingerprint> = Vec::new();
     let mut all_trees: Vec<NormalizedNode> = Vec::with_capacity(files.len());
     let mut sources: HashMap<FileId, Vec<u8>> = HashMap::with_capacity(files.len());
+    let mut stats = CacheStats::default();
+    let cache_base = config.root.join(DEFAULT_CACHE_DIR_NAME);
+    let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
     for discovered in files {
         let Some(parser) = parser_for_language(parsers, discovered.language) else {
             continue;
         };
         let source = read_source(&discovered.path)?;
-        let normalised = parser.parse_and_normalize(&source, discovered.file_id)?;
-        all_fingerprints.append(&mut collect_fingerprints(&normalised, min_nodes_usize));
-        all_fingerprints.append(&mut collect_sibling_fingerprints(
-            &normalised,
+        let cache = if config.incremental {
+            fingerprint_cache_for(
+                &mut caches,
+                &cache_base,
+                discovered.language,
+                config.min_nodes,
+            )
+        } else {
+            None
+        };
+        let processed = load_or_parse_file(
+            cache,
+            parser,
+            &source,
+            discovered.file_id,
             min_nodes_usize,
-        ));
-        all_trees.push(normalised);
+            &mut stats,
+        )?;
+        all_fingerprints.extend(processed.fingerprints);
+        all_trees.push(processed.tree);
         let _previous = sources.insert(discovered.file_id, source);
     }
     Ok(FingerprintCorpus {
         fingerprints: all_fingerprints,
         trees: all_trees,
         sources,
+        cache_stats: stats,
     })
+}
+
+/// Returns (lazily-opened) [`FingerprintCache`] for `language`,
+/// memoised for the duration of the run. Open failures are downgraded
+/// to `None` with a warning — the pipeline then runs uncached for
+/// that language rather than aborting a whole run over a missing
+/// cache directory.
+fn fingerprint_cache_for<'a>(
+    caches: &'a mut HashMap<&'static str, FingerprintCache>,
+    base: &Path,
+    language: &'static str,
+    min_nodes: u32,
+) -> Option<&'a FingerprintCache> {
+    if !caches.contains_key(language) {
+        match FingerprintCache::open(base, language, min_nodes) {
+            Ok(cache) => {
+                let _previous = caches.insert(language, cache);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    language,
+                    "fingerprint cache unavailable — falling back to full parse",
+                );
+                return None;
+            }
+        }
+    }
+    caches.get(language)
+}
+
+/// Resolves one file's normalised tree + fingerprints, consulting the
+/// cache first when enabled. Cache-miss parses the file, fingerprints
+/// it, and persists the result before returning.
+fn load_or_parse_file(
+    cache: Option<&FingerprintCache>,
+    parser: &dyn LanguageParser,
+    source: &[u8],
+    file_id: FileId,
+    min_nodes: usize,
+    stats: &mut CacheStats,
+) -> Result<CachedFile, CoreError> {
+    if let Some(cache) = cache {
+        if let Some(hit) = cache.get(source, file_id) {
+            stats.hits = stats.hits.saturating_add(1);
+            return Ok(hit);
+        }
+        stats.misses = stats.misses.saturating_add(1);
+    }
+    let normalised = parser.parse_and_normalize(source, file_id)?;
+    let mut fingerprints = collect_fingerprints(&normalised, min_nodes);
+    fingerprints.extend(collect_sibling_fingerprints(&normalised, min_nodes));
+    let cached = CachedFile {
+        tree: normalised,
+        fingerprints,
+    };
+    if let Some(cache) = cache {
+        if let Err(error) = cache.store(source, &cached) {
+            tracing::warn!(%error, "fingerprint cache write failed");
+        }
+    }
+    Ok(cached)
 }
 
 /// Computes a `MinHash` signature per fingerprint. Each signature is

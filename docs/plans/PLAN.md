@@ -23,6 +23,9 @@ Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust
 ## Non-goals
 No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-language detection, no auto-fix, no unit tests.
 
+## Future work (deliberately deferred)
+- **Interactive / TUI mode (`--interactive`).** Paginated top-clusters view with inline byte-range previews, keyboard navigation between occurrences, and "extract refactor suggestion" shortcuts. Mostly a `ratatui` build-out; the deterministic core already emits everything needed. Only worth shipping after we've seen real operator use of the colored stderr summary — that tells us what the interactive view should emphasise.
+
 ## Risks
 `--min-nodes` default is a guess — tune on real repos. Sibling-extension may miss Type-3s that need tree-edit-distance. HNSW determinism is per-machine only. Ollama absence: CI runs P3 path by default, nightly runs P5.
 
@@ -145,6 +148,9 @@ Implements [EXCLUSION-CONFIG]. Two tiers of exclusion driven by a single `.coded
 - [ ] Perf: <30s on 100K-LOC C# (no embeddings)
 - [ ] Ratchet coverage every PR
 - [ ] Fixture-per-bug (CLAUDE.md Bug Fix Process)
+
+### P6.1 Human-readable HTML mode
+Implements [OUTPUT-HUMAN-HTML]. HTML output gains collapsible per-occurrence `<details>` panels with syntax-highlighted snippets and line numbers. JSON schema unchanged. `--human={auto,on,off}` selects mode.
 
 
 
