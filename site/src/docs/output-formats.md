@@ -4,6 +4,7 @@ title: Output Formats
 eleventyNavigation:
   key: Output Formats
   order: 4
+icon: description
 ---
 
 # Output Formats

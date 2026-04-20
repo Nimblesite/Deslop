@@ -6,99 +6,52 @@ The spec is split into topic files for readability and the 500-line file budget.
 
 ## Architecture at a glance
 
-Every binary in the product — CLI, LSP server, MCP server, VS Code extension — is a **thin shell over one shared library** (`codededup-core`) and, for anything live, one shared **daemon service** (`codededup-daemon`). No pipeline code is duplicated. A language is added once, in the core, and every shell inherits it.
+Every binary in the product — CLI, LSP server, MCP server, VS Code extension — is a **thin shell over one shared library** (`codededup-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
 ```mermaid
-flowchart TB
-    subgraph Clients["Consumers"]
-        direction LR
-        Developer([Developer typing in editor])
-        Agent([AI coding agent — Claude Code / Cursor / Continue])
-        CI([CI pipeline])
+flowchart LR
+    CI(["CI / terminal"])
+
+    subgraph VSCode["VS Code process"]
+        VSIX["CodeDedup VSIX<br/>(live bubble · tree view · picker)"]
     end
 
-    subgraph VSIX["VSIX — clients/vscode/"]
-        direction TB
-        LiveBubble["Live duplication bubble\n(&nbsp;DUPLICATE · NEAR-MISS · SEMANTIC MATCH&nbsp;)"]
-        TreeView["Activity bar tree view\n(worst-first clusters)"]
-        Webview["Cluster + report webviews"]
-        EmbedPicker["Ollama model picker"]
-        StatusBar["Status bar"]
+    subgraph AgentHost["AI agent host<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
+        Agent["Agent + MCP client"]
     end
 
-    subgraph Binaries["Binaries"]
-        direction LR
-        LSP["codededup-lsp<br/>(tower-lsp, stdio JSON-RPC)"]
-        MCP["codededup-mcp<br/>(MCP over stdio)"]
-        CLI["codededup<br/>(batch CLI)"]
+    subgraph Binaries["Binaries (processes)"]
+        LspBin["codededup-lsp"]
+        McpBin["codededup-mcp"]
+        CliBin["codededup (CLI)"]
     end
 
-    subgraph Daemon["codededup-daemon (long-running service)"]
-        direction TB
-        Watcher["notify watcher<br/>(250 ms debounce / 2 s cap)"]
-        Scheduler["Single-flight scheduler<br/>(&lt;&nbsp;500 ms per 10-file changeset)"]
-        Session["AnalysisSession<br/>(Arc&lt;Report&gt; · generation&nbsp;N)"]
-        Delta["ReportDelta publisher"]
-        Subscribers["Push subscribers<br/>(report/changed · analysis/state)"]
+    subgraph CoreCrate["codededup-core (one crate)"]
+        Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
+        Pipeline["pipeline module<br/>PipelineSession · update_files · discover · parse<br/>fingerprint · LSH · embed · rank · render"]
+        Live --> Pipeline
     end
 
-    subgraph Core["codededup-core (the library)"]
-        direction TB
-        Discover["Discover + exclude\n(ignore + .codededup.toml)"]
-        Parse["tree-sitter parse + normalise\n(C# · Rust · Python)"]
-        Fingerprint["Merkle fingerprint\n(blake3 subtree hash)"]
-        LSH["MinHash / LSH (Type-3)"]
-        Embed["Embedding pass (Type-4)"]
-        Fuse["Fusion + cluster + rank"]
-        Render["JSON · text · HTML renderers"]
-        Cache["on-disk caches\n(.codededup-cache/: fingerprints + embeddings)"]
-    end
+    Workspace[(Workspace files)]
+    Ollama[(Ollama)]
 
-    subgraph External["External processes"]
-        Ollama["Ollama HTTP<br/>(/api/tags · /api/embeddings)"]
-        FS[(Workspace files)]
-    end
+    VSIX == "spawns + LSP stdio" ==> LspBin
+    VSIX == "bundles + spawns MCP" ==> McpBin
+    Agent == "spawns + MCP stdio" ==> McpBin
+    CI == "spawns one-shot" ==> CliBin
 
-    Developer -- "types code" --> VSIX
-    Developer -- "edits files" --> FS
-    Agent -- "find-similar · report-for-range" --> MCP
-    CI -- "codededup path/ --output report" --> CLI
+    LspBin --> Live
+    McpBin --> Live
+    CliBin --> Pipeline
 
-    VSIX <-- "LSP JSON-RPC (stdio)" --> LSP
-    VSIX -- "bundles + spawns" --> MCP
+    Workspace -- "file events" --> Live
+    Workspace -- "walk + read" --> Pipeline
 
-    LSP --> Daemon
-    MCP --> Daemon
-    CLI -- "one-shot run()" --> Core
-
-    Watcher --> Scheduler
-    Scheduler --> Session
-    Session -- "update_files(changed)" --> Core
-    Session --> Delta
-    Delta --> Subscribers
-    Subscribers -. "report/changed" .-> LSP
-    Subscribers -. "report/changed" .-> MCP
-
-    FS --> Watcher
-    FS --> Discover
-
-    Discover --> Parse
-    Parse --> Fingerprint
-    Fingerprint --> LSH
-    Fingerprint --> Embed
-    LSH --> Fuse
-    Embed --> Fuse
-    Fuse --> Render
-    Parse <--> Cache
-    Embed <--> Cache
-    Embed <-- "HTTP" --> Ollama
-
-    VSIX -- "embedding/listModels" --> LSP
-    LSP -- "list_ollama_models" --> Ollama
-    EmbedPicker -. "calls" .-> LSP
+    Live <--> Ollama
+    Pipeline <--> Ollama
 ```
 
-The arrow from **Developer → VSIX → LSP → Daemon → `update_files` → Core** is the hot loop that delivers the [VSIX-LIVE-BUBBLE] UX: every keystroke the user makes, debounced by 250 ms, ends with the bubble over their cursor if the code they just wrote is already a duplicate. The **Agent → MCP → Daemon → `find-similar`** path is the same live index re-framed for programmatic consumers. **CI → CLI** skips the daemon entirely — batch runs never need a watcher. All three paths share the exact same analysis code in `codededup-core`.
+The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX → LSP → `live` module → `update_files` → pipeline** — is one process hop (the LSP binary) and one in-crate module boundary. The agent path — **Agent → MCP → `live` module** — is the same live index reframed for programmatic consumers. The CI path — **CI → CLI → pipeline** — skips the `live` module entirely; batch runs never need a watcher. All three paths share the same analysis code.
 
 ## Topic files
 
@@ -110,7 +63,7 @@ The arrow from **Developer → VSIX → LSP → Daemon → `update_files` → Co
 - [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.codededup.toml` `exclude` / `report_hide` tiers and per-language overlays.
 - [decisions.md](decisions.md) — `[DECISION-*]` defaults with fallback rules (`--min-nodes`, cross-language, two-pass Type-3 recall).
 - [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
-- [daemon.md](daemon.md) — `[LIVE-*]` shared long-running service that powers the LSP and MCP shells (lifecycle, watcher, scheduler, delta protocol, query API).
+- [live.md](live.md) — `[LIVE-*]` in-memory analysis session behind the LSP and MCP servers: lifecycle, watcher, scheduler, delta protocol, `LiveApi` query surface, push notifications. No daemon process.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.

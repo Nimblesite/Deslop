@@ -1,11 +1,14 @@
 //! Single-file HTML renderer.
 //!
-//! Human-readable view of the canonical report. Inline CSS, no JS, no
-//! external fonts — a report opened from disk on a fresh machine works
-//! offline. Per [OUTPUT-HUMAN-HTML], each occurrence is a collapsible
-//! `<details>` panel containing the source snippet (loaded from
-//! `scan_root + occurrence.path` at render time) with line numbers and
-//! tree-sitter-driven syntax highlighting.
+//! Human-readable view of the canonical report ([OUTPUT-HUMAN-HTML]).
+//! Inline CSS, no JS, no external assets — opens offline. Each cluster
+//! is rendered as a Terminal Card per the Kinetic Manuscript design
+//! system: one example snippet expanded with syntax highlighting plus
+//! a compact list of the other locations. The verbose run metadata
+//! (action hints, schema doc, signal numbers) is tucked into a single
+//! collapsed "Run details" footer so the body of the report stays
+//! scannable. CSS lives in [`super::html_css`]; the footer in
+//! [`super::html_footer`].
 
 use std::{
     collections::HashMap,
@@ -15,37 +18,34 @@ use std::{
 };
 
 use crate::{
-    render::highlight::highlight_snippet,
+    render::{
+        highlight::highlight_snippet,
+        html_css::{REPORT_CSS, SITE_CSS},
+        html_footer::write_run_details,
+    },
     report::{Report, ReportCluster, ReportOccurrence},
 };
 
-/// First N occurrences of each cluster open by default; the rest stay
-/// collapsed so a 256-occurrence cluster doesn't blow up the page.
-const OPEN_OCCURRENCES_PER_CLUSTER: usize = 1;
-
 /// Renders `report` as a single-file HTML document. `scan_root` is the
 /// directory occurrence paths are relative to; pass `None` (e.g. for
-/// `--from-report` when the source is no longer available) to get the
-/// terse byte-offset-only view per occurrence.
+/// `--from-report` when the source is no longer available) and snippet
+/// bodies degrade to a "source unavailable" placeholder.
 #[must_use]
 pub fn render_html(report: &Report, scan_root: Option<&Path>) -> String {
     let mut out = String::new();
-    let _ = write!(out, "<!doctype html><html lang=\"en\"><head>");
+    let _ = write!(out, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head>");
     write_head(&mut out, report);
-    let _ = write!(out, "</head><body>");
-    write_header(&mut out, report);
-    write_action_hints(&mut out, report);
-    write_schema_doc(&mut out, report);
+    let _ = write!(out, "</head><body><main class=\"report-shell\">");
+    write_intro(&mut out, report);
     let mut snippets = SnippetLoader::new(scan_root);
     write_clusters(&mut out, report, &mut snippets);
-    let _ = write!(out, "</body></html>");
+    write_run_details(&mut out, report, escape);
+    let _ = write!(out, "</main></body></html>");
     out
 }
 
 /// Reads source files lazily and caches them so a cluster with many
-/// occurrences in the same file does only one disk read. `None`
-/// `scan_root` makes every load a miss — snippet panels degrade to the
-/// "source unavailable" placeholder per [OUTPUT-HUMAN-HTML].
+/// occurrences in the same file does only one disk read.
 struct SnippetLoader<'a> {
     /// Directory occurrence paths resolve against. `None` disables disk
     /// reads entirely.
@@ -90,8 +90,6 @@ impl<'a> SnippetLoader<'a> {
 }
 
 /// Returns the 1-indexed line number that contains `offset` in `source`.
-/// Counts `\n` bytes directly so we don't allocate a per-line table for
-/// each lookup.
 fn line_for_offset(source: &str, offset: usize) -> usize {
     let safe = offset.min(source.len());
     let prefix = source.get(..safe).unwrap_or("");
@@ -107,177 +105,275 @@ fn write_head(out: &mut String, report: &Report) {
     let _ = write!(out, "<meta charset=\"utf-8\">");
     let _ = write!(
         out,
-        "<title>codededup report (schema v{schema})</title>",
-        schema = report.report_schema_version,
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">",
     );
-    let _ = write!(out, "<style>{CSS}</style>");
-}
-
-/// Writes the page banner with run stats.
-fn write_header(out: &mut String, report: &Report) {
     let _ = write!(
         out,
-        "<header><h1>CodeDedup report</h1>\
-         <p>Tool <code>{tool}</code> · schema v{schema} · {files} file(s) · \
-         {visible} visible cluster(s) · {hidden} hidden</p>\
-         <p class=\"embeddings\">{embeddings}</p></header>",
-        tool = escape(&report.tool_version),
-        schema = report.report_schema_version,
+        "<title>CodeDedup report — {clusters} duplicate group(s) across {files} file(s)</title>",
+        clusters = report.clusters.len(),
         files = report.files_analysed,
-        visible = report.clusters.len(),
-        hidden = report.clusters_hidden,
-        embeddings = escape(&format_provenance(report)),
+    );
+    let _ = write!(out, "<style>{SITE_CSS}{REPORT_CSS}</style>");
+}
+
+/// Writes the page title and a one-paragraph plain-English summary
+/// telling the reader what the report is and how to read it.
+fn write_intro(out: &mut String, report: &Report) {
+    let _ = write!(
+        out,
+        "<h1>CodeDedup report</h1><p class=\"lede\">{summary}</p>",
+        summary = escape(&intro_summary(report)),
     );
 }
 
-/// Returns the human-readable embedding provenance line for the
-/// header. Mirrors the text-renderer format so the two views agree.
-fn format_provenance(report: &Report) -> String {
-    report.embedding_provenance.as_ref().map_or_else(
-        || "embeddings: off".to_owned(),
-        |provenance| {
-            format!(
-                "embeddings: {provider}/{model}@{version} ({dims}-d)",
-                provider = provenance.provider_id,
-                model = provenance.model_id,
-                version = provenance.model_version,
-                dims = provenance.dimensions,
-            )
-        },
-    )
-}
-
-/// Writes the action-hint playbook so a reader sees it before the
-/// clusters and can apply it as a decision table.
-fn write_action_hints(out: &mut String, report: &Report) {
-    if report.action_hints.is_empty() {
-        return;
-    }
-    let _ = write!(out, "<section class=\"hints\"><h2>Action hints</h2><ul>");
-    for hint in &report.action_hints {
-        let _ = write!(
-            out,
-            "<li><code>{pattern}</code> — {rec}</li>",
-            pattern = escape(&hint.pattern),
-            rec = escape(&hint.recommendation),
+/// Builds the plain-English intro line. Avoids jargon; says what was
+/// found, where to focus, and how the page is organised.
+fn intro_summary(report: &Report) -> String {
+    let groups = report.clusters.len();
+    let files = report.files_analysed;
+    let hidden = report.clusters_hidden;
+    let kinds = classify_groups(&report.clusters);
+    if groups == 0 {
+        return format!(
+            "Scanned {files} file(s). No duplicated code worth reporting was found."
         );
     }
-    let _ = write!(out, "</ul></section>");
-}
-
-/// Embeds the canonical schema documentation in a collapsed
-/// `<details>` so the page opens compact but the reference is one
-/// click away.
-fn write_schema_doc(out: &mut String, report: &Report) {
-    let _ = write!(
-        out,
-        "<details class=\"schema-doc\"><summary>Schema reference</summary><pre>{doc}</pre></details>",
-        doc = escape(&report.schema_doc),
+    let mut sentence = format!(
+        "Scanned {files} file(s) and found {groups} group(s) of duplicated code. ",
     );
+    sentence.push_str(&kinds);
+    sentence.push_str(
+        " Worst offenders are listed first — each card shows one example with syntax \
+         highlighting and tells you where else the same code appears.",
+    );
+    if hidden > 0 {
+        let _ = write!(sentence, " ({hidden} group(s) were hidden by your config.)");
+    }
+    sentence
 }
 
-/// Writes each cluster in ranked order.
+/// Returns a one-line breakdown of how many groups in `clusters` look
+/// identical vs nearly identical vs weakly similar. Plain English only.
+fn classify_groups(clusters: &[ReportCluster]) -> String {
+    let (mut exact, mut near, mut weak) = (0_usize, 0_usize, 0_usize);
+    for cluster in clusters {
+        match cluster_kind(cluster) {
+            ClusterKind::Exact => exact = exact.saturating_add(1),
+            ClusterKind::Near => near = near.saturating_add(1),
+            ClusterKind::Weak => weak = weak.saturating_add(1),
+        }
+    }
+    let mut parts: Vec<String> = Vec::new();
+    if exact > 0 {
+        parts.push(format!("{exact} identical (safe to merge)"));
+    }
+    if near > 0 {
+        parts.push(format!("{near} nearly identical (review then merge)"));
+    }
+    if weak > 0 {
+        parts.push(format!("{weak} loosely similar (treat as a hint)"));
+    }
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!("Breakdown: {}.", parts.join(" · "))
+    }
+}
+
+/// Coarse classification of a cluster from its fused signals. Drives
+/// the colour band on the card and the verb in the intro.
+#[derive(Clone, Copy)]
+enum ClusterKind {
+    /// Type-1/Type-2 exact / renamed clones — safe to extract.
+    Exact,
+    /// Strong token overlap or strong fused signal — review then merge.
+    Near,
+    /// LSH-only / weak fused — hint, not a directive.
+    Weak,
+}
+
+/// Maps cluster signals to a [`ClusterKind`]. Mirrors the buckets in
+/// [`crate::report::interpret`] so the HTML and the canonical
+/// interpretation never disagree.
+fn cluster_kind(cluster: &ReportCluster) -> ClusterKind {
+    let signals = cluster.signals;
+    if signals.structural >= 0.99 && signals.token_jaccard >= 0.99 {
+        ClusterKind::Exact
+    } else if signals.structural >= 0.99
+        || (signals.structural > 0.0 && signals.token_jaccard >= 0.95)
+        || (signals.structural <= 0.01 && signals.token_jaccard >= 0.90)
+    {
+        ClusterKind::Near
+    } else {
+        ClusterKind::Weak
+    }
+}
+
+/// CSS class suffix for the card's left border. Drives the band
+/// colour: crimson for exact, blue for near, neutral for weak.
+fn kind_class(kind: ClusterKind) -> &'static str {
+    match kind {
+        ClusterKind::Exact => "kind-exact",
+        ClusterKind::Near => "kind-near",
+        ClusterKind::Weak => "kind-weak",
+    }
+}
+
+/// Plain-English title for the card head, e.g.
+/// `"Identical code in 12 places"`.
+fn kind_title(kind: ClusterKind, occurrences: usize) -> String {
+    let verb = match kind {
+        ClusterKind::Exact => "Identical code",
+        ClusterKind::Near => "Nearly identical code",
+        ClusterKind::Weak => "Loosely similar code",
+    };
+    format!("{verb} in {occurrences} places")
+}
+
+/// Plain-English action sentence shown under the card title.
+fn kind_action(kind: ClusterKind) -> &'static str {
+    match kind {
+        ClusterKind::Exact => {
+            "Safe to extract into a single shared function — every copy is the same."
+        }
+        ClusterKind::Near => {
+            "Review the example and the other locations — small differences may matter."
+        }
+        ClusterKind::Weak => "Loose textual overlap. Treat as a hint, not a directive.",
+    }
+}
+
+/// Writes the section heading and every cluster card.
 fn write_clusters(out: &mut String, report: &Report, snippets: &mut SnippetLoader<'_>) {
-    let _ = write!(out, "<section class=\"clusters\"><h2>Clusters</h2>");
+    let _ = write!(out, "<section><h2>Duplicate groups</h2>");
     if report.clusters.is_empty() {
         let _ = write!(out, "<p class=\"empty\">No duplication detected.</p>");
     }
-    for (idx, cluster) in report.clusters.iter().enumerate() {
-        write_cluster(out, idx, cluster, snippets);
+    for cluster in &report.clusters {
+        write_cluster_card(out, cluster, snippets);
     }
     let _ = write!(out, "</section>");
 }
 
-/// Writes a single cluster block with its occurrences.
-fn write_cluster(
+/// Writes a single cluster as a Terminal Card: title + action sentence
+/// + one expanded example snippet + compact "also found in …" list.
+fn write_cluster_card(
     out: &mut String,
-    idx: usize,
     cluster: &ReportCluster,
     snippets: &mut SnippetLoader<'_>,
 ) {
+    let kind = cluster_kind(cluster);
+    let occurrences = &cluster.occurrences;
     let _ = write!(
         out,
-        "<article class=\"cluster\"><h3>#{rank} <code>{id}</code></h3>\
-         <p class=\"meta\">weight {weight:.2} · size {size} · {nodes} nodes</p>\
-         <p class=\"signals\">structural {s:.2} · token_jaccard {j:.2} · embedding_cos {e:.2} · fused {f:.2}</p>\
-         <p class=\"interp\">{interp}</p>",
-        rank = idx.saturating_add(1),
-        id = escape(&cluster.id),
-        weight = cluster.weight,
-        size = cluster.size,
-        nodes = cluster.canonical_node_count,
-        s = cluster.signals.structural,
-        j = cluster.signals.token_jaccard,
-        e = cluster.signals.embedding_cos,
-        f = cluster.signals.fused,
-        interp = escape(&cluster.interpretation),
+        "<article class=\"cluster-card {kind_class}\">\
+         <header class=\"cluster-card__head\">\
+         <h3 class=\"cluster-card__title\">{title}</h3>\
+         <span class=\"cluster-card__cost\">{cost}</span>\
+         </header>\
+         <p class=\"cluster-card__action\">{action}</p>",
+        kind_class = kind_class(kind),
+        title = escape(&kind_title(kind, occurrences.len())),
+        cost = escape(&cost_chip(cluster)),
+        action = escape(kind_action(kind)),
     );
-    write_occurrences(out, &cluster.occurrences, snippets);
+    write_example(out, occurrences, snippets);
+    write_also_list(out, occurrences);
     let _ = write!(out, "</article>");
 }
 
-/// Writes every occurrence of `cluster` as a `<details>` panel
-/// containing the syntax-highlighted snippet. The first
-/// [`OPEN_OCCURRENCES_PER_CLUSTER`] occurrences are rendered with the
-/// `open` attribute so the cluster lands open-by-default at one
-/// example; the rest stay collapsed.
-fn write_occurrences(
+/// Returns a compact "scope" chip text — number of AST nodes the
+/// canonical example covers, in plain language.
+fn cost_chip(cluster: &ReportCluster) -> String {
+    let nodes = cluster.canonical_node_count;
+    format!("~{nodes} AST nodes per copy")
+}
+
+/// Renders the canonical example: file path label + highlighted
+/// snippet body.
+fn write_example(
     out: &mut String,
     occurrences: &[ReportOccurrence],
     snippets: &mut SnippetLoader<'_>,
 ) {
-    let _ = write!(out, "<div class=\"occurrences\">");
-    for (index, occ) in occurrences.iter().enumerate() {
-        write_occurrence_panel(out, index, occ, snippets);
-    }
-    let _ = write!(out, "</div>");
-}
-
-/// Renders one occurrence as a `<details>` panel: summary line carries
-/// the path + line range + hidden marker; body carries the highlighted
-/// snippet (or the placeholder when source is unavailable).
-fn write_occurrence_panel(
-    out: &mut String,
-    index: usize,
-    occ: &ReportOccurrence,
-    snippets: &mut SnippetLoader<'_>,
-) {
-    let language = language_for_path(&occ.path);
-    let snippet = snippets.snippet(&occ.path, occ.start_byte, occ.end_byte);
-    let (line_label, body) = match snippet {
+    let Some(example) = occurrences.first() else {
+        return;
+    };
+    let language = language_for_path(&example.path);
+    match snippets.snippet(&example.path, example.start_byte, example.end_byte) {
         Some((source, start_line)) => {
             let end_line = start_line.saturating_add(source.matches('\n').count());
-            (
-                format!(":{start_line}-{end_line}"),
-                render_snippet_body(&source, start_line, language),
-            )
+            let _ = write!(
+                out,
+                "<p class=\"cluster-card__example\">Example — {path}:{start}-{end}</p>",
+                path = escape(&example.path.display().to_string()),
+                start = start_line,
+                end = end_line,
+            );
+            out.push_str(&render_snippet_body(&source, start_line, language));
         }
-        None => (
-            format!(" (bytes {}-{})", occ.start_byte, occ.end_byte),
-            "<p class=\"snippet-missing\">source unavailable</p>".to_owned(),
-        ),
-    };
-    let class = if occ.hidden {
-        "occurrence hidden"
-    } else {
-        "occurrence"
-    };
-    let open = if index < OPEN_OCCURRENCES_PER_CLUSTER {
-        " open"
+        None => {
+            let _ = write!(
+                out,
+                "<p class=\"cluster-card__example\">Example — {path} (bytes {start}-{end})</p>\
+                 <p class=\"snippet-missing\">Source unavailable on disk.</p>",
+                path = escape(&example.path.display().to_string()),
+                start = example.start_byte,
+                end = example.end_byte,
+            );
+        }
+    }
+}
+
+/// Renders the "also found in …" tail. Inline-prints the next five
+/// locations and folds anything beyond that into a single `<details>`
+/// so a 50-occurrence cluster produces a compact card, not a flood.
+fn write_also_list(out: &mut String, occurrences: &[ReportOccurrence]) {
+    if occurrences.len() <= 1 {
+        return;
+    }
+    let inline_cap = 6_usize;
+    let inline_end = occurrences.len().min(inline_cap);
+    let _ = write!(out, "<p class=\"cluster-card__example\">Also found in:</p><ul class=\"also-list\">");
+    for occ in occurrences.iter().take(inline_end).skip(1) {
+        write_also_item(out, occ);
+    }
+    let _ = write!(out, "</ul>");
+    if occurrences.len() > inline_cap {
+        let extra = occurrences.len().saturating_sub(inline_cap);
+        let _ = write!(
+            out,
+            "<details class=\"also-toggle\"><summary>Show {extra} more location(s)</summary><ul class=\"also-list\">",
+        );
+        for occ in occurrences.iter().skip(inline_cap) {
+            write_also_item(out, occ);
+        }
+        let _ = write!(out, "</ul></details>");
+    }
+}
+
+/// One row in the "also found in" list. Path + line range + hidden
+/// marker if applicable. No collapsibles, no per-occurrence snippets —
+/// the canonical example already shows the code.
+fn write_also_item(out: &mut String, occ: &ReportOccurrence) {
+    let class = if occ.hidden { "is-hidden" } else { "" };
+    let suffix = if occ.hidden {
+        " · hidden by your config"
     } else {
         ""
     };
-    let hidden_marker = if occ.hidden { " · hidden" } else { "" };
     let _ = write!(
         out,
-        "<details class=\"{class}\"{open}><summary><code>{path}</code>{line_label}{hidden_marker}</summary>{body}</details>",
+        "<li class=\"{class}\">{path}<span class=\"also-loc\">bytes {start}-{end}{suffix}</span></li>",
         path = escape(&occ.path.display().to_string()),
+        start = occ.start_byte,
+        end = occ.end_byte,
     );
 }
 
-/// Renders the snippet body: a `<pre>` containing one `<div>` per
-/// source line with a leading line-number gutter, with the source bytes
-/// passed through the syntax highlighter.
+/// Renders the snippet body: a `<pre>` containing one source line per
+/// row with a leading line-number gutter and tree-sitter-driven syntax
+/// highlighting.
 fn render_snippet_body(source: &str, start_line: usize, language: &str) -> String {
     let highlighted = highlight_snippet(source, language);
     let lines: Vec<&str> = split_html_lines(&highlighted);
@@ -301,9 +397,8 @@ fn render_snippet_body(source: &str, start_line: usize, language: &str) -> Strin
 }
 
 /// Splits `highlighted` HTML into one entry per source line. Splits on
-/// raw `\n` bytes — the highlighter never emits a `\n` inside a `<span>`
-/// (tree-sitter leaves don't span line boundaries for the kinds we
-/// classify) so the splits never break a tag.
+/// raw `\n` bytes — the highlighter never emits `\n` inside a `<span>`
+/// for the kinds we classify, so the split never breaks a tag.
 fn split_html_lines(highlighted: &str) -> Vec<&str> {
     if highlighted.is_empty() {
         return vec![""];
@@ -343,9 +438,9 @@ fn language_for_path(path: &Path) -> &'static str {
 }
 
 /// HTML-escapes the four characters that can break out of content
-/// context. Never emits entities for anything else so the output
-/// stays human-diffable.
-fn escape(input: &str) -> String {
+/// context. Never emits entities for anything else so the output stays
+/// human-diffable.
+pub(super) fn escape(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
         match ch {
@@ -358,17 +453,3 @@ fn escape(input: &str) -> String {
     }
     out
 }
-
-/// Inline stylesheet. Plain, readable, no web fonts. Keeps the report
-/// legible on any browser without network access.
-const CSS: &str = "body{font-family:system-ui,-apple-system,sans-serif;max-width:960px;margin:2em auto;padding:0 1em;color:#111}\
-header h1{margin-bottom:0}header p{color:#555}\
-.hints ul{list-style:none;padding:0}.hints li{margin:.25em 0}\
-.schema-doc pre{white-space:pre-wrap;background:#f6f6f6;padding:1em;border-radius:4px}\
-.cluster{border:1px solid #ddd;border-radius:6px;padding:1em;margin:1em 0}\
-.cluster h3{margin:0 0 .25em}.cluster .meta,.cluster .signals{color:#555;margin:.15em 0}\
-.cluster .interp{font-style:italic;margin:.25em 0 .75em}\
-.occurrences{list-style:none;padding-left:0}\
-.occurrences li{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em}\
-.occurrences li.hidden{color:#888}\
-code{background:#f6f6f6;padding:.1em .3em;border-radius:3px}";

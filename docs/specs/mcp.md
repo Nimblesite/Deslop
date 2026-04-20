@@ -2,7 +2,7 @@
 
 Thin Model Context Protocol shell over [LIVE-BINARY]. Lets an AI coding agent (Claude Code, Claude Desktop, Cursor, Continue, or anything that speaks MCP) **ask live questions of the running dedup analysis**: *"as I'm working on this file, which ranges I'm about to touch are already duplicated elsewhere?"* and *"before I write this block, is something like it already in the repo?"*
 
-Crate: `crates/codededup-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Stays under 100 LOC of glue; all logic lives in `codededup-daemon`.
+Crate: `crates/codededup-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Stays under 100 LOC of glue; all live-analysis logic lives in `codededup-core::live` (feature-gated).
 
 The MCP shell and the LSP shell ([lsp.md](lsp.md)) are peers — same daemon, different framing. The LSP is for the editor UI; the MCP is for the agent in the loop.
 

@@ -137,4 +137,4 @@ Coarse E2E only, per CLAUDE.md. `crates/codededup-lsp/tests/cli.rs` spawns the r
 - `codededup/duplicatesFindSimilar` returns the expected cluster for a hand-crafted snippet.
 - `codededup/embeddingSetModel` swaps the embedding provenance in the next `sessionConfig`.
 
-No mocking of the daemon — the LSP binary links the real `codededup-daemon` crate, running against `tests/fixtures/` workspaces.
+No mocking of the live session — the LSP binary links `codededup-core` with `features = ["live"]` and runs against `tests/fixtures/` workspaces.

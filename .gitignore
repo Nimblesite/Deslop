@@ -71,3 +71,5 @@ codededup-*.log
 
 node_modules/
 site/_site/
+
+/*.png

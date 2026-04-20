@@ -8,6 +8,8 @@
 pub mod ast;
 pub mod highlight;
 pub mod html;
+mod html_css;
+mod html_footer;
 pub mod text;
 
 pub use ast::render_ast_dump;

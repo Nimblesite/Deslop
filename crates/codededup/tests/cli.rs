@@ -185,6 +185,30 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     let html = fs::read_to_string(&out.html)?;
     assert!(html.contains("<!doctype html>"), "html doctype missing");
     assert!(html.contains("Action hints"), "html action hints missing");
+    assert!(
+        html.contains("CodeDedup report"),
+        "html human intro missing"
+    );
+    assert!(
+        html.contains("Duplicate groups"),
+        "html cluster section heading missing"
+    );
+    assert!(
+        html.contains("class=\"cluster-card"),
+        "html cluster card missing"
+    );
+    assert!(
+        html.contains("class=\"snippet\""),
+        "html snippet body missing"
+    );
+    assert!(
+        html.contains("class=\"ln\""),
+        "html line-number gutter missing"
+    );
+    assert!(
+        html.contains("--surface-container-low"),
+        "html design-system tokens missing"
+    );
     Ok(())
 }
 

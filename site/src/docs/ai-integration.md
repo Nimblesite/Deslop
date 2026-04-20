@@ -4,6 +4,7 @@ title: AI Integration
 eleventyNavigation:
   key: AI Integration
   order: 3
+icon: smart_toy
 ---
 
 # AI Integration

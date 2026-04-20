@@ -4,6 +4,7 @@ title: Getting Started
 eleventyNavigation:
   key: Getting Started
   order: 1
+icon: rocket_launch
 ---
 
 # Getting Started

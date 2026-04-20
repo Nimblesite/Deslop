@@ -4,6 +4,7 @@ title: How It Works
 eleventyNavigation:
   key: How It Works
   order: 2
+icon: account_tree
 ---
 
 # How It Works

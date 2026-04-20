@@ -4,6 +4,7 @@ title: Design System
 eleventyNavigation:
   key: Design System
   order: 9
+icon: palette
 ---
 
 # Design System

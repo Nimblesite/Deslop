@@ -19,9 +19,9 @@ Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust
 - **P4.2 Exclusion configuration** — simple `.codededup.toml` config with two tiers: `exclude` (skip parsing entirely) and `report_hide` (analyse for duplication but omit from report unless a visible file duplicates them). Per-language sections + a shared default. Implements [EXCLUSION-CONFIG].
 - **P5 Embedding pass (hybrid)** — Ollama + `nomic-embed-code`, HNSW (`usearch`), fuse via max-normalized sum (never average). Cache `(content_hash, model_id, version)`.
 - **P6 Harden** — `--incremental` on-disk fingerprint cache keyed by `(language, tool_version, min_nodes, content_hash)`, perf regression guard, fixture-per-bug workflow, coverage ratchet.
-- **P7 Daemon foundation** — `codededup-daemon` crate, file watcher, scheduler, shared query API, report delta protocol. Implements `update_files(changed) -> ReportDelta` on `codededup-core`. See [daemon.md](../specs/daemon.md).
-- **P8 LSP shell** — `codededup-lsp` bin over `tower-lsp`: diagnostics, code lens, hover, virtual docs, `codededup/*` custom methods. Editor-agnostic. See [lsp.md](../specs/lsp.md).
-- **P9 MCP shell** — `codededup-mcp` bin: tools (`find-similar`, `report-for-*`, `set-embedding-model`, …), resources, notifications. Agent-facing contract. See [mcp.md](../specs/mcp.md).
+- **P7 Live-analysis foundation** — `live` module inside `codededup-core` (behind a `live` cargo feature): `AnalysisSession`, file watcher, debouncer, scheduler, `LiveApi` query surface, `ReportDelta` push notifications. `ReportDelta` + `PipelineSession` + `update_files` are already landed. See [live.md](../specs/live.md).
+- **P8 LSP server** — `codededup-lsp` bin over `tower-lsp`: diagnostics, code lens, hover, virtual docs, `codededup/*` custom methods. Editor-agnostic thin forwarder to `LiveApi`. See [lsp.md](../specs/lsp.md).
+- **P9 MCP server** — `codededup-mcp` bin: tools (`find-similar`, `report-for-*`, `set-embedding-model`, …), resources, notifications. Agent-facing thin forwarder to `LiveApi`. See [mcp.md](../specs/mcp.md).
 - **P10 VSIX + live bubble** — VS Code extension with live duplication bubble ([VSIX-LIVE-BUBBLE]), tree view, webview, status bar, Ollama embedding-model picker ([VSIX-EMBED-PICKER]). The in-your-face "you're duplicating right now" moment. See [vsix.md](../specs/vsix.md).
 
 ## Non-goals (across all phases)
@@ -45,7 +45,7 @@ No remote APIs. No execution validation (HyClone). No cross-language detection. 
 - Spec IDs converted to hierarchical `[GROUP-TOPIC-DETAIL]` form; every module references the IDs it implements AND the academic work those IDs cite (Baxter 1998, Chilowicz 2009, SourcererCC, ensemble-LLM 2025).
 - Pluggable by construction: `PairScore` carries a third `embedding_cos` slot so P5 is additive; fingerprints are keyed by `(file_id, byte_range)` so P6 file-watcher incremental updates slot into the same cache keys.
 
-**Next up (beyond P6):** phases **P7–P10** take the deterministic core live. P7 adds the shared daemon (`codededup-daemon`) with the file watcher, re-analysis scheduler, and report-delta protocol — the `update_files(changed)` entry point is the only new surface on `codededup-core`. P8 and P9 are thin shells on top: an LSP binary ([lsp.md](../specs/lsp.md)) and an MCP binary ([mcp.md](../specs/mcp.md)). P10 ships the VS Code extension ([vsix.md](../specs/vsix.md)) — the reference client — whose flagship UX is the **live duplication bubble** ([VSIX-LIVE-BUBBLE]): the moment a developer types code that matches an existing cluster, the editor tells them inline, before save. No competitor does this ([competitors.md](../specs/competitors.md)); it is the category-defining feature. TUI mode remains deferred.
+**Next up (beyond P6):** phases **P7–P10** take the deterministic core live without adding a daemon process. P7 adds the `live` module inside `codededup-core` (behind a `live` cargo feature) with the file watcher, re-analysis scheduler, `LiveApi` query surface, and `ReportDelta` push notifications. The core primitives are already landed: `ReportDelta` at `codededup-core::delta`, `PipelineSession::update_files` at `codededup-core::pipeline::session`, and `list_ollama_models` for the VSIX model picker. P8 and P9 are thin forwarders on top: an LSP binary ([lsp.md](../specs/lsp.md)) and an MCP binary ([mcp.md](../specs/mcp.md)). P10 ships the VS Code extension ([vsix.md](../specs/vsix.md)) — the reference client — whose flagship UX is the **live duplication bubble** ([VSIX-LIVE-BUBBLE]): the moment a developer types code that matches an existing cluster, the editor tells them inline, before save. No competitor does this ([competitors.md](../specs/competitors.md)); it is the category-defining feature. TUI mode remains deferred.
 
 ## TODO
 
@@ -164,42 +164,50 @@ Implements [PIPELINE-INCREMENTAL]. Hardening pass: opt-in on-disk fingerprint ca
 ### P6.1 Human-readable HTML mode
 Implements [OUTPUT-HUMAN-HTML]. HTML output gains collapsible per-occurrence `<details>` panels with syntax-highlighted snippets and line numbers. JSON schema unchanged. `--human={auto,on,off}` selects mode.
 
-### P7 Daemon foundation
-Implements [daemon.md](../specs/daemon.md). Long-running analysis service on which both the LSP shell (P8) and the MCP shell (P9) sit. The CLI binary is unaffected.
+### P7 Live-analysis foundation
+Implements [live.md](../specs/live.md). In-memory, watcher-driven session on top of which the LSP server (P8) and the MCP server (P9) both sit. There is **no daemon process** — the session lives inside whichever binary spawned it. The `live` module ships inside `codededup-core` behind a `live` cargo feature so the CLI stays zero-watcher / zero-`notify` (one crate, feature flag instead of a separate crate — see [principles.md §[PRINCIPLES-LONG-RUNNING-DAEMON]](../specs/principles.md) and [live.md §[LIVE-PACKAGING]](../specs/live.md)).
 
-- [ ] New crate `crates/codededup-daemon` depending on `codededup-core`. No new global state; `AnalysisSession` is the only live struct ([LIVE-STATE]).
-- [ ] Add `update_files(changed: &[FileId]) -> ReportDelta` entry point on `codededup-core::pipeline`. Internally reuses the P6 fingerprint cache and the P5 embedding cache; touches no new cache keys.
-- [ ] File watcher via `notify` with 250 ms debounce / 2 s cap ([LIVE-WATCHER]). Excluded paths filtered before debounce.
-- [ ] Single-flight scheduler with queued coalescing. Budget: < 500 ms for ≤ 10 changed files on 100 K LOC ([LIVE-PERF-BUDGETS]).
-- [ ] `ReportDelta` type at `codededup-core::report::delta`; stable cluster ids are already in place (P3), so deltas are a pure projection.
-- [ ] Query API transport-agnostic (`DaemonApi` trait): `report/get`, `report/delta`, `report/forFile`, `report/forRange`, `cluster/byId`, `duplicates/findSimilar`, `embedding/listModels`, `embedding/setModel`, `session/config` ([LIVE-QUERY-API]).
-- [ ] `duplicates/findSimilar` with two input variants: open-buffer range (cache lookup) and `snippet + language` (in-memory parse, no cache mutation). Error types for unparseable / unsupported-language / below-min-nodes inputs.
-- [ ] `embedding/listModels` probes Ollama `/api/tags` and annotates each entry with `is_embedding_model` via one cached probe of `/api/embeddings`. Falls back to stub-only when Ollama is unreachable.
-- [ ] `embedding/setModel` swaps providers atomically, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), re-runs the embedding pass on existing subtrees. Returns the new `EmbeddingProvenance`.
-- [ ] Push notifications: `report/changed`, `analysis/state`. Fire-and-forget subscribers.
-- [ ] E2E: daemon harness in `crates/codededup-daemon/tests/` drives the library API (no transport yet), fixture workspace, asserts on delta shape after an edit, embedding-model swap, watcher debounce.
-- [ ] Coverage ratchet once daemon crate lands (target: maintain ≥ 94 %).
+**Core primitives (landed):**
 
-### P8 LSP shell
-Implements [lsp.md](../specs/lsp.md). `tower-lsp`-based binary forwarding to P7's daemon.
+- [x] `ReportDelta` at `codededup-core::delta` (stable cluster-id projection over two `Report` snapshots; `between(prev, to_gen, next)` + `is_empty()`). Pure, no feature gate — any consumer can diff two reports.
+- [x] `PipelineSession` at `codededup-core::pipeline::session`: holds the per-`FileId` normalised trees, fingerprints, source bytes, file registry, exclusion config. `initialise(root, min_nodes, incremental, config_path, embedding)` runs the first full pass. `update_files(changed: &[PathBuf], embedding)` re-parses the listed paths (treating missing-on-disk as deletions), re-runs clustering + ranking over the updated corpus, returns the new `Report`. Reuses the P6 fingerprint cache + P5 embedding cache transparently.
+- [x] `pipeline/{config,corpus,signatures,embedding_pass,run,session}.rs` split so `run()` is a thin wrapper over `PipelineSession::initialise` and neither file exceeds the 500-line budget.
+- [x] `list_ollama_models(endpoint) -> Vec<OllamaModelInfo>` at `codededup-core::embedding::ollama`: enumerates `/api/tags` + classifies each model via one embedding probe; exported at the crate root as `list_ollama_models` + `OllamaModelInfo`.
 
-- [ ] New crate `crates/codededup-lsp` (< 100 LOC of glue); depends on `codededup-daemon` + `tower-lsp`.
+**Still to land under P7:**
+
+- [ ] `live` cargo feature on `codededup-core` that pulls in `notify` as a workspace-pinned optional dependency. CLI build path (`codededup` binary) does **not** enable the feature; LSP/MCP binaries in P8/P9 do. Guarded by `#[cfg(feature = "live")]` on the whole `live` module.
+- [ ] `codededup-core::live::AnalysisSession`: owns one `PipelineSession`, an `Arc<Report>` current snapshot, a monotonic `generation: u64`, a subscriber list, and the active embedding provider. No new global state — `AnalysisSession` is the only live struct ([LIVE-STATE]).
+- [ ] `codededup-core::live::LiveApi` trait exposing the nine query methods from [LIVE-QUERY-API]: `report/get`, `report/delta`, `report/forFile`, `report/forRange`, `cluster/byId`, `duplicates/findSimilar`, `embedding/listModels`, `embedding/setModel`, `session/config`. Concrete impl `LiveService` wraps an `Arc<Mutex<AnalysisSession>>`.
+- [ ] `duplicates/findSimilar` with two input variants: open-buffer range (cache lookup against the live corpus) and `{ snippet, language }` (in-memory parse, no cache mutation). Explicit error types for unparseable / unsupported-language / below-min-nodes inputs.
+- [ ] `embedding/listModels` wraps `list_ollama_models` and prepends the built-in `stub` provider. Falls back to stub-only when Ollama is unreachable (downgrades `ProviderError::Unreachable` to `vec![stub_info]` with `tracing::info!`).
+- [ ] `embedding/setModel` swaps providers atomically, invalidates only the embedding cache layer ([FUSION-EMBED-PROVIDER]), re-runs the embedding pass on the existing fingerprint set. Returns the new `EmbeddingProvenance`.
+- [ ] `notify`-backed file watcher ([LIVE-WATCHER]) with deterministic `Clock`-injected debouncer (250 ms quiet / 2 s cap). Excluded paths filtered before debounce. Debouncer test-injectable so E2E doesn't depend on wall-clock timing.
+- [ ] Single-flight scheduler ([LIVE-SCHEDULER]) with queued coalescing: at most one `update_files` in flight; a new changeset during a running pass is queued and merged before dispatch. Budget: < 500 ms end-to-end for ≤ 10 changed files on 100 K LOC ([LIVE-PERF-BUDGETS]) surfaced as `tracing::warn!` on miss.
+- [ ] Push notifications ([LIVE-NOTIFICATIONS]): `report/changed` (payload `{ generation, ChangeSummary }`) and `analysis/state` (idle / running / errored). Fire-and-forget — slow subscribers never block the scheduler.
+- [ ] E2E harness in `crates/codededup-core/tests/live.rs` (feature-gated) driving `LiveService` directly (no transport yet — those land in P8/P9). Fixtures reuse `crates/codededup/tests/fixtures/csharp-small/`. Assertions: initial report shape matches batch `run()` output; `update_files` after an edit produces a `ReportDelta` with non-empty added/removed/updated; `find-similar` on a known range returns the expected cluster; `find-similar` on unparseable input returns the explicit error; `find-similar` on a below-min-nodes snippet returns `below_min_nodes: true`; `set-embedding-model` swaps provenance without dropping fingerprint-cache hits; `list-embedding-models` falls back to stub when Ollama is unreachable; debouncer coalesces a burst and flushes at the cap.
+- [ ] Coverage ratchet once the `live` module lands (target: maintain ≥ 94 %). Watcher + notify glue is covered via the deterministic debouncer tests plus one smoke test with a real file write; the `notify` FFI path itself does not count toward coverage.
+
+### P8 LSP server
+Implements [lsp.md](../specs/lsp.md). `tower-lsp`-based binary forwarding to P7's `LiveApi`.
+
+- [ ] New crate `crates/codededup-lsp` (< 100 LOC of glue); depends on `codededup-core` with `features = ["live"]` + `tower-lsp`.
 - [ ] `initialize` handshake returns capabilities per [LSP-CAPABILITIES]. Spawns an `AnalysisSession` rooted at the first workspace folder; multi-root = one process per root.
 - [ ] Diagnostics (pull-based, LSP 3.17): one per clone occurrence in the active documents; severity mapped from weight percentile per [LSP-SEVERITY]; `relatedInformation` links to other occurrences; `code` = stable cluster id.
 - [ ] Code lens at the first line of every occurrence: severity glyph + signal summary + "jump to next" action ([LSP-CODE-LENS]).
 - [ ] Hover over a clone range returns markdown with cluster id, interpretation, signal table, occurrence list, matching action hints ([LSP-HOVER]).
 - [ ] `definitionProvider` overloaded: inside a clone range, jumps to the canonical occurrence of that cluster.
 - [ ] `codededup://` virtual document scheme: `cluster/<id>`, `report`, `schema` ([LSP-VIRTUAL-DOC]).
-- [ ] Custom LSP methods in the `codededup/*` namespace forwarding 1:1 to daemon query API ([LSP-CUSTOM-METHODS]).
+- [ ] Custom LSP methods in the `codededup/*` namespace forwarding 1:1 to `LiveApi` ([LSP-CUSTOM-METHODS]).
 - [ ] `workspace/executeCommand` verbs: `refreshReport`, `openCluster`, `openReport`, `pickEmbeddingModel`, `toggleIncremental` ([LSP-COMMANDS]).
 - [ ] E2E: `crates/codededup-lsp/tests/cli.rs` spawns the real binary over stdio, drives the JSON-RPC handshake, asserts diagnostics on a fixture workspace, asserts delta on buffer edit, asserts `codededup/duplicatesFindSimilar` returns the expected cluster.
 
-### P9 MCP shell
+### P9 MCP server
 Implements [mcp.md](../specs/mcp.md). JSON-RPC-over-stdio MCP server for AI agents (Claude Code, Claude Desktop, Cursor, Continue).
 
-- [ ] New crate `crates/codededup-mcp` (< 100 LOC of glue); depends on `codededup-daemon`.
+- [ ] New crate `crates/codededup-mcp` (< 100 LOC of glue); depends on `codededup-core` with `features = ["live"]`.
 - [ ] `initialize` + `tools/list` declares eight tools with schemas + agent-facing descriptions per [MCP-TOOLS] and [MCP-AGENT-PROMPT-GUIDANCE].
-- [ ] Tool implementations (each forwards to `DaemonApi`): `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
+- [ ] Tool implementations (each forwards to `LiveApi`): `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
 - [ ] `find-similar` accepts either a `{ path, start_byte, end_byte }` open-buffer range or `{ snippet, language }`. Cache-preserving. Returns top-N fused clusters; explicit `UnparseableInputError` / `UnsupportedLanguageError` / `below_min_nodes: true` paths ([MCP-TOOL-FINDSIMILAR]).
 - [ ] Resources: `codededup://report`, `codededup://schema` via `resources/list` + `resources/read` ([MCP-RESOURCES]).
 - [ ] Notifications: `notifications/resources/updated` on report refresh; `notifications/codededup/reportChanged` custom with `{ generation, summary }`.
@@ -214,9 +222,9 @@ Implements [vsix.md](../specs/vsix.md). The in-your-face "you're duplicating cod
 - [ ] Bundle per-platform pre-built `codededup-lsp` + `codededup-mcp` binaries (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). **No download-on-activate.**
 - [ ] Activation on `onLanguage:{csharp,rust,python}` + `workspaceContains:**/*.{cs,rs,py}` + `onCommand:codededup.openReport`.
 - [ ] **[VSIX-LIVE-BUBBLE] — the flagship.** After each coalesced edit, call `duplicates/findSimilar` on the most-recently-touched range; if fused ≥ 0.85, render a two-part bubble (inline `TextEditorDecorationType` with severity dot + `DUPLICATE`/`NEAR-MISS`/`SEMANTIC MATCH` verdict + count + canonical location; plus an `InlayHint` carrying the 3-bar signal strip). Hover reveals full detail; click expands to a webview card with `Compare` button. No-flicker cluster-id-stable cooldown. At most one bubble per editor. `Escape` dismisses. Ghost-line mode (`codededup.liveBubble.mode = "ghost"`) renders on a phantom line below the range via styled CodeLens.
-- [ ] Activity bar "Duplicate Clusters" view container: Top Offenders tree (worst-first, severity-badged), Focused File tree (clusters overlapping active editor), Session panel (embedding model / cache stats / files analysed / daemon state) ([VSIX-ACTIVITY-BAR]).
+- [ ] Activity bar "Duplicate Clusters" view container: Top Offenders tree (worst-first, severity-badged), Focused File tree (clusters overlapping active editor), Session panel (embedding model / cache stats / files analysed / analysis state) ([VSIX-ACTIVITY-BAR]).
 - [ ] Editor decorations: gutter severity bar + 1-pixel underline on every clone range in the active editor. No heavy highlighting ([VSIX-DECORATIONS]).
-- [ ] Cluster detail webview (`codededup.openCluster`): header, interpretation + action hints, 4-bar signal chart, per-occurrence collapsible panels with line-numbered, syntax-highlighted snippets (rendered via the daemon's [OUTPUT-HUMAN-HTML] path). Keyboard-first navigation (`j/k/n/p/Enter/?`) ([VSIX-WEBVIEW]).
+- [ ] Cluster detail webview (`codededup.openCluster`): header, interpretation + action hints, 4-bar signal chart, per-occurrence collapsible panels with line-numbered, syntax-highlighted snippets (rendered via the core's [OUTPUT-HUMAN-HTML] path). Keyboard-first navigation (`j/k/n/p/Enter/?`) ([VSIX-WEBVIEW]).
 - [ ] Full report webview (`codededup.openReport`): live-refreshing version of the HTML renderer, wired to `report/changed` notifications. Filters by language / severity / file-path glob. Worst-first sort is fixed ([VSIX-REPORT-WEBVIEW]).
 - [ ] **[VSIX-EMBED-PICKER] Ollama model picker.** QuickPick rendering every model returned by `embedding/listModels`, with recommended-for-code hints for known models (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, `codet5p`). `stub` as the last entry. Separator with "Pull a new model…" (opens `ollama.com/library`) and "Refresh list." On selection, calls `embedding/setModel`. Handles Ollama-not-running, probe failure, and stub-selection warnings. Triggers: Session panel click, command palette (`codededup.pickEmbeddingModel`), status bar.
 - [ ] Status bar item: `dedup · N · #1=File.cs:230 · embed=<model>` ([VSIX-STATUS-BAR]).
