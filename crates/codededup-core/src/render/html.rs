@@ -46,13 +46,32 @@ fn write_header(out: &mut String, report: &Report) {
         out,
         "<header><h1>CodeDedup report</h1>\
          <p>Tool <code>{tool}</code> · schema v{schema} · {files} file(s) · \
-         {visible} visible cluster(s) · {hidden} hidden</p></header>",
+         {visible} visible cluster(s) · {hidden} hidden</p>\
+         <p class=\"embeddings\">{embeddings}</p></header>",
         tool = escape(&report.tool_version),
         schema = report.report_schema_version,
         files = report.files_analysed,
         visible = report.clusters.len(),
         hidden = report.clusters_hidden,
+        embeddings = escape(&format_provenance(report)),
     );
+}
+
+/// Returns the human-readable embedding provenance line for the
+/// header. Mirrors the text-renderer format so the two views agree.
+fn format_provenance(report: &Report) -> String {
+    report.embedding_provenance.as_ref().map_or_else(
+        || "embeddings: off".to_owned(),
+        |provenance| {
+            format!(
+                "embeddings: {provider}/{model}@{version} ({dims}-d)",
+                provider = provenance.provider_id,
+                model = provenance.model_id,
+                version = provenance.model_version,
+                dims = provenance.dimensions,
+            )
+        },
+    )
 }
 
 /// Writes the action-hint playbook so a reader sees it before the

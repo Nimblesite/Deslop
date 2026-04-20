@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup help build-release install-binary
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -38,10 +38,18 @@ build:
 
 ## test: Fail-fast tests + coverage + threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
+##       Does NOT require Ollama — tests whose names contain `ollama_`
+##       are filtered out via `--skip ollama_`. `make ci-ollama` runs
+##       the Ollama-gated tests explicitly against a live daemon.
+##       Because the Ollama HTTP client is only exercised by those
+##       tests, `embedding/ollama.rs` is excluded from the coverage
+##       measurement so the default threshold stays honest.
 test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
-	cargo llvm-cov --workspace --all-targets --lcov --output-path lcov.info
+	cargo llvm-cov --workspace --all-targets \
+	    --ignore-filename-regex 'embedding/ollama\.rs' \
+	    --lcov --output-path lcov.info -- --skip ollama_
 	$(MAKE) _coverage_check
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
@@ -61,7 +69,7 @@ clean:
 	$(RM) lcov.info
 	$(RM) .codededup-cache
 
-## ci: lint + test + build (full CI simulation)
+## ci: lint + test + build (full CI simulation — no Ollama required)
 ci: lint test build
 
 ## setup: Post-create dev environment setup (used by devcontainer)
@@ -93,6 +101,16 @@ _coverage_check:
 # Repo-Specific Targets
 # =============================================================================
 
+## test-ollama: Run only the Ollama-gated tests (`ollama_*`-prefixed)
+##              that `make test` filters out. Requires a local Ollama
+##              daemon on 127.0.0.1:11434 with `nomic-embed-text`
+##              already pulled.
+test-ollama:
+	cargo test --release --workspace ollama_
+
+## ci-ollama: `make ci` plus `make test-ollama`.
+ci-ollama: ci test-ollama
+
 ## build-release: Build the release binary for the codededup CLI
 build-release:
 	@echo "==> Building release binary..."
@@ -115,5 +133,7 @@ help:
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""
 	@echo "Repo-specific targets:"
+	@echo "  test-ollama    - Run only the Ollama-gated tests (ollama_*)"
+	@echo "  ci-ollama      - make ci plus make test-ollama"
 	@echo "  build-release  - Build the release binary for the codededup CLI"
 	@echo "  install-binary - Build release and install binary onto PATH"

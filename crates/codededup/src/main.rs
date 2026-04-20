@@ -9,7 +9,11 @@ use std::{env, fs, io::Write as _, path::PathBuf};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use codededup_core::{render::render_html, render::render_text, run, PipelineConfig, Report};
+use codededup_core::{
+    render::render_html, render::render_text, run, EmbeddingMode, EmbeddingSettings, OllamaProvider,
+    PipelineConfig, Report, StubProvider, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
+    DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+};
 use tracing_subscriber::EnvFilter;
 
 /// Default base name for the three-format output written to CWD when
@@ -60,6 +64,27 @@ struct Cli {
     /// Suppress the human-readable HTML output.
     #[arg(long)]
     nohtml: bool,
+
+    /// Embedding-layer policy. `auto` probes the provider and falls
+    /// back with a warning; `required` hard-fails when the provider
+    /// is unreachable; `off` skips embeddings entirely.
+    #[arg(long, value_name = "MODE", default_value = "off")]
+    embeddings: String,
+
+    /// Embedding provider registry key. Only `ollama` is implemented
+    /// today; future providers slot in behind the same flag.
+    #[arg(long, value_name = "ID", default_value = DEFAULT_PROVIDER_ID)]
+    embedding_provider: String,
+
+    /// Embedding model identifier as understood by the provider. For
+    /// `ollama`, this is the model name shown by `ollama list`.
+    #[arg(long, value_name = "MODEL", default_value = DEFAULT_OLLAMA_MODEL)]
+    embedding_model: String,
+
+    /// Embedding provider endpoint. Defaults to the Ollama loopback
+    /// URL.
+    #[arg(long, value_name = "URL", default_value = DEFAULT_OLLAMA_ENDPOINT)]
+    embedding_endpoint: String,
 }
 
 fn main() -> Result<()> {
@@ -67,26 +92,82 @@ fn main() -> Result<()> {
     let args = Cli::parse();
     let formats = FormatSelection::from_args(&args)?;
     let output = OutputPaths::new(args.output.as_deref());
+    let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
     tracing::info!(
         path = %args.path.display(),
         min_nodes = args.min_nodes,
         json = formats.json,
         text = formats.text,
         html = formats.html,
+        embeddings = mode.as_str(),
         "codededup invoked",
     );
     let report = if let Some(source) = &args.from_report {
         load_report(source)?
     } else {
+        let provider = configured_provider(&args, mode)?;
+        let provider_ref: Option<&dyn codededup_core::EmbeddingProvider> = provider.as_deref();
         let pipeline_config = PipelineConfig {
             root: args.path.clone(),
             min_nodes: args.min_nodes,
             config_path: args.config.clone(),
+            embedding: EmbeddingSettings {
+                mode,
+                provider: provider_ref,
+            },
         };
         run(&pipeline_config).context("analysis pipeline failed")?
     };
     emit_all(&report, &formats, &output)?;
     Ok(())
+}
+
+/// Parses `--embeddings` into the core enum, surfacing a user-facing
+/// error message when the value is not one of the three accepted
+/// variants.
+fn parse_embedding_mode(source: &str) -> Result<EmbeddingMode> {
+    source
+        .parse::<EmbeddingMode>()
+        .map_err(|err| anyhow::anyhow!("invalid --embeddings value {:?}: {err}", err.value))
+}
+
+/// Instantiates the embedding provider. Returns `None` for
+/// [`EmbeddingMode::Off`] so the pipeline never tries to reach out,
+/// or when the provider id is not recognised under `auto` mode.
+fn configured_provider(
+    args: &Cli,
+    mode: EmbeddingMode,
+) -> Result<Option<Box<dyn codededup_core::EmbeddingProvider>>> {
+    if matches!(mode, EmbeddingMode::Off) {
+        return Ok(None);
+    }
+    match args.embedding_provider.as_str() {
+        DEFAULT_PROVIDER_ID => build_ollama_provider(args, mode),
+        STUB_PROVIDER_ID => Ok(Some(Box::new(StubProvider::new()))),
+        other => bail!("unknown embedding provider {other:?}"),
+    }
+}
+
+/// Builds the Ollama provider. Under `auto`, a connection failure
+/// downgrades to `None` with a warning so the pipeline can fall back.
+/// Under `required`, it propagates as an error.
+fn build_ollama_provider(
+    args: &Cli,
+    mode: EmbeddingMode,
+) -> Result<Option<Box<dyn codededup_core::EmbeddingProvider>>> {
+    match OllamaProvider::connect(&args.embedding_endpoint, &args.embedding_model) {
+        Ok(provider) => Ok(Some(Box::new(provider))),
+        Err(source) => {
+            if matches!(mode, EmbeddingMode::Required) {
+                Err(anyhow::anyhow!(
+                    "embedding provider required but unreachable: {source}"
+                ))
+            } else {
+                tracing::warn!(%source, "embedding provider unreachable — continuing without Type-4 recall");
+                Ok(None)
+            }
+        }
+    }
 }
 
 /// Which of the three output formats are enabled for this run.

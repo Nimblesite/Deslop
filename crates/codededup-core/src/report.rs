@@ -99,8 +99,28 @@ pub struct Report {
     pub schema_doc: String,
     /// Short agent-oriented playbook; see [`default_action_hints`].
     pub action_hints: Vec<ActionHint>,
+    /// Which embedding provider / model / version produced the
+    /// `embedding_cos` signals in this report, if any. `None` when
+    /// the embedding pass was disabled or failed ([FUSION-EMBED-PROVIDER]).
+    pub embedding_provenance: Option<EmbeddingProvenance>,
     /// Ordered clusters, worst offenders first.
     pub clusters: Vec<ReportCluster>,
+}
+
+/// Provenance block pinning the `(provider_id, model_id, model_version)`
+/// triple used when the embedding pass ran. Serialised into the report
+/// header per [FUSION-EMBED-PROVIDER] so switching providers/models is
+/// visible to consumers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingProvenance {
+    /// Registry key of the provider (e.g. `"ollama"`).
+    pub provider_id: String,
+    /// Human-readable model identifier.
+    pub model_id: String,
+    /// Opaque model version / digest reported by the provider.
+    pub model_version: String,
+    /// Embedding dimensionality the provider returned.
+    pub dimensions: usize,
 }
 
 /// One cluster as it appears in the rendered report.
@@ -173,26 +193,50 @@ pub struct ReportOccurrence {
     pub hidden: bool,
 }
 
+/// Parameters accepted by [`render_report`]. Grouped because the
+/// list has outgrown the 7-argument function budget without the
+/// struct and because adding provenance / languages should not force
+/// every call site to re-shuffle positional arguments.
+#[derive(Debug)]
+pub struct ReportInputs<'a, S: BuildHasher> {
+    /// Final ranked clusters from [`crate::cluster`].
+    pub clusters: &'a [Cluster],
+    /// File registry used to resolve `FileId → path`.
+    pub registry: &'a FileRegistry,
+    /// `FileId → language_id` map so per-language `report_hide`
+    /// patterns apply correctly.
+    pub file_languages: &'a HashMap<FileId, &'static str, S>,
+    /// Count of files actually parsed (reported in the header).
+    pub files_analysed: usize,
+    /// Minimum subtree node count used for clustering.
+    pub min_nodes: u32,
+    /// Absolute scan root for relative-path rendering.
+    pub scan_root: &'a Path,
+    /// Exclusion config providing `report_hide` semantics.
+    pub exclusion: &'a ExclusionConfig,
+    /// Embedding provenance — `None` when the embedding pass did not
+    /// run or produced no signal.
+    pub embedding_provenance: Option<EmbeddingProvenance>,
+}
+
 /// Converts the internal representation into a report ready for
 /// serialisation. Applies [EXCLUSION-CONFIG] `report_hide` semantics:
 /// per-occurrence `hidden` flags come from `exclusion`, and any cluster
 /// whose every member is hidden is dropped into `clusters_hidden`
 /// instead of `clusters`.
 #[must_use]
-pub fn render_report<S: BuildHasher>(
-    clusters: &[Cluster],
-    registry: &FileRegistry,
-    file_languages: &HashMap<FileId, &'static str, S>,
-    files_analysed: usize,
-    min_nodes: u32,
-    scan_root: &Path,
-    exclusion: &ExclusionConfig,
-) -> Report {
-    let materialised: Vec<(ReportCluster, bool)> = clusters
+pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
+    let materialised: Vec<(ReportCluster, bool)> = inputs
+        .clusters
         .iter()
         .map(|cluster| {
-            let report_cluster =
-                cluster_to_report(cluster, registry, file_languages, scan_root, exclusion);
+            let report_cluster = cluster_to_report(
+                cluster,
+                inputs.registry,
+                inputs.file_languages,
+                inputs.scan_root,
+                inputs.exclusion,
+            );
             let all_hidden = !report_cluster.occurrences.is_empty()
                 && report_cluster.occurrences.iter().all(|occ| occ.hidden);
             (report_cluster, all_hidden)
@@ -206,11 +250,12 @@ pub fn render_report<S: BuildHasher>(
     Report {
         report_schema_version: REPORT_SCHEMA_VERSION,
         tool_version: crate::version().to_owned(),
-        min_nodes,
-        files_analysed,
+        min_nodes: inputs.min_nodes,
+        files_analysed: inputs.files_analysed,
         clusters_hidden,
         schema_doc: SCHEMA_DOC.to_owned(),
         action_hints: default_action_hints(),
+        embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
     }
 }

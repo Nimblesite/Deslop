@@ -19,6 +19,8 @@ tree-sitter-rust.workspace = true
 tree-sitter-python.workspace = true
 ignore.workspace = true
 blake3.workspace = true
+ureq.workspace = true
+instant-distance.workspace = true
 
 [lints]
 workspace = true

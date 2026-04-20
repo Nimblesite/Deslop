@@ -19,6 +19,7 @@ pub mod ast;
 pub mod cluster;
 pub mod config;
 pub mod discover;
+pub mod embedding;
 pub mod error;
 pub mod fingerprint;
 pub mod lang;
@@ -32,9 +33,15 @@ pub mod state;
 pub mod tokens;
 
 pub use config::{ExclusionConfig, DEFAULT_CONFIG_FILENAME};
+pub use embedding::{
+    EmbeddingMode, EmbeddingProvider, EmbeddingSpec, OllamaProvider, ParseModeError, StubProvider,
+    DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+};
 pub use error::CoreError;
-pub use pipeline::{run, PipelineConfig};
-pub use report::{render_report, Report, REPORT_SCHEMA_VERSION};
+pub use pipeline::{run, EmbeddingSettings, PipelineConfig};
+pub use report::{
+    render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION,
+};
 
 /// Semantic version of the `codededup-core` library.
 #[must_use]

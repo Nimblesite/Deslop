@@ -14,6 +14,7 @@ use crate::report::{Report, ReportCluster};
 pub fn render_text(report: &Report) -> String {
     let mut out = String::new();
     write_header(&mut out, report);
+    write_provenance(&mut out, report);
     write_action_hints(&mut out, report);
     for (idx, cluster) in report.clusters.iter().enumerate() {
         write_cluster(&mut out, idx, cluster);
@@ -31,6 +32,22 @@ fn write_header(out: &mut String, report: &Report) {
         files = report.files_analysed,
         clusters = report.clusters.len(),
         hidden = report.clusters_hidden,
+    );
+}
+
+/// Writes the embedding provenance line when the pass ran.
+fn write_provenance(out: &mut String, report: &Report) {
+    let Some(provenance) = report.embedding_provenance.as_ref() else {
+        let _ = writeln!(out, "embeddings: off");
+        return;
+    };
+    let _ = writeln!(
+        out,
+        "embeddings: {provider}/{model}@{version} ({dims}-d)",
+        provider = provenance.provider_id,
+        model = provenance.model_id,
+        version = provenance.model_version,
+        dims = provenance.dimensions,
     );
 }
 

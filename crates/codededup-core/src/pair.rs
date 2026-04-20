@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::{
+    embedding::EmbeddingPair,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, Signature},
 };
@@ -101,20 +102,27 @@ pub struct FusedCluster {
 ///
 /// - every distinct pair inside each structural (Merkle) hash bucket
 ///   (`structural = 1.0`),
-/// - every LSH band collision (`structural = 0.0`).
+/// - every LSH band collision (`structural = 0.0`),
+/// - every ANN top-k neighbour surfaced by the embedding pass (pair
+///   enters with its `embedding_cos` populated).
 ///
 /// Pair scores include the token Jaccard estimate regardless of how the
-/// pair was discovered.
+/// pair was discovered. When `embedding_pairs` is empty (no provider
+/// or `--embeddings=off`) the output matches the pre-P5 behaviour
+/// exactly.
 #[must_use]
 pub fn candidate_pairs(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     lsh_pairs: &[(usize, usize)],
+    embedding_pairs: &[EmbeddingPair],
 ) -> Vec<CandidatePair> {
     let mut scores: HashMap<(usize, usize), f64> = HashMap::new();
+    let mut cosines: HashMap<(usize, usize), f64> = HashMap::new();
     collect_structural_pairs(fingerprints, &mut scores);
     add_lsh_pairs(lsh_pairs, &mut scores);
-    finalise_pairs(fingerprints, signatures, scores)
+    add_embedding_pairs(embedding_pairs, &mut scores, &mut cosines);
+    finalise_pairs(fingerprints, signatures, scores, &cosines)
 }
 
 /// Populates `scores` with `1.0` for every structural (Merkle-hash) pair.
@@ -156,6 +164,25 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
     }
 }
 
+/// Adds embedding ANN pairs. Structural scoring is unchanged; pairs
+/// gain an entry in `cosines` that [`finalise_pairs`] folds into the
+/// final [`PairScore`]. Pairs already surfaced by the structural or
+/// LSH passes still benefit from the embedding cosine being recorded.
+fn add_embedding_pairs(
+    embedding_pairs: &[EmbeddingPair],
+    scores: &mut HashMap<(usize, usize), f64>,
+    cosines: &mut HashMap<(usize, usize), f64>,
+) {
+    for pair in embedding_pairs {
+        let key = order(pair.left, pair.right);
+        let _previous_score = scores.entry(key).or_insert(0.0_f64);
+        let slot = cosines.entry(key).or_insert(pair.cosine);
+        if pair.cosine > *slot {
+            *slot = pair.cosine;
+        }
+    }
+}
+
 /// Converts raw `(left, right) → structural_score` map into a sorted
 /// [`CandidatePair`] list with token Jaccard filled in from the signatures
 /// and the minimum endpoint node count attached for downstream filtering.
@@ -163,6 +190,7 @@ fn finalise_pairs(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     scores: HashMap<(usize, usize), f64>,
+    cosines: &HashMap<(usize, usize), f64>,
 ) -> Vec<CandidatePair> {
     let mut pairs: Vec<CandidatePair> = scores
         .into_iter()
@@ -173,7 +201,7 @@ fn finalise_pairs(
             score: PairScore {
                 structural,
                 token_jaccard: jaccard_for(signatures, left, right),
-                embedding_cos: 0.0,
+                embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
             },
         })
         .collect();
@@ -260,13 +288,11 @@ fn build_clusters(
         let root = find(parents, member);
         let _inserted = groups.entry(root).or_default().insert(member);
     }
-    let mut totals: BTreeMap<usize, (f64, f64, u32)> = BTreeMap::new();
+    let mut totals: BTreeMap<usize, ClusterTotals> = BTreeMap::new();
     for pair in surviving {
         let root = find(parents, pair.left);
-        let entry = totals.entry(root).or_insert((0.0_f64, 0.0_f64, 0_u32));
-        entry.0 += pair.score.structural;
-        entry.1 += pair.score.token_jaccard;
-        entry.2 = entry.2.saturating_add(1);
+        let entry = totals.entry(root).or_default();
+        entry.add(pair.score);
     }
     groups
         .into_iter()
@@ -274,30 +300,56 @@ fn build_clusters(
         .collect()
 }
 
+/// Running totals per cluster root. Kept in one struct so the
+/// per-cluster mean score stays symmetric across all three signals.
+#[derive(Debug, Default, Clone, Copy)]
+struct ClusterTotals {
+    /// Sum of structural scores across pairs in the cluster.
+    structural: f64,
+    /// Sum of token-Jaccard scores.
+    token_jaccard: f64,
+    /// Sum of embedding cosines.
+    embedding_cos: f64,
+    /// Number of pairs folded into the totals.
+    count: u32,
+}
+
+impl ClusterTotals {
+    /// Folds a single pair's score into the running totals.
+    fn add(&mut self, score: PairScore) {
+        self.structural += score.structural;
+        self.token_jaccard += score.token_jaccard;
+        self.embedding_cos += score.embedding_cos;
+        self.count = self.count.saturating_add(1);
+    }
+
+    /// Returns the per-signal mean. Zero when no pairs were folded in.
+    fn mean(self) -> PairScore {
+        if self.count == 0 {
+            return PairScore {
+                structural: 0.0,
+                token_jaccard: 0.0,
+                embedding_cos: 0.0,
+            };
+        }
+        let divisor = f64::from(self.count);
+        PairScore {
+            structural: self.structural / divisor,
+            token_jaccard: self.token_jaccard / divisor,
+            embedding_cos: self.embedding_cos / divisor,
+        }
+    }
+}
+
 /// Builds one [`FusedCluster`] from a connected-component membership set
 /// and the precomputed pair-score totals.
 fn build_cluster(
     root: usize,
     members: BTreeSet<usize>,
-    totals: &BTreeMap<usize, (f64, f64, u32)>,
+    totals: &BTreeMap<usize, ClusterTotals>,
 ) -> FusedCluster {
     let ordered_members: Vec<usize> = members.into_iter().collect();
-    let default_totals = (0.0_f64, 0.0_f64, 0_u32);
-    let (structural_sum, jaccard_sum, count) = totals.get(&root).copied().unwrap_or(default_totals);
-    let mean_score = if count == 0 {
-        PairScore {
-            structural: 0.0,
-            token_jaccard: 0.0,
-            embedding_cos: 0.0,
-        }
-    } else {
-        let divisor = f64::from(count);
-        PairScore {
-            structural: structural_sum / divisor,
-            token_jaccard: jaccard_sum / divisor,
-            embedding_cos: 0.0,
-        }
-    };
+    let mean_score = totals.get(&root).copied().unwrap_or_default().mean();
     FusedCluster {
         members: ordered_members,
         mean_score,

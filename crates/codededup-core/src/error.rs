@@ -68,4 +68,14 @@ pub enum CoreError {
         #[source]
         source: serde_json::Error,
     },
+
+    /// The embedding pass failed in a way that must be surfaced to
+    /// the user. Includes `--embeddings=required` probe failures and
+    /// individual `embed` calls that the provider rejected.
+    #[error("embedding pass failed: {message}")]
+    Embedding {
+        /// Human-readable description of the upstream failure
+        /// (provider message, cache I/O error, etc.).
+        message: String,
+    },
 }
