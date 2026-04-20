@@ -176,11 +176,9 @@ fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
         ));
     }
     let tree = decode_tree(&mut cursor, file_id)?;
-    let fp_count = read_u64(&mut cursor)?;
-    let fp_count_usize = usize::try_from(fp_count)
-        .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?;
-    let mut fingerprints = Vec::with_capacity(fp_count_usize);
-    for _ in 0..fp_count_usize {
+    let fp_count = u64_to_usize(read_u64(&mut cursor)?)?;
+    let mut fingerprints = Vec::with_capacity(fp_count);
+    for _ in 0..fp_count {
         fingerprints.push(decode_fingerprint(&mut cursor, file_id)?);
     }
     Ok(CachedFile { tree, fingerprints })
@@ -189,33 +187,23 @@ fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
 /// Reconstructs one [`NormalizedNode`] subtree and all of its
 /// descendants from the cursor.
 fn decode_tree(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<NormalizedNode> {
-    let kind_len = read_u32(&mut *cursor)?;
-    let kind_len_usize = usize::try_from(kind_len)
-        .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?;
-    let mut kind_bytes = vec![0_u8; kind_len_usize];
+    let kind_len = u32_to_usize(read_u32(&mut *cursor)?);
+    let mut kind_bytes = vec![0_u8; kind_len];
     cursor.read_exact(&mut kind_bytes)?;
     let kind_str = std::str::from_utf8(&kind_bytes)
         .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?;
     let kind = intern_kind(kind_str);
-    let start = read_u64(&mut *cursor)?;
-    let end = read_u64(&mut *cursor)?;
-    let child_count = read_u32(&mut *cursor)?;
-    let child_count_usize = usize::try_from(child_count)
-        .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?;
-    let mut children = Vec::with_capacity(child_count_usize);
-    for _ in 0..child_count_usize {
+    let start = u64_to_usize(read_u64(&mut *cursor)?)?;
+    let end = u64_to_usize(read_u64(&mut *cursor)?)?;
+    let child_count = u32_to_usize(read_u32(&mut *cursor)?);
+    let mut children = Vec::with_capacity(child_count);
+    for _ in 0..child_count {
         children.push(decode_tree(&mut *cursor, file_id)?);
     }
-    let byte_range = ByteRange {
-        start: usize::try_from(start)
-            .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?,
-        end: usize::try_from(end)
-            .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?,
-    };
     Ok(NormalizedNode {
         kind,
         children,
-        byte_range,
+        byte_range: ByteRange { start, end },
         file_id,
     })
 }
@@ -225,21 +213,30 @@ fn decode_tree(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<Normal
 fn decode_fingerprint(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<Fingerprint> {
     let mut hash = [0_u8; 32];
     cursor.read_exact(&mut hash)?;
-    let start = read_u64(&mut *cursor)?;
-    let end = read_u64(&mut *cursor)?;
-    let node_count = read_u64(&mut *cursor)?;
+    let start = u64_to_usize(read_u64(&mut *cursor)?)?;
+    let end = u64_to_usize(read_u64(&mut *cursor)?)?;
+    let node_count = u64_to_usize(read_u64(&mut *cursor)?)?;
     Ok(Fingerprint {
         hash,
         file_id,
-        byte_range: ByteRange {
-            start: usize::try_from(start)
-                .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?,
-            end: usize::try_from(end)
-                .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?,
-        },
-        node_count: usize::try_from(node_count)
-            .map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))?,
+        byte_range: ByteRange { start, end },
+        node_count,
     })
+}
+
+/// Converts a `u64` read from the cache blob into a `usize`, wrapping
+/// a single out-of-range error variant so the decoder is legible.
+/// Only fires on 32-bit targets with absurdly large blobs — but the
+/// `Result` stays so those targets still fail cleanly rather than
+/// silently truncating.
+fn u64_to_usize(value: u64) -> io::Result<usize> {
+    usize::try_from(value).map_err(|source| io::Error::new(io::ErrorKind::InvalidData, source))
+}
+
+/// `u32 → usize` always fits — `usize` is at least 32 bits on every
+/// platform Rust supports — so this is a pure-widening helper.
+fn u32_to_usize(value: u32) -> usize {
+    value as usize
 }
 
 /// Reads a little-endian `u32` out of the cursor.

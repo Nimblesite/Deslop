@@ -162,23 +162,18 @@ const fn nibble(value: u8) -> char {
 }
 
 /// Sanitises a path segment so a maliciously-named model cannot
-/// escape the cache directory. We allow alphanumerics, `.`, `-`, and
-/// `_`; everything else becomes `_`. Empty input maps to `"_"` so
-/// the resulting path segment is always non-empty.
+/// escape the cache directory. Allowed characters (alphanumerics,
+/// `.`, `-`, `_`) pass through; everything else, including an empty
+/// input, collapses to `_` so the resulting directory name is always
+/// non-empty.
 fn sanitise(segment: &str) -> String {
-    let sanitised: String = segment
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if sanitised.is_empty() {
-        "_".to_owned()
-    } else {
-        sanitised
+    let mut out = String::with_capacity(segment.len().max(1));
+    for ch in segment.chars() {
+        let safe = ch.is_ascii_alphanumeric() || ch == '.' || ch == '-' || ch == '_';
+        out.push(if safe { ch } else { '_' });
     }
+    if out.is_empty() {
+        out.push('_');
+    }
+    out
 }

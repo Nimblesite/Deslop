@@ -15,7 +15,6 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -59,49 +58,25 @@ pub fn init(log_dir: &Path, log_to_console: bool, level: Level) -> Result<LogSin
     let path = log_file_path(log_dir);
     let file =
         fs::File::create(&path).with_context(|| format!("create log file {}", path.display()))?;
-    // Leak the Mutex so `MakeWriter` can hand out a `&'static`
-    // reference on every event — required by tracing's writer trait
-    // and acceptable because the CLI runs once per process.
-    let shared: &'static Mutex<fs::File> = Box::leak(Box::new(Mutex::new(file)));
+    // Each tracing event calls the MakeWriter closure, which hands
+    // back a fresh handle via `try_clone`. The kernel serialises the
+    // underlying writes, so no user-space mutex is needed. We leak
+    // the canonical handle (`Box::leak`) so the closure can clone it
+    // for the program's lifetime — the CLI runs once per process.
+    let handle: &'static fs::File = Box::leak(Box::new(file));
     fmt()
         .with_env_filter(filter)
         .with_target(false)
         .with_ansi(false)
-        .with_writer(move || FileSink { inner: shared })
+        .with_writer(move || -> Box<dyn io::Write> {
+            match handle.try_clone() {
+                Ok(clone) => Box::new(clone),
+                Err(_) => Box::new(io::sink()),
+            }
+        })
         .try_init()
         .map_err(|err| anyhow::anyhow!("failed to initialise tracing: {err}"))?;
     Ok(LogSink::File(path))
-}
-
-/// `io::Write` shim around a shared log file. Each tracing event
-/// calls the `MakeWriter` closure which hands back one of these;
-/// the `Mutex` serialises writes so interleaved events do not shred
-/// each other's bytes.
-struct FileSink {
-    /// Shared handle into the log file (see [`init`]).
-    inner: &'static Mutex<fs::File>,
-}
-
-impl io::Write for FileSink {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        // `fs::File::write` on append-open mode is atomic and also
-        // flushes to the OS, so `tracing` never needs to call our
-        // `flush` explicitly. `flush` is still required by the
-        // `Write` trait; it just delegates to the same locked handle.
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| io::Error::other("log mutex poisoned"))?;
-        guard.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| io::Error::other("log mutex poisoned"))?;
-        guard.flush()
-    }
 }
 
 /// Parses `--log-level <level>` and composes it with `RUST_LOG`.

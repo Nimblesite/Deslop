@@ -18,6 +18,7 @@
 pub mod ast;
 pub mod cluster;
 pub mod config;
+pub mod delta;
 pub mod discover;
 pub mod embedding;
 pub mod error;
@@ -34,12 +35,14 @@ pub mod state;
 pub mod tokens;
 
 pub use config::{ExclusionConfig, DEFAULT_CONFIG_FILENAME};
+pub use delta::ReportDelta;
 pub use embedding::{
-    EmbeddingMode, EmbeddingProvider, EmbeddingSpec, OllamaProvider, ParseModeError, StubProvider,
-    DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    EmbeddingMode, EmbeddingProvider, EmbeddingSpec, OllamaProvider, ParseModeError,
+    ProviderError, StubProvider, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
+    DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 pub use error::CoreError;
-pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig};
+pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
 
 /// Semantic version of the `codededup-core` library.

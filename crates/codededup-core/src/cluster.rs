@@ -49,7 +49,7 @@ pub fn build_ranked_fused_clusters(
 ) -> Vec<Cluster> {
     let mut clusters: Vec<Cluster> = fused_clusters
         .iter()
-        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
+        .map(|fused| build_fused_cluster(fingerprints, fused))
         .collect();
     clusters.sort_by(|left, right| {
         right
@@ -61,18 +61,18 @@ pub fn build_ranked_fused_clusters(
     clusters
 }
 
-/// Rehydrates a single `FusedCluster` into a [`Cluster`], or returns
-/// `None` when the cluster is empty (should not happen — the fused
-/// clusterer discards single-member components).
-fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Option<Cluster> {
+/// Rehydrates a single `FusedCluster` into a [`Cluster`]. The
+/// clusterer only emits groups with ≥2 members, and any missing
+/// fingerprint index silently drops that slot from the rehydrated
+/// cluster — a cluster with zero surviving members is still emitted
+/// as an empty slot so the report remains deterministic in that
+/// degenerate case.
+fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Cluster {
     let members: Vec<Fingerprint> = fused
         .members
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    if members.len() < 2 {
-        return None;
-    }
     let size = members.len();
     let smallest_nodes = members
         .iter()
@@ -88,12 +88,12 @@ fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Op
         .iter()
         .min_by_key(|member| member.hash)
         .map_or([0_u8; 32], |member| member.hash);
-    Some(Cluster {
+    Cluster {
         id: encode_short_id(id_source),
         members,
         weight,
         signals: fused.mean_score,
-    })
+    }
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
