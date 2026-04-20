@@ -1,6 +1,6 @@
 # agent-pmo:9a71cbf
 # =============================================================================
-# Standard Makefile — CodeDedup
+# Standard Makefile — Deslop
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================

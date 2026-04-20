@@ -16,6 +16,7 @@
 //!   Batch runs are "incremental starting from an empty cache."
 
 pub mod ast;
+pub mod buckets;
 pub mod cluster;
 pub mod config;
 pub mod delta;
@@ -37,6 +38,7 @@ pub mod sibling;
 pub mod state;
 pub mod tokens;
 
+pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use config::{ExclusionConfig, DEFAULT_CONFIG_FILENAME};
 pub use delta::ReportDelta;
 pub use embedding::{

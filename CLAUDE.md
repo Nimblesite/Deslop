@@ -1,5 +1,5 @@
 <!-- agent-pmo:9a71cbf -->
-# CodeDedup — Agent Instructions
+# Deslop Live — Agent Instructions
 
 > ⚠️ **TOKEN DISCIPLINE.** Check file size first. `Grep` over `Read`. Use `offset`/`limit`.
 > Smallest diff that solves the problem. Delete dead code, unused imports, stale comments.
@@ -14,7 +14,7 @@ https://typediagram.dev/docs/language-reference.html ⚠️
 
 ## Project Overview
 
-**CodeDedup** is a Rust CLI that detects duplicated code across a codebase and reports the **worst offenders first** (highest weighted duplication impact at the top). Language support starts with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
+**Deslop** (a.k.a. Deslop Live) is a Rust CLI that detects duplicated code across a codebase and reports the **worst offenders first** (highest weighted duplication impact at the top). Language support starts with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
 
 Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 - ALL SPEC SECTIONS HAVE NON-NUMERIC HIERARCHICALLY STRUCTURED SECTIONS. ALL TESTS REFER TO SPEC IDs. ALL CODE REFERS TO SPEC IDS.

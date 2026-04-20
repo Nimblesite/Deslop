@@ -69,7 +69,7 @@ The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 
 
 ### [EXIT-CODES] CLI exit codes and fail-over threshold
 
-CodeDedup's default exit code is `0` on a successful analysis regardless of how much duplication exists — the tool is diagnostic, not opinionated. Opt-in CI gating is expressed through a single flag and a single config key.
+Deslop's default exit code is `0` on a successful analysis regardless of how much duplication exists — the tool is diagnostic, not opinionated. Opt-in CI gating is expressed through a single flag and a single config key.
 
 Exit codes:
 

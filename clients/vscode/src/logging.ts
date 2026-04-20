@@ -1,4 +1,4 @@
-// Structured logging via pino, fanned out to the CodeDedup output channel.
+// Structured logging via pino, fanned out to the Deslop output channel.
 // One logger instance, one output channel, no println-style debugging allowed.
 
 import * as vscode from "vscode";
@@ -8,7 +8,7 @@ let channel: vscode.OutputChannel | undefined;
 let rootLogger: Logger | undefined;
 
 export function initOutputChannel(): vscode.OutputChannel {
-  if (!channel) channel = vscode.window.createOutputChannel("CodeDedup");
+  if (!channel) channel = vscode.window.createOutputChannel("Deslop");
   return channel;
 }
 

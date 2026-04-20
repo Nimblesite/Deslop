@@ -4,10 +4,10 @@ title: Why the ranking formula is the entire product
 date: 2026-04-15
 author: Christian Findlay
 tags: posts
-excerpt: CodeDedup ranks clusters by clone_size × clone_count × spanned_LOC. Every decision in the tool flows from that one line. Here's why it's not configurable.
+excerpt: Deslop ranks clusters by clone_size × clone_count × spanned_LOC. Every decision in the tool flows from that one line. Here's why it's not configurable.
 ---
 
-A duplicate-detection tool that reports clusters without ranking them is a search engine that returns results in insertion order. You can tell the user "there are 142 clusters," and you have just transferred the problem from the tool to the human. Line one of the report is the only line that matters on the first look. Everything else in CodeDedup exists to make line one correct.
+A duplicate-detection tool that reports clusters without ranking them is a search engine that returns results in insertion order. You can tell the user "there are 142 clusters," and you have just transferred the problem from the tool to the human. Line one of the report is the only line that matters on the first look. Everything else in Deslop exists to make line one correct.
 
 ## The formula
 
@@ -29,7 +29,7 @@ Multiplying the three gives a number that is dimensionally sensible (effort × r
 
 - **Language weight.** A Type-2 C# duplicate and a Type-2 Rust duplicate score identically if their size × count × LOC match. Language preferences belong in configuration, not the ranking.
 - **Signal weight.** The ranking does not multiply by `embedding_cos` or `structural`. Those signals gate whether a cluster exists at all. Once accepted, every cluster is ranked on the same scale.
-- **File age / churn.** Tempting, and wrong. Old stable duplication is still duplication. Adding a churn factor would hide long-standing problems that the team has learned to live with — which is precisely the kind of problem CodeDedup should surface.
+- **File age / churn.** Tempting, and wrong. Old stable duplication is still duplication. Adding a churn factor would hide long-standing problems that the team has learned to live with — which is precisely the kind of problem Deslop should surface.
 - **User-configurable weights.** Non-negotiable. If every team tuned their own weights, cross-repo comparison would be meaningless, and "score = 2184" in a blog post would communicate nothing.
 
 ## The consequence of that choice
@@ -43,4 +43,4 @@ Because the ranking is a single fixed formula, two things become true:
 
 Signals evolve. The embedding model will change. The LSH bands will be retuned. Clone-type definitions may pick up a fifth category for ML-generated near-misses. All of that is downstream of ranking.
 
-The ranking formula is the one surface we commit to keeping stable. It is what makes CodeDedup a tool you can trust — rather than a search engine that returns 142 clusters in insertion order.
+The ranking formula is the one surface we commit to keeping stable. It is what makes Deslop a tool you can trust — rather than a search engine that returns 142 clusters in insertion order.

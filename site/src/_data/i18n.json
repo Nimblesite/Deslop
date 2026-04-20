@@ -3,7 +3,7 @@
     "blog": {
       "back": "← Back to Blog",
       "title": "Blog",
-      "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind CodeDedup.",
+      "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind Deslop.",
       "tags": "Tags",
       "categories": "Categories",
       "empty": "No blog posts yet."

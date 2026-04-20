@@ -1,12 +1,88 @@
 # Clone Type Taxonomy
 
-### [CLONE-TYPE-TAXONOMY] Ground rules
+## [CLONE-BUCKETS-NORTH-STAR] Two audiences, three surface classes
 
-- **Type-1** — identical code, ignoring whitespace/comments.
-- **Type-2** — identical up to renaming of identifiers/literals/types.
-- **Type-3** — Type-2 + added/removed/modified statements ("near-miss" clones).
-- **Type-4** — semantically equivalent, syntactically different (same behavior, different structure/algorithm).
+Deslop writes for **two** readers (humans and AI agents) across **three** classes of surface. Every output decision flows from which class a given surface falls into:
+
+- **Pure-visual surfaces** (HTML report body, VS Code webview, live bubble decoration) — **humans only**. Agents rarely scrape rendered HTML. Plain-English labels; no `Type-N`, no signal triples, no enum names in prose. Drift between the HTML card and a webview is a bug.
+- **Shared-text surfaces** (CLI stderr summary, LSP diagnostics `message`, VS Code Problems window, hover tooltips) — **humans first, AI secondary**. These are textual and agents regularly scrape them. Use the **hybrid** form: plain-English title first, academic taxonomy in brackets. E.g. `"Identical code [Type-1/2]"`, `"Same behavior, different code [Type-4, AI match]"`. The human reads the plain prefix; the agent parses the bracketed suffix.
+- **AI-only surfaces** (JSON `report.json` fields `interpretation` / `action_hints` / `schema_doc`, MCP tool responses, machine-readable logs) — **agents only**. Precise and technical: plain title + bracketed taxonomy + signal context + routing rationale. Drop nothing — agent prompts in the wild depend on `Type-N`.
+
+**User mandate (verbatim):** *"Shoot for human readable, but include technical terms in brackets for the ai"* — applies to shared-text surfaces. *"Diagnostics that appear as CLI output or in the vscode problems window are primarily for humans. But, AI will read these too."* — why shared-text is hybrid, not split.
+
+All three classes point at the **same** bucket identity (the Rust enum variant). Only the *rendered text* differs. [CLONE-BUCKETS-DUAL-LABEL] formalises which class each concrete surface belongs to — never mix classes on a single surface.
+
+## [CLONE-BUCKETS] Canonical buckets (single source of truth)
+
+**This table is the canonical definition of every clone bucket Deslop reports. Every renderer — HTML, CLI, VS Code, MCP — must agree with it. If a surface disagrees, the surface is wrong, not the table.**
+
+| Bucket (enum)     | Plain title (pure-visual)                       | Hybrid title (shared-text)                          | Action sentence                                                                                | Colour band        | Taxonomy ref                |
+|-------------------|-------------------------------------------------|-----------------------------------------------------|------------------------------------------------------------------------------------------------|--------------------|-----------------------------|
+| `Identical`       | **Identical code**                              | `Identical code [Type-1/2]`                         | Safe to extract — every copy is the same.                                                      | green / crimson    | Type-1, Type-2              |
+| `NearlyIdentical` | **Nearly identical code**                       | `Nearly identical code [Type-3]`                    | Review the locations — small differences may matter.                                           | yellow / blue      | Type-3                      |
+| `LooselySimilar`  | **Loosely similar code**                        | `Loosely similar code [weak LSH]`                   | Loose textual overlap. Treat as a hint.                                                        | neutral            | weak LSH-only (sub-Type-3)  |
+| `SameBehavior`    | **Same behavior, different code** *(AI match)*  | `Same behavior, different code [Type-4, AI match]`  | The AI noticed these do the same thing written two ways — read both before merging.            | purple / cyan      | Type-4                      |
+
+`green / crimson`, `yellow / blue` etc. are light-theme / dark-theme pairs. Exact CSS variables live alongside the renderer in `crates/codededup-core/src/render/html.rs`; this table governs which colour family, not the specific hex.
+
+### [CLONE-BUCKETS-DUAL-LABEL] Dual-labelling policy
+
+Every bucket has **one bucket identity** (the enum variant) and **three rendered forms** pointing at it: a plain title, a hybrid title with bracketed taxonomy, and a full agent-facing sentence. Surfaces pick their form by **class**, per [CLONE-BUCKETS-NORTH-STAR]:
+
+- **Pure-visual surface** → Plain title + Action sentence (no `Type-N`, no enum names, no signal triples).
+- **Shared-text surface** → Hybrid title (`"Plain title [Type-N]"`) + Action sentence. Plain prose first, bracketed taxonomy suffix for AI scrapers.
+- **AI-only surface** → Plain title + Action sentence + `Type-N` reference + signal context. Precision over brevity.
+
+Surface routing:
+
+| Surface                                               | Class          | Rendered form                                    |
+|-------------------------------------------------------|----------------|--------------------------------------------------|
+| HTML report card title + action                       | Pure-visual    | **Plain title** + Action sentence                |
+| VS Code live bubble decoration                        | Pure-visual    | **Plain title**                                  |
+| VS Code cluster detail / report webviews              | Pure-visual    | **Plain title** + Action sentence                |
+| VS Code tree view node labels                         | Pure-visual    | **Plain title**                                  |
+| CLI stderr summary row                                | Shared-text    | **Hybrid title**                                 |
+| LSP `diagnostic.message`                              | Shared-text    | **Hybrid title** + Action sentence               |
+| VS Code Problems panel (mirrors LSP)                  | Shared-text    | **Hybrid title** + Action sentence               |
+| LSP hover tooltip                                     | Shared-text    | **Hybrid title** + Action sentence               |
+| JSON `cluster.interpretation`                         | AI-only        | **Plain title** + Action sentence + `Type-N`     |
+| JSON `action_hints[*].recommendation`                 | AI-only        | **Plain title** + Action sentence + `Type-N`     |
+| `REPORTING-CONTEXT.md` (`schema_doc`)                 | AI-only        | Full table with all three forms                  |
+| MCP tool descriptions, resources                      | AI-only        | **Plain title** + Action sentence + `Type-N`     |
+| Source code identifiers, spec IDs, tests              | n/a (dev)      | **Enum variant** (`ClusterKind::Identical` etc.) |
+
+**Rules:**
+
+1. **The enum is the identity.** `ClusterKind::Identical`, `ClusterKind::NearlyIdentical`, `ClusterKind::LooselySimilar`, `ClusterKind::SameBehavior`. These names appear in code, tests, and CSS class suffixes. Never `Exact`, never `Near`, never `Weak`, never `Semantic`.
+2. **Pure-visual is pure.** HTML card, bubble, webviews, tree view — developers see the plain title and action sentence, never `Type-N`. If you feel pulled toward a "technical mode" toggle on a pure-visual surface, the toggle is the bug.
+3. **Shared-text is hybrid.** CLI stderr, LSP diagnostics, Problems panel, hover — plain prose prefix so humans read it naturally, bracketed `Type-N` suffix so AI scrapers can still classify. `"Identical code [Type-1/2]"` on one line; `"Same behavior, different code [Type-4, AI match]"` on another.
+4. **AI-only retains everything.** JSON `interpretation`, `action_hints`, `schema_doc`, MCP responses keep the full plain-title + action-sentence + `Type-N` form. Dropping `Type-N` would break agent prompts already in the wild.
+5. **`SameBehavior` carries the `(AI match)` badge.** Shown as `"Same behavior, different code (AI match)"` on pure-visual surfaces and `"Same behavior, different code [Type-4, AI match]"` on shared-text surfaces. It is the AI-specific value-add; users deserve to know which clusters came from the embedding pass vs the deterministic pipeline.
+6. **One helper, three forms.** A single function in `codededup-core::buckets` returns the `(plain_title, hybrid_title, action_sentence, taxonomy_label, css_suffix, ai_match)` sextuple keyed by `ClusterKind`. Every renderer pulls the form it needs from that struct. Drift is a bug.
+
+### [CLONE-BUCKETS-ROUTING] Signal-to-bucket routing
+
+The canonical signal thresholds that map a cluster's `(structural, token_jaccard, embedding_cos)` triple onto a bucket live in `codededup-core::report::interpret` and `codededup-core::render::html::cluster_kind`. Both functions must agree; both must match this table:
+
+| Condition (evaluated top-down)                                 | Bucket            |
+|----------------------------------------------------------------|-------------------|
+| `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99`                     | `Identical`       |
+| `embedding_cos ≥ 0.80 ∧ structural < 0.5`                      | `SameBehavior`    |
+| `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90`                     | `NearlyIdentical` |
+| `structural ≥ 0.99 ∨ (structural > 0 ∧ token_jaccard ≥ 0.95)`  | `NearlyIdentical` |
+| else                                                           | `LooselySimilar`  |
+
+`SameBehavior` is tested **before** `NearlyIdentical` so a strong AI signal on two syntactically divergent implementations gets the AI label rather than being absorbed into near-miss. It is only reachable when the embedding pass ran (`--embeddings=auto|required`). When the pass is disabled, `embedding_cos` is `0.00` across the whole report and the `SameBehavior` branch is dead.
+
+## [CLONE-TYPE-TAXONOMY] Academic ground rules (reference only)
+
+The `Type-1 → Type-4` taxonomy is standard in clone-detection literature (Bellon/Koschke, Roy/Cordy 2007). Deslop surfaces it verbatim on **AI-only** surfaces and in **bracketed form on shared-text** surfaces (see [CLONE-BUCKETS-DUAL-LABEL]). It never appears on **pure-visual** surfaces (HTML card, VS Code webview, bubble decoration).
+
+- **Type-1** — identical code, ignoring whitespace/comments. Maps to `Identical`.
+- **Type-2** — identical up to renaming of identifiers/literals/types. Maps to `Identical`.
+- **Type-3** — Type-2 + added/removed/modified statements ("near-miss" clones). Maps to `NearlyIdentical`, or `LooselySimilar` when the signal is weak (LSH-only, sub-threshold).
+- **Type-4** — semantically equivalent, syntactically different (same behavior, different structure/algorithm). Maps to `SameBehavior`.
 
 Recent work reframes Type-4 specifically as *"code segments deliver identical functionality through syntactically distinct implementations, such as differing algorithmic approaches or data structure choices that yield substantially varied program structures."* ([PMC — Semantic code clone detection via hybrid IR + BiLSTM, 2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12818651/))
 
-**Implication for CodeDedup:** Types 1–3 are the sweet spot for a deterministic static tool. Type-4 is expensive, noisy, and only reliably solved today with LLMs + execution-based validation — treat it as out-of-scope for v1.
+**Implication for Deslop:** Types 1–3 are the sweet spot for the deterministic static pipeline. Type-4 is handled by the optional embedding pass (P5) and surfaces as `SameBehavior` under [CLONE-BUCKETS]; absent the embedding pass the `SameBehavior` branch is empty but the other three remain fully populated.

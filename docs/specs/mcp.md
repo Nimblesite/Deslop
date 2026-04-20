@@ -58,7 +58,7 @@ MCP resources are read-only documents the agent can open by URI. Two canonical r
 | Resource URI | Contents |
 |---|---|
 | `codededup://report` | The current report, canonical JSON. The agent can `resources/read` it directly instead of calling `report-get` as a tool. Resource reads are the MCP-idiomatic way to pull a document-sized payload. |
-| `codededup://schema` | The `schema_doc` block from the report ([OUTPUT-SCHEMA-JSON]). Same markdown as the LSP virtual doc. An agent new to CodeDedup reads this once per session to learn the schema. |
+| `codededup://schema` | The `schema_doc` block from the report ([OUTPUT-SCHEMA-JSON]). Same markdown as the LSP virtual doc. An agent new to Deslop reads this once per session to learn the schema. |
 
 Resources are listed via `resources/list`. Their content refreshes every time `resources/read` is called — the daemon always returns the latest snapshot.
 

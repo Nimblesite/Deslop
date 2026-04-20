@@ -21,7 +21,7 @@ use tracing_subscriber::EnvFilter;
 #[command(
     name = "codededup-mcp",
     version,
-    about = "Model Context Protocol server exposing CodeDedup live analysis to AI agents."
+    about = "Model Context Protocol server exposing Deslop live analysis to AI agents."
 )]
 struct Cli {
     /// Workspace root to analyse. Defaults to the current directory.

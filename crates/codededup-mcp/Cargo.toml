@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Model Context Protocol (MCP) server over stdio exposing CodeDedup live analysis to AI agents."
+description = "Model Context Protocol (MCP) server over stdio exposing Deslop live analysis to AI agents."
 
 [[bin]]
 name = "codededup-mcp"

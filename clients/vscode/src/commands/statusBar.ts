@@ -11,7 +11,7 @@ export class StatusBar implements vscode.Disposable {
 
   constructor(private readonly store: ReportStore) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
-    this.item.name = "CodeDedup";
+    this.item.name = "Deslop";
     this.item.command = "codededup.openWorstCluster";
     this.disposables.push(
       this.item,
@@ -35,7 +35,7 @@ export class StatusBar implements vscode.Disposable {
     const report = this.store.current.report;
     if (!report) {
       this.item.text = "$(sync~spin) dedup analysing";
-      this.item.tooltip = "CodeDedup is warming up";
+      this.item.tooltip = "Deslop is warming up";
       return;
     }
     const editorPath = vscode.window.activeTextEditor?.document.uri.fsPath;
@@ -51,7 +51,7 @@ export class StatusBar implements vscode.Disposable {
     const analysing = this.analysing ? " (analysing…)" : "";
     this.item.text = `dedup · ${n}${worstLabel} · embed=${embed}${analysing}`;
     this.item.tooltip = new vscode.MarkdownString(
-      `**CodeDedup**\n\n` +
+      `**Deslop**\n\n` +
         `${report.clusters.length} clusters total, ${n} in this file\n\n` +
         `duplication: \`${report.metrics.duplication_percent.toFixed(1)}%\` ` +
         `(${report.metrics.duplicated_loc}/${report.metrics.analysed_loc} LOC)\n\n` +

@@ -1,6 +1,6 @@
-# Competitive landscape + where CodeDedup wins
+# Competitive landscape + where Deslop wins
 
-Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship the four-way combination CodeDedup targets: **deterministic hybrid core + long-running LSP daemon + MCP for AI agents + first-class VSIX with live Ollama model selection**. This doc inventories the field and locks in the feature bar we must clear to be the default choice.
+Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship the four-way combination Deslop targets: **deterministic hybrid core + long-running LSP daemon + MCP for AI agents + first-class VSIX with live Ollama model selection**. This doc inventories the field and locks in the feature bar we must clear to be the default choice.
 
 ### [COMPETE-LANDSCAPE] The field (2024–2026)
 
@@ -21,7 +21,7 @@ Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship
 | **NiCad** | Academic TXL tool; no package, painful build. Strong Type-3 recall on BigCloneBench (~90%) but unusable as a product. |
 | **ConQAT** | Abandoned 2014; superseded by **Teamscale** (commercial, enterprise SaaS, no local, no MCP). |
 | **SourcererCC** | Apache-2.0 Java tool, scales to 250 MLOC, unmaintained since ~2020. |
-| **SSCD / HyClone / SCOTT / Rator** | Research prototypes (2023–2025 papers). GitHub research dumps with no releases. CodeDedup already cites their findings in [fusion.md](fusion.md) and [landscape.md](landscape.md) — we adopt the algorithms, not the artifacts. |
+| **SSCD / HyClone / SCOTT / Rator** | Research prototypes (2023–2025 papers). GitHub research dumps with no releases. Deslop already cites their findings in [fusion.md](fusion.md) and [landscape.md](landscape.md) — we adopt the algorithms, not the artifacts. |
 
 #### Adjacent / AI-native
 
@@ -43,7 +43,7 @@ Breaking the niche into four axes:
 - **MCP tool surface for AI agents** — zero clone detectors as of 2026-Q1. General code-search MCP servers exist (Serena, ast-grep wrappers) but none rank clones, and none let an agent ask *"is the block I'm about to write already a clone?"* ([MCP-TOOL-FINDSIMILAR]).
 - **Local Ollama embedding selection for Type-4** — no clone detector exposes this. Continue.dev and some RAG tools let you pick embedding models, but they're not clone-specific.
 
-**CodeDedup is the only product that ships all four.** Anyone building the same combination has to rebuild the hybrid core — and we already spent P0–P6 on that.
+**Deslop is the only product that ships all four.** Anyone building the same combination has to rebuild the hybrid core — and we already spent P0–P6 on that.
 
 ### [COMPETE-FEATURE-BAR] Features we must clear
 

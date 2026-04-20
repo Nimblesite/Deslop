@@ -2,10 +2,18 @@
 //!
 //! Translates a [`FileReport`] into the LSP `Diagnostic` shape, mapping
 //! per-cluster weights onto the four severity buckets specified in
-//! [LSP-SEVERITY]. Severity bucketing is computed from the percentile
-//! of the cluster's weight against every other cluster in the file
-//! report — clients call `textDocument/diagnostic` per file so the
-//! local report is the right scope for "top-1% offender on this file".
+//! [LSP-SEVERITY]. Severity bucketing uses the percentile of the
+//! cluster's weight against the **whole live report**, not just the
+//! current file: a cluster that is the worst in a sleepy file but
+//! mid-tier overall must rank mid-tier in the Problems panel —
+//! agreeing with the top-offenders tree, the CLI text report, and the
+//! HTML report. Callers obtain the global distribution through
+//! [`codededup_core::live::LiveApi::all_cluster_weights`].
+//!
+//! Occurrence paths in the report are workspace-relative; this module
+//! resolves them against the session's workspace root before
+//! constructing `file://` URLs so `relatedInformation` jumps land on
+//! real files.
 //!
 //! Byte offsets are translated to `(line, character)` LSP positions by
 //! reading the source text and counting UTF-16 code units per LSP spec.
@@ -22,15 +30,21 @@ use tower_lsp::lsp_types::{
 
 use crate::position::position_for_byte;
 
-/// Builds the diagnostics for one file report.
+/// Builds the diagnostics for one file report ([LSP-DIAGNOSTICS]).
+///
+/// `global_weights` carries the weight of every cluster in the live
+/// report and drives the per-report percentile bucketing in
+/// [LSP-SEVERITY]. `workspace_root` is the absolute path the session
+/// was rooted at; relative occurrence paths are resolved against it so
+/// `relatedInformation` URLs are valid.
 #[must_use]
-pub fn build_for_file(report: &FileReport) -> Vec<Diagnostic> {
-    let weights: Vec<f64> = report
-        .clusters
-        .iter()
-        .map(|cluster| cluster.weight)
-        .collect();
-    let primary_source = std::fs::read_to_string(&report.path).unwrap_or_default();
+pub fn build_for_file(
+    report: &FileReport,
+    global_weights: &[f64],
+    workspace_root: &Path,
+) -> Vec<Diagnostic> {
+    let primary_path = absolute_path(&report.path, workspace_root);
+    let primary_source = std::fs::read_to_string(&primary_path).unwrap_or_default();
     let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
     report
         .clusters
@@ -38,13 +52,24 @@ pub fn build_for_file(report: &FileReport) -> Vec<Diagnostic> {
         .flat_map(|cluster| {
             build_for_cluster(
                 cluster,
-                &weights,
+                global_weights,
                 &report.path,
+                workspace_root,
                 &primary_source,
                 &mut source_cache,
             )
         })
         .collect()
+}
+
+/// Resolves `path` against `workspace_root` when it is relative,
+/// returning the path unchanged when it is already absolute.
+fn absolute_path(path: &Path, workspace_root: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace_root.join(path)
+    }
 }
 
 /// Loads a file's text, caching per [`build_for_file`] invocation.
@@ -64,12 +89,16 @@ fn load_cached_source(path: &Path, cache: &mut HashMap<PathBuf, String>) -> Stri
 /// `path`.
 fn build_for_cluster(
     cluster: &ReportCluster,
-    weights: &[f64],
+    global_weights: &[f64],
     path: &Path,
+    workspace_root: &Path,
     source_bytes: &str,
     cache: &mut HashMap<PathBuf, String>,
 ) -> Vec<Diagnostic> {
-    let severity = severity_for(cluster.weight, weights);
+    let severity = severity_for(cluster.weight, global_weights);
+    if severity.is_none() {
+        return Vec::new();
+    }
     cluster
         .occurrences
         .iter()
@@ -83,7 +112,7 @@ fn build_for_cluster(
             code_description: code_description_for(&cluster.id),
             source: Some("codededup".to_owned()),
             message: cluster.interpretation.clone(),
-            related_information: related_info_for(cluster, path, cache),
+            related_information: related_info_for(cluster, path, workspace_root, cache),
             tags: None,
             data: None,
         })
@@ -154,6 +183,7 @@ fn byte_range_to_lsp(start_byte: usize, end_byte: usize, source_bytes: &str) -> 
 fn related_info_for(
     cluster: &ReportCluster,
     path: &Path,
+    workspace_root: &Path,
     cache: &mut HashMap<PathBuf, String>,
 ) -> Option<Vec<DiagnosticRelatedInformation>> {
     let total = cluster.occurrences.len();
@@ -162,7 +192,7 @@ fn related_info_for(
         if occurrence_matches_path(occurrence, path) {
             continue;
         }
-        if let Some(info) = related_item(index, total, occurrence, cache) {
+        if let Some(info) = related_item(index, total, occurrence, workspace_root, cache) {
             items.push(info);
         }
     }
@@ -178,10 +208,12 @@ fn related_item(
     index: usize,
     total: usize,
     occurrence: &ReportOccurrence,
+    workspace_root: &Path,
     cache: &mut HashMap<PathBuf, String>,
 ) -> Option<DiagnosticRelatedInformation> {
-    let uri = Url::from_file_path(&occurrence.path).ok()?;
-    let source = load_cached_source(&occurrence.path, cache);
+    let absolute = absolute_path(&occurrence.path, workspace_root);
+    let uri = Url::from_file_path(&absolute).ok()?;
+    let source = load_cached_source(&absolute, cache);
     let range = byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, &source);
     let label = occurrence_label(index, total);
     Some(DiagnosticRelatedInformation {

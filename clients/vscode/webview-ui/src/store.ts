@@ -1,4 +1,4 @@
-// Centralised Preact Signals store for every CodeDedup webview.
+// Centralised Preact Signals store for every Deslop webview.
 // Per [VSIX-STATE] + [VSIX-WEBVIEW-REACTIVITY]: one store, no parallel caches,
 // no stale UI. The extension process posts messages; this is the only writer.
 

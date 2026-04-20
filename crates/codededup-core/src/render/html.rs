@@ -18,6 +18,7 @@ use std::{
 };
 
 use crate::{
+    buckets::{bucket_labels, classify, ClusterKind},
     render::{
         highlight::highlight_snippet,
         html_css::{REPORT_CSS, SITE_CSS},
@@ -201,26 +202,28 @@ fn intro_summary(report: &Report) -> String {
     sentence
 }
 
-/// Returns a one-line breakdown of how many groups in `clusters` look
-/// identical vs nearly identical vs weakly similar. Plain English only.
+/// Returns a one-line breakdown of how many groups fall into each
+/// [CLONE-BUCKETS] bucket. Pure-visual surface (HTML report body) so
+/// uses `plain_title` lower-cased — no `Type-N` per
+/// [CLONE-BUCKETS-DUAL-LABEL].
 fn classify_groups(clusters: &[ReportCluster]) -> String {
-    let (mut exact, mut near, mut weak) = (0_usize, 0_usize, 0_usize);
+    let mut counts = [0_usize; 4];
     for cluster in clusters {
-        match cluster_kind(cluster) {
-            ClusterKind::Exact => exact = exact.saturating_add(1),
-            ClusterKind::Near => near = near.saturating_add(1),
-            ClusterKind::Weak => weak = weak.saturating_add(1),
-        }
+        let idx = match classify(cluster) {
+            ClusterKind::Identical => 0,
+            ClusterKind::NearlyIdentical => 1,
+            ClusterKind::LooselySimilar => 2,
+            ClusterKind::SameBehavior => 3,
+        };
+        counts[idx] = counts[idx].saturating_add(1);
     }
     let mut parts: Vec<String> = Vec::new();
-    if exact > 0 {
-        parts.push(format!("{exact} identical (safe to merge)"));
-    }
-    if near > 0 {
-        parts.push(format!("{near} nearly identical (review then merge)"));
-    }
-    if weak > 0 {
-        parts.push(format!("{weak} loosely similar (treat as a hint)"));
+    for (kind, count) in ClusterKind::all().into_iter().zip(counts) {
+        if count == 0 {
+            continue;
+        }
+        let labels = bucket_labels(kind);
+        parts.push(format!("{count} {}", labels.plain_title.to_lowercase()));
     }
     if parts.is_empty() {
         String::new()
@@ -229,67 +232,24 @@ fn classify_groups(clusters: &[ReportCluster]) -> String {
     }
 }
 
-/// Coarse classification of a cluster from its fused signals. Drives
-/// the colour band on the card and the verb in the intro.
-#[derive(Clone, Copy)]
-enum ClusterKind {
-    /// Type-1/Type-2 exact / renamed clones — safe to extract.
-    Exact,
-    /// Strong token overlap or strong fused signal — review then merge.
-    Near,
-    /// LSH-only / weak fused — hint, not a directive.
-    Weak,
-}
-
-/// Maps cluster signals to a [`ClusterKind`]. Mirrors the buckets in
-/// [`crate::report::interpret`] so the HTML and the canonical
-/// interpretation never disagree.
-fn cluster_kind(cluster: &ReportCluster) -> ClusterKind {
-    let signals = cluster.signals;
-    if signals.structural >= 0.99 && signals.token_jaccard >= 0.99 {
-        ClusterKind::Exact
-    } else if signals.structural >= 0.99
-        || (signals.structural > 0.0 && signals.token_jaccard >= 0.95)
-        || (signals.structural <= 0.01 && signals.token_jaccard >= 0.90)
-    {
-        ClusterKind::Near
-    } else {
-        ClusterKind::Weak
-    }
-}
-
 /// CSS class suffix for the card's left border. Drives the band
-/// colour: crimson for exact, blue for near, neutral for weak.
-fn kind_class(kind: ClusterKind) -> &'static str {
-    match kind {
-        ClusterKind::Exact => "kind-exact",
-        ClusterKind::Near => "kind-near",
-        ClusterKind::Weak => "kind-weak",
-    }
+/// colour family per [CLONE-BUCKETS]: green/crimson for identical,
+/// yellow/blue for nearly identical, neutral for loosely similar,
+/// purple/cyan for same-behavior.
+fn kind_class(kind: ClusterKind) -> String {
+    format!("kind-{}", bucket_labels(kind).css_suffix)
 }
 
-/// Plain-English title for the card head, e.g.
-/// `"Identical code in 12 places"`.
+/// Plain-visual title for the card head, e.g.
+/// `"Identical code in 12 places"`. Pure-visual surface — no `Type-N`
+/// ever per [CLONE-BUCKETS-DUAL-LABEL].
 fn kind_title(kind: ClusterKind, occurrences: usize) -> String {
-    let verb = match kind {
-        ClusterKind::Exact => "Identical code",
-        ClusterKind::Near => "Nearly identical code",
-        ClusterKind::Weak => "Loosely similar code",
-    };
-    format!("{verb} in {occurrences} places")
+    format!("{} in {occurrences} places", bucket_labels(kind).plain_title)
 }
 
-/// Plain-English action sentence shown under the card title.
+/// Plain-visual action sentence shown under the card title.
 fn kind_action(kind: ClusterKind) -> &'static str {
-    match kind {
-        ClusterKind::Exact => {
-            "Safe to extract into a single shared function — every copy is the same."
-        }
-        ClusterKind::Near => {
-            "Review the example and the other locations — small differences may matter."
-        }
-        ClusterKind::Weak => "Loose textual overlap. Treat as a hint, not a directive.",
-    }
+    bucket_labels(kind).action_sentence
 }
 
 /// Writes the section heading and every cluster card.
@@ -307,13 +267,20 @@ fn write_clusters(out: &mut String, report: &Report, snippets: &mut SnippetLoade
 /// Writes a single cluster as a Terminal Card: title + action sentence
 /// + one expanded example snippet + compact "also found in …" list.
 fn write_cluster_card(out: &mut String, cluster: &ReportCluster, snippets: &mut SnippetLoader<'_>) {
-    let kind = cluster_kind(cluster);
+    let kind = classify(cluster);
+    let labels = bucket_labels(kind);
     let occurrences = &cluster.occurrences;
+    let ai_badge = if labels.ai_match {
+        "<span class=\"cluster-card__ai-badge\" title=\"Detected by the AI embedding pass — semantically equivalent, syntactically different.\">AI match</span>"
+    } else {
+        ""
+    };
     let _ = write!(
         out,
         "<article class=\"cluster-card {kind_class}\">\
          <header class=\"cluster-card__head\">\
          <h3 class=\"cluster-card__title\">{title}</h3>\
+         {ai_badge}\
          <span class=\"cluster-card__cost\">{cost}</span>\
          </header>\
          <p class=\"cluster-card__action\">{action}</p>",

@@ -36,7 +36,7 @@ function ReportApp() {
   if (!snapshot) {
     return (
       <main style={{ padding: "24px" }}>
-        <p>CodeDedup is warming up…</p>
+        <p>Deslop is warming up…</p>
       </main>
     );
   }

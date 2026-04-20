@@ -1,4 +1,4 @@
-// CodeDedup VSIX entry point. Per CLAUDE.md: < 500 lines, thin glue,
+// Deslop VSIX entry point. Per CLAUDE.md: < 500 lines, thin glue,
 // all UI logic split across bubble/, tree/, decorations/, commands/, webview/.
 
 import * as vscode from "vscode";
@@ -149,7 +149,7 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     outputChannel: initOutputChannel(),
     initializationOptions: currentInitializationOptions(),
   };
-  return new LanguageClient("codededup", "CodeDedup", serverOptions, clientOptions);
+  return new LanguageClient("codededup", "Deslop", serverOptions, clientOptions);
 }
 
 export function resolveWorkspaceRoot(): string | undefined {
@@ -194,7 +194,7 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
     else if (state === "errored") {
       store.setLifecycle({
         kind: "failed",
-        message: "Analysis failed — see the CodeDedup log for details.",
+        message: "Analysis failed — see the Deslop log for details.",
       });
     }
   });
@@ -249,7 +249,7 @@ export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
   const message =
     isMissing || isUnsupported
       ? (err as Error).message
-      : "CodeDedup failed to start its analysis server. See the CodeDedup output channel.";
+      : "Deslop failed to start its analysis server. See the Deslop output channel.";
   store?.setLifecycle({ kind: "failed", message });
   vscode.window
     .showErrorMessage(message, "Reveal log")

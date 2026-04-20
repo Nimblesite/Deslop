@@ -1,6 +1,6 @@
 # VSIX — the VS Code extension
 
-The VSIX is the **polished reference client** for the CodeDedup daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
+The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
 
 Distribution: Marketplace + OpenVSX as a single `.vsix`. Extension id: `codededup.codededup-vscode`. Published from `clients/vscode/` in this repo.
 
@@ -52,7 +52,7 @@ For users who want a tighter callout, ghost-line mode renders the bubble on a **
 - `codededup.liveBubble.enabled = false` turns the bubble off globally for users who want the rest of the VSIX without the in-your-face moment. Off-by-default is **not** a setting we ship — silence-when-clean already gives users a tolerable floor; the bubble is on from the first install.
 
 **Why this is the headline.**
-No competitor ([competitors.md](competitors.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. CodeDedup *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
+No competitor ([competitors.md](competitors.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. Deslop *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
 
 ### [VSIX-BUNDLE] Extension bundle
 
@@ -68,9 +68,9 @@ The VSIX ships:
 
 **One version, one zip.** The bundled `codededup-lsp` / `codededup-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
 
-**PATH fallback.** On activation, the extension checks whether `codededup`, `codededup-lsp`, and `codededup-mcp` are already reachable from the user's shell `PATH`. If any are — typically because the user installed via the Homebrew tap (`brew install codededup/tap/codededup`) or the Scoop bucket (`scoop install codededup`) — the extension uses the externally installed binary and stays out of the way. This respects the "one source of truth" principle for users who run the CLI in their terminal: the terminal `codededup` and the in-editor `codededup-lsp` should be the same binary (same version, same caches, same config) whenever that's user-installable.
+**PATH fallback.** On activation, the extension checks whether `deslop`, `deslop-lsp`, and `deslop-mcp` are already reachable from the user's shell `PATH`. If any are — typically because the user installed via the Homebrew tap (`brew install melbournedeveloper/tap/deslop`) or the Scoop bucket (`scoop install deslop`) — the extension uses the externally installed binary and stays out of the way. This respects the "one source of truth" principle for users who run the CLI in their terminal: the terminal `deslop` and the in-editor `deslop-lsp` should be the same binary (same version, same caches, same config) whenever that's user-installable.
 
-If none of the binaries are on `PATH`, the extension falls back to the bundled copy from `bin/<platform>/` and — on first activation only — prepends that directory to the current VS Code process's `PATH` so terminals spawned from the integrated terminal, task runners, and the Run/Debug panel can invoke `codededup` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew` / `scoop` / `cargo install`; the VSIX does not try to be a system package manager.
+If none of the binaries are on `PATH`, the extension falls back to the bundled copy from `bin/<platform>/` and — on first activation only — prepends that directory to the current VS Code process's `PATH` so terminals spawned from the integrated terminal, task runners, and the Run/Debug panel can invoke `deslop` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew` / `scoop` / `cargo install`; the VSIX does not try to be a system package manager.
 
 Order of resolution on activation:
 
@@ -78,7 +78,7 @@ Order of resolution on activation:
 2. Otherwise, look up `codededup-lsp` on `PATH` via `which` / `where`. If found and the `--version` output matches the extension's `package.json` `version` exactly, use it. Version mismatch logs a `warn!` and falls back to bundled — we refuse to speak a wire protocol against a binary that might not implement it.
 3. Otherwise, use the bundled binary under `${extensionPath}/bin/${platform}/` and prepend that directory to `process.env.PATH` for the current VS Code session.
 
-`codededup-mcp` follows the same resolution order. Both binaries are resolved once per session; a `CodeDedup: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
+`codededup-mcp` follows the same resolution order. Both binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
 
 ### [VSIX-ACTIVATION] Activation
 
@@ -218,14 +218,14 @@ When the daemon is re-analysing, the first section animates to `dedup (analysing
 
 Every interaction has a command palette entry:
 
-- `CodeDedup: Open Report`
-- `CodeDedup: Open Worst Cluster`
-- `CodeDedup: Jump to Next Occurrence in Cluster`
-- `CodeDedup: Compare With Canonical Occurrence`
-- `CodeDedup: Pick Embedding Model`
-- `CodeDedup: Refresh Report (force full re-analysis)`
-- `CodeDedup: Toggle Show All Code Lenses`
-- `CodeDedup: Show Schema Documentation`
+- `Deslop: Open Report`
+- `Deslop: Open Worst Cluster`
+- `Deslop: Jump to Next Occurrence in Cluster`
+- `Deslop: Compare With Canonical Occurrence`
+- `Deslop: Pick Embedding Model`
+- `Deslop: Refresh Report (force full re-analysis)`
+- `Deslop: Toggle Show All Code Lenses`
+- `Deslop: Show Schema Documentation`
 
 Each entry maps 1:1 to an LSP `workspace/executeCommand` or virtual-document open. Nothing UI-only — keeps the VSIX a thin client.
 
@@ -252,7 +252,7 @@ The extension posts VS Code notifications sparingly:
 
 - On daemon startup failure (missing binary, permission denied) → error toast with a `Reveal log` button.
 - On embedding model switch → info toast confirming the new provenance.
-- On first activation ever → info toast `CodeDedup is watching this workspace. Open the Duplicate Clusters view to see the report.` — one-time per workspace, dismissible forever.
+- On first activation ever → info toast `Deslop is watching this workspace. Open the Duplicate Clusters view to see the report.` — one-time per workspace, dismissible forever.
 - No toasts for ordinary re-analysis. That's what the status bar is for.
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents

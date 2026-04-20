@@ -211,8 +211,8 @@ function overrideVirtualTemplates(eleventyConfig) {
 export default function (eleventyConfig) {
   eleventyConfig.addPlugin(techdoc, {
     site: {
-      name: "CodeDedup",
-      url: "https://codededup.dev",
+      name: "Deslop",
+      url: "https://deslop.live",
       description:
         "Duplicate-code detection for the AI era. Tree-sitter parsing, AST fingerprinting, and semantic fusion — ranked worst-offender first so agents and humans fix what matters.",
     },

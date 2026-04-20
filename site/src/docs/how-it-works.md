@@ -9,7 +9,7 @@ icon: account_tree
 
 # How It Works
 
-CodeDedup is a fixed, deterministic pipeline. No step uses regex on source code. Every step is cache-keyed so an unchanged file is skipped. The output of each stage is small, structured, and auditable.
+Deslop is a fixed, deterministic pipeline. No step uses regex on source code. Every step is cache-keyed so an unchanged file is skipped. The output of each stage is small, structured, and auditable.
 
 ```
 discover → parse → normalize → fingerprint → cluster
@@ -36,7 +36,7 @@ A parser produces an AST. No source-level regex touches this pipeline — ever.
 
 ## Normalize
 
-Type-2 clones differ only in identifiers and literals. CodeDedup strips:
+Type-2 clones differ only in identifiers and literals. Deslop strips:
 
 - identifier names (rewritten to `__id__`)
 - string / number / char literals (rewritten to `__lit__`)
@@ -54,7 +54,7 @@ Identical Merkle hashes across files or within the same file form a Type-1 / Typ
 
 ## LSH (near-miss)
 
-For Type-3 (structurally similar but not identical), CodeDedup builds a token bag per subtree and applies locality-sensitive hashing (MinHash + banding). Candidate pairs with Jaccard similarity above a floor feed the fusion step.
+For Type-3 (structurally similar but not identical), Deslop builds a token bag per subtree and applies locality-sensitive hashing (MinHash + banding). Candidate pairs with Jaccard similarity above a floor feed the fusion step.
 
 ## Embed (semantic)
 

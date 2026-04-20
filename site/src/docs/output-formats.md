@@ -9,7 +9,7 @@ icon: description
 
 # Output Formats
 
-Every CodeDedup run emits three reports. The JSON is the product; the text and HTML are renderers over the same data. No claim appears in TXT or HTML that is not also present in the JSON.
+Every Deslop run emits three reports. The JSON is the product; the text and HTML are renderers over the same data. No claim appears in TXT or HTML that is not also present in the JSON.
 
 ## JSON — canonical
 
@@ -43,14 +43,14 @@ Every CodeDedup run emits three reports. The JSON is the product; the text and H
 `codededup-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colors, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
 
 ```
-CodeDedup 1.0.0  —  142 clusters, 17 above threshold
+Deslop 1.0.0  —  142 clusters, 17 above threshold
 ──────────────────────────────────────────────────────────────────────
 
-  SCORE  KIND     FILE                                     SPAN
-──────── ──────── ──────────────────────────────────────── ─────────────
-▲  2184  Type-2   UserRepository.cs                        120–180
-▲  2184  Type-2     ProductRepository.cs                   58–118
-▲  2184  Type-2     OrderRepository.cs                     40–102
+  SCORE  KIND                FILE                            SPAN
+──────── ─────────────────── ─────────────────────────────── ──────────
+▲  2184  Nearly identical    UserRepository.cs               120–180
+▲  2184  Nearly identical      ProductRepository.cs          58–118
+▲  2184  Nearly identical      OrderRepository.cs            40–102
 
   Signals: structural=1.00  token_jaccard=0.97  embedding_cos=0.91
   Summary: 3 near-identical copies — safe to extract.
@@ -80,12 +80,12 @@ It does not add: scores not in the JSON, commentary beyond the `summary` field, 
 | `2` | Usage error — bad flag, missing path. |
 | `3` | Pipeline error — parser crash, I/O failure. Never a panic. |
 
-`codededup` never panics on user input. Errors are surfaced through exit codes and a structured error object in the JSON.
+`deslop` never panics on user input. Errors are surfaced through exit codes and a structured error object in the JSON.
 
 ## Logging vs. reports
 
 Diagnostics go to `stderr` via `tracing` with structured fields. Reports go to `stdout` (or `--output`) via the renderer. They are different streams. Piping only the report:
 
 ```bash
-codededup . --format=json > report.json
+deslop . --format=json > report.json
 ```

@@ -35,13 +35,13 @@ pub fn resources_list_payload() -> Value {
         "resources": [
             {
                 "uri": REPORT_URI,
-                "name": "CodeDedup live report",
+                "name": "Deslop live report",
                 "description": "Current duplication report, canonical JSON. Refreshed on every analysis pass.",
                 "mimeType": REPORT_MIME,
             },
             {
                 "uri": SCHEMA_URI,
-                "name": "CodeDedup report schema",
+                "name": "Deslop report schema",
                 "description": "Markdown describing the report schema — field definitions, signal semantics, clone taxonomy.",
                 "mimeType": SCHEMA_MIME,
             }

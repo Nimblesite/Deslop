@@ -1,6 +1,6 @@
 {
   "name": "codededup-vscode",
-  "displayName": "CodeDedup",
+  "displayName": "Deslop",
   "description": "The first clone detector that tells you you're duplicating code as you type.",
   "version": "0.1.0",
   "publisher": "codededup",
@@ -38,43 +38,43 @@
     "commands": [
       {
         "command": "codededup.openReport",
-        "title": "CodeDedup: Open Report"
+        "title": "Deslop: Open Report"
       },
       {
         "command": "codededup.openWorstCluster",
-        "title": "CodeDedup: Open Worst Cluster"
+        "title": "Deslop: Open Worst Cluster"
       },
       {
         "command": "codededup.jumpToNextOccurrence",
-        "title": "CodeDedup: Jump to Next Occurrence in Cluster"
+        "title": "Deslop: Jump to Next Occurrence in Cluster"
       },
       {
         "command": "codededup.compareWithCanonical",
-        "title": "CodeDedup: Compare With Canonical Occurrence"
+        "title": "Deslop: Compare With Canonical Occurrence"
       },
       {
         "command": "codededup.pickEmbeddingModel",
-        "title": "CodeDedup: Pick Embedding Model"
+        "title": "Deslop: Pick Embedding Model"
       },
       {
         "command": "codededup.refreshReport",
-        "title": "CodeDedup: Refresh Report (force full re-analysis)"
+        "title": "Deslop: Refresh Report (force full re-analysis)"
       },
       {
         "command": "codededup.toggleShowAllLenses",
-        "title": "CodeDedup: Toggle Show All Code Lenses"
+        "title": "Deslop: Toggle Show All Code Lenses"
       },
       {
         "command": "codededup.showSchemaDoc",
-        "title": "CodeDedup: Show Schema Documentation"
+        "title": "Deslop: Show Schema Documentation"
       },
       {
         "command": "codededup.openCluster",
-        "title": "CodeDedup: Open Cluster"
+        "title": "Deslop: Open Cluster"
       },
       {
         "command": "codededup.revealActiveBinary",
-        "title": "CodeDedup: Reveal Active Binary"
+        "title": "Deslop: Reveal Active Binary"
       }
     ],
     "viewsContainers": {
@@ -103,7 +103,7 @@
       ]
     },
     "configuration": {
-      "title": "CodeDedup",
+      "title": "Deslop",
       "properties": {
         "codededup.minNodes": {
           "type": "integer",
@@ -174,7 +174,7 @@
     "mcpServers": [
       {
         "id": "codededup",
-        "name": "CodeDedup",
+        "name": "Deslop",
         "description": "Live duplicate-code analysis for the current workspace.",
         "command": "${extensionPath}/bin/${platform}/codededup-mcp",
         "args": [],

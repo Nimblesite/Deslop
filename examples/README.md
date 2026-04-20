@@ -1,7 +1,7 @@
 # Examples
 
-Substantial fixtures that exercise every clone type CodeDedup can
-detect. Each subfolder is a self-contained scenario. Run CodeDedup
+Substantial fixtures that exercise every clone type Deslop can
+detect. Each subfolder is a self-contained scenario. Run Deslop
 against a folder to see the clusters.
 
 ```bash

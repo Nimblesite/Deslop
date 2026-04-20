@@ -32,14 +32,14 @@ export interface ResolvedBinary {
 
 export class UnsupportedPlatformError extends Error {
   constructor(platform: string, arch: string) {
-    super(`CodeDedup has no bundled binary for ${platform}-${arch}.`);
+    super(`Deslop has no bundled binary for ${platform}-${arch}.`);
     this.name = "UnsupportedPlatformError";
   }
 }
 
 export class BundledBinaryMissingError extends Error {
   constructor(public readonly binaryPath: string) {
-    super(`Bundled CodeDedup binary not found at ${binaryPath}. Reinstall the extension.`);
+    super(`Bundled Deslop binary not found at ${binaryPath}. Reinstall the extension.`);
     this.name = "BundledBinaryMissingError";
   }
 }

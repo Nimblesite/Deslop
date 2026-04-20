@@ -30,6 +30,14 @@ const DIMENSION_PROBE_PROMPT: &str = "codededup";
 /// inference is bounded in practice; give enough headroom for cold
 /// model loads without blocking the pipeline forever.
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
+/// Hard character cap on any single embed prompt. Ollama returns HTTP
+/// 500 ("the input length exceeds the context length") when a prompt
+/// overflows the model's context window. `nomic-embed-text` and its
+/// peers use a 2048-token window; 6000 chars comfortably undershoots
+/// that at ~4 chars/token, and oversized subtrees (generated code,
+/// minified files) still contribute a usable prefix instead of
+/// aborting the whole pass.
+const MAX_EMBED_CHARS: usize = 6000;
 
 /// Ollama provider configured for a specific endpoint + model.
 #[derive(Debug, Clone)]
@@ -98,34 +106,7 @@ impl EmbeddingProvider for OllamaProvider {
     }
 
     fn embed(&self, input: &str) -> Result<Vec<f32>, ProviderError> {
-        let url = format!("{}/api/embeddings", self.endpoint);
-        let body = EmbedRequest {
-            model: &self.model,
-            prompt: input,
-        };
-        let mut response = ureq::post(&url)
-            .config()
-            .timeout_global(Some(HTTP_TIMEOUT))
-            .build()
-            .send_json(&body)
-            .map_err(|err| ProviderError::Unreachable {
-                provider_id: PROVIDER_ID.to_owned(),
-                message: err.to_string(),
-            })?;
-        if !response.status().is_success() {
-            return Err(ProviderError::ProviderFailed {
-                provider_id: PROVIDER_ID.to_owned(),
-                message: format!("unexpected status {}", response.status()),
-            });
-        }
-        let parsed: EmbedResponse =
-            response
-                .body_mut()
-                .read_json()
-                .map_err(|err| ProviderError::Malformed {
-                    provider_id: PROVIDER_ID.to_owned(),
-                    message: err.to_string(),
-                })?;
+        let parsed = post_embedding(&self.endpoint, &self.model, input)?;
         if parsed.embedding.len() != self.spec.dimensions {
             return Err(ProviderError::Malformed {
                 provider_id: PROVIDER_ID.to_owned(),
@@ -168,10 +149,23 @@ fn truncate_digest(digest: &str) -> String {
 /// dimensionality. The spec cannot be known ahead of time because
 /// users can swap models via `--embedding-model`.
 fn probe_dimensions(endpoint: &str, model: &str) -> Result<usize, ProviderError> {
+    let parsed = post_embedding(endpoint, model, DIMENSION_PROBE_PROMPT)?;
+    Ok(parsed.embedding.len())
+}
+
+/// Sends one `POST /api/embeddings` call and returns the parsed
+/// response. Centralises truncation, status handling, and error-body
+/// capture so both `embed` and `probe_dimensions` behave identically.
+fn post_embedding(
+    endpoint: &str,
+    model: &str,
+    input: &str,
+) -> Result<EmbedResponse, ProviderError> {
     let url = format!("{endpoint}/api/embeddings");
+    let prompt = truncate_prompt(input);
     let body = EmbedRequest {
         model,
-        prompt: DIMENSION_PROBE_PROMPT,
+        prompt: &prompt,
     };
     let mut response = ureq::post(&url)
         .config()
@@ -183,20 +177,42 @@ fn probe_dimensions(endpoint: &str, model: &str) -> Result<usize, ProviderError>
             message: err.to_string(),
         })?;
     if !response.status().is_success() {
+        let status = response.status();
+        let detail = response
+            .body_mut()
+            .read_to_string()
+            .ok()
+            .filter(|body| !body.is_empty())
+            .map(|body| format!(": {}", body.trim()))
+            .unwrap_or_default();
         return Err(ProviderError::ProviderFailed {
             provider_id: PROVIDER_ID.to_owned(),
-            message: format!("embeddings probe failed: status {}", response.status()),
+            message: format!("http status: {status}{detail}"),
         });
     }
-    let parsed: EmbedResponse =
-        response
-            .body_mut()
-            .read_json()
-            .map_err(|err| ProviderError::Malformed {
-                provider_id: PROVIDER_ID.to_owned(),
-                message: err.to_string(),
-            })?;
-    Ok(parsed.embedding.len())
+    response
+        .body_mut()
+        .read_json::<EmbedResponse>()
+        .map_err(|err| ProviderError::Malformed {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: err.to_string(),
+        })
+}
+
+/// Truncates `input` to at most `MAX_EMBED_CHARS` characters at a UTF-8
+/// boundary. Prevents Ollama's "input length exceeds the context
+/// length" HTTP 500 for oversized subtrees (generated / minified code).
+fn truncate_prompt(input: &str) -> String {
+    if input.len() <= MAX_EMBED_CHARS {
+        return input.to_owned();
+    }
+    let end = input
+        .char_indices()
+        .map(|(idx, _)| idx)
+        .take_while(|idx| *idx <= MAX_EMBED_CHARS)
+        .last()
+        .unwrap_or(0);
+    input.get(..end).unwrap_or("").to_owned()
 }
 
 /// `POST /api/embeddings` request body.

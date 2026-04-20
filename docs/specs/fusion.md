@@ -2,7 +2,7 @@
 
 ### [FUSION-POLICY-HYBRID] The state of the art is HYBRID, not pure-RAG
 
-**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** CodeDedup is hybrid.
+**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** Deslop is hybrid.
 
 ### [FUSION-POLICY-NO-PURE-RAG] No paper recommends pure embeddings / pure RAG
 
@@ -28,7 +28,7 @@ The pattern is consistent: **structure (AST/graph) + learned representation (emb
 - **Smaller embedding sizes beat larger ones** for clone detection. This directly contradicts the "bigger vector DB = better" intuition of pure-RAG.
 - **Reports must cite exact byte ranges** (LSP requirement per CLAUDE.md). Pure embedding similarity gives you "these two fragments are similar" but not "this specific subtree of fragment A matches this specific subtree of fragment B." AST fingerprinting gives that natively; Rator showed it's also achievable from tree encoding with Top-2/Top-3 localization.
 
-### [FUSION-SIGNALS-THREE-LAYER] CodeDedup is hybrid by design
+### [FUSION-SIGNALS-THREE-LAYER] Deslop is hybrid by design
 
 The pipeline fuses three signals:
 

@@ -58,7 +58,7 @@ export function openWorstCluster(ctx: vscode.ExtensionContext, store: ReportStor
   const report = store.current.report;
   const worst = report?.clusters[0];
   if (!worst) {
-    vscode.window.showInformationMessage("CodeDedup: no duplication detected.");
+    vscode.window.showInformationMessage("Deslop: no duplication detected.");
     return;
   }
   openClusterPanel(ctx, store, worst.id);
@@ -89,7 +89,7 @@ export function jumpToNextOccurrence(store: ReportStore): void {
   const activePath = editor.document.uri.fsPath;
   const cluster = findClusterContaining(report.clusters, activePath, editor.document, here);
   if (!cluster) {
-    vscode.window.showInformationMessage("CodeDedup: no cluster at cursor.");
+    vscode.window.showInformationMessage("Deslop: no cluster at cursor.");
     return;
   }
   const others = cluster.occurrences.filter((o) => !sameFile(o.path, activePath));

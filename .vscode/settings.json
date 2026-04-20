@@ -5,5 +5,7 @@
     "titleBar.activeForeground": "#ffffff",
     "titleBar.inactiveBackground": "#7a1a14",
     "titleBar.inactiveForeground": "#ffffffcc"
-  }
+  },
+  "codededup.embedding.provider": "ollama",
+  "codededup.embedding.model": "nomic-embed-text"
 }

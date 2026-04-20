@@ -81,7 +81,7 @@ fn embed_corpus(
         "embedding pass starting",
     );
     let cache = open_cache(&config.root, &spec)?;
-    let embeddings = compute_embeddings(provider, &cache, corpus)?;
+    let embeddings = compute_embeddings(provider, &cache, corpus);
     let pairs = embedding_pairs(&corpus.fingerprints, &embeddings);
     tracing::info!(pair_count = pairs.len(), "embedding pass complete");
     Ok(EmbeddingOutcome {
@@ -108,25 +108,43 @@ fn compute_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
     corpus: &FingerprintCorpus,
-) -> Result<Vec<Vec<f32>>, CoreError> {
+) -> Vec<Vec<f32>> {
+    let dims = provider.spec().dimensions;
     let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(corpus.fingerprints.len());
+    let mut skipped: usize = 0;
     for fingerprint in &corpus.fingerprints {
         let snippet = snippet_for(fingerprint, &corpus.sources);
         if let Some(cached) = cache.get(&snippet) {
             embeddings.push(cached);
             continue;
         }
-        let fresh = provider
-            .embed(&snippet)
-            .map_err(|source| CoreError::Embedding {
-                message: source.to_string(),
-            })?;
-        if let Err(error) = cache.store(&snippet, &fresh) {
-            tracing::warn!(%error, content_hash = %content_hash(&snippet), "embedding cache write failed");
+        match provider.embed(&snippet) {
+            Ok(fresh) => {
+                if let Err(error) = cache.store(&snippet, &fresh) {
+                    tracing::warn!(%error, content_hash = %content_hash(&snippet), "embedding cache write failed");
+                }
+                embeddings.push(fresh);
+            }
+            Err(source) => {
+                skipped = skipped.saturating_add(1);
+                tracing::warn!(
+                    error = %source,
+                    snippet_chars = snippet.chars().count(),
+                    content_hash = %content_hash(&snippet),
+                    "embedding provider rejected subtree — substituting zero vector"
+                );
+                embeddings.push(vec![0.0_f32; dims]);
+            }
         }
-        embeddings.push(fresh);
     }
-    Ok(embeddings)
+    if skipped > 0 {
+        tracing::warn!(
+            skipped,
+            total = corpus.fingerprints.len(),
+            "embedding pass completed with skipped subtrees"
+        );
+    }
+    embeddings
 }
 
 /// Returns the source slice for `fingerprint` as a `String`. Invalid

@@ -30,7 +30,7 @@ export function openClusterPanel(
     existing.panel.reveal(vscode.ViewColumn.Active);
     return;
   }
-  const panel = createPanel(context, "cluster", `CodeDedup: cluster ${clusterId}`);
+  const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
   const unsub = wirePanel(panel, store, "cluster", (webview) =>
     webview.postMessage({ kind: "select/cluster", id: clusterId }),
   );
@@ -49,7 +49,7 @@ export function openReportPanel(context: vscode.ExtensionContext, store: ReportS
     existing.panel.reveal(vscode.ViewColumn.Active);
     return;
   }
-  const panel = createPanel(context, "report", "CodeDedup: report");
+  const panel = createPanel(context, "report", "Deslop: report");
   const unsub = wirePanel(panel, store, "report");
   panel.webview.onDidReceiveMessage((msg) => handleMessage(store, msg));
   panel.onDidDispose(() => {
@@ -126,7 +126,7 @@ function buildHtml(
       <head>
         <meta charset="utf-8" />
         <meta http-equiv="Content-Security-Policy" content="${csp}" />
-        <title>CodeDedup</title>
+        <title>Deslop</title>
         <style>body { background: ${COLOR.surface}; margin: 0; }</style>
       </head>
       <body>

@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CLI for CodeDedup: detect duplicated code ordered by worst offenders first."
+description = "CLI for Deslop: detect duplicated code ordered by worst offenders first."
 
 [[bin]]
 name = "codededup"

@@ -60,7 +60,7 @@ scratch/
 Cargo.lock.bak
 
 # =============================================================================
-# CodeDedup-specific
+# Deslop-specific
 # =============================================================================
 .codededup-cache/
 codededup-report.json

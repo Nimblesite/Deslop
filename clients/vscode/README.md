@@ -1,8 +1,8 @@
-# CodeDedup for VS Code
+# Deslop for VS Code
 
 **The first clone detector that tells you you're duplicating code as you type.**
 
-Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. CodeDedup surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**. No save, no push, no context switch.
+Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**. No save, no push, no context switch.
 
 ## Features
 
@@ -19,13 +19,13 @@ Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic insp
 
 ## Install
 
-- Marketplace: search `CodeDedup` in VS Code's Extensions view.
+- Marketplace: search `Deslop` in VS Code's Extensions view.
 - OpenVSX: also published under the same id.
 - CLI too: `brew install codededup/tap/codededup` or `scoop install codededup`. The extension will pick up the PATH install automatically when its version matches.
 
 ## Settings
 
-See `CodeDedup` in the Settings UI. Key knobs: `codededup.embedding.model`, `codededup.minNodes`, `codededup.liveBubble.mode` (inline / ghost).
+See `Deslop` in the Settings UI. Key knobs: `codededup.embedding.model`, `codededup.minNodes`, `codededup.liveBubble.mode` (inline / ghost).
 
 ## License
 

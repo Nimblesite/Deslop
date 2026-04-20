@@ -9,13 +9,13 @@ icon: palette
 
 # Design System
 
-> Duplication is the tax LLMs charge for speed. CodeDedup is the audit.
+> Duplication is the tax LLMs charge for speed. Deslop is the audit.
 
-This document is the single source of visual, typographic, and interaction truth for CodeDedup's web presence. It is authored with the same rigour as the engine it fronts: every token has a reason, every reason traces to a principle, every principle serves one goal — **making the worst duplication in a repository impossible to ignore**.
+This document is the single source of visual, typographic, and interaction truth for Deslop's web presence. It is authored with the same rigour as the engine it fronts: every token has a reason, every reason traces to a principle, every principle serves one goal — **making the worst duplication in a repository impossible to ignore**.
 
 ## Voice & Positioning
 
-CodeDedup is the duplicate-detection tool for the AI era. Coding agents generate plausible code at a rate that outpaces human review; a human reviewer's instinct for "I have seen this before" does not scale past a few hundred thousand tokens of generated surface area. CodeDedup restores that instinct — mechanically, deterministically, and with a ranked report that puts the worst offenders at line one.
+Deslop is the duplicate-detection tool for the AI era. Coding agents generate plausible code at a rate that outpaces human review; a human reviewer's instinct for "I have seen this before" does not scale past a few hundred thousand tokens of generated surface area. Deslop restores that instinct — mechanically, deterministically, and with a ranked report that puts the worst offenders at line one.
 
 The brand voice is **academic in construction, urgent in tone**. Read it aloud and it should sound like a terse technical paper written by someone who has just watched a well-meaning agent copy-paste the same repository three times. Precise. Unsparing. Confident. Never cute.
 
@@ -24,7 +24,7 @@ The brand voice is **academic in construction, urgent in tone**. Read it aloud a
 - **Built for AI-speed codebases.** Every pipeline decision assumes generated code, not hand-crafted code, is the dominant input.
 - **Immediate feedback.** The tool runs fast enough to sit in an agent's inner loop — not a nightly CI job.
 - **Worst-first ranking.** Score = clone_size × clone_count × spanned_LOC. The top of the report is always where the largest payoff lives.
-- **Tree-sitter, not regex.** Four clone types (Type-1 identical → Type-4 semantic) detected through AST fingerprints and embedding fusion, never line-matching.
+- **Tree-sitter, not regex.** Four duplication categories — Identical, Nearly identical, Loosely similar, Same behavior — detected through AST fingerprints and embedding fusion, never line-matching.
 - **Structured output as product.** JSON is canonical; the text and HTML renderers are views. Agents consume the same schema humans read.
 
 ### Forbidden phrasings
@@ -37,7 +37,7 @@ The brand voice is **academic in construction, urgent in tone**. Read it aloud a
 
 ### 1. Information density wins
 
-Marketing sites for developer tools fail by padding. A developer evaluating CodeDedup wants to know, inside thirty seconds: what it does, what it parses, how fast it runs, what it costs. Every screen answers at least one of those questions above the fold.
+Marketing sites for developer tools fail by padding. A developer evaluating Deslop wants to know, inside thirty seconds: what it does, what it parses, how fast it runs, what it costs. Every screen answers at least one of those questions above the fold.
 
 ### 2. Monospace is load-bearing
 
@@ -45,7 +45,7 @@ This tool reports on source code. Source code is monospace. The typographic syst
 
 ### 3. The report is the hero
 
-Screenshots of a ranked CodeDedup report carry more conviction than any illustration. Marketing surfaces show the real output: the same three columns (score, file, span) a developer will see five minutes after install.
+Screenshots of a ranked Deslop report carry more conviction than any illustration. Marketing surfaces show the real output: the same three columns (score, file, span) a developer will see five minutes after install.
 
 ### 4. Two audiences, one surface
 
@@ -53,7 +53,7 @@ Every page must read naturally to both a human skimming for credibility and an A
 
 ### 5. Ruthless restraint
 
-No gradients as decoration. No stock photography. No hero videos. No emoji. No particle animations. If a visual element does not narrow the distance between the reader and the `codededup` binary, it is cut.
+No gradients as decoration. No stock photography. No hero videos. No emoji. No particle animations. If a visual element does not narrow the distance between the reader and the `deslop` binary, it is cut.
 
 ## Color System
 
@@ -79,7 +79,7 @@ Two palettes, both pinned to WCAG AA contrast at every pairing used. The default
 
 ### Why red primary?
 
-Every competitor in the space — jscpd, Simian, Sonar CPD — leans blue or green, signalling "analysis" or "quality." CodeDedup reports findings that cost you money, carry bugs, and embarrass code review. The primary is the red of a burnt-edge alarm lamp, not a logo. It appears on the top-1 finding, on the count of clusters-above-threshold, and nowhere else.
+Every competitor in the space — jscpd, Simian, Sonar CPD — leans blue or green, signalling "analysis" or "quality." Deslop reports findings that cost you money, carry bugs, and embarrass code review. The primary is the red of a burnt-edge alarm lamp, not a logo. It appears on the top-1 finding, on the count of clusters-above-threshold, and nowhere else.
 
 ## Typography
 
@@ -147,14 +147,14 @@ Section padding is `--space-16` top and bottom on desktop, `--space-12` on mobil
 
 ### Report band
 
-The hero of the home page. A dark, monospaced panel rendering a real CodeDedup report — exactly as the CLI emits it, with ANSI stripped. Structure:
+The hero of the home page. A dark, monospaced panel rendering a real Deslop report — exactly as the CLI emits it, with ANSI stripped. Structure:
 
 ```
 SCORE     FILE                            SPAN          KIND
 ────────────────────────────────────────────────────────────
-  2,184   UserRepository.cs               120–180       Type-2
-  1,903   ProductRepository.cs            58–118        Type-2
-    710   EmailValidatorRegex.cs          10–62         Type-4
+  2,184   UserRepository.cs               120–180       Nearly identical
+  1,903   ProductRepository.cs            58–118        Nearly identical
+    710   EmailValidatorRegex.cs          10–62         Same behavior
 ```
 
 Top row is marked with `--color-primary` on the score column. No chrome — the panel is the report, not a screenshot of one.
@@ -178,7 +178,7 @@ Rendered in monospace, 1px bordered, transparent background. Chips are informati
 A single black-on-cream (or cream-on-black in dark mode) block with the install command, a copy affordance, and no marketing prose around it:
 
 ```
-cargo install codededup
+cargo install deslop
 ```
 
 That is the entire conversion surface on the home page. Everything else is documentation.
@@ -193,7 +193,7 @@ ABOVE-THRESHOLD        17
 TOP OFFENDER       2,184  ← red
 ```
 
-The band is deliberately austere. It sets the expectation that CodeDedup speaks in numbers.
+The band is deliberately austere. It sets the expectation that Deslop speaks in numbers.
 
 ## Motion
 
@@ -218,7 +218,7 @@ Easing is `cubic-bezier(0.2, 0.7, 0.2, 1)` for enters and `cubic-bezier(0.4, 0, 
 
 ## Iconography
 
-CodeDedup ships no decorative icons. The only glyphs in use are:
+Deslop ships no decorative icons. The only glyphs in use are:
 
 - Chevrons (`›`, `‹`) for navigation affordances.
 - `·` (interpunct) as a metadata separator.
@@ -254,4 +254,4 @@ The CSS file is the contract: if a token is added here, it is added there, in th
 
 ---
 
-> CodeDedup is an audit, not a fix. The design system exists so that nothing on the page distracts from what the audit found.
+> Deslop is an audit, not a fix. The design system exists so that nothing on the page distracts from what the audit found.

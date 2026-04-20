@@ -1,6 +1,6 @@
 # Live analysis — in-memory session behind the LSP and MCP servers
 
-CodeDedup v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `codededup-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
+Deslop v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `codededup-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
 
 **There is no daemon process.** The `live` module just keeps an analysis session alive for as long as the binary that owns it is running. The LSP server and the MCP server are long-running because LSP and MCP are long-running protocols; they're not background services, they're conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`).
 
@@ -23,7 +23,7 @@ flowchart LR
 
     subgraph VSCode["VS Code process"]
         direction TB
-        subgraph VSIX["CodeDedup VSIX (TypeScript extension)"]
+        subgraph VSIX["Deslop VSIX (TypeScript extension)"]
             direction TB
             UI["Live bubble · tree view · webview<br/>Ollama model picker · status bar"]
             LspClient["LSP client"]

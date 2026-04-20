@@ -1,6 +1,6 @@
 # LSP shell
 
-Thin Language Server Protocol shell over [LIVE-BINARY]. Makes the live CodeDedup report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
+Thin Language Server Protocol shell over [LIVE-BINARY]. Makes the live Deslop report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
 
 Crate: `crates/codededup-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-lsp` (pure Rust, no C deps; already used by `rust-analyzer` and dozens of other servers).
 
@@ -35,7 +35,13 @@ Cluster weights (`count × (size−1) × log2(1 + spanned_loc)`) are unbounded, 
 | 10 – 50% | `Hint` | Faded underline, Problems panel only if filter allows. |
 | Bottom 50% | Not published as a diagnostic | Still visible via code lens + hover. |
 
+**Percentile is computed across the whole report, not per file.** A cluster's severity is its weight's percentile against the weights of every cluster in the live report. A cluster that is the worst offender in a sleepy file but mid-tier overall must rank mid-tier in the Problems panel — otherwise a quiet file with three trivial near-misses would publish a `Warning` while the actual hot files compete for the same bucket. This matches the "worst offenders first" rank order surfaced everywhere else (CLI text report, VSIX top-offenders tree, HTML report).
+
+Because severity depends on the global weight set, the diagnostic provider declares `inter_file_dependencies: true` ([LSP-CAPABILITIES]); editing one file shifts every other file's percentile, and the client must refresh the corresponding diagnostics.
+
 Severity is **never** `Error` — duplication isn't a compile error, and polluting the error stream breaks existing developer workflows (CI red on clone count is a future opt-in, not the default). Percentile thresholds are fixed; the user doesn't tune severity, they tune `min-nodes` and exclusion patterns instead.
+
+Severity bucketing lives in `crates/codededup-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 

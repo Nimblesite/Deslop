@@ -1,8 +1,8 @@
-# CodeDedup Report Context
+# Deslop Report Context
 
 ## What this is
 
-You are being given a code-duplication report from **CodeDedup**, a static analysis tool that detects duplicated code using a hybrid pipeline of AST fingerprinting + token MinHash/LSH. The report lists **worst offenders first** — clusters ranked by a duplication-impact score, not just count.
+You are being given a code-duplication report from **Deslop**, a static analysis tool that detects duplicated code using a hybrid pipeline of AST fingerprinting + token MinHash/LSH. The report lists **worst offenders first** — clusters ranked by a duplication-impact score, not just count.
 
 ## How it works (so you know what the signals mean)
 
@@ -14,12 +14,20 @@ The pipeline normalizes each source file's AST (collapsing identifier names, lit
 
 Candidate pairs from all three passes are unioned, then transitively closed into clusters. Small LSH-only pairs are filtered out (they're usually trivial scaffolding like imports or namespace declarations).
 
-## Clone taxonomy
+## Clone buckets (canonical)
 
-- **Type-1** — identical code (ignoring whitespace/comments).
-- **Type-2** — identical up to renaming of identifiers/literals.
-- **Type-3** — Type-2 + added/removed/modified statements ("near-miss").
-- **Type-4** — semantically equivalent, syntactically different. Requires an embedding pass; may or may not be enabled for the report you are reading. When disabled, `embedding_cos` is always `0.00`.
+Every cluster in this report belongs to exactly one of four buckets. The human label is what end-users see in the CLI / HTML / VS Code UI; the academic `Type-N` label is retained here because agents often read the literature. Both labels refer to the **same** bucket.
+
+| Bucket            | Human label                              | Academic ref     | Meaning                                                                                  |
+|-------------------|------------------------------------------|------------------|------------------------------------------------------------------------------------------|
+| `Identical`       | Identical code                           | Type-1, Type-2   | Identical after normalization (ignoring whitespace, comments, renamed identifiers).      |
+| `NearlyIdentical` | Nearly identical code                    | Type-3           | Type-2 + added/removed/modified statements. Small differences may matter — review both.  |
+| `LooselySimilar`  | Loosely similar code                     | weak LSH-only    | Loose textual overlap below the near-miss bar. Treat as a hint, not a directive.         |
+| `SameBehavior`    | Same behavior, different code *(AI)*     | Type-4           | Semantically equivalent, syntactically different. Requires the embedding pass.           |
+
+`SameBehavior` is populated only when the embedding pass ran. If `embedding_cos` is `0.00` across the whole report, the pass was disabled and the `SameBehavior` bucket is empty — structural / token-based clusters (`Identical`, `NearlyIdentical`, `LooselySimilar`) are unaffected.
+
+Full canonical definition including routing thresholds: [taxonomy.md §[CLONE-BUCKETS]](taxonomy.md).
 
 ## How to read the report format
 
@@ -48,13 +56,16 @@ Byte ranges come from `tree-sitter`. To display line numbers you must re-derive 
 
 ## Reading the signals together
 
-| `structural` | `token_jaccard` | What it means |
-|---|---|---|
-| `1.00` | `1.00` | **Type-1 or Type-2 exact clone.** Safe candidate for extraction into a shared function/method. |
-| `1.00` | `<1.00` | Unusual — same AST shape but slightly different token k-grams. Usually means overlapping byte ranges from sibling-extension. |
-| `0.00` | `≥ 0.90` | **Type-3 near-miss.** Similar token content, different structure. Review before merging — may differ in a semantically important way (loop vs recursion, added guard, etc.). |
-| `0.00` | `0.70 – 0.90` | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |
-| `0.20 – 0.80` | `≥ 0.95` | **Fused cluster spanning multiple exact-clone bands.** Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |
+| `structural` | `token_jaccard` | `embedding_cos` | Bucket → human label | What it means |
+|---|---|---|---|---|
+| `1.00` | `1.00` | any | `Identical` → **Identical code** *(Type-1/2)* | Safe candidate for extraction into a shared function/method. |
+| `1.00` | `<1.00` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Same AST shape but slightly different token k-grams. Usually overlapping sibling-extension ranges. |
+| `0.00` | `≥ 0.90` | `<0.80` or disabled | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Similar token content, different structure. Review before merging — may differ in a semantically important way (loop vs recursion, added guard, etc.). |
+| `<0.50` | any | `≥ 0.80` | `SameBehavior` → **Same behavior, different code** *(Type-4, AI match)* | The embedding pass noticed these do the same thing written two syntactically distinct ways. Read both before merging. |
+| `0.00` | `0.70 – 0.90` | `<0.80` or disabled | `LooselySimilar` → **Loosely similar code** | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |
+| `0.20 – 0.80` | `≥ 0.95` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Fused cluster spanning multiple exact-clone bands. Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |
+
+`SameBehavior` is tested before `NearlyIdentical` when the embedding pass is enabled, so a strong semantic signal on syntactically divergent code gets the AI-match label rather than being absorbed into near-miss. Full routing table: [taxonomy.md §[CLONE-BUCKETS-ROUTING]](taxonomy.md).
 
 ## Repo-wide duplication metric
 
@@ -88,5 +99,5 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 ## Tool metadata
 
-- Tool: `codededup`. The report header states the tool version and report schema version.
+- Tool: `deslop`. The report header states the tool version and report schema version.
 - The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, embedding_cos, fused }`, and an agent-oriented `summary` string per cluster.

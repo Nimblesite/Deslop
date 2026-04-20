@@ -1,4 +1,4 @@
-# CodeDedup — Plan
+# Deslop — Plan
 
 Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust/Python and embeddings come after the deterministic core is proven on real C# code.
 
@@ -24,6 +24,7 @@ Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust
 - **P8 LSP server** — `codededup-lsp` bin over `tower-lsp`: diagnostics, code lens, hover, virtual docs, `codededup/*` custom methods. Editor-agnostic thin forwarder to `LiveApi`. See [lsp.md](../specs/lsp.md).
 - **P9 MCP server** — `codededup-mcp` bin: tools (`find-similar`, `report-for-*`, `set-embedding-model`, …), resources, notifications. Agent-facing thin forwarder to `LiveApi`. See [mcp.md](../specs/mcp.md).
 - **P10 VSIX + live bubble** — VS Code extension with live duplication bubble ([VSIX-LIVE-BUBBLE]), tree view, webview, status bar, Ollama embedding-model picker ([VSIX-EMBED-PICKER]). The in-your-face "you're duplicating right now" moment. See [vsix.md](../specs/vsix.md).
+- **P11 Canonical clone buckets + dual labelling** — promote `[CLONE-BUCKETS]` (taxonomy.md) to the single source of truth across every renderer. Human UI surfaces (HTML, CLI stderr, VS Code) show only the human titles; JSON / `schema_doc` / MCP / agent copy keep the academic `Type-1 → Type-4` labels. Adds the `SameBehavior` bucket as a first-class AI-match surface and kills the four parallel vocabularies the renderers currently ship with. See [taxonomy.md §[CLONE-BUCKETS-DUAL-LABEL]](../specs/taxonomy.md).
 
 ## Non-goals (across all phases)
 No remote APIs. No execution validation (HyClone). No cross-language detection. No auto-fix / extract-to-function — refactoring belongs downstream of a dedicated engine. No unit tests; coarse E2E only.
@@ -208,8 +209,8 @@ Implements [live.md](../specs/live.md). In-memory, watcher-driven session on top
 Implements [lsp.md](../specs/lsp.md). `tower-lsp`-based binary forwarding to P7's `LiveApi`.
 
 - [x] New crate `crates/codededup-lsp` depends on `codededup-core` with `features = ["live"]` + `tower-lsp`. `src/main.rs` stays < 70 LOC of glue; every protocol concern lives in `backend.rs` / `custom_methods.rs` / `diagnostics.rs`.
-- [x] `initialize` handshake returns capabilities per [LSP-CAPABILITIES] — `textDocumentSync = Incremental`, server info block — with diagnostics via `textDocument/diagnostic` (pull-based per LSP 3.17 — `tower-lsp::LanguageServer::diagnostic`).
-- [x] Diagnostics at `src/diagnostics.rs` map per-cluster weight → `DiagnosticSeverity` buckets per [LSP-SEVERITY] (`Warning` / `Information` / `Hint` / drop); `code` carries the stable cluster id; `source = "codededup"`; `message = cluster.interpretation`.
+- [x] `initialize` handshake returns capabilities per [LSP-CAPABILITIES] — `textDocumentSync = Incremental`, server info block, **`diagnosticProvider` (pull-based, LSP 3.17) with `inter_file_dependencies = true`** so editing one file refreshes everyone else's percentile-bucketed severity. The `diagnostic` handler is implemented at [backend.rs](../../crates/codededup-lsp/src/backend.rs).
+- [x] Diagnostics at `src/diagnostics.rs` map per-cluster weight → `DiagnosticSeverity` buckets per [LSP-SEVERITY] (`Warning` / `Information` / `Hint` / drop). **Percentile is computed against the whole report** (not just the current file) so a cluster that's the worst in a sleepy file but mid-tier overall ranks mid-tier in the Problems panel — agreeing with the top-offenders tree, the CLI text report, and the HTML report. Global weights flow from `LiveApi::all_cluster_weights()`. `code` carries the stable cluster id; `source = "codededup"`; `message = cluster.interpretation`; `relatedInformation` lists every other occurrence with an "occurrence N of M" label so the Problems panel jumps cross-file.
 - [x] Custom `codededup/*` methods (`reportGet`, `reportForFile`, `reportForRange`, `clusterById`, `duplicatesFindSimilar`, `embeddingListModels`, `embeddingSetModel`, `sessionConfig`) at `src/custom_methods.rs` forward 1:1 to `LiveApi`.
 - [x] `textDocument/didChange` triggers an incremental pipeline pass through `LiveService::session().lock().apply_changes(...)`.
 - [x] E2E at `crates/codededup-lsp/tests/cli.rs` — 5 tests spawn the real binary, drive raw JSON-RPC frames (Content-Length / \r\n\r\n), and assert: `initialize` returns capabilities; `codededup/sessionConfig` returns the workspace root; `codededup/reportGet` returns non-empty clusters on the C# fixture; `codededup/duplicatesFindSimilar` flags `below_min_nodes: true` on a tiny snippet under the configured floor; `codededup/embeddingListModels` falls back to stub when Ollama is unreachable. Tests copy the fixture into a tempdir so `.codededup-cache/` writes never touch the committed fixtures.
@@ -255,3 +256,51 @@ Implements [vsix.md](../specs/vsix.md). The in-your-face "you're duplicating cod
 - [x] Bundle per-platform pre-built `codededup-lsp` + `codededup-mcp` binaries at release time — `build-binaries` matrix in [publish-vsix.yml](../../.github/workflows/publish-vsix.yml) emits artifacts that `package-vsix` flattens into `clients/vscode/bin/<platform>/` before `vsce package`. No download-on-activate.
 - [x] E2E: VS Code extension test harness in [clients/vscode/test/](../../clients/vscode/test/) — `activation.test.ts`, `bubble.test.ts`, `embeddingPicker.test.ts`, `webviews.test.ts`, `binaryResolver.test.ts`. Fixtures: `test/fixtures/csharp-small/{Alpha,Beta}.cs` (Type-2 clone), `test/fixtures/fake-bin/codededup-lsp` (stub LSP installed by `install-fake-lsp.mjs` that answers `initialize` + `codededup/reportGet` + `codededup/duplicatesFindSimilar` + `codededup/embeddingListModels`). Harness: `test/run-tests.mjs` drives `@vscode/test-electron`.
 - [x] README at [clients/vscode/README.md](../../clients/vscode/README.md) — headline, feature list, design-system callout, install matrix (Marketplace / OpenVSX / brew / scoop). Demo GIF pending the first recorded session.
+
+### P11 Canonical clone buckets + dual labelling
+Implements [CLONE-BUCKETS] and [CLONE-BUCKETS-DUAL-LABEL] from [taxonomy.md](../specs/taxonomy.md). Today the codebase ships four parallel vocabularies for the same buckets (HTML titles, CLI plain summary, CLI technical summary, `interpret()` strings) and the semantic / Type-4 cluster silently collapses into the weak bucket on every UI surface. P11 makes the taxonomy table the single source of truth, promotes the AI-detected `SameBehavior` bucket to a first-class citizen, and drops academic `Type-N` labels from human-facing copy (JSON / `schema_doc` / MCP keep them per [CLONE-BUCKETS-DUAL-LABEL]).
+
+Phased rollout — each phase is independently reviewable and `make ci`-green.
+
+**P11.1 — Core plumbing (no visible change yet).**
+- [ ] Extend `ClusterKind` at `crates/codededup-core/src/render/html.rs` with four canonical variants: `Identical`, `NearlyIdentical`, `LooselySimilar`, `SameBehavior`. Delete `Exact` / `Near` / `Weak`. Ripgrep the crate for stragglers.
+- [ ] Move `ClusterKind` + `cluster_kind()` out of `render/html.rs` into a new `codededup-core::buckets` module so every renderer depends on one source. Keep the file < 500 LOC.
+- [ ] Add `fn bucket_labels(kind: ClusterKind) -> BucketLabels` returning `{ human_title, action_sentence, css_suffix, taxonomy_label }`. This is the single helper every surface pulls from per [CLONE-BUCKETS-DUAL-LABEL] rule 5.
+- [ ] Update `cluster_kind()` signal-routing to match [CLONE-BUCKETS-ROUTING] exactly — `SameBehavior` tested before `NearlyIdentical`, threshold constants pulled from the same shared module that already owns `FUSED_THRESHOLD`. E2E: `cluster_kind_matches_canonical_routing_table` runs every row of the routing table as a parameterised assertion.
+- [ ] `crates/codededup-core/src/report.rs::interpret()` rewritten to call `bucket_labels()` instead of hard-coding strings. Output must continue to include the Type-N reference (e.g. `"Identical code (Type-1/2 exact clone). Safe to extract — every copy is the same."`) since `interpret()` feeds the JSON `cluster.interpretation` field and that is agent-facing per [CLONE-BUCKETS-DUAL-LABEL] rule 3.
+- [ ] `default_action_hints()` rewritten to match — four entries, one per bucket, each carrying both the human label and the Type-N reference.
+
+**P11.2 — CLI stderr summary.**
+- [ ] `crates/codededup/src/summary/body.rs::write_breakdown_plain` refactored to iterate over `ClusterKind::all()` and call `bucket_labels()`. No hard-coded strings.
+- [ ] Add a fourth column for `SameBehavior` with the `(AI match)` suffix: `"{n} same behavior, different code (AI match)"`. Cyan. Omitted when count is zero (same rule as today's semantic tail).
+- [ ] **Delete** `write_breakdown_technical` and the `--technical` flag wired through [main.rs:124](../../crates/codededup/src/main.rs#L124). Dual labelling lives in JSON / schema_doc, not in a CLI mode; a second mode is drift-by-design. Tests: delete `writes_technical_breakdown_with_type_labels` and update help-text assertion.
+- [ ] Rename `ClusterBreakdown::semantic` → `same_behavior` and `ClusterBreakdown::near_miss` → `nearly_identical` for grep-consistency with the enum variants. Rename `exact` → `identical` and `weak` → `loosely_similar`. This is the final name, everywhere.
+
+**P11.3 — HTML renderer.**
+- [ ] `cluster_kind()` gains the `SameBehavior` arm (was silently routed to `Weak`); card title + action sentence come from `bucket_labels()`.
+- [ ] Add a `.cluster-card--ai` badge ("AI match") in `render/html.rs` that renders only when `kind == SameBehavior`. CSS: purple / cyan pair per [CLONE-BUCKETS].
+- [ ] Add a `kind-samebehavior` CSS class with the purple / cyan light / dark band.
+- [ ] E2E: `html_renderer_shows_ai_match_badge_on_same_behavior_cluster` + `html_renderer_uses_canonical_human_titles` (asserts no `Type-1`, `Type-2`, `Type-3`, `Type-4`, `exact clone`, `near-miss` substrings in the HTML body).
+
+**P11.4 — JSON / `schema_doc` / MCP (Type-N preserved).**
+- [ ] `REPORTING-CONTEXT.md` already carries the dual-labelled table after the P11 doc pass; re-verify `include_str!` picks it up and `schema_doc_round_trips_through_from_report` still passes.
+- [ ] Add a structured `cluster.bucket: String` field on `ReportCluster` (`"identical" | "nearly_identical" | "loosely_similar" | "same_behavior"`). Makes every consumer stop re-deriving the bucket from the signal triple. Bump `report_schema_version` 3 → 4 with `#[serde(default)]` for back-compat; `--from-report` must still read v3 reports.
+- [ ] `crates/codededup-mcp/src/tools.rs` tool descriptions + `cluster-by-id` response include both labels (already do via embedded `schema_doc`; no work unless grep finds a bespoke string).
+- [ ] E2E: `report_carries_canonical_bucket_field_on_every_cluster`, `from_report_v3_upgrades_bucket_field_deterministically`.
+
+**P11.5 — VS Code extension.**
+- [ ] `clients/vscode/src/types/report.ts` gains the TS mirror of the `bucket` field + a `BucketLabels` helper mirroring the Rust one. Single source for the webview store, tree view, bubble, and status bar.
+- [ ] Tree view, bubble, cluster detail webview, full report webview all switch from the legacy `Exact` / `Near` / `Weak` names to canonical human labels via `BucketLabels`. Add the AI-match badge on `SameBehavior` rows.
+- [ ] `clients/vscode/src/commands/embeddingPicker.ts` references to `Type-3` etc. reviewed — picker explains which buckets depend on the embedding pass in plain English.
+- [ ] E2E: extend `clients/vscode/test/webviews.test.ts` to assert the AI-match badge renders on the `SameBehavior` fixture row and no Type-N strings appear in the rendered DOM.
+
+**P11.6 — Static docs under `site/`.**
+- [ ] Audit `site/src/docs/output-formats.md`, `site/src/docs/how-it-works.md`, `site/src/docs/ai-integration.md`, `site/src/blog/ranking-formula.md` — replace Type-N-only phrasing with bucket-first / Type-N-in-parens per [CLONE-BUCKETS-DUAL-LABEL]. Keep academic refs where the audience is plausibly researcher (reading list, competitor landscape).
+- [ ] Update screenshots / code samples so the published site matches the shipped UI.
+
+**P11.7 — Ratchet + close-out.**
+- [ ] Ripgrep the repo for `Type-1`, `Type-2`, `Type-3`, `Type-4`, `near-miss`, `exact clone`, `semantic clone`, `LSH-only` in human-facing strings (`*.rs` string literals, `*.ts`, `*.tsx`, `clients/vscode/package.json` contributed strings, HTML templates). Every human-facing hit either moves to `bucket_labels()` or gets a `// TODO [CLONE-BUCKETS]` comment rejected in review.
+- [ ] Coverage ratchet: hold at the current threshold or raise by 1 point if the new `bucket_labels()` helper + routing tests lift measured coverage.
+- [ ] Update example README snippets (`examples/README.md` etc.) where the taxonomy wording leaks.
+
+**Non-goals for P11.** No signal-threshold tuning. No new detectors. No changes to cluster ranking / weighting. No CLI-flag churn beyond deleting `--technical`. If a bucket boundary feels wrong on real repos, that's a separate phase against [CLONE-BUCKETS-ROUTING].

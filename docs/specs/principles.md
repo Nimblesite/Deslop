@@ -2,7 +2,7 @@
 
 ### [PRINCIPLES-AUDIENCE-AGENT] Audience for the report: AI coding agents
 
-The report is not just for humans scanning a terminal — **the primary consumer is an AI coding agent using CodeDedup as a tool**. Design choices follow from that:
+The report is not just for humans scanning a terminal — **the primary consumer is an AI coding agent using Deslop as a tool**. Design choices follow from that:
 
 - Structured output is the product. JSON is the canonical format; the text renderer is a pretty-printer over the same data. Never emit information in text that isn't also in JSON.
 - Every cluster carries enough context for an agent to act without re-reading the whole repo: exact byte ranges, file paths, a canonical representative snippet, the reason signals fired (structural / LSH / embedding with scores), and a suggested refactor hint where one is reliably inferrable (e.g. "extract as shared function," "move to module X," "both call sites are in the same crate").
@@ -14,7 +14,7 @@ See [OUTPUT-SCHEMA-JSON] for the JSON schema. The report format is a first-class
 
 ### [PRINCIPLES-LONG-RUNNING-DAEMON] Long-running mode (MCP/LSP) as a load-bearing constraint
 
-CodeDedup v1 is a batch CLI, but the architecture must not foreclose a future daemon mode:
+Deslop v1 is a batch CLI, but the architecture must not foreclose a future daemon mode:
 
 - **Library core.** `codededup-core` owns the pipeline. The CLI is a thin shell. An MCP/LSP binary is just a second shell over the same crate.
 - **Incremental first, batch second.** Every pipeline stage (parse, fingerprint, LSH, embedding) is keyed by `(file_content_hash, model_id, model_version)` and cached. A batch run is "incremental starting from empty cache." A watcher-driven update is "incremental starting from the previous cache." There is no separate batch code path.

@@ -20,10 +20,11 @@ use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response, Result as LspResult},
     lsp_types::{
-        DidChangeTextDocumentParams, DocumentDiagnosticParams, DocumentDiagnosticReport,
-        DocumentDiagnosticReportResult, FullDocumentDiagnosticReport, InitializeParams,
-        InitializeResult, InitializedParams, MessageType, RelatedFullDocumentDiagnosticReport,
-        ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
+        DiagnosticOptions, DiagnosticServerCapabilities, DidChangeTextDocumentParams,
+        DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
+        FullDocumentDiagnosticReport, InitializeParams, InitializeResult, InitializedParams,
+        MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
+        TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
     Client, ExitedError, LanguageServer, LspService, Server,
 };
@@ -32,6 +33,11 @@ use crate::{custom_methods, diagnostics};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "codededup-lsp";
+
+/// Diagnostic `source` + provider `identifier` surfaced to the client.
+/// Must match the `source` field stamped by
+/// [`crate::diagnostics::build_for_file`] so clients can filter by it.
+pub const DIAGNOSTIC_SOURCE: &str = "codededup";
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
 #[derive(Debug)]
@@ -85,6 +91,14 @@ impl LanguageServer for LspBackend {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::INCREMENTAL,
                 )),
+                diagnostic_provider: Some(DiagnosticServerCapabilities::Options(
+                    DiagnosticOptions {
+                        identifier: Some(DIAGNOSTIC_SOURCE.to_owned()),
+                        inter_file_dependencies: true,
+                        workspace_diagnostics: false,
+                        work_done_progress_options: WorkDoneProgressOptions::default(),
+                    },
+                )),
                 ..ServerCapabilities::default()
             },
         })
@@ -115,7 +129,9 @@ impl LanguageServer for LspBackend {
     ) -> LspResult<DocumentDiagnosticReportResult> {
         let path = url_to_path(&params.text_document.uri).unwrap_or_default();
         let file_report = self.service.report_for_file(&path).await;
-        let items = diagnostics::build_for_file(&file_report);
+        let global_weights = self.service.all_cluster_weights().await;
+        let workspace_root = self.service.session_config().await.workspace_root;
+        let items = diagnostics::build_for_file(&file_report, &global_weights, &workspace_root);
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                 related_documents: None,

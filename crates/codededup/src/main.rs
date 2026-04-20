@@ -1,4 +1,4 @@
-//! `CodeDedup` CLI binary.
+//! `Deslop` CLI binary.
 //!
 //! Thin shell over `codededup-core`. Parses args, initialises tracing
 //! (to a timestamped log file by default; see [`logging`]), prints a
@@ -31,7 +31,7 @@ use crate::{
 /// `--output` is not provided.
 const DEFAULT_OUTPUT_STEM: &str = "codededup-report";
 
-/// Command-line interface for `CodeDedup`.
+/// Command-line interface for `Deslop`.
 #[derive(Debug, Parser)]
 #[command(
     name = "codededup",

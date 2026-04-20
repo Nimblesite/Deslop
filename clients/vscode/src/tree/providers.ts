@@ -77,7 +77,7 @@ class StatusNode extends vscode.TreeItem {
       );
       this.command = {
         command: "codededup.revealLog",
-        title: "Reveal CodeDedup log",
+        title: "Reveal Deslop log",
       };
     }
     if (tooltip) this.tooltip = tooltip;
@@ -94,7 +94,7 @@ function renderLifecycle(
     return new StatusNode(
       `Stopped: ${lifecycle.message}`,
       "error",
-      `${lifecycle.message}\n\nClick to open the CodeDedup log.`,
+      `${lifecycle.message}\n\nClick to open the Deslop log.`,
     );
   }
   const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];

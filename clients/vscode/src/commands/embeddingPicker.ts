@@ -26,12 +26,12 @@ export async function pickEmbeddingModel(
 ): Promise<void> {
   const client = clientOf();
   if (!client) {
-    vscode.window.showErrorMessage("CodeDedup: analysis server not running.");
+    vscode.window.showErrorMessage("Deslop: analysis server not running.");
     return;
   }
 
   const quickPick = vscode.window.createQuickPick<Entry>();
-  quickPick.title = "CodeDedup — pick an embedding model";
+  quickPick.title = "Deslop — pick an embedding model";
   quickPick.placeholder = "Switch the embedding provider that feeds the fused score";
   quickPick.matchOnDescription = true;
   quickPick.matchOnDetail = true;
@@ -49,9 +49,8 @@ export async function pickEmbeddingModel(
   quickPick.items = buildItems(models, store);
 
   quickPick.onDidAccept(async () => {
-    const picked = quickPick.activeItems[0];
-    if (!picked) {
-      quickPick.dispose();
+    const picked = quickPick.selectedItems[0] ?? quickPick.activeItems[0];
+    if (!picked || picked.entryKind === "none") {
       return;
     }
     quickPick.hide();
@@ -85,7 +84,11 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
       detail: "Only the deterministic stub provider is available below.",
     });
   } else {
-    items.push({ entryKind: "none", label: "Ollama models" } as Entry);
+    items.push({
+      entryKind: "none",
+      label: "Ollama models",
+      kind: vscode.QuickPickItemKind.Separator,
+    });
     for (const m of ollama) {
       const recommended = RECOMMENDED[m.model_id];
       const activeMark = isActive(active, m) ? "  ✓ active" : "";

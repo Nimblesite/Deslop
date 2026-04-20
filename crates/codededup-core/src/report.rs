@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ast::ByteRange,
+    buckets::{bucket_labels, classify_signals, ClusterKind},
     cluster::Cluster,
     config::ExclusionConfig,
     pair::PairScore,
@@ -43,41 +44,22 @@ pub struct ActionHint {
     pub recommendation: String,
 }
 
-/// Playbook shown to agents. Kept short — one entry per row in the
-/// "Reading the signals together" table in
-/// `docs/specs/REPORTING-CONTEXT.md` so the two never disagree.
+/// Playbook shown to agents. One entry per bucket in [CLONE-BUCKETS].
+/// AI-only surface: uses [`BucketLabels::agent_summary`] so every
+/// recommendation carries plain title + action sentence + `Type-N`.
+/// Kept aligned with the "Reading the signals together" table in
+/// `docs/specs/REPORTING-CONTEXT.md`.
 #[must_use]
 pub fn default_action_hints() -> Vec<ActionHint> {
-    vec![
-        ActionHint {
-            pattern: "structural=1.00, token_jaccard=1.00".to_owned(),
-            recommendation:
-                "Type-1 or Type-2 exact clone. Safe to extract into a shared function."
-                    .to_owned(),
-        },
-        ActionHint {
-            pattern: "structural=1.00, token_jaccard<1.00".to_owned(),
-            recommendation:
-                "Same AST shape, slightly different tokens. Usually overlapping sibling windows — treat as one clone."
-                    .to_owned(),
-        },
-        ActionHint {
-            pattern: "structural=0.00, token_jaccard>=0.90".to_owned(),
-            recommendation:
-                "Type-3 near-miss. Review both occurrences; differences may be semantically meaningful."
-                    .to_owned(),
-        },
-        ActionHint {
-            pattern: "structural=0.00, token_jaccard in [0.70, 0.90)".to_owned(),
-            recommendation: "Weak LSH-only signal. Treat as a hint, not a directive.".to_owned(),
-        },
-        ActionHint {
-            pattern: "structural in (0, 1), token_jaccard>=0.95".to_owned(),
-            recommendation:
-                "Fused cluster spanning several exact-clone bands. Usually genuine duplication across a family of variants."
-                    .to_owned(),
-        },
-    ]
+    let mut hints = Vec::with_capacity(ClusterKind::all().len());
+    for kind in ClusterKind::all() {
+        let labels = bucket_labels(kind);
+        hints.push(ActionHint {
+            pattern: format!("bucket={}", labels.css_suffix),
+            recommendation: labels.agent_summary(),
+        });
+    }
+    hints
 }
 
 /// A complete analysis report.
@@ -405,28 +387,14 @@ fn summarise(
     )
 }
 
-/// Maps the signal triple onto a one-line interpretation. Decision
-/// table mirrors the "Reading the signals together" table in
-/// `docs/specs/REPORTING-CONTEXT.md`; both must change together.
-fn interpret(signals: ReportSignals, canonical_node_count: usize) -> String {
-    let structural = signals.structural;
-    let jaccard = signals.token_jaccard;
-    let high_j = jaccard >= 0.95;
-    let med_j = jaccard >= 0.90;
-    if structural >= 0.99 && jaccard >= 0.99 {
-        "Type-1 or Type-2 exact clone. Safe to extract into a shared function.".to_owned()
-    } else if structural >= 0.99 {
-        "Same AST shape with slight token variation — usually overlapping sibling windows."
-            .to_owned()
-    } else if structural <= 0.01 && med_j {
-        "Type-3 near-miss. Review both occurrences before merging.".to_owned()
-    } else if structural > 0.0 && high_j {
-        "Fused cluster spanning several exact-clone bands — genuine family of variants.".to_owned()
-    } else if canonical_node_count < 40 {
-        "Low-information LSH-only match. Treat as a hint, not a directive.".to_owned()
-    } else {
-        "Weak signal — inspect manually before acting.".to_owned()
-    }
+/// Maps the signal triple onto a one-line interpretation for AI
+/// agents. JSON `cluster.interpretation` is an AI-only surface per
+/// [CLONE-BUCKETS-DUAL-LABEL], so the output composes plain title +
+/// action sentence + `Type-N`. The `canonical_node_count` is unused
+/// today — kept in the signature so callers don't churn; routing
+/// lives in `buckets::classify_signals`.
+fn interpret(signals: ReportSignals, _canonical_node_count: usize) -> String {
+    bucket_labels(classify_signals(signals)).agent_summary()
 }
 
 /// Formats one occurrence as `path:start-end`. Extracted so
