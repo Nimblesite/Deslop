@@ -13,7 +13,29 @@ Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no re
 
 ---
 
-## Install the CLI
+## Install (preferred) — VS Code extension
+
+The VSIX is the **one install that gives you everything**: the live bubble, the LSP server, the MCP server, and the `deslop` CLI all at once. Other IDE extensions (JetBrains, Zed, Neovim) are on the roadmap — until then, this is the headline path.
+
+1. Grab `deslop-vscode-X.Y.Z.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+2. Install it:
+
+   ```bash
+   code --install-extension deslop-vscode-X.Y.Z.vsix
+   ```
+
+   Or: **Extensions panel → `…` menu → Install from VSIX…**
+
+3. Open a `.cs` / `.rs` / `.py` file. The live bubble lights up the moment you type a duplicate. The command palette exposes **Deslop: Open Report**, **Deslop: Open Worst Cluster**, **Deslop: Jump to Next Occurrence**. The extension prepends its bundled `bin/<platform>/` to the VS Code process `PATH`, so `deslop`, `deslop-lsp`, and `deslop-mcp` are callable from the integrated terminal.
+
+---
+
+## Install the CLI only
+
+If you just want the `deslop` binary on your shell `PATH` — no VS Code — use Homebrew or Scoop. Binaries are published through two repos:
+
+- Homebrew tap: [github.com/Nimblesite/homebrew-tap](https://github.com/Nimblesite/homebrew-tap)
+- Scoop bucket: [github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket)
 
 ### macOS / Linux (Homebrew)
 
@@ -32,7 +54,7 @@ deslop --version
 
 ### Direct download
 
-Grab the binary for your platform from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and drop it on your `PATH`.
+Grab the archive for your platform from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and drop the binaries on your `PATH`.
 
 ## Use the CLI
 
@@ -65,25 +87,11 @@ Full flag reference: `deslop --help`.
 
 ---
 
-## Install the VS Code extension
-
-Download `deslop-vscode-X.Y.Z.vsix` from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and install it:
-
-```bash
-code --install-extension deslop-vscode-X.Y.Z.vsix
-```
-
-Or: **Extensions panel → `…` menu → Install from VSIX…**
-
-The extension activates automatically on `.cs`, `.rs`, and `.py` files. Duplicated blocks are highlighted live as you edit. Use the command palette (**Deslop: Open Report**, **Deslop: Open Worst Cluster**, **Deslop: Jump to Next Occurrence**) to navigate clusters.
-
----
-
 ## Use Deslop from an AI agent (MCP)
 
 Deslop ships an MCP server — `deslop-mcp` — that exposes live clone analysis as tools any MCP-compatible agent can call: `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
 
-Install it the same way as the CLI — `brew install nimblesite/tap/deslop` or `scoop install deslop` ships both binaries.
+The VS Code extension bundles `deslop-mcp` alongside the LSP. If you installed the CLI standalone, `brew install nimblesite/tap/deslop` and `scoop install deslop` both ship the MCP binary too.
 
 ### Claude Code
 

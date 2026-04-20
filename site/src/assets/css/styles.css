@@ -347,6 +347,22 @@ pre {
   max-width: 36rem;
 }
 
+.hero__sublede {
+  font-family: var(--font-body);
+  color: var(--on-surface-muted, var(--on-surface-variant));
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-top: var(--space-4);
+  max-width: 40rem;
+}
+
+.hero__sublede code {
+  background: var(--surface-container-low);
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
 .hero__cta {
   display: flex;
   flex-direction: column;

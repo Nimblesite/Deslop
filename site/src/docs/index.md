@@ -9,17 +9,42 @@ icon: rocket_launch
 
 # Getting Started
 
-Deslop is a single Rust binary. Install it, run it against a directory, read the top of the report. If the top row is not the highest-impact duplication in your repo, file a bug.
+Deslop is a **live duplicate-code analysis server**. The preferred way to install it is the **VS Code extension** — the VSIX bundles the LSP server, the MCP server, and the CLI all at once, so you get the live bubble in your editor, the MCP channel for your AI agent, and the CLI on your `PATH`, from one download.
 
-## Install
+> More IDE extensions (JetBrains, Zed, Neovim) are on the roadmap. Until then, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
+
+## Install (preferred) — VS Code extension
+
+1. Grab `deslop-vscode-X.Y.Z.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+2. `code --install-extension deslop-vscode-X.Y.Z.vsix` — or use **Extensions panel → `…` menu → Install from VSIX…**.
+3. Open a `.cs` / `.rs` / `.py` file. The live bubble is active; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
+
+## Install the CLI only (Homebrew / Scoop)
+
+### macOS / Linux (Homebrew)
 
 ```bash
-cargo install deslop
+brew install nimblesite/tap/deslop
+deslop --version
 ```
 
-Precompiled binaries and the VS Code extension land closer to v1. For now, `cargo install` is canonical.
+Tap source: [github.com/Nimblesite/homebrew-tap](https://github.com/Nimblesite/homebrew-tap).
 
-## Run
+### Windows (Scoop)
+
+```powershell
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+scoop install deslop
+deslop --version
+```
+
+Bucket source: [github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket).
+
+### Direct download
+
+Grab the per-platform archive from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) and drop the binaries on your `PATH`.
+
+## Run the CLI
 
 ```bash
 deslop .

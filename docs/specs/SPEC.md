@@ -1,6 +1,6 @@
 # Deslop — Research & Spec
 
-This doc indexes the formal research and design spec for Deslop. **Primary goal:** pick techniques that are (a) fast enough for a CLI to run on a whole repo, (b) accurate across the four clone buckets in [CLONE-BUCKETS] (canonical human-facing labels; academic Type-1 → Type-4 mapping preserved in the same table), and (c) compatible with a future **long-running MCP/LSP** mode — incremental, per-file, byte-range-addressable, and cheap to keep live under a file watcher.
+This doc indexes the formal research and design spec for Deslop. **Primary goal:** build a **live duplicate-code analysis server** (LSP + MCP) that stays fast enough to sit in an AI coding agent's inner loop and an editor's keystroke loop — incremental, per-file, byte-range-addressable, cheap to keep live under a file watcher, and accurate across the four clone buckets in [CLONE-BUCKETS] (canonical human-facing labels; academic Type-1 → Type-4 mapping preserved in the same table). The CLI is a secondary surface — same engine, run once, emit a report — used for CI gates and cold-cache audits. Every design decision is judged against whether it still works when the pipeline runs a thousand times per minute, not once per PR.
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 

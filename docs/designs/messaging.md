@@ -181,11 +181,20 @@ Rendered in monospace, 1px bordered, transparent background. Chips are informati
 
 ### Call-to-install
 
-A single black-on-cream (or cream-on-black in dark mode) block with the install command, a copy affordance, and no marketing prose around it:
+The primary call-to-install is the **VS Code extension** — it bundles the LSP server, the MCP server, and the CLI together, and that's the only install that unlocks the live bubble. A single black-on-cream (or cream-on-black in dark mode) block with the install command, a copy affordance, and no marketing prose around it:
 
 ```
-cargo install deslop
+code --install-extension deslop-vscode-*.vsix
 ```
+
+…sourced from the latest [GitHub release](https://github.com/Nimblesite/Deslop/releases/latest). A secondary, smaller line offers the CLI-only paths:
+
+```
+brew install nimblesite/tap/deslop
+scoop install deslop   # after: scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
+```
+
+The home page never promotes `cargo install` — there is no published crate. Other IDE extensions (JetBrains, Zed, Neovim) are "coming soon" and the block should say so in small type.
 
 That is the entire conversion surface on the home page. Everything else is documentation.
 
