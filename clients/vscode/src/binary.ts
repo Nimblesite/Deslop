@@ -1,7 +1,7 @@
 // Binary resolver per [VSIX-BINARY-VERSIONING].
 //
 // Order of resolution:
-//   1. ${CODEDEDUP_BINARY_DIR} — nightly / local builds override everything.
+//   1. ${DESLOP_BINARY_DIR} — nightly / local builds override everything.
 //   2. PATH — reachable via shell (brew tap, scoop bucket, cargo install),
 //      accepted only if `<binary> --version` matches the extension version exactly.
 //   3. Bundled ${extensionPath}/bin/<platform>/<binary>.
@@ -82,7 +82,7 @@ export function resolveBinary(
 }
 
 function tryEnv(env: NodeJS.ProcessEnv, binName: string): string | null {
-  const dir = env["CODEDEDUP_BINARY_DIR"];
+  const dir = env["DESLOP_BINARY_DIR"];
   if (!dir) return null;
   const candidate = path.join(dir, binName);
   return fs.existsSync(candidate) ? candidate : null;

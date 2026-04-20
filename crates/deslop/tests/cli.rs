@@ -2009,7 +2009,7 @@ fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
     Ok(())
 }
 
-// Implements [UX-COLOR-FORCE]: `CODEDEDUP_FORCE_COLOR=1` forces ANSI
+// Implements [UX-COLOR-FORCE]: `DESLOP_FORCE_COLOR=1` forces ANSI
 // escapes even when stderr isn't a TTY (useful in CI logs). The flag
 // combination also exercises the `ColorChoice::Always` branch in
 // coverage.
@@ -2018,7 +2018,7 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = Command::cargo_bin("deslop")?;
     let assertion = cmd
-        .env("CODEDEDUP_FORCE_COLOR", "1")
+        .env("DESLOP_FORCE_COLOR", "1")
         .env_remove("NO_COLOR")
         .arg(fixture("csharp-small"))
         .arg("--min-nodes")
@@ -2030,7 +2030,7 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
     assert!(
         stderr.contains('\x1b'),
-        "CODEDEDUP_FORCE_COLOR must emit ANSI escapes: {stderr:?}"
+        "DESLOP_FORCE_COLOR must emit ANSI escapes: {stderr:?}"
     );
     Ok(())
 }
@@ -2065,7 +2065,7 @@ fn rust_log_env_controls_severity_filter() -> Result<()> {
 }
 
 // Implements [UX-COLOR-NO-COLOR-ENV]: `NO_COLOR=1` disables ANSI
-// escapes even when `CODEDEDUP_FORCE_COLOR` is also set — standard
+// escapes even when `DESLOP_FORCE_COLOR` is also set — standard
 // NO_COLOR precedence per <https://no-color.org>.
 #[test]
 fn no_color_env_overrides_force_color() -> Result<()> {
@@ -2073,7 +2073,7 @@ fn no_color_env_overrides_force_color() -> Result<()> {
     let mut cmd = Command::cargo_bin("deslop")?;
     let assertion = cmd
         .env("NO_COLOR", "1")
-        .env("CODEDEDUP_FORCE_COLOR", "1")
+        .env("DESLOP_FORCE_COLOR", "1")
         .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")

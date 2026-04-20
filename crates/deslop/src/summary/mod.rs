@@ -24,7 +24,7 @@ pub enum ColorChoice {
 impl ColorChoice {
     /// Resolves the effective colour choice from the user-supplied
     /// `--no-color` flag, the `NO_COLOR` environment variable, the
-    /// `CODEDEDUP_FORCE_COLOR` override (tests and CI logs that want
+    /// `DESLOP_FORCE_COLOR` override (tests and CI logs that want
     /// ANSI even without a TTY), and the stderr TTY state, in that
     /// precedence order.
     #[must_use]
@@ -35,7 +35,7 @@ impl ColorChoice {
         if std::env::var_os("NO_COLOR").is_some() {
             return Self::Never;
         }
-        if std::env::var_os("CODEDEDUP_FORCE_COLOR").is_some() {
+        if std::env::var_os("DESLOP_FORCE_COLOR").is_some() {
             return Self::Always;
         }
         if std::io::stderr().is_terminal() {
