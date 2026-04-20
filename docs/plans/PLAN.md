@@ -19,6 +19,7 @@ Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust
 - **P4.2 Exclusion configuration** — simple `.codededup.toml` config with two tiers: `exclude` (skip parsing entirely) and `report_hide` (analyse for duplication but omit from report unless a visible file duplicates them). Per-language sections + a shared default. Implements [EXCLUSION-CONFIG].
 - **P5 Embedding pass (hybrid)** — Ollama + `nomic-embed-code`, HNSW (`usearch`), fuse via max-normalized sum (never average). Cache `(content_hash, model_id, version)`.
 - **P6 Harden** — `--incremental` on-disk fingerprint cache keyed by `(language, tool_version, min_nodes, content_hash)`, perf regression guard, fixture-per-bug workflow, coverage ratchet.
+- **P6.2 Repo-wide duplication metric + fail-over** — `Report.metrics { analysed_loc, duplicated_loc, duplication_percent, clusters_total, duplicated_files, threshold }` computed deterministically from non-hidden occurrences ([METRICS-REPO]). `--fail-over <percent>` CLI flag + `[threshold] max_duplication_percent` in `.codededup.toml` gate CI with exit `3` on breach ([EXIT-CODES]). `report_schema_version` → 3.
 - **P7 Live-analysis foundation** — `live` module inside `codededup-core` (behind a `live` cargo feature): `AnalysisSession`, file watcher, debouncer, scheduler, `LiveApi` query surface, `ReportDelta` push notifications. `ReportDelta` + `PipelineSession` + `update_files` are already landed. See [live.md](../specs/live.md).
 - **P8 LSP server** — `codededup-lsp` bin over `tower-lsp`: diagnostics, code lens, hover, virtual docs, `codededup/*` custom methods. Editor-agnostic thin forwarder to `LiveApi`. See [lsp.md](../specs/lsp.md).
 - **P9 MCP server** — `codededup-mcp` bin: tools (`find-similar`, `report-for-*`, `set-embedding-model`, …), resources, notifications. Agent-facing thin forwarder to `LiveApi`. See [mcp.md](../specs/mcp.md).
@@ -163,6 +164,21 @@ Implements [PIPELINE-INCREMENTAL]. Hardening pass: opt-in on-disk fingerprint ca
 
 ### P6.1 Human-readable HTML mode
 Implements [OUTPUT-HUMAN-HTML]. HTML output gains collapsible per-occurrence `<details>` panels with syntax-highlighted snippets and line numbers. JSON schema unchanged. `--human={auto,on,off}` selects mode.
+
+### P6.2 Repo-wide duplication metric + fail-over threshold
+Implements [METRICS-REPO] and [EXIT-CODES]. One honest number + one CI gate, derived deterministically from the cluster set the report already carries.
+
+- [ ] `RepoMetrics { analysed_loc, duplicated_loc, duplication_percent, clusters_total, duplicated_files, threshold }` in `codededup-core::report::metrics`. Computed by projecting every non-hidden `ReportOccurrence` onto a per-file `BTreeSet<line>`, unioning, and summing set sizes — overlapping sibling-extension ranges count once.
+- [ ] `analysed_loc` counted at file-read time (`\n`-terminated lines plus trailing partial line); accumulated onto the existing corpus struct so the metric adds no extra I/O pass.
+- [ ] `Report.metrics` wired into the JSON schema; `report_schema_version` bumped 2 → 3 with `#[serde(default)]` on deserialise so P5/P6 reports keep round-tripping through `--from-report`.
+- [ ] Text renderer header line: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. HTML renderer surfaces the same line, colour-coded by threshold state.
+- [ ] `--fail-over <percent>` CLI flag (finite float in `[0.0, 100.0]`); `--no-fail-over` override; mutually exclusive; invalid values → exit `2`.
+- [ ] `[threshold] max_duplication_percent` in `.codededup.toml`, parsed in `codededup-core::config`. CLI flag beats config; `--no-fail-over` beats both.
+- [ ] Exit `3` when `metrics.duplication_percent > threshold`. Report is still written to disk in full before the non-zero exit so CI can attach it.
+- [ ] `Report.metrics.threshold { percent, breached, source }` populated from the resolved threshold (`"cli"` / `"config"` / `"none"`) so renderers don't re-derive the verdict.
+- [ ] `schema_doc` updated to describe `metrics` + fail-over semantics (still via `include_str!` from `REPORTING-CONTEXT.md`, no drift).
+- [ ] Coverage ratchet (target: ≥ 94 % → step upward once the renderer + config paths land).
+- [ ] E2E: `metrics_zero_on_empty_corpus`, `metrics_match_hand_counted_fixture`, `metrics_exclude_hidden_occurrences`, `metrics_deduplicate_overlapping_sibling_ranges`, `fail_over_cli_exits_three_on_breach`, `fail_over_cli_passes_under_threshold`, `fail_over_config_file_loaded_when_flag_absent`, `fail_over_cli_overrides_config_file`, `no_fail_over_overrides_config_file_threshold`, `fail_over_invalid_value_exits_two`, `from_report_replays_metrics_without_reanalysing`, `text_renderer_shows_repo_duplication_header`, `html_renderer_colour_codes_threshold_state`.
 
 ### P7 Live-analysis foundation
 Implements [live.md](../specs/live.md). In-memory, watcher-driven session on top of which the LSP server (P8) and the MCP server (P9) both sit. There is **no daemon process** — the session lives inside whichever binary spawned it. The `live` module ships inside `codededup-core` behind a `live` cargo feature so the CLI stays zero-watcher / zero-`notify` (one crate, feature flag instead of a separate crate — see [principles.md §[PRINCIPLES-LONG-RUNNING-DAEMON]](../specs/principles.md) and [live.md §[LIVE-PACKAGING]](../specs/live.md)).

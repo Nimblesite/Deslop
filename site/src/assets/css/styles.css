@@ -881,56 +881,17 @@ pre {
 .docs-breadcrumb .material-symbols-outlined { font-size: 0.75rem; }
 .docs-breadcrumb__current { color: var(--primary); }
 
-.docs-article__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-16);
-}
 .docs-article__body > h1:first-child {
   font-size: clamp(2rem, 5vw, 3rem);
   font-weight: 900;
   letter-spacing: -0.03em;
-  margin-bottom: 0;
+  margin: 0 0 var(--space-10);
 }
-.docs-article__body > h1:first-child + p { font-size: 1.125rem; color: var(--on-surface-variant); line-height: 1.6; max-width: 42rem; margin: var(--space-4) 0 0; }
-.docs-article__body h2 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 var(--space-6);
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-.docs-article__body h3 { font-size: 1.25rem; font-weight: 700; margin: 0 0 var(--space-4); letter-spacing: -0.02em; }
-.docs-article__body p, .docs-article__body ul, .docs-article__body ol { color: var(--on-surface-variant); line-height: 1.7; margin: 0 0 var(--space-4); }
-.docs-article__body ul, .docs-article__body ol { padding-left: var(--space-6); }
-.docs-article__body li { margin-bottom: var(--space-2); }
-.docs-article__body li::marker { color: var(--primary); }
-.docs-article__body strong { color: var(--on-surface); font-weight: 700; }
-.docs-article__body a:not(.header-anchor) { color: var(--primary); }
-.docs-article__body a:not(.header-anchor):hover { text-decoration: underline; }
-.docs-article__body a.header-anchor { color: inherit; text-decoration: none; }
-
-.docs-article__body pre {
-  background: var(--surface-container-lowest);
-  padding: var(--space-6);
-  border-radius: var(--radius-sm);
-  position: relative;
-  font-size: 0.875rem;
-  margin: 0;
-}
-.docs-article__body pre code {
-  color: var(--on-surface);
-  background: none;
-  padding: 0;
-}
-.docs-article__body :not(pre) > code {
-  background: var(--surface-container-high);
-  color: var(--on-surface);
-  padding: 0.15em 0.4em;
-  border-radius: var(--radius-sm);
-  font-size: 0.875em;
+.docs-article__body > h1:first-child + p {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  max-width: 42rem;
+  margin-top: calc(var(--space-10) * -1 + var(--space-4));
 }
 
 .docs-article__footer {
@@ -1101,35 +1062,78 @@ pre {
 }
 .post-article__tag:hover { color: var(--on-surface); background: var(--surface-container-highest); }
 
+.prose,
+.docs-article__body,
 .post-article__body {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
 }
+.prose > *,
+.docs-article__body > *,
 .post-article__body > * { margin: 0; }
+.prose h2,
+.docs-article__body h2,
 .post-article__body h2 {
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   margin-top: var(--space-10);
+  color: var(--on-surface);
 }
-.post-article__body h3 { font-size: 1.25rem; font-weight: 700; margin-top: var(--space-8); letter-spacing: -0.02em; }
+.prose h3,
+.docs-article__body h3,
+.post-article__body h3 { font-size: 1.25rem; font-weight: 700; margin-top: var(--space-8); letter-spacing: -0.02em; color: var(--on-surface); }
+.prose p,
+.docs-article__body p,
 .post-article__body p { color: var(--on-surface-variant); line-height: 1.75; font-size: 1.0625rem; }
+.prose ul, .prose ol,
+.docs-article__body ul, .docs-article__body ol,
 .post-article__body ul, .post-article__body ol { color: var(--on-surface-variant); padding-left: var(--space-6); line-height: 1.75; }
+.prose li,
+.docs-article__body li,
 .post-article__body li { margin-bottom: var(--space-2); }
+.prose li::marker,
+.docs-article__body li::marker,
 .post-article__body li::marker { color: var(--primary); }
+.prose strong,
+.docs-article__body strong,
 .post-article__body strong { color: var(--on-surface); font-weight: 700; }
+.prose a:not(.header-anchor),
+.docs-article__body a:not(.header-anchor),
 .post-article__body a:not(.header-anchor) { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.prose a:not(.header-anchor):hover,
+.docs-article__body a:not(.header-anchor):hover,
 .post-article__body a:not(.header-anchor):hover { color: var(--on-surface); }
+.prose a.header-anchor,
+.docs-article__body a.header-anchor,
 .post-article__body a.header-anchor { color: inherit; text-decoration: none; }
-.post-article__body pre { background: var(--surface-container-lowest); padding: var(--space-6); border-radius: var(--radius-sm); font-size: 0.875rem; }
+.prose pre,
+.docs-article__body pre,
+.post-article__body pre { background: var(--surface-container-lowest); padding: var(--space-6); border-radius: var(--radius-sm); font-size: 0.875rem; overflow-x: auto; }
+.prose :not(pre) > code,
+.docs-article__body :not(pre) > code,
 .post-article__body :not(pre) > code { background: var(--surface-container-high); color: var(--on-surface); padding: 0.15em 0.4em; border-radius: var(--radius-sm); font-size: 0.875em; }
+.prose blockquote,
+.docs-article__body blockquote,
 .post-article__body blockquote {
   border-left: 2px solid var(--primary-container);
   padding-left: var(--space-4);
   color: var(--on-surface-variant);
   font-style: italic;
 }
+.prose table,
+.docs-article__body table,
+.post-article__body table { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.prose th, .prose td,
+.docs-article__body th, .docs-article__body td,
+.post-article__body th, .post-article__body td { padding: var(--space-3) var(--space-4); text-align: left; }
+.prose thead th,
+.docs-article__body thead th,
+.post-article__body thead th { color: var(--on-surface); font-weight: 700; background: var(--surface-container-low); }
+.prose tbody td,
+.docs-article__body tbody td,
+.post-article__body tbody td { color: var(--on-surface-variant); background: linear-gradient(to bottom, transparent calc(100% - 1px), var(--surface-container-high) calc(100% - 1px)); }
 
 .post-article__footer {
   margin-top: var(--space-16);
@@ -1168,3 +1172,53 @@ pre {
   .post-list .blog-post { padding: var(--space-6); }
   .docs-article__footer { flex-direction: column; align-items: flex-start; gap: var(--space-4); }
 }
+
+/* Prism syntax highlighting — uniform across docs, blog, landing */
+:root {
+  --code-bg: var(--surface-container-lowest);
+  --code-fg: var(--on-surface);
+  --code-comment: color-mix(in srgb, var(--on-surface-variant) 70%, transparent);
+  --code-keyword: var(--primary);
+  --code-string: #9bcbff;
+  --code-number: #ffd28a;
+  --code-function: #ffb4aa;
+  --code-punctuation: color-mix(in srgb, var(--on-surface-variant) 85%, transparent);
+  --code-variable: var(--on-surface);
+  --code-operator: var(--on-surface-variant);
+  --code-builtin: #c8a6ff;
+}
+:root[data-theme="light"] {
+  --code-comment: color-mix(in srgb, var(--on-surface-variant) 80%, transparent);
+  --code-string: #006b5d;
+  --code-number: #8a4f00;
+  --code-function: #b3261e;
+  --code-builtin: #5d2fa8;
+}
+pre[class*="language-"],
+code[class*="language-"] {
+  color: var(--code-fg);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  text-shadow: none;
+  tab-size: 2;
+  hyphens: none;
+}
+pre[class*="language-"] {
+  background: var(--code-bg);
+  padding: var(--space-6);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--code-comment); font-style: italic; }
+.token.punctuation { color: var(--code-punctuation); }
+.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted { color: var(--code-function); }
+.token.boolean, .token.number { color: var(--code-number); }
+.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: var(--code-string); }
+.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: var(--code-operator); }
+.token.atrule, .token.attr-value, .token.keyword { color: var(--code-keyword); font-weight: 500; }
+.token.function, .token.class-name { color: var(--code-function); }
+.token.regex, .token.important, .token.variable { color: var(--code-builtin); }
+.token.important, .token.bold { font-weight: 700; }
+.token.italic { font-style: italic; }

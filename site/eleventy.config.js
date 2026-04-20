@@ -1,4 +1,5 @@
 import techdoc from "eleventy-plugin-techdoc";
+import syntaxHighlight from "@11ty/eleventy-plugin-syntaxhighlight";
 
 const BLOG_INDEX_OVERRIDE = `---
 layout: layouts/base.njk
@@ -223,6 +224,7 @@ export default function (eleventyConfig) {
     },
   });
 
+  eleventyConfig.addPlugin(syntaxHighlight);
   eleventyConfig.addPlugin(overrideVirtualTemplates);
   eleventyConfig.addPassthroughCopy("src/assets");
 

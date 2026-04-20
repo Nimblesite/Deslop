@@ -56,6 +56,15 @@ Byte ranges come from `tree-sitter`. To display line numbers you must re-derive 
 | `0.00` | `0.70 – 0.90` | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |
 | `0.20 – 0.80` | `≥ 0.95` | **Fused cluster spanning multiple exact-clone bands.** Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |
 
+## Repo-wide duplication metric
+
+The report header carries one honest number: `metrics.duplication_percent = 100 × duplicated_loc / analysed_loc`.
+
+- `duplicated_loc` = lines covered by ≥ 2 non-hidden clone occurrences, deduplicated per file so overlapping sibling-extension ranges count once.
+- `analysed_loc` = physical lines across every file in `files_analysed`.
+- Hidden occurrences (generated code flagged via `.codededup.toml` `report_hide`) are excluded so they cannot inflate the metric.
+- CI gating: `--fail-over <percent>` (or `[threshold] max_duplication_percent` in `.codededup.toml`) exits `3` when `duplication_percent > threshold`. No threshold → no gate. Use this, not the `weight` column, for pass/fail decisions.
+
 ## Thresholds (typical defaults)
 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.

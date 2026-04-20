@@ -265,7 +265,7 @@ fn build_long_clone_body(statements: usize) -> String {
 /// Wraps `body` in a minimal C# class so the C# parser produces a
 /// real method-level subtree the clusterer can fingerprint.
 fn wrap_clone_in_class(class: &str, body: &str) -> String {
-    format!("public class {class} {{\n    public void Run() {{\n{body}    }}\n}}\n",)
+    format!("public class {class} {{\n    public void Run() {{\n{body}    }}\n}}\n")
 }
 
 // Implements [OUTPUT-FORMAT-DERIVED] suppression flags: `--nojson

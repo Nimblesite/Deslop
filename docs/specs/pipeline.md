@@ -32,6 +32,7 @@ Top level at `report_schema_version = 2`:
 - `files_analysed: usize` — count of files actually parsed.
 - `clusters_hidden: usize` — clusters that existed but were suppressed from `clusters` because every occurrence matched a [EXCLUSION-CONFIG] `report_hide` pattern. Surfaces the volume of ignored duplication without leaking the content.
 - `cache_stats: { hits: usize, misses: usize }` — incremental fingerprint-cache telemetry per [PIPELINE-INCREMENTAL]. Both zero when `--incremental` was not passed; otherwise `hits + misses == files_analysed` for files whose language has a registered parser.
+- `metrics: RepoMetrics` — repo-wide duplication totals per [METRICS-REPO]. Always populated; zero when no duplication exists.
 - `schema_doc: &'static str` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy. Shipped via `include_str!` so it cannot drift from the schema.
 - `action_hints: Vec<ActionHint>` — short playbook entries ("high structural + high jaccard → extract shared function", etc.) agents can consult before deciding how to act.
 - `clusters: Vec<ReportCluster>` — ranked worst-offenders-first per [PIPELINE-RANK-WORST-FIRST].
@@ -45,6 +46,47 @@ Top level at `report_schema_version = 2`:
 `--from-report <file.json>` skips analysis and re-renders the text + HTML views from a canonical JSON report. Keeps the rendering pipeline testable in isolation and makes re-formatting a cached report free.
 
 The default invocation writes all three formats to disk (`codededup-report.{json,txt,html}` in CWD, or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+
+### [METRICS-REPO] Repo-wide duplication metrics
+
+One honest number, computed deterministically from the same cluster set the report already carries. Lives at `Report.metrics` and drives the fail-over threshold in [EXIT-CODES].
+
+`RepoMetrics` fields:
+
+- `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
+- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric.
+- `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
+- `clusters_total: usize` — count of clusters contributing to `duplicated_loc` (i.e. non-hidden clusters with ≥ 2 occurrences). Matches `clusters.len()` at `report_schema_version = 3` but is carried explicitly so downstream consumers don't re-derive it.
+- `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
+
+Deliberate non-metrics:
+
+- No weight-sum percentage. `weight` is a ranking quantity, not a fraction, and mixing a log term into a percentage produces a number nobody can reason about.
+- No byte-level percentage. Developers reason in lines; a 3-line and a 30-line occurrence are not interchangeable even if their byte counts are similar.
+- No "clone density per KLOC". Derivable from `duplicated_loc / analysed_loc * 1000`; we don't ship two spellings of the same ratio.
+
+The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. HTML surfaces the same line in the report header and colours it by the fail-over threshold (green < threshold, red ≥ threshold, neutral when no threshold is set). JSON is canonical; both renderers read from `metrics`.
+
+### [EXIT-CODES] CLI exit codes and fail-over threshold
+
+CodeDedup's default exit code is `0` on a successful analysis regardless of how much duplication exists — the tool is diagnostic, not opinionated. Opt-in CI gating is expressed through a single flag and a single config key.
+
+Exit codes:
+
+- `0` — analysis succeeded; `duplication_percent ≤ threshold` (or no threshold was set).
+- `1` — unexpected runtime error (parse failure, I/O error, cache corruption that couldn't be recovered). Pre-existing behaviour; unchanged by this spec.
+- `2` — invalid CLI invocation (bad flag, incompatible combination, missing required argument). Pre-existing behaviour; unchanged.
+- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis. The report is still written to disk in full so CI can surface the offenders. Added at `report_schema_version = 3`.
+
+Threshold sources, highest precedence first:
+
+1. `--fail-over <percent>` CLI flag. Accepts a finite float in `[0.0, 100.0]`. `--fail-over 0` means "fail on any duplication". Invalid values → exit `2` with a named error.
+2. `[threshold] max_duplication_percent` in `.codededup.toml` (or the file passed via `--config`). Same validation rules.
+3. Absent — no threshold is enforced; exit `3` is unreachable and the text/HTML headers render the metric without a pass/fail verdict.
+
+A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip.
+
+The renderer always states the active threshold in the report header (`threshold: 10.00% (breached)` / `threshold: 10.00% (ok)` / `threshold: none`) so the report is self-explanatory when read out of context. The threshold value and breach flag are carried on `Report.metrics.threshold { percent: f64, breached: bool, source: "cli" | "config" | "none" }` so downstream tools do not re-derive the verdict.
 
 ### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
 Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
