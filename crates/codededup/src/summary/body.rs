@@ -214,7 +214,9 @@ fn write_breakdown_technical(theme: &Theme, counts: ClusterBreakdown) {
 }
 
 /// Plain-English worst-offender callout — one sentence naming the
-/// biggest cluster, its copy count, and the files it spans.
+/// biggest cluster, its copy count, and the files it spans. Silently
+/// bails on an empty cluster list, even though callers guard that
+/// case — keeps the renderer total.
 fn write_worst_offender_line(theme: &Theme, report: &Report) {
     let Some(worst) = report.clusters.first() else {
         return;

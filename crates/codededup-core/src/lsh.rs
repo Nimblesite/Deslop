@@ -110,13 +110,11 @@ fn collect_pairs(buckets: &HashMap<[u8; 32], Vec<usize>>) -> Vec<(usize, usize)>
 }
 
 /// Normalises a pair so the smaller index is first. Keeps the downstream
-/// candidate set symmetric without extra bookkeeping.
-const fn ordered_pair(a: usize, b: usize) -> (usize, usize) {
-    if a <= b {
-        (a, b)
-    } else {
-        (b, a)
-    }
+/// candidate set symmetric without extra bookkeeping. `usize::min`
+/// and `usize::max` are branch-free CPU intrinsics, so this reads
+/// cleanly in the coverage report.
+fn ordered_pair(a: usize, b: usize) -> (usize, usize) {
+    (a.min(b), a.max(b))
 }
 
 /// Hashes one band of a signature into a stable 32-byte key used as a

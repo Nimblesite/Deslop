@@ -183,29 +183,17 @@ impl ExclusionConfig {
         false
     }
 
-    /// True when `path` matches any `report_hide` pattern. Hidden files
-    /// are still analysed — the flag only affects rendering.
-    ///
-    /// When `language` is `None`, every per-language overlay is
-    /// consulted as well. The renderer calls this without a language
-    /// (the [`crate::state::FileRegistry`] does not track it), and
-    /// `report_hide` patterns are path-based, so the OR across
-    /// overlays gives the same answer the language-aware call would.
+    /// True when `path` matches any `report_hide` pattern under the
+    /// given `language` overlay (or the shared `default` set). Hidden
+    /// files are still analysed — the flag only affects rendering.
     #[must_use]
-    pub fn is_report_hidden(&self, path: &Path, language: Option<&str>) -> bool {
+    pub fn is_report_hidden(&self, path: &Path, language: &str) -> bool {
         if matches(&self.default_report_hide, path) {
             return true;
         }
-        match language {
-            Some(lang) => self
-                .per_language
-                .get(lang)
-                .is_some_and(|overlay| matches(&overlay.report_hide, path)),
-            None => self
-                .per_language
-                .values()
-                .any(|overlay| matches(&overlay.report_hide, path)),
-        }
+        self.per_language
+            .get(language)
+            .is_some_and(|overlay| matches(&overlay.report_hide, path))
     }
 }
 

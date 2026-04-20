@@ -6,7 +6,7 @@
 //! Per the project charter (see `CLAUDE.md`), this is the **only** module
 //! permitted to hold mutable state shared across pipeline stages.
 
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
 /// Opaque handle assigned by the [`FileRegistry`] to a discovered file.
 ///
@@ -15,23 +15,14 @@ use std::{collections::HashMap, path::PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FileId(u32);
 
-impl FileId {
-    /// Returns the raw integer representation, primarily for logging and
-    /// deterministic report output.
-    #[must_use]
-    pub const fn as_u32(self) -> u32 {
-        self.0
-    }
-}
-
-/// Bidirectional mapping between [`FileId`] and absolute file paths.
+/// One-way mapping from [`FileId`] to absolute file paths. The
+/// discovery walker produces a de-duplicated file list, so the
+/// registry only needs forward lookup — re-registering the same path
+/// is a caller bug and is not defended against.
 #[derive(Debug, Default)]
 pub struct FileRegistry {
     /// Dense `FileId.0 == index` storage.
     paths: Vec<PathBuf>,
-    /// Reverse lookup for deduplication when the same path is registered
-    /// twice.
-    lookup: HashMap<PathBuf, FileId>,
 }
 
 impl FileRegistry {
@@ -41,17 +32,11 @@ impl FileRegistry {
         Self::default()
     }
 
-    /// Registers `path` and returns its [`FileId`]. Re-registering an already
-    /// known path returns the existing id rather than allocating a new one.
+    /// Registers `path` and returns its freshly allocated [`FileId`].
     pub fn register(&mut self, path: PathBuf) -> FileId {
-        if let Some(existing) = self.lookup.get(&path) {
-            return *existing;
-        }
         let index = u32::try_from(self.paths.len()).unwrap_or(u32::MAX);
-        let id = FileId(index);
-        self.paths.push(path.clone());
-        let _previous = self.lookup.insert(path, id);
-        id
+        self.paths.push(path);
+        FileId(index)
     }
 
     /// Returns the path associated with `id`, if any.
@@ -59,17 +44,5 @@ impl FileRegistry {
     pub fn path(&self, id: FileId) -> Option<&std::path::Path> {
         let index = usize::try_from(id.0).ok()?;
         self.paths.get(index).map(PathBuf::as_path)
-    }
-
-    /// Number of files currently registered.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.paths.len()
-    }
-
-    /// Returns `true` when no files have been registered.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.paths.is_empty()
     }
 }

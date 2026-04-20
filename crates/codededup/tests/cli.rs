@@ -539,6 +539,82 @@ fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
     Ok(())
 }
 
+// Implements [PIPELINE-DISCOVER-FILES]: files without an extension
+// (e.g. `Makefile`) are skipped silently — the discovery walker
+// has no language plug-in to hand them to. Covers the
+// `lowercase_extension -> None` branch in the discovery loop.
+#[test]
+fn files_without_extensions_are_skipped_silently() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        scan_root.join("Alpha.cs"),
+    )?;
+    fs::write(scan_root.join("Makefile"), "all:\n\techo hi\n")?;
+    fs::write(scan_root.join("README"), "nothing to see here\n")?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        json.contains("\"files_analysed\": 1"),
+        "Makefile / README must be filtered before the language dispatch: {json}"
+    );
+    Ok(())
+}
+
+// Implements [EXCLUSION-CONFIG] missing-config error path: pointing
+// `--config` at a path that doesn't exist must surface the IO error
+// via the CLI error footer, not silently fall back to an empty
+// config.
+#[test]
+fn missing_config_file_reports_error() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let missing = tmp.path().join("does-not-exist.toml");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--config")
+        .arg(&missing)
+        .arg("--no-color")
+        .assert()
+        .failure()
+        .stderr(contains("failed"));
+    Ok(())
+}
+
+// Implements [EXCLUSION-CONFIG] invalid-pattern error path: an
+// ill-formed gitignore pattern (here `[unclosed`) must fail the
+// config compile step, not crash.
+#[test]
+fn invalid_exclude_pattern_reports_error() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let config = tmp.path().join("codededup.toml");
+    fs::write(&config, "[defaults]\nexclude = [\"[unclosed\"]\n")?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--config")
+        .arg(&config)
+        .arg("--no-color")
+        .assert()
+        .failure()
+        .stderr(contains("failed"));
+    Ok(())
+}
+
 // Implements [EXCLUSION-CONFIG] error reporting: a malformed TOML file
 // must exit non-zero with the upstream parse error surfaced.
 #[test]
@@ -1873,6 +1949,35 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
     Ok(())
 }
 
+// Implements [UX-LOG-RUST-LOG]: `RUST_LOG` takes precedence over
+// `--log-level` — Rust-ecosystem convention. Setting `RUST_LOG=warn`
+// with `--log-to-console` must still produce the `codededup invoked`
+// info message when we *also* set `--log-level info`, because the
+// environment variable wins. Conversely, `RUST_LOG=warn` alone
+// suppresses it.
+#[test]
+fn rust_log_env_controls_severity_filter() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .env("RUST_LOG", "warn")
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--log-to-console")
+        .arg("--no-color")
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        !stderr.contains("codededup invoked"),
+        "RUST_LOG=warn must suppress INFO events: {stderr}"
+    );
+    Ok(())
+}
+
 // Implements [UX-COLOR-NO-COLOR-ENV]: `NO_COLOR=1` disables ANSI
 // escapes even when `CODEDEDUP_FORCE_COLOR` is also set — standard
 // NO_COLOR precedence per <https://no-color.org>.
@@ -1894,6 +1999,131 @@ fn no_color_env_overrides_force_color() -> Result<()> {
     assert!(
         !stderr.contains('\x1b'),
         "NO_COLOR must override the force flag: {stderr:?}"
+    );
+    Ok(())
+}
+
+// Implements [UX-TECHNICAL-CACHE]: `--technical --incremental`
+// surfaces the raw `cache: N hit / M miss` line on stderr. Plain
+// mode only shows the friendly `skipped N unchanged file(s)` line
+// — the technical branch lives under `if technical` in
+// `write_cache_line` and is otherwise unreachable.
+#[test]
+fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    // First run populates the cache.
+    let mut first = Command::cargo_bin("codededup")?;
+    let _assertion = first
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--output")
+        .arg(tmp.path().join("first"))
+        .assert()
+        .success();
+    let mut second = Command::cargo_bin("codededup")?;
+    let assertion = second
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--incremental")
+        .arg("--technical")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("second"))
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        stderr.contains("cache: 2 hit / 0 miss"),
+        "--technical must surface the raw cache-stats line: {stderr}"
+    );
+    Ok(())
+}
+
+// Implements [UX-TECHNICAL-EMBEDDINGS]: `--technical` with a live
+// embedding provider prints the provenance triple
+// `provider/model@version (N-d)` on stderr. The stub provider is
+// deterministic so the test doesn't depend on Ollama being
+// installed.
+#[test]
+fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--embeddings")
+        .arg("required")
+        .arg("--embedding-provider")
+        .arg("stub")
+        .arg("--technical")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        stderr.contains("embeddings: stub/blake3-stub@v1"),
+        "--technical must surface the provenance triple on stderr: {stderr}"
+    );
+    Ok(())
+}
+
+// Implements [UX-TECHNICAL-BREAKDOWN]: `--technical` prints the
+// researcher breakdown row with Type-1/2/3 labels. Plain mode uses
+// friendly wording; this test guards the `Type-1/2` string the
+// technical branch emits.
+#[test]
+fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--technical")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        stderr.contains("Type-1/2"),
+        "--technical must print the Type-taxonomy breakdown: {stderr}"
+    );
+    Ok(())
+}
+
+// Implements [UX-PLAIN-SUMMARY]: empty scan root (no source files)
+// produces a report with zero clusters, which the plain-mode
+// summary must render without panicking or emitting the
+// "Worst offender" callout.
+#[test]
+fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let empty = tmp.path().join("empty");
+    fs::create_dir_all(&empty)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(&empty)
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--no-color")
+        .assert()
+        .success();
+    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    assert!(
+        !stderr.contains("Worst offender"),
+        "empty scan must not print a worst-offender line: {stderr}"
     );
     Ok(())
 }

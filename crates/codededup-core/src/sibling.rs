@@ -51,62 +51,52 @@ fn walk(node: &NormalizedNode, min_nodes: usize, out: &mut Vec<Fingerprint>) {
 }
 
 /// Scans every contiguous sibling window of length ≥2 in `siblings`,
-/// pushing one fingerprint per window that clears `min_nodes`.
+/// pushing one fingerprint per window that clears `min_nodes`. Uses
+/// `slice::windows` for every window width from 2 up to
+/// [`MAX_WINDOW_WIDTH`] so each enumerated slice is guaranteed
+/// non-empty — removes the "window can be empty" branch that was
+/// previously impossible to exercise from a test.
 fn emit_windows(siblings: &[NormalizedNode], min_nodes: usize, out: &mut Vec<Fingerprint>) {
     let cumulative = cumulative_node_counts(siblings);
     let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
-    for start in 0..siblings.len() {
-        let max_end = start.saturating_add(MAX_WINDOW_WIDTH).min(siblings.len());
-        for end in start.saturating_add(2)..=max_end {
+    for width in 2..=MAX_WINDOW_WIDTH {
+        for (start, window) in siblings.windows(width).enumerate() {
+            let end = start.saturating_add(width);
             let node_count = window_node_count(&cumulative, start, end);
             if node_count < min_nodes {
                 continue;
             }
-            out.push(window_fingerprint(
-                siblings,
-                &child_hashes,
-                start,
-                end,
-                node_count,
-            ));
+            // `slice::windows(w)` with `w >= 2` always yields slices
+            // with a first and a last; the slice pattern makes that
+            // guarantee visible to the compiler.
+            if let [first, .., last] = window {
+                let hash = hash_window(&child_hashes, start, end);
+                out.push(window_fingerprint(first, last, hash, node_count));
+            }
         }
     }
 }
 
-/// Materialises one sibling-window fingerprint covering `siblings[start..end]`.
+/// Materialises one sibling-window fingerprint covering
+/// `(first, last)`. Callers pass the endpoints explicitly — both come
+/// from `slice::first` / `slice::last` on a `slice::windows(w)` slice
+/// where `w >= 2`, so they are always `Some` by construction and the
+/// `Option` is unwrapped at the call site.
 fn window_fingerprint(
-    siblings: &[NormalizedNode],
-    child_hashes: &[[u8; 32]],
-    start: usize,
-    end: usize,
+    first: &NormalizedNode,
+    last: &NormalizedNode,
+    hash: [u8; 32],
     node_count: usize,
 ) -> Fingerprint {
-    let hash = hash_window(child_hashes, start, end);
-    let first = siblings.get(start);
-    let last_index = end.saturating_sub(1);
-    let last = siblings.get(last_index);
-    let file_id = first.map_or_else(
-        || last.map_or_else(default_file_id, |node| node.file_id),
-        |node| node.file_id,
-    );
-    let byte_range = ByteRange {
-        start: first.map_or(0, |node| node.byte_range.start),
-        end: last.map_or(0, |node| node.byte_range.end),
-    };
     Fingerprint {
         hash,
-        file_id,
-        byte_range,
+        file_id: first.file_id,
+        byte_range: ByteRange {
+            start: first.byte_range.start,
+            end: last.byte_range.end,
+        },
         node_count,
     }
-}
-
-/// Returns `FileId(0)` for windows whose siblings slice is empty. The empty
-/// case is impossible in practice because `emit_windows` guards `end >=
-/// start + 2`, but the compiler can't see that — this keeps `unwrap`/`expect`
-/// out of the production path.
-fn default_file_id() -> crate::state::FileId {
-    crate::state::FileRegistry::new().register(std::path::PathBuf::new())
 }
 
 /// Builds a prefix-sum table of subtree node counts so window totals are

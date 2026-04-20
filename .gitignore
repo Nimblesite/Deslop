@@ -67,3 +67,7 @@ codededup-report.json
 codededup-report.txt
 codededup-report.html
 codededup-*.log
+
+
+node_modules/
+site/_site/

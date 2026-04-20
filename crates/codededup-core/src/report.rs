@@ -339,7 +339,7 @@ fn occurrence<S: BuildHasher>(
     exclusion: &ExclusionConfig,
 ) -> ReportOccurrence {
     let absolute = registry.path(file_id).map(Path::to_path_buf);
-    let language = file_languages.get(&file_id).copied();
+    let language = file_languages.get(&file_id).copied().unwrap_or("");
     let hidden = absolute
         .as_deref()
         .is_some_and(|abs| exclusion.is_report_hidden(abs, language));

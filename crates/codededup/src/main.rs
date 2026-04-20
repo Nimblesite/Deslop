@@ -296,19 +296,18 @@ fn build_ollama_provider(
     args: &Cli,
     mode: EmbeddingMode,
 ) -> Result<Option<Box<dyn codededup_core::EmbeddingProvider>>> {
-    match OllamaProvider::connect(&args.embedding_endpoint, &args.embedding_model) {
-        Ok(provider) => Ok(Some(Box::new(provider))),
-        Err(source) => {
-            if matches!(mode, EmbeddingMode::Required) {
-                Err(anyhow::anyhow!(
-                    "embedding provider required but unreachable: {source}"
-                ))
-            } else {
-                tracing::warn!(%source, "embedding provider unreachable — continuing without Type-4 recall");
-                Ok(None)
-            }
-        }
+    let source =
+        match OllamaProvider::connect(&args.embedding_endpoint, &args.embedding_model) {
+            Ok(provider) => return Ok(Some(Box::new(provider))),
+            Err(source) => source,
+        };
+    if matches!(mode, EmbeddingMode::Required) {
+        return Err(anyhow::anyhow!(
+            "embedding provider required but unreachable: {source}"
+        ));
     }
+    tracing::warn!(%source, "embedding provider unreachable — continuing without Type-4 recall");
+    Ok(None)
 }
 
 /// Which of the three output formats are enabled for this run.
@@ -416,12 +415,9 @@ fn emit_all(
 
 /// Writes `payload` to `path`, creating parent directories as needed.
 fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create parent {}", parent.display()))?;
-        }
-    }
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    fs::create_dir_all(parent)
+        .with_context(|| format!("create parent {}", parent.display()))?;
     let mut file =
         fs::File::create(path).with_context(|| format!("create report file {}", path.display()))?;
     file.write_all(payload)

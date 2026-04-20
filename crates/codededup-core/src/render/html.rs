@@ -75,11 +75,9 @@ fn format_provenance(report: &Report) -> String {
 }
 
 /// Writes the action-hint playbook so a reader sees it before the
-/// clusters and can apply it as a decision table.
+/// clusters and can apply it as a decision table. `action_hints` is
+/// guaranteed non-empty by the report builder.
 fn write_action_hints(out: &mut String, report: &Report) {
-    if report.action_hints.is_empty() {
-        return;
-    }
     let _ = write!(out, "<section class=\"hints\"><h2>Action hints</h2><ul>");
     for hint in &report.action_hints {
         let _ = write!(

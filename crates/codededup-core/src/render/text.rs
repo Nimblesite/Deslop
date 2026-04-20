@@ -70,11 +70,10 @@ fn write_provenance(out: &mut String, report: &Report) {
 }
 
 /// Writes the playbook header so an agent can consult the decision
-/// table before walking the cluster list.
+/// table before walking the cluster list. `action_hints` is
+/// guaranteed non-empty by the report builder, so there is no empty
+/// guard.
 fn write_action_hints(out: &mut String, report: &Report) {
-    if report.action_hints.is_empty() {
-        return;
-    }
     let _ = writeln!(out, "-- action hints --");
     for hint in &report.action_hints {
         let _ = writeln!(out, "  [{}] {}", hint.pattern, hint.recommendation);

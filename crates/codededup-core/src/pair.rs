@@ -176,10 +176,10 @@ fn add_embedding_pairs(
     for pair in embedding_pairs {
         let key = order(pair.left, pair.right);
         let _previous_score = scores.entry(key).or_insert(0.0_f64);
-        let slot = cosines.entry(key).or_insert(pair.cosine);
-        if pair.cosine > *slot {
-            *slot = pair.cosine;
-        }
+        // HNSW's top-K search already produces at most one pair per
+        // ordered (left, right); `or_insert` keeps the first cosine
+        // rather than re-ranking duplicates we never see.
+        let _previous = cosines.entry(key).or_insert(pair.cosine);
     }
 }
 
@@ -232,12 +232,8 @@ fn jaccard_for(signatures: &[Signature], left: usize, right: usize) -> f64 {
 }
 
 /// Puts the smaller index first. Pair keys are order-insensitive.
-const fn order(a: usize, b: usize) -> (usize, usize) {
-    if a <= b {
-        (a, b)
-    } else {
-        (b, a)
-    }
+fn order(a: usize, b: usize) -> (usize, usize) {
+    (a.min(b), a.max(b))
 }
 
 /// Applies the compound "survives clustering?" decision to a single pair.
@@ -323,16 +319,11 @@ impl ClusterTotals {
         self.count = self.count.saturating_add(1);
     }
 
-    /// Returns the per-signal mean. Zero when no pairs were folded in.
+    /// Returns the per-signal mean. When no pairs were folded in the
+    /// numerators are already zero, so dividing by one preserves the
+    /// zero score without a separate branch.
     fn mean(self) -> PairScore {
-        if self.count == 0 {
-            return PairScore {
-                structural: 0.0,
-                token_jaccard: 0.0,
-                embedding_cos: 0.0,
-            };
-        }
-        let divisor = f64::from(self.count);
+        let divisor = f64::from(self.count.max(1));
         PairScore {
             structural: self.structural / divisor,
             token_jaccard: self.token_jaccard / divisor,

@@ -54,13 +54,9 @@ pub fn init(log_dir: &Path, log_to_console: bool, level: Level) -> Result<LogSin
             .map_err(|err| anyhow::anyhow!("failed to initialise tracing: {err}"))?;
         return Ok(LogSink::Console);
     }
+    fs::create_dir_all(log_dir)
+        .with_context(|| format!("create log directory {}", log_dir.display()))?;
     let path = log_file_path(log_dir);
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create log directory {}", parent.display()))?;
-        }
-    }
     let file =
         fs::File::create(&path).with_context(|| format!("create log file {}", path.display()))?;
     // Leak the Mutex so `MakeWriter` can hand out a `&'static`
@@ -88,26 +84,24 @@ struct FileSink {
 
 impl io::Write for FileSink {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        with_guard(self.inner, |file| file.write(buf))
+        // `fs::File::write` on append-open mode is atomic and also
+        // flushes to the OS, so `tracing` never needs to call our
+        // `flush` explicitly. `flush` is still required by the
+        // `Write` trait; it just delegates to the same locked handle.
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| io::Error::other("log mutex poisoned"))?;
+        guard.write(buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        with_guard(self.inner, io::Write::flush)
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| io::Error::other("log mutex poisoned"))?;
+        guard.flush()
     }
-}
-
-/// Runs `action` under the shared log-file mutex, turning a poisoned
-/// mutex into an `io::Error::other`. Shared by [`FileSink::write`]
-/// and [`FileSink::flush`] so the `tracing` writer code path is
-/// exercised by both.
-fn with_guard<T>(
-    lock: &Mutex<fs::File>,
-    action: impl FnOnce(&mut fs::File) -> io::Result<T>,
-) -> io::Result<T> {
-    let Ok(mut guard) = lock.lock() else {
-        return Err(io::Error::other("log mutex poisoned"));
-    };
-    action(&mut guard)
 }
 
 /// Parses `--log-level <level>` and composes it with `RUST_LOG`.

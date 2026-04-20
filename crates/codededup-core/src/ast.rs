@@ -28,20 +28,18 @@ pub struct ByteRange {
 }
 
 impl ByteRange {
-    /// Number of bytes spanned by this range. Returns 0 if `end <= start`.
+    /// Number of bytes spanned by this range. Returns 0 when
+    /// `end <= start` (saturating semantics).
     #[must_use]
     pub const fn len(self) -> usize {
-        if self.end > self.start {
-            self.end.saturating_sub(self.start)
-        } else {
-            0
-        }
+        self.end.saturating_sub(self.start)
     }
 
-    /// Returns `true` when this range spans no bytes.
+    /// Returns `true` when this range spans no bytes. Paired with
+    /// [`Self::len`] so clippy's `len_without_is_empty` passes.
     #[must_use]
     pub const fn is_empty(self) -> bool {
-        self.len() == 0
+        self.end <= self.start
     }
 }
 

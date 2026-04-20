@@ -440,10 +440,13 @@ fn compute_embeddings(
 }
 
 /// Returns the source slice for `fingerprint` as a `String`. Invalid
-/// byte ranges (impossible in the current pipeline) collapse to an
-/// empty string, which the provider then embeds as a constant vector
-/// — keeps the helper total without a branch in the caller.
+/// or empty byte ranges collapse to an empty string, which the
+/// provider then embeds as a constant vector — keeps the helper
+/// total without a branch in the caller.
 fn snippet_for(fingerprint: &Fingerprint, sources: &HashMap<FileId, Vec<u8>>) -> String {
+    if fingerprint.byte_range.is_empty() {
+        return String::new();
+    }
     let Some(bytes) = sources.get(&fingerprint.file_id) else {
         return String::new();
     };

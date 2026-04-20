@@ -119,39 +119,21 @@ fn normalise_node(
 /// explicit leak so ownership is independent of any grammar instance.
 #[must_use]
 pub fn intern_kind(raw: &str) -> &'static str {
-    KIND_INTERNER.with(|cache| cache.borrow_mut().intern(raw))
+    KIND_INTERNER.with(|cache| intern(&mut cache.borrow_mut(), raw))
 }
 
 thread_local! {
-    static KIND_INTERNER: std::cell::RefCell<KindInterner> =
-        const { std::cell::RefCell::new(KindInterner::new()) };
+    static KIND_INTERNER: std::cell::RefCell<Vec<&'static str>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Small deterministic string interner keyed on tree-sitter node kind.
-struct KindInterner {
-    /// Previously interned kinds. Linear scan is fine — tree-sitter
-    /// grammars have on the order of 200 distinct node kinds per
-    /// language.
-    entries: Vec<&'static str>,
-}
-
-impl KindInterner {
-    /// Creates an empty interner. `const` so it can back a
-    /// `thread_local!` without a runtime initialiser.
-    const fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
+/// Returns the canonical `&'static str` for `raw`, allocating once
+/// per previously unseen kind and caching it for reuse.
+fn intern(entries: &mut Vec<&'static str>, raw: &str) -> &'static str {
+    if let Some(existing) = entries.iter().find(|stored| **stored == raw) {
+        return existing;
     }
-
-    /// Returns the canonical `&'static str` for `raw`, allocating once
-    /// per previously unseen kind and caching it for reuse.
-    fn intern(&mut self, raw: &str) -> &'static str {
-        if let Some(existing) = self.entries.iter().find(|stored| **stored == raw) {
-            return existing;
-        }
-        let leaked: &'static str = Box::leak(raw.to_owned().into_boxed_str());
-        self.entries.push(leaked);
-        leaked
-    }
+    let leaked: &'static str = Box::leak(raw.to_owned().into_boxed_str());
+    entries.push(leaked);
+    leaked
 }
