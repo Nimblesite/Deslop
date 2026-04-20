@@ -1,5 +1,5 @@
 {
-  "_agent_pmo": "424c8f8",
+  "_agent_pmo": "9a71cbf",
   "name": "CodeDedup (Rust)",
   "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "features": {
