@@ -113,16 +113,6 @@ impl JsonRpcError {
             data: None,
         }
     }
-
-    /// Constructs a new error with a structured `data` payload.
-    #[must_use]
-    pub fn with_data(code: ErrorCode, message: impl Into<String>, data: Value) -> Self {
-        Self {
-            code: code as i32,
-            message: message.into(),
-            data: Some(data),
-        }
-    }
 }
 
 /// Canonical JSON-RPC / MCP error codes.
@@ -153,27 +143,4 @@ pub enum ErrorCode {
     PathOutsideRoot = -32_003,
     /// Tool call failed at the `LiveApi` / session layer.
     BackendError = -32_004,
-}
-
-/// Server → client notification frame (no `id`).
-#[derive(Debug, Clone, Serialize)]
-pub struct JsonRpcNotification {
-    /// Must equal [`JSONRPC_VERSION`].
-    pub jsonrpc: &'static str,
-    /// Notification method, e.g. `"notifications/resources/updated"`.
-    pub method: String,
-    /// Method-specific parameters.
-    pub params: Value,
-}
-
-impl JsonRpcNotification {
-    /// Builds a notification with the given method + params.
-    #[must_use]
-    pub const fn new(method: String, params: Value) -> Self {
-        Self {
-            jsonrpc: JSONRPC_VERSION,
-            method,
-            params,
-        }
-    }
 }

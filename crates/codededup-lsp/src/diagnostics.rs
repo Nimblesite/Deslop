@@ -6,10 +6,21 @@
 //! of the cluster's weight against every other cluster in the file
 //! report — clients call `textDocument/diagnostic` per file so the
 //! local report is the right scope for "top-1% offender on this file".
+//!
+//! Byte offsets are translated to `(line, character)` LSP positions by
+//! reading the source text and counting UTF-16 code units per LSP spec.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use codededup_core::live::FileReport;
-use codededup_core::report::ReportCluster;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range};
+use codededup_core::report::{ReportCluster, ReportOccurrence};
+use tower_lsp::lsp_types::{
+    CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location,
+    Position, Range, Url,
+};
+
+use crate::position::position_for_byte;
 
 /// Builds the diagnostics for one file report.
 #[must_use]
@@ -19,11 +30,34 @@ pub fn build_for_file(report: &FileReport) -> Vec<Diagnostic> {
         .iter()
         .map(|cluster| cluster.weight)
         .collect();
+    let primary_source = std::fs::read_to_string(&report.path).unwrap_or_default();
+    let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
     report
         .clusters
         .iter()
-        .flat_map(|cluster| build_for_cluster(cluster, &weights, &report.path))
+        .flat_map(|cluster| {
+            build_for_cluster(
+                cluster,
+                &weights,
+                &report.path,
+                &primary_source,
+                &mut source_cache,
+            )
+        })
         .collect()
+}
+
+/// Loads a file's text, caching per [`build_for_file`] invocation.
+fn load_cached_source(path: &Path, cache: &mut HashMap<PathBuf, String>) -> String {
+    if let Some(existing) = cache.get(path) {
+        return existing.clone();
+    }
+    let content = std::fs::read_to_string(path).unwrap_or_else(|error| {
+        tracing::warn!(path = %path.display(), %error, "failed to read occurrence source");
+        String::new()
+    });
+    let _previous = cache.insert(path.to_path_buf(), content.clone());
+    content
 }
 
 /// Builds the per-cluster diagnostic — one entry per occurrence in
@@ -31,27 +65,47 @@ pub fn build_for_file(report: &FileReport) -> Vec<Diagnostic> {
 fn build_for_cluster(
     cluster: &ReportCluster,
     weights: &[f64],
-    path: &std::path::Path,
+    path: &Path,
+    source_bytes: &str,
+    cache: &mut HashMap<PathBuf, String>,
 ) -> Vec<Diagnostic> {
     let severity = severity_for(cluster.weight, weights);
     cluster
         .occurrences
         .iter()
-        .filter(|occ| occ.path == path || occ.path.ends_with(path) || path.ends_with(&occ.path))
+        .filter(|occ| occurrence_matches_path(occ, path))
         .map(|occurrence| Diagnostic {
-            range: byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte),
+            range: byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, source_bytes),
             severity,
             code: Some(tower_lsp::lsp_types::NumberOrString::String(
                 cluster.id.clone(),
             )),
-            code_description: None,
+            code_description: code_description_for(&cluster.id),
             source: Some("codededup".to_owned()),
             message: cluster.interpretation.clone(),
-            related_information: None,
+            related_information: related_info_for(cluster, path, cache),
             tags: None,
             data: None,
         })
         .collect()
+}
+
+/// Returns `true` when the occurrence matches the file the report
+/// applies to. Handles the common relative/absolute skew.
+fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
+    occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
+}
+
+/// Builds the `codededup://cluster/<id>` href.
+fn code_description_for(cluster_id: &str) -> Option<CodeDescription> {
+    let href = format!("codededup://cluster/{cluster_id}");
+    match Url::parse(&href) {
+        Ok(url) => Some(CodeDescription { href: url }),
+        Err(error) => {
+            tracing::warn!(%error, cluster_id, "invalid cluster href");
+            None
+        }
+    }
 }
 
 /// Maps the cluster weight onto an LSP severity using the bucketing
@@ -87,20 +141,71 @@ fn percentile_for(weight: f64, weights: &[f64]) -> f64 {
     }
 }
 
-/// Translates a byte range into a `Range` of zero-indexed positions.
-/// We intentionally collapse byte offsets onto the same line because
-/// the LSP server does not own the open buffer in this skeleton —
-/// downstream clients re-derive line numbers from byte offsets via
-/// the same mechanism the renderer uses.
-fn byte_range_to_lsp(start_byte: usize, end_byte: usize) -> Range {
+/// Translates a byte range in `source_bytes` into a zero-indexed
+/// `Range` per the LSP spec.
+fn byte_range_to_lsp(start_byte: usize, end_byte: usize, source_bytes: &str) -> Range {
     Range {
-        start: Position {
-            line: 0,
-            character: u32::try_from(start_byte).unwrap_or(u32::MAX),
-        },
-        end: Position {
-            line: 0,
-            character: u32::try_from(end_byte).unwrap_or(u32::MAX),
-        },
+        start: position_for_byte(source_bytes, start_byte),
+        end: position_for_byte(source_bytes, end_byte),
     }
+}
+
+/// Builds `relatedInformation` links for the cluster's other occurrences.
+fn related_info_for(
+    cluster: &ReportCluster,
+    path: &Path,
+    cache: &mut HashMap<PathBuf, String>,
+) -> Option<Vec<DiagnosticRelatedInformation>> {
+    let total = cluster.occurrences.len();
+    let mut items: Vec<DiagnosticRelatedInformation> = Vec::new();
+    for (index, occurrence) in cluster.occurrences.iter().enumerate() {
+        if occurrence_matches_path(occurrence, path) {
+            continue;
+        }
+        if let Some(info) = related_item(index, total, occurrence, cache) {
+            items.push(info);
+        }
+    }
+    if items.is_empty() {
+        None
+    } else {
+        Some(items)
+    }
+}
+
+/// Constructs one `DiagnosticRelatedInformation` entry.
+fn related_item(
+    index: usize,
+    total: usize,
+    occurrence: &ReportOccurrence,
+    cache: &mut HashMap<PathBuf, String>,
+) -> Option<DiagnosticRelatedInformation> {
+    let uri = Url::from_file_path(&occurrence.path).ok()?;
+    let source = load_cached_source(&occurrence.path, cache);
+    let range = byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, &source);
+    let label = occurrence_label(index, total);
+    Some(DiagnosticRelatedInformation {
+        location: Location { uri, range },
+        message: label,
+    })
+}
+
+/// Formats the "occurrence N of M" label. Uses 1-based indexing for
+/// user-facing strings.
+fn occurrence_label(index: usize, total: usize) -> String {
+    let one_based = index.saturating_add(1);
+    format!("occurrence {one_based} of {total}")
+}
+
+/// Public helper for callers that need direct access to the range
+/// converter (e.g. code-lens layer).
+#[must_use]
+pub fn byte_range(start_byte: usize, end_byte: usize, source: &str) -> Range {
+    byte_range_to_lsp(start_byte, end_byte, source)
+}
+
+/// Exposed helper for tests.
+#[must_use]
+pub fn position_at(source: &str, byte_offset: usize) -> Position {
+    position_for_byte(source, byte_offset)
 }

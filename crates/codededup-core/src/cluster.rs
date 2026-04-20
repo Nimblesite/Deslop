@@ -136,7 +136,8 @@ const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 const F64_TWO_POW_32: f64 = 4_294_967_296.0;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
-fn encode_short_id(hash: [u8; 32]) -> String {
+#[must_use]
+pub fn encode_short_id(hash: [u8; 32]) -> String {
     let mut out = String::with_capacity(16);
     for byte in hash.iter().take(8) {
         let high = (*byte >> 4) & 0x0F;

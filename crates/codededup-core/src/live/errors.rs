@@ -38,6 +38,15 @@ pub enum LiveError {
         /// Languages the session has parsers for.
         registered: Vec<String>,
     },
+    /// `embedding/setModel` was called with a `provider_id` that does
+    /// not match a registered embedding provider.
+    #[error("provider {requested} is not supported (registered: {registered:?})")]
+    UnsupportedProvider {
+        /// Provider id the caller asked for.
+        requested: String,
+        /// Providers the session supports.
+        registered: Vec<String>,
+    },
     /// A request referenced a path outside the live workspace root.
     /// Live sessions never touch files outside the root they were
     /// constructed against ([MCP-SAFETY]).
@@ -103,6 +112,7 @@ impl LiveError {
         match self {
             Self::UnparseableInput { .. } => "unparseable_input",
             Self::UnsupportedLanguage { .. } => "unsupported_language",
+            Self::UnsupportedProvider { .. } => "unsupported_provider",
             Self::PathOutsideWorkspace { .. } => "path_outside_workspace",
             Self::UnknownCluster { .. } => "unknown_cluster",
             Self::ProviderUnreachable { .. } => "provider_unreachable",

@@ -206,6 +206,149 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let session_lock = make_session_lock(tmp.path())?;
+    let mut service = LiveService::new(Arc::clone(&session_lock));
+    service.set_ollama_endpoint("http://127.0.0.1:1".to_owned());
+
+    let first_id = exercise_snapshot_lookups(&service, tmp.path()).await?;
+    let initial_generation = exercise_session_config(&service, &session_lock, tmp.path()).await?;
+    exercise_delta_cursor(&service, initial_generation).await;
+    exercise_error_paths(&service, &first_id).await;
+    exercise_embedding_swap(&service).await?;
+    exercise_path_resolution(&service).await?;
+    Ok(())
+}
+
+/// Builds a fresh session lock around the temp fixture root.
+fn make_session_lock(root: &Path) -> Result<Arc<tokio::sync::Mutex<AnalysisSession>>> {
+    let provider = Arc::new(StubProvider::new());
+    let session =
+        AnalysisSession::new(root.to_path_buf(), 15, false, None, provider).context("session")?;
+    Ok(Arc::new(tokio::sync::Mutex::new(session)))
+}
+
+/// Verifies `report_get` → `cluster_by_id` → `report_for_file/range`
+/// round trips and returns the first cluster id for downstream use.
+async fn exercise_snapshot_lookups(service: &LiveService, root: &Path) -> Result<String> {
+    let report = service.report_get().await;
+    assert!(!report.clusters.is_empty(), "fixture must produce clusters");
+    let first = report
+        .clusters
+        .first()
+        .ok_or_else(|| anyhow!("at least one cluster"))?;
+    let by_id = service.cluster_by_id(&first.id).await?;
+    assert_eq!(by_id.id, first.id);
+    let occurrence = first
+        .occurrences
+        .first()
+        .ok_or_else(|| anyhow!("expected occurrence"))?;
+    let resolved = root.join(&occurrence.path);
+    let file_report = service.report_for_file(&resolved).await;
+    assert_eq!(file_report.path, resolved);
+    let range_clusters = service
+        .report_for_range(&resolved, occurrence.start_byte, occurrence.end_byte)
+        .await;
+    assert!(!range_clusters.is_empty());
+    Ok(first.id.clone())
+}
+
+/// Verifies `session_config` + a basic `find_similar` + generation cursor.
+async fn exercise_session_config(
+    service: &LiveService,
+    session_lock: &Arc<tokio::sync::Mutex<AnalysisSession>>,
+    root: &Path,
+) -> Result<u64> {
+    let config = service.session_config().await;
+    assert_eq!(config.workspace_root, root);
+    assert!(!config.languages.is_empty());
+    let request = FindSimilarRequest {
+        input: FindSimilarInput::Snippet {
+            snippet: "namespace N { class C { void M(int x) { return; } } }".to_owned(),
+            language: "csharp".to_owned(),
+        },
+        max_results: Some(5),
+    };
+    let _result = service.find_similar(&request).await?;
+    let guard = session_lock.lock().await;
+    assert_eq!(guard.root(), root, "root accessor should match");
+    let generation = guard.generation();
+    assert!(generation >= 1);
+    Ok(generation)
+}
+
+/// Verifies the delta cursor returns `Some` for stale generations and
+/// `None` when the caller is up-to-date.
+async fn exercise_delta_cursor(service: &LiveService, current_generation: u64) {
+    let cursor = service.report_delta(0).await;
+    assert!(cursor.is_some());
+    let none_now = service.report_delta(current_generation).await;
+    assert!(none_now.is_none());
+}
+
+/// Asserts the four error paths through the query surface.
+async fn exercise_error_paths(service: &LiveService, _first_id: &str) {
+    let outside = FindSimilarRequest {
+        input: FindSimilarInput::OpenRange {
+            path: PathBuf::from("/definitely/not/here.cs"),
+            start_byte: 0,
+            end_byte: 1,
+        },
+        max_results: None,
+    };
+    let outside_outcome = service.find_similar(&outside).await;
+    assert!(matches!(
+        outside_outcome,
+        Err(LiveError::PathOutsideWorkspace { .. })
+    ));
+    let miss = service.cluster_by_id("deadbeefcafebabe").await;
+    assert!(matches!(miss, Err(LiveError::UnknownCluster { .. })));
+    let unsupported = FindSimilarRequest {
+        input: FindSimilarInput::Snippet {
+            snippet: "function f() {}".to_owned(),
+            language: "javascript".to_owned(),
+        },
+        max_results: None,
+    };
+    let unsupported_outcome = service.find_similar(&unsupported).await;
+    assert!(matches!(
+        unsupported_outcome,
+        Err(LiveError::UnsupportedLanguage { .. })
+    ));
+}
+
+/// Verifies the embedding model swap surface.
+async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
+    let models = service.embedding_list_models().await;
+    assert!(models.iter().all(|m| m.provider_id == "stub"));
+    let provenance = service
+        .embedding_set_model("stub", "blake3-stub", None)
+        .await?;
+    assert!(provenance.is_some_and(|p| p.provider_id == "stub"));
+    let unknown = service.embedding_set_model("nope", "no", None).await;
+    assert!(matches!(
+        unknown,
+        Err(LiveError::UnsupportedProvider { .. })
+    ));
+    Ok(())
+}
+
+/// Verifies relative paths resolve against the workspace root.
+async fn exercise_path_resolution(service: &LiveService) -> Result<()> {
+    let relative = FindSimilarRequest {
+        input: FindSimilarInput::OpenRange {
+            path: PathBuf::from("Alpha.cs"),
+            start_byte: 0,
+            end_byte: 10,
+        },
+        max_results: Some(3),
+    };
+    let _relative_result = service.find_similar(&relative).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn embedding_list_models_falls_back_to_stub_when_ollama_unreachable() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());

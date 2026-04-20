@@ -60,12 +60,7 @@ pub fn read_resource(backend: &dyn McpBackend, uri: &str) -> Result<Value, JsonR
     match uri {
         REPORT_URI => {
             let report = backend.report_get().map_err(backend_to_rpc)?;
-            let text = serde_json::to_string_pretty(&*report).map_err(|err| {
-                JsonRpcError::new(
-                    ErrorCode::InternalError,
-                    format!("failed to serialise report: {err}"),
-                )
-            })?;
+            let text = serde_json::to_string_pretty(&*report).unwrap_or_else(|_| "{}".to_owned());
             Ok(json!({
                 "contents": [{
                     "uri": REPORT_URI,

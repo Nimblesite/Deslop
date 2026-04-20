@@ -27,9 +27,7 @@ pub mod server;
 pub mod tools;
 
 pub use backend::{McpBackend, PipelineSessionBackend, SessionBackendConfig};
-pub use protocol::{
-    ErrorCode, JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, RequestId,
-};
+pub use protocol::{ErrorCode, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId};
 pub use safety::{resolve_within_root, PathResolutionError};
 pub use server::{McpServer, ServerError};
 

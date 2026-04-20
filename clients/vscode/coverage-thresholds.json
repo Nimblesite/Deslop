@@ -1,0 +1,7 @@
+{
+  "default_threshold": 95,
+  "note": "VSIX line coverage, measured by c8 against src/**/*.ts during `npm run coverage`. Ratchet only — upward.",
+  "exclude": [
+    "src/logging.ts"
+  ]
+}

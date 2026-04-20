@@ -214,7 +214,7 @@ fn build_provider(
     match provider_id {
         crate::embedding::STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
         crate::embedding::DEFAULT_PROVIDER_ID => connect_ollama(model_id, endpoint),
-        other => Err(LiveError::UnsupportedLanguage {
+        other => Err(LiveError::UnsupportedProvider {
             requested: other.to_owned(),
             registered: vec![
                 crate::embedding::STUB_PROVIDER_ID.to_owned(),

@@ -22,10 +22,10 @@ use tracing::{debug, error, info};
 use crate::{
     backend::McpBackend,
     protocol::{
-        ErrorCode, JsonRpcError, JsonRpcErrorResponse, JsonRpcNotification, JsonRpcRequest,
-        JsonRpcResponse, RequestId, JSONRPC_VERSION,
+        ErrorCode, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, RequestId,
+        JSONRPC_VERSION,
     },
-    resources::{read_resource, resources_list_payload, REPORT_URI},
+    resources::{read_resource, resources_list_payload},
     tools::{dispatch_tool_call, tools_list_payload, wrap_tool_result},
     MCP_PROTOCOL_VERSION, MCP_SERVER_NAME,
 };
@@ -84,22 +84,6 @@ impl<B: McpBackend> McpServer<B> {
         }
     }
 
-    /// Sends a server → client notification. Exposed so a future
-    /// watcher layer can push `notifications/resources/updated`
-    /// without going through the request path.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ServerError::Io`] when writing the frame fails.
-    pub fn send_notification<W: Write>(
-        &self,
-        writer: &mut W,
-        notification: &JsonRpcNotification,
-    ) -> Result<(), ServerError> {
-        let bytes = serde_json::to_vec(notification).map_err(|err| io_from_serde(&err))?;
-        write_frame(&self.stdout_mutex, writer, &bytes)
-    }
-
     /// Handles one JSON-RPC frame — request, notification, or a
     /// malformed line (which produces a parse-error response).
     fn handle_frame<W: Write>(&self, line: &str, writer: &mut W) -> Result<(), ServerError> {
@@ -126,7 +110,7 @@ impl<B: McpBackend> McpServer<B> {
         }
         request.id.clone().map_or_else(
             || {
-                Self::handle_notification(&request);
+                self.handle_notification(&request);
                 Ok(())
             },
             |id| self.handle_request(id, &request, writer),
@@ -169,8 +153,32 @@ impl<B: McpBackend> McpServer<B> {
     }
 
     /// Handles a notification (no `id`).
-    fn handle_notification(request: &JsonRpcRequest) {
+    ///
+    /// `notifications/codededup/filesChanged` — carries `{ paths: [...] }`
+    /// and re-runs analysis. Exposed so a host (editor, file watcher)
+    /// can push incremental edits without polling tool calls.
+    fn handle_notification(&self, request: &JsonRpcRequest) {
         debug!(method = %request.method, "mcp_notification_received");
+        if request.method == "notifications/codededup/filesChanged" {
+            if let Some(params) = request.params.as_ref() {
+                let paths: Vec<std::path::PathBuf> = params
+                    .get("paths")
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(std::path::PathBuf::from)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if !paths.is_empty() {
+                    if let Err(err) = self.backend.mark_changed(&paths) {
+                        error!(reason = %err, "mcp_mark_changed_failed");
+                    }
+                }
+            }
+        }
     }
 
     /// Builds the `initialize` response payload.
@@ -214,29 +222,6 @@ impl<B: McpBackend> McpServer<B> {
             JsonRpcError::new(ErrorCode::InvalidParams, "resources/read requires a 'uri'")
         })?;
         read_resource(self.backend.as_ref(), uri)
-    }
-
-    /// Builds a `notifications/resources/updated` notification frame
-    /// for the report resource. Exposed for the future watcher.
-    #[must_use]
-    pub fn report_updated_notification(&self) -> JsonRpcNotification {
-        JsonRpcNotification::new(
-            "notifications/resources/updated".to_owned(),
-            json!({ "uri": REPORT_URI }),
-        )
-    }
-
-    /// Builds a custom `notifications/codededup/reportChanged` frame
-    /// carrying `{ generation, summary }` per [MCP-NOTIFICATIONS].
-    #[must_use]
-    pub fn report_changed_notification(&self, summary: &str) -> JsonRpcNotification {
-        JsonRpcNotification::new(
-            "notifications/codededup/reportChanged".to_owned(),
-            json!({
-                "generation": self.backend.generation(),
-                "summary": summary,
-            }),
-        )
     }
 }
 

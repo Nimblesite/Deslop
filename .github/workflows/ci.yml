@@ -96,3 +96,52 @@ jobs:
             target/release/codededup
             target/release/codededup.exe
           retention-days: 7
+
+  vsix:
+    name: VSIX tests + coverage
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install xvfb (headless VS Code)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # Builds the real codededup-lsp + codededup-mcp from the workspace
+      # and installs Node deps for the extension + webview-ui.
+      - name: vsix-build
+        run: make vsix-build
+
+      # Unit tests + coverage threshold. E2E spawns real VS Code Electron.
+      - name: vsix-coverage (unit + threshold)
+        run: xvfb-run -a make vsix-coverage
+
+      - name: vsix-test (full E2E against real LSP)
+        run: xvfb-run -a make vsix-test
+
+      - name: Upload VSIX coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vsix-coverage
+          path: |
+            clients/vscode/coverage/
+          retention-days: 7

@@ -6,6 +6,7 @@
 //! runs against fixture workspaces under `tests/fixtures/`.
 
 use std::{
+    fs,
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
@@ -27,6 +28,21 @@ fn fixture(name: &str) -> PathBuf {
         .join("tests")
         .join("fixtures")
         .join(name)
+}
+
+/// Copies the named fixture into a freshly created temp directory so
+/// the LSP server's `.codededup-cache/` writes never pollute the
+/// committed fixtures.
+fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
+    let src = fixture(name);
+    let dst = tempfile::tempdir()?;
+    for entry in fs::read_dir(&src)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() {
+            let _bytes = fs::copy(entry.path(), dst.path().join(entry.file_name()))?;
+        }
+    }
+    Ok(dst)
 }
 
 /// Spawns the LSP binary against `workspace_root`.
@@ -155,7 +171,8 @@ fn result_value(response: &serde_json::Value) -> Result<&serde_json::Value> {
 
 #[test]
 fn lsp_binary_responds_to_initialize() -> Result<()> {
-    let mut child = spawn_lsp(&fixture("csharp-small"), 15)?;
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
     let (mut stdin, mut reader) = take_io(&mut child)?;
     let (id, payload) = initialize_request()?;
     let response = send_and_recv(&mut stdin, &mut reader, id, &payload)?;
@@ -171,7 +188,8 @@ fn lsp_binary_responds_to_initialize() -> Result<()> {
 
 #[test]
 fn lsp_custom_method_session_config_returns_workspace_root() -> Result<()> {
-    let mut child = spawn_lsp(&fixture("csharp-small"), 15)?;
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
     let (mut stdin, mut reader) = take_io(&mut child)?;
     let (init_id, init_payload) = initialize_request()?;
     let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
@@ -183,8 +201,8 @@ fn lsp_custom_method_session_config_returns_workspace_root() -> Result<()> {
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| anyhow!("workspace_root missing in {response}"))?;
     assert!(
-        workspace_root.ends_with("csharp-small"),
-        "workspace_root mismatch: {workspace_root}"
+        !workspace_root.is_empty(),
+        "workspace_root should be non-empty: {workspace_root}"
     );
     shut_down(child);
     Ok(())
@@ -192,7 +210,8 @@ fn lsp_custom_method_session_config_returns_workspace_root() -> Result<()> {
 
 #[test]
 fn lsp_custom_method_report_get_returns_clusters() -> Result<()> {
-    let mut child = spawn_lsp(&fixture("csharp-small"), 15)?;
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
     let (mut stdin, mut reader) = take_io(&mut child)?;
     let (init_id, init_payload) = initialize_request()?;
     let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
@@ -210,7 +229,8 @@ fn lsp_custom_method_report_get_returns_clusters() -> Result<()> {
 
 #[test]
 fn lsp_custom_method_find_similar_returns_below_min_nodes_for_tiny_snippet() -> Result<()> {
-    let mut child = spawn_lsp(&fixture("csharp-small"), 1_000)?;
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 1_000)?;
     let (mut stdin, mut reader) = take_io(&mut child)?;
     let (init_id, init_payload) = initialize_request()?;
     let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
@@ -236,7 +256,8 @@ fn lsp_custom_method_find_similar_returns_below_min_nodes_for_tiny_snippet() -> 
 
 #[test]
 fn lsp_custom_method_embedding_list_models_returns_stub_when_ollama_unreachable() -> Result<()> {
-    let mut child = spawn_lsp(&fixture("csharp-small"), 15)?;
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
     let (mut stdin, mut reader) = take_io(&mut child)?;
     let (init_id, init_payload) = initialize_request()?;
     let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;

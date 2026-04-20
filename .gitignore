@@ -74,3 +74,9 @@ site/_site/
 
 /*.png
 crates/codededup-mcp/target/
+
+clients/vscode/.vscode-test/
+
+clients/vscode/dist/
+
+clients/vscode/out/

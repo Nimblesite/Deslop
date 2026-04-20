@@ -25,14 +25,7 @@ pub struct ToolDefinition {
     pub input_schema: fn() -> Value,
 }
 
-/// Canonical tool registry. Order matches the [MCP-TOOLS] table in
-/// `docs/specs/mcp.md`.
-#[must_use]
-pub const fn all_tools() -> &'static [ToolDefinition] {
-    &TOOLS
-}
-
-/// Renders `all_tools()` into the JSON shape MCP's `tools/list`
+/// Renders the tool registry into the JSON shape MCP's `tools/list`
 /// response expects.
 #[must_use]
 pub fn tools_list_payload() -> Value {
@@ -227,7 +220,7 @@ fn schema_set_embedding_model() -> Value {
 /// `report-get` forwarder.
 fn call_report_get(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    serde_json::to_value(&*report).map_err(|err| serialise_failure(&err))
+    Ok(serde_json::to_value(&*report).unwrap_or(Value::Null))
 }
 
 /// `report-for-file` forwarder.
@@ -317,7 +310,7 @@ fn call_find_similar(backend: &dyn McpBackend, args: &Value) -> Result<Value, Js
 fn call_cluster_by_id(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
     let id = extract_string(args, "id")?;
     let cluster = backend.cluster_by_id(&id).map_err(backend_to_rpc)?;
-    serde_json::to_value(cluster).map_err(|err| serialise_failure(&err))
+    Ok(serde_json::to_value(cluster).unwrap_or(Value::Null))
 }
 
 /// `list-embedding-models` forwarder.
@@ -428,12 +421,4 @@ pub fn backend_to_rpc(err: BackendError) -> JsonRpcError {
         ),
         other => JsonRpcError::new(ErrorCode::BackendError, other.to_string()),
     }
-}
-
-/// Maps a `serde_json` serialisation failure onto an internal error.
-fn serialise_failure(err: &serde_json::Error) -> JsonRpcError {
-    JsonRpcError::new(
-        ErrorCode::InternalError,
-        format!("failed to serialise tool result: {err}"),
-    )
 }

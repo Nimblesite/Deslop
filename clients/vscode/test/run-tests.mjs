@@ -1,8 +1,11 @@
-// E2E entry point.
+// Runs the full VSIX test suite.
 //
-// Builds the REAL codededup-lsp + codededup-mcp binaries from the workspace
-// with `cargo build --release -p codededup-lsp -p codededup-mcp` and points
-// the extension at them via CODEDEDUP_BINARY_DIR. No LSP stubs, ever.
+// 1) Unit tests (pure modules) — mocha in this process, directly.
+// 2) E2E tests — @vscode/test-electron spawning real VS Code against the
+//    real codededup-lsp binary (built from the Rust workspace).
+//
+// When `NODE_V8_COVERAGE` is set (c8 sets it automatically), both
+// processes emit v8 coverage into the same directory, c8 merges them.
 
 import { runTests } from "@vscode/test-electron";
 import { fileURLToPath } from "node:url";
@@ -12,7 +15,7 @@ import { spawnSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const extensionDevelopmentPath = resolve(here, "..");
-const extensionTestsPath = resolve(here, "suite", "index.js");
+const extensionTestsPath = resolve(extensionDevelopmentPath, "out", "test", "test", "suite", "index.js");
 const fixture = resolve(here, "fixtures", "csharp-small");
 const repoRoot = resolve(here, "..", "..", "..");
 const releaseDir = resolve(repoRoot, "target", "release");
@@ -22,7 +25,7 @@ const lspBinary = resolve(releaseDir, `codededup-lsp${exe}`);
 const mcpBinary = resolve(releaseDir, `codededup-mcp${exe}`);
 
 if (!existsSync(lspBinary) || !existsSync(mcpBinary)) {
-  console.log("building real codededup-lsp + codededup-mcp from the workspace…");
+  console.log("building real codededup-lsp + codededup-mcp…");
   const result = spawnSync(
     "cargo",
     ["build", "--release", "-p", "codededup-lsp", "-p", "codededup-mcp"],
@@ -38,13 +41,27 @@ if (!existsSync(lspBinary) || !existsSync(mcpBinary)) {
   process.exit(1);
 }
 
+// 1) Unit tests — fast, no VS Code.
+console.log("\n=== Unit tests ===");
+const unitResult = spawnSync(
+  process.execPath,
+  [resolve(here, "run-unit-tests.mjs")],
+  { cwd: extensionDevelopmentPath, stdio: "inherit", env: process.env },
+);
+if (unitResult.status !== 0) process.exit(unitResult.status ?? 1);
+
+// 2) E2E tests inside real VS Code.
+console.log("\n=== E2E tests ===");
+const e2eEnv = {
+  ...process.env,
+  CODEDEDUP_TEST_FIXTURE: fixture,
+  CODEDEDUP_BINARY_DIR: releaseDir,
+};
+
 const exitCode = await runTests({
   extensionDevelopmentPath,
   extensionTestsPath,
-  launchArgs: ["--disable-extensions", "--new-window", fixture],
-  extensionTestsEnv: {
-    CODEDEDUP_TEST_FIXTURE: fixture,
-    CODEDEDUP_BINARY_DIR: releaseDir,
-  },
+  launchArgs: [fixture],
+  extensionTestsEnv: e2eEnv,
 });
 process.exit(exitCode);

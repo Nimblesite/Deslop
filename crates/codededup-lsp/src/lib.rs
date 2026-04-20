@@ -7,7 +7,10 @@
 //! `codededup-lsp` binary defined in `src/main.rs`.
 
 pub mod backend;
+pub mod code_lens;
 pub mod custom_methods;
 pub mod diagnostics;
+pub mod hover;
+pub mod position;
 
 pub use backend::{run_stdio, LspBackend};

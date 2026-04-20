@@ -18,7 +18,6 @@ use std::{
 };
 
 use codededup_core::{
-    embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL},
     list_ollama_models,
     report::{CacheStats, ReportCluster, ReportOccurrence},
     state::FileRegistry,
@@ -243,21 +242,6 @@ pub struct SessionBackendConfig {
     pub embedding_endpoint: String,
     /// Optional `.codededup.toml` override path.
     pub config_path: Option<PathBuf>,
-}
-
-impl Default for SessionBackendConfig {
-    fn default() -> Self {
-        Self {
-            root: PathBuf::from("."),
-            min_nodes: 30,
-            incremental: false,
-            embedding_mode: EmbeddingMode::Off,
-            embedding_provider: DEFAULT_PROVIDER_ID.to_owned(),
-            embedding_model: DEFAULT_OLLAMA_MODEL.to_owned(),
-            embedding_endpoint: DEFAULT_OLLAMA_ENDPOINT.to_owned(),
-            config_path: None,
-        }
-    }
 }
 
 /// `McpBackend` implementation backed by a [`PipelineSession`] guarded
@@ -590,22 +574,13 @@ const fn occurrence_overlaps(occ: &ReportOccurrence, start_byte: usize, end_byte
 }
 
 /// Compares an occurrence path (stored relative to the scan root by
-/// the renderer) against an absolute path. Matches on either the
-/// absolute form or on `root.join(occ.path)`.
+/// the renderer) against an absolute path. The renderer stores
+/// scan-root-relative paths, so we reconstruct the absolute form by
+/// canonicalising `root.join(occ)` and match against the canonical
+/// candidate.
 fn paths_equal(occurrence_path: &Path, absolute_candidate: &Path, root: &Path) -> bool {
-    if occurrence_path == absolute_candidate {
-        return true;
-    }
     let joined = root.join(occurrence_path);
-    if joined == absolute_candidate {
-        return true;
-    }
-    if let Ok(canonical_joined) = std::fs::canonicalize(&joined) {
-        if canonical_joined == absolute_candidate {
-            return true;
-        }
-    }
-    false
+    std::fs::canonicalize(&joined).is_ok_and(|canonical| canonical == absolute_candidate)
 }
 
 /// Trims `clusters` to the top `n` entries (already worst-first).

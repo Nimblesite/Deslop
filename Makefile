@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-coverage vsix-package
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -48,7 +48,7 @@ test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	cargo llvm-cov --workspace --all-targets --features codededup-core/live \
-	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|live/scheduler\.rs|codededup-lsp/src/main\.rs|codededup-mcp/src/main\.rs|codededup-mcp/src/server\.rs)' \
+	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|codededup-lsp/src/main\.rs|codededup-mcp/src/main\.rs|codededup-mcp/src/server\.rs)' \
 	    --lcov --output-path lcov.info -- --skip ollama_
 	$(MAKE) _coverage_check
 
@@ -136,6 +136,30 @@ install-binary:
 	@echo "==> Installing codededup binary..."
 	cargo install --locked --path crates/codededup --force
 
+## vsix-install: Install Node deps for clients/vscode + webview-ui
+vsix-install:
+	cd clients/vscode && npm install --no-audit --no-fund
+	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
+
+## vsix-build: Build codededup-lsp + codededup-mcp + VSIX bundle + webview UI.
+vsix-build:
+	cargo build --release -p codededup-lsp -p codededup-mcp
+	cd clients/vscode/webview-ui && npm run build
+	cd clients/vscode && npm run build
+
+## vsix-test: Run VS Code E2E tests against the REAL codededup-lsp binary.
+vsix-test: vsix-install vsix-build
+	cd clients/vscode && npm test
+
+## vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
+##                Threshold lives in clients/vscode/coverage-thresholds.json.
+vsix-coverage: vsix-install vsix-build
+	cd clients/vscode && npm run coverage
+
+## vsix-package: Build the .vsix artifact (does not publish).
+vsix-package: vsix-install vsix-build
+	cd clients/vscode && npm run package
+
 ## help: List all available targets
 help:
 	@echo "Standard targets:"
@@ -152,3 +176,8 @@ help:
 	@echo "  ci-ollama      - make ci plus make test-ollama"
 	@echo "  build-release  - Build the release binary for the codededup CLI"
 	@echo "  install-binary - Build release and install binary onto PATH"
+	@echo "  vsix-install   - Install Node deps for clients/vscode + webview-ui"
+	@echo "  vsix-build     - Build LSP + MCP + VSIX bundle + webview UI"
+	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"
+	@echo "  vsix-coverage  - VS Code E2E + enforce coverage threshold"
+	@echo "  vsix-package   - Build the .vsix artifact"

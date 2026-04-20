@@ -16,7 +16,7 @@ const RECOMMENDED: Record<string, string> = {
 };
 
 interface Entry extends vscode.QuickPickItem {
-  kind: "model" | "pull" | "refresh" | "none";
+  entryKind: "model" | "pull" | "refresh" | "none";
   model?: EmbeddingModelInfo;
 }
 
@@ -56,11 +56,11 @@ export async function pickEmbeddingModel(
     }
     quickPick.hide();
     try {
-      if (picked.kind === "pull") {
+      if (picked.entryKind === "pull") {
         await vscode.env.openExternal(vscode.Uri.parse("https://ollama.com/library"));
-      } else if (picked.kind === "refresh") {
+      } else if (picked.entryKind === "refresh") {
         await pickEmbeddingModel(store, clientOf);
-      } else if (picked.kind === "model" && picked.model) {
+      } else if (picked.entryKind === "model" && picked.model) {
         await setModel(client, picked.model);
       }
     } finally {
@@ -79,13 +79,13 @@ function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
 
   if (ollama.length === 0) {
     items.push({
-      kind: "none",
+      entryKind: "none",
       label: "Ollama not detected",
       description: "Install from ollama.com to use local embedding models.",
       detail: "Only the deterministic stub provider is available below.",
     });
   } else {
-    items.push({ kind: "none", label: "Ollama models", kind: "none" as const } as Entry);
+    items.push({ entryKind: "none", label: "Ollama models" } as Entry);
     for (const m of ollama) {
       const recommended = RECOMMENDED[m.model_id];
       const activeMark = isActive(active, m) ? "  ✓ active" : "";
@@ -95,7 +95,7 @@ function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
         m.size_bytes ? formatSize(m.size_bytes) : null,
       ].filter(Boolean);
       items.push({
-        kind: "model",
+        entryKind: "model",
         label: `$(database) ${m.model_id}${activeMark}`,
         description: descParts.join(" · "),
         detail: recommended ?? "User-pulled Ollama model.",
@@ -105,7 +105,7 @@ function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
   }
 
   items.push({
-    kind: "model",
+    entryKind: "model",
     label: `$(circuit-board) stub${isActive(active, stub) ? "  ✓ active" : ""}`,
     description: "deterministic · 64-dim · CI-friendly",
     detail: "Turns off semantic recall. Use for Type-1/2/3 detection only.",
@@ -120,8 +120,8 @@ function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
   });
 
   items.push(
-    { kind: "pull", label: "$(cloud-download) Pull a new model…", description: "ollama.com/library" },
-    { kind: "refresh", label: "$(refresh) Refresh list", description: "Re-query Ollama" },
+    { entryKind: "pull", label: "$(cloud-download) Pull a new model…", description: "ollama.com/library" },
+    { entryKind: "refresh", label: "$(refresh) Refresh list", description: "Re-query Ollama" },
   );
   return items;
 }

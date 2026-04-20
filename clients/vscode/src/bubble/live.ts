@@ -8,7 +8,7 @@
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-import { COLOR, FONT, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
+import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity } from "../severity";
 import {
@@ -171,7 +171,6 @@ export class LiveBubble implements vscode.Disposable {
               color: SEVERITY_COLOR[severity],
               fontStyle: "normal",
               fontWeight: "600",
-              fontFamily: FONT.mono,
             },
           },
         },
