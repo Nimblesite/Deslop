@@ -18,7 +18,7 @@ use crate::{
     ast::NormalizedNode,
     cluster::build_ranked_fused_clusters,
     config::ExclusionConfig,
-    discover::discover_files,
+    discover::{discover_files, DiscoveryResult},
     error::CoreError,
     fingerprint::Fingerprint,
     fpcache::CachedFile,
@@ -119,8 +119,18 @@ impl PipelineSession {
     ) -> Result<(Self, Report), CoreError> {
         let parsers = default_parsers();
         let extension_to_language = build_extension_map(&parsers);
+        tracing::info!(
+            root = %root.display(),
+            root_exists = root.exists(),
+            root_is_dir = root.is_dir(),
+            min_nodes,
+            incremental,
+            supported_extensions = ?extension_to_language.keys().collect::<Vec<_>>(),
+            "pipeline session initialising",
+        );
         let exclusion = load_exclusion(&root, config_path.as_deref())?;
         let discovery = discover_files(&root, &extension_to_language, &exclusion);
+        log_discovery_summary(&discovery, &root);
         let config = PipelineConfig {
             root: root.clone(),
             min_nodes,
@@ -433,4 +443,29 @@ fn load_exclusion(root: &Path, override_path: Option<&Path>) -> Result<Exclusion
         return ExclusionConfig::load(explicit);
     }
     ExclusionConfig::discover(root)
+}
+
+/// Emits an info-level summary of what file discovery found, grouped by
+/// language. When the count is zero, also logs a warning — this is the
+/// most common "why is the report empty?" failure mode.
+fn log_discovery_summary(discovery: &DiscoveryResult, root: &Path) {
+    let total = discovery.files.len();
+    let mut by_language: HashMap<&'static str, usize> = HashMap::new();
+    for file in &discovery.files {
+        let entry = by_language.entry(file.language).or_insert(0);
+        *entry = entry.saturating_add(1);
+    }
+    tracing::info!(
+        root = %root.display(),
+        total_files = total,
+        by_language = ?by_language,
+        "file discovery complete",
+    );
+    if total == 0 {
+        tracing::warn!(
+            root = %root.display(),
+            root_exists = root.exists(),
+            "no source files discovered — check workspace root and language support",
+        );
+    }
 }

@@ -22,8 +22,14 @@ async fn main() -> ExitCode {
 async fn run() -> Result<()> {
     init_tracing();
     let args: Vec<String> = env::args().collect();
+    tracing::info!(argv = ?args, "codededup-lsp starting");
     let workspace_root = parse_workspace_root(&args)?;
     let min_nodes = parse_min_nodes(&args)?;
+    tracing::info!(
+        workspace_root = %workspace_root.display(),
+        min_nodes,
+        "codededup-lsp args parsed",
+    );
     codededup_lsp::run_stdio(workspace_root, min_nodes).await
 }
 

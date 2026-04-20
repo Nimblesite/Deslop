@@ -141,6 +141,13 @@ pub fn url_to_path(url: &Url) -> Option<PathBuf> {
 ///
 /// Returns `Err` when the backend fails to construct.
 pub async fn run_stdio(workspace_root: PathBuf, min_nodes: u32) -> anyhow::Result<()> {
+    tracing::info!(
+        workspace_root = %workspace_root.display(),
+        exists = workspace_root.exists(),
+        is_dir = workspace_root.is_dir(),
+        min_nodes,
+        "run_stdio booting backend",
+    );
     let workspace_root_for_builder = workspace_root;
     let (service, socket) = LspService::build(move |client| {
         match LspBackend::new_with_stub(client, workspace_root_for_builder.clone(), min_nodes) {
@@ -194,10 +201,12 @@ const NO_PARAM_METHODS: &[&str] = &[
 /// selected custom methods when the incoming request omitted it.
 #[derive(Debug)]
 struct NormaliseParams<S> {
+    /// Wrapped service that receives the normalised request.
     inner: S,
 }
 
 impl<S> NormaliseParams<S> {
+    /// Wraps `inner` so incoming requests are normalised before reaching it.
     fn new(inner: S) -> Self {
         Self { inner }
     }

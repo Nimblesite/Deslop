@@ -121,9 +121,20 @@ export async function deactivate(): Promise<void> {
 }
 
 function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
+  const workspaceRoot = resolveWorkspaceRoot();
+  const runArgs = workspaceRoot ? [workspaceRoot] : [];
+  const debugArgs = workspaceRoot ? [workspaceRoot, "--debug"] : ["--debug"];
+  log("starting language client", {
+    lspPath: lsp.path,
+    workspaceRoot: workspaceRoot ?? null,
+    args: runArgs,
+  });
+  if (!workspaceRoot) {
+    log("no workspace folder open; LSP will have nothing to analyse", {});
+  }
   const serverOptions: ServerOptions = {
-    run: { command: lsp.path, transport: TransportKind.stdio, args: [] },
-    debug: { command: lsp.path, transport: TransportKind.stdio, args: ["--debug"] },
+    run: { command: lsp.path, transport: TransportKind.stdio, args: runArgs },
+    debug: { command: lsp.path, transport: TransportKind.stdio, args: debugArgs },
   };
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
@@ -139,6 +150,13 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     initializationOptions: currentInitializationOptions(),
   };
   return new LanguageClient("codededup", "CodeDedup", serverOptions, clientOptions);
+}
+
+export function resolveWorkspaceRoot(): string | undefined {
+  const folders = vscode.workspace.workspaceFolders;
+  if (!folders || folders.length === 0) return undefined;
+  const first = folders[0];
+  return first?.uri.fsPath;
 }
 
 function currentInitializationOptions(): Record<string, unknown> {

@@ -97,6 +97,13 @@ pub fn fingerprint_corpus(
         let _previous = corpus.per_file.insert(discovered.file_id, processed);
         let _previous_source = corpus.sources.insert(discovered.file_id, source);
     }
+    tracing::info!(
+        files_processed = files.len(),
+        fingerprints = corpus.fingerprints.len(),
+        cache_hits = corpus.cache_stats.hits,
+        cache_misses = corpus.cache_stats.misses,
+        "fingerprint corpus built",
+    );
     Ok(corpus)
 }
 
