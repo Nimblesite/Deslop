@@ -16,7 +16,7 @@ pub mod rust_lang;
 pub mod shared;
 
 /// A language plugin. One instance per language per pipeline run.
-pub trait LanguageParser: Send + Sync {
+pub trait LanguageParser: std::fmt::Debug + Send + Sync {
     /// Stable identifier for this language (`"csharp"`, `"rust"`, ...).
     fn id(&self) -> &'static str;
 

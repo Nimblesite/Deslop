@@ -145,30 +145,7 @@ impl EmbeddingProvider for OllamaProvider {
 /// that reliably reports a stable content digest across versions;
 /// `/api/show` drops the field on some builds.
 fn fetch_model_version(endpoint: &str, model: &str) -> Result<String, ProviderError> {
-    let url = format!("{endpoint}/api/tags");
-    let mut response = ureq::get(&url)
-        .config()
-        .timeout_global(Some(HTTP_TIMEOUT))
-        .build()
-        .call()
-        .map_err(|err| ProviderError::Unreachable {
-            provider_id: PROVIDER_ID.to_owned(),
-            message: err.to_string(),
-        })?;
-    if !response.status().is_success() {
-        return Err(ProviderError::ProviderFailed {
-            provider_id: PROVIDER_ID.to_owned(),
-            message: format!("tags endpoint failed (status {})", response.status()),
-        });
-    }
-    let parsed: TagsResponse =
-        response
-            .body_mut()
-            .read_json()
-            .map_err(|err| ProviderError::Malformed {
-                provider_id: PROVIDER_ID.to_owned(),
-                message: err.to_string(),
-            })?;
+    let parsed = fetch_tags(endpoint)?;
     parsed
         .digest_for(model)
         .as_deref()
@@ -257,6 +234,37 @@ struct TagEntry {
     /// Content digest of the packaged weights.
     #[serde(default)]
     digest: String,
+    /// Packaged model size in bytes. Surfaced in the VSIX picker so
+    /// users can see how much disk each installed model consumes.
+    #[serde(default)]
+    size: u64,
+}
+
+/// Fetches the `GET /api/tags` payload.
+fn fetch_tags(endpoint: &str) -> Result<TagsResponse, ProviderError> {
+    let url = format!("{endpoint}/api/tags");
+    let mut response = ureq::get(&url)
+        .config()
+        .timeout_global(Some(HTTP_TIMEOUT))
+        .build()
+        .call()
+        .map_err(|err| ProviderError::Unreachable {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: err.to_string(),
+        })?;
+    if !response.status().is_success() {
+        return Err(ProviderError::ProviderFailed {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: format!("tags endpoint failed (status {})", response.status()),
+        });
+    }
+    response
+        .body_mut()
+        .read_json()
+        .map_err(|err| ProviderError::Malformed {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: err.to_string(),
+        })
 }
 
 impl TagsResponse {

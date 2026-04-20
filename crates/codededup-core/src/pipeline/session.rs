@@ -334,10 +334,10 @@ impl PipelineSession {
     /// Builds a [`PipelineConfig`] snapshot for a pass that does not
     /// need the embedding provider — the parse-only cache-consulting
     /// path in [`parse_one_file`].
-    fn pipeline_config_with_mode(
+    fn pipeline_config_with_mode<'a>(
         &self,
-        embedding: &EmbeddingSettings<'_>,
-    ) -> PipelineConfig<'_> {
+        embedding: &EmbeddingSettings<'a>,
+    ) -> PipelineConfig<'a> {
         PipelineConfig {
             root: self.root.clone(),
             min_nodes: self.min_nodes,
