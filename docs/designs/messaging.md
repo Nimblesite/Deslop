@@ -15,21 +15,27 @@ This document is the single source of visual, typographic, and interaction truth
 
 ## Voice & Positioning
 
-Deslop is the duplicate-detection tool for the AI era. Coding agents generate plausible code at a rate that outpaces human review; a human reviewer's instinct for "I have seen this before" does not scale past a few hundred thousand tokens of generated surface area. Deslop restores that instinct — mechanically, deterministically, and with a ranked report that puts the worst offenders at line one.
+Deslop is a **live duplicate-code analysis server** — an LSP + MCP server that runs in the workspace and streams real-time clone signals to the human's editor and the AI coding agent driving that editor (Claude Code, Cursor, Copilot, Continue, Codex…). Coding agents generate plausible code at a rate that outpaces human review; a human reviewer's instinct for "I have seen this before" does not scale past a few hundred thousand tokens of generated surface area, and a batch CI report arrives after the copy-paste has already landed. Deslop restores that instinct at the instant the keystroke happens — mechanically, deterministically, and fed back to both audiences over the same running engine.
+
+The CLI is the cold-cache fallback. The *server* is the product.
 
 The brand voice is **academic in construction, urgent in tone**. Read it aloud and it should sound like a terse technical paper written by someone who has just watched a well-meaning agent copy-paste the same repository three times. Precise. Unsparing. Confident. Never cute.
 
 ### Primary claims
 
-- **Built for AI-speed codebases.** Every pipeline decision assumes generated code, not hand-crafted code, is the dominant input.
-- **Immediate feedback.** The tool runs fast enough to sit in an agent's inner loop — not a nightly CI job.
-- **Worst-first ranking.** Score = clone_size × clone_count × spanned_LOC. The top of the report is always where the largest payoff lives.
+- **Live server, not a batch scanner.** A long-running process (LSP for editors, MCP for agents) that re-analyses on every keystroke within a debounce budget — not a script that prints a report and exits.
+- **Feeds AI agents mid-generation.** Over MCP, the agent can ask *"is something like this already in the repo?"* before writing a single token. Duplication gets prevented, not audited.
+- **Feeds humans inline.** Over LSP, the editor lights up the cluster at end-of-line while the developer is still typing.
+- **Same engine on every surface.** LSP, MCP, CLI, webview — one `deslop-core` pipeline, one cache, one schema. Cold start and hot-path are the same code.
+- **Worst-first ranking.** Score = clone_size × clone_count × spanned_LOC. The top of the live view is always where the largest payoff lives.
 - **Tree-sitter, not regex.** Four duplication categories — Identical, Nearly identical, Loosely similar, Same behavior — detected through AST fingerprints and embedding fusion, never line-matching.
-- **Structured output as product.** JSON is canonical; the text and HTML renderers are views. Agents consume the same schema humans read.
+- **Structured output as product.** JSON is canonical; text and HTML renderers are views. Agents consume the same schema humans read.
 
 ### Forbidden phrasings
 
-- "Solves duplication." It reveals duplication. Solving it is still your job.
+- "Duplicate-code detector." Too passive — implies a batch scanner. Say *live duplicate-code server* or *live analysis engine*.
+- "Runs on your repo." Implies a one-shot scan. Say *runs in your workspace* or *lives alongside your editor*.
+- "Solves duplication." It reveals duplication, on the keystroke. Acting on the finding is still the developer's or agent's job.
 - "AI-powered." The tool uses embeddings; it is not sold on hype. Lead with the technique, not the buzzword.
 - Exclamation marks in product copy. They undermine authority. Reserve urgency for verbs.
 

@@ -217,10 +217,7 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
     assert!(debouncer.ready_to_flush(), "cap should fire");
     let flushed = debouncer.flush();
     assert_eq!(flushed.len(), 2, "duplicates must collapse");
-    assert!(
-        !debouncer.has_pending(),
-        "flush clears the pending set"
-    );
+    assert!(!debouncer.has_pending(), "flush clears the pending set");
     assert!(
         !debouncer.ready_to_flush(),
         "flush resets the timing windows"
@@ -264,7 +261,9 @@ async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
         "cluster weights are non-negative: {weights:?}"
     );
     let snapshot = service.report_get().await;
-    service.remember_snapshot(generation, Arc::clone(&snapshot)).await;
+    service
+        .remember_snapshot(generation, Arc::clone(&snapshot))
+        .await;
     let replay = service.report_delta(generation.saturating_sub(1)).await;
     assert!(
         replay.is_some(),

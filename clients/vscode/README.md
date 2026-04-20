@@ -1,8 +1,8 @@
 # Deslop for VS Code
 
-**The first clone tool that flags duplicated code as you type — and is built to fix it, not just report it.**
+**The reference client for the Deslop live duplicate-code analysis server.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
 
-Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**. No save, no push, no context switch. Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap, so the same engine that spots the clone will soon help you collapse it.
+Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes. No save, no push, no context switch, no batch report.
 
 ## Features
 
@@ -10,7 +10,7 @@ Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags 
 - **Worst-first activity-bar view.** The Duplicate Clusters panel always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals — no stale pixels, ever.
-- **Bundled LSP + MCP binaries.** Every platform (`darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`) ships offline-ready. No post-install downloads. The MCP server auto-registers with Claude Code / Copilot Chat so your AI agents see the same duplicates you do.
+- **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries offline-ready. No post-install downloads. The MCP server auto-registers with Claude Code / Copilot Chat so your AI agents consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
 - **Falls back to your CLI install.** If you already have `deslop` on `PATH` via Homebrew tap or Scoop bucket at a matching version, the extension uses it — one binary, one cache, one truth.
 
 ## Design
