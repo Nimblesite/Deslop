@@ -10,7 +10,7 @@ import {
   SPACING,
   TYPE,
   SHADOW,
-} from "../../src/design";
+} from "../../design";
 
 suite("design tokens", () => {
   test("every color is a hex or rgba string", () => {

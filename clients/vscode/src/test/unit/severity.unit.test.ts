@@ -5,8 +5,8 @@ import {
   rankPercentile,
   severityForRank,
   indexedSeverity,
-} from "../../src/severity";
-import { ReportCluster } from "../../src/types/report";
+} from "../../severity";
+import { ReportCluster } from "../../types/report";
 
 function cluster(id: string): ReportCluster {
   return {

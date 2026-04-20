@@ -53,7 +53,7 @@ export function registerCommands(
   );
 }
 
-function openWorstCluster(ctx: vscode.ExtensionContext, store: ReportStore): void {
+export function openWorstCluster(ctx: vscode.ExtensionContext, store: ReportStore): void {
   const report = store.current.report;
   const worst = report?.clusters[0];
   if (!worst) {
@@ -63,7 +63,7 @@ function openWorstCluster(ctx: vscode.ExtensionContext, store: ReportStore): voi
   openClusterPanel(ctx, store, worst.id);
 }
 
-async function openOccurrence(occurrence: ReportOccurrence): Promise<void> {
+export async function openOccurrence(occurrence: ReportOccurrence): Promise<void> {
   const uri = vscode.Uri.file(occurrence.path);
   const doc = await vscode.workspace.openTextDocument(uri);
   const editor = await vscode.window.showTextDocument(doc);
@@ -73,7 +73,7 @@ async function openOccurrence(occurrence: ReportOccurrence): Promise<void> {
   editor.selection = new vscode.Selection(start, end);
 }
 
-function jumpToNextOccurrence(store: ReportStore): void {
+export function jumpToNextOccurrence(store: ReportStore): void {
   const editor = vscode.window.activeTextEditor;
   const report = store.current.report;
   if (!editor || !report) return;
@@ -90,7 +90,7 @@ function jumpToNextOccurrence(store: ReportStore): void {
   openOccurrence(next).catch(() => undefined);
 }
 
-async function compareWithCanonical(store: ReportStore, clusterId: string): Promise<void> {
+export async function compareWithCanonical(store: ReportStore, clusterId: string): Promise<void> {
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster || cluster.occurrences.length < 2) return;
   const [a, b] = cluster.occurrences;
@@ -103,7 +103,7 @@ async function compareWithCanonical(store: ReportStore, clusterId: string): Prom
   );
 }
 
-async function openSchemaDoc(ctx: vscode.ExtensionContext, store: ReportStore): Promise<void> {
+export async function openSchemaDoc(ctx: vscode.ExtensionContext, store: ReportStore): Promise<void> {
   const doc = await vscode.workspace.openTextDocument({
     language: "markdown",
     content: store.current.report?.schema_doc ?? "Schema doc unavailable.",
@@ -112,7 +112,7 @@ async function openSchemaDoc(ctx: vscode.ExtensionContext, store: ReportStore): 
   void ctx;
 }
 
-function findClusterContaining(
+export function findClusterContaining(
   clusters: ReportCluster[],
   path: string,
   document: vscode.TextDocument,
@@ -126,13 +126,13 @@ function findClusterContaining(
   );
 }
 
-function byteToPosition(doc: vscode.TextDocument, byte: number): vscode.Position {
+export function byteToPosition(doc: vscode.TextDocument, byte: number): vscode.Position {
   const buffer = Buffer.from(doc.getText(), "utf8");
   const slice = buffer.slice(0, Math.min(byte, buffer.length)).toString("utf8");
   return doc.positionAt(slice.length);
 }
 
-function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {
+export function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {
   return Buffer.byteLength(
     doc.getText(new vscode.Range(new vscode.Position(0, 0), position)),
     "utf8",

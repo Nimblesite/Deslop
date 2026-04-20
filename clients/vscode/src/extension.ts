@@ -130,7 +130,7 @@ function currentInitializationOptions(): Record<string, unknown> {
   };
 }
 
-function wireNotifications(c: LanguageClient, store: ReportStore): void {
+export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   c.onNotification(
     "codededup/reportChanged",
     async (payload: ReportChangedNotification) => {
@@ -151,7 +151,7 @@ function wireNotifications(c: LanguageClient, store: ReportStore): void {
   });
 }
 
-async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise<void> {
+export async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise<void> {
   try {
     const snapshot = await c.sendRequest<Report>("codededup/reportGet", {});
     store.setSnapshot(snapshot, 0);
@@ -160,7 +160,7 @@ async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise
   }
 }
 
-function tryResolveOptional(
+export function tryResolveOptional(
   extensionPath: string,
   kind: "mcp",
   version: string,
@@ -173,12 +173,12 @@ function tryResolveOptional(
   }
 }
 
-function currentExtensionVersion(context: vscode.ExtensionContext): string {
+export function currentExtensionVersion(context: vscode.ExtensionContext): string {
   const raw = context.extension.packageJSON as { version?: unknown };
   return typeof raw.version === "string" ? raw.version : "0.0.0";
 }
 
-function revealActiveBinary(
+export function revealActiveBinary(
   lsp: ResolvedBinary | undefined,
   mcp: ResolvedBinary | undefined,
 ): void {
@@ -193,7 +193,7 @@ function revealActiveBinary(
   vscode.window.showInformationMessage(lines.join("\n"), { modal: true });
 }
 
-function surfaceStartupFailure(err: unknown): void {
+export function surfaceStartupFailure(err: unknown): void {
   logError(err, "language client startup");
   const isMissing = err instanceof BundledBinaryMissingError;
   const isUnsupported = err instanceof UnsupportedPlatformError;

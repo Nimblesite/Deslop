@@ -1,6 +1,5 @@
-// Enforce the VSIX coverage threshold from coverage-thresholds.json.
+// Enforce VSIX coverage threshold from coverage-thresholds.json.
 // Mirrors the Rust _coverage_check in the repo Makefile.
-
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -27,7 +26,7 @@ if (!Number.isFinite(pct)) {
   process.exit(1);
 }
 
-const pass = pct + 1.0 >= target; // same 1% rounding slack as the Rust check
+const pass = pct + 1.0 >= target;
 console.log(`VSIX line coverage: ${pct.toFixed(1)}% (threshold: ${target}% + 1% slack)`);
 if (!pass) {
   console.error(`FAIL: ${pct.toFixed(1)}% + 1% slack < ${target}%`);

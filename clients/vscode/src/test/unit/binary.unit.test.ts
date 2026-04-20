@@ -6,7 +6,7 @@ import {
   resolveBinary,
   BundledBinaryMissingError,
   UnsupportedPlatformError,
-} from "../../src/binary";
+} from "../../binary";
 import { mkdirSync, writeFileSync, chmodSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";

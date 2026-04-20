@@ -143,7 +143,7 @@ vsix-install:
 
 ## vsix-build: Build codededup-lsp + codededup-mcp + VSIX bundle + webview UI.
 vsix-build:
-	cargo build --release -p codededup-lsp -p codededup-mcp
+	cargo build --release -p codededup-lsp -p codededup-mcp -p codededup
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
 
@@ -157,7 +157,31 @@ vsix-coverage: vsix-install vsix-build
 	cd clients/vscode && npm run coverage
 
 ## vsix-package: Build the .vsix artifact (does not publish).
+##               Stages the host-platform codededup-lsp + codededup-mcp + codededup
+##               binaries into clients/vscode/bin/<platform>/ so the installed
+##               extension can resolve them via the bundled path
+##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
+##               locally we only have the host toolchain so we only stage that one.
 vsix-package: vsix-install vsix-build
+	@_uname_s=$$(uname -s); _uname_m=$$(uname -m); \
+	 case "$$_uname_s-$$_uname_m" in \
+	   Darwin-arm64)   _platform=darwin-arm64 ;; \
+	   Darwin-x86_64)  _platform=darwin-x64 ;; \
+	   Linux-x86_64)   _platform=linux-x64 ;; \
+	   Linux-aarch64)  _platform=linux-arm64 ;; \
+	   MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64) _platform=win32-x64 ;; \
+	   *) echo "FAIL: unsupported host $$_uname_s-$$_uname_m for vsix-package"; exit 1 ;; \
+	 esac; \
+	 case "$$_platform" in win32-*) _ext=.exe ;; *) _ext= ;; esac; \
+	 _dest=clients/vscode/bin/$$_platform; \
+	 echo "==> Staging bundled binaries into $$_dest"; \
+	 $(RM) "$$_dest"; $(MKDIR) "$$_dest"; \
+	 for _bin in codededup-lsp codededup-mcp codededup; do \
+	   _src=target/release/$$_bin$$_ext; \
+	   if [ ! -f "$$_src" ]; then echo "FAIL: $$_src missing (vsix-build should have produced it)"; exit 1; fi; \
+	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
+	   chmod +x "$$_dest/$$_bin$$_ext"; \
+	 done
 	cd clients/vscode && npm run package
 
 ## help: List all available targets

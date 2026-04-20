@@ -136,7 +136,7 @@ function buildHtml(
     </html>`;
 }
 
-async function handleMessage(store: ReportStore, message: unknown): Promise<void> {
+export async function handleMessage(store: ReportStore, message: unknown): Promise<void> {
   if (!message || typeof message !== "object") return;
   const m = message as { kind?: string } & Record<string, unknown>;
   switch (m.kind) {

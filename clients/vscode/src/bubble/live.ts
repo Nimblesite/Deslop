@@ -125,7 +125,8 @@ export class LiveBubble implements vscode.Disposable {
     }
   }
 
-  private render(
+  // Public for test harness only — production call sites go through `probe()`.
+  render(
     editor: vscode.TextEditor,
     range: vscode.Range,
     clusters: ReportCluster[],
@@ -219,7 +220,7 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
   }
 }
 
-function inlineText(cluster: ReportCluster, severity: Severity): string {
+export function inlineText(cluster: ReportCluster, severity: Severity): string {
   const canonical = cluster.occurrences[0];
   const count = cluster.occurrences.length;
   const verdict = verdictOf(cluster.signals);
@@ -227,11 +228,11 @@ function inlineText(cluster: ReportCluster, severity: Severity): string {
   return `  ${SEVERITY_DOT[severity]} ${verdict} × ${count}${location}`;
 }
 
-function ghostText(cluster: ReportCluster, severity: Severity): string {
+export function ghostText(cluster: ReportCluster, severity: Severity): string {
   return `  └─ ${SEVERITY_DOT[severity]} ${verdictOf(cluster.signals)}  ${signalStrip(cluster)}  × ${cluster.occurrences.length}`;
 }
 
-function signalStrip(cluster: ReportCluster): string {
+export function signalStrip(cluster: ReportCluster): string {
   const bar = (v: number) => BARS[Math.min(BARS.length - 1, Math.max(0, Math.round(v * (BARS.length - 1))))];
   const s = cluster.signals;
   return `${bar(s.structural)}${bar(s.token_jaccard)}${bar(s.embedding_cos)}`;
@@ -239,12 +240,12 @@ function signalStrip(cluster: ReportCluster): string {
 
 const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
 
-function shortPath(p: string): string {
+export function shortPath(p: string): string {
   const slash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
-function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
+export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   md.supportHtml = true;

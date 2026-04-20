@@ -70,7 +70,7 @@ export async function pickEmbeddingModel(
   quickPick.onDidHide(() => quickPick.dispose());
 }
 
-function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
+export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
   const active = store.current.report?.embedding_provenance;
   const items: Entry[] = [];
 
@@ -126,7 +126,7 @@ function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
   return items;
 }
 
-async function setModel(client: LanguageClient, model: EmbeddingModelInfo): Promise<void> {
+export async function setModel(client: LanguageClient, model: EmbeddingModelInfo): Promise<void> {
   try {
     if (model.provider_id === "stub") {
       const confirm = await vscode.window.showWarningMessage(
@@ -155,7 +155,7 @@ async function setModel(client: LanguageClient, model: EmbeddingModelInfo): Prom
   }
 }
 
-function isActive(
+export function isActive(
   active: { provider_id: string; model_id: string } | null | undefined,
   model: EmbeddingModelInfo | undefined,
 ): boolean {
@@ -163,7 +163,7 @@ function isActive(
   return active.provider_id === model.provider_id && active.model_id === model.model_id;
 }
 
-function formatSize(bytes: number): string {
+export function formatSize(bytes: number): string {
   const units = ["B", "KiB", "MiB", "GiB"];
   let value = bytes;
   let unit = 0;

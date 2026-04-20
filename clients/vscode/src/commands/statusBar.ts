@@ -60,12 +60,12 @@ export class StatusBar implements vscode.Disposable {
   }
 }
 
-function sameFile(a: string, b: string): boolean {
+export function sameFile(a: string, b: string): boolean {
   if (a === b) return true;
   return a.endsWith(b) || b.endsWith(a);
 }
 
-function shortPath(p: string): string {
+export function shortPath(p: string): string {
   const slash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
   return slash >= 0 ? p.slice(slash + 1) : p;
 }

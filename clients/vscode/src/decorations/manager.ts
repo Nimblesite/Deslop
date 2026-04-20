@@ -70,13 +70,12 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
     textDecoration: `underline ${color}`,
     overviewRulerColor: color,
     overviewRulerLane: vscode.OverviewRulerLane.Left,
-    gutterIconPath: undefined,
     isWholeLine: false,
     rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
   });
 }
 
-function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
+export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   md.appendMarkdown(`**${cluster.interpretation}**\n\n`);
@@ -92,7 +91,7 @@ function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   return md;
 }
 
-function byteRangeToRange(
+export function byteRangeToRange(
   document: vscode.TextDocument,
   occurrence: ReportOccurrence,
 ): vscode.Range | null {

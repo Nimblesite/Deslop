@@ -5,7 +5,7 @@ import {
   FUSED_THRESHOLD,
   severityOf,
   verdictOf,
-} from "../../src/types/report";
+} from "../../types/report";
 
 suite("report schema helpers", () => {
   test("FUSED_THRESHOLD is 0.85", () => {

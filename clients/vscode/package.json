@@ -25,7 +25,7 @@
     "code quality",
     "DRY"
   ],
-  "main": "./dist/extension.js",
+  "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:csharp",
     "onLanguage:rust",
@@ -36,16 +36,46 @@
   ],
   "contributes": {
     "commands": [
-      { "command": "codededup.openReport", "title": "CodeDedup: Open Report" },
-      { "command": "codededup.openWorstCluster", "title": "CodeDedup: Open Worst Cluster" },
-      { "command": "codededup.jumpToNextOccurrence", "title": "CodeDedup: Jump to Next Occurrence in Cluster" },
-      { "command": "codededup.compareWithCanonical", "title": "CodeDedup: Compare With Canonical Occurrence" },
-      { "command": "codededup.pickEmbeddingModel", "title": "CodeDedup: Pick Embedding Model" },
-      { "command": "codededup.refreshReport", "title": "CodeDedup: Refresh Report (force full re-analysis)" },
-      { "command": "codededup.toggleShowAllLenses", "title": "CodeDedup: Toggle Show All Code Lenses" },
-      { "command": "codededup.showSchemaDoc", "title": "CodeDedup: Show Schema Documentation" },
-      { "command": "codededup.openCluster", "title": "CodeDedup: Open Cluster" },
-      { "command": "codededup.revealActiveBinary", "title": "CodeDedup: Reveal Active Binary" }
+      {
+        "command": "codededup.openReport",
+        "title": "CodeDedup: Open Report"
+      },
+      {
+        "command": "codededup.openWorstCluster",
+        "title": "CodeDedup: Open Worst Cluster"
+      },
+      {
+        "command": "codededup.jumpToNextOccurrence",
+        "title": "CodeDedup: Jump to Next Occurrence in Cluster"
+      },
+      {
+        "command": "codededup.compareWithCanonical",
+        "title": "CodeDedup: Compare With Canonical Occurrence"
+      },
+      {
+        "command": "codededup.pickEmbeddingModel",
+        "title": "CodeDedup: Pick Embedding Model"
+      },
+      {
+        "command": "codededup.refreshReport",
+        "title": "CodeDedup: Refresh Report (force full re-analysis)"
+      },
+      {
+        "command": "codededup.toggleShowAllLenses",
+        "title": "CodeDedup: Toggle Show All Code Lenses"
+      },
+      {
+        "command": "codededup.showSchemaDoc",
+        "title": "CodeDedup: Show Schema Documentation"
+      },
+      {
+        "command": "codededup.openCluster",
+        "title": "CodeDedup: Open Cluster"
+      },
+      {
+        "command": "codededup.revealActiveBinary",
+        "title": "CodeDedup: Reveal Active Binary"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -58,9 +88,18 @@
     },
     "views": {
       "codededup": [
-        { "id": "codededup.topOffenders", "name": "Top Offenders" },
-        { "id": "codededup.focusedFile", "name": "Focused File" },
-        { "id": "codededup.session", "name": "Session" }
+        {
+          "id": "codededup.topOffenders",
+          "name": "Top Offenders"
+        },
+        {
+          "id": "codededup.focusedFile",
+          "name": "Focused File"
+        },
+        {
+          "id": "codededup.session",
+          "name": "Session"
+        }
       ]
     },
     "configuration": {
@@ -74,7 +113,10 @@
         },
         "codededup.embedding.provider": {
           "type": "string",
-          "enum": ["ollama", "stub"],
+          "enum": [
+            "ollama",
+            "stub"
+          ],
           "default": "ollama",
           "description": "Embedding provider id."
         },
@@ -90,7 +132,11 @@
         },
         "codededup.embedding.mode": {
           "type": "string",
-          "enum": ["auto", "required", "off"],
+          "enum": [
+            "auto",
+            "required",
+            "off"
+          ],
           "default": "auto",
           "description": "Mirrors CLI --embeddings={auto,required,off}."
         },
@@ -116,7 +162,10 @@
         },
         "codededup.liveBubble.mode": {
           "type": "string",
-          "enum": ["inline", "ghost"],
+          "enum": [
+            "inline",
+            "ghost"
+          ],
           "default": "inline",
           "description": "Bubble layout: inline decoration + inlay hint, or a phantom ghost line below the range."
         }
@@ -137,12 +186,11 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "compile-tests": "tsc -p ./test/tsconfig.json",
-    "pretest": "npm run typecheck && npm run build && npm run compile-tests",
-    "test": "node ./test/run-tests.mjs",
-    "coverage": "npm run pretest && c8 node ./test/run-unit-tests.mjs && node ./test/check-coverage.mjs",
-    "coverage-with-e2e": "npm run pretest && c8 node ./test/run-tests.mjs && node ./test/check-coverage.mjs",
-    "package": "vsce package --no-dependencies -o codededup-vscode.vsix"
+    "compile": "tsc -p ./",
+    "pretest": "npm run compile && cp -r src/test/fixtures out/test/fixtures",
+    "test": "vscode-test",
+    "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "package": "npm run build && vsce package --no-dependencies -o codededup-vscode.vsix"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
@@ -151,6 +199,7 @@
     "@types/mocha": "^10.0.9",
     "@types/node": "^20.12.0",
     "@types/vscode": "^1.90.0",
+    "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.4.1",
     "@vscode/vsce": "^3.1.1",
     "c8": "^10.1.2",
