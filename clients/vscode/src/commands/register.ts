@@ -1,6 +1,7 @@
 // Command palette + gutter interactions. Every command forwards to the LSP
 // or opens a webview; nothing owns UI-only state.
 
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
@@ -63,8 +64,15 @@ export function openWorstCluster(ctx: vscode.ExtensionContext, store: ReportStor
   openClusterPanel(ctx, store, worst.id);
 }
 
+export function resolveOccurrenceUri(occurrencePath: string): vscode.Uri {
+  if (path.isAbsolute(occurrencePath)) return vscode.Uri.file(occurrencePath);
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const resolved = root ? path.join(root, occurrencePath) : occurrencePath;
+  return vscode.Uri.file(resolved);
+}
+
 export async function openOccurrence(occurrence: ReportOccurrence): Promise<void> {
-  const uri = vscode.Uri.file(occurrence.path);
+  const uri = resolveOccurrenceUri(occurrence.path);
   const doc = await vscode.workspace.openTextDocument(uri);
   const editor = await vscode.window.showTextDocument(doc);
   const start = byteToPosition(doc, occurrence.start_byte);
@@ -97,8 +105,8 @@ export async function compareWithCanonical(store: ReportStore, clusterId: string
   if (!a || !b) return;
   await vscode.commands.executeCommand(
     "vscode.diff",
-    vscode.Uri.file(a.path),
-    vscode.Uri.file(b.path),
+    resolveOccurrenceUri(a.path),
+    resolveOccurrenceUri(b.path),
     `Compare (cluster ${cluster.id})`,
   );
 }
