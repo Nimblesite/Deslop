@@ -34,4 +34,38 @@ pub enum CoreError {
         #[source]
         source: io::Error,
     },
+
+    /// Configuration file was present but could not be parsed as valid
+    /// TOML. See [`crate::config`].
+    #[error("failed to parse exclusion config {path}: {source}")]
+    ConfigParse {
+        /// Config path that failed to parse.
+        path: PathBuf,
+        /// Upstream TOML parse error.
+        #[source]
+        source: toml::de::Error,
+    },
+
+    /// A pattern in the exclusion config was rejected by the
+    /// `ignore::gitignore` compiler.
+    #[error("invalid glob pattern {pattern:?} in {path}: {source}")]
+    ConfigPattern {
+        /// Config path that contained the bad pattern.
+        path: PathBuf,
+        /// The offending pattern string.
+        pattern: String,
+        /// Upstream error from `ignore::gitignore`.
+        #[source]
+        source: ignore::Error,
+    },
+
+    /// Report JSON supplied via `--from-report` could not be parsed.
+    #[error("failed to deserialise report {path}: {source}")]
+    ReportDeserialize {
+        /// Path of the JSON report that failed to parse.
+        path: PathBuf,
+        /// Upstream `serde_json` error.
+        #[source]
+        source: serde_json::Error,
+    },
 }

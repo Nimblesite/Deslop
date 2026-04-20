@@ -199,7 +199,7 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 The single extension point. Implementations live in `codededup-core::lang::<name>`. Each implementation provides: (a) tree-sitter grammar factory, (b) file-extension filter, (c) per-language node-kind normalization rules that collapse identifier / literal / trivia nodes into their structural kind. The trait output type (`NormalizedNode`) is identical across languages so downstream stages are language-agnostic. v1 ships with three plug-ins: `csharp` (`tree-sitter-c-sharp`), `rust` (`tree-sitter-rust`), and `python` (`tree-sitter-python`). Adding a language = one `LanguageParser` impl + pinning the grammar version in `Cargo.toml`. Shared walking / interning plumbing lives in `lang::shared` so every language module is just a `normalise_kind` match plus boilerplate.
 
 ### [PIPELINE-DISCOVER-FILES] File discovery
-Walk the target path with the `ignore` crate, respecting `.gitignore` and Git's standard ignore rules. Filter by the set of file extensions contributed by registered `LanguageParser`s. Every discovered path is registered with [STATE-FILE-REGISTRY] and downstream code traffics in `FileId`, never `Path`.
+Walk the target path with the `ignore` crate, respecting `.gitignore` and Git's standard ignore rules. Filter by the set of file extensions contributed by registered `LanguageParser`s. Additionally drop paths matching `[EXCLUSION-CONFIG]` `exclude` patterns — those files are never parsed. Every surviving path is registered with [STATE-FILE-REGISTRY] and downstream code traffics in `FileId`, never `Path`.
 
 ### [PIPELINE-NORMALIZE-AST] AST normalization
 For each file, parse with the selected language's tree-sitter grammar and walk the resulting tree bottom-up, producing `NormalizedNode { kind: &'static str, children: Vec<Self>, byte_range, file_id }`. Identifier / literal / comment / whitespace nodes are collapsed to their structural kind so Type-2 clones (renamed identifiers) hash identically. Byte ranges are preserved and are the source of truth for any later rendering — line numbers are derived.
@@ -215,6 +215,60 @@ Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries i
 
 ### [STATE-FILE-REGISTRY] File registry (the only global state)
 `codededup-core::state::FileRegistry` maps `FileId ↔ PathBuf`. This is the *only* place mutable state associated with a pipeline run may live. Instances are per-run (not process-global) so a future long-running daemon can keep multiple analyses side-by-side.
+
+### [OUTPUT-SCHEMA-JSON] Canonical JSON schema
+JSON is the canonical report format ([PRINCIPLES-AUDIENCE-AGENT]). Text and HTML are derived from it — nothing lives in two places. Text is terse and AI-readable (ASCII, line-oriented, no colour). HTML is single-file, inline-CSS, human-readable, and embeds the same `schema_doc` and `action_hints` the JSON carries so a human opening the file cold understands what they are looking at.
+
+Top level at `report_schema_version = 2`:
+
+- `report_schema_version: u32` — bumped on breaking change.
+- `tool_version: String` — producer binary version.
+- `min_nodes: u32` — subtree size floor used for the run.
+- `files_analysed: usize` — count of files actually parsed.
+- `clusters_hidden: usize` — clusters that existed but were suppressed from `clusters` because every occurrence matched a [EXCLUSION-CONFIG] `report_hide` pattern. Surfaces the volume of ignored duplication without leaking the content.
+- `schema_doc: &'static str` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy. Shipped via `include_str!` so it cannot drift from the schema.
+- `action_hints: Vec<ActionHint>` — short playbook entries ("high structural + high jaccard → extract shared function", etc.) agents can consult before deciding how to act.
+- `clusters: Vec<ReportCluster>` — ranked worst-offenders-first per [PIPELINE-RANK-WORST-FIRST].
+
+`ReportCluster`:
+
+- `id`, `weight`, `size`, `canonical_node_count`, `signals { structural, token_jaccard, embedding_cos, fused }`, `summary` — as in v1.
+- `interpretation: String` (new in v2) — one-line synthesis computed from the signal combination ("Type-1 exact clone, safe to extract", "Type-3 near-miss, review before merging", "Low-information LSH-only match, treat as hint"). Derived, so rendering is deterministic.
+- `occurrences: Vec<ReportOccurrence>` — each with `path`, `start_byte`, `end_byte`, and `hidden: bool` (true when the occurrence matched a `report_hide` pattern per [EXCLUSION-CONFIG]).
+
+`--from-report <file.json>` skips analysis and re-renders the text + HTML views from a canonical JSON report. Keeps the rendering pipeline testable in isolation and makes re-formatting a cached report free.
+
+The default invocation writes all three formats to disk (`codededup-report.{json,txt,html}` in CWD, or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+
+### [EXCLUSION-CONFIG] Exclusion configuration
+A single opt-in configuration file — `.codededup.toml` in the scan root, or `--config <path>` — controls two orthogonal exclusion tiers. Motivating case: generated code. We want to know when hand-written code duplicates a generated file, but we do not want the generated file itself to dominate the top of the report.
+
+**Tiers.**
+
+- `exclude` — matching files are dropped in [PIPELINE-DISCOVER-FILES] before parsing. They are not counted in `files_analysed`, never fingerprinted, never embedded, and cannot appear in any cluster. Use for third-party vendored code you do not want analysed at all.
+- `report_hide` — matching files **are analysed** and can contribute to clustering, but each occurrence is flagged `hidden = true` at render time. A cluster where **every** occurrence is hidden is dropped from the rendered `clusters` list and counted under `clusters_hidden`. A cluster with at least one non-hidden occurrence is kept intact so the user sees "regular code duplicates generated code." This is the default tier for generated output like `*.g.cs`, `*.generated.cs`, OpenAPI clients, protobuf output.
+
+**File format.** TOML. Parsed via the `toml` crate. Minimal, familiar, diffable:
+
+```toml
+[defaults]
+exclude = ["vendor/**", "third_party/**"]
+report_hide = ["**/*.generated.cs", "**/*.g.cs"]
+
+[language.csharp]
+report_hide = ["**/Migrations/**/*.cs"]
+
+[language.rust]
+report_hide = ["**/target/**"]
+```
+
+**Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
+
+**Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
+
+**No config ⇒ no exclusions.** Current behaviour is preserved. Absence of `.codededup.toml` is not an error and is not warned on.
+
+**`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.
 
 
 

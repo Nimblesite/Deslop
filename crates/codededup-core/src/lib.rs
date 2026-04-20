@@ -17,6 +17,7 @@
 
 pub mod ast;
 pub mod cluster;
+pub mod config;
 pub mod discover;
 pub mod error;
 pub mod fingerprint;
@@ -24,11 +25,13 @@ pub mod lang;
 pub mod lsh;
 pub mod pair;
 pub mod pipeline;
+pub mod render;
 pub mod report;
 pub mod sibling;
 pub mod state;
 pub mod tokens;
 
+pub use config::{ExclusionConfig, DEFAULT_CONFIG_FILENAME};
 pub use error::CoreError;
 pub use pipeline::{run, PipelineConfig};
 pub use report::{render_report, Report, REPORT_SCHEMA_VERSION};

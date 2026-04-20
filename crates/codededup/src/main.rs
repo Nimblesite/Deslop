@@ -1,15 +1,20 @@
 //! `CodeDedup` CLI binary.
 //!
-//! Thin shell over `codededup-core`. Parses args, initialises tracing, and
-//! dispatches to the library. A future MCP/LSP daemon will be a sibling
-//! binary over the same crate.
+//! Thin shell over `codededup-core`. Parses args, initialises tracing,
+//! and either runs the pipeline or re-renders an existing JSON report
+//! (`--from-report`). Always emits the canonical JSON plus derived
+//! text and HTML views unless suppressed ([OUTPUT-SCHEMA-JSON]).
 
-use std::{fmt::Write as _, fs, io::Write as _, path::PathBuf};
+use std::{env, fs, io::Write as _, path::PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
-use codededup_core::{run, PipelineConfig, Report};
+use codededup_core::{render::render_html, render::render_text, run, PipelineConfig, Report};
 use tracing_subscriber::EnvFilter;
+
+/// Default base name for the three-format output written to CWD when
+/// `--output` is not provided.
+const DEFAULT_OUTPUT_STEM: &str = "codededup-report";
 
 /// Command-line interface for `CodeDedup`.
 #[derive(Debug, Parser)]
@@ -27,93 +32,167 @@ struct Cli {
     #[arg(long, default_value_t = 30)]
     min_nodes: u32,
 
-    /// Output format.
-    #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
-    format: OutputFormat,
-
-    /// Write the report to this path instead of stdout.
-    #[arg(long, value_name = "FILE")]
+    /// Base path for the rendered reports. Extensions `.json`, `.txt`,
+    /// `.html` are appended. Defaults to `codededup-report` in the
+    /// current working directory.
+    #[arg(long, value_name = "PATH_PREFIX")]
     output: Option<PathBuf>,
-}
 
-/// Report format selector.
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-enum OutputFormat {
-    /// Human-readable text. Pretty-printer over the JSON schema.
-    Text,
-    /// Canonical JSON schema, stable across releases.
-    Json,
+    /// Skip analysis and re-render the canonical JSON report at this
+    /// path into `.txt` and `.html` (and, unless `--nojson` is set,
+    /// copy the JSON itself).
+    #[arg(long, value_name = "FILE")]
+    from_report: Option<PathBuf>,
+
+    /// Path to an explicit `.codededup.toml` exclusion config. Defaults
+    /// to `.codededup.toml` next to the scan root.
+    #[arg(long, value_name = "FILE")]
+    config: Option<PathBuf>,
+
+    /// Suppress the canonical JSON output.
+    #[arg(long)]
+    nojson: bool,
+
+    /// Suppress the terse AI-readable text output.
+    #[arg(long)]
+    notext: bool,
+
+    /// Suppress the human-readable HTML output.
+    #[arg(long)]
+    nohtml: bool,
 }
 
 fn main() -> Result<()> {
     init_tracing()?;
     let args = Cli::parse();
+    let formats = FormatSelection::from_args(&args)?;
+    let output = OutputPaths::new(args.output.as_deref());
     tracing::info!(
         path = %args.path.display(),
         min_nodes = args.min_nodes,
-        format = ?args.format,
+        json = formats.json,
+        text = formats.text,
+        html = formats.html,
         "codededup invoked",
     );
-    let report = run(&PipelineConfig {
-        root: args.path.clone(),
-        min_nodes: args.min_nodes,
-    })
-    .context("analysis pipeline failed")?;
-    emit_report(&report, args.format, args.output.as_deref())?;
-    Ok(())
-}
-
-/// Serialises `report` in the requested format and writes it to either
-/// `destination` (when provided) or stdout.
-fn emit_report(
-    report: &Report,
-    format: OutputFormat,
-    destination: Option<&std::path::Path>,
-) -> Result<()> {
-    let payload = match format {
-        OutputFormat::Json => {
-            serde_json::to_string_pretty(report).context("serialise report as JSON")?
-        }
-        OutputFormat::Text => render_text(report),
+    let report = if let Some(source) = &args.from_report {
+        load_report(source)?
+    } else {
+        let pipeline_config = PipelineConfig {
+            root: args.path.clone(),
+            min_nodes: args.min_nodes,
+            config_path: args.config.clone(),
+        };
+        run(&pipeline_config).context("analysis pipeline failed")?
     };
-    if let Some(path) = destination {
-        return fs::write(path, &payload)
-            .with_context(|| format!("write report to {}", path.display()));
-    }
-    let stdout = std::io::stdout();
-    let mut guard = stdout.lock();
-    guard
-        .write_all(payload.as_bytes())
-        .context("write report to stdout")?;
-    guard.write_all(b"\n").context("write trailing newline")?;
+    emit_all(&report, &formats, &output)?;
     Ok(())
 }
 
-/// ASCII-only pretty-printer over the report. See
-/// [PRINCIPLES-AUDIENCE-AGENT].
-fn render_text(report: &Report) -> String {
-    let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "codededup {tool} (schema v{schema}) -- {files} file(s), {clusters} cluster(s)",
-        tool = report.tool_version,
-        schema = report.report_schema_version,
-        files = report.files_analysed,
-        clusters = report.clusters.len(),
-    );
-    for (idx, cluster) in report.clusters.iter().enumerate() {
-        let _ = writeln!(
-            out,
-            "#{rank} [{id}] weight={weight:.2} size={size} nodes={nodes}\n  {summary}",
-            rank = idx.saturating_add(1),
-            id = cluster.id,
-            weight = cluster.weight,
-            size = cluster.size,
-            nodes = cluster.canonical_node_count,
-            summary = cluster.summary,
-        );
+/// Which of the three output formats are enabled for this run.
+struct FormatSelection {
+    /// Emit canonical JSON (`<base>.json`).
+    json: bool,
+    /// Emit terse text view (`<base>.txt`).
+    text: bool,
+    /// Emit human-readable HTML view (`<base>.html`).
+    html: bool,
+}
+
+impl FormatSelection {
+    /// Builds the selection from the three suppression flags. Errors
+    /// out when all three are suppressed — silent runs are never
+    /// helpful.
+    fn from_args(args: &Cli) -> Result<Self> {
+        let selection = Self {
+            json: !args.nojson,
+            text: !args.notext,
+            html: !args.nohtml,
+        };
+        if !selection.json && !selection.text && !selection.html {
+            bail!("at least one of --nojson/--notext/--nohtml must remain enabled");
+        }
+        Ok(selection)
     }
-    out
+}
+
+/// Resolved output base path; renderers append their own extension.
+struct OutputPaths {
+    /// `<base>` such that `<base>.json` etc. are the final paths.
+    base: PathBuf,
+}
+
+impl OutputPaths {
+    /// Picks the base path. When the user passed `--output`, use it
+    /// verbatim; otherwise write into the current working directory
+    /// under [`DEFAULT_OUTPUT_STEM`].
+    fn new(explicit: Option<&std::path::Path>) -> Self {
+        let base = explicit.map_or_else(
+            || {
+                env::current_dir()
+                    .unwrap_or_default()
+                    .join(DEFAULT_OUTPUT_STEM)
+            },
+            std::path::Path::to_path_buf,
+        );
+        Self { base }
+    }
+
+    /// Returns the concrete on-disk path for a given extension.
+    fn with_extension(&self, extension: &str) -> PathBuf {
+        let mut path = self.base.clone();
+        let stem = path
+            .file_name()
+            .map(std::ffi::OsStr::to_os_string)
+            .unwrap_or_default();
+        let mut new_name = stem;
+        new_name.push(".");
+        new_name.push(extension);
+        path.set_file_name(new_name);
+        path
+    }
+}
+
+/// Writes every enabled format for `report` to its derived path under
+/// `output`.
+fn emit_all(report: &Report, formats: &FormatSelection, output: &OutputPaths) -> Result<()> {
+    if formats.json {
+        let json = serde_json::to_string_pretty(report).context("serialise report as JSON")?;
+        write_file(&output.with_extension("json"), json.as_bytes())?;
+    }
+    if formats.text {
+        let text = render_text(report);
+        write_file(&output.with_extension("txt"), text.as_bytes())?;
+    }
+    if formats.html {
+        let html = render_html(report);
+        write_file(&output.with_extension("html"), html.as_bytes())?;
+    }
+    Ok(())
+}
+
+/// Writes `payload` to `path`, creating parent directories as needed.
+fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("create parent {}", parent.display()))?;
+        }
+    }
+    let mut file =
+        fs::File::create(path).with_context(|| format!("create report file {}", path.display()))?;
+    file.write_all(payload)
+        .with_context(|| format!("write report file {}", path.display()))?;
+    tracing::info!(path = %path.display(), bytes = payload.len(), "wrote report file");
+    Ok(())
+}
+
+/// Loads a canonical JSON report from disk for `--from-report`.
+fn load_report(path: &std::path::Path) -> Result<Report> {
+    let source =
+        fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
+    serde_json::from_str::<Report>(&source)
+        .with_context(|| format!("parse report {}", path.display()))
 }
 
 /// Configures the global `tracing` subscriber. Honours `RUST_LOG` when set

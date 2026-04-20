@@ -109,7 +109,7 @@ make ci      # lint + test + build (full CI simulation)
 make setup   # post-create dev environment setup
 ```
 
-**There are exactly 7 targets. No others.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured ≥ threshold from `coverage-thresholds.json`, and exits non-zero on any failure. To debug a single test, invoke `cargo test <name> -- --nocapture` directly — that is not a Makefile target.
+**There are 7 AgentPMO targets. Repo specific targets must have a horizontal marker.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured ≥ threshold from `coverage-thresholds.json`, and exits non-zero on any failure. To debug a single test, invoke `cargo test <name> -- --nocapture` directly — that is not a Makefile target.
 
 **`make fmt`** formats. **`make lint`** reads. **`make test`** runs tests with coverage. Three separate targets — no overlap.
 

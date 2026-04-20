@@ -52,11 +52,9 @@ pub fn parse_source(
             language: language_id,
             source,
         })?;
-    parser
-        .parse(source, None)
-        .ok_or(CoreError::ParseFailed {
-            language: language_id,
-        })
+    parser.parse(source, None).ok_or(CoreError::ParseFailed {
+        language: language_id,
+    })
 }
 
 /// Walks `tree`'s named children, applies `normalise_kind` to each, and

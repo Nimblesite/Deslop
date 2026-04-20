@@ -71,12 +71,8 @@ fn normalise_kind(raw: &str) -> Option<&'static str> {
         | "scoped_identifier"
         | "scoped_type_identifier"
         | "metavariable" => Some(IDENTIFIER_KIND),
-        "string_literal"
-        | "raw_string_literal"
-        | "char_literal"
-        | "integer_literal"
-        | "float_literal"
-        | "boolean_literal" => Some(LITERAL_KIND),
+        "string_literal" | "raw_string_literal" | "char_literal" | "integer_literal"
+        | "float_literal" | "boolean_literal" => Some(LITERAL_KIND),
         other => Some(intern_kind(other)),
     }
 }

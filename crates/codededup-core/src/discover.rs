@@ -2,14 +2,23 @@
 //!
 //! Implements [PIPELINE-DISCOVER-FILES]: walks the target path with the
 //! `ignore` crate (honouring `.gitignore` and Git defaults), filters by the
-//! set of file extensions contributed by registered language parsers, and
-//! registers each discovered path with the run's `FileRegistry`.
+//! set of file extensions contributed by registered language parsers, drops
+//! files matching [`crate::config::ExclusionConfig`] `exclude` patterns
+//! ([EXCLUSION-CONFIG]), and registers each surviving path with the run's
+//! `FileRegistry`.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    hash::BuildHasher,
+    path::{Path, PathBuf},
+};
 
 use ignore::WalkBuilder;
 
-use crate::state::{FileId, FileRegistry};
+use crate::{
+    config::ExclusionConfig,
+    state::{FileId, FileRegistry},
+};
 
 /// A discovered file attached to its [`FileId`].
 #[derive(Debug, Clone)]
@@ -20,14 +29,23 @@ pub struct DiscoveredFile {
     pub file_id: FileId,
     /// Lowercase file extension, without leading `.`.
     pub extension: String,
+    /// Parser language id that claimed this file (e.g. `csharp`,
+    /// `rust`, `python`). Used by [`ExclusionConfig`] for per-language
+    /// overlays and by the pipeline to route the file to the right
+    /// parser.
+    pub language: &'static str,
 }
 
 /// Walks `root` and registers every file whose lowercase extension is in
-/// `accepted_extensions`. Returns the freshly populated `FileRegistry` and
-/// the ordered list of discoveries so downstream stages can stream through
-/// them.
+/// `extension_to_language`. Files whose absolute path matches a config
+/// `exclude` pattern are skipped before registration and are not counted
+/// in `files_analysed`.
 #[must_use]
-pub fn discover_files(root: &Path, accepted_extensions: &[&str]) -> DiscoveryResult {
+pub fn discover_files<S: BuildHasher>(
+    root: &Path,
+    extension_to_language: &HashMap<String, &'static str, S>,
+    config: &ExclusionConfig,
+) -> DiscoveryResult {
     let mut registry = FileRegistry::new();
     let mut files = Vec::new();
     let walker = WalkBuilder::new(root)
@@ -43,10 +61,15 @@ pub fn discover_files(root: &Path, accepted_extensions: &[&str]) -> DiscoveryRes
         let Some(extension) = lowercase_extension(&path) else {
             continue;
         };
-        if !accepted_extensions
-            .iter()
-            .any(|candidate| candidate.eq_ignore_ascii_case(&extension))
-        {
+        let Some(language) = extension_to_language.get(&extension).copied() else {
+            continue;
+        };
+        if config.is_excluded(&path, Some(language)) {
+            tracing::debug!(
+                path = %path.display(),
+                language = language,
+                "file excluded by config",
+            );
             continue;
         }
         let file_id = registry.register(path.clone());
@@ -54,6 +77,7 @@ pub fn discover_files(root: &Path, accepted_extensions: &[&str]) -> DiscoveryRes
             path,
             file_id,
             extension,
+            language,
         });
     }
     DiscoveryResult { registry, files }

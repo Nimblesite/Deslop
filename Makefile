@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup help
+.PHONY: build test lint fmt clean ci setup help build-release install-binary
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -25,7 +25,7 @@ endif
 # Coverage — single source of truth is coverage-thresholds.json
 # See docs/specs/SPEC.md and REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON].
 # ---------------------------------------------------------------------------
-COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
+_COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
 # =============================================================================
 # Standard Targets
@@ -75,8 +75,8 @@ setup:
 # Private: coverage enforcement (called from `test`)
 # ---------------------------------------------------------------------------
 _coverage_check:
-	@if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	THRESHOLD=$$(jq -r '.default_threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	@if [ ! -f "$(_COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(_COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
+	THRESHOLD=$$(jq -r '.default_threshold' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	LH=$$(grep '^LH:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
 	LF=$$(grep '^LF:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
 	if [ "$$LF" -eq 0 ]; then echo "FAIL: No lines in lcov.info"; exit 1; fi; \
@@ -93,13 +93,27 @@ _coverage_check:
 # Repo-Specific Targets
 # =============================================================================
 
+## build-release: Build the release binary for the codededup CLI
+build-release:
+	@echo "==> Building release binary..."
+	cargo build --release --package codededup
+
+## install-binary: Build release and install the binary onto the user's PATH
+install-binary: build-release
+	@echo "==> Installing codededup binary..."
+	cargo install --locked --path crates/codededup --force
+
 ## help: List all available targets
 help:
 	@echo "Standard targets:"
-	@echo "  build  - Compile/assemble all artifacts"
-	@echo "  test   - Fail-fast tests + coverage + threshold enforcement"
-	@echo "  lint   - All linters/analyzers (read-only, no formatting)"
-	@echo "  fmt    - Format all code in-place (CHECK=1 for read-only CI check)"
-	@echo "  clean  - Remove build artifacts"
-	@echo "  ci     - lint + test + build (full CI simulation)"
-	@echo "  setup  - Post-create dev environment setup"
+	@echo "  build          - Compile/assemble all artifacts"
+	@echo "  test           - Fail-fast tests + coverage + threshold enforcement"
+	@echo "  lint           - All linters/analyzers (read-only, no formatting)"
+	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
+	@echo "  clean          - Remove build artifacts"
+	@echo "  ci             - lint + test + build (full CI simulation)"
+	@echo "  setup          - Post-create dev environment setup"
+	@echo ""
+	@echo "Repo-specific targets:"
+	@echo "  build-release  - Build the release binary for the codededup CLI"
+	@echo "  install-binary - Build release and install binary onto PATH"

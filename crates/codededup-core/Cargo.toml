@@ -12,6 +12,7 @@ thiserror.workspace = true
 tracing.workspace = true
 serde = { workspace = true }
 serde_json.workspace = true
+toml.workspace = true
 tree-sitter.workspace = true
 tree-sitter-c-sharp.workspace = true
 tree-sitter-rust.workspace = true
