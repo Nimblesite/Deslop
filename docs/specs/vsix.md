@@ -6,11 +6,53 @@ Distribution: Marketplace + OpenVSX as a single `.vsix`. Extension id: `codededu
 
 ### [VSIX-PRINCIPLES] UX principles
 
-1. **Silent when the code is clean, loud only when it matters.** If there are no clusters overlapping the current file, no UI elements appear on that file. The activity bar badge disappears. The editor is untouched.
-2. **The worst offender is always one click away.** The activity bar icon always jumps to cluster `#1` of the live report. The user never navigates through menus to find duplication hotspots.
-3. **Every surface speaks the same schema.** Tree view, hover, code lens, status bar, webview — all render the same `Report` the JSON file carries. Humans and agents read the same truth.
-4. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
-5. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
+1. **In your face the moment you duplicate.** When the user types code that matches an existing cluster, the editor tells them **immediately** via the live-bubble ([VSIX-LIVE-BUBBLE]) — not on save, not on CI, not in a panel they have to open. This is the product's defining moment. Every other UX decision is subordinate to making it land cleanly.
+2. **Silent when the code is clean.** If there are no clusters overlapping the current file, no UI elements appear on that file. The activity bar badge disappears. The editor is untouched. Loudness is reserved for real duplication.
+3. **The worst offender is always one click away.** The activity bar icon always jumps to cluster `#1` of the live report. The user never navigates through menus to find duplication hotspots.
+4. **Every surface speaks the same schema.** Tree view, hover, code lens, status bar, bubble, webview — all render the same `Report` the JSON file carries. Humans and agents read the same truth.
+5. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
+6. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
+
+### [VSIX-LIVE-BUBBLE] Live duplication bubble — the flagship UX
+
+This is the feature. The VSIX is the first tool that tells a developer **"you are duplicating code right now"** while the code is still under their cursor. Every other surface (tree view, webview, code lens, status bar) is supporting cast; the bubble is the lead.
+
+**When it fires.**
+After every coalesced buffer edit ([DAEMON-WATCHER] debounce = 250 ms), the VSIX issues `duplicates/findSimilar` on the range the user most recently touched. If a cluster comes back with fused score ≥ `FUSED_THRESHOLD` (0.85, same as the offline report), the bubble appears anchored to the bottom-right of the duplicated range. If nothing matches, no bubble — silence is the signal that the code is novel.
+
+**What it looks like.**
+A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
+
+- **Severity dot** — the same colour ramp as [LSP-SEVERITY] (red for top 1% weight, amber for 1–10%, blue for 10–50%, faint grey never shown as a bubble).
+- **Short verdict** — one of: `DUPLICATE` (structural = 1.0), `NEAR-MISS` (token jaccard ≥ 0.90, structural < 1.0), `SEMANTIC MATCH` (embedding cos ≥ 0.90). One word, uppercase, so the user sees it without reading.
+- **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
+- **Signal strip** — three 8-pixel bars for structural / jaccard / embedding. Bright = high, dim = low. Lets the user distinguish "identical copy" from "semantic near-miss" at a glance.
+- **Action chevron** — click expands the bubble into a webview-backed card with interpretation, all occurrences, action hints, and a `Compare` button that opens VS Code's diff view against the canonical occurrence.
+
+**How it's rendered.**
+VS Code doesn't give us a true floating tooltip over a specific range, so the bubble uses the layering documented in the VS Code extension cookbook:
+
+- Primary: a `TextEditorDecorationType` with `after.contentText` attached to the end of the duplicated range's last line, carrying the severity dot + verdict + count. This is the always-visible indicator — shows up inline, like GitHub Copilot's ghost text but for duplication.
+- Secondary: an `InlayHint` on the same range, carrying the signal strip. Inlay hints render in a different visual register than ghost text; the combination gives the user a two-part cue (verdict inline, signal bars on the hint line).
+- Tertiary: hover over either surface opens the LSP hover ([LSP-HOVER]) for full detail.
+
+No native floating bubble is possible in current VS Code APIs without a custom webview overlay — and a webview overlay would steal focus. The decoration + inlay combination is the closest legal approximation, reads as a single "bubble" to the user, and never steals the caret.
+
+**Ghost-line mode (opt-in, `codededup.liveBubble.mode = "ghost"`).**
+For users who want a tighter callout, ghost-line mode renders the bubble on a **phantom line inserted below the duplicated range**, using VS Code's `CodeLens` API with a custom-styled title. The phantom line is visually distinct from the real buffer (dimmed background, italic). It never modifies the buffer; scroll behaviour matches code lenses. This is the closest thing to "a speech bubble pointing at the duplicate" that VS Code natively supports.
+
+**Cooldown + budget.**
+- Bubbles don't flicker: once shown for a range, the same cluster on the same range stays bubbled until the user moves out, even if debounce re-fires. Cluster stability across re-analyses ([DAEMON-DELTA]) makes this trivial — same id, same bubble.
+- The live-bubble query has a 250 ms budget on the daemon side ([DAEMON-PERF-BUDGETS]); if it misses, the bubble is skipped for that edit cycle and will try again on the next debounce. No stale bubbles.
+- At most one bubble visible per editor at a time (the worst-weight cluster overlapping the most-recently-edited range). Users reading a report don't need N bubbles competing for attention; the tree view ([VSIX-ACTIVITY-BAR]) shows all of them.
+
+**Dismissal.**
+- `Escape` dismisses the bubble until the next edit re-triggers.
+- Clicking a `Dismiss for this cluster` action in the expanded card suppresses that cluster id for the session. Session-scoped, never persisted — the next day, the duplication is real again and we say so.
+- `codededup.liveBubble.enabled = false` turns the bubble off globally for users who want the rest of the VSIX without the in-your-face moment. Off-by-default is **not** a setting we ship — silence-when-clean already gives users a tolerable floor; the bubble is on from the first install.
+
+**Why this is the headline.**
+No competitor ([competitors.md](competitors.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. CodeDedup *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
 
 ### [VSIX-BUNDLE] Extension bundle
 

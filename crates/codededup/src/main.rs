@@ -100,6 +100,13 @@ struct Cli {
     /// `--no-color`).
     #[command(flatten)]
     behaviour: BehaviourFlags,
+
+    /// Show the researcher view on stderr — taxonomy IDs (Type-1/2/3),
+    /// signal letters (s=structural, j=token, e=embedding), AST node
+    /// counts, weight, LSH terminology. Off by default; the plain
+    /// English summary is what humans actually want.
+    #[arg(long)]
+    technical: bool,
 }
 
 /// Suppression flags for each output format. Packed into their own
@@ -144,12 +151,6 @@ struct BehaviourFlags {
     /// `NO_COLOR` environment variable is set.
     #[arg(long)]
     no_color: bool,
-    /// Show the researcher view on stderr — taxonomy IDs (Type-1/2/3),
-    /// signal letters (s=structural, j=token, e=embedding), AST node
-    /// counts, weight, LSH terminology. Off by default; the plain
-    /// English summary is what humans actually want.
-    #[arg(long)]
-    technical: bool,
 }
 
 fn main() {
@@ -188,7 +189,7 @@ fn run_cli() -> Result<()> {
             min_nodes: args.min_nodes,
             embedding_mode: mode.as_str(),
             incremental: args.behaviour.incremental,
-            technical: args.behaviour.technical,
+            technical: args.technical,
         },
     );
     tracing::info!(
@@ -209,7 +210,7 @@ fn run_cli() -> Result<()> {
         }
     };
     let written = emit_all(&report, &formats, &output)?;
-    summary::summary(color, &report);
+    summary::summary(color, &report, args.technical);
     summary::finish_ok(
         color,
         &WrittenArtefacts {
