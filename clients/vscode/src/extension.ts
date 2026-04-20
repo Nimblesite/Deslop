@@ -35,7 +35,12 @@ let resolvedMcp: ResolvedBinary | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   initOutputChannel();
-  log("CodeDedup extension activating");
+  log("extension activating", {
+    extensionPath: context.extensionPath,
+    version: currentExtensionVersion(context),
+    platform: process.platform,
+    arch: process.arch,
+  });
 
   const reportStore = new ReportStore();
   context.subscriptions.push(reportStore);
@@ -43,13 +48,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   try {
     resolvedLsp = resolveBinary(context.extensionPath, "lsp", currentExtensionVersion(context));
     resolvedMcp = tryResolveOptional(context.extensionPath, "mcp", currentExtensionVersion(context));
-    log(
-      `lsp: ${resolvedLsp.path} (${resolvedLsp.source}, version=${resolvedLsp.version ?? "unknown"})`,
-    );
+    log("lsp resolved", {
+      path: resolvedLsp.path,
+      source: resolvedLsp.source,
+      version: resolvedLsp.version,
+    });
     if (resolvedMcp) {
-      log(
-        `mcp: ${resolvedMcp.path} (${resolvedMcp.source}, version=${resolvedMcp.version ?? "unknown"})`,
-      );
+      log("mcp resolved", {
+        path: resolvedMcp.path,
+        source: resolvedMcp.source,
+        version: resolvedMcp.version,
+      });
     }
     client = startLanguageClient(resolvedLsp);
   } catch (err) {
@@ -147,7 +156,7 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
     },
   );
   c.onNotification("codededup/analysisState", (state: AnalysisState) => {
-    log(`analysis state: ${state}`);
+    log("analysis state", { state });
   });
 }
 

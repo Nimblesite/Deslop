@@ -79,8 +79,15 @@ suite("extension internals", () => {
   });
 
   test("tryResolveOptional swallows failure and returns undefined", () => {
-    const result = tryResolveOptional("/nonexistent/extension", "mcp", "0.1.0");
-    assert.equal(result, undefined);
+    const saved = { ...process.env };
+    delete process.env["CODEDEDUP_BINARY_DIR"];
+    process.env["PATH"] = "/nope";
+    try {
+      const result = tryResolveOptional("/nonexistent/extension", "mcp", "0.1.0");
+      assert.equal(result, undefined);
+    } finally {
+      process.env = saved;
+    }
   });
 
   test("wireNotifications registers handlers without throwing", () => {

@@ -65,15 +65,22 @@ export class LiveBubble implements vscode.Disposable {
       ),
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
-      vscode.commands.registerCommand("codededup.bubble.dismiss", () => this.clearBubble()),
-      vscode.commands.registerCommand(
-        "codededup.bubble.dismissCluster",
-        (id: string) => {
-          this.dismissedClusters.add(id);
-          this.clearBubble();
-        },
-      ),
     );
+    this.tryRegister("codededup.bubble.dismiss", () => this.clearBubble());
+    this.tryRegister("codededup.bubble.dismissCluster", (id) => {
+      this.dismissedClusters.add(String(id));
+      this.clearBubble();
+    });
+  }
+
+  // Idempotent registration so multiple LiveBubble instances (real + tests)
+  // can co-exist without "command already exists" throws.
+  private tryRegister(id: string, handler: (...args: unknown[]) => unknown): void {
+    try {
+      this.disposables.push(vscode.commands.registerCommand(id, handler));
+    } catch {
+      // already registered by an earlier instance
+    }
   }
 
   dispose(): void {

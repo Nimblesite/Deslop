@@ -3,6 +3,9 @@
 // with the real extension's command registrations.
 
 import * as vscode from "vscode";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import {
   openWorstCluster,
   openOccurrence,
@@ -74,16 +77,16 @@ suite("register command implementations", () => {
   });
 
   test("openOccurrence opens the referenced file at the byte range", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "hello\nworld\n",
-      language: "plaintext",
-    });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-occ-"));
+    const file = path.join(dir, "occ.txt");
+    fs.writeFileSync(file, "hello\nworld\n", "utf8");
     await openOccurrence({
-      path: doc.uri.fsPath,
+      path: file,
       start_byte: 0,
       end_byte: 3,
       hidden: false,
     });
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   test("jumpToNextOccurrence navigates to the sibling when the cursor sits inside a cluster", async () => {

@@ -1,19 +1,50 @@
-// Single output channel for everything user-visible; stderr from the LSP lands here too.
+// Structured logging via pino, fanned out to the CodeDedup output channel.
+// One logger instance, one output channel, no println-style debugging allowed.
 
 import * as vscode from "vscode";
+import pino, { Logger, LogDescriptor } from "pino";
 
 let channel: vscode.OutputChannel | undefined;
+let rootLogger: Logger | undefined;
 
 export function initOutputChannel(): vscode.OutputChannel {
   if (!channel) channel = vscode.window.createOutputChannel("CodeDedup");
   return channel;
 }
 
-export function log(message: string): void {
-  initOutputChannel().appendLine(`[${new Date().toISOString()}] ${message}`);
+export function logger(): Logger {
+  if (rootLogger) return rootLogger;
+  const out = initOutputChannel();
+  rootLogger = pino(
+    {
+      name: "codededup-vscode",
+      level: process.env.CODEDEDUP_LOG_LEVEL ?? "debug",
+      base: null,
+      timestamp: pino.stdTimeFunctions.isoTime,
+      formatters: { level: (label) => ({ level: label }) },
+    },
+    {
+      write(chunk: string): void {
+        out.append(chunk);
+      },
+    },
+  );
+  return rootLogger;
+}
+
+export function log(message: string, fields?: Record<string, unknown>): void {
+  logger().info(fields ?? {}, message);
+}
+
+export function logWarn(message: string, fields?: Record<string, unknown>): void {
+  logger().warn(fields ?? {}, message);
 }
 
 export function logError(err: unknown, context: string): void {
-  const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-  log(`error in ${context}: ${message}`);
+  const payload: LogDescriptor =
+    err instanceof Error
+      ? { err: { name: err.name, message: err.message, stack: err.stack }, context }
+      : { err: String(err), context };
+  logger().error(payload, `error in ${context}`);
+  initOutputChannel().show(true);
 }
