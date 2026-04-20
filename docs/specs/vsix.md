@@ -2,7 +2,7 @@
 
 The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
 
-Distribution: Marketplace + OpenVSX as a single `.vsix`. Extension id: `deslop.deslop-vscode`. Published from `clients/vscode/` in this repo.
+Distribution: Marketplace + OpenVSX as a single `.vsix`. Extension id: `nimblesite.deslop-vscode`. Published from `clients/vscode/` in this repo.
 
 ### [VSIX-PRINCIPLES] UX principles
 

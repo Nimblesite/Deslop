@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
 async function waitForReport(): Promise<unknown> {
-  const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
+  const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
   await ext!.activate();
   // Initial report seeding takes time over stdio.
   for (let i = 0; i < 20; i++) {

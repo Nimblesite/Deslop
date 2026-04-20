@@ -432,12 +432,12 @@ mod tests {
     }
 
     #[test]
-    fn build_for_file_emits_diagnostic_with_relatedinfo_and_severity() {
-        let workspace = TempDir::new().expect("tempdir");
+    fn build_for_file_emits_diagnostic_with_relatedinfo_and_severity() -> Result<()> {
+        let workspace = TempDir::new()?;
         let primary_source = "alpha\nbeta\ngamma\n";
         let secondary_source = "a\nbb\nccc\ndddd\n";
-        let _primary = write_source(workspace.path(), "Alpha.cs", primary_source);
-        let _secondary = write_source(workspace.path(), "Beta.cs", secondary_source);
+        let _primary = write_source(workspace.path(), "Alpha.cs", primary_source)?;
+        let _secondary = write_source(workspace.path(), "Beta.cs", secondary_source)?;
         let occurrences = vec![occurrence("Alpha.cs", 0, 5), occurrence("Beta.cs", 2, 5)];
         let cluster = sample_cluster("cluster-1", 100.0, occurrences, "identical");
         let file_report = FileReport {
@@ -453,39 +453,45 @@ mod tests {
             1,
             "one diagnostic for the Alpha.cs occurrence"
         );
-        let diagnostic = &diagnostics[0];
+        let diagnostic = diagnostics
+            .first()
+            .ok_or_else(|| anyhow!("diagnostic present"))?;
         assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
         assert_eq!(
             diagnostic.severity,
             Some(DiagnosticSeverity::WARNING),
             "top percentile → WARNING"
         );
-        let tower_lsp::lsp_types::NumberOrString::String(code) =
-            diagnostic.code.as_ref().expect("code populated")
-        else {
-            panic!("expected String diagnostic code");
+        let code_field = diagnostic
+            .code
+            .as_ref()
+            .ok_or_else(|| anyhow!("code populated"))?;
+        let tower_lsp::lsp_types::NumberOrString::String(code) = code_field else {
+            return Err(anyhow!("expected String diagnostic code"));
         };
         assert_eq!(code, "cluster-1");
         let related = diagnostic
             .related_information
             .as_ref()
-            .expect("related info for Beta.cs");
+            .ok_or_else(|| anyhow!("related info for Beta.cs"))?;
         assert_eq!(related.len(), 1, "only Beta.cs surfaces as related");
+        let related_first = related.first().ok_or_else(|| anyhow!("first related"))?;
         assert!(
-            related[0].message.contains("occurrence 2 of 2"),
+            related_first.message.contains("occurrence 2 of 2"),
             "label uses 1-based index: {}",
-            related[0].message
+            related_first.message
         );
         assert_eq!(
             diagnostic.range.start.line, 0,
             "start on first line of Alpha.cs"
         );
+        Ok(())
     }
 
     #[test]
-    fn build_for_file_drops_clusters_with_suppressed_severity() {
-        let workspace = TempDir::new().expect("tempdir");
-        let _primary = write_source(workspace.path(), "Alpha.cs", "abc\n");
+    fn build_for_file_drops_clusters_with_suppressed_severity() -> Result<()> {
+        let workspace = TempDir::new()?;
+        let _primary = write_source(workspace.path(), "Alpha.cs", "abc\n")?;
         let cluster = sample_cluster(
             "cluster-low",
             1.0,
@@ -502,12 +508,13 @@ mod tests {
             diagnostics.is_empty(),
             "weight below 50th percentile → dropped: {diagnostics:?}"
         );
+        Ok(())
     }
 
     #[test]
-    fn build_for_file_empty_related_info_becomes_none() {
-        let workspace = TempDir::new().expect("tempdir");
-        let _primary = write_source(workspace.path(), "Alpha.cs", "abcdef\n");
+    fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
+        let workspace = TempDir::new()?;
+        let _primary = write_source(workspace.path(), "Alpha.cs", "abcdef\n")?;
         let cluster = sample_cluster(
             "solo",
             100.0,
@@ -521,16 +528,20 @@ mod tests {
         let weights = vec![1.0_f64, 2.0, 100.0];
         let diagnostics = build_for_file(&file_report, &weights, workspace.path());
         assert_eq!(diagnostics.len(), 1);
+        let diagnostic = diagnostics
+            .first()
+            .ok_or_else(|| anyhow!("diagnostic present"))?;
         assert!(
-            diagnostics[0].related_information.is_none(),
+            diagnostic.related_information.is_none(),
             "no other occurrences → related_information is None"
         );
+        Ok(())
     }
 
     #[test]
-    fn load_cached_source_reuses_cache_and_survives_missing_files() {
-        let workspace = TempDir::new().expect("tempdir");
-        let real = write_source(workspace.path(), "Real.cs", "hello\n");
+    fn load_cached_source_reuses_cache_and_survives_missing_files() -> Result<()> {
+        let workspace = TempDir::new()?;
+        let real = write_source(workspace.path(), "Real.cs", "hello\n")?;
         let mut cache: HashMap<PathBuf, String> = HashMap::new();
         let first = load_cached_source(&real, &mut cache);
         assert_eq!(first, "hello\n");
@@ -543,5 +554,6 @@ mod tests {
         );
         let second = load_cached_source(&real, &mut cache);
         assert_eq!(second, "hello\n", "cached read returns same content");
+        Ok(())
     }
 }

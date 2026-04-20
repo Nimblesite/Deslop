@@ -8,7 +8,7 @@ import { sleep } from "./helpers";
 
 suite("live bubble (real LSP)", () => {
   test("extension spawns the real deslop-lsp binary", async () => {
-    const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
     assert.ok(ext && ext.isActive, "extension must be active against the real LSP");
   });
 

@@ -72,6 +72,7 @@ fn occurrences_block(cluster: &ReportCluster) -> String {
 #[allow(clippy::missing_docs_in_private_items)]
 mod tests {
     use super::*;
+    use anyhow::{anyhow, Result};
     use deslop_core::report::{ReportOccurrence, ReportSignals};
     use std::path::PathBuf;
 
@@ -132,11 +133,11 @@ mod tests {
     }
 
     #[test]
-    fn build_for_cluster_wraps_markdown_in_hover_content() {
+    fn build_for_cluster_wraps_markdown_in_hover_content() -> Result<()> {
         let cluster = make_cluster();
         let hover = build_for_cluster(&cluster);
         let HoverContents::Markup(markup) = hover.contents else {
-            panic!("hover contents should be MarkupContent");
+            return Err(anyhow!("hover contents should be MarkupContent"));
         };
         assert_eq!(markup.kind, MarkupKind::Markdown);
         assert!(
@@ -148,6 +149,7 @@ mod tests {
             hover.range.is_none(),
             "hover range must stay None so the client highlights the full cursor range"
         );
+        Ok(())
     }
 
     #[test]

@@ -72,9 +72,10 @@ fn advance_utf16_units(source: &str, start_byte: usize, character: u32) -> usize
 #[allow(clippy::missing_docs_in_private_items)]
 mod tests {
     use super::*;
+    use anyhow::{anyhow, Result};
 
     #[test]
-    fn position_for_byte_covers_newlines_utf16_clamping_and_offsets() {
+    fn position_for_byte_covers_newlines_utf16_clamping_and_offsets() -> Result<()> {
         let single = "hello world";
         assert_eq!(
             position_for_byte(single, 0),
@@ -128,7 +129,7 @@ mod tests {
             }
         );
         let emoji = "A\u{1F600}B";
-        let after_emoji = emoji.find('B').expect("B is present");
+        let after_emoji = emoji.find('B').ok_or_else(|| anyhow!("B is present"))?;
         let pos = position_for_byte(emoji, after_emoji);
         assert_eq!(pos.line, 0);
         assert_eq!(pos.character, 3, "emoji occupies two UTF-16 code units");
@@ -146,10 +147,11 @@ mod tests {
                 character: 0
             }
         );
+        Ok(())
     }
 
     #[test]
-    fn byte_for_position_round_trips_and_clamps_past_eof() {
+    fn byte_for_position_round_trips_and_clamps_past_eof() -> Result<()> {
         let multi = "abc\ndef\nghij";
         for byte in [0_usize, 1, 2, 3, 4, 6, 8, 12] {
             let position = position_for_byte(multi, byte);
@@ -171,8 +173,9 @@ mod tests {
             line: 0,
             character: 3,
         };
-        let b_byte = emoji.find('B').expect("B present");
+        let b_byte = emoji.find('B').ok_or_else(|| anyhow!("B present"))?;
         assert_eq!(byte_for_position(emoji, at_b), b_byte);
+        Ok(())
     }
 
     #[test]

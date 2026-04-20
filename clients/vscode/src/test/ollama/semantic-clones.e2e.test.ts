@@ -18,7 +18,7 @@ import { LanguageClient } from "vscode-languageclient/node";
 import type { Report } from "../../types/report";
 import { sleep } from "../suite/helpers";
 
-const EXT_ID = "deslop.deslop-vscode";
+const EXT_ID = "nimblesite.deslop-vscode";
 const COS_FLOOR = 0.3;
 
 interface ExtensionExports {
@@ -27,7 +27,7 @@ interface ExtensionExports {
 
 async function activateExtension(): Promise<ExtensionExports> {
   const ext = vscode.extensions.getExtension<ExtensionExports>(EXT_ID);
-  assert.ok(ext, "deslop.deslop-vscode must be installed in the test host");
+  assert.ok(ext, "nimblesite.deslop-vscode must be installed in the test host");
   const api = await ext.activate();
   for (let i = 0; i < 40; i++) {
     const cmds = await vscode.commands.getCommands(true);
