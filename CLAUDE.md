@@ -32,8 +32,11 @@ fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
 fuse signals → rank → render report
 ```
 
-- **`crates/deslop-core`** — analysis library. Everything non-trivial lives here. A future LSP consumes the same crate.
+- **`crates/deslop-core`** — analysis library. Everything non-trivial lives here. The CLI, LSP, and MCP binaries all consume this single crate.
 - **`crates/deslop`** — thin CLI binary (<50 LOC of glue): arg parsing, tracing setup, invoke core, render output.
+- **`crates/deslop-lsp`** — LSP server surface; streams live clone warnings to any LSP-capable editor.
+- **`crates/deslop-mcp`** — MCP server surface; lets agent tools query the running analysis mid-generation.
+- **`clients/vscode`** — VS Code extension (VSIX) that bundles the LSP + MCP binaries and surfaces reports in-editor.
 - **`LanguageParser` trait** is the single extension point. Adding a language = implementing the trait + pinning the grammar in `Cargo.toml`, CI, and Dockerfile.
 - **Normalization** strips identifiers, literals, and trivia before fingerprinting so renamed-clone detection works (Type-2). Per-language rules, identical output format across languages.
 - **Fingerprinting** operates on AST subtrees, not lines. Minimum node count configurable.
@@ -131,7 +134,12 @@ crates/
 │   └── src/
 │       ├── lib.rs
 │       └── state.rs        # single global-state file
-└── deslop/              # thin CLI binary
+├── deslop/              # thin CLI binary
+├── deslop-lsp/          # LSP server binary
+└── deslop-mcp/          # MCP server binary
+clients/
+└── vscode/              # VS Code extension (VSIX) — bundles LSP + MCP
+site/                    # Eleventy static site
 docs/
 ├── specs/SPEC.md           # full research + design spec
 └── plans/PLAN.md           # phased execution plan with TODO at bottom

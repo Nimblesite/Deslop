@@ -1,3 +1,4 @@
+# agent-pmo:9a71cbf
 name: Release
 
 on:
@@ -32,6 +33,13 @@ jobs:
           sed -i 's/^version = ".*"$/version = "${{ steps.extract.outputs.version }}"/' Cargo.toml
           grep -E '^version = "${{ steps.extract.outputs.version }}"$' Cargo.toml
 
+      - name: Stamp version into clients/vscode/package.json
+        working-directory: clients/vscode
+        run: |
+          set -euo pipefail
+          npm version "${{ steps.extract.outputs.version }}" --no-git-tag-version --allow-same-version
+          node -e "if (require('./package.json').version !== '${{ steps.extract.outputs.version }}') { process.exit(1) }"
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Refresh Cargo.lock
@@ -42,7 +50,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock
+          git add Cargo.toml Cargo.lock clients/vscode/package.json clients/vscode/package-lock.json
           git diff --staged --quiet && exit 0
           git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
           git push origin HEAD:main
@@ -59,21 +67,31 @@ jobs:
             artifact_name: linux-x64
             bin: deslop
             archive_ext: tar.gz
+            cross: false
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: linux-arm64
+            bin: deslop
+            archive_ext: tar.gz
+            cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: macos-x64
             bin: deslop
             archive_ext: tar.gz
+            cross: false
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-arm64
             bin: deslop
             archive_ext: tar.gz
+            cross: false
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x64
             bin: deslop.exe
             archive_ext: zip
+            cross: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -96,8 +114,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-release-
 
-      - name: Build release binaries
+      - name: Install cross (for cross-compiled targets)
+        if: matrix.cross
+        run: cargo install cross --locked --version 0.2.5
+
+      - name: Build release binaries (native)
+        if: ${{ !matrix.cross }}
         run: cargo build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
+
+      - name: Build release binaries (cross)
+        if: matrix.cross
+        run: cross build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
@@ -194,6 +221,7 @@ jobs:
             # Match VS Code extension platform naming (matches Makefile _vsix-stage-and-package).
             case "$platform" in
               linux-x64)   target=linux-x64 ;;
+              linux-arm64) target=linux-arm64 ;;
               macos-x64)   target=darwin-x64 ;;
               macos-arm64) target=darwin-arm64 ;;
               windows-x64) target=win32-x64 ;;
@@ -271,3 +299,177 @@ jobs:
           files: release-files/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  publish-homebrew:
+    name: Publish Homebrew formula
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Compute checksums and write Formula
+        id: formula
+        run: |
+          set -euo pipefail
+          version="${{ needs.version.outputs.version }}"
+          base="https://github.com/${{ github.repository }}/releases/download/v${version}"
+
+          mac_arm_tar="deslop-${version}-macos-arm64.tar.gz"
+          mac_x64_tar="deslop-${version}-macos-x64.tar.gz"
+          linux_x64_tar="deslop-${version}-linux-x64.tar.gz"
+          linux_arm_tar="deslop-${version}-linux-arm64.tar.gz"
+
+          for f in "$mac_arm_tar" "$mac_x64_tar" "$linux_x64_tar" "$linux_arm_tar"; do
+            path=$(find artifacts -name "$f" -type f | head -n1)
+            if [ -z "$path" ]; then
+              echo "FAIL: missing release artifact $f" >&2
+              exit 1
+            fi
+            sha=$(sha256sum "$path" | awk '{print $1}')
+            case "$f" in
+              "$mac_arm_tar")   mac_arm_sha=$sha ;;
+              "$mac_x64_tar")   mac_x64_sha=$sha ;;
+              "$linux_x64_tar") linux_x64_sha=$sha ;;
+              "$linux_arm_tar") linux_arm_sha=$sha ;;
+            esac
+          done
+
+          mkdir -p tap/Formula
+          cat > tap/Formula/deslop.rb <<EOF
+          class Deslop < Formula
+            desc "Live duplicate-code analysis server for AI coding agents"
+            homepage "https://github.com/${{ github.repository }}"
+            version "${version}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "${base}/${mac_arm_tar}"
+                sha256 "${mac_arm_sha}"
+              end
+              on_intel do
+                url "${base}/${mac_x64_tar}"
+                sha256 "${mac_x64_sha}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${base}/${linux_arm_tar}"
+                sha256 "${linux_arm_sha}"
+              end
+              on_intel do
+                url "${base}/${linux_x64_tar}"
+                sha256 "${linux_x64_sha}"
+              end
+            end
+
+            def install
+              bin.install "deslop"
+              bin.install "deslop-lsp" if File.exist?("deslop-lsp")
+              bin.install "deslop-mcp" if File.exist?("deslop-mcp")
+            end
+
+            test do
+              assert_match "${version}", shell_output("#{bin}/deslop --version")
+            end
+          end
+          EOF
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: Nimblesite/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Commit and push Formula
+        run: |
+          set -euo pipefail
+          mkdir -p homebrew-tap/Formula
+          cp tap/Formula/deslop.rb homebrew-tap/Formula/deslop.rb
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/deslop.rb
+          git diff --staged --quiet && exit 0
+          git commit -m "deslop ${{ needs.version.outputs.version }}"
+          git push
+
+  publish-scoop:
+    name: Publish Scoop manifest
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Build Scoop manifest
+        run: |
+          set -euo pipefail
+          version="${{ needs.version.outputs.version }}"
+          base="https://github.com/${{ github.repository }}/releases/download/v${version}"
+          win_zip="deslop-${version}-windows-x64.zip"
+
+          path=$(find artifacts -name "$win_zip" -type f | head -n1)
+          if [ -z "$path" ]; then
+            echo "FAIL: missing $win_zip" >&2
+            exit 1
+          fi
+          win_sha=$(sha256sum "$path" | awk '{print $1}')
+
+          mkdir -p bucket/bucket
+          cat > bucket/bucket/deslop.json <<EOF
+          {
+            "version": "${version}",
+            "description": "Live duplicate-code analysis server for AI coding agents",
+            "homepage": "https://github.com/${{ github.repository }}",
+            "license": "MIT",
+            "architecture": {
+              "64bit": {
+                "url": "${base}/${win_zip}",
+                "hash": "${win_sha}"
+              }
+            },
+            "bin": [
+              "deslop.exe",
+              "deslop-lsp.exe",
+              "deslop-mcp.exe"
+            ],
+            "checkver": {
+              "github": "https://github.com/${{ github.repository }}"
+            },
+            "autoupdate": {
+              "architecture": {
+                "64bit": {
+                  "url": "${base}/deslop-\$version-windows-x64.zip"
+                }
+              }
+            }
+          }
+          EOF
+
+      - name: Checkout scoop-bucket
+        uses: actions/checkout@v4
+        with:
+          repository: Nimblesite/scoop-bucket
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: scoop-bucket
+
+      - name: Commit and push manifest
+        run: |
+          set -euo pipefail
+          mkdir -p scoop-bucket/bucket
+          cp bucket/bucket/deslop.json scoop-bucket/bucket/deslop.json
+          cd scoop-bucket
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bucket/deslop.json
+          git diff --staged --quiet && exit 0
+          git commit -m "deslop ${{ needs.version.outputs.version }}"
+          git push
