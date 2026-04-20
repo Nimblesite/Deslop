@@ -15,9 +15,9 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use codededup_core::{
-    debug_ast_dump, render::render_html, render::render_text, run, EmbeddingMode,
-    EmbeddingSettings, OllamaProvider, PipelineConfig, Report, StubProvider,
-    DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    debug_ast_dump, render::render_html, render::render_text, EmbeddingMode, EmbeddingSettings,
+    OllamaProvider, PipelineSession, Report, ReportDelta, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 use tracing::Level;
 
@@ -107,6 +107,16 @@ struct Cli {
     /// English summary is what humans actually want.
     #[arg(long)]
     technical: bool,
+
+    /// After the initial analysis, re-run each listed path through the
+    /// incremental session ([`PipelineSession::update_files`]) and emit
+    /// the [`ReportDelta`] between the two generations as
+    /// `<base>.delta.json`. The rerun also drives the delta+session
+    /// path end-to-end; deleted paths are dropped from the corpus on
+    /// the rerun. Primary use: wiring a watcher or LSP transport at
+    /// [DAEMON-WATCHER].
+    #[arg(long = "rerun-touch", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
+    rerun_touch: Vec<PathBuf>,
 }
 
 /// Suppression flags for each output format. Packed into their own
@@ -202,14 +212,21 @@ fn run_cli() -> Result<()> {
         incremental = args.behaviour.incremental,
         "codededup invoked",
     );
-    let report = match produce_report(&args, mode, &formats) {
-        Ok(report) => report,
+    let outcome = match produce_report(&args, mode, &formats) {
+        Ok(outcome) => outcome,
         Err(err) => {
             summary::finish_err(color, &log_sink, &err);
             return Err(err);
         }
     };
-    let written = emit_all(&report, &formats, &output, &args.path)?;
+    let report = outcome.report;
+    let mut written = emit_all(&report, &formats, &output, &args.path)?;
+    if let Some(delta) = outcome.delta.as_ref() {
+        let delta_path = output.with_extension("delta.json");
+        let payload = serde_json::to_string_pretty(delta).context("serialise delta as JSON")?;
+        write_file(&delta_path, payload.as_bytes())?;
+        written.push(delta_path);
+    }
     summary::summary(color, &report, args.technical);
     summary::finish_ok(
         color,
@@ -238,24 +255,62 @@ fn run_debug_ast(file: &std::path::Path) -> Result<()> {
 }
 
 /// Either loads a cached report (`--from-report`) or runs the
+/// pipeline end-to-end, optionally following with an incremental
+/// rerun + [`ReportDelta`] ([LIVE-DELTA]).
+#[derive(Debug)]
+struct PipelineOutcome {
+    /// Final report to emit as JSON/text/HTML.
+    report: Report,
+    /// Delta between the initial and rerun generations. `None` unless
+    /// `--rerun-touch` was passed.
+    delta: Option<ReportDelta>,
+}
+
+/// Either loads a cached report (`--from-report`) or runs the
 /// pipeline end-to-end.
-fn produce_report(args: &Cli, mode: EmbeddingMode, _formats: &FormatSelection) -> Result<Report> {
+fn produce_report(
+    args: &Cli,
+    mode: EmbeddingMode,
+    _formats: &FormatSelection,
+) -> Result<PipelineOutcome> {
     if let Some(source) = &args.from_report {
-        return load_report(source);
+        return Ok(PipelineOutcome {
+            report: load_report(source)?,
+            delta: None,
+        });
     }
     let provider = configured_provider(args, mode)?;
     let provider_ref: Option<&dyn codededup_core::EmbeddingProvider> = provider.as_deref();
-    let pipeline_config = PipelineConfig {
-        root: args.path.clone(),
-        min_nodes: args.min_nodes,
-        config_path: args.config.clone(),
-        embedding: EmbeddingSettings {
-            mode,
-            provider: provider_ref,
-        },
-        incremental: args.behaviour.incremental,
+    let embedding = || EmbeddingSettings {
+        mode,
+        provider: provider_ref,
     };
-    run(&pipeline_config).context("analysis pipeline failed")
+    let (mut session, initial) = PipelineSession::initialise(
+        args.path.clone(),
+        args.min_nodes,
+        args.behaviour.incremental,
+        args.config.clone(),
+        embedding(),
+    )
+    .context("analysis pipeline failed")?;
+    if args.rerun_touch.is_empty() {
+        return Ok(PipelineOutcome {
+            report: initial,
+            delta: None,
+        });
+    }
+    tracing::info!(
+        touched = args.rerun_touch.len(),
+        "rerun-touch: replaying paths through PipelineSession::update_files",
+    );
+    let updated = session
+        .update_files(&args.rerun_touch, embedding())
+        .context("incremental rerun failed")?;
+    let delta = ReportDelta::between(Some((0, &initial)), 1, &updated);
+    Ok(PipelineOutcome {
+        report: updated,
+        delta: Some(delta),
+    })
 }
 
 /// Parses `--embeddings` into the core enum, surfacing a user-facing

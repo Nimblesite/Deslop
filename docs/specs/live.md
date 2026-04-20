@@ -15,17 +15,61 @@ The `live` module lives **inside `codededup-core`**, gated behind the `live` car
 
 Both binaries stay under 100 LOC of glue — transport demux, dispatch, shutdown. All live-session logic — state, watcher, scheduler, query API — is reachable from `codededup_core::live::*` once the feature is enabled. Nothing in the pipeline moves; no pipeline code is duplicated.
 
-Dependency chain:
+End-to-end flow — who owns each box, who talks to whom, and where the live analysis lives:
 
 ```mermaid
 flowchart LR
-    LSP["codededup-lsp"] --> CoreLive["codededup-core\n(feature = live)"]
-    MCP["codededup-mcp"] --> CoreLive
-    CLI["codededup (CLI)"] --> CoreBase["codededup-core\n(default features)"]
-    CoreLive -. same crate .- CoreBase
+    Agent(["AI coding agent<br/>Claude Code · Cursor · Continue"])
+    CI(["CI / terminal"])
+
+    subgraph VSCode["VS Code process"]
+        direction TB
+        subgraph VSIX["CodeDedup VSIX (TypeScript extension)"]
+            direction TB
+            UI["Live bubble · tree view · webview<br/>Ollama model picker · status bar"]
+            LspClient["LSP client"]
+            McpHost["Bundled MCP host entry"]
+        end
+    end
+
+    subgraph Binaries["Binaries (processes)"]
+        direction TB
+        LspBin["codededup-lsp<br/>(stdio JSON-RPC)"]
+        McpBin["codededup-mcp<br/>(stdio MCP)"]
+        CliBin["codededup (CLI)<br/>(one-shot batch)"]
+    end
+
+    subgraph CoreCrate["codededup-core (one crate)"]
+        direction TB
+        Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
+        Pipeline["pipeline module<br/>PipelineSession · update_files()<br/>discover · parse · fingerprint · LSH · embed · rank · render"]
+        Live --> Pipeline
+    end
+
+    Workspace[(Workspace files)]
+    Ollama[(Ollama<br/>/api/tags · /api/embeddings)]
+
+    UI -- "user types · tree click · picker" --> LspClient
+    LspClient == "spawns + LSP stdio" ==> LspBin
+    McpHost == "spawns + MCP stdio" ==> McpBin
+
+    Agent == "spawns + MCP stdio" ==> McpBin
+    CI == "spawns one-shot" ==> CliBin
+
+    LspBin --> Live
+    McpBin --> Live
+    CliBin --> Pipeline
+
+    Workspace -- "file events" --> Live
+    Workspace -- "walk + read" --> Pipeline
+
+    Live <-- "listModels · embed" --> Ollama
+    Pipeline <-- "embed" --> Ollama
 ```
 
 **The CLI does not enable the `live` feature.** CLI builds stay zero-watcher, zero-background-thread, zero `notify` dependency — identical to v1. The feature flag — not a separate crate — is what keeps the CLI lean. One crate, one lint profile, one version, one place to add a language. See [principles.md §[PRINCIPLES-LONG-RUNNING-DAEMON]](principles.md).
+
+Two consumers of the live analysis live inside the VS Code process (the VSIX UI through the LSP client, and any MCP-aware agent inside VS Code through the bundled MCP host), and one lives outside (an AI agent running in a terminal that spawns `codededup-mcp` directly). All three paths — VSIX UI, in-editor agent, external agent — end at the same `AnalysisSession` in the `live` module and the same `PipelineSession` underneath. Nothing is re-implemented per client.
 
 ### [LIVE-LIFECYCLE] Session lifecycle
 
