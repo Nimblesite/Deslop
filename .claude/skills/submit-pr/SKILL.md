@@ -3,7 +3,7 @@ name: submit-pr
 description: Creates a pull request for CodeDedup with a well-structured description after verifying `make ci` passes. Use when the user asks to submit, create, or open a pull request.
 disable-model-invocation: true
 ---
-<!-- agent-pmo:424c8f8 -->
+<!-- agent-pmo:9a71cbf -->
 
 # Submit PR
 
