@@ -78,4 +78,12 @@ pub enum CoreError {
         /// (provider message, cache I/O error, etc.).
         message: String,
     },
+
+    /// `--debug-ast` was invoked on a file whose extension no
+    /// registered [`crate::lang::LanguageParser`] claims.
+    #[error("no language parser matches extension for {path}")]
+    UnsupportedExtension {
+        /// Offending path.
+        path: PathBuf,
+    },
 }

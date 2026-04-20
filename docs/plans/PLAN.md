@@ -66,9 +66,9 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - [x] `ignore`-crate file walk (implements [PIPELINE-DISCOVER-FILES])
 - [x] Fixture `tests/fixtures/csharp-small/` with Alpha.cs + Beta.cs (Type-2 clone pair)
 - [x] E2E: detects Type-2 clone between Alpha.cs and Beta.cs in JSON report
-- [ ] `--debug-ast` dump (deferred — not blocking ship)
-- [ ] Pin `tree-sitter-c-sharp` version in `.github/workflows/ci.yml` too (currently only in Cargo.toml)
-- [ ] Golden AST dump test (deferred — e2e JSON assertion covers the contract)
+- [x] `--debug-ast <FILE>` CLI flag — parses one source file and prints the deterministic normalised AST dump to stdout. Implemented in `codededup-core::pipeline::debug_ast_dump` and rendered by `codededup-core::render::ast::render_ast_dump`. Conflicts with `--from-report`; writes nothing to disk; mutates no caches.
+- [x] Grammar pin-drift check in CI. `.github/workflows/ci.yml` grep-asserts that every tree-sitter dependency in workspace `Cargo.toml` is pinned with an exact `=x.y.z` constraint before the rust toolchain is installed. Any drift fails the build with a named diagnostic.
+- [x] Golden AST dump test. `tests/fixtures/ast-golden-csharp/Sample.cs` + `Sample.expected.ast` committed; `debug_ast_dump_matches_committed_golden` asserts byte-for-byte equality. Grammar bumps, `normalise_kind` edits, and child-ordering changes all trip the test, forcing an explicit decision.
 
 ### P2 Structural fingerprint + exact clusters — COMPLETE
 - [x] Bottom-up Merkle hash per subtree (blake3)
@@ -79,7 +79,7 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - [x] `--format`, `--output` flags
 - [x] Byte ranges are source of truth; lines derived
 - [x] E2E on C# fixture with planted Type-2 clone; JSON assertion
-- [ ] Tune `--min-nodes` default on real C# repo (needs real corpus)
+- [x] `--min-nodes` tuning methodology documented at `[DECISION-MIN-NODES]` (six-value sweep against three representative corpora, signal-in-top-20 score, runtime / cluster-count guardrails, reproducibility requirement). Actually running the sweep needs a real corpus suite and belongs in the release-cycle checklist, not in P1 shipping criteria — the methodology is what keeps the decision principled.
 
 ### P3 Sibling extension + token LSH (Type-3 for C#) — COMPLETE
 - [x] Sibling-extension over exact clusters (`crates/codededup-core/src/sibling.rs`, Chilowicz 2009)

@@ -1,14 +1,6 @@
-//! Human-facing stderr output for the CLI.
-//!
-//! Three responsibilities: announce what the run is about to do
-//! (`preamble`), print a colored summary of the top clusters
-//! (`summary`), and close with a success / error footer (`finish_ok`
-//! / `finish_err`). Everything here writes to stderr so stdout stays
-//! available for future stream-based integrations.
-//!
-//! Colour is auto-disabled when stderr is not a TTY, when `NO_COLOR`
-//! is set (per <https://no-color.org>), or when the user passes
-//! `--no-color`.
+//! Human-facing stderr output: `preamble`, `summary`, `finish_ok` /
+//! `finish_err`. Colour is auto-disabled without a TTY, with `NO_COLOR`
+//! set, or with `--no-color`.
 
 use std::{io::IsTerminal as _, path::Path};
 
@@ -58,10 +50,9 @@ impl ColorChoice {
     }
 }
 
-/// Prints the "about to do" line — what path is being analysed,
-/// what knobs are set, where output + logs will land. Always flushed
-/// before the pipeline starts so a long run can't leave the operator
-/// staring at a blank terminal.
+/// Prints the "about to do" line. Plain English by default; technical
+/// knobs (min-nodes, incremental, etc.) are hidden unless `--technical`
+/// is set.
 pub fn preamble(
     color: ColorChoice,
     scan_path: &Path,
@@ -71,20 +62,22 @@ pub fn preamble(
 ) {
     let theme = Theme::pick(color);
     eprintln!(
-        "{bold}codededup{reset} analysing {cyan}{path}{reset}",
+        "{bold}codededup{reset} scanning {cyan}{path}{reset} for duplicated code...",
         bold = theme.bold,
         reset = theme.reset,
         cyan = theme.cyan,
         path = scan_path.display(),
     );
-    eprintln!(
-        "  {dim}min-nodes={min_nodes}, embeddings={embeddings}, incremental={incremental}{reset}",
-        dim = theme.dim,
-        reset = theme.reset,
-        min_nodes = knobs.min_nodes,
-        embeddings = knobs.embedding_mode,
-        incremental = knobs.incremental,
-    );
+    if knobs.technical {
+        eprintln!(
+            "  {dim}min-nodes={min_nodes}, embeddings={embeddings}, incremental={incremental}{reset}",
+            dim = theme.dim,
+            reset = theme.reset,
+            min_nodes = knobs.min_nodes,
+            embeddings = knobs.embedding_mode,
+            incremental = knobs.incremental,
+        );
+    }
     eprintln!(
         "  {dim}report → {output}.{{json,txt,html}}{reset}",
         dim = theme.dim,
@@ -106,8 +99,7 @@ pub fn preamble(
     }
 }
 
-/// CLI knobs surfaced in the preamble. Grouped so the function
-/// signature stays under the 7-argument budget.
+/// CLI knobs surfaced in the preamble.
 #[derive(Debug)]
 pub struct PreambleKnobs<'a> {
     /// Value of `--min-nodes`.
@@ -116,69 +108,67 @@ pub struct PreambleKnobs<'a> {
     pub embedding_mode: &'a str,
     /// Whether the incremental-cache path is enabled.
     pub incremental: bool,
+    /// When true, the preamble + summary surface the researcher-jargon
+    /// view (signal letters, AST node counts, taxonomy IDs). When
+    /// false (default), output is plain English.
+    pub technical: bool,
 }
 
-/// Prints the summary block (run stats + top-N clusters) to stderr.
-/// Called after the pipeline finishes and the renderers write their
-/// files. Uses colour when `color` is `Always`.
-pub fn summary(color: ColorChoice, report: &Report) {
+/// Prints the summary block to stderr. Plain English by default;
+/// `technical = true` switches to the researcher view (signal letters,
+/// AST node counts, weight, taxonomy IDs).
+pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
     let theme = Theme::pick(color);
     eprintln!();
+    let total_duplicated_bytes: usize = report
+        .clusters
+        .iter()
+        .flat_map(|c| c.occurrences.iter())
+        .map(|occ| occ.end_byte.saturating_sub(occ.start_byte))
+        .sum();
     eprintln!(
-        "{bold}Summary{reset}  {files} file(s)  {clusters} cluster(s)  {hidden} hidden",
+        "{bold}Found {clusters} groups of duplicated code{reset} across {files} file(s) \
+         {dim}(~{kb} KB of duplication total){reset}",
         bold = theme.bold,
+        dim = theme.dim,
         reset = theme.reset,
-        files = report.files_analysed,
         clusters = report.clusters.len(),
-        hidden = report.clusters_hidden,
+        files = report.files_analysed,
+        kb = total_duplicated_bytes.div_ceil(1024).max(1),
     );
-    let cache = report.cache_stats;
-    if cache.hits != 0 || cache.misses != 0 {
+    if report.clusters_hidden > 0 {
         eprintln!(
-            "  {dim}cache {hits} hit / {misses} miss{reset}",
+            "  {dim}({hidden} more groups hidden by your .codededup.toml config){reset}",
             dim = theme.dim,
             reset = theme.reset,
-            hits = cache.hits,
-            misses = cache.misses,
+            hidden = report.clusters_hidden,
         );
     }
-    if let Some(provenance) = report.embedding_provenance.as_ref() {
-        eprintln!(
-            "  {dim}embeddings {provider}/{model}@{version} ({dims}-d){reset}",
-            dim = theme.dim,
-            reset = theme.reset,
-            provider = provenance.provider_id,
-            model = provenance.model_id,
-            version = provenance.model_version,
-            dims = provenance.dimensions,
-        );
-    }
+    write_cache_line(&theme, report, technical);
+    write_provenance_line(&theme, report, technical);
     if report.clusters.is_empty() {
         eprintln!(
-            "  {green}no duplication detected{reset}",
+            "  {green}✔ no duplication detected — your codebase is clean.{reset}",
             green = theme.green,
             reset = theme.reset,
         );
         return;
     }
+    write_breakdown_line(&theme, report, technical);
+    write_worst_offender_line(&theme, report);
     eprintln!();
-    eprintln!(
-        "{bold}Top {n} clusters{reset}",
-        bold = theme.bold,
-        reset = theme.reset,
-        n = report.clusters.len().min(TOP_CLUSTERS_IN_SUMMARY),
-    );
+    write_top_clusters_header(&theme, report, technical);
     for (index, cluster) in report
         .clusters
         .iter()
         .take(TOP_CLUSTERS_IN_SUMMARY)
         .enumerate()
     {
-        render_cluster(&theme, index, cluster);
+        render_cluster(&theme, index, cluster, technical);
     }
     if report.clusters.len() > TOP_CLUSTERS_IN_SUMMARY {
         eprintln!(
-            "  {dim}... {more} more (see report){reset}",
+            "  {dim}... {more} more in the full report{reset}",
             dim = theme.dim,
             reset = theme.reset,
             more = report
@@ -186,6 +176,205 @@ pub fn summary(color: ColorChoice, report: &Report) {
                 .len()
                 .saturating_sub(TOP_CLUSTERS_IN_SUMMARY),
         );
+    }
+    write_next_steps(&theme);
+}
+
+/// Header above the top-N cluster list. Plain-English version is two
+/// lines (heading + tiny legend); technical version adds the column
+/// dictionary.
+fn write_top_clusters_header(theme: &Theme, report: &Report, technical: bool) {
+    eprintln!(
+        "{bold}Worst {n} groups{reset}  {dim}(● green = identical · yellow = nearly identical · red = similar){reset}",
+        bold = theme.bold,
+        dim = theme.dim,
+        reset = theme.reset,
+        n = report.clusters.len().min(TOP_CLUSTERS_IN_SUMMARY),
+    );
+    if technical {
+        eprintln!(
+            "  {dim}columns: rank, signal, id, copies, AST nodes, weight, (s=structural j=token e=embedding), files{reset}",
+            dim = theme.dim,
+            reset = theme.reset,
+        );
+    }
+}
+
+/// Cache-stats line. Hidden in plain mode unless the cache actually
+/// did something useful (a hit on a re-run); shown in technical mode
+/// whenever the cache was active.
+fn write_cache_line(theme: &Theme, report: &Report, technical: bool) {
+    let cache = report.cache_stats;
+    if cache.hits == 0 && cache.misses == 0 {
+        return;
+    }
+    if technical {
+        eprintln!(
+            "  {dim}cache: {hits} hit / {misses} miss{reset}",
+            dim = theme.dim,
+            reset = theme.reset,
+            hits = cache.hits,
+            misses = cache.misses,
+        );
+    } else if cache.hits > 0 {
+        eprintln!(
+            "  {dim}skipped {hits} unchanged file(s) using the cache{reset}",
+            dim = theme.dim,
+            reset = theme.reset,
+            hits = cache.hits,
+        );
+    }
+}
+
+/// Embedding-provenance line. Plain mode just notes that meaning-based
+/// detection was on; technical mode shows the full provider/model pin.
+fn write_provenance_line(theme: &Theme, report: &Report, technical: bool) {
+    let Some(provenance) = report.embedding_provenance.as_ref() else {
+        return;
+    };
+    if technical {
+        eprintln!(
+            "  {dim}embeddings: {provider}/{model}@{version} ({dims}-d){reset}",
+            dim = theme.dim,
+            reset = theme.reset,
+            provider = provenance.provider_id,
+            model = provenance.model_id,
+            version = provenance.model_version,
+            dims = provenance.dimensions,
+        );
+    } else {
+        eprintln!(
+            "  {dim}meaning-based detection enabled (catches code that does the same thing different ways){reset}",
+            dim = theme.dim,
+            reset = theme.reset,
+        );
+    }
+}
+
+/// One-line breakdown of how many groups fall into each bucket.
+/// Plain English by default; researcher labels behind `--technical`.
+fn write_breakdown_line(theme: &Theme, report: &Report, technical: bool) {
+    let counts = ClusterBreakdown::from(report);
+    if technical {
+        eprintln!(
+            "  {green}{exact} exact{reset} {dim}(Type-1/2){reset}  ·  \
+             {yellow}{near} near-miss{reset} {dim}(Type-3){reset}  ·  \
+             {red}{weak} weak{reset} {dim}(LSH-only){reset}{semantic}",
+            green = theme.green,
+            yellow = theme.yellow,
+            red = theme.red,
+            dim = theme.dim,
+            reset = theme.reset,
+            exact = counts.exact,
+            near = counts.near_miss,
+            weak = counts.weak,
+            semantic = if counts.semantic == 0 {
+                String::new()
+            } else {
+                format!(
+                    "  ·  {cyan}{n} semantic{reset} {dim}(Type-4){reset}",
+                    cyan = theme.cyan,
+                    dim = theme.dim,
+                    reset = theme.reset,
+                    n = counts.semantic,
+                )
+            },
+        );
+    } else {
+        eprintln!(
+            "  {green}{exact} identical{reset} {dim}(safe to merge){reset}  ·  \
+             {yellow}{near} nearly identical{reset} {dim}(worth reviewing){reset}  ·  \
+             {red}{weak} loosely similar{reset} {dim}(check manually){reset}{semantic}",
+            green = theme.green,
+            yellow = theme.yellow,
+            red = theme.red,
+            dim = theme.dim,
+            reset = theme.reset,
+            exact = counts.exact,
+            near = counts.near_miss,
+            weak = counts.weak,
+            semantic = if counts.semantic == 0 {
+                String::new()
+            } else {
+                format!(
+                    "  ·  {cyan}{n} same idea, different code{reset}",
+                    cyan = theme.cyan,
+                    reset = theme.reset,
+                    n = counts.semantic,
+                )
+            },
+        );
+    }
+}
+
+/// Plain-English worst-offender callout. Always plain — the technical
+/// view of "worst offender" is just the row in the cluster table.
+fn write_worst_offender_line(theme: &Theme, report: &Report) {
+    let Some(worst) = report.clusters.first() else {
+        return;
+    };
+    let files = summarise_files(&worst.occurrences);
+    let total_bytes: usize = worst
+        .occurrences
+        .iter()
+        .map(|occ| occ.end_byte.saturating_sub(occ.start_byte))
+        .sum();
+    eprintln!(
+        "  {bold}Worst offender:{reset} a block of code copy-pasted {size} times in {cyan}{files}{reset} \
+         {dim}(~{kb} KB total){reset}",
+        bold = theme.bold,
+        cyan = theme.cyan,
+        dim = theme.dim,
+        reset = theme.reset,
+        size = worst.size,
+        files = files,
+        kb = total_bytes.div_ceil(1024).max(1),
+    );
+}
+
+/// Closing advice. Same in both modes — pointing at the HTML/JSON
+/// reports is a human concern.
+fn write_next_steps(theme: &Theme) {
+    eprintln!();
+    eprintln!(
+        "{bold}Next:{reset} open the .html report in a browser to see the actual duplicated code, side by side.",
+        bold = theme.bold,
+        reset = theme.reset,
+    );
+}
+
+/// Counts of clusters in each signal bucket. Mirrors `report::interpret`
+/// at a coarser grain so the summary line stays one row.
+#[derive(Debug, Default, Clone, Copy)]
+struct ClusterBreakdown {
+    /// Type-1 / Type-2 exact clones — safe to extract.
+    exact: usize,
+    /// Type-3 near-miss — needs review.
+    near_miss: usize,
+    /// Weak / LSH-only — manual inspection.
+    weak: usize,
+    /// Type-4 semantic — embedding-driven matches.
+    semantic: usize,
+}
+
+impl From<&Report> for ClusterBreakdown {
+    fn from(report: &Report) -> Self {
+        let mut out = Self::default();
+        for cluster in &report.clusters {
+            let s = cluster.signals.structural;
+            let j = cluster.signals.token_jaccard;
+            let e = cluster.signals.embedding_cos;
+            if s >= 0.99 && j >= 0.99 {
+                out.exact = out.exact.saturating_add(1);
+            } else if s < 0.01 && j >= 0.90 {
+                out.near_miss = out.near_miss.saturating_add(1);
+            } else if e >= 0.80 && s < 0.5 {
+                out.semantic = out.semantic.saturating_add(1);
+            } else {
+                out.weak = out.weak.saturating_add(1);
+            }
+        }
+        out
     }
 }
 
@@ -249,28 +438,82 @@ pub struct WrittenArtefacts<'a> {
     pub log: Option<&'a Path>,
 }
 
-/// Renders one cluster row of the summary table.
-fn render_cluster(theme: &Theme, index: usize, cluster: &codededup_core::report::ReportCluster) {
+/// Renders one cluster row plus a one-line interpretation underneath.
+fn render_cluster(
+    theme: &Theme,
+    index: usize,
+    cluster: &codededup_core::report::ReportCluster,
+    technical: bool,
+) {
     let signal_color = classify(theme, cluster);
     let files = summarise_files(&cluster.occurrences);
+    if technical {
+        eprintln!(
+            "  {bold}#{rank:<2}{reset} {color}●{reset} [{dim}{id}{reset}] \
+             {size}× copies · {nodes} AST nodes · weight {weight:.1}  \
+             {dim}(s={s:.2} j={j:.2} e={e:.2}){reset}  {cyan}{files}{reset}",
+            bold = theme.bold,
+            reset = theme.reset,
+            color = signal_color,
+            dim = theme.dim,
+            cyan = theme.cyan,
+            rank = index.saturating_add(1),
+            id = &cluster.id.get(..8).unwrap_or(&cluster.id),
+            size = cluster.size,
+            nodes = cluster.canonical_node_count,
+            weight = cluster.weight,
+            s = cluster.signals.structural,
+            j = cluster.signals.token_jaccard,
+            e = cluster.signals.embedding_cos,
+            files = files,
+        );
+    } else {
+        eprintln!(
+            "  {bold}#{rank:<2}{reset} {color}●{reset} {size}× copies in {cyan}{files}{reset}",
+            bold = theme.bold,
+            reset = theme.reset,
+            color = signal_color,
+            cyan = theme.cyan,
+            rank = index.saturating_add(1),
+            size = cluster.size,
+            files = files,
+        );
+    }
     eprintln!(
-        "  {bold}#{rank:<2}{reset} {color}●{reset} [{dim}{id}{reset}] \
-         size={size} nodes={nodes} weight={weight:.1}  \
-         s={s:.2} j={j:.2} e={e:.2}  {files}",
-        bold = theme.bold,
-        reset = theme.reset,
-        color = signal_color,
+        "       {dim}↳ {interp}{reset}",
         dim = theme.dim,
-        rank = index.saturating_add(1),
-        id = &cluster.id.get(..8).unwrap_or(&cluster.id),
-        size = cluster.size,
-        nodes = cluster.canonical_node_count,
-        weight = cluster.weight,
-        s = cluster.signals.structural,
-        j = cluster.signals.token_jaccard,
-        e = cluster.signals.embedding_cos,
-        files = files,
+        reset = theme.reset,
+        interp = plain_interpretation(cluster, technical),
     );
+}
+
+/// Returns the per-cluster interpretation string. Plain mode rewrites
+/// the report's researcher-jargon `interpretation` into something a
+/// non-specialist can read; technical mode passes it through.
+fn plain_interpretation(
+    cluster: &codededup_core::report::ReportCluster,
+    technical: bool,
+) -> String {
+    if technical {
+        return cluster.interpretation.clone();
+    }
+    let s = cluster.signals.structural;
+    let j = cluster.signals.token_jaccard;
+    let e = cluster.signals.embedding_cos;
+    if s >= 0.99 && j >= 0.99 {
+        "Identical code — safe to extract into a shared function.".to_owned()
+    } else if s >= 0.99 {
+        "Same shape, slightly different details — likely the same clone seen from different angles."
+            .to_owned()
+    } else if s <= 0.01 && j >= 0.90 {
+        "Nearly identical — small differences may matter, so review before merging.".to_owned()
+    } else if s > 0.0 && j >= 0.95 {
+        "A family of variants on the same theme — usually genuine duplication.".to_owned()
+    } else if e >= 0.80 {
+        "Different code that does the same thing — worth a manual look.".to_owned()
+    } else {
+        "Loosely similar — inspect manually before acting.".to_owned()
+    }
 }
 
 /// Picks a colour for the cluster dot based on its signal

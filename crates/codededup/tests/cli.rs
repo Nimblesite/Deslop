@@ -1257,6 +1257,79 @@ fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     Ok(())
 }
 
+// Implements [PIPELINE-NORMALIZE-AST] golden guard: `--debug-ast`
+// on a hand-picked C# fixture must match the committed expected
+// dump byte-for-byte. Any drift in the grammar version, the
+// `normalise_kind` match arms, or the child-ordering policy will
+// trip this test — which is exactly what we want, because any of
+// those changes silently alters the fingerprint and invalidates
+// every user's cache.
+//
+// The fixture deliberately exercises:
+//   - file-scoped namespace (`namespace Golden;`)
+//   - class modifier + identifier
+//   - method with parameters (identifier collapse)
+//   - comment (must be dropped)
+//   - local declaration + binary expression
+//   - return statement
+// which is enough surface area to catch most regressions in the
+// C# plug-in without requiring the full language grammar.
+#[test]
+fn debug_ast_dump_matches_committed_golden() -> Result<()> {
+    let source = fixture("ast-golden-csharp").join("Sample.cs");
+    let expected_path = fixture("ast-golden-csharp").join("Sample.expected.ast");
+    let expected = fs::read_to_string(&expected_path)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let output = cmd
+        .arg("--debug-ast")
+        .arg(&source)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let actual = String::from_utf8(output)?;
+    assert_eq!(
+        actual, expected,
+        "AST dump drifted from {}. If this is intentional, regenerate with \
+         `cargo run -q -- --debug-ast {}` and commit the updated .expected.ast.",
+        expected_path.display(),
+        source.display(),
+    );
+    Ok(())
+}
+
+// Implements [PIPELINE-NORMALIZE-AST] unsupported-extension: running
+// `--debug-ast` on a file whose extension no parser claims must exit
+// non-zero with a clear error, not panic or emit an empty dump.
+#[test]
+fn debug_ast_rejects_unknown_extension() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let path = tmp.path().join("sample.unknown");
+    fs::write(&path, "// not a supported language\n")?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg("--debug-ast")
+        .arg(&path)
+        .assert()
+        .failure()
+        .stderr(contains("no language parser matches extension"));
+    Ok(())
+}
+
+// Implements [PIPELINE-NORMALIZE-AST] help-text exposure: the
+// `--debug-ast` developer flag must be documented.
+#[test]
+fn help_text_documents_debug_ast_flag() -> Result<()> {
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(contains("--debug-ast"));
+    Ok(())
+}
+
 // ===========================================================================
 // UX — timestamped-log-by-default, colored summary, console overrides
 // ===========================================================================

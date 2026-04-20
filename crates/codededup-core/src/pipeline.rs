@@ -474,6 +474,40 @@ fn read_source(path: &Path) -> Result<Vec<u8>, CoreError> {
     })
 }
 
+/// Parses `path` with the matching language parser and returns a
+/// deterministic text dump of the normalised AST ([PIPELINE-NORMALIZE-AST]).
+/// Used by the CLI's `--debug-ast` flag — developer tool, not part
+/// of the analysis pipeline.
+///
+/// # Errors
+///
+/// - [`CoreError::Io`] if the file cannot be read.
+/// - [`CoreError::UnsupportedExtension`] if no registered parser
+///   claims the file's extension.
+/// - Any parser error forwarded from
+///   [`crate::lang::LanguageParser::parse_and_normalize`].
+pub fn debug_ast_dump(path: &Path) -> Result<String, CoreError> {
+    let parsers = default_parsers();
+    let extension = path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .map(str::to_lowercase)
+        .unwrap_or_default();
+    let Some(parser) = parsers
+        .iter()
+        .find(|p| p.file_extensions().iter().any(|e| *e == extension))
+    else {
+        return Err(CoreError::UnsupportedExtension {
+            path: path.to_path_buf(),
+        });
+    };
+    let source = read_source(path)?;
+    let mut registry = crate::state::FileRegistry::new();
+    let file_id = registry.register(path.to_path_buf());
+    let tree = parser.parse_and_normalize(&source, file_id)?;
+    Ok(crate::render::render_ast_dump(&tree))
+}
+
 /// Returns the registered language parsers in a stable order
 /// (implements [PIPELINE-LANG-TRAIT]).
 fn default_parsers() -> Vec<Box<dyn LanguageParser>> {

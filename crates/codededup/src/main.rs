@@ -15,7 +15,7 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use codededup_core::{
-    render::render_html, render::render_text, run, EmbeddingMode, EmbeddingSettings,
+    debug_ast_dump, render::render_html, render::render_text, run, EmbeddingMode, EmbeddingSettings,
     OllamaProvider, PipelineConfig, Report, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
     DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
@@ -57,6 +57,13 @@ struct Cli {
     /// copy the JSON itself).
     #[arg(long, value_name = "FILE")]
     from_report: Option<PathBuf>,
+
+    /// Parse a single source file and print the normalised AST to
+    /// stdout, then exit. Developer tool — bypasses the analysis
+    /// pipeline, writes nothing to disk, and mutates no caches.
+    /// Conflicts with `--from-report`.
+    #[arg(long, value_name = "FILE", conflicts_with = "from_report")]
+    debug_ast: Option<PathBuf>,
 
     /// Path to an explicit `.codededup.toml` exclusion config. Defaults
     /// to `.codededup.toml` next to the scan root.
@@ -137,6 +144,12 @@ struct BehaviourFlags {
     /// `NO_COLOR` environment variable is set.
     #[arg(long)]
     no_color: bool,
+    /// Show the researcher view on stderr — taxonomy IDs (Type-1/2/3),
+    /// signal letters (s=structural, j=token, e=embedding), AST node
+    /// counts, weight, LSH terminology. Off by default; the plain
+    /// English summary is what humans actually want.
+    #[arg(long)]
+    technical: bool,
 }
 
 fn main() {
@@ -157,6 +170,9 @@ fn main() {
 /// `anyhow::Error` chain.
 fn run_cli() -> Result<()> {
     let args = Cli::parse();
+    if let Some(file) = args.debug_ast.as_deref() {
+        return run_debug_ast(file);
+    }
     let formats = FormatSelection::from_args(&args)?;
     let output = OutputPaths::new(args.output.as_deref());
     let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
@@ -172,6 +188,7 @@ fn run_cli() -> Result<()> {
             min_nodes: args.min_nodes,
             embedding_mode: mode.as_str(),
             incremental: args.behaviour.incremental,
+            technical: args.behaviour.technical,
         },
     );
     tracing::info!(
@@ -203,6 +220,19 @@ fn run_cli() -> Result<()> {
             },
         },
     );
+    Ok(())
+}
+
+/// Parses `file` and writes the normalised AST dump to stdout.
+/// Developer entry point for `--debug-ast` ([PIPELINE-NORMALIZE-AST]):
+/// no logging, no report, no cache mutation — just the tree.
+fn run_debug_ast(file: &std::path::Path) -> Result<()> {
+    let dump = debug_ast_dump(file).with_context(|| format!("debug-ast {}", file.display()))?;
+    let stdout = std::io::stdout();
+    let mut handle = stdout.lock();
+    handle
+        .write_all(dump.as_bytes())
+        .context("write ast dump to stdout")?;
     Ok(())
 }
 

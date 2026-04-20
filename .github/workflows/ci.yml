@@ -19,9 +19,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # CLAUDE.md invariant: tree-sitter grammars must stay pinned
+      # with `=x.y.z` in the workspace `Cargo.toml`. This step fails
+      # the build if any pin drifts to a caret / tilde / range
+      # constraint so accidental unpinning can never land on main.
+      - name: Verify grammar pins
+        run: |
+          set -euo pipefail
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python; do
+            line=$(grep -E "^${dep} = " Cargo.toml || true)
+            if [ -z "${line}" ]; then
+              echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
+              exit 1
+            fi
+            if ! echo "${line}" | grep -qE '"=[0-9]+\.[0-9]+\.[0-9]+"'; then
+              echo "LOOSE PIN: ${dep} must use an exact =x.y.z constraint, got: ${line}"
+              exit 1
+            fi
+            echo "OK: ${line}"
+          done
+
       # Rust toolchain + components. Grammar versions (tree-sitter,
-      # tree-sitter-c-sharp) are pinned in the workspace `Cargo.toml` and
-      # are the source of truth; this workflow picks them up automatically.
+      # tree-sitter-c-sharp, tree-sitter-rust, tree-sitter-python) are
+      # pinned with `=x.y.z` in the workspace `Cargo.toml`; the step
+      # above verifies the pins stay exact.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy, llvm-tools-preview

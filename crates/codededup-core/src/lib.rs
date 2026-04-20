@@ -39,7 +39,7 @@ pub use embedding::{
     DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 pub use error::CoreError;
-pub use pipeline::{run, EmbeddingSettings, PipelineConfig};
+pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig};
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
 
 /// Semantic version of the `codededup-core` library.
