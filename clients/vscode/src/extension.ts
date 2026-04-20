@@ -18,7 +18,12 @@ import {
 import { log, logError, initOutputChannel } from "./logging";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
-import { TopOffendersProvider, FocusedFileProvider, SessionProvider } from "./tree/providers";
+import {
+  TopOffendersProvider,
+  FocusedFileProvider,
+  SessionProvider,
+  StatusTicker,
+} from "./tree/providers";
 import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
@@ -45,6 +50,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const reportStore = new ReportStore();
   context.subscriptions.push(reportStore);
 
+  const ticker = new StatusTicker();
+  context.subscriptions.push(ticker);
+
+  const topOffenders = new TopOffendersProvider(reportStore, ticker);
+  const focusedFile = new FocusedFileProvider(reportStore, ticker);
+  const session = new SessionProvider(reportStore, ticker, () => client);
+  context.subscriptions.push(
+    topOffenders,
+    focusedFile,
+    session,
+    vscode.window.registerTreeDataProvider("codededup.topOffenders", topOffenders),
+    vscode.window.registerTreeDataProvider("codededup.focusedFile", focusedFile),
+    vscode.window.registerTreeDataProvider("codededup.session", session),
+    vscode.commands.registerCommand("codededup.revealLog", () => initOutputChannel().show(true)),
+  );
+
   try {
     resolvedLsp = resolveBinary(context.extensionPath, "lsp", currentExtensionVersion(context));
     resolvedMcp = tryResolveOptional(context.extensionPath, "mcp", currentExtensionVersion(context));
@@ -62,18 +83,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     client = startLanguageClient(resolvedLsp);
   } catch (err) {
-    surfaceStartupFailure(err);
+    surfaceStartupFailure(err, reportStore);
     return;
   }
-
-  const topOffenders = new TopOffendersProvider(reportStore);
-  const focusedFile = new FocusedFileProvider(reportStore);
-  const session = new SessionProvider(reportStore, () => client);
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("codededup.topOffenders", topOffenders),
-    vscode.window.registerTreeDataProvider("codededup.focusedFile", focusedFile),
-    vscode.window.registerTreeDataProvider("codededup.session", session),
-  );
 
   const decorations = new DecorationManager(reportStore);
   context.subscriptions.push(decorations);
@@ -91,7 +103,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
   );
 
-  await client.start();
+  reportStore.setLifecycle({ kind: "analysing" });
+  try {
+    await client.start();
+  } catch (err) {
+    surfaceStartupFailure(err, reportStore);
+    return;
+  }
   wireNotifications(client, reportStore);
   await seedInitialReport(client, reportStore);
 }
@@ -157,6 +175,14 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   );
   c.onNotification("codededup/analysisState", (state: AnalysisState) => {
     log("analysis state", { state });
+    if (state === "running") store.setLifecycle({ kind: "analysing" });
+    else if (state === "idle") store.setLifecycle({ kind: "ready" });
+    else if (state === "errored") {
+      store.setLifecycle({
+        kind: "failed",
+        message: "Analysis failed — see the CodeDedup log for details.",
+      });
+    }
   });
 }
 
@@ -202,7 +228,7 @@ export function revealActiveBinary(
   vscode.window.showInformationMessage(lines.join("\n"), { modal: true });
 }
 
-export function surfaceStartupFailure(err: unknown): void {
+export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
   logError(err, "language client startup");
   const isMissing = err instanceof BundledBinaryMissingError;
   const isUnsupported = err instanceof UnsupportedPlatformError;
@@ -210,6 +236,7 @@ export function surfaceStartupFailure(err: unknown): void {
     isMissing || isUnsupported
       ? (err as Error).message
       : "CodeDedup failed to start its analysis server. See the CodeDedup output channel.";
+  store?.setLifecycle({ kind: "failed", message });
   vscode.window
     .showErrorMessage(message, "Reveal log")
     .then(

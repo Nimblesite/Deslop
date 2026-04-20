@@ -51,10 +51,7 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
         command: Some(Command {
             title: title_for(cluster),
             command: JUMP_COMMAND.to_owned(),
-            arguments: Some(vec![
-                json!(cluster.id),
-                json!(occurrence_index),
-            ]),
+            arguments: Some(vec![json!(cluster.id), json!(occurrence_index)]),
         }),
         data: None,
     }

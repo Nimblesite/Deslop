@@ -6,6 +6,7 @@ import {
   TopOffendersProvider,
   FocusedFileProvider,
   SessionProvider,
+  StatusTicker,
 } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
@@ -57,7 +58,7 @@ function report(clusters: ReportCluster[]): Report {
 suite("TopOffendersProvider", () => {
   test("renders an Analysing… placeholder before the first report arrives", () => {
     const store = new ReportStore();
-    const provider = new TopOffendersProvider(store);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
   });
@@ -65,7 +66,7 @@ suite("TopOffendersProvider", () => {
   test("renders a 'no duplication' placeholder when the report is empty", () => {
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
-    const provider = new TopOffendersProvider(store);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
   });
@@ -73,7 +74,7 @@ suite("TopOffendersProvider", () => {
   test("renders one root node per cluster", () => {
     const store = new ReportStore();
     store.setSnapshot(report([cluster("a", 10, "/f1"), cluster("b", 5, "/f2")]), 0);
-    const provider = new TopOffendersProvider(store);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 2);
   });
@@ -82,7 +83,7 @@ suite("TopOffendersProvider", () => {
     const store = new ReportStore();
     const c = cluster("a", 10, "/f1");
     store.setSnapshot(report([c]), 0);
-    const provider = new TopOffendersProvider(store);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
     const roots = provider.getChildren();
     const kids = provider.getChildren(roots[0]!);
     assert.equal(kids.length, c.occurrences.length);
@@ -91,7 +92,7 @@ suite("TopOffendersProvider", () => {
   test("getTreeItem returns the node verbatim", () => {
     const store = new ReportStore();
     store.setSnapshot(report([cluster("a", 10, "/f1")]), 0);
-    const provider = new TopOffendersProvider(store);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
     const [root] = provider.getChildren();
     assert.strictEqual(provider.getTreeItem(root!), root);
   });
@@ -102,7 +103,7 @@ suite("FocusedFileProvider", () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
-    const provider = new FocusedFileProvider(store);
+    const provider = new FocusedFileProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
   });
@@ -114,7 +115,7 @@ suite("FocusedFileProvider", () => {
     });
     await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
-    const provider = new FocusedFileProvider(store);
+    const provider = new FocusedFileProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 0);
   });
@@ -131,7 +132,7 @@ suite("FocusedFileProvider", () => {
       report([cluster("a", 10, activePath), cluster("b", 5, "/other")]),
       0,
     );
-    const provider = new FocusedFileProvider(store);
+    const provider = new FocusedFileProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.ok(nodes.length >= 1);
     const kids = provider.getChildren(nodes[0]!);
@@ -146,7 +147,7 @@ suite("FocusedFileProvider", () => {
     await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report([cluster("a", 1, "/does-not-match")]), 0);
-    const provider = new FocusedFileProvider(store);
+    const provider = new FocusedFileProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
   });
@@ -156,7 +157,7 @@ suite("SessionProvider", () => {
   test("renders five session rows when a report is loaded", () => {
     const store = new ReportStore();
     store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
-    const provider = new SessionProvider(store, () => undefined);
+    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 5);
     assert.equal(provider.getChildren(nodes[0]!).length, 0);
@@ -164,7 +165,7 @@ suite("SessionProvider", () => {
 
   test("renders a 'no session' placeholder before a report arrives", () => {
     const store = new ReportStore();
-    const provider = new SessionProvider(store, () => undefined);
+    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);
   });
@@ -172,7 +173,7 @@ suite("SessionProvider", () => {
   test("marks state as running when the clientFactory returns a value", () => {
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
-    const provider = new SessionProvider(store, () => ({}) as never);
+    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
     const state = nodes.find((n) => String(n.label) === "State");
     assert.ok(state);

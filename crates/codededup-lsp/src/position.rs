@@ -15,8 +15,8 @@ use tower_lsp::lsp_types::Position;
 pub fn position_for_byte(source: &str, byte_offset: usize) -> Position {
     let clamped = byte_offset.min(source.len());
     let prefix = source.get(..clamped).unwrap_or(source);
-    let line_count = u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count())
-        .unwrap_or(u32::MAX);
+    let line_count =
+        u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count()).unwrap_or(u32::MAX);
     let last_line_start = prefix
         .rfind('\n')
         .map_or(0, |newline_index| newline_index.saturating_add(1));

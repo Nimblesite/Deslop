@@ -80,3 +80,4 @@ clients/vscode/.vscode-test/
 clients/vscode/dist/
 
 clients/vscode/out/
+clients/vscode/codededup-vscode.vsix

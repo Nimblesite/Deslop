@@ -5,6 +5,8 @@
 //! list — enough context that the reader can decide whether to
 //! investigate without leaving the file.
 
+use std::fmt::Write as _;
+
 use codededup_core::report::ReportCluster;
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
@@ -23,7 +25,11 @@ pub fn build_for_cluster(cluster: &ReportCluster) -> Hover {
 /// Renders the hover markdown body.
 #[must_use]
 pub fn markdown_for(cluster: &ReportCluster) -> String {
-    let header = format!("### Cluster {id}\n\n{interpretation}\n\n", id = cluster.id, interpretation = cluster.interpretation);
+    let header = format!(
+        "### Cluster {id}\n\n{interpretation}\n\n",
+        id = cluster.id,
+        interpretation = cluster.interpretation
+    );
     let table = signals_table(cluster);
     let occurrences = occurrences_block(cluster);
     format!("{header}{table}\n{occurrences}")
@@ -46,17 +52,18 @@ fn occurrences_block(cluster: &ReportCluster) -> String {
         "**Occurrences ({count})**:\n",
         count = cluster.occurrences.len()
     );
-    let body: String = cluster
+    let body = cluster
         .occurrences
         .iter()
-        .map(|occurrence| {
-            format!(
-                "- {path}:{start}-{end}\n",
+        .fold(String::new(), |mut acc, occurrence| {
+            let _ = writeln!(
+                acc,
+                "- {path}:{start}-{end}",
                 path = occurrence.path.display(),
                 start = occurrence.start_byte,
                 end = occurrence.end_byte,
-            )
-        })
-        .collect();
+            );
+            acc
+        });
     format!("{header}{body}")
 }
