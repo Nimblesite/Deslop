@@ -15,6 +15,7 @@ Sibling to [SPEC.md](SPEC.md). **Priority: ship C# CLI fast for feedback.** Rust
 - **P2 Structural fingerprint + exact clusters** — Merkle subtree hash, `--min-nodes`, ranking `count × (size−1) × log(loc)`, text + JSON renderer. First useful C# report.
 - **P3 Sibling extension + token MinHash/LSH** — Type-3 for C#. Per-pair scores `(structural, jaccard)`, transitive-closure clusters, signal breakdown in report. **Ship. Get feedback.**
 - **P4 Rust + Python** — new `LanguageParser` impls only; versions pinned in `Cargo.toml` + CI + Dockerfile.
+- **P4.1 Self-documenting report + three-format output** — JSON is canonical; text (AI-readable terse) and HTML (human-readable) are derived from it. Embed `schema_doc`, per-cluster `interpretation`, top-level `action_hints`. `--from-report` re-renders without re-analysing. Bump `report_schema_version` to 2.
 - **P5 Embedding pass (hybrid)** — Ollama + `nomic-embed-code`, HNSW (`usearch`), fuse via max-normalized sum (never average). Cache `(content_hash, model_id, version)`.
 - **P6 Harden** — `--incremental`, perf pass (<30s/100K LOC C#, no embeddings), coverage ratchet.
 
@@ -36,7 +37,9 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - Spec IDs converted to hierarchical `[GROUP-TOPIC-DETAIL]` form; every module references the IDs it implements AND the academic work those IDs cite (Baxter 1998, Chilowicz 2009, SourcererCC, ensemble-LLM 2025).
 - Pluggable by construction: `PairScore` carries a third `embedding_cos` slot so P5 is additive; fingerprints are keyed by `(file_id, byte_range)` so P6 file-watcher incremental updates slot into the same cache keys.
 
-**Next up (P5):** embedding pass via `EmbeddingProvider` trait — pluggable provider (`--embedding-provider`, default `ollama`) and model (`--embedding-model`, default `nomic-embed-code`) per [FUSION-EMBED-PROVIDER]. Fuse via max-normalized sum (never average) per the ensemble-LLM 2025 finding. Cache by `(content_hash, provider_id, model_id, model_version)`. The `embedding_cos` slot in `PairScore` / `ReportSignals` is already reserved, so P5 is additive — no schema bump.
+**Next up (P4.1):** self-documenting JSON + three-format output (JSON canonical, text = AI-readable terse, HTML = human-readable). Embed `schema_doc`, per-cluster `interpretation`, and top-level `action_hints` so reports are understandable cold without a side-channel doc. Text and HTML are **derived** from JSON — `--from-report <file.json>` re-renders without re-analysing. Bumps `report_schema_version` to 2.
+
+**After that (P5):** embedding pass via `EmbeddingProvider` trait — pluggable provider (`--embedding-provider`, default `ollama`) and model (`--embedding-model`, default `nomic-embed-code`) per [FUSION-EMBED-PROVIDER]. Fuse via max-normalized sum (never average) per the ensemble-LLM 2025 finding. Cache by `(content_hash, provider_id, model_id, model_version)`. The `embedding_cos` slot in `PairScore` / `ReportSignals` is already reserved, so P5 is additive — no schema bump.
 
 ## TODO
 
@@ -95,6 +98,23 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - [x] Shared walking / interning plumbing factored to `crates/codededup-core/src/lang/shared.rs` so each language module is ~80 LOC of `normalise_kind` + boilerplate
 - [x] Grammar versions pinned in `Cargo.toml` (source of truth — CI workflow picks them up automatically; Dockerfile will mirror when P6 ships)
 
+### P4.1 Self-documenting report + three-format output — TODO
+Output contract: JSON is canonical ([PRINCIPLES-AUDIENCE-AGENT]); text is AI-readable terse; HTML is human-readable. Text + HTML are **derived** from the JSON — nothing lives in two places. Default: emit all three. Flags suppress individual formats.
+
+- [ ] Embed `schema_doc` at JSON top level: field-by-field explanations, signal semantics (what `structural=1.0` vs `token_jaccard=0.97` mean), ranking formula, byte-range conventions, clone taxonomy. Ship via `include_str!` so it can't drift from the schema.
+- [ ] Embed per-cluster `interpretation: String` computed from the signal combination — one line like `"Type-1 exact clone, safe to extract"`, `"Type-3 near-miss, review before merging"`, `"Low-information LSH-only match, treat as hint"`.
+- [ ] Embed top-level `action_hints: Vec<ActionHint>` — short playbook entries: `"high structural + high jaccard → extract shared function"`, `"low structural + high jaccard → Type-3 candidate, may need tree-edit-distance verification"`, etc.
+- [ ] Replace `--format={text,json}` with **default-emit-all-three**: JSON + text + HTML. New suppression flags `--nojson`, `--notext`, `--nohtml` (at least one format must remain enabled or the CLI exits non-zero with a clear message).
+- [ ] When `--output <path>` is set, write `<path>.json`, `<path>.txt`, `<path>.html`. When omitted, write `codededup-report.{json,txt,html}` in CWD. Never interleave three streams on stdout.
+- [ ] `--from-report <file.json>` takes an existing canonical report as input, skips analysis, and re-renders the text + HTML views. Makes re-rendering deterministic and cheap; keeps the rendering pipeline testable in isolation.
+- [ ] HTML renderer: single-file output, inline CSS, no JS, no external fonts. Renders per-cluster `summary`, `interpretation`, `signals`, first N occurrences, and a collapsed `<details>` for the rest. Includes the `schema_doc` and `action_hints` in a header section so a human opening the file cold understands what they're looking at.
+- [ ] Text renderer migrates from an ad-hoc `String`-builder in `codededup/src/main.rs` to a `codededup-core::render::text` module that takes `&Report` → `String`, so `--from-report` and tests reuse it.
+- [ ] HTML renderer lives in `codededup-core::render::html` alongside the text one.
+- [ ] Ratchet coverage to cover the new renderers + `--from-report` round-trip.
+- [ ] E2E: run once with default flags, assert all three files exist. Run with `--nojson --nohtml`, assert only text. Run with `--from-report` on a committed golden JSON, assert text + HTML derived outputs match expectations.
+- [ ] Update CLI `--help` so the three-format default and `--no*` flags are discoverable by agents.
+- [ ] Update `docs/specs/SPEC.md` [OUTPUT-SCHEMA-JSON] to document `schema_doc`, per-cluster `interpretation`, and `action_hints` as required fields at `report_schema_version = 2`; bump `REPORT_SCHEMA_VERSION` to 2.
+
 ### P5 Embedding pass (hybrid completion)
 - [ ] Ollama client; runtime detection
 - [ ] `--embeddings={auto,required,off}`
@@ -112,3 +132,7 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - [ ] Perf: <30s on 100K-LOC C# (no embeddings)
 - [ ] Ratchet coverage every PR
 - [ ] Fixture-per-bug (CLAUDE.md Bug Fix Process)
+
+
+
+
