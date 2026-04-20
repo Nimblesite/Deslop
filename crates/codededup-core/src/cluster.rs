@@ -6,7 +6,10 @@
 
 use std::collections::HashMap;
 
-use crate::fingerprint::Fingerprint;
+use crate::{
+    fingerprint::Fingerprint,
+    pair::{FusedCluster, PairScore},
+};
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.
@@ -20,6 +23,11 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
+    /// Per-cluster signal breakdown, when available. Structural-only
+    /// exact clusters report `structural = 1.0`, `token_jaccard = 1.0`
+    /// because every member shares a Merkle hash and therefore a k-gram
+    /// set. Fused clusters carry the mean of pair scores.
+    pub signals: PairScore,
 }
 
 /// Builds clusters from a flat fingerprint list and ranks them. Singleton
