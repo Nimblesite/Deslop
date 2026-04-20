@@ -1,0 +1,154 @@
+{
+  "name": "codededup-vscode",
+  "displayName": "CodeDedup",
+  "description": "The first clone detector that tells you you're duplicating code as you type.",
+  "version": "0.1.0",
+  "publisher": "codededup",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codededup/codededup.git",
+    "directory": "clients/vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "duplication",
+    "clone detection",
+    "refactoring",
+    "code quality",
+    "DRY"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:csharp",
+    "onLanguage:rust",
+    "onLanguage:python",
+    "workspaceContains:**/*.cs",
+    "workspaceContains:**/*.rs",
+    "workspaceContains:**/*.py",
+    "onCommand:codededup.openReport"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "codededup.openReport", "title": "CodeDedup: Open Report" },
+      { "command": "codededup.openWorstCluster", "title": "CodeDedup: Open Worst Cluster" },
+      { "command": "codededup.jumpToNextOccurrence", "title": "CodeDedup: Jump to Next Occurrence in Cluster" },
+      { "command": "codededup.compareWithCanonical", "title": "CodeDedup: Compare With Canonical Occurrence" },
+      { "command": "codededup.pickEmbeddingModel", "title": "CodeDedup: Pick Embedding Model" },
+      { "command": "codededup.refreshReport", "title": "CodeDedup: Refresh Report (force full re-analysis)" },
+      { "command": "codededup.toggleShowAllLenses", "title": "CodeDedup: Toggle Show All Code Lenses" },
+      { "command": "codededup.showSchemaDoc", "title": "CodeDedup: Show Schema Documentation" },
+      { "command": "codededup.openCluster", "title": "CodeDedup: Open Cluster" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codededup",
+          "title": "Duplicate Clusters",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "codededup": [
+        { "id": "codededup.topOffenders", "name": "Top Offenders" },
+        { "id": "codededup.focusedFile", "name": "Focused File" },
+        { "id": "codededup.session", "name": "Session" }
+      ]
+    },
+    "configuration": {
+      "title": "CodeDedup",
+      "properties": {
+        "codededup.minNodes": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "description": "Minimum AST node count for a subtree to be fingerprinted. Forwarded to the LSP at initialize."
+        },
+        "codededup.embedding.provider": {
+          "type": "string",
+          "enum": ["ollama", "stub"],
+          "default": "ollama",
+          "description": "Embedding provider id."
+        },
+        "codededup.embedding.model": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Embedding model id. Change via the picker; this value is persisted."
+        },
+        "codededup.embedding.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "description": "Ollama HTTP endpoint. Loopback-only by default."
+        },
+        "codededup.embedding.mode": {
+          "type": "string",
+          "enum": ["auto", "required", "off"],
+          "default": "auto",
+          "description": "Mirrors CLI --embeddings={auto,required,off}."
+        },
+        "codededup.incremental": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable on-disk fingerprint cache (.codededup-cache)."
+        },
+        "codededup.showAllLenses": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show code lenses below the 50th-percentile weight threshold."
+        },
+        "codededup.configPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to .codededup.toml. Mirrors CLI --config."
+        },
+        "codededup.liveBubble.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the live duplication bubble as you type."
+        },
+        "codededup.liveBubble.mode": {
+          "type": "string",
+          "enum": ["inline", "ghost"],
+          "default": "inline",
+          "description": "Bubble layout: inline decoration + inlay hint, or a phantom ghost line below the range."
+        }
+      }
+    },
+    "mcpServers": [
+      {
+        "id": "codededup",
+        "name": "CodeDedup",
+        "description": "Live duplicate-code analysis for the current workspace.",
+        "command": "${extensionPath}/bin/${platform}/codededup-mcp",
+        "args": [],
+        "env": {}
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node ./test/run-tests.mjs",
+    "package": "vsce package --no-dependencies -o codededup-vscode.vsix"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.1.1",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.3"
+  }
+}

@@ -280,7 +280,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
-    let metrics = compute_repo_metrics(MetricsInputs {
+    let metrics = compute_repo_metrics(&MetricsInputs {
         clusters: inputs.clusters,
         sources: inputs.sources,
         file_languages: inputs.file_languages,

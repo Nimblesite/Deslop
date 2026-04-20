@@ -231,22 +231,27 @@ Implements [mcp.md](../specs/mcp.md). JSON-RPC-over-stdio MCP server for AI agen
 - [ ] E2E: `crates/codededup-mcp/tests/cli.rs` drives raw JSON-RPC frames over a pipe: initialize → tools/list → tools/call for each of the eight tools → resources/read → edit-triggered `notifications/resources/updated`.
 - [ ] `make ci` integrates MCP E2E under the standard (non-Ollama-gated) runner; `make ci-ollama` runs the Ollama-backed find-similar path.
 
-### P10 VSIX + live bubble
+### P10 VSIX + live bubble — IN PROGRESS (codededup-opus-main)
 Implements [vsix.md](../specs/vsix.md). The in-your-face "you're duplicating code right now" UX. This is the feature that defines the product.
 
-- [ ] Repo layout: new `clients/vscode/` workspace, TypeScript + preact webviews. `src/extension.ts` < 500 LOC; UI split across `webview/`, `tree/`, `decorations/`, `commands/`, `bubble/`.
+- [x] Repo layout: new `clients/vscode/` workspace, TypeScript. `src/extension.ts` < 500 LOC; UI split across `webview/`, `tree/`, `decorations/`, `commands/`, `bubble/`, `types/`.
+- [x] Activation on `onLanguage:{csharp,rust,python}` + `workspaceContains:**/*.{cs,rs,py}` + `onCommand:codededup.openReport` (`package.json`).
+- [x] Settings under `codededup.*`: `minNodes`, `embedding.{provider,model,endpoint,mode}`, `incremental`, `showAllLenses`, `configPath`, `liveBubble.{enabled,mode}` ([VSIX-SETTINGS]).
+- [x] `contributes.mcpServers` manifest entry registering the bundled `codededup-mcp` binary ([VSIX-MCP-INTEGRATION]).
+- [x] Design tokens module (`src/design.ts`): Kinetic Manuscript palette, Inter + JetBrains Mono, no-line / no-soft-radius rules, severity ramp with crimson as surgical accent.
+- [x] TS mirror of Report schema v3 (`src/types/report.ts`): `Report`, `ReportCluster`, `ReportSignals`, `RepoMetrics`, `ThresholdSummary`, `ReportDelta`, `EmbeddingModelInfo`, severity bucketer.
+- [x] Activity bar "Duplicate Clusters" view container: Top Offenders tree (worst-first, severity-badged), Focused File tree, Session panel ([VSIX-ACTIVITY-BAR]).
+- [x] Editor decorations: overview-ruler severity bar + 1-pixel underline per occurrence ([VSIX-DECORATIONS]).
+- [x] **[VSIX-LIVE-BUBBLE] flagship.** Inline `TextEditorDecorationType` (severity dot + verdict + count + canonical) + `InlayHint` (3-bar signal strip) + ghost-line mode. Debounce 250 ms, budget 250 ms, cluster-id-stable cooldown, per-session dismiss.
+- [x] **[VSIX-EMBED-PICKER] Ollama model picker.** QuickPick with recommended-for-code hints, `stub` entry, "Pull a new model…" + "Refresh list," Ollama-down fallback, stub-selection warning.
+- [x] Status bar item: `dedup · N · #1=File.cs:230 · embed=<model>` ([VSIX-STATUS-BAR]).
+- [x] Command palette entries ([VSIX-COMMANDS]): openReport, openWorstCluster, jumpToNextOccurrence, compareWithCanonical, pickEmbeddingModel, refreshReport, toggleShowAllLenses, showSchemaDoc.
+- [ ] Binary resolver ([VSIX-BINARY-VERSIONING]): `${CODEDEDUP_BINARY_DIR}` → `PATH` (when `--version` matches) → bundled; session-local PATH prepend.
+- [ ] Cluster detail webview (`codededup.openCluster`): header, interpretation + action hints, 4-bar signal chart, per-occurrence collapsible panels; keyboard nav (`j/k/n/p/Enter/?`) ([VSIX-WEBVIEW]).
+- [ ] Full report webview (`codededup.openReport`): live-refreshing HTML, `report/changed` wiring, filters, fixed worst-first sort ([VSIX-REPORT-WEBVIEW]).
 - [ ] Bundle per-platform pre-built `codededup-lsp` + `codededup-mcp` binaries (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). **No download-on-activate.**
-- [ ] Activation on `onLanguage:{csharp,rust,python}` + `workspaceContains:**/*.{cs,rs,py}` + `onCommand:codededup.openReport`.
-- [ ] **[VSIX-LIVE-BUBBLE] — the flagship.** After each coalesced edit, call `duplicates/findSimilar` on the most-recently-touched range; if fused ≥ 0.85, render a two-part bubble (inline `TextEditorDecorationType` with severity dot + `DUPLICATE`/`NEAR-MISS`/`SEMANTIC MATCH` verdict + count + canonical location; plus an `InlayHint` carrying the 3-bar signal strip). Hover reveals full detail; click expands to a webview card with `Compare` button. No-flicker cluster-id-stable cooldown. At most one bubble per editor. `Escape` dismisses. Ghost-line mode (`codededup.liveBubble.mode = "ghost"`) renders on a phantom line below the range via styled CodeLens.
-- [ ] Activity bar "Duplicate Clusters" view container: Top Offenders tree (worst-first, severity-badged), Focused File tree (clusters overlapping active editor), Session panel (embedding model / cache stats / files analysed / analysis state) ([VSIX-ACTIVITY-BAR]).
-- [ ] Editor decorations: gutter severity bar + 1-pixel underline on every clone range in the active editor. No heavy highlighting ([VSIX-DECORATIONS]).
-- [ ] Cluster detail webview (`codededup.openCluster`): header, interpretation + action hints, 4-bar signal chart, per-occurrence collapsible panels with line-numbered, syntax-highlighted snippets (rendered via the core's [OUTPUT-HUMAN-HTML] path). Keyboard-first navigation (`j/k/n/p/Enter/?`) ([VSIX-WEBVIEW]).
-- [ ] Full report webview (`codededup.openReport`): live-refreshing version of the HTML renderer, wired to `report/changed` notifications. Filters by language / severity / file-path glob. Worst-first sort is fixed ([VSIX-REPORT-WEBVIEW]).
-- [ ] **[VSIX-EMBED-PICKER] Ollama model picker.** QuickPick rendering every model returned by `embedding/listModels`, with recommended-for-code hints for known models (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, `codet5p`). `stub` as the last entry. Separator with "Pull a new model…" (opens `ollama.com/library`) and "Refresh list." On selection, calls `embedding/setModel`. Handles Ollama-not-running, probe failure, and stub-selection warnings. Triggers: Session panel click, command palette (`codededup.pickEmbeddingModel`), status bar.
-- [ ] Status bar item: `dedup · N · #1=File.cs:230 · embed=<model>` ([VSIX-STATUS-BAR]).
-- [ ] Settings under `codededup.*`: `minNodes`, `embedding.{provider,model,endpoint,mode}`, `incremental`, `showAllLenses`, `configPath`, `liveBubble.{enabled,mode}` ([VSIX-SETTINGS]).
-- [ ] `contributes.mcpServers` manifest entry registering the bundled `codededup-mcp` binary against the same workspace root the LSP uses, for VS Code's MCP-aware agent hosts ([VSIX-MCP-INTEGRATION]).
+- [ ] Binary lock-step versioning with the VSIX version ([VSIX-BINARY-VERSIONING]).
 - [ ] `schema_doc.md` pulled from `docs/specs/REPORTING-CONTEXT.md` at build time; no drift.
 - [ ] Marketplace + OpenVSX publishing pipeline in `.github/workflows/publish-vsix.yml`.
-- [ ] E2E: VS Code extension test harness in `clients/vscode/test/` — activation → tree populates → edit triggers bubble within 1 s → embedding picker lists stub with Ollama down → embedding picker lists Ollama models against a mock `127.0.0.1:11434` server → cluster + report webviews render.
+- [ ] E2E: VS Code extension test harness in `clients/vscode/test/` — activation → tree populates → edit triggers bubble within 1 s → embedding picker lists stub with Ollama down → embedding picker lists Ollama models against a mock `127.0.0.1:11434` server → cluster + report webviews render → binary resolver prefers PATH when version matches.
 - [ ] README screenshots / demo GIF emphasising the live bubble. Marketplace listing headline: "the first clone detector that tells you you're duplicating code as you type."

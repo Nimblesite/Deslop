@@ -2216,3 +2216,624 @@ fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
     );
     Ok(())
 }
+
+// -----------------------------------------------------------------
+// P6.2 — Repo-wide duplication metric + fail-over threshold
+// Implements [METRICS-REPO] and [EXIT-CODES].
+// -----------------------------------------------------------------
+
+/// Writes two C# files whose classes are Type-2 clones of each other,
+/// rooted at `dir`. Returns the hand-countable line total: each file is
+/// 12 physical lines, so the pair contributes 24 analysed LOC.
+fn write_clone_pair(dir: &Path) -> Result<u64> {
+    fs::create_dir_all(dir)?;
+    let alpha = "namespace Alpha\n\
+                 {\n\
+                 public class Processor\n\
+                 {\n\
+                 public int Compute(int input)\n\
+                 {\n\
+                 if (input < 0) { return 0; }\n\
+                 int total = 0;\n\
+                 for (int i = 0; i < input; i = i + 1) { total = total + i; }\n\
+                 return total;\n\
+                 }\n\
+                 }\n\
+                 }\n";
+    let beta = "namespace Beta\n\
+                {\n\
+                public class Summer\n\
+                {\n\
+                public int Run(int limit)\n\
+                {\n\
+                if (limit < 0) { return 0; }\n\
+                int acc = 0;\n\
+                for (int j = 0; j < limit; j = j + 1) { acc = acc + j; }\n\
+                return acc;\n\
+                }\n\
+                }\n\
+                }\n";
+    fs::write(dir.join("Alpha.cs"), alpha)?;
+    fs::write(dir.join("Beta.cs"), beta)?;
+    // Each file = 13 newline-terminated lines. Two files => 26.
+    Ok(26)
+}
+
+/// Returns the parsed JSON report from a successful run.
+fn read_json_report(path: &Path) -> Result<serde_json::Value> {
+    let body = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+/// Looks up a named field on `value`; returns `Value::Null` when the
+/// field is absent so callers get a deterministic `!=` instead of a
+/// panic ([TESTS-NO-INDEXING]).
+fn field<'a>(value: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
+    value.get(name).unwrap_or(&serde_json::Value::Null)
+}
+
+/// Shortcut for `field(field(value, "metrics"), key)`.
+fn metric_field<'a>(report: &'a serde_json::Value, key: &str) -> &'a serde_json::Value {
+    field(field(report, "metrics"), key)
+}
+
+/// Shortcut for `field(field(field(value, "metrics"), "threshold"), key)`.
+fn threshold_field<'a>(report: &'a serde_json::Value, key: &str) -> &'a serde_json::Value {
+    field(metric_field(report, "threshold"), key)
+}
+
+// Implements [METRICS-REPO]: empty corpus yields zero metrics. Still a
+// valid report with schema v3, still serialises the metrics block.
+#[test]
+fn metrics_zero_on_empty_corpus() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("empty");
+    fs::create_dir_all(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
+    assert_eq!(metric_field(&json, "duplicated_loc").as_u64(), Some(0));
+    assert_eq!(metric_field(&json, "clusters_total").as_u64(), Some(0));
+    assert_eq!(metric_field(&json, "duplicated_files").as_u64(), Some(0));
+    let pct = metric_field(&json, "duplication_percent")
+        .as_f64()
+        .unwrap_or(-1.0);
+    assert!((0.0..=0.0001).contains(&pct), "percent must be 0: {pct}");
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
+    Ok(())
+}
+
+// Implements [METRICS-REPO]: duplicated_loc on a hand-counted fixture
+// matches the lines covered by at least two non-hidden occurrences.
+#[test]
+fn metrics_match_hand_counted_fixture() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let analysed = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    let metrics = field(&json, "metrics").clone();
+    assert_eq!(
+        metric_field(&json, "analysed_loc").as_u64(),
+        Some(analysed),
+        "analysed_loc mismatch: {metrics}"
+    );
+    let dup = metric_field(&json, "duplicated_loc").as_u64().unwrap_or(0);
+    assert!(dup > 0, "duplicated_loc must exceed zero: {metrics}");
+    assert!(
+        dup <= analysed,
+        "duplicated_loc {dup} cannot exceed analysed {analysed}",
+    );
+    let dup_files = metric_field(&json, "duplicated_files")
+        .as_u64()
+        .unwrap_or(0);
+    assert!(
+        dup_files >= 2,
+        "both fixture files should contribute: {metrics}"
+    );
+    let clusters = field(&metrics, "clusters_total").as_u64().unwrap_or(0);
+    assert!(clusters >= 1, "at least one cluster expected: {metrics}");
+    Ok(())
+}
+
+// Implements [METRICS-REPO]: hidden occurrences (report_hide) do not
+// count toward duplicated_loc. Hiding one of a two-file cross-file
+// clone pair must shrink the metric and drop the hidden file from
+// `duplicated_files`.
+#[test]
+fn metrics_exclude_hidden_occurrences() -> Result<()> {
+    // Baseline without any hide policy.
+    let tmp_plain = tempfile::tempdir()?;
+    let plain_root = tmp_plain.path().join("src");
+    let _ = write_clone_pair(&plain_root)?;
+    let plain_out = outputs_under(tmp_plain.path());
+    let mut cmd_plain = Command::cargo_bin("codededup")?;
+    let _plain_assertion = cmd_plain
+        .arg(&plain_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp_plain.path().join("report"))
+        .assert()
+        .success();
+    let plain_metrics = field(&read_json_report(&plain_out.json)?, "metrics").clone();
+    let plain_dup = field(&plain_metrics, "duplicated_loc")
+        .as_u64()
+        .unwrap_or(0);
+    let plain_files = field(&plain_metrics, "duplicated_files")
+        .as_u64()
+        .unwrap_or(0);
+    assert!(
+        plain_dup > 0 && plain_files >= 2,
+        "baseline must cover both files: {plain_metrics}"
+    );
+
+    // With Alpha.cs report_hidden: metric shrinks, hidden file drops
+    // out of `duplicated_files`.
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    fs::write(
+        scan_root.join(".codededup.toml"),
+        "[defaults]\nreport_hide = [\"**/Alpha.cs\"]\n",
+    )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let metrics = field(&read_json_report(&out.json)?, "metrics").clone();
+    let hidden_dup = field(&metrics, "duplicated_loc").as_u64().unwrap_or(0);
+    let hidden_files = field(&metrics, "duplicated_files").as_u64().unwrap_or(0);
+    assert!(
+        hidden_dup < plain_dup,
+        "hiding Alpha.cs must shrink duplicated_loc: plain={plain_dup} hidden={hidden_dup}: {metrics}",
+    );
+    assert!(
+        hidden_files <= 1,
+        "hidden files must not appear in duplicated_files: {metrics}"
+    );
+    Ok(())
+}
+
+// Implements [METRICS-REPO]: overlapping sibling-extension ranges count
+// once per line. Two files with two clone pairs at different sizes must
+// produce duplicated_loc <= lines in the files, never 2x that.
+#[test]
+fn metrics_deduplicate_overlapping_sibling_ranges() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let analysed = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("4")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    let metrics = field(&json, "metrics").clone();
+    let dup = field(&metrics, "duplicated_loc").as_u64().unwrap_or(0);
+    assert!(
+        dup <= analysed,
+        "duplicated_loc {dup} must never exceed analysed {analysed} — \
+         sibling-extension windows must be deduplicated per file: {metrics}"
+    );
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: --fail-over 0.0 is breached by any
+// duplication and the CLI exits 3 with the report on disk.
+#[test]
+fn fail_over_cli_exits_three_on_breach() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--fail-over")
+        .arg("0")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(3);
+    let _ = assertion;
+    assert!(
+        out.json.exists(),
+        "report must land on disk before exit 3: {}",
+        out.json.display()
+    );
+    let json = read_json_report(&out.json)?;
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("cli"));
+    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(true));
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: --fail-over 100.0 is never breached; exit 0.
+#[test]
+fn fail_over_cli_passes_under_threshold() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--fail-over")
+        .arg("100")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("cli"));
+    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(false));
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: the `[threshold]` key in `.codededup.toml` is
+// loaded when `--fail-over` is absent, and an exceeded value exits 3.
+#[test]
+fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    fs::write(
+        scan_root.join(".codededup.toml"),
+        "[threshold]\nmax_duplication_percent = 0.0\n",
+    )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(3);
+    let json = read_json_report(&out.json)?;
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("config"));
+    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(true));
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: `--fail-over` overrides the config-file key.
+// A permissive CLI value turns a breaching config into a passing run.
+#[test]
+fn fail_over_cli_overrides_config_file() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    fs::write(
+        scan_root.join(".codededup.toml"),
+        "[threshold]\nmax_duplication_percent = 0.0\n",
+    )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--fail-over")
+        .arg("100")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("cli"));
+    assert_eq!(threshold_field(&json, "breached").as_bool(), Some(false));
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: `--no-fail-over` clears the config threshold
+// so the run is ungated locally.
+#[test]
+fn no_fail_over_overrides_config_file_threshold() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    fs::write(
+        scan_root.join(".codededup.toml"),
+        "[threshold]\nmax_duplication_percent = 0.0\n",
+    )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--no-fail-over")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: invalid `--fail-over` values (negative, NaN,
+// > 100) produce clap's argument-error exit code 2.
+#[test]
+fn fail_over_invalid_value_exits_two() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--fail-over")
+        .arg("-1.0")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(2);
+    Ok(())
+}
+
+// Implements [METRICS-REPO] + [OUTPUT-SCHEMA-JSON]: `--from-report`
+// replays a v3 report, including its metrics block, without re-running
+// the pipeline. Applied `--fail-over` on the replay beats any earlier
+// threshold.
+#[test]
+fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    let initial = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let original = read_json_report(&initial.json)?;
+    let original_metrics = field(&original, "metrics").clone();
+    // Replay: write into a second output prefix so we don't clobber
+    // the source JSON, and re-render from the first.
+    let replay_prefix = tmp.path().join("replay");
+    let mut cmd2 = Command::cargo_bin("codededup")?;
+    let _assertion2 = cmd2
+        .arg(&scan_root)
+        .arg("--from-report")
+        .arg(&initial.json)
+        .arg("--no-color")
+        .arg("--output")
+        .arg(&replay_prefix)
+        .assert()
+        .success();
+    let replay_json = read_json_report(&with_ext(&replay_prefix, "json"))?;
+    assert_eq!(
+        field(&replay_json, "metrics").clone(),
+        original_metrics,
+        "metrics must round-trip through --from-report"
+    );
+    Ok(())
+}
+
+// Implements [METRICS-REPO]: the text renderer prints the one-line
+// repo duplication header.
+#[test]
+fn text_renderer_shows_repo_duplication_header() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--fail-over")
+        .arg("0")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(3);
+    let txt = fs::read_to_string(&out.txt)?;
+    assert!(
+        txt.contains("repo:") && txt.contains("% duplicated"),
+        "text renderer must print repo metric: {txt}"
+    );
+    assert!(
+        txt.contains("threshold:") && txt.contains("breached"),
+        "text renderer must print breach verdict: {txt}"
+    );
+    Ok(())
+}
+
+// Implements [METRICS-REPO]: the HTML renderer emits a banner whose
+// CSS class reflects the threshold verdict — breached → red, ok →
+// green, absent → neutral.
+#[test]
+fn html_renderer_colour_codes_threshold_state() -> Result<()> {
+    // Breached variant.
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--fail-over")
+        .arg("0")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(3);
+    let html_breached = fs::read_to_string(&out.html)?;
+    assert!(
+        html_breached.contains("metrics-banner--breached"),
+        "breached HTML must carry the breached class"
+    );
+
+    // Neutral variant (no threshold).
+    let tmp2 = tempfile::tempdir()?;
+    let scan_root2 = tmp2.path().join("src");
+    let _ = write_clone_pair(&scan_root2)?;
+    let out2 = outputs_under(tmp2.path());
+    let mut cmd2 = Command::cargo_bin("codededup")?;
+    let _assertion2 = cmd2
+        .arg(&scan_root2)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp2.path().join("report"))
+        .assert()
+        .success();
+    let html_neutral = fs::read_to_string(&out2.html)?;
+    assert!(
+        html_neutral.contains("metrics-banner--neutral"),
+        "no-threshold HTML must carry the neutral class"
+    );
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: `--fail-over 150` is out of range and exits 2.
+#[test]
+fn fail_over_above_100_exits_two() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--fail-over")
+        .arg("150.0")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(2);
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: `--fail-over NaN` is not finite and exits 2.
+#[test]
+fn fail_over_nan_exits_two() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--fail-over")
+        .arg("NaN")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(2);
+    Ok(())
+}
+
+// Implements [EXIT-CODES]: an invalid threshold in `.codededup.toml`
+// propagates as exit 1 (runtime error) with the offending path in the
+// diagnostic. `max_duplication_percent = 150` is out of range.
+#[test]
+fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let _ = write_clone_pair(&scan_root)?;
+    fs::write(
+        scan_root.join(".codededup.toml"),
+        "[threshold]\nmax_duplication_percent = 150.0\n",
+    )?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(1);
+    Ok(())
+}
+
+// Implements [METRICS-REPO]: `RepoMetrics::default()` and `empty()`
+// deserialise as zero metrics through `--from-report` when reading an
+// older (v2) report that pre-dates the field.
+#[test]
+fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    // Minimal v2 report without `metrics`. Schema v3 uses #[serde(default)]
+    // to keep this back-compatible.
+    let v2 = "{\n\
+              \"report_schema_version\": 2,\n\
+              \"tool_version\": \"legacy\",\n\
+              \"min_nodes\": 30,\n\
+              \"files_analysed\": 0,\n\
+              \"clusters_hidden\": 0,\n\
+              \"schema_doc\": \"\",\n\
+              \"action_hints\": [],\n\
+              \"embedding_provenance\": null,\n\
+              \"clusters\": []\n\
+              }\n";
+    let legacy_path = tmp.path().join("legacy.json");
+    fs::write(&legacy_path, v2)?;
+    let output_prefix = tmp.path().join("report");
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(tmp.path())
+        .arg("--from-report")
+        .arg(&legacy_path)
+        .arg("--no-color")
+        .arg("--output")
+        .arg(&output_prefix)
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
+    assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
+    Ok(())
+}

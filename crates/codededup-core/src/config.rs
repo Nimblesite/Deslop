@@ -269,10 +269,10 @@ fn resolve_threshold(
     let Some(percent) = raw.and_then(|block| block.max_duplication_percent) else {
         return Ok(None);
     };
-    validate_threshold_percent(percent).map(Some).map_err(|msg| {
-        CoreError::ConfigThreshold {
+    validate_threshold_percent(percent)
+        .map(Some)
+        .map_err(|msg| CoreError::ConfigThreshold {
             path: source.to_path_buf(),
             message: msg,
-        }
-    })
+        })
 }

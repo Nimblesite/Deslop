@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description = "Core analysis library for CodeDedup: AST fingerprinting, clustering, ranking."
 
+[features]
+default = []
+live = ["dep:notify", "dep:tokio", "dep:futures", "dep:async-trait"]
+
 [dependencies]
 thiserror.workspace = true
 tracing.workspace = true
@@ -21,6 +25,14 @@ ignore.workspace = true
 blake3.workspace = true
 ureq.workspace = true
 instant-distance.workspace = true
+notify = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile.workspace = true
 
 [lints]
 workspace = true

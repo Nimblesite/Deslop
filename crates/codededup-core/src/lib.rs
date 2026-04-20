@@ -25,6 +25,8 @@ pub mod error;
 pub mod fingerprint;
 pub mod fpcache;
 pub mod lang;
+#[cfg(feature = "live")]
+pub mod live;
 pub mod lsh;
 pub mod pair;
 pub mod pipeline;

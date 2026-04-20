@@ -64,6 +64,22 @@ The VSIX ships:
 - The shared `codededup-report-view` webview bundle (preact + no external CSS framework; see [VSIX-WEBVIEW]).
 - The extension's own `schema_doc.md` pulled from `docs/specs/REPORTING-CONTEXT.md` at build time — the same `include_str!` content the report embeds. Drift is impossible.
 
+### [VSIX-BINARY-VERSIONING] Binary versioning + PATH exposure
+
+**One version, one zip.** The bundled `codededup-lsp` / `codededup-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
+
+**PATH fallback.** On activation, the extension checks whether `codededup`, `codededup-lsp`, and `codededup-mcp` are already reachable from the user's shell `PATH`. If any are — typically because the user installed via the Homebrew tap (`brew install codededup/tap/codededup`) or the Scoop bucket (`scoop install codededup`) — the extension uses the externally installed binary and stays out of the way. This respects the "one source of truth" principle for users who run the CLI in their terminal: the terminal `codededup` and the in-editor `codededup-lsp` should be the same binary (same version, same caches, same config) whenever that's user-installable.
+
+If none of the binaries are on `PATH`, the extension falls back to the bundled copy from `bin/<platform>/` and — on first activation only — prepends that directory to the current VS Code process's `PATH` so terminals spawned from the integrated terminal, task runners, and the Run/Debug panel can invoke `codededup` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew` / `scoop` / `cargo install`; the VSIX does not try to be a system package manager.
+
+Order of resolution on activation:
+
+1. If `${CODEDEDUP_BINARY_DIR}` is set, use it (escape hatch for nightly / local builds).
+2. Otherwise, look up `codededup-lsp` on `PATH` via `which` / `where`. If found and the `--version` output matches the extension's `package.json` `version` exactly, use it. Version mismatch logs a `warn!` and falls back to bundled — we refuse to speak a wire protocol against a binary that might not implement it.
+3. Otherwise, use the bundled binary under `${extensionPath}/bin/${platform}/` and prepend that directory to `process.env.PATH` for the current VS Code session.
+
+`codededup-mcp` follows the same resolution order. Both binaries are resolved once per session; a `CodeDedup: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
+
 ### [VSIX-ACTIVATION] Activation
 
 Activation events:

@@ -1,5 +1,5 @@
 {
   "_agent_pmo": "9a71cbf",
   "_doc": "Single source of truth for coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON] and docs/specs/SPEC.md. Ratchet only — never lower.",
-  "default_threshold": 95
+  "default_threshold": 96
 }

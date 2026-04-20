@@ -102,7 +102,7 @@ struct Cli {
     #[command(flatten)]
     behaviour: BehaviourFlags,
 
-    /// Duplication percentage above which CodeDedup exits `3`
+    /// Duplication percentage above which `codededup` exits `3`
     /// ([EXIT-CODES]). Finite float in `[0.0, 100.0]`. Takes
     /// precedence over `[threshold] max_duplication_percent` in
     /// `.codededup.toml`. Mutually exclusive with `--no-fail-over`.

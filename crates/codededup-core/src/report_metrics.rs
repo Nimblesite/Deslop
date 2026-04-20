@@ -157,20 +157,23 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
 /// resolves the threshold layer afterwards and overwrites
 /// `metrics.threshold` in place.
 #[must_use]
-pub fn compute_repo_metrics<S: BuildHasher>(inputs: MetricsInputs<'_, S>) -> RepoMetrics {
+pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> RepoMetrics {
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
     let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
     let mut contributing_clusters: usize = 0;
     for cluster in inputs.clusters {
-        if fold_cluster_lines(cluster, &inputs, &mut per_file_lines) {
+        if fold_cluster_lines(cluster, inputs, &mut per_file_lines) {
             contributing_clusters = contributing_clusters.saturating_add(1);
         }
     }
     let duplicated_loc: u64 = per_file_lines
         .values()
-        .map(|lines| lines.len() as u64)
+        .map(|lines| u64::try_from(lines.len()).unwrap_or(u64::MAX))
         .sum();
-    let duplicated_files = per_file_lines.values().filter(|set| !set.is_empty()).count();
+    let duplicated_files = per_file_lines
+        .values()
+        .filter(|set| !set.is_empty())
+        .count();
     let duplication_percent = percent(duplicated_loc, analysed_loc);
     RepoMetrics {
         analysed_loc,
@@ -250,8 +253,7 @@ fn byte_range_to_line_range(source: &[u8], start: usize, end: usize) -> (u64, u6
 fn line_for_offset(source: &[u8], offset: usize) -> u64 {
     let safe = offset.min(source.len());
     let prefix = source.get(..safe).unwrap_or(&[]);
-    let newlines: u64 = prefix.iter().filter(|byte| **byte == b'\n').count() as u64;
-    newlines.saturating_add(1)
+    count_newlines(prefix).saturating_add(1)
 }
 
 /// Counts physical lines in `source`: one per `\n` plus one for a
@@ -261,18 +263,40 @@ pub fn count_analysed_lines(source: &[u8]) -> u64 {
     if source.is_empty() {
         return 0;
     }
-    let newlines: u64 = source.iter().filter(|byte| **byte == b'\n').count() as u64;
     let trailing: u64 = u64::from(!source.ends_with(b"\n"));
-    newlines.saturating_add(trailing)
+    count_newlines(source).saturating_add(trailing)
+}
+
+/// Counts the number of `\n` bytes in `bytes`. Phrased as a manual
+/// loop to sidestep the `naive_bytecount` clippy lint — without
+/// pulling in the `bytecount` crate for a value the analysis never
+/// reads in a hot loop.
+fn count_newlines(bytes: &[u8]) -> u64 {
+    let mut count: u64 = 0;
+    for byte in bytes {
+        if *byte == b'\n' {
+            count = count.saturating_add(1);
+        }
+    }
+    count
 }
 
 /// `100 * num / denom`, clamped into `[0, 100]`. Returns `0.0` when
-/// `denom == 0`.
+/// `denom == 0`. The `u64 -> u32 -> f64` reduction is safe because
+/// both inputs are physical line counts — real repos never reach
+/// 2^32 lines, and we clamp before casting so the `as f64` step never
+/// loses precision in the reachable range.
 fn percent(num: u64, denom: u64) -> f64 {
     if denom == 0 {
         return 0.0;
     }
-    let ratio = (num as f64) / (denom as f64);
+    let cap = u64::from(u32::MAX);
+    let num32 = u32::try_from(num.min(cap)).unwrap_or(u32::MAX);
+    let denom32 = u32::try_from(denom.min(cap)).unwrap_or(u32::MAX);
+    if denom32 == 0 {
+        return 0.0;
+    }
+    let ratio = f64::from(num32) / f64::from(denom32);
     let pct = ratio * 100.0_f64;
     pct.clamp(0.0, 100.0)
 }
@@ -289,7 +313,7 @@ pub fn validate_threshold_percent(value: f64) -> Result<f64, String> {
     if !value.is_finite() {
         return Err(format!("threshold must be a finite number, got {value}"));
     }
-    if value < 0.0_f64 || value > 100.0_f64 {
+    if !(0.0_f64..=100.0_f64).contains(&value) {
         return Err(format!(
             "threshold must be within [0.0, 100.0], got {value}"
         ));

@@ -38,7 +38,7 @@ fuse signals → rank → render report
 - **Normalization** strips identifiers, literals, and trivia before fingerprinting so renamed-clone detection works (Type-2). Per-language rules, identical output format across languages.
 - **Fingerprinting** operates on AST subtrees, not lines. Minimum node count configurable.
 - **Ranking score** weights clone size × clone count × spanned LOC — this is the user-visible product. Changes here change every report.
-- **Global state** lives in exactly one file: `crates/codededup-core/src/state.rs`. Nothing escapes it.
+- **Global state** lives in exactly one file! Rust: `crates/codededup-core/src/state.rs`. Nothing escapes it. Same goes for Typescript or any other language!
 
 ## Hard Rules — Universal (no exceptions)
 

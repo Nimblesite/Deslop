@@ -292,8 +292,7 @@ impl PipelineSession {
             .file_id_for(&absolute)
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
-        let (cached, source, lines) =
-            parse_one_file(file_id, &absolute, parser, &config, stats)?;
+        let (cached, source, lines) = parse_one_file(file_id, &absolute, parser, &config, stats)?;
         let _prev_lines = self.analysed_lines.insert(file_id, lines);
         let _prev = self.per_file.insert(file_id, cached);
         let _prev_source = self.sources.insert(file_id, source);
