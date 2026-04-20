@@ -1167,10 +1167,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
-    child.notify(
-        "notifications/deslop/filesChanged",
-        &json!({ "paths": [] }),
-    )?;
+    child.notify("notifications/deslop/filesChanged", &json!({ "paths": [] }))?;
     // Server must remain responsive after a no-op notification.
     let response = child.request("tools/list", &json!({}))?;
     assert!(value_get(&response, "/result/tools")?.is_array());

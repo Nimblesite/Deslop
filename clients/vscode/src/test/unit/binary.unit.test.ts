@@ -21,12 +21,12 @@ function platformId(): string {
 }
 
 function writeVersionScript(path: string, version: string): void {
-  writeFileSync(path, `#!/bin/sh\necho 'codededup ${version}'\n`);
+  writeFileSync(path, `#!/bin/sh\necho 'deslop ${version}'\n`);
   chmodSync(path, 0o755);
 }
 
 suite("binary resolver", () => {
-  const tmp = resolve(tmpdir(), `codededup-binary-${process.pid}-${Date.now()}`);
+  const tmp = resolve(tmpdir(), `deslop-binary-${process.pid}-${Date.now()}`);
   const envDir = resolve(tmp, "env");
   const pathDir = resolve(tmp, "pathdir");
   const extDir = resolve(tmp, "ext");
@@ -36,12 +36,12 @@ suite("binary resolver", () => {
     mkdirSync(envDir, { recursive: true });
     mkdirSync(pathDir, { recursive: true });
     mkdirSync(bundledDir, { recursive: true });
-    writeVersionScript(resolve(envDir, "codededup-lsp"), "9.9.9");
-    writeVersionScript(resolve(pathDir, "codededup-lsp"), "0.1.0");
-    writeVersionScript(resolve(bundledDir, "codededup-lsp"), "0.1.0");
-    writeVersionScript(resolve(envDir, "codededup-mcp"), "9.9.9");
-    writeVersionScript(resolve(bundledDir, "codededup-mcp"), "0.1.0");
-    writeVersionScript(resolve(bundledDir, "codededup"), "0.1.0");
+    writeVersionScript(resolve(envDir, "deslop-lsp"), "9.9.9");
+    writeVersionScript(resolve(pathDir, "deslop-lsp"), "0.1.0");
+    writeVersionScript(resolve(bundledDir, "deslop-lsp"), "0.1.0");
+    writeVersionScript(resolve(envDir, "deslop-mcp"), "9.9.9");
+    writeVersionScript(resolve(bundledDir, "deslop-mcp"), "0.1.0");
+    writeVersionScript(resolve(bundledDir, "deslop"), "0.1.0");
   });
 
   suiteTeardown(() => {
@@ -101,7 +101,7 @@ suite("binary resolver", () => {
     assert.equal(resolved.source, "env");
   });
 
-  test("cli kind resolves to bundled codededup", () => {
+  test("cli kind resolves to bundled deslop", () => {
     const env = { ...process.env, PATH: "" } as NodeJS.ProcessEnv;
     delete env["CODEDEDUP_BINARY_DIR"];
     const resolved = resolveBinary(extDir, "cli", "0.1.0", env);

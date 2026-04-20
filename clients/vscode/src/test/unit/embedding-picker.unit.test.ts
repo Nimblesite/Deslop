@@ -111,7 +111,7 @@ suite("embeddingPicker helpers", () => {
     });
   });
 
-  test("setModel dispatches codededup/embeddingSetModel with the chosen provider + model", async () => {
+  test("setModel dispatches deslop/embeddingSetModel with the chosen provider + model", async () => {
     const calls: Array<{ method: string; params: unknown }> = [];
     const client = {
       sendRequest: (method: string, params: unknown) => {
@@ -127,7 +127,7 @@ suite("embeddingPicker helpers", () => {
       size_bytes: null,
       is_embedding_model: true,
     });
-    const swap = calls.find((call) => call.method === "codededup/embeddingSetModel");
+    const swap = calls.find((call) => call.method === "deslop/embeddingSetModel");
     assert.ok(swap, `expected embeddingSetModel request; got ${JSON.stringify(calls)}`);
     assert.deepEqual(swap!.params, {
       provider_id: "ollama",

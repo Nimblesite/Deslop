@@ -34,13 +34,13 @@ class ClusterNode extends vscode.TreeItem {
       vscode.TreeItemCollapsibleState.Collapsed,
     );
     this.description = cluster.id;
-    this.contextValue = "codededup.cluster";
+    this.contextValue = "deslop.cluster";
     this.tooltip = new vscode.MarkdownString(
       `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${cluster.occurrences.length}\``,
     );
     this.command = {
-      command: "codededup.openCluster",
+      command: "deslop.openCluster",
       title: "Open cluster",
       arguments: [cluster.id],
     };
@@ -51,9 +51,9 @@ class OccurrenceNode extends vscode.TreeItem {
   constructor(readonly occurrence: ReportOccurrence) {
     super(occurrence.path, vscode.TreeItemCollapsibleState.None);
     this.description = `${occurrence.start_byte}..${occurrence.end_byte}`;
-    this.contextValue = "codededup.occurrence";
+    this.contextValue = "deslop.occurrence";
     this.command = {
-      command: "codededup.openOccurrence",
+      command: "deslop.openOccurrence",
       title: "Open occurrence",
       arguments: [occurrence],
     };
@@ -77,7 +77,7 @@ class StatusNode extends vscode.TreeItem {
     tooltip?: string,
   ) {
     super(message, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = `codededup.status.${kind}`;
+    this.contextValue = `deslop.status.${kind}`;
     if (kind === "busy") {
       this.iconPath = new vscode.ThemeIcon("sync~spin");
     } else if (kind === "error") {
@@ -86,7 +86,7 @@ class StatusNode extends vscode.TreeItem {
         new vscode.ThemeColor("errorForeground"),
       );
       this.command = {
-        command: "codededup.revealLog",
+        command: "deslop.revealLog",
         title: "Reveal Deslop log",
       };
     }
@@ -266,7 +266,7 @@ export class SessionProvider extends LifecycleAwareProvider {
     const cache = `${report.cache_stats.hits} hit / ${report.cache_stats.misses} miss`;
     const state = this.clientOf() ? "running" : "stopped";
     return [
-      new SessionFieldNode("Embedding model", model, "codededup.pickEmbeddingModel"),
+      new SessionFieldNode("Embedding model", model, "deslop.pickEmbeddingModel"),
       new SessionFieldNode("Cache", cache),
       new SessionFieldNode("Files analysed", String(report.files_analysed)),
       new SessionFieldNode("Schema version", String(report.report_schema_version)),

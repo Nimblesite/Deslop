@@ -7,13 +7,13 @@ import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
 async function waitForReport(): Promise<unknown> {
-  const ext = vscode.extensions.getExtension("codededup.codededup-vscode");
+  const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
   await ext!.activate();
   // Initial report seeding takes time over stdio.
   for (let i = 0; i < 20; i++) {
     await sleep(250);
     const cmds = await vscode.commands.getCommands(true);
-    if (cmds.includes("codededup.openCluster")) return ext;
+    if (cmds.includes("deslop.openCluster")) return ext;
   }
   throw new Error("extension did not activate in time");
 }
@@ -26,9 +26,9 @@ suite("cluster navigation", () => {
 
   test("openCluster by id opens the cluster panel", async () => {
     // Use a synthetic id — the open path builds the HTML regardless of the id matching.
-    await vscode.commands.executeCommand("codededup.openCluster", "cluster-for-test");
+    await vscode.commands.executeCommand("deslop.openCluster", "cluster-for-test");
     await sleep(300);
-    await vscode.commands.executeCommand("codededup.openCluster", "cluster-for-test");
+    await vscode.commands.executeCommand("deslop.openCluster", "cluster-for-test");
     await sleep(200);
   });
 
@@ -44,7 +44,7 @@ suite("cluster navigation", () => {
       new vscode.Position(2, 8),
     );
     await sleep(200);
-    await vscode.commands.executeCommand("codededup.jumpToNextOccurrence");
+    await vscode.commands.executeCommand("deslop.jumpToNextOccurrence");
     await sleep(300);
   });
 

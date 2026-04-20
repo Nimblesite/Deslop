@@ -1,7 +1,7 @@
-// Mirrors codededup-core::report at REPORT_SCHEMA_VERSION = 1.
-// Keep in sync with crates/codededup-core/src/report.rs,
-// crates/codededup-core/src/buckets.rs, and
-// crates/codededup-core/src/report_metrics.rs.
+// Mirrors deslop-core::report at REPORT_SCHEMA_VERSION = 1.
+// Keep in sync with crates/deslop-core/src/report.rs,
+// crates/deslop-core/src/buckets.rs, and
+// crates/deslop-core/src/report_metrics.rs.
 
 export interface Report {
   report_schema_version: number;
@@ -80,7 +80,7 @@ export interface ThresholdSummary {
 
 export type ThresholdSource = "none" | "cli" | "config";
 
-// ReportDelta (codededup_core::delta) — live updates.
+// ReportDelta (deslop_core::delta) — live updates.
 export interface ReportDelta {
   from_generation: number;
   to_generation: number;
@@ -138,7 +138,7 @@ export function severityOf(weightPercentile: number): Severity {
 }
 
 // ---------------------------------------------------------------------------
-// Canonical clone buckets — mirrors codededup-core::buckets.
+// Canonical clone buckets — mirrors deslop-core::buckets.
 // Single source of truth for every user-facing surface in the VS Code
 // extension per docs/specs/taxonomy.md [CLONE-BUCKETS-DUAL-LABEL].
 // ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ export function bucketLabels(bucket: Bucket): BucketLabels {
 }
 
 // Routing from signal triple onto a canonical bucket. Must match
-// codededup-core::buckets::classify_signals byte-for-byte; the
+// deslop-core::buckets::classify_signals byte-for-byte; the
 // Deslop core owns the routing table in [CLONE-BUCKETS-ROUTING].
 export function classifyCluster(signals: ReportSignals): Bucket {
   if (signals.structural >= 0.99 && signals.token_jaccard >= 0.99) {

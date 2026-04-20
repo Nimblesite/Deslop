@@ -2,7 +2,7 @@
 
 Thin Model Context Protocol shell over [LIVE-BINARY]. Lets an AI coding agent (Claude Code, Claude Desktop, Cursor, Continue, or anything that speaks MCP) **ask live questions of the running dedup analysis**: *"as I'm working on this file, which ranges I'm about to touch are already duplicated elsewhere?"* and *"before I write this block, is something like it already in the repo?"*
 
-Crate: `crates/codededup-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Stays under 100 LOC of glue; all live-analysis logic lives in `codededup-core::live` (feature-gated).
+Crate: `crates/deslop-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Stays under 100 LOC of glue; all live-analysis logic lives in `deslop-core::live` (feature-gated).
 
 The MCP shell and the LSP shell ([lsp.md](lsp.md)) are peers — same daemon, different framing. The LSP is for the editor UI; the MCP is for the agent in the loop.
 
@@ -57,8 +57,8 @@ MCP resources are read-only documents the agent can open by URI. Two canonical r
 
 | Resource URI | Contents |
 |---|---|
-| `codededup://report` | The current report, canonical JSON. The agent can `resources/read` it directly instead of calling `report-get` as a tool. Resource reads are the MCP-idiomatic way to pull a document-sized payload. |
-| `codededup://schema` | The `schema_doc` block from the report ([OUTPUT-SCHEMA-JSON]). Same markdown as the LSP virtual doc. An agent new to Deslop reads this once per session to learn the schema. |
+| `deslop://report` | The current report, canonical JSON. The agent can `resources/read` it directly instead of calling `report-get` as a tool. Resource reads are the MCP-idiomatic way to pull a document-sized payload. |
+| `deslop://schema` | The `schema_doc` block from the report ([OUTPUT-SCHEMA-JSON]). Same markdown as the LSP virtual doc. An agent new to Deslop reads this once per session to learn the schema. |
 
 Resources are listed via `resources/list`. Their content refreshes every time `resources/read` is called — the daemon always returns the latest snapshot.
 
@@ -66,8 +66,8 @@ Resources are listed via `resources/list`. Their content refreshes every time `r
 
 The MCP spec supports server-initiated notifications. We use two:
 
-- `notifications/resources/updated` — fired against `codededup://report` after every scheduler pass. Clients that subscribed to the resource re-read it.
-- `notifications/codededup/reportChanged` — custom namespace, carries a `{ generation, summary }` payload mirroring the LSP `report/changed`. Agents that keep a cursor on the report generation consume this directly.
+- `notifications/resources/updated` — fired against `deslop://report` after every scheduler pass. Clients that subscribed to the resource re-read it.
+- `notifications/deslop/reportChanged` — custom namespace, carries a `{ generation, summary }` payload mirroring the LSP `report/changed`. Agents that keep a cursor on the report generation consume this directly.
 
 Notifications are not ordered relative to tool calls; an agent issuing a tool call mid-re-analysis gets a snapshot that's either pre- or post-pass, never partial. The `generation` field on the response lets the agent reconcile.
 
@@ -79,7 +79,7 @@ The tool descriptions above are the user-visible contract between the daemon and
 2. **Tell the agent what the result means, not just its shape.** *"Worst offenders first."* — `report-get`. *"Clusters overlapping the byte range you're about to edit."* — `report-for-range`.
 3. **Point to related tools.** *"Use before switching models."* — `list-embedding-models`. This surfaces the natural call chain.
 
-These descriptions are written in one place (the MCP shell's `tools/list` response) and reused verbatim in [vsix.md] docs and the `codededup/schema` virtual document so humans and agents read the same contract.
+These descriptions are written in one place (the MCP shell's `tools/list` response) and reused verbatim in [vsix.md] docs and the `deslop/schema` virtual document so humans and agents read the same contract.
 
 ### [MCP-ACTIONABLE] Every result is actionable
 
@@ -94,13 +94,13 @@ Because the canonical JSON report already embeds `interpretation`, `action_hints
 
 ### [MCP-TESTING] E2E tests
 
-`crates/codededup-mcp/tests/cli.rs` drives the real MCP binary over stdio with the MCP JSON-RPC frames:
+`crates/deslop-mcp/tests/cli.rs` drives the real MCP binary over stdio with the MCP JSON-RPC frames:
 
 - `initialize` + `tools/list` returns the eight tools above with matching schemas.
 - `tools/call report-for-file` on a fixture returns the expected cluster.
 - `tools/call find-similar` with a known snippet returns the matching cluster with fused score above threshold.
 - `tools/call find-similar` with unparseable input returns `UnparseableInputError`.
 - `tools/call set-embedding-model` followed by `tools/call session-config` shows the new provenance.
-- `resources/read codededup://report` returns valid canonical JSON; a follow-up edit triggers `notifications/resources/updated`.
+- `resources/read deslop://report` returns valid canonical JSON; a follow-up edit triggers `notifications/resources/updated`.
 
 No mocking of the MCP framing — test frames are raw JSON-RPC over a pipe.

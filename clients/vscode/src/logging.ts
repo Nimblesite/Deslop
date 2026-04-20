@@ -17,7 +17,7 @@ export function logger(): Logger {
   const out = initOutputChannel();
   rootLogger = pino(
     {
-      name: "codededup-vscode",
+      name: "deslop-vscode",
       level: process.env.CODEDEDUP_LOG_LEVEL ?? "debug",
       base: null,
       timestamp: pino.stdTimeFunctions.isoTime,

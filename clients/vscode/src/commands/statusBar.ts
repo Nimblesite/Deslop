@@ -12,7 +12,7 @@ export class StatusBar implements vscode.Disposable {
   constructor(private readonly store: ReportStore) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
     this.item.name = "Deslop";
-    this.item.command = "codededup.openWorstCluster";
+    this.item.command = "deslop.openWorstCluster";
     this.disposables.push(
       this.item,
       store.onDidChange(() => this.render()),

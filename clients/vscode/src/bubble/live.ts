@@ -1,5 +1,5 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
-// Fires after every coalesced buffer edit. Calls codededup/duplicatesFindSimilar
+// Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
 // on the most-recently-touched range; if fused >= 0.85, renders:
 //   primary: after-text decoration (severity dot + verdict + count + canonical)
 //   secondary: inlay hint with a 3-bar signal strip
@@ -67,8 +67,8 @@ export class LiveBubble implements vscode.Disposable {
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
     );
-    this.tryRegister("codededup.bubble.dismiss", () => this.clearBubble());
-    this.tryRegister("codededup.bubble.dismissCluster", (id) => {
+    this.tryRegister("deslop.bubble.dismiss", () => this.clearBubble());
+    this.tryRegister("deslop.bubble.dismissCluster", (id) => {
       this.dismissedClusters.add(String(id));
       this.clearBubble();
     });
@@ -90,7 +90,7 @@ export class LiveBubble implements vscode.Disposable {
   }
 
   private onEdit(event: vscode.TextDocumentChangeEvent): void {
-    const cfg = vscode.workspace.getConfiguration("codededup");
+    const cfg = vscode.workspace.getConfiguration("deslop");
     if (!cfg.get<boolean>("liveBubble.enabled", true)) return;
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document !== event.document) return;
@@ -122,7 +122,7 @@ export class LiveBubble implements vscode.Disposable {
     const timeout = setTimeout(() => controller.abort(), BUDGET_MS);
     try {
       const clusters = await client.sendRequest<ReportCluster[]>(
-        "codededup/duplicatesFindSimilar",
+        "deslop/duplicatesFindSimilar",
         { path: doc.uri.fsPath, start_byte: startByte, end_byte: endByte },
       );
       clearTimeout(timeout);
@@ -154,7 +154,7 @@ export class LiveBubble implements vscode.Disposable {
     const severities = indexedSeverity(report.clusters);
     const severity = severities.get(best.id) ?? "faint";
     const mode = vscode.workspace
-      .getConfiguration("codededup")
+      .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
     const lineEnd = editor.document.lineAt(range.end.line).range.end;
     const anchor = new vscode.Range(lineEnd, lineEnd);
@@ -272,9 +272,9 @@ export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
   const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   const dismissArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   md.appendMarkdown(
-    `[Open cluster](command:codededup.openCluster?${openArgs}) · ` +
-      `[Compare](command:codededup.compareWithCanonical?${openArgs}) · ` +
-      `[Dismiss for session](command:codededup.bubble.dismissCluster?${dismissArgs})`,
+    `[Open cluster](command:deslop.openCluster?${openArgs}) · ` +
+      `[Compare](command:deslop.compareWithCanonical?${openArgs}) · ` +
+      `[Dismiss for session](command:deslop.bubble.dismissCluster?${dismissArgs})`,
   );
   return md;
 }

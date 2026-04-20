@@ -2,7 +2,7 @@
 
 The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
 
-Distribution: Marketplace + OpenVSX as a single `.vsix`. Extension id: `codededup.codededup-vscode`. Published from `clients/vscode/` in this repo.
+Distribution: Marketplace + OpenVSX as a single `.vsix`. Extension id: `deslop.deslop-vscode`. Published from `clients/vscode/` in this repo.
 
 ### [VSIX-PRINCIPLES] UX principles
 
@@ -38,7 +38,7 @@ VS Code doesn't give us a true floating tooltip over a specific range, so the bu
 
 No native floating bubble is possible in current VS Code APIs without a custom webview overlay — and a webview overlay would steal focus. The decoration + inlay combination is the closest legal approximation, reads as a single "bubble" to the user, and never steals the caret.
 
-**Ghost-line mode (opt-in, `codededup.liveBubble.mode = "ghost"`).**
+**Ghost-line mode (opt-in, `deslop.liveBubble.mode = "ghost"`).**
 For users who want a tighter callout, ghost-line mode renders the bubble on a **phantom line inserted below the duplicated range**, using VS Code's `CodeLens` API with a custom-styled title. The phantom line is visually distinct from the real buffer (dimmed background, italic). It never modifies the buffer; scroll behaviour matches code lenses. This is the closest thing to "a speech bubble pointing at the duplicate" that VS Code natively supports.
 
 **Cooldown + budget.**
@@ -49,7 +49,7 @@ For users who want a tighter callout, ghost-line mode renders the bubble on a **
 **Dismissal.**
 - `Escape` dismisses the bubble until the next edit re-triggers.
 - Clicking a `Dismiss for this cluster` action in the expanded card suppresses that cluster id for the session. Session-scoped, never persisted — the next day, the duplication is real again and we say so.
-- `codededup.liveBubble.enabled = false` turns the bubble off globally for users who want the rest of the VSIX without the in-your-face moment. Off-by-default is **not** a setting we ship — silence-when-clean already gives users a tolerable floor; the bubble is on from the first install.
+- `deslop.liveBubble.enabled = false` turns the bubble off globally for users who want the rest of the VSIX without the in-your-face moment. Off-by-default is **not** a setting we ship — silence-when-clean already gives users a tolerable floor; the bubble is on from the first install.
 
 **Why this is the headline.**
 No competitor ([competitors.md](competitors.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. Deslop *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
@@ -59,14 +59,14 @@ No competitor ([competitors.md](competitors.md)) tells a developer about duplica
 The VSIX ships:
 
 - The extension TypeScript (`clients/vscode/src/extension.ts`, under 500 lines per CLAUDE.md; UI logic split into `webview/`, `tree/`, `decorations/`, `commands/`).
-- A pre-built `codededup-lsp` binary per platform (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). Download-on-first-activate is **not** acceptable — the extension either works offline immediately or it doesn't install.
-- A pre-built `codededup-mcp` binary per platform, colocated, registered with any MCP-aware VS Code host (Claude Code, Copilot Chat with MCP, etc.) via the extension's MCP contribution point.
-- The shared `codededup-report-view` webview bundle (preact + no external CSS framework; see [VSIX-WEBVIEW]).
+- A pre-built `deslop-lsp` binary per platform (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). Download-on-first-activate is **not** acceptable — the extension either works offline immediately or it doesn't install.
+- A pre-built `deslop-mcp` binary per platform, colocated, registered with any MCP-aware VS Code host (Claude Code, Copilot Chat with MCP, etc.) via the extension's MCP contribution point.
+- The shared `deslop-report-view` webview bundle (preact + no external CSS framework; see [VSIX-WEBVIEW]).
 - The extension's own `schema_doc.md` pulled from `docs/specs/REPORTING-CONTEXT.md` at build time — the same `include_str!` content the report embeds. Drift is impossible.
 
 ### [VSIX-BINARY-VERSIONING] Binary versioning + PATH exposure
 
-**One version, one zip.** The bundled `codededup-lsp` / `codededup-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
+**One version, one zip.** The bundled `deslop-lsp` / `deslop-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
 
 **PATH fallback.** On activation, the extension checks whether `deslop`, `deslop-lsp`, and `deslop-mcp` are already reachable from the user's shell `PATH`. If any are — typically because the user installed via the Homebrew tap (`brew install melbournedeveloper/tap/deslop`) or the Scoop bucket (`scoop install deslop`) — the extension uses the externally installed binary and stays out of the way. This respects the "one source of truth" principle for users who run the CLI in their terminal: the terminal `deslop` and the in-editor `deslop-lsp` should be the same binary (same version, same caches, same config) whenever that's user-installable.
 
@@ -75,20 +75,20 @@ If none of the binaries are on `PATH`, the extension falls back to the bundled c
 Order of resolution on activation:
 
 1. If `${CODEDEDUP_BINARY_DIR}` is set, use it (escape hatch for nightly / local builds).
-2. Otherwise, look up `codededup-lsp` on `PATH` via `which` / `where`. If found and the `--version` output matches the extension's `package.json` `version` exactly, use it. Version mismatch logs a `warn!` and falls back to bundled — we refuse to speak a wire protocol against a binary that might not implement it.
+2. Otherwise, look up `deslop-lsp` on `PATH` via `which` / `where`. If found and the `--version` output matches the extension's `package.json` `version` exactly, use it. Version mismatch logs a `warn!` and falls back to bundled — we refuse to speak a wire protocol against a binary that might not implement it.
 3. Otherwise, use the bundled binary under `${extensionPath}/bin/${platform}/` and prepend that directory to `process.env.PATH` for the current VS Code session.
 
-`codededup-mcp` follows the same resolution order. Both binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
+`deslop-mcp` follows the same resolution order. Both binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
 
 ### [VSIX-ACTIVATION] Activation
 
 Activation events:
 
-- `onLanguage:csharp`, `onLanguage:rust`, `onLanguage:python` — mirror the supported language set; extending requires a VSIX rebuild when `codededup-core` adds a language.
-- `onCommand:codededup.openReport` — cold activation when the user explicitly asks for the report.
+- `onLanguage:csharp`, `onLanguage:rust`, `onLanguage:python` — mirror the supported language set; extending requires a VSIX rebuild when `deslop-core` adds a language.
+- `onCommand:deslop.openReport` — cold activation when the user explicitly asks for the report.
 - `workspaceContains:**/*.cs`, `**/*.rs`, `**/*.py` — pre-warm the LSP on project open.
 
-On activation: spawn the bundled `codededup-lsp` binary rooted at the first workspace folder, start the LSP client, wire up the VSIX UI surfaces below. Multi-root workspaces get one LSP process per root.
+On activation: spawn the bundled `deslop-lsp` binary rooted at the first workspace folder, start the LSP client, wire up the VSIX UI surfaces below. Multi-root workspaces get one LSP process per root.
 
 ### [VSIX-ACTIVITY-BAR] Activity bar + tree view
 
@@ -102,7 +102,7 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 - **Focused File** tree — the cluster subset overlapping the currently open editor. Collapses when no clusters apply.
 - **Session** panel — compact footer with: active embedding model (linkable, opens the picker), `cache_stats`, `files_analysed`, daemon state (`idle` / `running`).
 
-Tree refresh is driven by `codededup/reportChanged`; the webview uses the same notification to bump its own state.
+Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
 ### [VSIX-CODE-LENS] Code lens
 
@@ -114,7 +114,7 @@ Each lens has three actions in its command array:
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
 - **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
 
-The lens is suppressed for clusters below the 50th weight percentile (consistent with [LSP-SEVERITY]). Users can toggle via `codededup.showAllLenses` (off by default — this is the silent-when-clean principle in action).
+The lens is suppressed for clusters below the 50th weight percentile (consistent with [LSP-SEVERITY]). Users can toggle via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action).
 
 ### [VSIX-DECORATIONS] Editor decorations
 
@@ -124,11 +124,11 @@ No background highlighting, no border boxes, no emoji markers in the gutter. The
 
 ### [VSIX-STATE] Centralised state store
 
-**All VSIX state lives in one place.** The extension owns a single in-process state container — the `ReportStore` — that every surface (tree, decorations, bubble, webviews, status bar, picker) reads from. Nothing renders from ad-hoc locals, nothing caches a parallel copy of the report, nothing keeps a "last-known" snapshot on the side. One truth, one listener tree, one invalidation path. This mirrors the `crates/codededup-core/src/state.rs` rule on the Rust side: centralised state is the contract, not an implementation detail.
+**All VSIX state lives in one place.** The extension owns a single in-process state container — the `ReportStore` — that every surface (tree, decorations, bubble, webviews, status bar, picker) reads from. Nothing renders from ad-hoc locals, nothing caches a parallel copy of the report, nothing keeps a "last-known" snapshot on the side. One truth, one listener tree, one invalidation path. This mirrors the `crates/deslop-core/src/state.rs` rule on the Rust side: centralised state is the contract, not an implementation detail.
 
 Rules that fall out of that:
 
-- The LSP's `codededup/reportChanged` notification is the **only** writer of the current report snapshot. The tree view does not call `reportGet` on its own, nor does the webview, nor the status bar — they all observe the store.
+- The LSP's `deslop/reportChanged` notification is the **only** writer of the current report snapshot. The tree view does not call `reportGet` on its own, nor does the webview, nor the status bar — they all observe the store.
 - Settings changes route through the LSP (`workspace/didChangeConfiguration`) and come back through the same store update path, so there's no "UI thinks the model is nomic-embed-text, LSP is actually using stub" drift window.
 - When the LSP reconnects, the store is reset and every surface re-renders from empty — no stale colour on a tree node, no stale verdict on the bubble, no stale percentage on the status bar.
 - Disposables are attached to the store, not scattered across provider objects, so extension shutdown tears everything down deterministically.
@@ -156,7 +156,7 @@ Implementation shape:
 
 ### [VSIX-WEBVIEW] Cluster detail webview
 
-Command `codededup.openCluster` opens a webview tab. The tab renders a single cluster with:
+Command `deslop.openCluster` opens a webview tab. The tab renders a single cluster with:
 
 - Header: cluster id, rank, weight, size, severity badge, jump-to-next-cluster / jump-to-prev-cluster arrows.
 - Interpretation and action hints (the same fields the JSON carries).
@@ -170,14 +170,14 @@ Navigation is keyboard-first: `j/k` move occurrence focus, `n/p` move cluster fo
 
 ### [VSIX-REPORT-WEBVIEW] Full report webview
 
-Command `codededup.openReport` opens a second webview with the full ranked list — essentially a live-refreshing version of the HTML renderer from [OUTPUT-SCHEMA-JSON], but wired to the daemon's notification stream so it stays current as the user types. Filters: by language, by severity, by file-path glob. Sort is fixed (worst-first) because the whole product premise is worst-first.
+Command `deslop.openReport` opens a second webview with the full ranked list — essentially a live-refreshing version of the HTML renderer from [OUTPUT-SCHEMA-JSON], but wired to the daemon's notification stream so it stays current as the user types. Filters: by language, by severity, by file-path glob. Sort is fixed (worst-first) because the whole product premise is worst-first.
 
 ### [VSIX-EMBED-PICKER] Embedding model picker
 
 A first-class VSIX surface because the user explicitly asked for it. Trigger:
 
 - Clicking the embedding-model label in the Session panel.
-- Running `codededup.pickEmbeddingModel` from the command palette.
+- Running `deslop.pickEmbeddingModel` from the command palette.
 - The status bar item (see [VSIX-STATUS-BAR]) when Ollama is detected on the host.
 
 Flow:
@@ -231,18 +231,18 @@ Each entry maps 1:1 to an LSP `workspace/executeCommand` or virtual-document ope
 
 ### [VSIX-SETTINGS] Settings
 
-Exposed under `codededup.*` in VS Code settings:
+Exposed under `deslop.*` in VS Code settings:
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `codededup.minNodes` | `30` | Forwarded to the LSP at `initialize`. Matches CLI `--min-nodes`. |
-| `codededup.embedding.provider` | `ollama` | `ollama` or `stub`. |
-| `codededup.embedding.model` | `nomic-embed-text` | Selected via picker; this is the persisted value. |
-| `codededup.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
-| `codededup.embedding.mode` | `auto` | Mirrors `--embeddings={auto,required,off}`. |
-| `codededup.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
-| `codededup.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
-| `codededup.configPath` | `""` | Optional override for `.codededup.toml` — mirrors CLI `--config`. |
+| `deslop.minNodes` | `30` | Forwarded to the LSP at `initialize`. Matches CLI `--min-nodes`. |
+| `deslop.embedding.provider` | `ollama` | `ollama` or `stub`. |
+| `deslop.embedding.model` | `nomic-embed-text` | Selected via picker; this is the persisted value. |
+| `deslop.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
+| `deslop.embedding.mode` | `auto` | Mirrors `--embeddings={auto,required,off}`. |
+| `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
+| `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
+| `deslop.configPath` | `""` | Optional override for `.codededup.toml` — mirrors CLI `--config`. |
 
 Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required.
 
@@ -257,7 +257,7 @@ The extension posts VS Code notifications sparingly:
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 
-VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `codededup-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `codededup` with the same workspace root the LSP uses. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
+VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `deslop` with the same workspace root the LSP uses. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
 
 Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) can still wire the MCP up manually via the agent's own config. The VSIX bundling is convenience, not a lock-in.
 

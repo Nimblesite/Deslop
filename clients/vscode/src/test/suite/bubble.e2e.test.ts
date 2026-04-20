@@ -1,14 +1,14 @@
 // E2E: edit a fixture file, give the real LSP time to re-analyse,
 // assert the bubble-related commands are registered (only possible if
-// activate() ran end-to-end against the real codededup-lsp binary).
+// activate() ran end-to-end against the real deslop-lsp binary).
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
 suite("live bubble (real LSP)", () => {
-  test("extension spawns the real codededup-lsp binary", async () => {
-    const ext = vscode.extensions.getExtension("codededup.codededup-vscode");
+  test("extension spawns the real deslop-lsp binary", async () => {
+    const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
     assert.ok(ext && ext.isActive, "extension must be active against the real LSP");
   });
 
@@ -26,11 +26,11 @@ suite("live bubble (real LSP)", () => {
     await sleep(2000);
 
     const commands = await vscode.commands.getCommands(true);
-    assert.ok(commands.includes("codededup.bubble.dismiss"));
-    assert.ok(commands.includes("codededup.bubble.dismissCluster"));
+    assert.ok(commands.includes("deslop.bubble.dismiss"));
+    assert.ok(commands.includes("deslop.bubble.dismissCluster"));
   });
 
   test("escape dismisses the bubble", async () => {
-    await vscode.commands.executeCommand("codededup.bubble.dismiss");
+    await vscode.commands.executeCommand("deslop.bubble.dismiss");
   });
 });

@@ -31,7 +31,7 @@ suite("decorations helpers", () => {
     assert.match(text, /jaccard/);
     assert.match(text, /embedding/);
     assert.match(text, /fused/);
-    assert.match(text, /command:codededup.openCluster/);
+    assert.match(text, /command:deslop.openCluster/);
   });
 
   test("byteRangeToRange returns null when range exceeds the document", async () => {

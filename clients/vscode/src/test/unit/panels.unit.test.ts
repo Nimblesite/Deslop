@@ -1,5 +1,5 @@
 // Unit: handleMessage dispatch — every case must execute the corresponding
-// codededup.* command without throwing on malformed payloads.
+// deslop.* command without throwing on malformed payloads.
 
 import { handleMessage } from "../../webview/panels";
 import { ReportStore } from "../../reportStore";

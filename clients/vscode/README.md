@@ -11,7 +11,7 @@ Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags 
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals — no stale pixels, ever.
 - **Bundled LSP + MCP binaries.** Every platform (`darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`) ships offline-ready. No post-install downloads. The MCP server auto-registers with Claude Code / Copilot Chat so your AI agents see the same duplicates you do.
-- **Falls back to your CLI install.** If you already have `codededup` on `PATH` via Homebrew tap or Scoop bucket at a matching version, the extension uses it — one binary, one cache, one truth.
+- **Falls back to your CLI install.** If you already have `deslop` on `PATH` via Homebrew tap or Scoop bucket at a matching version, the extension uses it — one binary, one cache, one truth.
 
 ## Design
 
@@ -21,11 +21,11 @@ Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic insp
 
 - Marketplace: search `Deslop` in VS Code's Extensions view.
 - OpenVSX: also published under the same id.
-- CLI too: `brew install codededup/tap/codededup` or `scoop install codededup`. The extension will pick up the PATH install automatically when its version matches.
+- CLI too: `brew install deslop/tap/deslop` or `scoop install deslop`. The extension will pick up the PATH install automatically when its version matches.
 
 ## Settings
 
-See `Deslop` in the Settings UI. Key knobs: `codededup.embedding.model`, `codededup.minNodes`, `codededup.liveBubble.mode` (inline / ghost).
+See `Deslop` in the Settings UI. Key knobs: `deslop.embedding.model`, `deslop.minNodes`, `deslop.liveBubble.mode` (inline / ghost).
 
 ## License
 

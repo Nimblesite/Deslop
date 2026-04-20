@@ -7,7 +7,7 @@ description: Searches for duplicate code, duplicate tests, and dead code in the 
 
 # Code Dedup
 
-Carefully search for duplicate code, duplicate tests, and dead code across the Rust workspace (`crates/codededup-core`, `crates/codededup`). Merge duplicates and delete dead code — but only when test coverage proves the change is safe.
+Carefully search for duplicate code, duplicate tests, and dead code across the Rust workspace (`crates/deslop-core`, `crates/deslop`). Merge duplicates and delete dead code — but only when test coverage proves the change is safe.
 
 ## Prerequisites — hard gate
 
@@ -35,7 +35,7 @@ Dedup Progress:
 
 1. Run `make test` to confirm green baseline. It is fail-fast and enforces the coverage threshold from [coverage-thresholds.json](coverage-thresholds.json). Non-zero exit = stop.
 2. Record the measured line-coverage percentage — this is the floor. It must not drop.
-3. Identify which files/modules have coverage and which do not. Only files WITH coverage are candidates for dedup. E2E tests live in [crates/codededup/tests](crates/codededup/tests) and drive the CLI black-box per [CLAUDE.md](CLAUDE.md).
+3. Identify which files/modules have coverage and which do not. Only files WITH coverage are candidates for dedup. E2E tests live in [crates/deslop/tests](crates/deslop/tests) and drive the CLI black-box per [CLAUDE.md](CLAUDE.md).
 
 ### Step 2 — Scan for dead code
 
@@ -45,16 +45,16 @@ Dedup Progress:
 
 ### Step 3 — Scan for duplicate code
 
-1. Look for functions/methods with identical or near-identical logic across [crates/codededup-core/src](crates/codededup-core/src) and [crates/codededup/src](crates/codededup/src).
+1. Look for functions/methods with identical or near-identical logic across [crates/deslop-core/src](crates/deslop-core/src) and [crates/deslop/src](crates/deslop/src).
 2. Look for copy-pasted blocks (same structure, maybe different identifiers — Type-2 clones).
 3. Check across pipeline stages (discover → parse → normalize → fingerprint → cluster → LSH → embed → fuse → rank → render). Duplicates often hide between adjacent stages.
-4. Re-use the tool on itself: `cargo run --release -- <path>` against this repo and read [codededup-report.txt](codededup-report.txt). Dogfooding is the first-class duplicate signal.
+4. Re-use the tool on itself: `cargo run --release -- <path>` against this repo and read [deslop-report.txt](deslop-report.txt). Dogfooding is the first-class duplicate signal.
 5. For each duplicate pair: note both locations, what they do, and how they differ (if at all). Do NOT merge yet.
 
 ### Step 4 — Scan for duplicate tests
 
 1. Look for E2E tests that assert the same rendered-report behaviour against the same fixture.
-2. Look for duplicated fixture directories or helper functions across [crates/codededup/tests](crates/codededup/tests).
+2. Look for duplicated fixture directories or helper functions across [crates/deslop/tests](crates/deslop/tests).
 3. If an integration-level E2E fully covers what a narrower E2E also covers, mark the narrower one redundant. Per [CLAUDE.md](CLAUDE.md): coarse E2E tests only — never delete a failing test, never remove assertions.
 4. List all duplicate tests found. Do NOT delete yet.
 
@@ -68,7 +68,7 @@ For each change, follow: **change → `make test` → verify coverage → contin
 - If `make test` exits non-zero (test failure OR coverage drop): **revert immediately** and investigate.
 
 #### 5b. Merge duplicate code
-- For each duplicate pair: extract shared logic into [crates/codededup-core](crates/codededup-core) (the library owns all non-trivial logic — the binary is <50 LOC of glue per [CLAUDE.md](CLAUDE.md)).
+- For each duplicate pair: extract shared logic into [crates/deslop-core](crates/deslop-core) (the library owns all non-trivial logic — the binary is <50 LOC of glue per [CLAUDE.md](CLAUDE.md)).
 - Update call sites to use the shared version.
 - After each merge: run `make test`.
 - If tests fail: **revert immediately**. The duplicates may have subtle differences you missed.

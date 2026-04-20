@@ -68,8 +68,8 @@ suite("bubble rendering helpers", () => {
   test("bubbleHover renders three action links", () => {
     const md = bubbleHover(cluster());
     const text = md.value;
-    assert.match(text, /command:codededup.openCluster/);
-    assert.match(text, /command:codededup.compareWithCanonical/);
-    assert.match(text, /command:codededup.bubble.dismissCluster/);
+    assert.match(text, /command:deslop.openCluster/);
+    assert.match(text, /command:deslop.compareWithCanonical/);
+    assert.match(text, /command:deslop.bubble.dismissCluster/);
   });
 });

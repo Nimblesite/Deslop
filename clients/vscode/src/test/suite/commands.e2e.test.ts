@@ -7,7 +7,7 @@ import { sleep } from "./helpers";
 
 suite("commands", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("codededup.codededup-vscode");
+    const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
     assert.ok(ext, "extension should be registered");
     await ext!.activate();
     // Give the LSP a beat to produce the initial report.
@@ -15,28 +15,28 @@ suite("commands", () => {
   });
 
   test("openReport + openReport again reveals the existing panel", async () => {
-    await vscode.commands.executeCommand("codededup.openReport");
+    await vscode.commands.executeCommand("deslop.openReport");
     await sleep(200);
-    await vscode.commands.executeCommand("codededup.openReport");
+    await vscode.commands.executeCommand("deslop.openReport");
     await sleep(200);
   });
 
   test("openWorstCluster twice reveals the cluster panel", async () => {
-    await vscode.commands.executeCommand("codededup.openWorstCluster");
+    await vscode.commands.executeCommand("deslop.openWorstCluster");
     await sleep(200);
-    await vscode.commands.executeCommand("codededup.openWorstCluster");
+    await vscode.commands.executeCommand("deslop.openWorstCluster");
     await sleep(200);
   });
 
   test("openCluster with a bad id does not throw", async () => {
-    await vscode.commands.executeCommand("codededup.openCluster", "nonexistent-id");
+    await vscode.commands.executeCommand("deslop.openCluster", "nonexistent-id");
     await sleep(100);
   });
 
   test("openOccurrence opens the referenced file", async () => {
     const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
-    await vscode.commands.executeCommand("codededup.openOccurrence", {
+    await vscode.commands.executeCommand("deslop.openOccurrence", {
       path: `${fixture}/Alpha.cs`,
       start_byte: 0,
       end_byte: 10,
@@ -47,30 +47,30 @@ suite("commands", () => {
   });
 
   test("jumpToNextOccurrence with no cluster under cursor is a no-op", async () => {
-    await vscode.commands.executeCommand("codededup.jumpToNextOccurrence");
+    await vscode.commands.executeCommand("deslop.jumpToNextOccurrence");
   });
 
   test("compareWithCanonical with a bad id is a no-op", async () => {
-    await vscode.commands.executeCommand("codededup.compareWithCanonical", "nonexistent");
+    await vscode.commands.executeCommand("deslop.compareWithCanonical", "nonexistent");
   });
 
   test("toggleShowAllLenses flips the workspace setting", async () => {
     const before = vscode.workspace
-      .getConfiguration("codededup")
+      .getConfiguration("deslop")
       .get<boolean>("showAllLenses", false);
-    await vscode.commands.executeCommand("codededup.toggleShowAllLenses");
+    await vscode.commands.executeCommand("deslop.toggleShowAllLenses");
     const after = vscode.workspace
-      .getConfiguration("codededup")
+      .getConfiguration("deslop")
       .get<boolean>("showAllLenses", false);
     assert.notEqual(before, after);
-    await vscode.commands.executeCommand("codededup.toggleShowAllLenses");
+    await vscode.commands.executeCommand("deslop.toggleShowAllLenses");
   });
 
   test("refreshReport forwards to the LSP (LSP may not implement)", async () => {
     // The extension fires workspace/executeCommand — the LSP stub may respond
     // with "Method not found"; the command itself must not throw synchronously.
     try {
-      await vscode.commands.executeCommand("codededup.refreshReport");
+      await vscode.commands.executeCommand("deslop.refreshReport");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       assert.match(message, /Method not found|not registered|unknown/i);
@@ -80,7 +80,7 @@ suite("commands", () => {
   test("revealActiveBinary fires the info modal without throwing", async () => {
     // The command shows a modal; we don't need to dismiss it — when the
     // extension-host test session ends VS Code tears all windows down.
-    vscode.commands.executeCommand("codededup.revealActiveBinary");
+    vscode.commands.executeCommand("deslop.revealActiveBinary");
     await sleep(200);
   });
 });

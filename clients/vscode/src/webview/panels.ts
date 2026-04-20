@@ -66,7 +66,7 @@ function createPanel(
 ): vscode.WebviewPanel {
   const mediaRoot = vscode.Uri.file(path.join(context.extensionPath, "media"));
   const panel = vscode.window.createWebviewPanel(
-    `codededup.${kind}`,
+    `deslop.${kind}`,
     title,
     vscode.ViewColumn.Active,
     {
@@ -142,21 +142,21 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
   switch (m.kind) {
     case "open/cluster": {
       const id = typeof m["id"] === "string" ? (m["id"] as string) : null;
-      if (id) await vscode.commands.executeCommand("codededup.openCluster", id);
+      if (id) await vscode.commands.executeCommand("deslop.openCluster", id);
       return;
     }
     case "open/occurrence": {
       const occurrence = m["occurrence"] as ReportOccurrence | undefined;
-      if (occurrence) await vscode.commands.executeCommand("codededup.openOccurrence", occurrence);
+      if (occurrence) await vscode.commands.executeCommand("deslop.openOccurrence", occurrence);
       return;
     }
     case "compare/canonical": {
       const id = typeof m["clusterId"] === "string" ? (m["clusterId"] as string) : null;
-      if (id) await vscode.commands.executeCommand("codededup.compareWithCanonical", id);
+      if (id) await vscode.commands.executeCommand("deslop.compareWithCanonical", id);
       return;
     }
     case "refresh":
-      await vscode.commands.executeCommand("codededup.refreshReport");
+      await vscode.commands.executeCommand("deslop.refreshReport");
       return;
     case "navigate/next":
     case "navigate/prev": {

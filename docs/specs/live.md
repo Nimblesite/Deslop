@@ -1,6 +1,6 @@
 # Live analysis — in-memory session behind the LSP and MCP servers
 
-Deslop v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `codededup-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
+Deslop v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `deslop-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
 
 **There is no daemon process.** The `live` module just keeps an analysis session alive for as long as the binary that owns it is running. The LSP server and the MCP server are long-running because LSP and MCP are long-running protocols; they're not background services, they're conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`).
 
@@ -8,12 +8,12 @@ See also: [lsp.md](lsp.md), [mcp.md](mcp.md), [vsix.md](vsix.md).
 
 ### [LIVE-PACKAGING] Crate + binary layout
 
-The `live` module lives **inside `codededup-core`**, gated behind the `live` cargo feature. Two thin binaries link it:
+The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo feature. Two thin binaries link it:
 
-- `crates/codededup-lsp` — JSON-RPC over stdio (LSP transport).
-- `crates/codededup-mcp` — JSON-RPC over stdio (Model Context Protocol transport).
+- `crates/deslop-lsp` — JSON-RPC over stdio (LSP transport).
+- `crates/deslop-mcp` — JSON-RPC over stdio (Model Context Protocol transport).
 
-Both binaries stay under 100 LOC of glue — transport demux, dispatch, shutdown. All live-session logic — state, watcher, scheduler, query API — is reachable from `codededup_core::live::*` once the feature is enabled. Nothing in the pipeline moves; no pipeline code is duplicated.
+Both binaries stay under 100 LOC of glue — transport demux, dispatch, shutdown. All live-session logic — state, watcher, scheduler, query API — is reachable from `deslop_core::live::*` once the feature is enabled. Nothing in the pipeline moves; no pipeline code is duplicated.
 
 End-to-end flow — who owns each box, who talks to whom, and where the live analysis lives:
 
@@ -40,12 +40,12 @@ flowchart LR
 
     subgraph Binaries["Binaries (processes)"]
         direction TB
-        LspBin["codededup-lsp<br/>(stdio JSON-RPC)"]
-        McpBin["codededup-mcp<br/>(stdio MCP)"]
-        CliBin["codededup (CLI)<br/>(one-shot batch)"]
+        LspBin["deslop-lsp<br/>(stdio JSON-RPC)"]
+        McpBin["deslop-mcp<br/>(stdio MCP)"]
+        CliBin["deslop (CLI)<br/>(one-shot batch)"]
     end
 
-    subgraph CoreCrate["codededup-core (one crate)"]
+    subgraph CoreCrate["deslop-core (one crate)"]
         direction TB
         Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
         Pipeline["pipeline module<br/>PipelineSession · update_files()<br/>discover · parse · fingerprint · LSH · embed · rank · render"]
@@ -75,7 +75,7 @@ flowchart LR
 
 **The CLI does not enable the `live` feature.** CLI builds stay zero-watcher, zero-background-thread, zero `notify` dependency — identical to v1. The feature flag — not a separate crate — is what keeps the CLI lean. One crate, one lint profile, one version, one place to add a language. See [principles.md §[PRINCIPLES-LONG-RUNNING-DAEMON]](principles.md).
 
-Two consumers of the live analysis live inside the VS Code process (the VSIX UI through the LSP client, and any MCP-aware agent inside VS Code through the bundled MCP host), and one lives outside (an AI agent running in a terminal that spawns `codededup-mcp` directly). All three paths — VSIX UI, in-editor agent, external agent — end at the same `AnalysisSession` in the `live` module and the same `PipelineSession` underneath. Nothing is re-implemented per client.
+Two consumers of the live analysis live inside the VS Code process (the VSIX UI through the LSP client, and any MCP-aware agent inside VS Code through the bundled MCP host), and one lives outside (an AI agent running in a terminal that spawns `deslop-mcp` directly). All three paths — VSIX UI, in-editor agent, external agent — end at the same `AnalysisSession` in the `live` module and the same `PipelineSession` underneath. Nothing is re-implemented per client.
 
 ### [LIVE-LIFECYCLE] Session lifecycle
 
@@ -95,7 +95,7 @@ The `live` module keeps one `AnalysisSession` in memory:
 
 ```rust
 pub struct AnalysisSession {
-    pipeline: PipelineSession,        // analysis state (codededup-core::pipeline)
+    pipeline: PipelineSession,        // analysis state (deslop-core::pipeline)
     latest_report: Arc<Report>,       // immutable snapshot, swapped atomically
     generation: u64,                  // monotonic; bumped every re-analysis
     subscribers: Vec<Subscriber>,     // LSP/MCP clients awaiting deltas
@@ -107,7 +107,7 @@ pub struct AnalysisSession {
 
 `latest_report` is an `Arc<Report>` swapped under a lock so readers get a consistent snapshot. `generation` lets a subscriber skip forward: *"I last saw generation 42, what changed since?"* This is the same version-cursor pattern an LSP uses for document syncs.
 
-All mutable state is reachable from `AnalysisSession`. Nothing in `codededup-core` adds new process-global mutable state — [STATE-FILE-REGISTRY] is still the only blessed global, and it's owned per-session through `PipelineSession`.
+All mutable state is reachable from `AnalysisSession`. Nothing in `deslop-core` adds new process-global mutable state — [STATE-FILE-REGISTRY] is still the only blessed global, and it's owned per-session through `PipelineSession`.
 
 ### [LIVE-WATCHER] File watcher
 
@@ -147,7 +147,7 @@ pub struct ReportDelta {
 }
 ```
 
-`ReportDelta` lives in `codededup_core::delta` (no feature gate — it's a pure projection over two reports, useful to any consumer). Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]) — same clone, same id, even after an edit. That stability is what makes the delta shape useful: an IDE can keep its tree view mounted and just flip colours when a cluster's signals or occurrence set changes.
+`ReportDelta` lives in `deslop_core::delta` (no feature gate — it's a pure projection over two reports, useful to any consumer). Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]) — same clone, same id, even after an edit. That stability is what makes the delta shape useful: an IDE can keep its tree view mounted and just flip colours when a cluster's signals or occurrence set changes.
 
 Clients that miss too many generations (or connect mid-session) ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
 

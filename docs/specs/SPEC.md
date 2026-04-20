@@ -10,7 +10,7 @@ Every user-facing surface (HTML report, CLI summary, VS Code extension) labels c
 
 ## Architecture at a glance
 
-Every binary in the product — CLI, LSP server, MCP server, VS Code extension — is a **thin shell over one shared library** (`codededup-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
+Every binary in the product — CLI, LSP server, MCP server, VS Code extension — is a **thin shell over one shared library** (`deslop-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
 ```mermaid
 flowchart LR
@@ -25,12 +25,12 @@ flowchart LR
     end
 
     subgraph Binaries["Binaries (processes)"]
-        LspBin["codededup-lsp"]
-        McpBin["codededup-mcp"]
-        CliBin["codededup (CLI)"]
+        LspBin["deslop-lsp"]
+        McpBin["deslop-mcp"]
+        CliBin["deslop (CLI)"]
     end
 
-    subgraph CoreCrate["codededup-core (one crate)"]
+    subgraph CoreCrate["deslop-core (one crate)"]
         Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
         Pipeline["pipeline module<br/>PipelineSession · update_files · discover · parse<br/>fingerprint · LSH · embed · rank · render"]
         Live --> Pipeline

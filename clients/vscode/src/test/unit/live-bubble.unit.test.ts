@@ -58,7 +58,7 @@ suite("LiveBubble render", () => {
     const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
-    const cfg = vscode.workspace.getConfiguration("codededup");
+    const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
     const bubble = new LiveBubble(store, () => undefined);
     const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
@@ -76,7 +76,7 @@ suite("LiveBubble render", () => {
     const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
-    const cfg = vscode.workspace.getConfiguration("codededup");
+    const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.mode", "ghost", vscode.ConfigurationTarget.Workspace);
     const bubble = new LiveBubble(store, () => undefined);
     const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));

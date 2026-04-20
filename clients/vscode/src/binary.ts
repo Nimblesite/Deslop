@@ -8,7 +8,7 @@
 //
 // When (3) wins, the resolver prepends that directory to the current VS Code
 // process PATH so integrated terminals, task runners, and launch configs see
-// `codededup` without the user modifying their shell profile.
+// `deslop` without the user modifying their shell profile.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -45,9 +45,9 @@ export class BundledBinaryMissingError extends Error {
 }
 
 const BINARY_NAMES: Record<BinaryKind, string> = {
-  lsp: "codededup-lsp",
-  mcp: "codededup-mcp",
-  cli: "codededup",
+  lsp: "deslop-lsp",
+  mcp: "deslop-mcp",
+  cli: "deslop",
 };
 
 export function resolveBinary(

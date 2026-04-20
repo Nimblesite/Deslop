@@ -41,7 +41,7 @@ export async function pickEmbeddingModel(
 
   let models: EmbeddingModelInfo[] = [];
   try {
-    models = await client.sendRequest<EmbeddingModelInfo[]>("codededup/embeddingListModels", {});
+    models = await client.sendRequest<EmbeddingModelInfo[]>("deslop/embeddingListModels", {});
   } catch (err) {
     logError(err, "embedding/listModels");
   }
@@ -139,15 +139,15 @@ export async function setModel(client: LanguageClient, model: EmbeddingModelInfo
       );
       if (confirm !== "Use stub anyway") return;
     }
-    await client.sendRequest("codededup/embeddingSetModel", {
+    await client.sendRequest("deslop/embeddingSetModel", {
       provider_id: model.provider_id,
       model_id: model.model_id,
     });
     await vscode.workspace
-      .getConfiguration("codededup")
+      .getConfiguration("deslop")
       .update("embedding.provider", model.provider_id, vscode.ConfigurationTarget.Workspace);
     await vscode.workspace
-      .getConfiguration("codededup")
+      .getConfiguration("deslop")
       .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
     vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
   } catch (err) {

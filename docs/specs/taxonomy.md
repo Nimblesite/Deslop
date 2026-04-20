@@ -23,7 +23,7 @@ All three classes point at the **same** bucket identity (the Rust enum variant).
 | `LooselySimilar`  | **Loosely similar code**                        | `Loosely similar code [weak LSH]`                   | Loose textual overlap. Treat as a hint.                                                        | neutral            | weak LSH-only (sub-Type-3)  |
 | `SameBehavior`    | **Same behavior, different code** *(AI match)*  | `Same behavior, different code [Type-4, AI match]`  | The AI noticed these do the same thing written two ways — read both before merging.            | purple / cyan      | Type-4                      |
 
-`green / crimson`, `yellow / blue` etc. are light-theme / dark-theme pairs. Exact CSS variables live alongside the renderer in `crates/codededup-core/src/render/html.rs`; this table governs which colour family, not the specific hex.
+`green / crimson`, `yellow / blue` etc. are light-theme / dark-theme pairs. Exact CSS variables live alongside the renderer in `crates/deslop-core/src/render/html.rs`; this table governs which colour family, not the specific hex.
 
 ### [CLONE-BUCKETS-DUAL-LABEL] Dual-labelling policy
 
@@ -58,11 +58,11 @@ Surface routing:
 3. **Shared-text is hybrid.** CLI stderr, LSP diagnostics, Problems panel, hover — plain prose prefix so humans read it naturally, bracketed `Type-N` suffix so AI scrapers can still classify. `"Identical code [Type-1/2]"` on one line; `"Same behavior, different code [Type-4, AI match]"` on another.
 4. **AI-only retains everything.** JSON `interpretation`, `action_hints`, `schema_doc`, MCP responses keep the full plain-title + action-sentence + `Type-N` form. Dropping `Type-N` would break agent prompts already in the wild.
 5. **`SameBehavior` carries the `(AI match)` badge.** Shown as `"Same behavior, different code (AI match)"` on pure-visual surfaces and `"Same behavior, different code [Type-4, AI match]"` on shared-text surfaces. It is the AI-specific value-add; users deserve to know which clusters came from the embedding pass vs the deterministic pipeline.
-6. **One helper, three forms.** A single function in `codededup-core::buckets` returns the `(plain_title, hybrid_title, action_sentence, taxonomy_label, css_suffix, ai_match)` sextuple keyed by `ClusterKind`. Every renderer pulls the form it needs from that struct. Drift is a bug.
+6. **One helper, three forms.** A single function in `deslop-core::buckets` returns the `(plain_title, hybrid_title, action_sentence, taxonomy_label, css_suffix, ai_match)` sextuple keyed by `ClusterKind`. Every renderer pulls the form it needs from that struct. Drift is a bug.
 
 ### [CLONE-BUCKETS-ROUTING] Signal-to-bucket routing
 
-The canonical signal thresholds that map a cluster's `(structural, token_jaccard, embedding_cos)` triple onto a bucket live in `codededup-core::report::interpret` and `codededup-core::render::html::cluster_kind`. Both functions must agree; both must match this table:
+The canonical signal thresholds that map a cluster's `(structural, token_jaccard, embedding_cos)` triple onto a bucket live in `deslop-core::report::interpret` and `deslop-core::render::html::cluster_kind`. Both functions must agree; both must match this table:
 
 | Condition (evaluated top-down)                                 | Bucket            |
 |----------------------------------------------------------------|-------------------|

@@ -18,37 +18,37 @@ export function registerCommands(
   clientOf: ClientFactory,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand("codededup.openReport", () => openReportPanel(context, store)),
-    vscode.commands.registerCommand("codededup.openWorstCluster", () =>
+    vscode.commands.registerCommand("deslop.openReport", () => openReportPanel(context, store)),
+    vscode.commands.registerCommand("deslop.openWorstCluster", () =>
       openWorstCluster(context, store),
     ),
-    vscode.commands.registerCommand("codededup.openCluster", (id: string) =>
+    vscode.commands.registerCommand("deslop.openCluster", (id: string) =>
       openClusterPanel(context, store, id),
     ),
-    vscode.commands.registerCommand("codededup.openOccurrence", (o: ReportOccurrence) =>
+    vscode.commands.registerCommand("deslop.openOccurrence", (o: ReportOccurrence) =>
       openOccurrence(o),
     ),
-    vscode.commands.registerCommand("codededup.jumpToNextOccurrence", () =>
+    vscode.commands.registerCommand("deslop.jumpToNextOccurrence", () =>
       jumpToNextOccurrence(store),
     ),
-    vscode.commands.registerCommand("codededup.compareWithCanonical", (id: string) =>
+    vscode.commands.registerCommand("deslop.compareWithCanonical", (id: string) =>
       compareWithCanonical(store, id),
     ),
-    vscode.commands.registerCommand("codededup.pickEmbeddingModel", () =>
+    vscode.commands.registerCommand("deslop.pickEmbeddingModel", () =>
       pickEmbeddingModel(store, clientOf),
     ),
-    vscode.commands.registerCommand("codededup.refreshReport", () =>
+    vscode.commands.registerCommand("deslop.refreshReport", () =>
       clientOf()?.sendRequest("workspace/executeCommand", {
-        command: "codededup.refreshReport",
+        command: "deslop.refreshReport",
         arguments: [],
       }),
     ),
-    vscode.commands.registerCommand("codededup.toggleShowAllLenses", async () => {
-      const cfg = vscode.workspace.getConfiguration("codededup");
+    vscode.commands.registerCommand("deslop.toggleShowAllLenses", async () => {
+      const cfg = vscode.workspace.getConfiguration("deslop");
       const next = !cfg.get<boolean>("showAllLenses", false);
       await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
     }),
-    vscode.commands.registerCommand("codededup.showSchemaDoc", () =>
+    vscode.commands.registerCommand("deslop.showSchemaDoc", () =>
       openSchemaDoc(context, store),
     ),
   );

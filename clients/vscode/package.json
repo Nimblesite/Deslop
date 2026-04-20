@@ -1,13 +1,13 @@
 {
-  "name": "codededup-vscode",
+  "name": "deslop-vscode",
   "displayName": "Deslop",
   "description": "Finds, ranks, and helps you fix duplicated code as you type — detection shipping today, AI-assisted and mechanical refactors next.",
   "version": "0.1.0",
-  "publisher": "codededup",
+  "publisher": "deslop",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/codededup/codededup.git",
+    "url": "https://github.com/MelbourneDeveloper/CodeDedup.git",
     "directory": "clients/vscode"
   },
   "engines": {
@@ -37,67 +37,67 @@
   "contributes": {
     "commands": [
       {
-        "command": "codededup.openReport",
+        "command": "deslop.openReport",
         "title": "Deslop: Open Report"
       },
       {
-        "command": "codededup.openWorstCluster",
+        "command": "deslop.openWorstCluster",
         "title": "Deslop: Open Worst Cluster"
       },
       {
-        "command": "codededup.jumpToNextOccurrence",
+        "command": "deslop.jumpToNextOccurrence",
         "title": "Deslop: Jump to Next Occurrence in Cluster"
       },
       {
-        "command": "codededup.compareWithCanonical",
+        "command": "deslop.compareWithCanonical",
         "title": "Deslop: Compare With Canonical Occurrence"
       },
       {
-        "command": "codededup.pickEmbeddingModel",
+        "command": "deslop.pickEmbeddingModel",
         "title": "Deslop: Pick Embedding Model"
       },
       {
-        "command": "codededup.refreshReport",
+        "command": "deslop.refreshReport",
         "title": "Deslop: Refresh Report (force full re-analysis)"
       },
       {
-        "command": "codededup.toggleShowAllLenses",
+        "command": "deslop.toggleShowAllLenses",
         "title": "Deslop: Toggle Show All Code Lenses"
       },
       {
-        "command": "codededup.showSchemaDoc",
+        "command": "deslop.showSchemaDoc",
         "title": "Deslop: Show Schema Documentation"
       },
       {
-        "command": "codededup.openCluster",
+        "command": "deslop.openCluster",
         "title": "Deslop: Open Cluster"
       },
       {
-        "command": "codededup.revealActiveBinary",
+        "command": "deslop.revealActiveBinary",
         "title": "Deslop: Reveal Active Binary"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "codededup",
+          "id": "deslop",
           "title": "Duplicate Clusters",
           "icon": "media/activity-bar.svg"
         }
       ]
     },
     "views": {
-      "codededup": [
+      "deslop": [
         {
-          "id": "codededup.topOffenders",
+          "id": "deslop.topOffenders",
           "name": "Top Offenders"
         },
         {
-          "id": "codededup.focusedFile",
+          "id": "deslop.focusedFile",
           "name": "Focused File"
         },
         {
-          "id": "codededup.session",
+          "id": "deslop.session",
           "name": "Session"
         }
       ]
@@ -105,13 +105,13 @@
     "configuration": {
       "title": "Deslop",
       "properties": {
-        "codededup.minNodes": {
+        "deslop.minNodes": {
           "type": "integer",
           "default": 30,
           "minimum": 1,
           "description": "Minimum AST node count for a subtree to be fingerprinted. Forwarded to the LSP at initialize."
         },
-        "codededup.embedding.provider": {
+        "deslop.embedding.provider": {
           "type": "string",
           "enum": [
             "ollama",
@@ -120,17 +120,17 @@
           "default": "ollama",
           "description": "Embedding provider id."
         },
-        "codededup.embedding.model": {
+        "deslop.embedding.model": {
           "type": "string",
           "default": "nomic-embed-text",
           "description": "Embedding model id. Change via the picker; this value is persisted."
         },
-        "codededup.embedding.endpoint": {
+        "deslop.embedding.endpoint": {
           "type": "string",
           "default": "http://127.0.0.1:11434",
           "description": "Ollama HTTP endpoint. Loopback-only by default."
         },
-        "codededup.embedding.mode": {
+        "deslop.embedding.mode": {
           "type": "string",
           "enum": [
             "auto",
@@ -140,27 +140,27 @@
           "default": "auto",
           "description": "Mirrors CLI --embeddings={auto,required,off}."
         },
-        "codededup.incremental": {
+        "deslop.incremental": {
           "type": "boolean",
           "default": true,
           "description": "Enable on-disk fingerprint cache (.codededup-cache)."
         },
-        "codededup.showAllLenses": {
+        "deslop.showAllLenses": {
           "type": "boolean",
           "default": false,
           "description": "Show code lenses below the 50th-percentile weight threshold."
         },
-        "codededup.configPath": {
+        "deslop.configPath": {
           "type": "string",
           "default": "",
           "description": "Optional path to .codededup.toml. Mirrors CLI --config."
         },
-        "codededup.liveBubble.enabled": {
+        "deslop.liveBubble.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Show the live duplication bubble as you type."
         },
-        "codededup.liveBubble.mode": {
+        "deslop.liveBubble.mode": {
           "type": "string",
           "enum": [
             "inline",
@@ -173,10 +173,10 @@
     },
     "mcpServers": [
       {
-        "id": "codededup",
+        "id": "deslop",
         "name": "Deslop",
         "description": "Live duplicate-code analysis for the current workspace.",
-        "command": "${extensionPath}/bin/${platform}/codededup-mcp",
+        "command": "${extensionPath}/bin/${platform}/deslop-mcp",
         "args": [],
         "env": {}
       }
@@ -190,7 +190,7 @@
     "pretest": "npm run compile && cp -r src/test/fixtures out/test/fixtures",
     "test": "vscode-test",
     "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
-    "package": "npm run build && vsce package --no-dependencies -o codededup-vscode.vsix"
+    "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix"
   },
   "dependencies": {
     "pino": "^10.3.1",

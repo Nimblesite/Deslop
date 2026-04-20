@@ -1,5 +1,5 @@
 // Holds the current report snapshot + emits change events for every surface.
-// Wired to the LSP's `codededup/reportChanged` notification and seeded by `codededup/reportGet`.
+// Wired to the LSP's `deslop/reportChanged` notification and seeded by `deslop/reportGet`.
 
 import * as vscode from "vscode";
 import {

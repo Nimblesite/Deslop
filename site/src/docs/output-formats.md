@@ -13,12 +13,12 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ## JSON — canonical
 
-`codededup-report.json` is what agents read and what schema consumers should parse.
+`deslop-report.json` is what agents read and what schema consumers should parse.
 
 ```json
 {
   "report_schema_version": "1.0",
-  "generator": { "name": "codededup", "version": "1.0.0" },
+  "generator": { "name": "deslop", "version": "1.0.0" },
   "schema_doc": "…",
   "summary": {
     "clusters_total": 142,
@@ -40,7 +40,7 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ## TXT — terminal
 
-`codededup-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colors, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
+`deslop-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colors, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
 
 ```
 Deslop 1.0.0  —  142 clusters, 17 above threshold
@@ -61,7 +61,7 @@ The leading `▲` marks the representative (first) member of a cluster; indented
 
 ## HTML — portable
 
-`codededup-report.html` is a single file. All CSS is inlined. No network requests. Drop it into a CI artifact, email it, open it on an airplane — it renders.
+`deslop-report.html` is a single file. All CSS is inlined. No network requests. Drop it into a CI artifact, email it, open it on an airplane — it renders.
 
 The HTML renderer uses the same ranking and the same cluster summaries as JSON and TXT. It adds:
 

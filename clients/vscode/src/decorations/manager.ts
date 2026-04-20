@@ -98,7 +98,7 @@ export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
       `fused \`${cluster.signals.fused.toFixed(2)}\`\n\n`,
   );
   md.appendMarkdown(
-    `[Open cluster](command:codededup.openCluster?${encodeURIComponent(JSON.stringify([cluster.id]))})`,
+    `[Open cluster](command:deslop.openCluster?${encodeURIComponent(JSON.stringify([cluster.id]))})`,
   );
   return md;
 }

@@ -17,7 +17,7 @@ async function openFixture(name: string): Promise<vscode.TextEditor> {
 
 suite("surfaces", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("codededup.codededup-vscode");
+    const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
     await ext!.activate();
     await sleep(1500);
   });
@@ -28,7 +28,7 @@ suite("surfaces", () => {
     // The tree is created at activation, covered by the activation test.
     // Here we ensure the tree data provider has been registered:
     const cmds = await vscode.commands.getCommands(true);
-    assert.ok(cmds.includes("codededup.openCluster"));
+    assert.ok(cmds.includes("deslop.openCluster"));
   });
 
   test("opening a fixture editor fires FocusedFile tree refresh + decorations", async () => {
@@ -47,7 +47,7 @@ suite("surfaces", () => {
   });
 
   test("bubble ghost mode renders after an edit", async () => {
-    const cfg = vscode.workspace.getConfiguration("codededup");
+    const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.mode", "ghost", vscode.ConfigurationTarget.Workspace);
     const editor = await openFixture("Beta.cs");
     await editor.edit((b) => b.insert(new vscode.Position(1, 0), "    var x = 1;\n"));
@@ -59,7 +59,7 @@ suite("surfaces", () => {
   });
 
   test("bubble disabled setting short-circuits onEdit", async () => {
-    const cfg = vscode.workspace.getConfiguration("codededup");
+    const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.enabled", false, vscode.ConfigurationTarget.Workspace);
     const editor = await openFixture("Alpha.cs");
     await editor.edit((b) => b.insert(new vscode.Position(0, 0), " "));
@@ -68,7 +68,7 @@ suite("surfaces", () => {
   });
 
   test("dismissCluster suppresses re-bubbling for the dismissed cluster", async () => {
-    await vscode.commands.executeCommand("codededup.bubble.dismissCluster", "cluster-xyz");
+    await vscode.commands.executeCommand("deslop.bubble.dismissCluster", "cluster-xyz");
   });
 
   test("closing the active editor clears the bubble", async () => {
@@ -80,7 +80,7 @@ suite("surfaces", () => {
 
   test("inlay hints provider is registered for C#", async () => {
     // Registration happens at activation — if activation succeeded the provider is live.
-    const ext = vscode.extensions.getExtension("codededup.codededup-vscode");
+    const ext = vscode.extensions.getExtension("deslop.deslop-vscode");
     assert.ok(ext!.isActive);
   });
 });

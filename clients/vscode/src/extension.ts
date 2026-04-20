@@ -59,10 +59,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     topOffenders,
     focusedFile,
     session,
-    vscode.window.registerTreeDataProvider("codededup.topOffenders", topOffenders),
-    vscode.window.registerTreeDataProvider("codededup.focusedFile", focusedFile),
-    vscode.window.registerTreeDataProvider("codededup.session", session),
-    vscode.commands.registerCommand("codededup.revealLog", () => initOutputChannel().show(true)),
+    vscode.window.registerTreeDataProvider("deslop.topOffenders", topOffenders),
+    vscode.window.registerTreeDataProvider("deslop.focusedFile", focusedFile),
+    vscode.window.registerTreeDataProvider("deslop.session", session),
+    vscode.commands.registerCommand("deslop.revealLog", () => initOutputChannel().show(true)),
   );
 
   try {
@@ -97,7 +97,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   registerCommands(context, reportStore, () => client);
   context.subscriptions.push(
-    vscode.commands.registerCommand("codededup.revealActiveBinary", () =>
+    vscode.commands.registerCommand("deslop.revealActiveBinary", () =>
       revealActiveBinary(resolvedLsp, resolvedMcp),
     ),
   );
@@ -143,13 +143,13 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
       { language: "python", scheme: "file" },
     ],
     synchronize: {
-      configurationSection: "codededup",
+      configurationSection: "deslop",
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{cs,rs,py}"),
     },
     outputChannel: initOutputChannel(),
     initializationOptions: currentInitializationOptions(),
   };
-  return new LanguageClient("codededup", "Deslop", serverOptions, clientOptions);
+  return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }
 
 export function resolveWorkspaceRoot(): string | undefined {
@@ -160,7 +160,7 @@ export function resolveWorkspaceRoot(): string | undefined {
 }
 
 function currentInitializationOptions(): Record<string, unknown> {
-  const cfg = vscode.workspace.getConfiguration("codededup");
+  const cfg = vscode.workspace.getConfiguration("deslop");
   return {
     minNodes: cfg.get<number>("minNodes", 30),
     embedding: {
@@ -176,18 +176,18 @@ function currentInitializationOptions(): Record<string, unknown> {
 
 export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   c.onNotification(
-    "codededup/reportChanged",
+    "deslop/reportChanged",
     async (payload: ReportChangedNotification) => {
       store.notifyChange(payload.summary);
       try {
-        const snapshot = await c.sendRequest<Report>("codededup/reportGet");
+        const snapshot = await c.sendRequest<Report>("deslop/reportGet");
         store.setSnapshot(snapshot, payload.generation);
       } catch (err) {
         logError(err, "refresh report after change");
       }
     },
   );
-  c.onNotification("codededup/analysisState", (state: AnalysisState) => {
+  c.onNotification("deslop/analysisState", (state: AnalysisState) => {
     log("analysis state", { state });
     if (state === "running") store.setLifecycle({ kind: "analysing" });
     else if (state === "idle") store.setLifecycle({ kind: "ready" });
@@ -202,7 +202,7 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
 
 export async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise<void> {
   try {
-    const snapshot = await c.sendRequest<Report>("codededup/reportGet");
+    const snapshot = await c.sendRequest<Report>("deslop/reportGet");
     store.setSnapshot(snapshot, 0);
   } catch (err) {
     logError(err, "seed initial report");
@@ -233,11 +233,11 @@ export function revealActiveBinary(
 ): void {
   const lines = [
     lsp
-      ? `codededup-lsp → ${lsp.path}  [${lsp.source}, version=${lsp.version ?? "unknown"}]`
-      : "codededup-lsp → not resolved",
+      ? `deslop-lsp → ${lsp.path}  [${lsp.source}, version=${lsp.version ?? "unknown"}]`
+      : "deslop-lsp → not resolved",
     mcp
-      ? `codededup-mcp → ${mcp.path}  [${mcp.source}, version=${mcp.version ?? "unknown"}]`
-      : "codededup-mcp → not bundled",
+      ? `deslop-mcp → ${mcp.path}  [${mcp.source}, version=${mcp.version ?? "unknown"}]`
+      : "deslop-mcp → not bundled",
   ];
   vscode.window.showInformationMessage(lines.join("\n"), { modal: true });
 }

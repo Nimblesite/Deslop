@@ -28,9 +28,9 @@ deslop .
 That scans the current directory, writes three reports, and prints the top clusters to your terminal:
 
 ```
-codededup-report.json   # canonical, agent-consumable
-codededup-report.txt    # line-oriented plain text
-codededup-report.html   # standalone, human-readable
+deslop-report.json   # canonical, agent-consumable
+deslop-report.txt    # line-oriented plain text
+deslop-report.html   # standalone, human-readable
 ```
 
 ## Tune the threshold

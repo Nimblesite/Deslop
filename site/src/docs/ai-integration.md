@@ -67,7 +67,7 @@ Cluster IDs are ULIDs generated from the cluster's content fingerprint plus the 
 
 ## MCP and LSP (v2)
 
-The `codededup-core` crate is the entire pipeline. The CLI is one shell over it. A second shell will expose:
+The `deslop-core` crate is the entire pipeline. The CLI is one shell over it. A second shell will expose:
 
 - an **MCP server** with a `find-similar` tool — given a snippet, return clusters ranked by similarity, updated in real time as the watcher fires;
 - an **LSP server** with diagnostics and code lens — surface clusters inline in the editor the same way a linter surfaces warnings.

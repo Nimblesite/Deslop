@@ -32,13 +32,13 @@ fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
 fuse signals → rank → render report
 ```
 
-- **`crates/codededup-core`** — analysis library. Everything non-trivial lives here. A future LSP consumes the same crate.
-- **`crates/codededup`** — thin CLI binary (<50 LOC of glue): arg parsing, tracing setup, invoke core, render output.
+- **`crates/deslop-core`** — analysis library. Everything non-trivial lives here. A future LSP consumes the same crate.
+- **`crates/deslop`** — thin CLI binary (<50 LOC of glue): arg parsing, tracing setup, invoke core, render output.
 - **`LanguageParser` trait** is the single extension point. Adding a language = implementing the trait + pinning the grammar in `Cargo.toml`, CI, and Dockerfile.
 - **Normalization** strips identifiers, literals, and trivia before fingerprinting so renamed-clone detection works (Type-2). Per-language rules, identical output format across languages.
 - **Fingerprinting** operates on AST subtrees, not lines. Minimum node count configurable.
 - **Ranking score** weights clone size × clone count × spanned LOC — this is the user-visible product. Changes here change every report.
-- **Global state** lives in exactly one file! Rust: `crates/codededup-core/src/state.rs`. Nothing escapes it. Same goes for Typescript or any other language!
+- **Global state** lives in exactly one file! Rust: `crates/deslop-core/src/state.rs`. Nothing escapes it. Same goes for Typescript or any other language!
 
 ## Hard Rules — Universal (no exceptions)
 
@@ -52,7 +52,7 @@ fuse signals → rank → render report
 - **Functions < 20 lines** 
 - **No legacy code.** Legacy = deleted.
 - **Copying files is illegal.** MOVE them.
-- **Centralize all global state** in `crates/codededup-core/src/state.rs`.
+- **Centralize all global state** in `crates/deslop-core/src/state.rs`.
 - **Never delete failing tests. Never remove assertions.** Reducing assertiveness = ⛔️ ILLEGAL.
 - **`make test` is FAIL-FAST.** Stops at first failure. Never `--no-fail-fast`.
 - **`make test` ALWAYS computes coverage AND enforces it.** Threshold lives in `coverage-thresholds.json` at the repo root — NOT env vars, NOT gh repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
@@ -68,7 +68,7 @@ fuse signals → rank → render report
 - No `panic!`/`todo!`/`unimplemented!`/`unreachable!`.
 - No `unsafe {}`. Workspace lint is `unsafe_code = "deny"`.
 - All public items have `///` doc comments (workspace lint: `missing_docs = "deny"`).
-- `thiserror` for library errors in `codededup-core`. `anyhow` allowed in the `codededup` binary.
+- `thiserror` for library errors in `deslop-core`. `anyhow` allowed in the `deslop` binary.
 - Pattern matching over casting. Expressions over statements. Iterator chains over imperative loops.
 - Early return with `?` for clean error propagation.
 - Descriptive variable names — no single letters except in closures.
@@ -127,11 +127,11 @@ make setup   # post-create dev environment setup
 
 ```
 crates/
-├── codededup-core/         # library: pipeline stages
+├── deslop-core/         # library: pipeline stages
 │   └── src/
 │       ├── lib.rs
 │       └── state.rs        # single global-state file
-└── codededup/              # thin CLI binary
+└── deslop/              # thin CLI binary
 docs/
 ├── specs/SPEC.md           # full research + design spec
 └── plans/PLAN.md           # phased execution plan with TODO at bottom

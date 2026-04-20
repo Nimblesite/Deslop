@@ -54,7 +54,7 @@ deslop --fail-over 5.0
 Re-render a previous JSON report without re-analysing:
 
 ```bash
-deslop --from-report codededup-report.json
+deslop --from-report deslop-report.json
 ```
 
 Full flag reference: `deslop --help`.
@@ -160,7 +160,7 @@ Dual-licensed under [MIT](LICENSE) or Apache-2.0, at your option.
 Requires Rust 1.80+ and GNU Make.
 
 ```bash
-make build   # release binary at target/release/codededup
+make build   # release binary at target/release/deslop
 make test    # fail-fast tests + coverage gate
 make ci      # lint + test + build
 ```

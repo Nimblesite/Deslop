@@ -97,15 +97,15 @@ suite("extension internals", () => {
       sendRequest: () => Promise.resolve(null),
     } as unknown as LanguageClient;
     wireNotifications(client, new ReportStore());
-    assert.ok(handlers.has("codededup/reportChanged"));
-    assert.ok(handlers.has("codededup/analysisState"));
+    assert.ok(handlers.has("deslop/reportChanged"));
+    assert.ok(handlers.has("deslop/analysisState"));
   });
 
   test("wireNotifications analysisState handler logs without throwing", () => {
     let stateCb: ((s: string) => void) | undefined;
     const client = {
       onNotification: (name: string, cb: (s: string) => void) => {
-        if (name === "codededup/analysisState") stateCb = cb;
+        if (name === "deslop/analysisState") stateCb = cb;
       },
       sendRequest: () => Promise.resolve(null),
     } as unknown as LanguageClient;
@@ -118,11 +118,11 @@ suite("extension internals", () => {
     const requests: string[] = [];
     const client = {
       onNotification: (name: string, cb: (p: unknown) => Promise<void>) => {
-        if (name === "codededup/reportChanged") changedCb = cb;
+        if (name === "deslop/reportChanged") changedCb = cb;
       },
       sendRequest: (name: string) => {
         requests.push(name);
-        if (name === "codededup/reportDelta") {
+        if (name === "deslop/reportDelta") {
           return Promise.resolve({
             from_generation: 0,
             to_generation: 1,
@@ -162,7 +162,7 @@ suite("extension internals", () => {
     );
     wireNotifications(client, store);
     await changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
-    assert.ok(requests.includes("codededup/reportDelta"));
+    assert.ok(requests.includes("deslop/reportDelta"));
   });
 
   test("wireNotifications reportChanged falls back to reportGet when delta is null", async () => {
@@ -170,11 +170,11 @@ suite("extension internals", () => {
     const requests: string[] = [];
     const client = {
       onNotification: (name: string, cb: (p: unknown) => Promise<void>) => {
-        if (name === "codededup/reportChanged") changedCb = cb;
+        if (name === "deslop/reportChanged") changedCb = cb;
       },
       sendRequest: (name: string) => {
         requests.push(name);
-        if (name === "codededup/reportDelta") return Promise.resolve(null);
+        if (name === "deslop/reportDelta") return Promise.resolve(null);
         return Promise.resolve({
           report_schema_version: 1,
           tool_version: "x",
@@ -200,7 +200,7 @@ suite("extension internals", () => {
     const store = new ReportStore();
     wireNotifications(client, store);
     await changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
-    assert.ok(requests.includes("codededup/reportGet"));
+    assert.ok(requests.includes("deslop/reportGet"));
   });
 
   test("seedInitialReport stores the returned snapshot", async () => {
