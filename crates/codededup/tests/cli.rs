@@ -212,6 +212,58 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     Ok(())
 }
 
+// Implements [OUTPUT-HUMAN-HTML] preview cap: snippets longer than the
+// soft cap render the first window inline and fold the remainder into a
+// `<details>` summary so a 300-line clone does not stretch the page.
+#[test]
+fn long_clone_html_caps_inline_preview_and_folds_rest() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    let body = build_long_clone_body(60);
+    fs::write(scan_root.join("Alpha.cs"), wrap_clone_in_class("Alpha", &body))?;
+    fs::write(scan_root.join("Beta.cs"), wrap_clone_in_class("Beta", &body))?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let html = fs::read_to_string(&out.html)?;
+    assert!(
+        html.contains("class=\"snippet\""),
+        "expected at least one inline snippet block"
+    );
+    assert!(
+        html.contains("more line(s)"),
+        "expected the long-clone preview cap to fold extra lines into a details summary, got: {head}",
+        head = html.chars().take(400).collect::<String>(),
+    );
+    Ok(())
+}
+
+/// Builds a 60-statement C# method body that is structurally large
+/// enough to blow past the snippet preview cap once duplicated.
+fn build_long_clone_body(statements: usize) -> String {
+    let mut body = String::new();
+    for index in 0..statements {
+        let _ = writeln!(body, "        var v{index} = {index} + {index};");
+    }
+    body
+}
+
+/// Wraps `body` in a minimal C# class so the C# parser produces a
+/// real method-level subtree the clusterer can fingerprint.
+fn wrap_clone_in_class(class: &str, body: &str) -> String {
+    format!(
+        "public class {class} {{\n    public void Run() {{\n{body}    }}\n}}\n",
+    )
+}
+
 // Implements [OUTPUT-FORMAT-DERIVED] suppression flags: `--nojson
 // --nohtml` leaves only the text output behind.
 #[test]

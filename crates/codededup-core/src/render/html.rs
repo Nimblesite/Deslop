@@ -33,7 +33,10 @@ use crate::{
 #[must_use]
 pub fn render_html(report: &Report, scan_root: Option<&Path>) -> String {
     let mut out = String::new();
-    let _ = write!(out, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head>");
+    let _ = write!(
+        out,
+        "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head>"
+    );
     write_head(&mut out, report);
     let _ = write!(out, "</head><body><main class=\"report-shell\">");
     write_intro(&mut out, report);
@@ -134,13 +137,10 @@ fn intro_summary(report: &Report) -> String {
     let hidden = report.clusters_hidden;
     let kinds = classify_groups(&report.clusters);
     if groups == 0 {
-        return format!(
-            "Scanned {files} file(s). No duplicated code worth reporting was found."
-        );
+        return format!("Scanned {files} file(s). No duplicated code worth reporting was found.");
     }
-    let mut sentence = format!(
-        "Scanned {files} file(s) and found {groups} group(s) of duplicated code. ",
-    );
+    let mut sentence =
+        format!("Scanned {files} file(s) and found {groups} group(s) of duplicated code. ");
     sentence.push_str(&kinds);
     sentence.push_str(
         " Worst offenders are listed first — each card shows one example with syntax \
@@ -257,11 +257,7 @@ fn write_clusters(out: &mut String, report: &Report, snippets: &mut SnippetLoade
 
 /// Writes a single cluster as a Terminal Card: title + action sentence
 /// + one expanded example snippet + compact "also found in …" list.
-fn write_cluster_card(
-    out: &mut String,
-    cluster: &ReportCluster,
-    snippets: &mut SnippetLoader<'_>,
-) {
+fn write_cluster_card(out: &mut String, cluster: &ReportCluster, snippets: &mut SnippetLoader<'_>) {
     let kind = cluster_kind(cluster);
     let occurrences = &cluster.occurrences;
     let _ = write!(
@@ -334,7 +330,10 @@ fn write_also_list(out: &mut String, occurrences: &[ReportOccurrence]) {
     }
     let inline_cap = 6_usize;
     let inline_end = occurrences.len().min(inline_cap);
-    let _ = write!(out, "<p class=\"cluster-card__example\">Also found in:</p><ul class=\"also-list\">");
+    let _ = write!(
+        out,
+        "<p class=\"cluster-card__example\">Also found in:</p><ul class=\"also-list\">"
+    );
     for occ in occurrences.iter().take(inline_end).skip(1) {
         write_also_item(out, occ);
     }
@@ -371,19 +370,47 @@ fn write_also_item(out: &mut String, occ: &ReportOccurrence) {
     );
 }
 
-/// Renders the snippet body: a `<pre>` containing one source line per
-/// row with a leading line-number gutter and tree-sitter-driven syntax
-/// highlighting.
+/// Soft cap on inline snippet height. A 320-line clone is real but
+/// useless to scan visually — render the first [`SNIPPET_PREVIEW_LINES`]
+/// lines in the visible block and fold the rest into a `<details>` so
+/// the card stays compact while the full source remains one click away.
+const SNIPPET_PREVIEW_LINES: usize = 40;
+
+/// Renders the snippet body. Up to [`SNIPPET_PREVIEW_LINES`] are shown
+/// inline; if the snippet is longer, the remainder is tucked into a
+/// `<details>` continuing the line numbers, with a summary chip
+/// reporting how many more lines were hidden.
 fn render_snippet_body(source: &str, start_line: usize, language: &str) -> String {
     let highlighted = highlight_snippet(source, language);
     let lines: Vec<&str> = split_html_lines(&highlighted);
     let line_count = lines.len();
     let gutter_width = digits(start_line.saturating_add(line_count.saturating_sub(1)));
+    let preview_end = line_count.min(SNIPPET_PREVIEW_LINES);
     let mut out = String::with_capacity(
         highlighted
             .len()
             .saturating_add(line_count.saturating_mul(20)),
     );
+    let preview = lines.get(..preview_end).unwrap_or(&[]);
+    write_snippet_pre(&mut out, preview, start_line, gutter_width);
+    if line_count > preview_end {
+        let hidden = line_count.saturating_sub(preview_end);
+        let rest_start = start_line.saturating_add(preview_end);
+        let rest = lines.get(preview_end..).unwrap_or(&[]);
+        let _ = write!(
+            &mut out,
+            "<details class=\"also-toggle\"><summary>Show {hidden} more line(s)</summary>",
+        );
+        write_snippet_pre(&mut out, rest, rest_start, gutter_width);
+        out.push_str("</details>");
+    }
+    out
+}
+
+/// Writes one `<pre class="snippet">` block for `lines`, numbering
+/// each row from `start_line` and right-aligning the gutter to
+/// `gutter_width` characters.
+fn write_snippet_pre(out: &mut String, lines: &[&str], start_line: usize, gutter_width: usize) {
     out.push_str("<pre class=\"snippet\">");
     for (index, line) in lines.iter().enumerate() {
         let line_no = start_line.saturating_add(index);
@@ -393,7 +420,6 @@ fn render_snippet_body(source: &str, start_line: usize, language: &str) -> Strin
         );
     }
     out.push_str("</pre>");
-    out
 }
 
 /// Splits `highlighted` HTML into one entry per source line. Splits on
