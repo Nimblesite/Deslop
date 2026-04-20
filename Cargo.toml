@@ -1,0 +1,81 @@
+# agent-pmo:424c8f8
+[workspace]
+resolver = "2"
+members = [
+    "crates/codededup-core",
+    "crates/codededup",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MelbourneDeveloper/CodeDedup"
+
+[workspace.dependencies]
+anyhow = "=1.0.86"
+thiserror = "=1.0.63"
+clap = { version = "=4.5.16", features = ["derive"] }
+tracing = "=0.1.40"
+tracing-subscriber = { version = "=0.3.18", features = ["env-filter"] }
+serde = { version = "=1.0.210", features = ["derive"] }
+serde_json = "=1.0.128"
+toml = "=0.8.22"
+assert_cmd = "=2.0.16"
+predicates = "=3.1.2"
+tempfile = "=3.12.0"
+tree-sitter = "=0.22.6"
+tree-sitter-c-sharp = "=0.21.3"
+tree-sitter-rust = "=0.21.2"
+tree-sitter-python = "=0.21.0"
+ignore = "=0.4.23"
+blake3 = "=1.5.4"
+ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
+instant-distance = "=0.6.1"
+notify = { version = "=6.1.1", default-features = false, features = ["macos_fsevent"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+missing_debug_implementations = "deny"
+unused_imports = "deny"
+dead_code = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+unused_assignments = "deny"
+unused_results = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+elided_lifetimes_in_paths = "deny"
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+rust_2018_idioms = { level = "deny", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+# Catches unchecked integer overflow (was `integer_arithmetic`, renamed in
+# recent clippy).
+arithmetic_side_effects = "deny"
+# NOTE: `float_arithmetic = "deny"` is deliberately NOT enabled. The lint is
+# only appropriate for crypto / consensus / money / bit-exact-reproducible
+# hashing work. For a tool that computes ranking scores and embedding
+# cosine similarities, denying float math workspace-wide just forces
+# awkward integer workarounds or `#[allow]` suppressions (which the rest
+# of our lint profile bans). If a future internal crate genuinely needs
+# float-free arithmetic, add `#![deny(clippy::float_arithmetic)]` at that
+# crate's root instead of reintroducing it here.
+missing_docs_in_private_items = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

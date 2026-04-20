@@ -1,0 +1,7 @@
+{
+  "title": "CodeDedup",
+  "description": "Duplicate-code detection built for the AI era. Tree-sitter parsing, AST fingerprints, semantic fusion — ranked worst-offender first.",
+  "url": "https://codededup.dev",
+  "stylesheet": "/assets/css/styles.css",
+  "author": "Christian Findlay"
+}

@@ -1,0 +1,100 @@
+---
+layout: layouts/base.njk
+title: CodeDedup — Duplicate-code detection for the AI era
+description: High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
+---
+
+<div class="home">
+  <section class="hero">
+    <div class="hero__left">
+      <div class="eyebrow-chip"><span>v2.4.0-stable released</span></div>
+      <h1>
+        When your agent copy-pastes,
+        <em>you see it first.</em>
+      </h1>
+      <p class="hero__lede">
+        High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
+      </p>
+      <div class="hero__cta">
+        <a href="/docs/" class="btn-primary">Run Demo Scan</a>
+        <div class="install-chip">
+          <code>cargo install codededup</code>
+          <button aria-label="Copy install command">
+            <span class="material-symbols-outlined">content_copy</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero__right">
+      <div class="report-card">
+        <div class="report-chrome">
+          <div class="report-chrome__dots"><span></span><span></span><span></span></div>
+          <span class="report-chrome__path">codededup scan ./src</span>
+        </div>
+        <pre class="report-body"><span class="muted">Initializing AST parsers... <span class="ok">[0.002s]</span></span><span class="muted">Scanning 4,208 files... <span class="ok">[0.145s]</span></span><div class="cluster">
+  <div class="cluster__head">
+    <span class="cluster__title">Cluster 01A_AUTH (Similarity: 98.4%)</span>
+    <span class="cluster__cost">Cost: HIGH</span>
+  </div>
+  <div class="cluster__files">
+    <span>src/middleware/auth.ts</span><span>L12–L84</span>
+    <span>src/utils/legacy_auth.ts</span><span>L104–L176</span>
+  </div>
+</div>
+<div class="cluster cluster--low">
+  <div class="cluster__head">
+    <span class="cluster__title">Cluster 04B_DB (Similarity: 82.1%)</span>
+    <span class="cluster__cost">Cost: LOW</span>
+  </div>
+  <div class="cluster__files">
+    <span>src/db/connection.rs</span><span>L40–L55</span>
+    <span>src/db/pool.rs</span><span>L12–L27</span>
+  </div>
+</div>
+<div class="report-footer">Found 12 clusters. Total structural duplication: <strong>4.2%</strong></div></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="bento">
+    <div class="bento__grid">
+      <div class="bento__cell">
+        <span class="bento__label">Clusters Detected</span>
+        <div class="bento__row">
+          <span class="bento__value">1,042</span>
+          <span class="bento__icon material-symbols-outlined">hub</span>
+        </div>
+      </div>
+
+      <div class="bento__cell">
+        <span class="bento__label">Above Threshold</span>
+        <div class="bento__row">
+          <span class="bento__value bento__value--alarm">314</span>
+          <span class="bento__icon bento__icon--alarm material-symbols-outlined">warning</span>
+        </div>
+      </div>
+
+      <div class="bento__cell bento__cell--recess bento__cell--wide-2">
+        <div class="bento__top">
+          <span class="bento__label">Top Offender</span>
+          <span class="bento__critical">CRITICAL</span>
+        </div>
+        <div>
+          <div class="bento__offender">src/legacy/parser_v1.rs</div>
+          <p class="bento__blurb">Duplicated across 14 modules. Estimated refactor savings: 4.2GB LOC.</p>
+        </div>
+      </div>
+
+      <div class="bento__cell bento__cell--panorama bento__cell--wide-4">
+        <div class="bento__panorama-inner">
+          <div>
+            <span class="bento__label">Avg Scan Time (Linux Kernel)</span>
+            <span class="bento__value bento__value--hero">0.084<span class="unit">s</span></span>
+          </div>
+          <p class="bento__panorama-note">Multi-threaded parsing utilizes all available cores. Zero memory overhead for files under 50MB.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>

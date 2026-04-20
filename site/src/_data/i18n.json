@@ -1,0 +1,22 @@
+{
+  "en": {
+    "blog": {
+      "back": "← Back to Blog",
+      "title": "Blog",
+      "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind CodeDedup.",
+      "tags": "Tags",
+      "categories": "Categories",
+      "empty": "No blog posts yet."
+    },
+    "nav": {
+      "docs": "Docs",
+      "blog": "Blog",
+      "api": "API",
+      "apiReference": "API Reference"
+    },
+    "docs": {
+      "title": "Documentation",
+      "gettingStarted": "Getting Started"
+    }
+  }
+}

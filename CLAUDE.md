@@ -1,113 +1,145 @@
-# CLAUDE.md
+<!-- agent-pmo:424c8f8 -->
+# CodeDedup — Agent Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> ⚠️ **TOKEN DISCIPLINE.** Check file size first. `Grep` over `Read`. Use `offset`/`limit`.
+> Smallest diff that solves the problem. Delete dead code, unused imports, stale comments.
+> Call out irrelevant context before proceeding. Bloat degrades reasoning. ⚠️
 
-⚠️ CRITICAL: WE TREAT THIS CODEBASE WITH RESPECT. THIS CODE WOULD PASS REVIEW AT Google, Meta and Microsoft. WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. THIS CODEBASE RECEIVES A GRADE OF A+. ANYTHING LESS IS ⛔️ILLEGAL AND YOU MUST FIX IT IMMEDIATELY.
+> ⚠️ **CRITICAL: THIS CODEBASE RECEIVES A GRADE OF A+.** WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. CODE MUST PASS REVIEW AT Google / Meta / Microsoft. ANYTHING LESS IS ⛔️ ILLEGAL AND MUST BE FIXED IMMEDIATELY.
 
-# Project
+> Read this file in full. Rules below are NON-NEGOTIABLE — violations are rejected in review.
 
-**CodeDedup** — a Rust CLI tool that detects duplicated code across a codebase and produces a report ordered by **worst offenders first** (highest duplication impact at the top).
+## Project Overview
 
-- **Language support (initial):** C#, Rust, Python.
-- **Parsing:** `tree-sitter` with the per-language Rust grammars (`tree-sitter-c-sharp`, `tree-sitter-rust`, `tree-sitter-python`). Regex-based parsing is ⛔️ ILLEGAL — always use the tree-sitter AST.
-- **Output:** ordered text/JSON report. Worst offender = largest weighted duplication (clone size × clone count × span).
+**CodeDedup** is a Rust CLI that detects duplicated code across a codebase and reports the **worst offenders first** (highest weighted duplication impact at the top). Language support starts with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
 
-The binary is a CLI — no LSP, no IDE extension, no daemon. Keep it focused.
+Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
+- ALL SPEC SECTIONS HAVE NON-NUMERIC HIERARCHICALLY STRUCTURED SECTIONS. ALL TESTS REFER TO SPEC IDs. ALL CODE REFERS TO SPEC IDS.
 
-# Build Commands
+**Primary language:** Rust
+**Build command:** `make ci`
+**Test command:** `make test`
+**Lint command:** `make lint`
 
-Cross-platform GNU Make. Seven standard targets only — no others:
-
-```bash
-make build   # cargo build --release
-make test    # FAIL-FAST tests + coverage + threshold (ONLY test entry point)
-make lint    # cargo clippy + any analyzers (no formatting)
-make fmt     # cargo fmt (in place)
-make clean   # cargo clean + remove report artifacts
-make ci      # lint + test + build (full CI simulation)
-make setup   # post-create dev environment setup
-```
-
-`make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured ≥ threshold from `coverage-thresholds.json` at repo root, exits non-zero on any failure. To debug a single test, invoke `cargo test <name> -- --nocapture` directly — that is **not** a Makefile target.
-
-Three separate targets, no overlap: **fmt** writes, **lint** reads, **test** runs tests with coverage.
-
-# Architecture
-
-The pipeline is linear and deliberately simple:
+## Architecture
 
 ```
 discover files → per-language parse (tree-sitter) → normalize AST →
-fingerprint subtrees → cluster matching fingerprints → score & rank →
-render report
+fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
+fuse signals → rank → render report
 ```
 
-Key architectural points that span multiple files:
+- **`crates/codededup-core`** — analysis library. Everything non-trivial lives here. A future LSP consumes the same crate.
+- **`crates/codededup`** — thin CLI binary (<50 LOC of glue): arg parsing, tracing setup, invoke core, render output.
+- **`LanguageParser` trait** is the single extension point. Adding a language = implementing the trait + pinning the grammar in `Cargo.toml`, CI, and Dockerfile.
+- **Normalization** strips identifiers, literals, and trivia before fingerprinting so renamed-clone detection works (Type-2). Per-language rules, identical output format across languages.
+- **Fingerprinting** operates on AST subtrees, not lines. Minimum node count configurable.
+- **Ranking score** weights clone size × clone count × spanned LOC — this is the user-visible product. Changes here change every report.
+- **Global state** lives in exactly one file: `crates/codededup-core/src/state.rs`. Nothing escapes it.
 
-- **Language plugin trait** is the single extension point. Adding a language = implementing the trait + registering the grammar. C#, Rust, and Python live behind the same trait so the rest of the pipeline is language-agnostic.
-- **Normalization** strips identifier names, literals, and trivia before fingerprinting so that renamed-clone detection works (Type-2 clones). Keep normalization rules per-language but the fingerprint format identical across languages.
-- **Fingerprinting** operates on AST subtrees, not lines. Only subtrees above a configurable minimum node count are considered — small fragments are noise.
-- **Ranking** is the user-visible product. The score weights clone size, clone count, and total spanned LOC. This is the contract — changes here change every report.
-- **Global state** lives in exactly one file (e.g. `src/state.rs`). No state escapes it.
+## Hard Rules — Universal (no exceptions)
 
-# Rules (project-wide, non-negotiable)
+- CRITICAL: **Files < 500 lines.** Refactor when over.
+- **NO git commands.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, etc. CI handles git.
+- **REDUCE CODE DUPLICATION. DRY AF.** This tool detects duplication — its own codebase must be exemplary. Search before writing. Move code, don't copy.
+- **Regex on source code = ⛔️ ILLEGAL.** Use tree-sitter for all source parsing.
+- **NO EXCEPTIONS for control flow.** Return `Result<T,E>`. Panics are bugs.
+- **NO REGEX on structured data.** Use real parsers for JSON/YAML/TOML/code.
+- **NO PLACEHOLDERS.** No silent no-ops. Use proper error types.
+- **Functions < 20 lines** 
+- **No legacy code.** Legacy = deleted.
+- **Copying files is illegal.** MOVE them.
+- **Centralize all global state** in `crates/codededup-core/src/state.rs`.
+- **Never delete failing tests. Never remove assertions.** Reducing assertiveness = ⛔️ ILLEGAL.
+- **`make test` is FAIL-FAST.** Stops at first failure. Never `--no-fail-fast`.
+- **`make test` ALWAYS computes coverage AND enforces it.** Threshold lives in `coverage-thresholds.json` at the repo root — NOT env vars, NOT gh repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
+- **Coarse E2E tests only.** No unit tests. Drive the CLI end-to-end against fixture repos and assert against rendered reports.
+- **Heavy structured logging.** See Logging below.
+- **No linter suppressions.** `#[allow(clippy::...)]` = ⛔️ ILLEGAL. Fix the underlying code.
+- **Dependency versions in `Cargo.toml`, `.github/workflows/ci.yml`, and `.devcontainer/` stay in sync at all times.**
+- **Spec IDs are hierarchical, non-numeric: `[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`** (e.g., `[PARSE-CSHARP-NORMALIZE]`, `[RANK-SCORE]`). Same-group sections sit adjacent in the doc. NO sequential numbers. Code/tests referencing a spec section include the ID in a comment so `grep [PARSE-` finds spec → code → tests.
 
-- **TOP PRIORITY: REDUCE CODE DUPLICATION.** This tool detects duplication — its own codebase must be exemplary. Always search for existing code before writing new code. Aggressively merge similar code into shared modules.
-- **Zero duplication. DRY AF.**
-- **CENTRALIZE ALL GLOBAL STATE** in one file.
-- `#[allow(clippy::...)]` = ⛔️ ILLEGAL. Fix the underlying issue.
-- **Regex = ⛔️ ILLEGAL.** Use tree-sitter for all source parsing.
-- **No legacy code.** Legacy = DELETED.
-- Keep files **under 500 LOC**. Break up larger files.
-- **Copying files is illegal.** MOVE them instead.
-- Do **not** use Git unless asked.
-- Keep dependency versions in `.github/workflows/ci.yml` and `.devcontainer/Dockerfile` in sync at all times.
+## Hard Rules — Rust
 
-## Rust Quality Standards
+- No `unwrap()`/`expect()` in production code (tests may `expect` with a message).
+- No `panic!`/`todo!`/`unimplemented!`/`unreachable!`.
+- No `unsafe {}`. Workspace lint is `unsafe_code = "deny"`.
+- All public items have `///` doc comments (workspace lint: `missing_docs = "deny"`).
+- `thiserror` for library errors in `codededup-core`. `anyhow` allowed in the `codededup` binary.
+- Pattern matching over casting. Expressions over statements. Iterator chains over imperative loops.
+- Early return with `?` for clean error propagation.
+- Descriptive variable names — no single letters except in closures.
 
-- All lints at highest strictness (configure in `Cargo.toml` `[lints]`). Add lints when in doubt — never remove them.
-- `unsafe` code forbidden (`unsafe_code = "deny"`).
-- `unwrap()` is **always** a violation. Use `?` with proper error types.
-- No `panic!`, `todo!`, `unimplemented!` — handle every case, return `Result<T, E>`.
-- Run clippy and fmt routinely; fix violations immediately.
+## Website
 
-## Functional Programming Style
-
-- `Result<T, E>` and `Option<T>` everywhere.
-- Expressions over statements — `match`, `if let`, iterator chains.
-- Pure functions. Minimize side effects.
-- Pattern matching over casting or unwrapping.
-- Early returns with `?` for clean error propagation.
-
-## Code Structure
-
-- Small, focused functions (<20 lines).
-- Low cognitive complexity (`clippy::cognitive_complexity` enabled).
-- Descriptive variable names (no single letters except in closures).
-- Group related functionality into modules.
-- Public APIs must have documentation.
+- ZERO duplicate CSS
+- Hard CSS budget 1.5k LOC
 
 ## Logging Standards
 
-- **Structured logging only.** Never `println!`/`eprintln!` for diagnostics. Use `tracing` + `tracing-subscriber`.
-- Log at entry/exit of significant operations. Levels: `error|warn|info|debug|trace`.
-- **Structured fields, not string interpolation:** `tracing::info!(file_count = 42, lang = "rust")` — never format strings.
-- The CLI's *report output* (the user-facing artifact) is **not** a log. Reports go to stdout or a file via the renderer; diagnostics go to `tracing`.
+- **`tracing` + `tracing-subscriber` only.** Never `println!`/`eprintln!` for diagnostics.
+- **Log at entry/exit of significant operations.** Levels: `error|warn|info|debug|trace`.
+- **Structured fields, not string interpolation.** `tracing::info!(file_count = 42, lang = "csharp")` — never format strings.
+- **The CLI's report output is NOT a log.** Reports go to stdout (or `--output <path>`) via the renderer. Diagnostics go to `tracing`.
 - **NEVER log file contents, paths containing user data, or secrets.** Log counts and hashes, not source.
 
-## Testing
+## Testing Rules
 
-- Aim for 100% coverage and a high mutation score.
-- **NEVER delete failing tests. NEVER remove assertions that cause failures.** Add more failing tests for broken/missing functionality — never remove them.
-- Reducing test assertiveness = ⛔️ ILLEGAL.
-- `make test` is FAIL-FAST. Never `--no-fail-fast`.
-- Coverage threshold lives in `coverage-thresholds.json` at repo root — NOT env vars, NOT GH repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
-- **No unit tests. Only coarse e2e tests** that drive the CLI end-to-end on fixture repos and assert against rendered reports.
+- **Aim for 100% coverage and high mutation score.**
+- **Never delete a failing test. Never skip a test.** Add more failing tests for broken/missing functionality — never remove them.
+- **Specific assertions only.** `assert!(true)` is illegal.
+- **No try/catch that swallows errors and asserts success.**
+- **Deterministic.** No `sleep`, no timing dependencies, no random state.
+- **E2E tests: black-box only** — the CLI binary, fixture directories, rendered reports. Never reach into internals.
+- Coverage threshold lives in `coverage-thresholds.json` and only goes up.
 
-## Bug Fix Process
+### Bug Fix Process
 
 1. Write a test that fails because of the bug.
 2. Run the test — confirm it fails **because of the bug** (right reason).
 3. Repeat until it's failing for the right reason.
 4. Fix the bug (do **NOT** change the test).
 5. Run the test — confirm it passes.
+
+## Build Commands
+
+Cross-platform GNU Make. On Windows: `choco install make` or use the one in Git for Windows.
+
+```bash
+make build   # cargo build --release
+make test    # FAIL-FAST tests + coverage + threshold (ONLY test entry point)
+make lint    # cargo clippy (read-only, no formatting)
+make fmt     # cargo fmt (in place; CHECK=1 for read-only CI check)
+make clean   # cargo clean + remove report artifacts
+make ci      # lint + test + build (full CI simulation)
+make setup   # post-create dev environment setup
+```
+
+**There are 7 AgentPMO targets. Repo specific targets must have a horizontal marker.** `make test` runs the test runner with its fail-fast flag, collects coverage, asserts measured ≥ threshold from `coverage-thresholds.json`, and exits non-zero on any failure. To debug a single test, invoke `cargo test <name> -- --nocapture` directly — that is not a Makefile target.
+
+**`make fmt`** formats. **`make lint`** reads. **`make test`** runs tests with coverage. Three separate targets — no overlap.
+
+## Repo Structure
+
+```
+crates/
+├── codededup-core/         # library: pipeline stages
+│   └── src/
+│       ├── lib.rs
+│       └── state.rs        # single global-state file
+└── codededup/              # thin CLI binary
+docs/
+├── specs/SPEC.md           # full research + design spec
+└── plans/PLAN.md           # phased execution plan with TODO at bottom
+.github/workflows/ci.yml    # CI
+.devcontainer/              # dev container
+.claude/skills/             # repo-local skills: ci-prep, code-dedup, submit-pr
+Makefile                    # 7 standard targets
+coverage-thresholds.json    # single source of truth for coverage thresholds
+Cargo.toml                  # workspace + strict lints
+rustfmt.toml
+```
+
+## Too Many Cooks (Multi-Agent Coordination)
+
+If the TMC server is available: register on start (name, intent, files), lock files before editing, broadcast your plan, check messages periodically, release locks when done. Never edit a locked file — wait or take another approach.

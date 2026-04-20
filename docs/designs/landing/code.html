@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CodeDedup - The Kinetic Manuscript</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#1c1b1b",
+                        "error-container": "#93000a",
+                        "inverse-primary": "#b4271f",
+                        "on-tertiary-fixed-variant": "#004a7a",
+                        "outline-variant": "#5a403d",
+                        "error": "#ffb4ab",
+                        "on-primary-fixed-variant": "#910809",
+                        "surface-dim": "#131313",
+                        "surface-container-highest": "#353534",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-tertiary-container": "#bbdaff",
+                        "surface-tint": "#ffb4aa",
+                        "inverse-surface": "#e5e2e1",
+                        "surface-container": "#201f1f",
+                        "background": "#131313",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-container": "#ffcbc4",
+                        "on-secondary": "#303030",
+                        "on-background": "#e5e2e1",
+                        "surface-container-lowest": "#0e0e0e",
+                        "tertiary-fixed-dim": "#9bcbff",
+                        "tertiary": "#9bcbff",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "primary-container": "#b3261e",
+                        "on-tertiary-fixed": "#001d34",
+                        "tertiary-container": "#00619e",
+                        "secondary-container": "#474746",
+                        "outline": "#a98985",
+                        "on-secondary-container": "#b7b5b4",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed": "#e5e2e1",
+                        "inverse-on-surface": "#313030",
+                        "on-surface-variant": "#e2beb9",
+                        "primary": "#ffb4aa",
+                        "on-primary": "#690003",
+                        "surface": "#131313",
+                        "primary-fixed-dim": "#ffb4aa",
+                        "surface-variant": "#353534",
+                        "on-surface": "#e5e2e1",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "surface-bright": "#393939",
+                        "on-primary-fixed": "#410001",
+                        "on-error": "#690005",
+                        "primary-fixed": "#ffdad5",
+                        "on-tertiary": "#003256",
+                        "secondary": "#c8c6c5",
+                        "tertiary-fixed": "#d0e4ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["JetBrains Mono", "monospace"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { background-color: #131313; color: #e5e2e1; }
+    </style>
+</head>
+<body class="font-body antialiased bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-[#131313]/80 backdrop-blur-xl docked full-width top-0 sticky z-50">
+<div class="flex justify-between items-center w-full px-6 py-4 max-w-full mx-auto">
+<div class="text-xl font-bold tracking-tighter text-[#ffb4aa] font-headline">CodeDedup</div>
+<div class="hidden md:flex space-x-6 items-center">
+<a class="font-label text-sm text-white/60 hover:text-white transition-colors hover:bg-[#2a2a2a] transition-all duration-150" href="#">Features</a>
+<a class="font-label text-sm text-[#ffb4aa] border-b-2 border-[#b3261e] pb-1 hover:bg-[#2a2a2a] transition-all duration-150 Active: scale-95 transition-transform" href="#">Docs</a>
+<a class="font-label text-sm text-white/60 hover:text-white transition-colors hover:bg-[#2a2a2a] transition-all duration-150" href="#">Pricing</a>
+<a class="font-label text-sm text-white/60 hover:text-white transition-colors hover:bg-[#2a2a2a] transition-all duration-150" href="#">Enterprise</a>
+</div>
+<div class="flex items-center space-x-4">
+<button class="text-white/60 hover:text-[#ffb4aa] transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">terminal</span>
+</button>
+<button class="bg-primary-container text-on-primary-container px-4 py-2 rounded-sm font-label text-sm hover:bg-[#b3261e]/80 transition-colors">Get Started</button>
+</div>
+</div>
+<div class="bg-[#2a2a2a] h-[1px] w-full block shadow-[0_20px_40px_rgba(14,14,14,0.4)]"></div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col">
+<!-- Hero Section (Kinetic Asymmetry) -->
+<section class="relative pt-32 pb-24 px-6 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-16 items-start">
+<!-- Left: Typography & Intent -->
+<div class="flex-1 lg:max-w-2xl z-10">
+<div class="inline-block px-3 py-1 bg-surface-container-high rounded-sm mb-6 border border-outline-variant/20">
+<span class="font-label text-xs text-primary tracking-widest uppercase">v2.4.0-stable released</span>
+</div>
+<h1 class="font-headline text-5xl md:text-7xl font-black tracking-tighter leading-[1.05] text-on-surface mb-8">
+                    When your agent copy-pastes, <br/>
+<span class="text-primary-container block mt-2">you see it first.</span>
+</h1>
+<p class="font-body text-on-surface-variant text-lg md:text-xl leading-relaxed mb-10 max-w-xl">
+                    High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
+                </p>
+<div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+<button class="bg-gradient-to-r from-primary to-primary-container text-on-primary-container px-8 py-4 rounded-sm font-label text-sm font-bold shadow-[0_10px_30px_rgba(179,38,30,0.3)] hover:scale-105 transition-transform">
+                        Run Demo Scan
+                    </button>
+<div class="bg-surface-container-low px-6 py-4 rounded-sm border border-outline-variant/20 flex items-center gap-3">
+<span class="font-label text-sm text-secondary">cargo install codededup</span>
+<button class="text-primary hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Right: The "Lightning-Fast" Visual -->
+<div class="flex-1 w-full relative">
+<!-- Decorative Grid Background (Subtle) -->
+<div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9IiMzNTM1MzQiLz48L3N2Zz4=')] opacity-20 [mask-image:radial-gradient(ellipse_at_center,black,transparent_80%)]"></div>
+<!-- Terminal Report Preview -->
+<div class="bg-surface-container-lowest rounded-sm border border-outline-variant/20 shadow-[0_20px_40px_rgba(14,14,14,0.6)] relative z-10 transform lg:-rotate-2 transition-transform hover:rotate-0 duration-500">
+<div class="bg-surface-container-high px-4 py-2 flex items-center gap-3 border-b border-surface-container-lowest">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
+</div>
+<span class="font-label text-xs text-secondary-fixed-dim">codededup scan ./src</span>
+</div>
+<div class="p-6 font-label text-sm leading-relaxed overflow-x-auto text-on-surface">
+<div class="text-secondary mb-4">Initializing AST parsers... <span class="text-tertiary">[0.002s]</span></div>
+<div class="text-secondary mb-6">Scanning 4,208 files... <span class="text-tertiary">[0.145s]</span></div>
+<div class="bg-surface-container-low p-3 mb-2 rounded-sm border-l-2 border-primary-container">
+<div class="flex justify-between items-start mb-2">
+<span class="text-primary-container font-bold">Cluster 01A_AUTH (Similarity: 98.4%)</span>
+<span class="text-secondary-fixed-dim text-xs">Cost: HIGH</span>
+</div>
+<div class="grid grid-cols-[1fr_auto] gap-4">
+<span class="text-on-surface-variant">src/middleware/auth.ts</span>
+<span class="text-tertiary">L12-L84</span>
+<span class="text-on-surface-variant">src/utils/legacy_auth.ts</span>
+<span class="text-tertiary">L104-L176</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-3 mb-6 rounded-sm border-l-2 border-tertiary-container">
+<div class="flex justify-between items-start mb-2">
+<span class="text-tertiary-container font-bold">Cluster 04B_DB (Similarity: 82.1%)</span>
+<span class="text-secondary-fixed-dim text-xs">Cost: LOW</span>
+</div>
+<div class="grid grid-cols-[1fr_auto] gap-4">
+<span class="text-on-surface-variant">src/db/connection.rs</span>
+<span class="text-tertiary">L40-L55</span>
+<span class="text-on-surface-variant">src/db/pool.rs</span>
+<span class="text-tertiary">L12-L27</span>
+</div>
+</div>
+<div class="text-primary-fixed-dim border-t border-surface-container-high pt-4 mt-4">
+                            Found 12 clusters. Total structural duplication: <span class="text-primary font-bold">4.2%</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Statistics Bento Grid -->
+<section class="px-6 py-24 max-w-7xl mx-auto w-full">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- Cell 1 -->
+<div class="bg-surface-container-low p-8 flex flex-col justify-between hover:bg-surface-container-highest transition-colors duration-300">
+<span class="font-label text-sm text-secondary-fixed-dim uppercase tracking-widest mb-6">Clusters Detected</span>
+<div class="flex items-end justify-between">
+<span class="font-label text-4xl md:text-5xl text-on-surface font-bold">1,042</span>
+<span class="material-symbols-outlined text-primary-container text-3xl">hub</span>
+</div>
+</div>
+<!-- Cell 2 -->
+<div class="bg-surface-container-low p-8 flex flex-col justify-between hover:bg-surface-container-highest transition-colors duration-300">
+<span class="font-label text-sm text-secondary-fixed-dim uppercase tracking-widest mb-6">Above Threshold</span>
+<div class="flex items-end justify-between">
+<span class="font-label text-4xl md:text-5xl text-error font-bold">314</span>
+<span class="material-symbols-outlined text-error-container text-3xl">warning</span>
+</div>
+</div>
+<!-- Cell 3 -->
+<div class="bg-surface-container-lowest p-8 flex flex-col justify-between lg:col-span-2 border border-outline-variant/20">
+<div class="flex justify-between items-start mb-6">
+<span class="font-label text-sm text-secondary-fixed-dim uppercase tracking-widest">Top Offender</span>
+<div class="bg-error-container text-on-error px-2 py-1 text-xs font-label rounded-sm">CRITICAL</div>
+</div>
+<div>
+<div class="font-label text-xl text-primary-container mb-2">src/legacy/parser_v1.rs</div>
+<div class="font-body text-on-surface-variant text-sm">Duplicated across 14 modules. Estimated refactor savings: 4.2GB LOC.</div>
+</div>
+</div>
+<!-- Cell 4 -->
+<div class="bg-surface-container-low p-8 flex flex-col justify-between lg:col-span-4 bg-gradient-to-r from-surface-container-low to-surface-container-lowest relative overflow-hidden">
+<div class="absolute right-0 top-0 h-full w-1/2 bg-gradient-to-l from-surface-container-high/20 to-transparent"></div>
+<div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center w-full">
+<div>
+<span class="font-label text-sm text-secondary-fixed-dim uppercase tracking-widest mb-2 block">Avg Scan Time (Linux Kernel)</span>
+<span class="font-label text-5xl md:text-6xl text-primary font-bold">0.084<span class="text-2xl text-secondary-fixed-dim">s</span></span>
+</div>
+<div class="mt-6 md:mt-0 max-w-sm text-right">
+<p class="font-body text-sm text-on-surface-variant">Multi-threaded parsing utilizes all available cores. Zero memory overhead for files under 50MB.</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-[#0e0e0e] w-full py-12 px-8 mt-20 border-t border-[#2a2a2a] flat">
+<div class="flex flex-col md:flex-row justify-between items-center gap-8 max-w-7xl mx-auto w-full">
+<div class="text-[#b3261e] JetBrains Mono text-[10px] uppercase tracking-widest font-label">
+                © 2024 Kinetic Manuscript Labs. Built for precision.
+            </div>
+<div class="flex space-x-6">
+<a class="font-label text-[10px] uppercase tracking-widest text-white/30 hover:text-white/70 hover:opacity-100 underline underline-offset-4 transition-all" href="#">Github</a>
+<a class="font-label text-[10px] uppercase tracking-widest text-white/30 hover:text-white/70 hover:opacity-100 underline underline-offset-4 transition-all" href="#">Changelog</a>
+<a class="font-label text-[10px] uppercase tracking-widest text-white/30 hover:text-white/70 hover:opacity-100 underline underline-offset-4 transition-all" href="#">Status</a>
+<a class="font-label text-[10px] uppercase tracking-widest text-white/30 hover:text-white/70 hover:opacity-100 underline underline-offset-4 transition-all" href="#">Privacy</a>
+<a class="font-label text-[10px] uppercase tracking-widest text-white/30 hover:text-white/70 hover:opacity-100 underline underline-offset-4 transition-all" href="#">Terms</a>
+</div>
+</div>
+</footer>
+</body></html>
