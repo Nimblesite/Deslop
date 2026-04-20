@@ -123,6 +123,16 @@ struct Cli {
     /// listed path. Must name a path inside the scan root.
     #[arg(long = "rerun-remove", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
     rerun_remove: Vec<PathBuf>,
+
+    /// Copy `SRC` to `DST` between the initial analysis and the rerun,
+    /// then replay `DST` through [`PipelineSession::update_files`].
+    /// Simulates a new file appearing mid-session: the initial corpus
+    /// does not see `DST`; the rerun does and the delta surfaces the
+    /// new clusters it joins ([LIVE-DELTA] `clusters_added`). Spec is
+    /// `SRC=DST`; both paths must be absolute or resolvable against
+    /// the current working directory.
+    #[arg(long = "rerun-add", value_name = "SRC=DST", num_args = 1.., action = clap::ArgAction::Append)]
+    rerun_add: Vec<String>,
 }
 
 /// Suppression flags for each output format. Packed into their own
@@ -299,24 +309,87 @@ fn produce_report(
         embedding(),
     )
     .context("analysis pipeline failed")?;
-    if args.rerun_touch.is_empty() {
+    let adds = parse_rerun_adds(&args.rerun_add)?;
+    let touched = assemble_touched(args, &adds);
+    if touched.is_empty() {
         return Ok(PipelineOutcome {
             report: initial,
             delta: None,
         });
     }
+    for path in &args.rerun_remove {
+        fs::remove_file(path).with_context(|| format!("rerun-remove {}", path.display()))?;
+    }
+    for add in &adds {
+        let _bytes = fs::copy(&add.src, &add.dst)
+            .with_context(|| format!("rerun-add {} -> {}", add.src.display(), add.dst.display()))?;
+    }
     tracing::info!(
-        touched = args.rerun_touch.len(),
-        "rerun-touch: replaying paths through PipelineSession::update_files",
+        touched = touched.len(),
+        removed = args.rerun_remove.len(),
+        added = adds.len(),
+        "rerun: replaying paths through PipelineSession::update_files",
     );
     let updated = session
-        .update_files(&args.rerun_touch, embedding())
+        .update_files(&touched, embedding())
         .context("incremental rerun failed")?;
     let delta = ReportDelta::between(Some((0, &initial)), 1, &updated);
     Ok(PipelineOutcome {
         report: updated,
         delta: Some(delta),
     })
+}
+
+/// Parsed `--rerun-add` entry: copy `src` to `dst` between the initial
+/// analysis and the rerun, then replay `dst` through `update_files`.
+#[derive(Debug)]
+struct RerunAdd {
+    /// Source path copied from (must exist at rerun time).
+    src: PathBuf,
+    /// Destination path copied to (inside the scan root).
+    dst: PathBuf,
+}
+
+/// Parses the `SRC=DST` spec. Rejects specs that do not contain exactly
+/// one `=` separator.
+fn parse_rerun_adds(specs: &[String]) -> Result<Vec<RerunAdd>> {
+    specs
+        .iter()
+        .map(|spec| {
+            let (src, dst) = spec
+                .split_once('=')
+                .ok_or_else(|| anyhow::anyhow!("--rerun-add spec must be SRC=DST, got {spec:?}"))?;
+            Ok(RerunAdd {
+                src: PathBuf::from(src),
+                dst: PathBuf::from(dst),
+            })
+        })
+        .collect()
+}
+
+/// Merges `--rerun-touch`, `--rerun-remove`, and `--rerun-add` paths
+/// into the single vector passed to [`PipelineSession::update_files`].
+/// Deletions and additions are implicitly touched so the session picks
+/// them up.
+fn assemble_touched(args: &Cli, adds: &[RerunAdd]) -> Vec<PathBuf> {
+    let capacity = args
+        .rerun_touch
+        .len()
+        .saturating_add(args.rerun_remove.len())
+        .saturating_add(adds.len());
+    let mut out: Vec<PathBuf> = Vec::with_capacity(capacity);
+    out.extend(args.rerun_touch.iter().cloned());
+    for path in &args.rerun_remove {
+        if !out.contains(path) {
+            out.push(path.clone());
+        }
+    }
+    for add in adds {
+        if !out.contains(&add.dst) {
+            out.push(add.dst.clone());
+        }
+    }
+    out
 }
 
 /// Parses `--embeddings` into the core enum, surfacing a user-facing

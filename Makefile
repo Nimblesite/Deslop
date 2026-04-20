@@ -89,12 +89,12 @@ _coverage_check:
 	LF=$$(grep '^LF:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
 	if [ "$$LF" -eq 0 ]; then echo "FAIL: No lines in lcov.info"; exit 1; fi; \
 	PCT=$$(awk "BEGIN{printf \"%.1f\", $$LH/$$LF*100}"); \
-	PCT_INT=$$(awk "BEGIN{printf \"%d\", $$LH/$$LF*100}"); \
-	echo "Line coverage: $${PCT}% (threshold: $${THRESHOLD}%)"; \
-	if [ "$$PCT_INT" -lt "$${THRESHOLD}" ]; then \
-	  echo "FAIL: $${PCT}% < $${THRESHOLD}%"; exit 1; \
+	PASS=$$(awk "BEGIN{print ($$LH/$$LF*100 - 1.0 >= $${THRESHOLD}) ? 1 : 0}"); \
+	echo "Line coverage: $${PCT}% (threshold: $${THRESHOLD}% + 1% rounding slack)"; \
+	if [ "$$PASS" -eq 0 ]; then \
+	  echo "FAIL: $${PCT}% - 1% rounding slack < $${THRESHOLD}%"; exit 1; \
 	else \
-	  echo "OK: $${PCT}% >= $${THRESHOLD}%"; \
+	  echo "OK: $${PCT}% - 1% rounding slack >= $${THRESHOLD}%"; \
 	fi
 
 # =============================================================================
@@ -116,8 +116,17 @@ build-release:
 	@echo "==> Building release binary..."
 	cargo build --release --package codededup
 
-## install-binary: Build release and install the binary onto the user's PATH
-install-binary: build-release
+## install-binary: Clean, build release, and install the binary onto the user's PATH.
+##                 Deletes the installed binary and runs `cargo clean` first so a
+##                 stale build artifact can never shadow the source on disk.
+install-binary:
+	@echo "==> Removing previously installed codededup binary..."
+	cargo uninstall codededup 2>/dev/null || true
+	$(RM) "$(HOME)/.cargo/bin/codededup"
+	@echo "==> Cleaning build artifacts..."
+	cargo clean --release --package codededup
+	@echo "==> Building release binary from clean state..."
+	cargo build --release --package codededup
 	@echo "==> Installing codededup binary..."
 	cargo install --locked --path crates/codededup --force
 

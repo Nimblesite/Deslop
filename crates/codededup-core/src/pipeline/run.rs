@@ -6,13 +6,7 @@
 
 use std::path::Path;
 
-use crate::{
-    error::CoreError,
-    lang::LanguageParser,
-    render::render_ast_dump,
-    report::Report,
-    state::FileRegistry,
-};
+use crate::{error::CoreError, render::render_ast_dump, report::Report, state::FileRegistry};
 
 use super::{
     config::PipelineConfig,
@@ -64,9 +58,7 @@ pub fn debug_ast_dump(path: &Path) -> Result<String, CoreError> {
         .unwrap_or_default();
     let Some(parser) = parsers
         .iter()
-        .find(|parser: &&Box<dyn LanguageParser>| {
-            parser.file_extensions().iter().any(|e| *e == extension)
-        })
+        .find(|parser| parser.file_extensions().iter().any(|e| *e == extension))
     else {
         return Err(CoreError::UnsupportedExtension {
             path: path.to_path_buf(),

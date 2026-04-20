@@ -185,11 +185,7 @@ fn identifier_class(node: &Node<'_>, source: &[u8]) -> Option<&'static str> {
         return Some("function");
     }
     let text = std::str::from_utf8(source.get(node.start_byte()..node.end_byte())?).ok()?;
-    if text
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_uppercase())
-    {
+    if text.chars().next().is_some_and(|c| c.is_ascii_uppercase()) {
         return Some("type");
     }
     Some("identifier")
@@ -198,9 +194,9 @@ fn identifier_class(node: &Node<'_>, source: &[u8]) -> Option<&'static str> {
 /// Maps single-character operator / punctuation kinds.
 fn operator_class(kind: &str) -> Option<&'static str> {
     match kind {
-        "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&"
-        | "||" | "!" | "&" | "|" | "^" | "~" | "+=" | "-=" | "*=" | "/=" | "%=" | "=>"
-        | "->" | "::" | "?" | "??" | "?." => Some("operator"),
+        "+" | "-" | "*" | "/" | "%" | "=" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "&&" | "||"
+        | "!" | "&" | "|" | "^" | "~" | "+=" | "-=" | "*=" | "/=" | "%=" | "=>" | "->" | "::"
+        | "?" | "??" | "?." => Some("operator"),
         "(" | ")" | "[" | "]" | "{" | "}" | ";" | "," | ":" | "." => Some("punctuation"),
         _ => None,
     }
@@ -380,7 +376,8 @@ fn is_rust_keyword(kind: &str) -> bool {
 fn is_python_keyword(kind: &str) -> bool {
     matches!(
         kind,
-        "and" | "as"
+        "and"
+            | "as"
             | "assert"
             | "async"
             | "await"

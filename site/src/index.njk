@@ -1,186 +1,100 @@
 ---
 layout: layouts/base.njk
 title: CodeDedup — Duplicate-code detection for the AI era
-description: CodeDedup is a Rust CLI that ranks the worst-offender duplication in a codebase first. Tree-sitter parsing, AST fingerprints, and semantic embedding fusion. Built for AI-speed codebases.
+description: High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
 ---
 
 <div class="home">
   <section class="hero">
-    <div>
-      <p class="eyebrow">The audit for AI-generated code</p>
-      <h1 class="display">When your agent copy-pastes, <em>you see it first.</em></h1>
-      <p class="lede">
-        CodeDedup is a Rust CLI that finds duplicated code across a repository and ranks the <strong>worst offenders at line one</strong>. Tree-sitter parsing. AST fingerprints. Semantic fusion. Fast enough to live in an agent's inner loop — not a nightly CI job.
+    <div class="hero__left">
+      <div class="eyebrow-chip"><span>v2.4.0-stable released</span></div>
+      <h1>
+        When your agent copy-pastes,
+        <em>you see it first.</em>
+      </h1>
+      <p class="hero__lede">
+        High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
       </p>
-      <div class="install"><code>cargo install codededup</code></div>
-    </div>
-
-    <div class="verdict" role="group" aria-label="Representative report summary">
-      <div class="verdict-cell">
-        <span class="verdict-label">Clusters detected</span>
-        <span class="verdict-value">142</span>
-      </div>
-      <div class="verdict-cell">
-        <span class="verdict-label">Above threshold</span>
-        <span class="verdict-value">17</span>
-      </div>
-      <div class="verdict-cell">
-        <span class="verdict-label">Top offender</span>
-        <span class="verdict-value alarm">2,184</span>
-      </div>
-      <div class="verdict-cell">
-        <span class="verdict-label">Scan time</span>
-        <span class="verdict-value">27s</span>
+      <div class="hero__cta">
+        <a href="/docs/" class="btn-primary">Run Demo Scan</a>
+        <div class="install-chip">
+          <code>cargo install codededup</code>
+          <button aria-label="Copy install command">
+            <span class="material-symbols-outlined">content_copy</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <figure class="report-band" aria-label="Sample CodeDedup report">
-      <div class="report-chrome">
-        <span></span><span></span><span></span>
-        <span class="path">~/src/acme-platform $ codededup .</span>
-      </div>
-<pre class="report-body"><span class="c-dim">SCORE     FILE                                      SPAN          KIND</span>
-<span class="c-dim">────────────────────────────────────────────────────────────────────</span>
-<span class="c-alarm">▲ 2,184   UserRepository.cs                         120–180       Type-2</span>
-<span class="c-score">  1,903</span>   ProductRepository.cs                      58–118        Type-2
-<span class="c-score">  1,411</span>   OrderRepository.cs                        40–102        Type-3
-<span class="c-score">    942</span>   Validators/EmailValidatorImperative.cs    10–58         Type-4
-<span class="c-score">    710</span>   Validators/EmailValidatorRegex.cs         10–62         Type-4
-<span class="c-dim">                                                                   </span>
-<span class="c-head">17 clusters above threshold. Full report:</span> codededup-report.json
-<span class="c-ok">✓ done in 27.1s</span>  <span class="c-dim">(parsed 4,812 files, 1.8M LOC, 12 languages)</span></pre>
-    </figure>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <p class="eyebrow">Why now</p>
-      <h2>LLMs ship duplication faster than you can spot it.</h2>
-      <p>A coding agent's strongest instinct is pattern-matching — which means it will happily generate the same function three times, in three files, under three names. Human review does not scale past a few hundred thousand tokens of generated surface area. CodeDedup does.</p>
-    </div>
-
-    <div class="feature-grid">
-      <div class="feature">
-        <h3>Worst-first ranking</h3>
-        <p>Score = clone size × clone count × spanned LOC. The top row of the report is always where the largest payoff lives. No hunting.</p>
-      </div>
-      <div class="feature">
-        <h3>Tree-sitter parsing</h3>
-        <p>Regex on source code is illegal here. Every language is parsed with a real grammar, normalized, and fingerprinted at the AST level.</p>
-      </div>
-      <div class="feature">
-        <h3>Four clone types</h3>
-        <p>Type-1 identical, Type-2 renamed, Type-3 near-miss, Type-4 semantic. Hashing + LSH + embedding fusion catches all four.</p>
-      </div>
-      <div class="feature">
-        <h3>Agent-ready output</h3>
-        <p>JSON is the canonical format. Every cluster carries byte ranges, signals, scores, and a short natural-language summary an agent can act on.</p>
-      </div>
-      <div class="feature">
-        <h3>Incremental by design</h3>
-        <p>Cache keyed by <code>(file_hash, model_id, model_version)</code>. Unchanged files are skipped. Ready for the MCP/LSP daemon that lands in v2.</p>
-      </div>
-      <div class="feature">
-        <h3>Three output formats</h3>
-        <p>Structured JSON, line-oriented plain text, standalone HTML. One schema, three renderers. No ANSI, no paging, no surprises.</p>
+    <div class="hero__right">
+      <div class="report-card">
+        <div class="report-chrome">
+          <div class="report-chrome__dots"><span></span><span></span><span></span></div>
+          <span class="report-chrome__path">codededup scan ./src</span>
+        </div>
+        <pre class="report-body"><span class="muted">Initializing AST parsers... <span class="ok">[0.002s]</span></span><span class="muted">Scanning 4,208 files... <span class="ok">[0.145s]</span></span><div class="cluster">
+  <div class="cluster__head">
+    <span class="cluster__title">Cluster 01A_AUTH (Similarity: 98.4%)</span>
+    <span class="cluster__cost">Cost: HIGH</span>
+  </div>
+  <div class="cluster__files">
+    <span>src/middleware/auth.ts</span><span>L12–L84</span>
+    <span>src/utils/legacy_auth.ts</span><span>L104–L176</span>
+  </div>
+</div>
+<div class="cluster cluster--low">
+  <div class="cluster__head">
+    <span class="cluster__title">Cluster 04B_DB (Similarity: 82.1%)</span>
+    <span class="cluster__cost">Cost: LOW</span>
+  </div>
+  <div class="cluster__files">
+    <span>src/db/connection.rs</span><span>L40–L55</span>
+    <span>src/db/pool.rs</span><span>L12–L27</span>
+  </div>
+</div>
+<div class="report-footer">Found 12 clusters. Total structural duplication: <strong>4.2%</strong></div></pre>
       </div>
     </div>
   </section>
 
-  <section class="section-alt">
-    <div class="section-inner">
-      <div class="section-head">
-        <p class="eyebrow">The pipeline</p>
-        <h2>From source to ranked report in one deterministic pass.</h2>
-        <p>No magic, no model-of-the-week. Each stage is cache-keyed, byte-range-addressable, and replayable. Swap the embedding model without re-parsing.</p>
+  <section class="bento">
+    <div class="bento__grid">
+      <div class="bento__cell">
+        <span class="bento__label">Clusters Detected</span>
+        <div class="bento__row">
+          <span class="bento__value">1,042</span>
+          <span class="bento__icon material-symbols-outlined">hub</span>
+        </div>
       </div>
 
-      <div class="pipeline" aria-label="Pipeline stages">
-        <span>discover</span><span class="arrow">→</span>
-        <span>parse</span><span class="arrow">→</span>
-        <span>normalize</span><span class="arrow">→</span>
-        <span>fingerprint</span><span class="arrow">→</span>
-        <span>cluster</span><span class="arrow">→</span>
-        <span>LSH</span><span class="arrow">→</span>
-        <span>embed</span><span class="arrow">→</span>
-        <span>fuse</span><span class="arrow">→</span>
-        <span>rank</span><span class="arrow">→</span>
-        <span>render</span>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <div class="section-head">
-      <p class="eyebrow">Evidence, not vibes</p>
-      <h2>Every cluster comes with the signals that fired.</h2>
-      <p>A CodeDedup cluster is not a string match — it is a decision backed by three independent signals. You read the signal strip, you decide.</p>
-    </div>
-
-    <div class="two-up">
-<pre><span class="c-dim">// UserRepository.cs — 120–180</span>
-public async Task&lt;User&gt; GetById(int id)
-{
-    var entity = await _ctx.Users
-        .Where(u =&gt; u.Id == id)
-        .FirstOrDefaultAsync();
-    if (entity == null)
-        throw new NotFoundException();
-    return _mapper.Map&lt;User&gt;(entity);
-}</pre>
-<pre><span class="c-dim">// ProductRepository.cs — 58–118</span>
-public async Task&lt;Product&gt; GetById(int id)
-{
-    var entity = await _ctx.Products
-        .Where(p =&gt; p.Id == id)
-        .FirstOrDefaultAsync();
-    if (entity == null)
-        throw new NotFoundException();
-    return _mapper.Map&lt;Product&gt;(entity);
-}</pre>
-    </div>
-
-    <div class="signals" aria-label="Cluster signals">
-      <span class="chip">STRUCTURAL <strong>1.00</strong></span>
-      <span class="chip">TOKEN <strong>0.97</strong></span>
-      <span class="chip">EMBEDDING <strong>0.91</strong></span>
-      <span class="chip">KIND <strong>TYPE-2</strong></span>
-    </div>
-  </section>
-
-  <section class="section-alt">
-    <div class="section-inner">
-      <div class="section-head">
-        <p class="eyebrow">Built for agents</p>
-        <h2>Fast feedback. Structured output. No heuristics required.</h2>
-        <p>Coding agents don't need prose — they need byte ranges, stable schemas, and verdicts they can act on. CodeDedup's JSON output is the product; the text and HTML renderers are views over the same data.</p>
+      <div class="bento__cell">
+        <span class="bento__label">Above Threshold</span>
+        <div class="bento__row">
+          <span class="bento__value bento__value--alarm">314</span>
+          <span class="bento__icon bento__icon--alarm material-symbols-outlined">warning</span>
+        </div>
       </div>
 
-<pre><span class="c-dim">{
-  "report_schema_version": "1.0",
-  "clusters": [
-    {
-      "id": "cl_01HZ...",
-      "score": 2184,
-      "kind": "Type-2",
-      "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91 },
-      "summary": "3 near-identical copies of a 42-node method across UserRepository.cs, ProductRepository.cs, OrderRepository.cs — safe to extract.",
-      "members": [
-        { "path": "UserRepository.cs",    "byte_range": [3104, 4820] },
-        { "path": "ProductRepository.cs", "byte_range": [1501, 3188] },
-        { "path": "OrderRepository.cs",   "byte_range": [1044, 2702] }
-      ]
-    }
-  ]
-}</span></pre>
-    </div>
-  </section>
+      <div class="bento__cell bento__cell--recess bento__cell--wide-2">
+        <div class="bento__top">
+          <span class="bento__label">Top Offender</span>
+          <span class="bento__critical">CRITICAL</span>
+        </div>
+        <div>
+          <div class="bento__offender">src/legacy/parser_v1.rs</div>
+          <p class="bento__blurb">Duplicated across 14 modules. Estimated refactor savings: 4.2GB LOC.</p>
+        </div>
+      </div>
 
-  <section>
-    <div class="section-head">
-      <h2>Install. Run. Read line one.</h2>
-      <p>There is no "getting started" funnel. The install is the tutorial.</p>
+      <div class="bento__cell bento__cell--panorama bento__cell--wide-4">
+        <div class="bento__panorama-inner">
+          <div>
+            <span class="bento__label">Avg Scan Time (Linux Kernel)</span>
+            <span class="bento__value bento__value--hero">0.084<span class="unit">s</span></span>
+          </div>
+          <p class="bento__panorama-note">Multi-threaded parsing utilizes all available cores. Zero memory overhead for files under 50MB.</p>
+        </div>
+      </div>
     </div>
-    <div class="install"><code>cargo install codededup &amp;&amp; codededup .</code></div>
   </section>
 </div>

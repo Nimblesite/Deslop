@@ -11,6 +11,7 @@ use std::{fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
 use assert_cmd::Command;
+use predicates::str::contains;
 use serde_json::Value;
 
 /// Returns the absolute path of a fixture under `tests/fixtures/<name>`.
@@ -41,6 +42,19 @@ fn load_json(path: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
 }
 
+/// Reads a named field. Returns [`Value::Null`] when absent so callers
+/// get a deterministic `!=` instead of a panic.
+fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
+    value.get(name).unwrap_or(&Value::Null)
+}
+
+/// Returns the length of a named array-valued field. Returns `0` for
+/// missing or non-array fields (which will then trip the assertion with
+/// the full JSON printed so the failure is actionable).
+fn array_len(value: &Value, name: &str) -> usize {
+    field(value, name).as_array().map_or(0, Vec::len)
+}
+
 // Implements [LIVE-STATE] touching a path whose content is unchanged
 // yields an empty delta. Exercises the no-op update path through
 // `PipelineSession::update_files` and the all-equal branches of
@@ -65,15 +79,15 @@ fn rerun_touch_with_unchanged_sources_emits_empty_delta() -> Result<()> {
     let delta_json = delta_path(tmp.path());
     assert!(delta_json.is_file(), "delta file must be emitted");
     let delta = load_json(&delta_json)?;
-    assert_eq!(delta["from_generation"], 0);
-    assert_eq!(delta["to_generation"], 1);
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     assert_eq!(
-        delta["clusters_added"].as_array().map(Vec::len),
-        Some(0),
+        array_len(&delta, "clusters_added"),
+        0,
         "unchanged sources must add no clusters: {delta:#}"
     );
-    assert_eq!(delta["clusters_removed"].as_array().map(Vec::len), Some(0));
-    assert_eq!(delta["clusters_updated"].as_array().map(Vec::len), Some(0));
+    assert_eq!(array_len(&delta, "clusters_removed"), 0);
+    assert_eq!(array_len(&delta, "clusters_updated"), 0);
     Ok(())
 }
 
@@ -107,11 +121,11 @@ fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
         .assert()
         .success();
     let delta = load_json(&tmp.path().join("report.delta.json"))?;
-    assert_eq!(delta["from_generation"], 0);
-    assert_eq!(delta["to_generation"], 1);
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     assert_eq!(
-        delta["clusters_added"].as_array().map(Vec::len),
-        Some(0),
+        array_len(&delta, "clusters_added"),
+        0,
         "same on-disk state before and after rerun must emit no added clusters"
     );
     Ok(())
@@ -146,11 +160,102 @@ fn rerun_touch_ignores_unsupported_and_out_of_root_paths() -> Result<()> {
         .success();
     let delta = load_json(&tmp.path().join("report.delta.json"))?;
     assert_eq!(
-        delta["clusters_added"].as_array().map(Vec::len),
-        Some(0),
+        array_len(&delta, "clusters_added"),
+        0,
         "irrelevant / missing paths must not add clusters: {delta:#}"
     );
-    assert_eq!(delta["clusters_removed"].as_array().map(Vec::len), Some(0));
+    assert_eq!(array_len(&delta, "clusters_removed"), 0);
+    Ok(())
+}
+
+// Implements [LIVE-STATE] + [LIVE-DELTA]: `--rerun-add` copies a source
+// file into the scan root between `initialise` and `update_files`, so
+// the initial corpus does not see the new file but the rerun parses it
+// and joins it into a clone cluster. Drives the add-new-file branch of
+// `apply_one_change` plus the `clusters_added` branch of `between`.
+#[test]
+fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    fs::create_dir_all(&scan_root)?;
+    // Seed with only Alpha.cs so the initial corpus has no clones.
+    let alpha = fixture("csharp-small").join("Alpha.cs");
+    let _bytes = fs::copy(&alpha, scan_root.join("Alpha.cs"))?;
+    // Stage Beta.cs outside the scan root so `initialise` cannot see it.
+    let staged = tmp.path().join("staged-Beta.cs");
+    let _bytes = fs::copy(fixture("csharp-small").join("Beta.cs"), &staged)?;
+    let dst = scan_root.join("Beta.cs");
+    let spec = format!("{}={}", staged.display(), dst.display());
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--rerun-add")
+        .arg(&spec)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    assert!(
+        array_len(&delta, "clusters_added") > 0,
+        "staging a new file must surface a clusters_added entry: {delta:#}"
+    );
+    assert!(dst.is_file(), "--rerun-add must copy the file into place");
+    Ok(())
+}
+
+// Implements [LIVE-STATE]: a malformed `--rerun-add` spec is rejected
+// with a user-facing error before any analysis runs.
+#[test]
+fn rerun_add_rejects_spec_without_equals() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--rerun-add")
+        .arg("missing-equals-sign")
+        .assert()
+        .failure()
+        .stderr(contains("--rerun-add"));
+    Ok(())
+}
+
+// Implements [LIVE-STATE] + [LIVE-DELTA]: `--rerun-remove` physically
+// deletes a file between `initialise` and `update_files`, so the delta
+// surfaces the clone cluster that disappeared. Drives `drop_path` plus
+// the `clusters_removed` branch of `ReportDelta::between`.
+#[test]
+fn rerun_remove_drops_clone_and_reports_cluster_removed() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
+    let doomed = scan_root.join("Beta.cs");
+    let mut cmd = Command::cargo_bin("codededup")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--rerun-remove")
+        .arg(&doomed)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    assert!(
+        array_len(&delta, "clusters_removed") > 0,
+        "removing the only peer must surface a clusters_removed entry: {delta:#}"
+    );
+    assert!(
+        !doomed.exists(),
+        "--rerun-remove must physically delete the path"
+    );
     Ok(())
 }
 
@@ -194,7 +299,7 @@ fn rerun_touch_on_excluded_path_drops_it_from_corpus() -> Result<()> {
     // The second initial pass already filters Beta.cs via exclusion, so
     // the rerun's drop-path branch is the relevant cover — the delta
     // simply reports no changes between gen 0 and gen 1.
-    assert_eq!(delta["from_generation"], 0);
-    assert_eq!(delta["to_generation"], 1);
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
     Ok(())
 }

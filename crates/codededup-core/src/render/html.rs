@@ -80,14 +80,11 @@ impl<'a> SnippetLoader<'a> {
     /// `None` when the source cannot be read as UTF-8 (binary blobs are
     /// not displayed inline).
     fn source(&mut self, relative: &Path) -> Option<&str> {
-        let cached = self
-            .cache
-            .entry(relative.to_path_buf())
-            .or_insert_with(|| {
-                let root = self.scan_root?;
-                let absolute = root.join(relative);
-                fs::read_to_string(&absolute).ok()
-            });
+        let cached = self.cache.entry(relative.to_path_buf()).or_insert_with(|| {
+            let root = self.scan_root?;
+            let absolute = root.join(relative);
+            fs::read_to_string(&absolute).ok()
+        });
         cached.as_deref()
     }
 }
@@ -98,7 +95,11 @@ impl<'a> SnippetLoader<'a> {
 fn line_for_offset(source: &str, offset: usize) -> usize {
     let safe = offset.min(source.len());
     let prefix = source.get(..safe).unwrap_or("");
-    prefix.bytes().filter(|b| *b == b'\n').count().saturating_add(1)
+    prefix
+        .bytes()
+        .filter(|b| *b == b'\n')
+        .count()
+        .saturating_add(1)
 }
 
 /// Writes `<head>` metadata and the inline stylesheet.
@@ -282,7 +283,11 @@ fn render_snippet_body(source: &str, start_line: usize, language: &str) -> Strin
     let lines: Vec<&str> = split_html_lines(&highlighted);
     let line_count = lines.len();
     let gutter_width = digits(start_line.saturating_add(line_count.saturating_sub(1)));
-    let mut out = String::with_capacity(highlighted.len().saturating_add(line_count.saturating_mul(20)));
+    let mut out = String::with_capacity(
+        highlighted
+            .len()
+            .saturating_add(line_count.saturating_mul(20)),
+    );
     out.push_str("<pre class=\"snippet\">");
     for (index, line) in lines.iter().enumerate() {
         let line_no = start_line.saturating_add(index);

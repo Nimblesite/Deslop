@@ -19,7 +19,6 @@ End-to-end flow — who owns each box, who talks to whom, and where the live ana
 
 ```mermaid
 flowchart LR
-    Agent(["AI coding agent<br/>Claude Code · Cursor · Continue"])
     CI(["CI / terminal"])
 
     subgraph VSCode["VS Code process"]
@@ -30,6 +29,13 @@ flowchart LR
             LspClient["LSP client"]
             McpHost["Bundled MCP host entry"]
         end
+    end
+
+    subgraph AgentHost["AI agent host process<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
+        direction TB
+        AgentLoop["Agent planner / tool-use loop"]
+        McpClient["MCP client"]
+        AgentLoop --> McpClient
     end
 
     subgraph Binaries["Binaries (processes)"]
@@ -53,7 +59,7 @@ flowchart LR
     LspClient == "spawns + LSP stdio" ==> LspBin
     McpHost == "spawns + MCP stdio" ==> McpBin
 
-    Agent == "spawns + MCP stdio" ==> McpBin
+    McpClient == "spawns + MCP stdio" ==> McpBin
     CI == "spawns one-shot" ==> CliBin
 
     LspBin --> Live
