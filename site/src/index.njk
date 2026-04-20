@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: Deslop — Find, rank, and fix duplicated code for the AI era
-description: High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Catch semantic duplication before it pollutes production — and pair it with AI-assisted and mechanical fix tooling built on the same engine.
+title: Deslop — Live duplicate-code server for AI coding agents
+description: A running LSP + MCP server that streams real-time duplicate-code signals to Claude, Cursor, Copilot, and your editor as code is written. Tree-sitter parsing, AST fingerprints, semantic fusion — worst offenders surface inline, not in a batch report after the copy-paste already landed.
 ---
 
 <div class="home">
@@ -9,11 +9,11 @@ description: High-performance AST fingerprinting via tree-sitter. Built in Rust 
     <div class="hero__left">
       <div class="eyebrow-chip"><span>v2.4.0-stable released</span></div>
       <h1>
-        When your agent copy-pastes,
-        <em>you see it first.</em>
+        Your agent is about to copy-paste.
+        <em>Deslop tells it not to.</em>
       </h1>
       <p class="hero__lede">
-        High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Catch semantic duplication before it pollutes your production codebase — and pair it with AI-assisted and mechanical fix tooling built on the same engine.
+        Deslop is a <strong>live analysis server</strong> — LSP + MCP, running in your workspace — that feeds real-time duplicate-code signals to Claude, Cursor, Copilot, and your editor <em>as code is written</em>. Tree-sitter parsing, AST fingerprints, semantic fusion, millisecond response. Batch CLI reports are one output; the live stream is the product.
       </p>
       <div class="hero__cta">
         <a href="/docs/" class="btn-primary">Run Demo Scan</a>

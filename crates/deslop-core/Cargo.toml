@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Core analysis library for Deslop: AST fingerprinting, clustering, ranking — the engine behind detection and fix tooling."
+description = "Deslop analysis engine — AST fingerprinting, clustering, ranking, live incremental re-analysis. The shared core behind the LSP, MCP, and CLI surfaces."
 
 [features]
 default = []

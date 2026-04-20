@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Language Server Protocol binary for Deslop."
+description = "Deslop LSP server — live duplicate-code analysis streamed to any LSP-capable editor as code is written."
 
 [[bin]]
 name = "deslop-lsp"

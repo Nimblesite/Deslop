@@ -416,7 +416,7 @@ export default function (eleventyConfig) {
       name: "Deslop",
       url: "https://deslop.live",
       description:
-        "Find, rank, and fix duplicated code — built for the AI era. Tree-sitter parsing, AST fingerprinting, and semantic fusion — worst-offender first, fix tooling on the same engine so agents and humans can act, not just read.",
+        "The live duplicate-code server for AI coding agents. Deslop runs as an LSP + MCP server that streams real-time clone signals to Claude, Cursor, Copilot, and your editor as code is written — worst offenders surface inline, before duplication lands in the repo. Batch CLI reports are one output mode, not the product.",
     },
     features: {
       blog: true,

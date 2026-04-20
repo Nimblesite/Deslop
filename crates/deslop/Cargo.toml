@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CLI for Deslop: find, rank, and fix duplicated code — worst offenders first."
+description = "Deslop CLI — cold-cache entry point for the live duplicate-code analysis server. One-shot scans, CI gates, and report rendering (JSON / TXT / HTML)."
 
 [[bin]]
 name = "deslop"

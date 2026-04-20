@@ -195,7 +195,19 @@ async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() 
 async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
     let clock = Arc::new(MockClock::new(0));
     let mut debouncer = Debouncer::new(clock.clone());
+    assert!(
+        !debouncer.has_pending(),
+        "fresh debouncer has no pending paths"
+    );
+    assert!(
+        !debouncer.ready_to_flush(),
+        "fresh debouncer with no events cannot flush"
+    );
     debouncer.push(PathBuf::from("a.cs"));
+    assert!(
+        debouncer.has_pending(),
+        "push marks the debouncer as pending"
+    );
     debouncer.push(PathBuf::from("b.cs"));
     debouncer.push(PathBuf::from("a.cs"));
     assert!(!debouncer.ready_to_flush(), "no time elapsed yet");
@@ -205,6 +217,14 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
     assert!(debouncer.ready_to_flush(), "cap should fire");
     let flushed = debouncer.flush();
     assert_eq!(flushed.len(), 2, "duplicates must collapse");
+    assert!(
+        !debouncer.has_pending(),
+        "flush clears the pending set"
+    );
+    assert!(
+        !debouncer.ready_to_flush(),
+        "flush resets the timing windows"
+    );
     Ok(())
 }
 
@@ -221,6 +241,35 @@ async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
     exercise_error_paths(&service, &first_id).await;
     exercise_embedding_swap(&service).await?;
     exercise_path_resolution(&service).await?;
+    exercise_transport_hooks(&service).await?;
+    Ok(())
+}
+
+/// Covers the transport-facing helpers on [`LiveService`] — the shared
+/// session lock, weight aggregation used by LSP severity bucketing,
+/// and the snapshot cache that feeds delta replies.
+async fn exercise_transport_hooks(service: &LiveService) -> Result<()> {
+    let session_handle = service.session();
+    let generation = {
+        let guard = session_handle.lock().await;
+        guard.generation()
+    };
+    let weights = service.all_cluster_weights().await;
+    assert!(
+        !weights.is_empty(),
+        "fixture must produce at least one cluster weight"
+    );
+    assert!(
+        weights.iter().all(|weight| *weight >= 0.0),
+        "cluster weights are non-negative: {weights:?}"
+    );
+    let snapshot = service.report_get().await;
+    service.remember_snapshot(generation, Arc::clone(&snapshot)).await;
+    let replay = service.report_delta(generation.saturating_sub(1)).await;
+    assert!(
+        replay.is_some(),
+        "delta replay must return Some after remember_snapshot populates history"
+    );
     Ok(())
 }
 

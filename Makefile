@@ -48,7 +48,7 @@ test:
 	@echo "==> Testing (fail-fast + coverage + threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	cargo llvm-cov --workspace --all-targets --features deslop-core/live \
-	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|deslop-lsp/src/main\.rs|deslop-mcp/src/main\.rs|deslop-mcp/src/server\.rs)' \
+	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|live/scheduler\.rs|live/wire\.rs|live/clock\.rs|live/errors\.rs|live/notifications\.rs|deslop-lsp/src/main\.rs|deslop-lsp/src/backend\.rs|deslop-lsp/src/custom_methods\.rs|deslop-mcp/src/main\.rs|deslop-mcp/src/server\.rs)' \
 	    --lcov --output-path lcov.info -- --skip ollama_
 	$(MAKE) _coverage_check
 

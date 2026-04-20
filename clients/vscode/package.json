@@ -1,7 +1,7 @@
 {
   "name": "deslop-vscode",
   "displayName": "Deslop",
-  "description": "Finds, ranks, and helps you fix duplicated code as you type — detection shipping today, AI-assisted and mechanical refactors next.",
+  "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
   "version": "0.1.0",
   "publisher": "nimblesite",
   "license": "MIT",

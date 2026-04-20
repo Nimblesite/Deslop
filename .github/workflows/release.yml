@@ -96,8 +96,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-release-
 
-      - name: Build release binary
-        run: cargo build --release --locked --target ${{ matrix.target }} --bin deslop
+      - name: Build release binaries
+        run: cargo build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
@@ -125,7 +125,27 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 "dist/$stage.zip").Hash.ToLower()
           "$hash  $stage.zip" | Out-File -FilePath "dist/$stage.zip.sha256" -Encoding ascii
 
-      - name: Upload artifact
+      - name: Stage VSIX binaries (unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "vsix-bin/${{ matrix.artifact_name }}"
+          for b in deslop deslop-lsp deslop-mcp; do
+            cp "target/${{ matrix.target }}/release/${b}" "vsix-bin/${{ matrix.artifact_name }}/"
+          done
+
+      - name: Stage VSIX binaries (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path "vsix-bin/${{ matrix.artifact_name }}" | Out-Null
+          foreach ($b in @("deslop.exe", "deslop-lsp.exe", "deslop-mcp.exe")) {
+            Copy-Item "target/${{ matrix.target }}/release/$b" "vsix-bin/${{ matrix.artifact_name }}/"
+          }
+
+      - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
@@ -136,9 +156,89 @@ jobs:
             dist/deslop-*.zip.sha256
           if-no-files-found: error
 
+      - name: Upload VSIX binaries artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-bin-${{ matrix.artifact_name }}
+          path: vsix-bin/${{ matrix.artifact_name }}
+          if-no-files-found: error
+
+  package-vsix:
+    name: Package VSIX
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download per-platform VSIX binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vsix-bin-*
+          path: clients/vscode/bin
+          merge-multiple: false
+
+      - name: Flatten vsix-bin-<platform> → bin/<platform>/
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd clients/vscode/bin
+          for dir in vsix-bin-*; do
+            platform="${dir#vsix-bin-}"
+            # Match VS Code extension platform naming (matches Makefile _vsix-stage-and-package).
+            case "$platform" in
+              linux-x64)   target=linux-x64 ;;
+              macos-x64)   target=darwin-x64 ;;
+              macos-arm64) target=darwin-arm64 ;;
+              windows-x64) target=win32-x64 ;;
+              *) echo "unknown platform $platform"; exit 1 ;;
+            esac
+            mkdir -p "$target"
+            mv "$dir"/* "$target"/
+            rmdir "$dir"
+          done
+          chmod +x */deslop */deslop-lsp */deslop-mcp 2>/dev/null || true
+          ls -la
+
+      - name: Install extension deps
+        working-directory: clients/vscode
+        run: npm install
+
+      - name: Install webview-ui deps
+        working-directory: clients/vscode/webview-ui
+        run: npm install
+
+      - name: Build webview-ui
+        working-directory: clients/vscode/webview-ui
+        run: npm run build
+
+      - name: Build extension
+        working-directory: clients/vscode
+        run: npm run build
+
+      - name: Typecheck extension
+        working-directory: clients/vscode
+        run: npx tsc --noEmit
+
+      - name: Package VSIX
+        working-directory: clients/vscode
+        run: npx vsce package --no-dependencies -o deslop-vscode-${{ needs.version.outputs.version }}.vsix
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: clients/vscode/deslop-vscode-*.vsix
+          if-no-files-found: error
+
   release:
     name: Create GitHub release
-    needs: [version, build]
+    needs: [version, build, package-vsix]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -154,10 +254,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-files
-          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' \) -exec cp {} release-files/ \;
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' -o -name '*.vsix' \) -exec cp {} release-files/ \;
           cd release-files
           : > SHA256SUMS
-          for f in *.tar.gz *.zip; do
+          for f in *.tar.gz *.zip *.vsix; do
             [ -e "$f" ] || continue
             sha256sum "$f" >> SHA256SUMS
           done

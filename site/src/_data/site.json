@@ -1,6 +1,6 @@
 {
   "title": "Deslop",
-  "description": "Find, rank, and fix duplicated code — built for the AI era. Tree-sitter parsing, AST fingerprints, semantic fusion — worst-offender first, fix tooling on the same engine.",
+  "description": "The live duplicate-code server for AI coding agents. Deslop runs as an LSP + MCP server that feeds real-time clone signals to Claude, Cursor, Copilot, and your editor as code is written — not a batch report after the damage is done.",
   "url": "https://deslop.live",
   "stylesheet": "/assets/css/styles.css",
   "author": "Christian Findlay"

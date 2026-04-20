@@ -1,11 +1,15 @@
 # Deslop
 
-**Deslop** (a.k.a. Deslop Live) finds, ranks, and helps you fix duplicated code *as you type*. It surfaces the worst offenders first — biggest clones, most copies, most lines spanned — so you stop chasing trivia and start removing real duplication. Today that's inline warnings and worst-first reports; next comes AI-assisted and mechanical deduplication so the fix is a keystroke away.
+**Deslop** is a **live duplicate-code analysis server** — an LSP + MCP server that runs in your workspace and streams real-time clone signals to your AI coding agent (Claude Code, Cursor, Copilot, Continue, Codex…) and your editor *as code is being written*. The worst offenders — biggest clones, most copies, most lines spanned — surface inline before a duplicate lands in the repo, not in a CI report afterwards.
+
+This is not a batch scanner that prints a report and exits. It is a long-running server feeding live analysis over LSP (for editors) and MCP (for agents) over the same tree-sitter engine.
 
 Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no regex, no line diffing, no false positives from reformatting.
 
-- **CLI** — one binary, runs on your repo, emits `.json` / `.txt` / `.html` reports and drives downstream fix tooling.
-- **VS Code extension** — inline warnings the moment you paste a duplicate, with refactor actions on the roadmap.
+- **MCP server (`deslop-mcp`)** — tools an AI agent can call mid-generation: *"before I write this block, is something like it already in the repo?"* Feeds Claude / Cursor / Codex / Continue a live duplicate-awareness channel that predates the copy-paste.
+- **LSP server (`deslop-lsp`)** — live inline warnings and bubbles in VS Code (and any LSP-capable editor) the moment a duplicate is typed.
+- **VS Code extension** — the reference LSP client; inline warnings, cluster explorer, worst-offender view.
+- **CLI (`deslop`)** — the cold-cache fallback. One binary, runs on your repo, emits `.json` / `.txt` / `.html` reports. Same engine as the server; use it for CI gates, bulk audits, or one-shot investigations.
 
 ---
 
@@ -63,20 +67,10 @@ Full flag reference: `deslop --help`.
 
 ## Install the VS Code extension
 
-### From the Marketplace
-
-Search for **Deslop** in the Extensions panel, or:
+Download `deslop-vscode-X.Y.Z.vsix` from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and install it:
 
 ```bash
-code --install-extension deslop
-```
-
-### From a `.vsix`
-
-Download `deslop.vsix` from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and install it:
-
-```bash
-code --install-extension deslop.vsix
+code --install-extension deslop-vscode-X.Y.Z.vsix
 ```
 
 Or: **Extensions panel → `…` menu → Install from VSIX…**

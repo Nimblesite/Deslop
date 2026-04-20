@@ -19,9 +19,8 @@ Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic insp
 
 ## Install
 
-- Marketplace: search `Deslop` in VS Code's Extensions view.
-- OpenVSX: also published under the same id.
-- CLI too: `brew install deslop/tap/deslop` or `scoop install deslop`. The extension will pick up the PATH install automatically when its version matches.
+- Download `deslop-vscode-X.Y.Z.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then `code --install-extension deslop-vscode-X.Y.Z.vsix`.
+- CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`. The extension will pick up the PATH install automatically when its version matches.
 
 ## Settings
 

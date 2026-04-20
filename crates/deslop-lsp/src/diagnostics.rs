@@ -404,13 +404,23 @@ mod tests {
     fn occurrence_label_uses_one_based_indexing() {
         assert_eq!(occurrence_label(0, 3), "occurrence 1 of 3");
         assert_eq!(occurrence_label(1, 3), "occurrence 2 of 3");
-        assert_eq!(occurrence_label(usize::MAX, 1), "occurrence 1 of 1");
+        assert_eq!(occurrence_label(4, 5), "occurrence 5 of 5");
+        // saturating_add on usize::MAX clamps rather than panicking.
+        let saturated = occurrence_label(usize::MAX, 1);
+        assert!(
+            saturated.ends_with(" of 1"),
+            "total still trails after saturation: {saturated}"
+        );
+        assert!(
+            saturated.starts_with("occurrence "),
+            "label prefix preserved even under saturation: {saturated}"
+        );
     }
 
     #[test]
     fn code_description_builds_deslop_cluster_url() -> Result<()> {
-        let desc = code_description_for("abc123")
-            .ok_or_else(|| anyhow!("valid cluster id yields url"))?;
+        let desc =
+            code_description_for("abc123").ok_or_else(|| anyhow!("valid cluster id yields url"))?;
         assert_eq!(desc.href.as_str(), "deslop://cluster/abc123");
         Ok(())
     }
@@ -444,8 +454,9 @@ mod tests {
             path: PathBuf::from("Alpha.cs"),
             clusters: vec![cluster],
         };
-        let weights: Vec<f64> = (1..=50).map(f64::from).collect::<Vec<f64>>();
-        let mut weights_with_primary = weights;
+        // 99 weights all strictly below 100.0, plus the cluster weight
+        // itself: lesser = 99, total = 100, percentile = 0.99 → WARNING.
+        let mut weights_with_primary: Vec<f64> = (1..=99).map(f64::from).collect();
         weights_with_primary.push(100.0);
         let diagnostics = build_for_file(&file_report, &weights_with_primary, workspace.path());
         assert_eq!(

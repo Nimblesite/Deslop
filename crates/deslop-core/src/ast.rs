@@ -68,3 +68,23 @@ impl NormalizedNode {
             .fold(1_usize, usize::saturating_add)
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::missing_docs_in_private_items)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn byte_range_len_and_is_empty_agree_across_the_boundary() {
+        let spanning = ByteRange { start: 2, end: 7 };
+        assert_eq!(spanning.len(), 5);
+        assert!(!spanning.is_empty());
+        let zero_width = ByteRange { start: 4, end: 4 };
+        assert_eq!(zero_width.len(), 0);
+        assert!(zero_width.is_empty());
+        // Saturating semantics: inverted ranges clamp to empty.
+        let inverted = ByteRange { start: 9, end: 3 };
+        assert_eq!(inverted.len(), 0);
+        assert!(inverted.is_empty());
+    }
+}

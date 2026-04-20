@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Model Context Protocol (MCP) server over stdio exposing Deslop live analysis and fix tooling to AI agents."
+description = "Deslop MCP server — live duplicate-code tools over stdio for Claude, Cursor, Codex, Continue, and any MCP-capable AI coding agent. Query the running analysis mid-generation, before a copy-paste happens."
 
 [[bin]]
 name = "deslop-mcp"

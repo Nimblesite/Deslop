@@ -154,12 +154,8 @@ mod tests {
                 .as_ref()
                 .ok_or_else(|| anyhow!("command arguments populated"))?;
             assert_eq!(arguments.len(), 2, "cluster id + occurrence index");
-            let first_arg = arguments
-                .first()
-                .ok_or_else(|| anyhow!("first argument"))?;
-            let second_arg = arguments
-                .get(1)
-                .ok_or_else(|| anyhow!("second argument"))?;
+            let first_arg = arguments.first().ok_or_else(|| anyhow!("first argument"))?;
+            let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
             assert_eq!(*first_arg, serde_json::json!("cluster-alpha"));
             let expected_occurrence_index = usize::from(expected_index != 0);
             assert_eq!(
@@ -233,12 +229,8 @@ mod tests {
         let arguments = command
             .arguments
             .ok_or_else(|| anyhow!("arguments populated"))?;
-        let first_arg = arguments
-            .first()
-            .ok_or_else(|| anyhow!("first argument"))?;
-        let second_arg = arguments
-            .get(1)
-            .ok_or_else(|| anyhow!("second argument"))?;
+        let first_arg = arguments.first().ok_or_else(|| anyhow!("first argument"))?;
+        let second_arg = arguments.get(1).ok_or_else(|| anyhow!("second argument"))?;
         assert_eq!(*first_arg, serde_json::json!("xyz-789"));
         assert_eq!(*second_arg, serde_json::json!(4_usize));
         assert!(command.title.contains("●● 5 copies"), "{}", command.title);
