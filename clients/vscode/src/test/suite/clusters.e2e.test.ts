@@ -8,7 +8,8 @@ import { sleep } from "./helpers";
 
 async function waitForReport(): Promise<unknown> {
   const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
-  await ext!.activate();
+  assert.ok(ext, "extension must be installed");
+  await ext.activate();
   // Initial report seeding takes time over stdio.
   for (let i = 0; i < 20; i++) {
     await sleep(250);

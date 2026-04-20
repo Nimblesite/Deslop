@@ -73,7 +73,7 @@ suite("binary resolver", () => {
     delete env["DESLOP_BINARY_DIR"];
     const resolved = resolveBinary(extDir, "lsp", "9.9.9", env);
     assert.equal(resolved.source, "bundled");
-    assert.ok(env["PATH"]?.split(":").includes(bundledDir) || env["PATH"]?.split(";").includes(bundledDir));
+    assert.ok(env["PATH"]?.split(":").includes(bundledDir) ?? env["PATH"]?.split(";").includes(bundledDir));
   });
 
   test("bundled used when neither env nor PATH has the binary", () => {

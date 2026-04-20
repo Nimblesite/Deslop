@@ -52,7 +52,7 @@ suite("register helpers", () => {
     ];
     const hit = findClusterContaining(clusters, "/tmp/hello.txt", doc, new vscode.Position(0, 2));
     assert.ok(hit);
-    assert.equal(hit.occurrences[0]!.start_byte, 0);
+    assert.equal(hit.occurrences[0]?.start_byte, 0);
   });
 
   test("findClusterContaining returns undefined when no cluster overlaps", async () => {

@@ -23,8 +23,8 @@ function cluster(id: string, paths: string[]): ReportCluster {
     size: 2,
     canonical_node_count: 4,
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
-    occurrences: paths.map((path) => ({
-      path,
+    occurrences: paths.map((p) => ({
+      path: p,
       start_byte: 0,
       end_byte: 50,
       hidden: false,

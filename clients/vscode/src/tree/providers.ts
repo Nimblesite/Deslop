@@ -107,7 +107,7 @@ function renderLifecycle(
       `${lifecycle.message}\n\nClick to open the Deslop log.`,
     );
   }
-  const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length];
+  const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "";
   const label = lifecycle.kind === "starting" ? "Starting" : idleLabel;
   return new StatusNode(`${spinner} ${label}…`, "busy");
 }
@@ -121,12 +121,10 @@ export class StatusTicker implements vscode.Disposable {
 
   acquire(): vscode.Disposable {
     this.subscribers += 1;
-    if (!this.handle) {
-      this.handle = setInterval(() => {
-        this.frame = (this.frame + 1) % SPINNER_FRAMES.length;
-        this.emitter.fire(this.frame);
-      }, SPINNER_INTERVAL_MS);
-    }
+    this.handle ??= setInterval(() => {
+      this.frame = (this.frame + 1) % SPINNER_FRAMES.length;
+      this.emitter.fire(this.frame);
+    }, SPINNER_INTERVAL_MS);
     let released = false;
     return {
       dispose: () => {

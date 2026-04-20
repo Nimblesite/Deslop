@@ -94,7 +94,8 @@ suite("TopOffendersProvider", () => {
     store.setSnapshot(report([cluster("a", 10, "/f1")]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const [root] = provider.getChildren();
-    assert.strictEqual(provider.getTreeItem(root!), root);
+    assert.ok(root, "root node must exist");
+    assert.strictEqual(provider.getTreeItem(root), root);
   });
 });
 
@@ -175,7 +176,7 @@ suite("SessionProvider", () => {
     store.setSnapshot(report([]), 0);
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
-    const state = nodes.find((n) => String(n.label) === "State");
+    const state = nodes.find((n) => typeof n.label === "string" && n.label === "State");
     assert.ok(state);
   });
 });

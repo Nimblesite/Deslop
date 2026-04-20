@@ -49,10 +49,10 @@ async function preflightOllama(): Promise<void> {
   await new Promise<void>((resolvePreflight, reject) => {
     const req = http.get(`${OLLAMA_ENDPOINT}/api/tags`, { timeout: 2000 }, (res) => {
       const chunks: Buffer[] = [];
-      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
       res.on("end", () => {
         if (res.statusCode !== 200) {
-          reject(new Error(`Ollama /api/tags returned ${res.statusCode}`));
+          reject(new Error(`Ollama /api/tags returned ${res.statusCode ?? "unknown"}`));
           return;
         }
         try {

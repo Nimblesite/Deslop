@@ -182,24 +182,27 @@ function currentInitializationOptions(): Record<string, unknown> {
   };
 }
 
+async function refreshAfterChange(
+  c: LanguageClient,
+  store: ReportStore,
+  payload: ReportChangedNotification,
+): Promise<void> {
+  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
+  if (delta) {
+    store.applyDelta(delta);
+    return;
+  }
+  const snapshot = await c.sendRequest<Report>("deslop/reportGet");
+  store.setSnapshot(snapshot, payload.generation);
+}
+
 export function wireNotifications(c: LanguageClient, store: ReportStore): void {
-  c.onNotification(
-    "deslop/reportChanged",
-    async (payload: ReportChangedNotification) => {
-      store.notifyChange(payload.summary);
-      try {
-        const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
-        if (delta) {
-          store.applyDelta(delta);
-          return;
-        }
-        const snapshot = await c.sendRequest<Report>("deslop/reportGet");
-        store.setSnapshot(snapshot, payload.generation);
-      } catch (err) {
-        logError(err, "refresh report after change");
-      }
-    },
-  );
+  c.onNotification("deslop/reportChanged", (payload: ReportChangedNotification) => {
+    store.notifyChange(payload.summary);
+    refreshAfterChange(c, store, payload).catch((err: unknown) =>
+      logError(err, "refresh report after change"),
+    );
+  });
   c.onNotification("deslop/analysisState", (state: AnalysisState) => {
     log("analysis state", { state });
     if (state === "running") store.setLifecycle({ kind: "analysing" });

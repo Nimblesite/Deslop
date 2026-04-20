@@ -122,14 +122,14 @@ export async function openSchemaDoc(ctx: vscode.ExtensionContext, store: ReportS
 
 export function findClusterContaining(
   clusters: ReportCluster[],
-  path: string,
+  filePath: string,
   document: vscode.TextDocument,
   position: vscode.Position,
 ): ReportCluster | undefined {
   const byte = utf8ByteOffset(document, position);
   return clusters.find((c) =>
     c.occurrences.some(
-      (o) => sameFile(o.path, path) && byte >= o.start_byte && byte <= o.end_byte,
+      (o) => sameFile(o.path, filePath) && byte >= o.start_byte && byte <= o.end_byte,
     ),
   );
 }

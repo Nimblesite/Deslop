@@ -8,7 +8,7 @@ let channel: vscode.OutputChannel | undefined;
 let rootLogger: Logger | undefined;
 
 export function initOutputChannel(): vscode.OutputChannel {
-  if (!channel) channel = vscode.window.createOutputChannel("Deslop");
+  channel ??= vscode.window.createOutputChannel("Deslop");
   return channel;
 }
 

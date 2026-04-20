@@ -31,10 +31,14 @@ export function openClusterPanel(
     return;
   }
   const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
-  const unsub = wirePanel(panel, store, "cluster", (webview) =>
-    webview.postMessage({ kind: "select/cluster", id: clusterId }),
-  );
-  panel.webview.onDidReceiveMessage((msg) => handleMessage(store, msg));
+  const unsub = wirePanel(panel, store, "cluster", (webview) => {
+    void webview.postMessage({ kind: "select/cluster", id: clusterId });
+  });
+  panel.webview.onDidReceiveMessage((msg: unknown) => {
+    handleMessage(store, msg).catch((err: unknown) => {
+      console.error("handleMessage failed", err);
+    });
+  });
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
@@ -51,7 +55,11 @@ export function openReportPanel(context: vscode.ExtensionContext, store: ReportS
   }
   const panel = createPanel(context, "report", "Deslop: report");
   const unsub = wirePanel(panel, store, "report");
-  panel.webview.onDidReceiveMessage((msg) => handleMessage(store, msg));
+  panel.webview.onDidReceiveMessage((msg: unknown) => {
+    handleMessage(store, msg).catch((err: unknown) => {
+      console.error("handleMessage failed", err);
+    });
+  });
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
@@ -86,21 +94,23 @@ function wirePanel(
   onReady?: (webview: vscode.Webview) => void,
 ): vscode.Disposable {
   void kind;
-  const push = (report: Report | null) => {
+  const push = (report: Report | null): void => {
     if (!report) return;
-    panel.webview.postMessage({ kind: "report/snapshot", report });
+    void panel.webview.postMessage({ kind: "report/snapshot", report });
   };
   push(store.current.report);
   const sub = store.onDidChange((state) => push(state.report));
   if (onReady) {
     // delay until the webview has mounted and acknowledged via `ready`
     const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {
-      if (m?.kind === "ready") {
+      if (m.kind === "ready") {
         onReady(panel.webview);
         once.dispose();
       }
     });
-    panel.onDidDispose(() => once.dispose());
+    panel.onDidDispose(() => {
+      once.dispose();
+    });
   }
   return sub;
 }
@@ -113,7 +123,7 @@ function buildHtml(
   const scriptPath = vscode.Uri.file(
     path.join(context.extensionPath, "media", "webview", `${kind}.js`),
   );
-  const scriptUri = webview.asWebviewUri(scriptPath);
+  const scriptUri = webview.asWebviewUri(scriptPath).toString();
   const csp = [
     `default-src 'none'`,
     `style-src ${webview.cspSource} 'unsafe-inline'`,
@@ -141,7 +151,7 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
   const m = message as { kind?: string } & Record<string, unknown>;
   switch (m.kind) {
     case "open/cluster": {
-      const id = typeof m["id"] === "string" ? (m["id"]) : null;
+      const id = typeof m["id"] === "string" ? m["id"] : null;
       if (id) await vscode.commands.executeCommand("deslop.openCluster", id);
       return;
     }
@@ -151,7 +161,7 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
       return;
     }
     case "compare/canonical": {
-      const id = typeof m["clusterId"] === "string" ? (m["clusterId"]) : null;
+      const id = typeof m["clusterId"] === "string" ? m["clusterId"] : null;
       if (id) await vscode.commands.executeCommand("deslop.compareWithCanonical", id);
       return;
     }
@@ -166,5 +176,9 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
       // the webview already advances its own signal; no-op is acceptable for now.
       return;
     }
+    case undefined:
+      return;
+    default:
+      return;
   }
 }

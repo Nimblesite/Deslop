@@ -169,6 +169,7 @@ suite("embeddingPicker helpers", () => {
     assert.match(nomic.label, /active/);
     // The unknown model should be labelled 'may not embed' since is_embedding_model=false.
     const unknown = items.find((i) => i.label?.includes("unknown-model"));
-    assert.match(unknown!.description ?? "", /may not embed/);
+    assert.ok(unknown, "unknown-model entry should exist");
+    assert.match(unknown.description ?? "", /may not embed/);
   });
 });

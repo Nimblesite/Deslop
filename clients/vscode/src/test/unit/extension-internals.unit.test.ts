@@ -91,9 +91,9 @@ suite("extension internals", () => {
   });
 
   test("wireNotifications registers handlers without throwing", () => {
-    const handlers = new Map<string, Function>();
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const client = {
-      onNotification: (name: string, cb: Function) => handlers.set(name, cb),
+      onNotification: (name: string, cb: (...args: unknown[]) => unknown) => handlers.set(name, cb),
       sendRequest: () => Promise.resolve(null),
     } as unknown as LanguageClient;
     wireNotifications(client, new ReportStore());

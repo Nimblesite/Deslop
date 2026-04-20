@@ -88,7 +88,8 @@ suite("ReportStore", () => {
       tool_version: "v2",
     };
     store.applyDelta(delta);
-    const out = store.current.report!;
+    const out = store.current.report;
+    assert.ok(out, "report must exist after applyDelta");
     assert.deepEqual(
       out.clusters.map((c) => c.id),
       ["c", "b"],

@@ -174,5 +174,5 @@ export function formatSize(bytes: number): string {
     value /= 1024;
     unit += 1;
   }
-  return `${value.toFixed(1)} ${units[unit]}`;
+  return `${value.toFixed(1)} ${units[unit] ?? "B"}`;
 }

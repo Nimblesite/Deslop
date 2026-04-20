@@ -91,6 +91,7 @@ export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   md.isTrusted = true;
   const labels = bucketLabels(resolveBucket(cluster));
   md.appendMarkdown(`**${labels.hybridTitle}** — ${labels.actionSentence}\n\n`);
+  md.appendMarkdown(`${cluster.interpretation}\n\n`);
   md.appendMarkdown(
     `structural \`${cluster.signals.structural.toFixed(2)}\` · ` +
       `jaccard \`${cluster.signals.token_jaccard.toFixed(2)}\` · ` +
