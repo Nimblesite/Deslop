@@ -67,3 +67,131 @@ fn advance_utf16_units(source: &str, start_byte: usize, character: u32) -> usize
     }
     source.len()
 }
+
+#[cfg(test)]
+#[allow(clippy::missing_docs_in_private_items)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn position_for_byte_covers_newlines_utf16_clamping_and_offsets() {
+        let single = "hello world";
+        assert_eq!(
+            position_for_byte(single, 0),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+        assert_eq!(
+            position_for_byte(single, 5),
+            Position {
+                line: 0,
+                character: 5
+            }
+        );
+        assert_eq!(
+            position_for_byte(single, 999),
+            Position {
+                line: 0,
+                character: 11
+            },
+            "offsets past EOF clamp to the final character"
+        );
+        let multi = "ab\ncd\nef";
+        assert_eq!(
+            position_for_byte(multi, 0),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+        assert_eq!(
+            position_for_byte(multi, 3),
+            Position {
+                line: 1,
+                character: 0
+            }
+        );
+        assert_eq!(
+            position_for_byte(multi, 4),
+            Position {
+                line: 1,
+                character: 1
+            }
+        );
+        assert_eq!(
+            position_for_byte(multi, 7),
+            Position {
+                line: 2,
+                character: 1
+            }
+        );
+        let emoji = "A\u{1F600}B";
+        let after_emoji = emoji.find('B').expect("B is present");
+        let pos = position_for_byte(emoji, after_emoji);
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 3, "emoji occupies two UTF-16 code units");
+        assert_eq!(
+            position_for_byte("", 0),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+        assert_eq!(
+            position_for_byte("", 99),
+            Position {
+                line: 0,
+                character: 0
+            }
+        );
+    }
+
+    #[test]
+    fn byte_for_position_round_trips_and_clamps_past_eof() {
+        let multi = "abc\ndef\nghij";
+        for byte in [0_usize, 1, 2, 3, 4, 6, 8, 12] {
+            let position = position_for_byte(multi, byte);
+            let round = byte_for_position(multi, position);
+            assert_eq!(round, byte, "round-trip broke at byte {byte}");
+        }
+        let beyond = Position {
+            line: 99,
+            character: 0,
+        };
+        assert_eq!(byte_for_position(multi, beyond), multi.len());
+        let past_line = Position {
+            line: 0,
+            character: 99,
+        };
+        assert_eq!(byte_for_position(multi, past_line), 3);
+        let emoji = "A\u{1F600}B";
+        let at_b = Position {
+            line: 0,
+            character: 3,
+        };
+        let b_byte = emoji.find('B').expect("B present");
+        assert_eq!(byte_for_position(emoji, at_b), b_byte);
+    }
+
+    #[test]
+    fn advance_utf16_units_stops_at_newline_and_bounds() {
+        let text = "ab\ncd";
+        assert_eq!(
+            advance_utf16_units(text, 0, 10),
+            2,
+            "advancing across newline stops at the newline"
+        );
+        assert_eq!(
+            advance_utf16_units(text, 3, 10),
+            text.len(),
+            "advancing past EOF clamps at source.len()"
+        );
+        assert_eq!(
+            advance_utf16_units(text, 999, 0),
+            text.len(),
+            "start_byte past EOF still returns source.len()"
+        );
+    }
+}

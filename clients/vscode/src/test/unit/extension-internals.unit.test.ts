@@ -80,7 +80,7 @@ suite("extension internals", () => {
 
   test("tryResolveOptional swallows failure and returns undefined", () => {
     const saved = { ...process.env };
-    delete process.env["CODEDEDUP_BINARY_DIR"];
+    delete process.env["DESLOP_BINARY_DIR"];
     process.env["PATH"] = "/nope";
     try {
       const result = tryResolveOptional("/nonexistent/extension", "mcp", "0.1.0");

@@ -13,7 +13,7 @@ suite("live bubble (real LSP)", () => {
   });
 
   test("editing a duplicated range triggers re-analysis", async () => {
-    const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
     const uri = vscode.Uri.file(`${fixture}/Alpha.cs`);
     const doc = await vscode.workspace.openTextDocument(uri);

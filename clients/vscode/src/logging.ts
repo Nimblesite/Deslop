@@ -18,7 +18,7 @@ export function logger(): Logger {
   rootLogger = pino(
     {
       name: "deslop-vscode",
-      level: process.env.CODEDEDUP_LOG_LEVEL ?? "debug",
+      level: process.env.DESLOP_LOG_LEVEL ?? "debug",
       base: null,
       timestamp: pino.stdTimeFunctions.isoTime,
       formatters: { level: (label) => ({ level: label }) },

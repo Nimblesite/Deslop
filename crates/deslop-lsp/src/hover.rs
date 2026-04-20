@@ -67,3 +67,119 @@ fn occurrences_block(cluster: &ReportCluster) -> String {
         });
     format!("{header}{body}")
 }
+
+#[cfg(test)]
+#[allow(clippy::missing_docs_in_private_items)]
+mod tests {
+    use super::*;
+    use deslop_core::report::{ReportOccurrence, ReportSignals};
+    use std::path::PathBuf;
+
+    fn make_cluster() -> ReportCluster {
+        ReportCluster {
+            id: "abc123".into(),
+            weight: 42.5,
+            size: 2,
+            canonical_node_count: 12,
+            signals: ReportSignals {
+                structural: 1.0,
+                token_jaccard: 0.95,
+                embedding_cos: 0.25,
+                fused: 2.2,
+            },
+            bucket: "identical".into(),
+            occurrences: vec![
+                ReportOccurrence {
+                    path: PathBuf::from("Alpha.cs"),
+                    start_byte: 10,
+                    end_byte: 40,
+                    hidden: false,
+                },
+                ReportOccurrence {
+                    path: PathBuf::from("Beta.cs"),
+                    start_byte: 5,
+                    end_byte: 35,
+                    hidden: false,
+                },
+            ],
+            summary: "test summary".into(),
+            interpretation: "Identical code. Safe to extract.".into(),
+        }
+    }
+
+    #[test]
+    fn markdown_for_cluster_covers_header_signals_and_occurrences() {
+        let cluster = make_cluster();
+        let body = markdown_for(&cluster);
+        // Header carries the cluster id and interpretation.
+        assert!(body.contains("### Cluster abc123"), "header: {body}");
+        assert!(
+            body.contains("Identical code. Safe to extract."),
+            "interpretation: {body}"
+        );
+        // Signals table: each row present with 2dp formatting.
+        assert!(body.contains("| structural | 1.00 |"), "structural: {body}");
+        assert!(
+            body.contains("| token_jaccard | 0.95 |"),
+            "jaccard: {body}"
+        );
+        assert!(
+            body.contains("| embedding_cos | 0.25 |"),
+            "embedding: {body}"
+        );
+        assert!(body.contains("| fused | 2.20 |"), "fused: {body}");
+        // Occurrence bullet list carries both occurrences with byte ranges.
+        assert!(body.contains("**Occurrences (2)**"), "occ header: {body}");
+        assert!(body.contains("- Alpha.cs:10-40"), "alpha occ: {body}");
+        assert!(body.contains("- Beta.cs:5-35"), "beta occ: {body}");
+    }
+
+    #[test]
+    fn build_for_cluster_wraps_markdown_in_hover_content() {
+        let cluster = make_cluster();
+        let hover = build_for_cluster(&cluster);
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("hover contents should be MarkupContent");
+        };
+        assert_eq!(markup.kind, MarkupKind::Markdown);
+        assert!(
+            markup.value.contains("### Cluster abc123"),
+            "value: {}",
+            markup.value
+        );
+        assert!(
+            hover.range.is_none(),
+            "hover range must stay None so the client highlights the full cursor range"
+        );
+    }
+
+    #[test]
+    fn signals_table_formats_each_signal_row() {
+        let cluster = make_cluster();
+        let table = signals_table(&cluster);
+        for row in [
+            "| Signal | Value |",
+            "| structural | 1.00 |",
+            "| token_jaccard | 0.95 |",
+            "| embedding_cos | 0.25 |",
+            "| fused | 2.20 |",
+        ] {
+            assert!(table.contains(row), "row {row} missing: {table}");
+        }
+    }
+
+    #[test]
+    fn occurrences_block_with_empty_list_still_renders_header() {
+        let mut cluster = make_cluster();
+        cluster.occurrences.clear();
+        let block = occurrences_block(&cluster);
+        assert!(
+            block.contains("**Occurrences (0)**"),
+            "header required even when empty: {block}"
+        );
+        assert!(
+            !block.contains("- "),
+            "no bullets should render for an empty list: {block}"
+        );
+    }
+}

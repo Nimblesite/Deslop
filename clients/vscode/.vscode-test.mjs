@@ -16,8 +16,8 @@ export default defineConfig({
       workspaceFolder: fixture,
       launchArgs: ["--disable-extensions"],
       env: {
-        CODEDEDUP_TEST_FIXTURE: fixture,
-        CODEDEDUP_BINARY_DIR: releaseDir,
+        DESLOP_TEST_FIXTURE: fixture,
+        DESLOP_BINARY_DIR: releaseDir,
       },
       mocha: {
         ui: "tdd",

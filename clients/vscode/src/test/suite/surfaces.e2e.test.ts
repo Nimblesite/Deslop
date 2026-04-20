@@ -7,7 +7,7 @@ import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
 async function openFixture(name: string): Promise<vscode.TextEditor> {
-  const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+  const fixture = process.env["DESLOP_TEST_FIXTURE"];
   assert.ok(fixture, "fixture path must be set");
   const doc = await vscode.workspace.openTextDocument(
     vscode.Uri.file(`${fixture}/${name}`),

@@ -34,7 +34,7 @@ suite("commands", () => {
   });
 
   test("openOccurrence opens the referenced file", async () => {
-    const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
     await vscode.commands.executeCommand("deslop.openOccurrence", {
       path: `${fixture}/Alpha.cs`,

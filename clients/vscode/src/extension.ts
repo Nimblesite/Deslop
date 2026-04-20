@@ -37,7 +37,13 @@ let client: LanguageClient | undefined;
 let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
 
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
+/// Public API returned by `activate()`. Lets tests reach the live
+/// LanguageClient without parallel activation or command-surface hacks.
+export interface ExtensionApi {
+  readonly client: LanguageClient | undefined;
+}
+
+export async function activate(context: vscode.ExtensionContext): Promise<ExtensionApi> {
   initOutputChannel();
   log("extension activating", {
     extensionPath: context.extensionPath,
@@ -83,7 +89,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     client = startLanguageClient(resolvedLsp);
   } catch (err) {
     surfaceStartupFailure(err, reportStore);
-    return;
+    return { get client() { return client; } };
   }
 
   const decorations = new DecorationManager(reportStore);
@@ -107,10 +113,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     await client.start();
   } catch (err) {
     surfaceStartupFailure(err, reportStore);
-    return;
+    return { get client() { return client; } };
   }
   wireNotifications(client, reportStore);
   await seedInitialReport(client, reportStore);
+  return { get client() { return client; } };
 }
 
 export async function deactivate(): Promise<void> {

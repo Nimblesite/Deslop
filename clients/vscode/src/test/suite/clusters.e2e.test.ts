@@ -33,7 +33,7 @@ suite("cluster navigation", () => {
   });
 
   test("jumping inside a fixture file while positioned at the start", async () => {
-    const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
     const doc = await vscode.workspace.openTextDocument(
       vscode.Uri.file(`${fixture}/Alpha.cs`),
@@ -49,7 +49,7 @@ suite("cluster navigation", () => {
   });
 
   test("Focused File tree populates when an editor is active", async () => {
-    const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
     const doc = await vscode.workspace.openTextDocument(
       vscode.Uri.file(`${fixture}/Beta.cs`),
@@ -66,7 +66,7 @@ suite("cluster navigation", () => {
     // its getChildren returns 5 SessionFieldNode items. We exercise it by
     // triggering a redraw via the active-editor change hook that all providers
     // subscribe to.
-    const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture);
     const doc = await vscode.workspace.openTextDocument(
       vscode.Uri.file(`${fixture}/Alpha.cs`),
@@ -76,7 +76,7 @@ suite("cluster navigation", () => {
   });
 
   test("bubble inline render triggered by edit", async () => {
-    const fixture = process.env["CODEDEDUP_TEST_FIXTURE"];
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture);
     const doc = await vscode.workspace.openTextDocument(
       vscode.Uri.file(`${fixture}/Alpha.cs`),
