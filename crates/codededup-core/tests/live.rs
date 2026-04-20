@@ -11,6 +11,8 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
 };
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use anyhow::{anyhow, bail, Context, Result};
 use codededup_core::{
     embedding::{EmbeddingMode, StubProvider},
@@ -19,6 +21,7 @@ use codededup_core::{
         LiveError, LiveService,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
+    EmbeddingProvider, EmbeddingSpec, ProviderError,
 };
 
 /// Returns the absolute fixture path used by the CLI tests.
@@ -397,4 +400,93 @@ impl Clock for MockClock {
     fn now_ms(&self) -> u64 {
         self.now_ms.lock().map_or(u64::MAX, |guard| *guard)
     }
+}
+
+/// Test-only [`EmbeddingProvider`] with distinctive identity and a call
+/// counter, so tests can assert that swapping the provider actually
+/// feeds the dedup pass.
+#[derive(Debug)]
+struct CountingProvider {
+    /// Identity reported via [`EmbeddingProvider::spec`].
+    spec: EmbeddingSpec,
+    /// Number of times [`EmbeddingProvider::embed`] was invoked.
+    embed_calls: AtomicUsize,
+}
+
+impl CountingProvider {
+    fn new(provider_id: &str, model_id: &str) -> Self {
+        Self {
+            spec: EmbeddingSpec {
+                provider_id: provider_id.to_owned(),
+                model_id: model_id.to_owned(),
+                model_version: "test-v1".to_owned(),
+                dimensions: 32,
+            },
+            embed_calls: AtomicUsize::new(0),
+        }
+    }
+
+    fn embed_calls(&self) -> usize {
+        self.embed_calls.load(Ordering::SeqCst)
+    }
+}
+
+impl EmbeddingProvider for CountingProvider {
+    fn spec(&self) -> EmbeddingSpec {
+        self.spec.clone()
+    }
+
+    fn probe(&self) -> Result<(), ProviderError> {
+        Ok(())
+    }
+
+    fn embed(&self, _input: &str) -> Result<Vec<f32>, ProviderError> {
+        let _previous = self.embed_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(vec![0.0_f32; self.spec.dimensions])
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn set_embedding_model_drives_the_new_provider_on_next_pass() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let original = Arc::new(StubProvider::new());
+    let mut session =
+        AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, original.clone())
+            .context("session")?;
+
+    let initial = session.report();
+    let initial_provenance = initial
+        .embedding_provenance
+        .as_ref()
+        .ok_or_else(|| anyhow!("initial pass must record stub provenance"))?;
+    assert_eq!(initial_provenance.provider_id, "stub");
+
+    let counting = Arc::new(CountingProvider::new("counting-test", "counting-model"));
+    let provenance = session
+        .set_embedding_model(counting.clone())
+        .context("set_embedding_model")?
+        .ok_or_else(|| anyhow!("post-swap pass must record provenance"))?;
+
+    assert_eq!(
+        provenance.provider_id, "counting-test",
+        "report provenance must reflect the newly-selected provider"
+    );
+    assert_eq!(provenance.model_id, "counting-model");
+    assert_eq!(provenance.dimensions, 32);
+    assert!(
+        counting.embed_calls() > 0,
+        "swapped-in provider must receive embed() calls from the dedup pass; got {}",
+        counting.embed_calls(),
+    );
+
+    let after = session.report();
+    let after_provenance = after
+        .embedding_provenance
+        .as_ref()
+        .ok_or_else(|| anyhow!("post-swap report must still carry provenance"))?;
+    assert_eq!(
+        after_provenance.provider_id, "counting-test",
+        "persisted report must also reflect the new provider"
+    );
+    Ok(())
 }

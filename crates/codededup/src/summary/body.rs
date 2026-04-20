@@ -1,7 +1,19 @@
-//! Summary block + per-cluster row rendering. Plain English by default;
-//! `--technical` switches to the researcher view.
+//! Summary block + per-cluster row rendering.
+//!
+//! CLI stderr is a **shared-text** surface per [CLONE-BUCKETS-DUAL-LABEL]:
+//! a human reads it in the terminal, an AI agent scrapes it from a
+//! subprocess. So every bucket name uses the hybrid form —
+//! `"Identical code [Type-1/2]"`, `"Same behavior, different code
+//! [Type-4, AI match]"` — taken from `BucketLabels::hybrid_title`.
+//! `--technical` is a **verbosity** toggle (adds signal triples, cache
+//! counters, embedding provenance), not a label-variant toggle.
 
-use codededup_core::{report::ReportCluster, report::ReportOccurrence, Report};
+use codededup_core::{
+    buckets::{bucket_labels, classify_signals, ClusterKind},
+    report::ReportCluster,
+    report::ReportOccurrence,
+    Report,
+};
 
 use super::{theme::Theme, ColorChoice};
 
@@ -80,10 +92,12 @@ fn write_headline(theme: &Theme, report: &Report) {
     );
 }
 
-/// "Worst N groups" heading with the colour legend.
+/// "Worst N groups" heading with the colour legend. Legend covers all
+/// four [CLONE-BUCKETS] buckets so nothing in the per-cluster rows
+/// below is un-explained.
 fn write_top_clusters_header(theme: &Theme, report: &Report, technical: bool) {
     eprintln!(
-        "{bold}Worst {n} groups{reset}  {dim}(● green = identical · yellow = nearly identical · red = similar){reset}",
+        "{bold}Worst {n} groups{reset}  {dim}(● green = identical · yellow = nearly identical · red = loosely similar · cyan = same behavior [AI]){reset}",
         bold = theme.bold,
         dim = theme.dim,
         reset = theme.reset,
@@ -146,71 +160,48 @@ fn write_provenance_line(theme: &Theme, report: &Report, technical: bool) {
     }
 }
 
-/// Categorised breakdown line ("N identical · M nearly identical · ...").
-fn write_breakdown_line(theme: &Theme, report: &Report, technical: bool) {
+/// Categorised breakdown line — one segment per non-zero [CLONE-BUCKETS]
+/// bucket. Shared-text surface: uses `hybrid_title` (e.g.
+/// `"Identical code [Type-1/2]"`) so the line reads as plain English
+/// to a human and as a grep-able `[Type-N]` suffix to an AI scraper.
+/// `technical` is a verbosity flag, not a label switch — same labels
+/// regardless.
+fn write_breakdown_line(theme: &Theme, report: &Report, _technical: bool) {
     let counts = ClusterBreakdown::from(report);
-    if technical {
-        write_breakdown_technical(theme, counts);
-    } else {
-        write_breakdown_plain(theme, counts);
+    let mut parts: Vec<String> = Vec::new();
+    for kind in ClusterKind::all() {
+        let count = counts.count(kind);
+        if count == 0 {
+            continue;
+        }
+        let labels = bucket_labels(kind);
+        let colour = bucket_colour(theme, kind);
+        parts.push(format!(
+            "{colour}{count} {title}{reset}",
+            colour = colour,
+            count = count,
+            title = labels.hybrid_title.to_lowercase(),
+            reset = theme.reset,
+        ));
     }
+    if parts.is_empty() {
+        return;
+    }
+    eprintln!("  {}", parts.join("  ·  "));
 }
 
-/// Plain-English breakdown row.
-fn write_breakdown_plain(theme: &Theme, counts: ClusterBreakdown) {
-    let semantic = if counts.semantic == 0 {
-        String::new()
-    } else {
-        format!(
-            "  ·  {cyan}{n} same idea, different code{reset}",
-            cyan = theme.cyan,
-            reset = theme.reset,
-            n = counts.semantic,
-        )
-    };
-    eprintln!(
-        "  {green}{exact} identical{reset} {dim}(safe to merge){reset}  ·  \
-         {yellow}{near} nearly identical{reset} {dim}(worth reviewing){reset}  ·  \
-         {red}{weak} loosely similar{reset} {dim}(check manually){reset}{semantic}",
-        green = theme.green,
-        yellow = theme.yellow,
-        red = theme.red,
-        dim = theme.dim,
-        reset = theme.reset,
-        exact = counts.exact,
-        near = counts.near_miss,
-        weak = counts.weak,
-        semantic = semantic,
-    );
-}
-
-/// Researcher breakdown row (Type-1/2/3/4 labels).
-fn write_breakdown_technical(theme: &Theme, counts: ClusterBreakdown) {
-    let semantic = if counts.semantic == 0 {
-        String::new()
-    } else {
-        format!(
-            "  ·  {cyan}{n} semantic{reset} {dim}(Type-4){reset}",
-            cyan = theme.cyan,
-            dim = theme.dim,
-            reset = theme.reset,
-            n = counts.semantic,
-        )
-    };
-    eprintln!(
-        "  {green}{exact} exact{reset} {dim}(Type-1/2){reset}  ·  \
-         {yellow}{near} near-miss{reset} {dim}(Type-3){reset}  ·  \
-         {red}{weak} weak{reset} {dim}(LSH-only){reset}{semantic}",
-        green = theme.green,
-        yellow = theme.yellow,
-        red = theme.red,
-        dim = theme.dim,
-        reset = theme.reset,
-        exact = counts.exact,
-        near = counts.near_miss,
-        weak = counts.weak,
-        semantic = semantic,
-    );
+/// Theme colour for a bucket. Mirrors the card band in the HTML
+/// renderer: green=identical, yellow=nearly identical, red=loosely
+/// similar, cyan=same behavior (AI match). Terminal themes can't
+/// render purple reliably, so `SameBehavior` uses cyan — aligned with
+/// `docs/specs/taxonomy.md [CLONE-BUCKETS]` colour-band commentary.
+fn bucket_colour(theme: &Theme, kind: ClusterKind) -> &'static str {
+    match kind {
+        ClusterKind::Identical => theme.green,
+        ClusterKind::NearlyIdentical => theme.yellow,
+        ClusterKind::LooselySimilar => theme.red,
+        ClusterKind::SameBehavior => theme.cyan,
+    }
 }
 
 /// Plain-English worst-offender callout — one sentence naming the
@@ -251,35 +242,50 @@ fn write_next_steps(theme: &Theme) {
     );
 }
 
-/// Counts of clusters in each signal bucket. Mirrors `report::interpret`
-/// at a coarser grain so the summary line stays one row.
+/// Counts of clusters in each [CLONE-BUCKETS] bucket. Routing goes
+/// through `buckets::classify_signals` so the CLI, HTML, and JSON
+/// `interpret()` never disagree.
 #[derive(Debug, Default, Clone, Copy)]
 struct ClusterBreakdown {
-    /// Type-1 / Type-2 exact clones — safe to extract.
-    exact: usize,
-    /// Type-3 near-miss — needs review.
-    near_miss: usize,
-    /// Weak / LSH-only — manual inspection.
-    weak: usize,
-    /// Type-4 semantic — embedding-driven matches.
-    semantic: usize,
+    /// Cluster count classified as [`ClusterKind::Identical`].
+    identical: usize,
+    /// Cluster count classified as [`ClusterKind::NearlyIdentical`].
+    nearly_identical: usize,
+    /// Cluster count classified as [`ClusterKind::LooselySimilar`].
+    loosely_similar: usize,
+    /// Cluster count classified as [`ClusterKind::SameBehavior`].
+    same_behavior: usize,
+}
+
+impl ClusterBreakdown {
+    /// Returns the cluster count for a given [`ClusterKind`].
+    fn count(self, kind: ClusterKind) -> usize {
+        match kind {
+            ClusterKind::Identical => self.identical,
+            ClusterKind::NearlyIdentical => self.nearly_identical,
+            ClusterKind::LooselySimilar => self.loosely_similar,
+            ClusterKind::SameBehavior => self.same_behavior,
+        }
+    }
 }
 
 impl From<&Report> for ClusterBreakdown {
     fn from(report: &Report) -> Self {
         let mut out = Self::default();
         for cluster in &report.clusters {
-            let s = cluster.signals.structural;
-            let j = cluster.signals.token_jaccard;
-            let e = cluster.signals.embedding_cos;
-            if s >= 0.99 && j >= 0.99 {
-                out.exact = out.exact.saturating_add(1);
-            } else if s < 0.01 && j >= 0.90 {
-                out.near_miss = out.near_miss.saturating_add(1);
-            } else if e >= 0.80 && s < 0.5 {
-                out.semantic = out.semantic.saturating_add(1);
-            } else {
-                out.weak = out.weak.saturating_add(1);
+            match classify_signals(cluster.signals) {
+                ClusterKind::Identical => {
+                    out.identical = out.identical.saturating_add(1);
+                }
+                ClusterKind::NearlyIdentical => {
+                    out.nearly_identical = out.nearly_identical.saturating_add(1);
+                }
+                ClusterKind::LooselySimilar => {
+                    out.loosely_similar = out.loosely_similar.saturating_add(1);
+                }
+                ClusterKind::SameBehavior => {
+                    out.same_behavior = out.same_behavior.saturating_add(1);
+                }
             }
         }
         out
@@ -287,17 +293,25 @@ impl From<&Report> for ClusterBreakdown {
 }
 
 /// Renders one cluster row plus a one-line interpretation underneath.
+/// The row header (`#N ● NxM copies in files`) is shared-text and uses
+/// the bucket's `hybrid_title`. The interpretation line under it reads
+/// the plain `action_sentence` so a non-specialist sees non-jargon prose
+/// immediately. Technical mode tacks on the signal triple for expert
+/// operators.
 fn render_cluster(theme: &Theme, index: usize, cluster: &ReportCluster, technical: bool) {
-    let signal_color = classify(theme, cluster);
+    let kind = classify_signals(cluster.signals);
+    let labels = bucket_labels(kind);
+    let signal_color = bucket_colour(theme, kind);
     let files = summarise_files(&cluster.occurrences);
     if technical {
         eprintln!(
-            "  {bold}#{rank:<2}{reset} {color}●{reset} [{dim}{id}{reset}] \
+            "  {bold}#{rank:<2}{reset} {color}●{reset} {title}  [{dim}{id}{reset}] \
              {size}× copies · {nodes} AST nodes · weight {weight:.1}  \
              {dim}(s={s:.2} j={j:.2} e={e:.2}){reset}  {cyan}{files}{reset}",
             bold = theme.bold,
             reset = theme.reset,
             color = signal_color,
+            title = labels.hybrid_title,
             dim = theme.dim,
             cyan = theme.cyan,
             rank = index.saturating_add(1),
@@ -312,10 +326,11 @@ fn render_cluster(theme: &Theme, index: usize, cluster: &ReportCluster, technica
         );
     } else {
         eprintln!(
-            "  {bold}#{rank:<2}{reset} {color}●{reset} {size}× copies in {cyan}{files}{reset}",
+            "  {bold}#{rank:<2}{reset} {color}●{reset} {title} — {size}× copies in {cyan}{files}{reset}",
             bold = theme.bold,
             reset = theme.reset,
             color = signal_color,
+            title = labels.hybrid_title,
             cyan = theme.cyan,
             rank = index.saturating_add(1),
             size = cluster.size,
@@ -323,54 +338,11 @@ fn render_cluster(theme: &Theme, index: usize, cluster: &ReportCluster, technica
         );
     }
     eprintln!(
-        "       {dim}↳ {interp}{reset}",
+        "       {dim}↳ {action}{reset}",
         dim = theme.dim,
         reset = theme.reset,
-        interp = plain_interpretation(cluster, technical),
+        action = labels.action_sentence,
     );
-}
-
-/// Returns the per-cluster interpretation string. Plain mode rewrites
-/// the report's researcher-jargon `interpretation` into something a
-/// non-specialist can read; technical mode passes it through.
-fn plain_interpretation(cluster: &ReportCluster, technical: bool) -> String {
-    if technical {
-        return cluster.interpretation.clone();
-    }
-    let s = cluster.signals.structural;
-    let j = cluster.signals.token_jaccard;
-    let e = cluster.signals.embedding_cos;
-    if s >= 0.99 && j >= 0.99 {
-        "Identical code — safe to extract into a shared function.".to_owned()
-    } else if s >= 0.99 {
-        "Same shape, slightly different details — likely the same clone seen from different angles."
-            .to_owned()
-    } else if s <= 0.01 && j >= 0.90 {
-        "Nearly identical — small differences may matter, so review before merging.".to_owned()
-    } else if s > 0.0 && j >= 0.95 {
-        "A family of variants on the same theme — usually genuine duplication.".to_owned()
-    } else if e >= 0.80 {
-        "Different code that does the same thing — worth a manual look.".to_owned()
-    } else {
-        "Loosely similar — inspect manually before acting.".to_owned()
-    }
-}
-
-/// Picks a colour for the cluster dot based on its signal
-/// combination. Type-1/2 exact clones → green (safe extract). Type-3
-/// near-miss → yellow (review). Type-4 / LSH-only → red (manual
-/// inspection).
-fn classify(theme: &Theme, cluster: &ReportCluster) -> &'static str {
-    let s = cluster.signals.structural;
-    let j = cluster.signals.token_jaccard;
-    let e = cluster.signals.embedding_cos;
-    if s >= 0.99 && j >= 0.99 {
-        theme.green
-    } else if s < 0.01 && (j >= 0.90 || e >= 0.80) {
-        theme.yellow
-    } else {
-        theme.red
-    }
 }
 
 /// Collapses the occurrence list into `"file.ext + N more"`.

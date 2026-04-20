@@ -1,4 +1,4 @@
-//! Core analysis library for `CodeDedup`.
+//! Core analysis library for `Deslop`.
 //!
 //! Owns the full pipeline: file discovery → tree-sitter parse → normalisation
 //! → Merkle fingerprint → clustering → ranking → report. The CLI binary (and

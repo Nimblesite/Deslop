@@ -14,7 +14,7 @@ https://typediagram.dev/docs/language-reference.html ⚠️
 
 ## Project Overview
 
-**Deslop** (a.k.a. Deslop Live) is a Rust CLI that detects duplicated code across a codebase and reports the **worst offenders first** (highest weighted duplication impact at the top). Language support starts with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
+**Deslop** (a.k.a. Deslop Live) is a Rust toolchain for finding, ranking, and fixing duplicated code across a codebase — **worst offenders first** (highest weighted duplication impact at the top). Detection and ranking ship today; AI-assisted and mechanical deduplication tooling is on the roadmap (the core, LSP, and MCP crates are all designed to drive fix actions, not just emit reports). Language support starts with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
 
 Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 - ALL SPEC SECTIONS HAVE NON-NUMERIC HIERARCHICALLY STRUCTURED SECTIONS. ALL TESTS REFER TO SPEC IDs. ALL CODE REFERS TO SPEC IDS.

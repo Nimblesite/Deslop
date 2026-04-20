@@ -25,8 +25,13 @@ use crate::{
     state::{FileId, FileRegistry},
 };
 
-/// Current report schema version. Bumped on breaking changes only.
-pub const REPORT_SCHEMA_VERSION: u32 = 3;
+/// Current report schema version.
+///
+/// **v4 (current)** — adds `cluster.bucket` (stable wire label for the
+/// [CLONE-BUCKETS] bucket) so consumers stop re-deriving routing from
+/// the signal triple. Additive: deserialises v3 reports with an
+/// inferred bucket via `#[serde(default)]`.
+pub const REPORT_SCHEMA_VERSION: u32 = 4;
 
 /// Markdown explaining the report schema. Embedded via `include_str!`
 /// from the single source of truth in `docs/specs/REPORTING-CONTEXT.md`
@@ -144,6 +149,14 @@ pub struct ReportCluster {
     /// the cluster was flagged ([PRINCIPLES-AUDIENCE-AGENT],
     /// [FUSION-STRATEGY-MAX-SUM]).
     pub signals: ReportSignals,
+    /// Canonical bucket ([CLONE-BUCKETS]) the cluster falls into.
+    /// One of `"identical" | "nearly_identical" | "loosely_similar" |
+    /// "same_behavior"`. Added in schema v4 so every consumer
+    /// (renderer, MCP tool, webview) stops re-deriving routing from the
+    /// signal triple. `#[serde(default)]` lets `--from-report` keep
+    /// round-tripping v3 reports; the renderer re-routes when empty.
+    #[serde(default)]
+    pub bucket: String,
     /// Every occurrence of the clone.
     pub occurrences: Vec<ReportOccurrence>,
     /// Agent-oriented one-line synthesis (see
@@ -320,12 +333,14 @@ fn cluster_to_report<S: BuildHasher>(
         signals,
     );
     let interpretation = interpret(signals, canonical_node_count);
+    let bucket = classify_signals(signals).wire_label().to_owned();
     ReportCluster {
         id: cluster.id.clone(),
         weight: cluster.weight,
         size: cluster.members.len(),
         canonical_node_count,
         signals,
+        bucket,
         occurrences,
         summary,
         interpretation,

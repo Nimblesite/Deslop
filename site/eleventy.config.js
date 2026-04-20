@@ -214,7 +214,7 @@ export default function (eleventyConfig) {
       name: "Deslop",
       url: "https://deslop.live",
       description:
-        "Duplicate-code detection for the AI era. Tree-sitter parsing, AST fingerprinting, and semantic fusion — ranked worst-offender first so agents and humans fix what matters.",
+        "Find, rank, and fix duplicated code — built for the AI era. Tree-sitter parsing, AST fingerprinting, and semantic fusion — worst-offender first, fix tooling on the same engine so agents and humans can act, not just read.",
     },
     features: {
       blog: true,

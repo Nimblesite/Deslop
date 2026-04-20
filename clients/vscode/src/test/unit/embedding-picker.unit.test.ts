@@ -2,6 +2,7 @@
 // the transitive `vscode` import resolves against the real host.
 
 import * as assert from "node:assert/strict";
+import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { buildItems, formatSize, isActive, setModel } from "../../commands/embeddingPicker";
 import { ReportStore } from "../../reportStore";
@@ -108,6 +109,44 @@ suite("embeddingPicker helpers", () => {
       size_bytes: null,
       is_embedding_model: true,
     });
+  });
+
+  test("setModel dispatches codededup/embeddingSetModel with the chosen provider + model", async () => {
+    const calls: Array<{ method: string; params: unknown }> = [];
+    const client = {
+      sendRequest: (method: string, params: unknown) => {
+        calls.push({ method, params });
+        return Promise.resolve(undefined);
+      },
+    } as unknown as LanguageClient;
+    await setModel(client, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      model_version: "0",
+      dimensions: 768,
+      size_bytes: null,
+      is_embedding_model: true,
+    });
+    const swap = calls.find((call) => call.method === "codededup/embeddingSetModel");
+    assert.ok(swap, `expected embeddingSetModel request; got ${JSON.stringify(calls)}`);
+    assert.deepEqual(swap!.params, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+    });
+  });
+
+  test("buildItems marks the 'Ollama models' header as a non-pickable separator", () => {
+    const items = buildItems(
+      [model("ollama", "nomic-embed-text"), model("stub", "stub", { dimensions: 64, size_bytes: null })],
+      newStore(),
+    );
+    const header = items.find((i) => i.label === "Ollama models");
+    assert.ok(header, "header row should exist");
+    assert.equal(
+      header!.kind,
+      vscode.QuickPickItemKind.Separator,
+      "header must be a Separator so VS Code filters it out of selectedItems",
+    );
   });
 
   test("buildItems groups ollama models + marks the active one", () => {

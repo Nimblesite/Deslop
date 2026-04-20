@@ -15,7 +15,8 @@ import {
   FUSED_THRESHOLD,
   ReportCluster,
   Severity,
-  verdictOf,
+  bucketLabels,
+  resolveBucket,
 } from "../types/report";
 
 const DEBOUNCE_MS = 250;
@@ -227,16 +228,20 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
   }
 }
 
+// The inline bubble and ghost-line decorations are pure-visual
+// surfaces (rendered only in the editor, never scraped by agents), so
+// they use `plainTitle` per [CLONE-BUCKETS-DUAL-LABEL].
 export function inlineText(cluster: ReportCluster, severity: Severity): string {
   const canonical = cluster.occurrences[0];
   const count = cluster.occurrences.length;
-  const verdict = verdictOf(cluster.signals);
+  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
-  return `  ${SEVERITY_DOT[severity]} ${verdict} × ${count}${location}`;
+  return `  ${SEVERITY_DOT[severity]} ${title} × ${count}${location}`;
 }
 
 export function ghostText(cluster: ReportCluster, severity: Severity): string {
-  return `  └─ ${SEVERITY_DOT[severity]} ${verdictOf(cluster.signals)}  ${signalStrip(cluster)}  × ${cluster.occurrences.length}`;
+  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
+  return `  └─ ${SEVERITY_DOT[severity]} ${title}  ${signalStrip(cluster)}  × ${cluster.occurrences.length}`;
 }
 
 export function signalStrip(cluster: ReportCluster): string {
@@ -252,11 +257,14 @@ export function shortPath(p: string): string {
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
+// Hover tooltip is a shared-text surface — agents scrape hovers via
+// LSP too — so use `hybridTitle` ("Identical code [Type-1/2]", etc.).
 export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   md.supportHtml = true;
-  md.appendMarkdown(`**${verdictOf(cluster.signals)}** — ${cluster.interpretation}\n\n`);
+  const title = bucketLabels(resolveBucket(cluster)).hybridTitle;
+  md.appendMarkdown(`**${title}** — ${cluster.interpretation}\n\n`);
   md.appendMarkdown(`\`structural\` ${cluster.signals.structural.toFixed(2)}  `);
   md.appendMarkdown(`\`jaccard\` ${cluster.signals.token_jaccard.toFixed(2)}  `);
   md.appendMarkdown(`\`embedding\` ${cluster.signals.embedding_cos.toFixed(2)}  `);

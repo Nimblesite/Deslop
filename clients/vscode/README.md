@@ -1,8 +1,8 @@
 # Deslop for VS Code
 
-**The first clone detector that tells you you're duplicating code as you type.**
+**The first clone tool that flags duplicated code as you type — and is built to fix it, not just report it.**
 
-Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**. No save, no push, no context switch.
+Every other tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**. No save, no push, no context switch. Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap, so the same engine that spots the clone will soon help you collapse it.
 
 ## Features
 

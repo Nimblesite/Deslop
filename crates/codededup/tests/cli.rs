@@ -186,7 +186,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     assert!(html.contains("<!doctype html>"), "html doctype missing");
     assert!(html.contains("Action hints"), "html action hints missing");
     assert!(
-        html.contains("CodeDedup report"),
+        html.contains("Deslop report"),
         "html human intro missing"
     );
     assert!(

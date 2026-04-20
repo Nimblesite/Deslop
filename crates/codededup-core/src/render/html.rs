@@ -114,7 +114,7 @@ fn write_head(out: &mut String, report: &Report) {
     );
     let _ = write!(
         out,
-        "<title>CodeDedup report — {clusters} duplicate group(s) across {files} file(s)</title>",
+        "<title>Deslop report — {clusters} duplicate group(s) across {files} file(s)</title>",
         clusters = report.clusters.len(),
         files = report.files_analysed,
     );
@@ -126,7 +126,7 @@ fn write_head(out: &mut String, report: &Report) {
 fn write_intro(out: &mut String, report: &Report) {
     let _ = write!(
         out,
-        "<h1>CodeDedup report</h1><p class=\"lede\">{summary}</p>",
+        "<h1>Deslop report</h1><p class=\"lede\">{summary}</p>",
         summary = escape(&intro_summary(report)),
     );
     write_metrics_banner(out, report);
@@ -207,24 +207,20 @@ fn intro_summary(report: &Report) -> String {
 /// uses `plain_title` lower-cased — no `Type-N` per
 /// [CLONE-BUCKETS-DUAL-LABEL].
 fn classify_groups(clusters: &[ReportCluster]) -> String {
-    let mut counts = [0_usize; 4];
-    for cluster in clusters {
-        let idx = match classify(cluster) {
-            ClusterKind::Identical => 0,
-            ClusterKind::NearlyIdentical => 1,
-            ClusterKind::LooselySimilar => 2,
-            ClusterKind::SameBehavior => 3,
-        };
-        counts[idx] = counts[idx].saturating_add(1);
-    }
-    let mut parts: Vec<String> = Vec::new();
-    for (kind, count) in ClusterKind::all().into_iter().zip(counts) {
-        if count == 0 {
-            continue;
-        }
-        let labels = bucket_labels(kind);
-        parts.push(format!("{count} {}", labels.plain_title.to_lowercase()));
-    }
+    let parts: Vec<String> = ClusterKind::all()
+        .into_iter()
+        .filter_map(|kind| {
+            let count = clusters
+                .iter()
+                .filter(|cluster| classify(cluster) == kind)
+                .count();
+            if count == 0 {
+                return None;
+            }
+            let labels = bucket_labels(kind);
+            Some(format!("{count} {}", labels.plain_title.to_lowercase()))
+        })
+        .collect();
     if parts.is_empty() {
         String::new()
     } else {
@@ -244,7 +240,10 @@ fn kind_class(kind: ClusterKind) -> String {
 /// `"Identical code in 12 places"`. Pure-visual surface — no `Type-N`
 /// ever per [CLONE-BUCKETS-DUAL-LABEL].
 fn kind_title(kind: ClusterKind, occurrences: usize) -> String {
-    format!("{} in {occurrences} places", bucket_labels(kind).plain_title)
+    format!(
+        "{} in {occurrences} places",
+        bucket_labels(kind).plain_title
+    )
 }
 
 /// Plain-visual action sentence shown under the card title.

@@ -6,7 +6,13 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import { indexedSeverity, SEVERITY_DOT } from "../severity";
-import { ReportCluster, ReportOccurrence, Severity } from "../types/report";
+import {
+  bucketLabels,
+  ReportCluster,
+  ReportOccurrence,
+  resolveBucket,
+  Severity,
+} from "../types/report";
 
 type Node = ClusterNode | OccurrenceNode | SessionFieldNode | StatusNode;
 
@@ -19,14 +25,18 @@ class ClusterNode extends vscode.TreeItem {
     readonly rank: number,
     severity: Severity,
   ) {
+    const labels = bucketLabels(resolveBucket(cluster));
+    // Tree label is a pure-visual surface — plain title only. Tooltip
+    // is shared-text (copyable, AI-scrapable on hover-extract), so it
+    // carries the hybrid form with bracketed Type-N.
     super(
-      `#${rank} ${SEVERITY_DOT[severity]} ${cluster.interpretation}`,
+      `#${rank} ${SEVERITY_DOT[severity]} ${labels.plainTitle}`,
       vscode.TreeItemCollapsibleState.Collapsed,
     );
     this.description = cluster.id;
     this.contextValue = "codededup.cluster";
     this.tooltip = new vscode.MarkdownString(
-      `**${cluster.interpretation}**\n\n` +
+      `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${cluster.occurrences.length}\``,
     );
     this.command = {

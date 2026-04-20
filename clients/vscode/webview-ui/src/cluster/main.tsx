@@ -13,6 +13,7 @@ import {
 import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
 import { SignalStrip } from "../components/SignalStrip";
 import { SeverityBadge } from "../components/SeverityBadge";
+import { bucketLabels, resolveBucket } from "../../../src/types/report";
 
 function ClusterApp() {
   const cluster = selectedCluster.value;
@@ -46,6 +47,7 @@ function ClusterApp() {
   }
 
   const canonical = cluster.occurrences[0];
+  const bucketInfo = bucketLabels(resolveBucket(cluster));
 
   return (
     <main
@@ -67,9 +69,32 @@ function ClusterApp() {
         <div>
           <div
             class="label"
-            style={{ color: COLOR.onSurfaceMuted, marginBottom: "8px", fontFamily: FONT.mono }}
+            style={{
+              color: COLOR.onSurfaceMuted,
+              marginBottom: "8px",
+              fontFamily: FONT.mono,
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
           >
-            CLUSTER · {cluster.id}
+            <span>CLUSTER · {cluster.id}</span>
+            {bucketInfo.aiMatch ? (
+              <span
+                style={{
+                  background: COLOR.secondaryContainer ?? COLOR.surfaceContainerLow,
+                  color: COLOR.onSurface,
+                  padding: "2px 6px",
+                  borderRadius: "3px",
+                  fontSize: "10px",
+                  letterSpacing: "0.1em",
+                  fontWeight: 700,
+                }}
+                title="Detected by the AI embedding pass — semantically equivalent, syntactically different."
+              >
+                AI MATCH
+              </span>
+            ) : null}
           </div>
           <h1
             style={{
@@ -80,8 +105,18 @@ function ClusterApp() {
               letterSpacing: "-0.02em",
             }}
           >
-            {cluster.interpretation}
+            {bucketInfo.plainTitle}
           </h1>
+          <p
+            style={{
+              margin: "12px 0 0",
+              color: COLOR.onSurfaceMuted,
+              fontFamily: FONT.ui,
+              fontSize: "15px",
+            }}
+          >
+            {bucketInfo.actionSentence}
+          </p>
         </div>
         <div style={{ textAlign: "right" }}>
           <SeverityBadge severity={severity} label={`#${rank || "?"}`} />

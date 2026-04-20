@@ -1,11 +1,11 @@
 # Deslop
 
-**Deslop** (a.k.a. Deslop Live) is a clone detector that tells you you're duplicating code *as you type*. It ranks the worst offenders first — biggest clones, most copies, most lines spanned — so you fix what matters instead of chasing trivia.
+**Deslop** (a.k.a. Deslop Live) finds, ranks, and helps you fix duplicated code *as you type*. It surfaces the worst offenders first — biggest clones, most copies, most lines spanned — so you stop chasing trivia and start removing real duplication. Today that's inline warnings and worst-first reports; next comes AI-assisted and mechanical deduplication so the fix is a keystroke away.
 
 Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no regex, no line diffing, no false positives from reformatting.
 
-- **CLI** — one binary, runs on your repo, emits `.json` / `.txt` / `.html` reports.
-- **VS Code extension** — inline warnings the moment you paste a duplicate.
+- **CLI** — one binary, runs on your repo, emits `.json` / `.txt` / `.html` reports and drives downstream fix tooling.
+- **VS Code extension** — inline warnings the moment you paste a duplicate, with refactor actions on the roadmap.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "codededup-vscode",
   "displayName": "Deslop",
-  "description": "The first clone detector that tells you you're duplicating code as you type.",
+  "description": "Finds, ranks, and helps you fix duplicated code as you type — detection shipping today, AI-assisted and mechanical refactors next.",
   "version": "0.1.0",
   "publisher": "codededup",
   "license": "MIT",

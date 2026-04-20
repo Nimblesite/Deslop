@@ -59,7 +59,7 @@ impl ClusterKind {
     }
 
     /// Stable wire label used in the JSON report's `cluster.bucket`
-    /// field. snake_case so agents can pattern-match without
+    /// field. `snake_case` so agents can pattern-match without
     /// deserialising the whole enum.
     #[must_use]
     pub const fn wire_label(self) -> &'static str {

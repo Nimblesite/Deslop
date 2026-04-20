@@ -15,10 +15,10 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use codededup_core::{
-    debug_ast_dump, render::render_html, render::render_text, validate_threshold_percent,
-    EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, PipelineSession, Report,
-    ReportDelta, StubProvider, ThresholdSource, ThresholdSummary, DEFAULT_OLLAMA_ENDPOINT,
-    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    classify_signals, debug_ast_dump, render::render_html, render::render_text,
+    validate_threshold_percent, EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider,
+    PipelineSession, Report, ReportDelta, StubProvider, ThresholdSource, ThresholdSummary,
+    DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 use tracing::Level;
 
@@ -36,7 +36,7 @@ const DEFAULT_OUTPUT_STEM: &str = "codededup-report";
 #[command(
     name = "codededup",
     version,
-    about = "Detect duplicated code across a codebase, ordered by worst offenders first."
+    about = "Find, rank, and help fix duplicated code across a codebase — worst offenders first."
 )]
 struct Cli {
     /// Directory to analyse. Defaults to the current working directory.
@@ -640,6 +640,15 @@ fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
 fn load_report(path: &std::path::Path) -> Result<Report> {
     let source =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))
+    let mut report = serde_json::from_str::<Report>(&source)
+        .with_context(|| format!("parse report {}", path.display()))?;
+    // v3 reports predate [CLONE-BUCKETS] so their `cluster.bucket`
+    // field deserialises as empty. Re-route from the signal triple so
+    // renderers always see a non-empty canonical wire label.
+    for cluster in &mut report.clusters {
+        if cluster.bucket.is_empty() {
+            cluster.bucket = classify_signals(cluster.signals).wire_label().to_owned();
+        }
+    }
+    Ok(report)
 }

@@ -28,8 +28,11 @@ pub const REPORT_CSS: &str = "\
 .report-shell h2{font-size:1.5rem;font-weight:700;margin:var(--space-12) 0 var(--space-6);letter-spacing:-0.02em;}\
 .report-shell .empty{color:var(--on-surface-variant);font-style:italic;}\
 .cluster-card{background:var(--surface-container-low);padding:var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-sm);border-left:4px solid var(--primary-container);}\
-.cluster-card.kind-near{border-left-color:var(--tertiary-container);}\
-.cluster-card.kind-weak{border-left-color:var(--secondary-container);}\
+.cluster-card.kind-identical{border-left-color:var(--primary-container);}\
+.cluster-card.kind-nearly-identical{border-left-color:var(--tertiary-container);}\
+.cluster-card.kind-loosely-similar{border-left-color:var(--secondary-container);}\
+.cluster-card.kind-same-behavior{border-left-color:var(--secondary);}\
+.cluster-card__ai-badge{font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:var(--secondary-container);color:var(--on-secondary-container);padding:0.125rem var(--space-2);border-radius:var(--radius-sm);white-space:nowrap;align-self:center;}\
 .cluster-card__head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4);margin-bottom:var(--space-3);flex-wrap:wrap;}\
 .cluster-card__title{font-family:var(--font-head);font-size:1.125rem;font-weight:700;color:var(--on-surface);letter-spacing:-0.01em;margin:0;}\
 .cluster-card__cost{font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary-fixed-dim);text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;}\
