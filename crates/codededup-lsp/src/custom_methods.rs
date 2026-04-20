@@ -63,15 +63,44 @@ pub struct SetModelParams {
     pub endpoint: Option<String>,
 }
 
-/// Forwards `report/get`.
+/// Forwards `report/get`. Accepts and ignores any params the client
+/// happens to send (tower-lsp rejects `params: {}` unless the handler
+/// declares a param type, and the VSIX sends `{}`).
 ///
 /// # Errors
 ///
 /// Never errors today — kept fallible to match the JSON-RPC method
 /// signature.
-pub async fn report_get(backend: &LspBackend) -> LspResult<serde_json::Value> {
+pub async fn report_get(
+    backend: &LspBackend,
+    _params: IgnoredParams,
+) -> LspResult<serde_json::Value> {
     let report = backend.service().report_get().await;
     Ok(serde_json::to_value(report.as_ref()).unwrap_or(serde_json::Value::Null))
+}
+
+/// Catch-all params for no-arg methods. Accepts any JSON value
+/// (including `{}`, `null`, or missing) because the JSON-RPC clients we
+/// talk to are inconsistent about sending `params` for no-arg methods.
+#[derive(Debug, Default)]
+pub struct IgnoredParams;
+
+impl<'de> Deserialize<'de> for IgnoredParams {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        serde::de::IgnoredAny::deserialize(deserializer).map(|_| Self)
+    }
+}
+
+impl Serialize for IgnoredParams {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_none()
+    }
 }
 
 /// Forwards `report/forFile`.
@@ -143,7 +172,10 @@ pub async fn find_similar(
 ///
 /// Never errors today — kept fallible to match the JSON-RPC method
 /// signature.
-pub async fn embedding_list_models(backend: &LspBackend) -> LspResult<serde_json::Value> {
+pub async fn embedding_list_models(
+    backend: &LspBackend,
+    _params: IgnoredParams,
+) -> LspResult<serde_json::Value> {
     let models = backend.service().embedding_list_models().await;
     Ok(serde_json::to_value(models).unwrap_or(serde_json::Value::Null))
 }
@@ -178,7 +210,10 @@ pub async fn embedding_set_model(
 ///
 /// Never errors today — kept fallible to match the JSON-RPC method
 /// signature.
-pub async fn session_config(backend: &LspBackend) -> LspResult<serde_json::Value> {
+pub async fn session_config(
+    backend: &LspBackend,
+    _params: IgnoredParams,
+) -> LspResult<serde_json::Value> {
     let config = backend.service().session_config().await;
     Ok(serde_json::to_value(config).unwrap_or(serde_json::Value::Null))
 }

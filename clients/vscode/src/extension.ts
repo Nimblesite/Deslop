@@ -31,7 +31,6 @@ import {
   Report,
   ReportChangedNotification,
   AnalysisState,
-  ReportDelta,
 } from "./types/report";
 
 let client: LanguageClient | undefined;
@@ -162,15 +161,12 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
     "codededup/reportChanged",
     async (payload: ReportChangedNotification) => {
       store.notifyChange(payload.summary);
-      const delta = await c.sendRequest<ReportDelta | null>("codededup/reportDelta", {
-        since_generation: store.current.generation,
-      });
-      if (delta) {
-        store.applyDelta(delta);
-        return;
+      try {
+        const snapshot = await c.sendRequest<Report>("codededup/reportGet");
+        store.setSnapshot(snapshot, payload.generation);
+      } catch (err) {
+        logError(err, "refresh report after change");
       }
-      const snapshot = await c.sendRequest<Report>("codededup/reportGet", {});
-      store.setSnapshot(snapshot, payload.generation);
     },
   );
   c.onNotification("codededup/analysisState", (state: AnalysisState) => {
@@ -188,7 +184,7 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
 
 export async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise<void> {
   try {
-    const snapshot = await c.sendRequest<Report>("codededup/reportGet", {});
+    const snapshot = await c.sendRequest<Report>("codededup/reportGet");
     store.setSnapshot(snapshot, 0);
   } catch (err) {
     logError(err, "seed initial report");

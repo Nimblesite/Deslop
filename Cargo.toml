@@ -37,6 +37,7 @@ ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
 notify = "=6.1.1"
 tokio = { version = "=1.40.0", features = ["rt-multi-thread", "macros", "sync", "io-util", "io-std", "time"] }
+tower = { version = "=0.4.13", default-features = false }
 tower-lsp = "=0.20.0"
 futures = "=0.3.31"
 async-trait = "=0.1.83"

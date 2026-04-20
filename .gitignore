@@ -81,3 +81,4 @@ clients/vscode/dist/
 
 clients/vscode/out/
 clients/vscode/codededup-vscode.vsix
+clients/vscode/bin/darwin-arm64/codededup-lsp

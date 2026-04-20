@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-coverage vsix-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -162,7 +162,9 @@ vsix-coverage: vsix-install vsix-build
 ##               extension can resolve them via the bundled path
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
-vsix-package: vsix-install vsix-build
+vsix-package: vsix-install vsix-build _vsix-stage-and-package
+
+_vsix-stage-and-package:
 	@_uname_s=$$(uname -s); _uname_m=$$(uname -m); \
 	 case "$$_uname_s-$$_uname_m" in \
 	   Darwin-arm64)   _platform=darwin-arm64 ;; \
@@ -183,6 +185,38 @@ vsix-package: vsix-install vsix-build
 	   chmod +x "$$_dest/$$_bin$$_ext"; \
 	 done
 	cd clients/vscode && npm run package
+
+## vsix-rebuild: Nuke every build artifact (cargo target, staged bin/, node_modules,
+##               dist/, out/, old .vsix), rebuild the workspace + webview + extension
+##               from scratch, repackage the .vsix, and install it into the local
+##               `code` CLI. Use when "why isn't my change showing up" strikes.
+vsix-rebuild:
+	@echo "==> [1/6] Removing cargo target/, staged bin/, node_modules, out/, dist/, old VSIX..."
+	cargo clean
+	$(RM) clients/vscode/bin
+	$(RM) clients/vscode/node_modules
+	$(RM) clients/vscode/webview-ui/node_modules
+	$(RM) clients/vscode/out
+	$(RM) clients/vscode/dist
+	$(RM) clients/vscode/codededup-vscode.vsix
+	$(RM) clients/vscode/coverage
+	@echo "==> [2/6] Reinstalling npm deps (extension + webview-ui)..."
+	cd clients/vscode && npm install --no-audit --no-fund
+	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
+	@echo "==> [3/6] Rebuilding rust binaries (codededup, codededup-lsp, codededup-mcp)..."
+	cargo build --release -p codededup -p codededup-lsp -p codededup-mcp
+	@echo "==> [4/6] Rebuilding webview UI + extension bundle..."
+	cd clients/vscode/webview-ui && npm run build
+	cd clients/vscode && npm run build
+	@echo "==> [5/6] Staging binaries + packaging .vsix..."
+	$(MAKE) _vsix-stage-and-package
+	@echo "==> [6/6] Installing the fresh .vsix into the VS Code CLI..."
+	@if command -v code >/dev/null 2>&1; then \
+	  code --install-extension clients/vscode/codededup-vscode.vsix --force; \
+	else \
+	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/codededup-vscode.vsix"; \
+	fi
+	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 
 ## help: List all available targets
 help:
@@ -205,3 +239,4 @@ help:
 	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"
 	@echo "  vsix-coverage  - VS Code E2E + enforce coverage threshold"
 	@echo "  vsix-package   - Build the .vsix artifact"
+	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"

@@ -17,6 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 codededup-core = { path = "../codededup-core", features = ["live"] }
+tower.workspace = true
 tower-lsp.workspace = true
 tokio.workspace = true
 serde = { workspace = true }

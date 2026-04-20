@@ -5,22 +5,27 @@
 //! `shutdown`, `textDocument/didChange`, `textDocument/diagnostic`,
 //! and the custom `codededup/*` namespace ([LSP-CUSTOM-METHODS]).
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use codededup_core::{
     embedding::StubProvider,
     live::{AnalysisSession, LiveApi, LiveService},
 };
 use tokio::sync::Mutex;
+use tower::Service;
 use tower_lsp::{
-    jsonrpc::Result as LspResult,
+    jsonrpc::{Request, Response, Result as LspResult},
     lsp_types::{
         DidChangeTextDocumentParams, DocumentDiagnosticParams, DocumentDiagnosticReport,
         DocumentDiagnosticReportResult, FullDocumentDiagnosticReport, InitializeParams,
         InitializeResult, InitializedParams, MessageType, RelatedFullDocumentDiagnosticReport,
         ServerCapabilities, ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
     },
-    Client, LanguageServer, LspService, Server,
+    Client, ExitedError, LanguageServer, LspService, Server,
 };
 
 use crate::{custom_methods, diagnostics};
@@ -169,8 +174,69 @@ pub async fn run_stdio(workspace_root: PathBuf, min_nodes: u32) -> anyhow::Resul
     .finish();
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
-    Server::new(stdin, stdout, socket).serve(service).await;
+    Server::new(stdin, stdout, socket)
+        .serve(NormaliseParams::new(service))
+        .await;
     Ok(())
+}
+
+/// Methods that accept an empty-object `params` payload and must also
+/// accept a missing `params` field — some JSON-RPC clients omit it for
+/// no-arg calls, and tower-lsp's router rejects the request with
+/// `-32602 Missing params field` before the handler runs.
+const NO_PARAM_METHODS: &[&str] = &[
+    custom_methods::REPORT_GET,
+    custom_methods::LIST_MODELS,
+    custom_methods::SESSION_CONFIG,
+];
+
+/// Service adapter that injects an empty-object `params` value on
+/// selected custom methods when the incoming request omitted it.
+#[derive(Debug)]
+struct NormaliseParams<S> {
+    inner: S,
+}
+
+impl<S> NormaliseParams<S> {
+    fn new(inner: S) -> Self {
+        Self { inner }
+    }
+}
+
+impl<S> Service<Request> for NormaliseParams<S>
+where
+    S: Service<Request, Response = Option<Response>, Error = ExitedError>,
+{
+    type Response = Option<Response>;
+    type Error = ExitedError;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request) -> Self::Future {
+        let normalised = if req.params().is_none()
+            && NO_PARAM_METHODS
+                .iter()
+                .any(|method| *method == req.method())
+        {
+            rebuild_with_empty_params(req)
+        } else {
+            req
+        };
+        self.inner.call(normalised)
+    }
+}
+
+/// Rebuilds `req` with a `params: {}` payload. Preserves method and id.
+fn rebuild_with_empty_params(req: Request) -> Request {
+    let (method, id, _params) = req.into_parts();
+    let mut builder = Request::build(method).params(serde_json::json!({}));
+    if let Some(id) = id {
+        builder = builder.id(id);
+    }
+    builder.finish()
 }
 
 /// Aborts the process with a structured diagnostic when the backend
