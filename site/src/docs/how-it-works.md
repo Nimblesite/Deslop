@@ -70,7 +70,7 @@ Each candidate pair gets three independent scores:
 | `token_jaccard` | 0..1 | Type-2, Type-3 (renamed + near-miss) |
 | `embedding_cos` | 0..1 | Type-3, Type-4 (semantic) |
 
-Pairs are accepted when at least one signal crosses the acceptance floor and the weighted sum exceeds the decision threshold. Defaults are tuned per spec at [`docs/specs/decisions.md`](https://github.com/MelbourneDeveloper/CodeDedup/blob/main/docs/specs/decisions.md).
+Pairs are accepted when at least one signal crosses the acceptance floor and the weighted sum exceeds the decision threshold. Defaults are tuned per spec at [`docs/specs/decisions.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/decisions.md).
 
 ## Rank
 

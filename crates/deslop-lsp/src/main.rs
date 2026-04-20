@@ -1,4 +1,4 @@
-//! Binary entry point for the `CodeDedup` LSP server ([LSP-TRANSPORT]).
+//! Binary entry point for the `Deslop` LSP server ([LSP-TRANSPORT]).
 //!
 //! Bootstrapping only — every protocol concern lives in
 //! [`deslop_lsp::backend`] and friends. Argument shape:

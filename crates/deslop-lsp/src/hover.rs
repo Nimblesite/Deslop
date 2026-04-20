@@ -119,10 +119,7 @@ mod tests {
         );
         // Signals table: each row present with 2dp formatting.
         assert!(body.contains("| structural | 1.00 |"), "structural: {body}");
-        assert!(
-            body.contains("| token_jaccard | 0.95 |"),
-            "jaccard: {body}"
-        );
+        assert!(body.contains("| token_jaccard | 0.95 |"), "jaccard: {body}");
         assert!(
             body.contains("| embedding_cos | 0.25 |"),
             "embedding: {body}"

@@ -14,21 +14,21 @@ Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no re
 ### macOS / Linux (Homebrew)
 
 ```bash
-brew install melbournedeveloper/tap/deslop
+brew install nimblesite/tap/deslop
 deslop --version
 ```
 
 ### Windows (Scoop)
 
 ```powershell
-scoop bucket add melbournedeveloper https://github.com/MelbourneDeveloper/scoop-bucket
+scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
 scoop install deslop
 deslop --version
 ```
 
 ### Direct download
 
-Grab the binary for your platform from the [latest release](https://github.com/MelbourneDeveloper/CodeDedup/releases/latest) and drop it on your `PATH`.
+Grab the binary for your platform from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and drop it on your `PATH`.
 
 ## Use the CLI
 
@@ -73,7 +73,7 @@ code --install-extension deslop
 
 ### From a `.vsix`
 
-Download `deslop.vsix` from the [latest release](https://github.com/MelbourneDeveloper/CodeDedup/releases/latest) and install it:
+Download `deslop.vsix` from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and install it:
 
 ```bash
 code --install-extension deslop.vsix
@@ -89,7 +89,7 @@ The extension activates automatically on `.cs`, `.rs`, and `.py` files. Duplicat
 
 Deslop ships an MCP server — `deslop-mcp` — that exposes live clone analysis as tools any MCP-compatible agent can call: `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
 
-Install it the same way as the CLI — `brew install melbournedeveloper/tap/deslop` or `scoop install deslop` ships both binaries.
+Install it the same way as the CLI — `brew install nimblesite/tap/deslop` or `scoop install deslop` ships both binaries.
 
 ### Claude Code
 

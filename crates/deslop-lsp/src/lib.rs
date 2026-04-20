@@ -1,4 +1,4 @@
-//! Language Server Protocol shell for `CodeDedup` ([LSP-TRANSPORT]).
+//! Language Server Protocol shell for `Deslop` ([LSP-TRANSPORT]).
 //!
 //! Forwards every request to the live [`deslop_core::live::LiveApi`]
 //! implementation via [`backend::LspBackend`]. The library half of the

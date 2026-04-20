@@ -1,4 +1,4 @@
-//! `tower-lsp` backend wiring `CodeDedup` live analysis into the
+//! `tower-lsp` backend wiring `Deslop` live analysis into the
 //! Language Server Protocol ([LSP-CAPABILITIES]).
 //!
 //! Keeps the protocol surface narrow: `initialize`, `initialized`,
@@ -20,12 +20,12 @@ use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response, Result as LspResult},
     lsp_types::{
-        CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions,
-        DiagnosticServerCapabilities, DidChangeTextDocumentParams, DocumentDiagnosticParams,
-        DocumentDiagnosticReport, DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
-        Hover, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities,
-        ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
+        CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
+        DidChangeTextDocumentParams, DocumentDiagnosticParams, DocumentDiagnosticReport,
+        DocumentDiagnosticReportResult, FullDocumentDiagnosticReport, Hover, HoverParams,
+        HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
+        MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
+        TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
     Client, ExitedError, LanguageServer, LspService, Server,
 };
@@ -149,8 +149,7 @@ impl LanguageServer for LspBackend {
     }
 
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
-        let Some(path) =
-            url_to_path(&params.text_document_position_params.text_document.uri)
+        let Some(path) = url_to_path(&params.text_document_position_params.text_document.uri)
         else {
             return Ok(None);
         };

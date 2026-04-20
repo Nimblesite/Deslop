@@ -661,8 +661,8 @@ fn lsp_custom_method_report_for_range_returns_matching_clusters() -> Result<()> 
 }
 
 #[test]
-fn lsp_custom_method_report_for_range_returns_empty_when_min_nodes_filters_everything(
-) -> Result<()> {
+fn lsp_custom_method_report_for_range_returns_empty_when_min_nodes_filters_everything() -> Result<()>
+{
     // Sky-high min_nodes removes every cluster globally; the range
     // query must then see nothing regardless of offsets.
     let workspace = copy_fixture("csharp-small")?;

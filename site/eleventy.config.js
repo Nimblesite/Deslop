@@ -86,7 +86,7 @@ layout: layouts/base.njk
       {% endfor %}
     </nav>
     <div class="docs-sidebar__foot">
-      <a href="https://github.com/MelbourneDeveloper/CodeDedup" class="docs-sidebar__cta">
+      <a href="https://github.com/Nimblesite/Deslop" class="docs-sidebar__cta">
         <span class="material-symbols-outlined">support_agent</span>
         Community support
       </a>
@@ -189,8 +189,210 @@ layout: layouts/base.njk
 </article>
 `;
 
+// Footer override: swap the techdoc plugin's footer markup for one that
+// credits Nimblesite (the product owner) and links back to nimblesite.co.
+// Techdoc ships `layouts/base.njk` as a virtual template, so we replace it
+// wholesale — the only deliberate diff from upstream is the `footer-bottom`
+// block. Keep the rest in lock-step with the plugin's template or head tags
+// will drift.
+const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
+<html lang="{{ lang | default('en') }}">
+<head>
+  <script>
+    (function() {
+      var theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>{{ title | default(site.title) }}</title>
+  <meta name="title" content="{{ title | default(site.title) }}">
+  <meta name="description" content="{{ description | default(site.description) }}">
+  {% if site.author %}<meta name="author" content="{{ site.author }}">{% endif %}
+  {% if site.keywords %}<meta name="keywords" content="{{ site.keywords }}">{% endif %}
+  <meta name="robots" content="index, follow">
+  <meta name="generator" content="Eleventy + techdoc">
+  <meta name="theme-color" content="{{ site.themeColor | default('#0066cc') }}">
+
+  <link rel="canonical" href="{{ site.url }}{{ page.url }}">
+  <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
+
+  {% for langCode in supportedLanguages %}
+  <link rel="alternate" hreflang="{{ langCode }}" href="{{ site.url }}{{ page.url | altLangUrl(lang | default('en'), langCode) }}">
+  {% endfor %}
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url | altLangUrl(lang | default('en'), defaultLanguage) }}">
+
+  <meta property="og:type" content="{% if page.url.startsWith('/blog/') and page.url != '/blog/' %}article{% else %}website{% endif %}">
+  <meta property="og:url" content="{{ site.url }}{{ page.url }}">
+  <meta property="og:title" content="{{ title | default(site.title) }}">
+  <meta property="og:description" content="{{ description | default(site.description) }}">
+  <meta property="og:site_name" content="{{ site.title }}">
+  <meta property="og:locale" content="{{ (lang | default('en')) | toOgLocale }}">
+  {% for langCode in supportedLanguages %}{% if langCode != (lang | default('en')) %}
+  <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
+  {% endif %}{% endfor %}
+  {% if site.ogImage %}
+  <meta property="og:image" content="{{ site.url }}{{ site.ogImage }}">
+  <meta property="og:image:width" content="{{ site.ogImageWidth | default('1200') }}">
+  <meta property="og:image:height" content="{{ site.ogImageHeight | default('630') }}">
+  {% endif %}
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="{{ site.url }}{{ page.url }}">
+  <meta name="twitter:title" content="{{ title | default(site.title) }}">
+  <meta name="twitter:description" content="{{ description | default(site.description) }}">
+  {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
+  {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
+  {% if site.ogImage %}<meta name="twitter:image" content="{{ site.url }}{{ site.ogImage }}">{% endif %}
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "{{ site.url }}/#website",
+        "url": "{{ site.url }}/",
+        "name": "{{ site.title }}",
+        "description": "{{ site.description }}",
+        "inLanguage": "{{ lang | default('en') }}"
+      },
+      {
+        "@type": "{% if page.url.startsWith('/docs/') %}TechArticle{% elif page.url.startsWith('/blog/') and page.url != '/blog/' %}BlogPosting{% else %}WebPage{% endif %}",
+        "@id": "{{ site.url }}{{ page.url }}#webpage",
+        "url": "{{ site.url }}{{ page.url }}",
+        "name": "{{ title | default(site.title) }}",
+        "description": "{{ description | default(site.description) }}",
+        "isPartOf": { "@id": "{{ site.url }}/#website" },
+        "inLanguage": "{{ lang | default('en') }}"{% if page.date %},
+        "datePublished": "{{ page.date | isoDate }}"{% endif %}{% if author %},
+        "author": {
+          "@type": "Person",
+          "name": "{{ author }}"
+        }{% endif %}
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "{{ site.url }}{{ page.url }}#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "{{ site.url }}/"
+          }{% if page.url != '/' %},
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "{{ title | default('Page') }}",
+            "item": "{{ site.url }}{{ page.url }}"
+          }{% endif %}
+        ]
+      },
+      {
+        "@type": "Organization",
+        "@id": "{{ site.url }}/#organization",
+        "name": "Nimblesite",
+        "url": "https://nimblesite.co"
+      }
+    ]
+  }
+  </script>
+
+  <link rel="stylesheet" href="/techdoc/css/reset.css">
+  <link rel="stylesheet" href="/techdoc/css/layout.css">
+  <link rel="stylesheet" href="/techdoc/css/utilities.css">
+
+  {% if site.stylesheet %}<link rel="stylesheet" href="{{ site.stylesheet }}">{% endif %}
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header class="site-header">
+    <nav class="nav">
+      <a href="{% if lang and lang != defaultLanguage %}/{{ lang }}/{% else %}/{% endif %}" class="logo">
+        {{ site.name | default(site.title) }}
+      </a>
+
+      <ul class="nav-links">
+        {% set navData = navigation %}
+        {% set currentLang = lang | default('en') %}
+        {% for item in navData.main %}
+        <li>
+          {% set navUrl = item.url %}
+          {% if not item.external and currentLang != defaultLanguage %}
+            {% set navUrl = item.url | altLangUrl('en', currentLang) %}
+          {% endif %}
+          <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
+             class="nav-link {% if (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}active{% endif %}">
+            {{ item.text }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <div class="nav-actions">
+        {% if techdocOptions.features.darkMode %}
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
+          <span class="theme-icon-light">☀</span>
+          <span class="theme-icon-dark">☾</span>
+        </button>
+        {% endif %}
+
+        <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    {% block content %}{{ content | safe }}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-content">
+      {% if navigation.footer %}
+      <div class="footer-grid">
+        {% set currentLang = lang | default('en') %}
+        {% for section in navigation.footer %}
+        <div class="footer-section">
+          <h3>{{ section.title }}</h3>
+          <ul>
+            {% for item in section.items %}
+            {% set footerUrl = item.url %}
+            {% if item.url.startsWith('/') and currentLang != defaultLanguage %}
+              {% set footerUrl = item.url | altLangUrl('en', currentLang) %}
+            {% endif %}
+            <li><a href="{{ footerUrl }}">{{ item.text }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="footer-bottom">
+        <p>&copy; {% year %} <a href="https://nimblesite.co" target="_blank" rel="noopener noreferrer">Nimblesite</a>. {{ site.name | default(site.title) }} is a Nimblesite product.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/techdoc/js/main.js" type="module"></script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
+`;
+
 const OVERRIDES = {
   "blog/index.njk": BLOG_INDEX_OVERRIDE,
+  "_includes/layouts/base.njk": BASE_LAYOUT_OVERRIDE,
   "_includes/layouts/docs.njk": DOCS_LAYOUT_OVERRIDE,
   "_includes/layouts/blog.njk": BLOG_POST_LAYOUT_OVERRIDE,
 };

@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -107,11 +107,12 @@ _coverage_check:
 # Repo-Specific Targets
 # =============================================================================
 
-## test-ollama: Run only the Ollama-gated tests (`ollama_*`-prefixed)
-##              that `make test` filters out. Requires a local Ollama
-##              daemon on 127.0.0.1:11434 with `nomic-embed-text`
-##              already pulled.
-test-ollama:
+## test-ollama: Run every Ollama-gated test — Rust `ollama_*` tests and
+##              the VSIX `.vscode-test-ollama.mjs` suite — that
+##              `make test`/`make vsix-test`/`make ci` filter out.
+##              Requires a local Ollama daemon on 127.0.0.1:11434 with
+##              `nomic-embed-text` already pulled.
+test-ollama: vsix-test-ollama
 	cargo test --release --workspace ollama_
 
 ## ci-ollama: `make ci` plus `make test-ollama`.
@@ -150,6 +151,13 @@ vsix-build:
 ## vsix-test: Run VS Code E2E tests against the REAL deslop-lsp binary.
 vsix-test: vsix-install vsix-build
 	cd clients/vscode && npm test
+
+## vsix-test-ollama: Run the Ollama-gated VSIX e2e suite (csharp-type4
+##                   fixture, provider=ollama, model=nomic-embed-text).
+##                   NEVER runs in `make ci` / `make vsix-test`. Requires
+##                   a local Ollama daemon and the model pulled.
+vsix-test-ollama: vsix-install vsix-build
+	cd clients/vscode && npm run test:ollama
 
 ## vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
 ##                Threshold lives in clients/vscode/coverage-thresholds.json.
@@ -230,13 +238,14 @@ help:
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""
 	@echo "Repo-specific targets:"
-	@echo "  test-ollama    - Run only the Ollama-gated tests (ollama_*)"
+	@echo "  test-ollama    - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  ci-ollama      - make ci plus make test-ollama"
 	@echo "  build-release  - Build the release binary for the deslop CLI"
 	@echo "  install-binary - Build release and install binary onto PATH"
 	@echo "  vsix-install   - Install Node deps for clients/vscode + webview-ui"
 	@echo "  vsix-build     - Build LSP + MCP + VSIX bundle + webview UI"
 	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"
+	@echo "  vsix-test-ollama - Ollama-gated VSIX e2e (type4 fixture, never in CI)"
 	@echo "  vsix-coverage  - VS Code E2E + enforce coverage threshold"
 	@echo "  vsix-package   - Build the .vsix artifact"
 	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"

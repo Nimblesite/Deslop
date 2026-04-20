@@ -12,7 +12,10 @@ const releaseDir = path.join(here, "..", "..", "target", "release");
 export default defineConfig({
   tests: [
     {
-      files: "out/test/**/*.test.js",
+      // Excludes `out/test/ollama/**` — those run only via
+      // `.vscode-test-ollama.mjs` / `npm run test:ollama` /
+      // `make vsix-test-ollama`. See docs/specs/vsix.md.
+      files: ["out/test/suite/**/*.test.js", "out/test/unit/**/*.test.js"],
       workspaceFolder: fixture,
       launchArgs: ["--disable-extensions"],
       env: {

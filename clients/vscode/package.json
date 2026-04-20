@@ -3,11 +3,11 @@
   "displayName": "Deslop",
   "description": "Finds, ranks, and helps you fix duplicated code as you type — detection shipping today, AI-assisted and mechanical refactors next.",
   "version": "0.1.0",
-  "publisher": "deslop",
+  "publisher": "nimblesite",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MelbourneDeveloper/CodeDedup.git",
+    "url": "https://github.com/Nimblesite/Deslop.git",
     "directory": "clients/vscode"
   },
   "engines": {
@@ -187,8 +187,10 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "compile": "tsc -p ./",
-    "pretest": "npm run compile && cp -r src/test/fixtures out/test/fixtures",
+    "pretest": "npm run compile && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test": "vscode-test",
+    "pretest:ollama": "npm run compile && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
     "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix"
   },

@@ -2,7 +2,7 @@
   "main": [
     { "text": "Docs", "url": "/docs/" },
     { "text": "Blog", "url": "/blog/" },
-    { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/CodeDedup", "external": true }
+    { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop", "external": true }
   ],
   "footer": [
     {
@@ -17,7 +17,7 @@
     {
       "title": "Community",
       "items": [
-        { "text": "GitHub", "url": "https://github.com/MelbourneDeveloper/CodeDedup" },
+        { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop" },
         { "text": "RSS", "url": "/feed.xml" }
       ]
     }
