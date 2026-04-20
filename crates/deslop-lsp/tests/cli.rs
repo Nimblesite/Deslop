@@ -31,7 +31,7 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 /// Copies the named fixture into a freshly created temp directory so
-/// the LSP server's `.codededup-cache/` writes never pollute the
+/// the LSP server's `.deslop-cache/` writes never pollute the
 /// committed fixtures.
 fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
     let src = fixture(name);

@@ -81,13 +81,13 @@ Two consumers of the live analysis live inside the VS Code process (the VSIX UI 
 
 One `AnalysisSession` per workspace root, owned by the binary that created it. The client (VSIX / LSP client / MCP client) launches a binary, the binary receives an `initialize` frame with the workspace root + config (min-nodes, exclusion config path, embedding settings), and the session:
 
-1. Opens the `.codededup-cache/` for that root (fingerprint cache + embedding cache).
+1. Opens the `.deslop-cache/` for that root (fingerprint cache + embedding cache).
 2. Runs a full initial analysis with incremental semantics on — usually a warm cache on second launch, so startup is cheap.
 3. Starts a file watcher ([LIVE-WATCHER]).
 4. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
 5. Sends `ready` with the initial `Report`.
 
-Shutdown is a graceful drain: stop accepting new edits, finish the current re-analysis, flush caches, exit. The session never writes outside `.codededup-cache/` and never modifies source files.
+Shutdown is a graceful drain: stop accepting new edits, finish the current re-analysis, flush caches, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
 
 ### [LIVE-STATE] In-process state
 
@@ -165,7 +165,7 @@ The `live` module exposes a small, stable query surface through the `LiveApi` tr
 | `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Agent-facing: "is this snippet I'm about to write already present elsewhere?" Runs the fingerprint + LSH + embedding passes on the snippet against the live index; no cache mutation. |
 | `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerates Ollama models available on the host (`/api/tags`) plus the built-in `stub` provider. Powers the VSIX model picker. |
 | `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | Switches the live session to the selected model. Invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]); structural + LSH caches stay warm. |
-| `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.codededup-cache/` path. |
+| `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.deslop-cache/` path. |
 
 All methods are synchronous request/response. **No subscribe/unsubscribe primitives** on the query API — deltas are pushed (see [LIVE-NOTIFICATIONS]). Keeping read and push separate makes the transport layering identical for LSP and MCP.
 

@@ -62,7 +62,7 @@ Cargo.lock.bak
 # =============================================================================
 # Deslop-specific
 # =============================================================================
-.codededup-cache/
+.deslop-cache/
 deslop-report.json
 deslop-report.txt
 deslop-report.html
@@ -86,3 +86,6 @@ deslop-lsp
 
 
 clients/vscode/bin/
+
+--version/
+--stdio/

@@ -583,7 +583,7 @@ fn exclude_per_language_overlay_scoped_to_its_language() -> Result<()> {
 
 // Implements [EXCLUSION-CONFIG] default filename discovery: when no
 // `--config` is passed, the pipeline picks up
-// `<scan_root>/.codededup.toml` automatically.
+// `<scan_root>/.deslop.toml` automatically.
 #[test]
 fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -598,7 +598,7 @@ fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
         scan_root.join("Beta.cs"),
     )?;
     fs::write(
-        scan_root.join(".codededup.toml"),
+        scan_root.join(".deslop.toml"),
         "[defaults]\nexclude = [\"**/Beta.cs\"]\n",
     )?;
     let out = outputs_under(tmp.path());
@@ -908,7 +908,7 @@ fn stub_provider_populates_embedding_cache() -> Result<()> {
         .assert()
         .success();
     let cache_dir = scan_root
-        .join(".codededup-cache")
+        .join(".deslop-cache")
         .join("embeddings")
         .join("stub")
         .join("blake3-stub")
@@ -1168,7 +1168,7 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
 }
 
 // Implements [FUSION-EMBED-PROVIDER] cache round-trip: the first
-// run populates `.codededup-cache/embeddings/ollama/<model>/<version>/`
+// run populates `.deslop-cache/embeddings/ollama/<model>/<version>/`
 // with one `.bin` per fingerprint; the second run completes in a
 // small fraction of the wall time because every embedding is
 // served from disk. Each Ollama inference call is network-bound
@@ -1197,7 +1197,7 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
         .success();
 
     let cache_root = scan_root
-        .join(".codededup-cache")
+        .join(".deslop-cache")
         .join("embeddings")
         .join("ollama");
     let model_dir = fs::read_dir(&cache_root)?
@@ -1290,7 +1290,7 @@ fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
 }
 
 // Implements [FUSION-EMBED-PROVIDER] × [PIPELINE-INCREMENTAL]: the
-// two caches live side-by-side under `.codededup-cache/` and
+// two caches live side-by-side under `.deslop-cache/` and
 // invalidate independently. The first run populates both
 // (`fingerprints/...` and `embeddings/...`); the second run hits
 // the fingerprint cache for every file AND reuses every embedding
@@ -1474,7 +1474,7 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
         first_json.contains("\"misses\": 2"),
         "first run must register two misses: {first_json}"
     );
-    let cache_dir = scan_root.join(".codededup-cache").join("fingerprints");
+    let cache_dir = scan_root.join(".deslop-cache").join("fingerprints");
     assert!(
         cache_dir.is_dir(),
         "fingerprint cache directory missing: {}",
@@ -1543,7 +1543,7 @@ fn default_run_skips_the_cache() -> Result<()> {
     );
     assert!(
         !scan_root
-            .join(".codededup-cache")
+            .join(".deslop-cache")
             .join("fingerprints")
             .exists(),
         "default run must not populate the fingerprint cache",
@@ -1569,7 +1569,7 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
         .arg(tmp.path().join("first"))
         .assert()
         .success();
-    let fingerprints_root = scan_root.join(".codededup-cache").join("fingerprints");
+    let fingerprints_root = scan_root.join(".deslop-cache").join("fingerprints");
     for language_dir in fs::read_dir(&fingerprints_root)? {
         let language_path = language_dir?.path();
         for version_dir in fs::read_dir(&language_path)? {
@@ -1637,7 +1637,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
         let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
     }
     let locked_dir = scan_root
-        .join(".codededup-cache")
+        .join(".deslop-cache")
         .join("fingerprints")
         .join("csharp")
         .join(env!("CARGO_PKG_VERSION"))
@@ -2387,7 +2387,7 @@ fn metrics_exclude_hidden_occurrences() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let _ = write_clone_pair(&scan_root)?;
     fs::write(
-        scan_root.join(".codededup.toml"),
+        scan_root.join(".deslop.toml"),
         "[defaults]\nreport_hide = [\"**/Alpha.cs\"]\n",
     )?;
     let out = outputs_under(tmp.path());
@@ -2500,7 +2500,7 @@ fn fail_over_cli_passes_under_threshold() -> Result<()> {
     Ok(())
 }
 
-// Implements [EXIT-CODES]: the `[threshold]` key in `.codededup.toml` is
+// Implements [EXIT-CODES]: the `[threshold]` key in `.deslop.toml` is
 // loaded when `--fail-over` is absent, and an exceeded value exits 3.
 #[test]
 fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
@@ -2508,7 +2508,7 @@ fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let _ = write_clone_pair(&scan_root)?;
     fs::write(
-        scan_root.join(".codededup.toml"),
+        scan_root.join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 0.0\n",
     )?;
     let out = outputs_under(tmp.path());
@@ -2536,7 +2536,7 @@ fn fail_over_cli_overrides_config_file() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let _ = write_clone_pair(&scan_root)?;
     fs::write(
-        scan_root.join(".codededup.toml"),
+        scan_root.join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 0.0\n",
     )?;
     let out = outputs_under(tmp.path());
@@ -2566,7 +2566,7 @@ fn no_fail_over_overrides_config_file_threshold() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let _ = write_clone_pair(&scan_root)?;
     fs::write(
-        scan_root.join(".codededup.toml"),
+        scan_root.join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 0.0\n",
     )?;
     let out = outputs_under(tmp.path());
@@ -2771,7 +2771,7 @@ fn fail_over_nan_exits_two() -> Result<()> {
     Ok(())
 }
 
-// Implements [EXIT-CODES]: an invalid threshold in `.codededup.toml`
+// Implements [EXIT-CODES]: an invalid threshold in `.deslop.toml`
 // propagates as exit 1 (runtime error) with the offending path in the
 // diagnostic. `max_duplication_percent = 150` is out of range.
 #[test]
@@ -2780,7 +2780,7 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let _ = write_clone_pair(&scan_root)?;
     fs::write(
-        scan_root.join(".codededup.toml"),
+        scan_root.join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 150.0\n",
     )?;
     let mut cmd = Command::cargo_bin("deslop")?;

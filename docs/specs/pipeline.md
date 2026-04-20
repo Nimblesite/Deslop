@@ -81,7 +81,7 @@ Exit codes:
 Threshold sources, highest precedence first:
 
 1. `--fail-over <percent>` CLI flag. Accepts a finite float in `[0.0, 100.0]`. `--fail-over 0` means "fail on any duplication". Invalid values → exit `2` with a named error.
-2. `[threshold] max_duplication_percent` in `.codededup.toml` (or the file passed via `--config`). Same validation rules.
+2. `[threshold] max_duplication_percent` in `.deslop.toml` (or the file passed via `--config`). Same validation rules.
 3. Absent — no threshold is enforced; exit `3` is unreachable and the text/HTML headers render the metric without a pass/fail verdict.
 
 A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip.
@@ -93,7 +93,7 @@ Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_ha
 
 **Activation.** Enabled with `--incremental` (off by default so read-only checkouts never get mutated). Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
 
-**Layout.** `<root>/.codededup-cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.codededup-cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
+**Layout.** `<root>/.deslop-cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop-cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
 
 **Format.** `u32` magic, then a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint. No serde, no schema drift: the magic + tool-version path segment bracket every format change.
 

@@ -29,7 +29,7 @@ use serde::Deserialize;
 use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 
 /// Default configuration file name searched for next to the scan root.
-pub const DEFAULT_CONFIG_FILENAME: &str = ".codededup.toml";
+pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 
 /// Raw on-disk TOML shape. Kept separate from [`ExclusionConfig`] so the
 /// runtime type can carry compiled matchers instead of raw pattern strings.
@@ -43,7 +43,7 @@ struct RawConfig {
     #[serde(default)]
     language: HashMap<String, RawSection>,
     /// Opt-in CI gate per [EXIT-CODES]. Populated when a user adds a
-    /// `[threshold]` block to `.codededup.toml`.
+    /// `[threshold]` block to `.deslop.toml`.
     #[serde(default)]
     threshold: Option<RawThreshold>,
 }

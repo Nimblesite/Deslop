@@ -240,7 +240,7 @@ pub struct SessionBackendConfig {
     pub embedding_model: String,
     /// Embedding endpoint override (currently only Ollama honours it).
     pub embedding_endpoint: String,
-    /// Optional `.codededup.toml` override path.
+    /// Optional `.deslop.toml` override path.
     pub config_path: Option<PathBuf>,
 }
 

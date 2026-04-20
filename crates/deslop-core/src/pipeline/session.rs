@@ -55,7 +55,7 @@ pub struct PipelineSession {
     min_nodes: u32,
     /// Whether to consult the on-disk fingerprint cache.
     incremental: bool,
-    /// Optional override pointing at a `.codededup.toml` outside the
+    /// Optional override pointing at a `.deslop.toml` outside the
     /// workspace root. `None` = discover inside `root`.
     config_path: Option<PathBuf>,
     /// Materialised registered parsers kept for the session lifetime
@@ -264,7 +264,7 @@ impl PipelineSession {
     }
 
     /// Reloads the exclusion config from disk. Called by the daemon
-    /// when `.codededup.toml` itself changes.
+    /// when `.deslop.toml` itself changes.
     ///
     /// # Errors
     ///

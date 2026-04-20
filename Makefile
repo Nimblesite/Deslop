@@ -69,7 +69,7 @@ clean:
 	@echo "==> Cleaning..."
 	cargo clean
 	$(RM) lcov.info
-	$(RM) .codededup-cache
+	$(RM) .deslop-cache
 
 ## ci: fmt check + lint + test + build (full CI simulation — no Ollama required)
 ci:

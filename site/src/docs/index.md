@@ -55,7 +55,7 @@ Deslop will use a local Ollama model if one is configured, or degrade gracefully
 
 ## Exclude noise
 
-Generated code, vendored dependencies, and migrations should not appear in the report. Configure once per repo in `.codededup.toml`:
+Generated code, vendored dependencies, and migrations should not appear in the report. Configure once per repo in `.deslop.toml`:
 
 ```toml
 exclude = [

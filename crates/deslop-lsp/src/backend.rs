@@ -20,16 +20,17 @@ use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response, Result as LspResult},
     lsp_types::{
-        DiagnosticOptions, DiagnosticServerCapabilities, DidChangeTextDocumentParams,
-        DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
-        FullDocumentDiagnosticReport, InitializeParams, InitializeResult, InitializedParams,
-        MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
-        TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
+        CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions,
+        DiagnosticServerCapabilities, DidChangeTextDocumentParams, DocumentDiagnosticParams,
+        DocumentDiagnosticReport, DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
+        Hover, HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities,
+        ServerInfo, TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
     Client, ExitedError, LanguageServer, LspService, Server,
 };
 
-use crate::{custom_methods, diagnostics};
+use crate::{code_lens, custom_methods, diagnostics, hover, position};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "deslop-lsp";
@@ -99,6 +100,10 @@ impl LanguageServer for LspBackend {
                         work_done_progress_options: WorkDoneProgressOptions::default(),
                     },
                 )),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
                 ..ServerCapabilities::default()
             },
         })
@@ -141,6 +146,35 @@ impl LanguageServer for LspBackend {
                 },
             }),
         ))
+    }
+
+    async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+        let Some(path) =
+            url_to_path(&params.text_document_position_params.text_document.uri)
+        else {
+            return Ok(None);
+        };
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            return Ok(None);
+        };
+        let lsp_position = params.text_document_position_params.position;
+        let byte = position::byte_for_position(&source, lsp_position);
+        let clusters = self
+            .service
+            .report_for_range(&path, byte, byte.saturating_add(1))
+            .await;
+        let Some(cluster) = clusters.into_iter().next() else {
+            return Ok(None);
+        };
+        Ok(Some(hover::build_for_cluster(&cluster)))
+    }
+
+    async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
+        let Some(path) = url_to_path(&params.text_document.uri) else {
+            return Ok(None);
+        };
+        let file_report = self.service.report_for_file(&path).await;
+        Ok(Some(code_lens::build_for_file(&file_report)))
     }
 }
 

@@ -73,8 +73,8 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 - `duplicated_loc` = lines covered by ≥ 2 non-hidden clone occurrences, deduplicated per file so overlapping sibling-extension ranges count once.
 - `analysed_loc` = physical lines across every file in `files_analysed`.
-- Hidden occurrences (generated code flagged via `.codededup.toml` `report_hide`) are excluded so they cannot inflate the metric.
-- CI gating: `--fail-over <percent>` (or `[threshold] max_duplication_percent` in `.codededup.toml`) exits `3` when `duplication_percent > threshold`. No threshold → no gate. Use this, not the `weight` column, for pass/fail decisions.
+- Hidden occurrences (generated code flagged via `.deslop.toml` `report_hide`) are excluded so they cannot inflate the metric.
+- CI gating: `--fail-over <percent>` (or `[threshold] max_duplication_percent` in `.deslop.toml`) exits `3` when `duplication_percent > threshold`. No threshold → no gate. Use this, not the `weight` column, for pass/fail decisions.
 
 ## Thresholds (typical defaults)
 

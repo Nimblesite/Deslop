@@ -30,7 +30,7 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
     write_headline(&theme, report);
     if report.clusters_hidden > 0 {
         eprintln!(
-            "  {dim}({hidden} more groups hidden by your .codededup.toml config){reset}",
+            "  {dim}({hidden} more groups hidden by your .deslop.toml config){reset}",
             dim = theme.dim,
             reset = theme.reset,
             hidden = report.clusters_hidden,

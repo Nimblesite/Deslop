@@ -1,7 +1,7 @@
 # Exclusion configuration
 
 ### [EXCLUSION-CONFIG] Exclusion configuration
-A single opt-in configuration file — `.codededup.toml` in the scan root, or `--config <path>` — controls two orthogonal exclusion tiers. Motivating case: generated code. We want to know when hand-written code duplicates a generated file, but we do not want the generated file itself to dominate the top of the report.
+A single opt-in configuration file — `.deslop.toml` in the scan root, or `--config <path>` — controls two orthogonal exclusion tiers. Motivating case: generated code. We want to know when hand-written code duplicates a generated file, but we do not want the generated file itself to dominate the top of the report.
 
 **Tiers.**
 
@@ -26,6 +26,6 @@ report_hide = ["**/target/**"]
 
 **Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
 
-**No config ⇒ no exclusions.** Current behaviour is preserved. Absence of `.codededup.toml` is not an error and is not warned on.
+**No config ⇒ no exclusions.** Current behaviour is preserved. Absence of `.deslop.toml` is not an error and is not warned on.
 
 **`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.

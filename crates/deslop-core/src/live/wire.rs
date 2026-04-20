@@ -105,7 +105,7 @@ pub struct SessionConfig {
     pub embedding_provenance: Option<EmbeddingProvenance>,
     /// Optional explicit exclusion-config path.
     pub exclusion_config_path: Option<PathBuf>,
-    /// Cache root (`<workspace>/.codededup-cache`).
+    /// Cache root (`<workspace>/.deslop-cache`).
     pub cache_root: PathBuf,
     /// Whether the session was created with the incremental cache on.
     pub incremental: bool,

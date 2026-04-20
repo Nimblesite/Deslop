@@ -52,7 +52,7 @@ struct Cli {
     #[arg(long, default_value = DEFAULT_OLLAMA_ENDPOINT)]
     embedding_endpoint: String,
 
-    /// Optional `.codededup.toml` override path.
+    /// Optional `.deslop.toml` override path.
     #[arg(long)]
     config: Option<PathBuf>,
 }

@@ -18,7 +18,7 @@ use crate::embedding::provider::EmbeddingSpec;
 
 /// Default cache root relative to the analysis root. Surfaced so
 /// callers can log the chosen path.
-pub const DEFAULT_CACHE_DIR_NAME: &str = ".codededup-cache";
+pub const DEFAULT_CACHE_DIR_NAME: &str = ".deslop-cache";
 
 /// Cache layout:
 ///
@@ -42,7 +42,7 @@ pub struct EmbeddingCache {
 
 impl EmbeddingCache {
     /// Opens (or creates) the cache directory for `spec` under
-    /// `base`. `base` is typically `<scan_root>/.codededup-cache`.
+    /// `base`. `base` is typically `<scan_root>/.deslop-cache`.
     ///
     /// # Errors
     ///

@@ -13,7 +13,7 @@ pub struct PipelineConfig<'a> {
     /// Minimum AST subtree node count considered a clone candidate
     /// (mirrors the CLI `--min-nodes` flag).
     pub min_nodes: u32,
-    /// Optional `.codededup.toml` override; `None` means discover in
+    /// Optional `.deslop.toml` override; `None` means discover in
     /// the scan root.
     pub config_path: Option<PathBuf>,
     /// Embedding-pass configuration ([FUSION-EMBED-PROVIDER]).

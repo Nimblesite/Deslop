@@ -141,7 +141,7 @@ args    = ["--root", "."]
 
 ```
 --min-nodes 30          # raise to cut noise on small clones
---incremental           # cache parsed ASTs under .codededup-cache/
+--incremental           # cache parsed ASTs under .deslop-cache/
 --embeddings auto       # add semantic-similarity pass (needs Ollama)
 --embedding-model nomic-embed-text
 ```

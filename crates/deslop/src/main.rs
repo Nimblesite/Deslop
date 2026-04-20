@@ -66,8 +66,8 @@ struct Cli {
     #[arg(long, value_name = "FILE", conflicts_with = "from_report")]
     debug_ast: Option<PathBuf>,
 
-    /// Path to an explicit `.codededup.toml` exclusion config. Defaults
-    /// to `.codededup.toml` next to the scan root.
+    /// Path to an explicit `.deslop.toml` exclusion config. Defaults
+    /// to `.deslop.toml` next to the scan root.
     #[arg(long, value_name = "FILE")]
     config: Option<PathBuf>,
 
@@ -105,7 +105,7 @@ struct Cli {
     /// Duplication percentage above which `deslop` exits `3`
     /// ([EXIT-CODES]). Finite float in `[0.0, 100.0]`. Takes
     /// precedence over `[threshold] max_duplication_percent` in
-    /// `.codededup.toml`. Mutually exclusive with `--no-fail-over`.
+    /// `.deslop.toml`. Mutually exclusive with `--no-fail-over`.
     #[arg(
         long,
         value_name = "PERCENT",
@@ -114,7 +114,7 @@ struct Cli {
     )]
     fail_over: Option<f64>,
 
-    /// Clears any `.codededup.toml` fail-over threshold for this run
+    /// Clears any `.deslop.toml` fail-over threshold for this run
     /// so the CLI can never exit `3`. Useful when running the tool
     /// locally against a repo whose CI gate the developer does not
     /// want to trip.
@@ -177,7 +177,7 @@ struct SuppressFlags {
 struct BehaviourFlags {
     /// Enable the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]).
     /// When set, the pipeline caches parsed AST + fingerprints under
-    /// `<root>/.codededup-cache/fingerprints/...` keyed by
+    /// `<root>/.deslop-cache/fingerprints/...` keyed by
     /// `(language, tool_version, min_nodes, content_hash)`. On the
     /// next run, unchanged files skip tree-sitter entirely. Off by
     /// default — analysing a read-only checkout should not mutate it.
@@ -310,7 +310,7 @@ fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     Ok(())
 }
 
-/// Loads `.codededup.toml` (if any) to surface the
+/// Loads `.deslop.toml` (if any) to surface the
 /// `[threshold] max_duplication_percent` key without mutating the
 /// pipeline path. Returns `None` when no config file exists or the
 /// key is absent.

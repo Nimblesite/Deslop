@@ -242,7 +242,7 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.embedding.mode` | `auto` | Mirrors `--embeddings={auto,required,off}`. |
 | `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
 | `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
-| `deslop.configPath` | `""` | Optional override for `.codededup.toml` — mirrors CLI `--config`. |
+| `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |
 
 Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required.
 

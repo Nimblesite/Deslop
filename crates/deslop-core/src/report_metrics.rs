@@ -144,7 +144,7 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     pub file_languages: &'a HashMap<FileId, &'static str, S>,
     /// File registry used to resolve `FileId → absolute path`.
     pub registry: &'a FileRegistry,
-    /// `.codededup.toml` policy. Occurrences whose file matches a
+    /// `.deslop.toml` policy. Occurrences whose file matches a
     /// `report_hide` pattern are excluded from the numerator.
     pub exclusion: &'a ExclusionConfig,
     /// Per-file analysed-line counts accumulated during the corpus
