@@ -24,6 +24,7 @@ use crate::{
         html_footer::write_run_details,
     },
     report::{Report, ReportCluster, ReportOccurrence},
+    report_metrics::ThresholdSource,
 };
 
 /// Renders `report` as a single-file HTML document. `scan_root` is the
@@ -127,6 +128,54 @@ fn write_intro(out: &mut String, report: &Report) {
         "<h1>CodeDedup report</h1><p class=\"lede\">{summary}</p>",
         summary = escape(&intro_summary(report)),
     );
+    write_metrics_banner(out, report);
+}
+
+/// Writes the repo-wide duplication banner per [METRICS-REPO]. Colour
+/// comes from a class selector driven by the threshold verdict so
+/// themes override it cleanly:
+/// `metrics-banner--ok` (green) / `--breached` (red) / `--neutral`.
+fn write_metrics_banner(out: &mut String, report: &Report) {
+    let metrics = report.metrics;
+    let variant = match (metrics.threshold.source, metrics.threshold.breached) {
+        (ThresholdSource::None, _) => "neutral",
+        (_, true) => "breached",
+        (_, false) => "ok",
+    };
+    let _ = write!(
+        out,
+        "<p class=\"metrics-banner metrics-banner--{variant}\">{body}</p>",
+        body = escape(&metrics_banner_text(report)),
+    );
+}
+
+/// Plain-English metrics + threshold sentence rendered inside the
+/// banner. Kept as text (not HTML) so escaping is uniform with the
+/// rest of the intro.
+fn metrics_banner_text(report: &Report) -> String {
+    let metrics = report.metrics;
+    let head = format!(
+        "repo: {pct:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
+        pct = metrics.duplication_percent,
+        dup = metrics.duplicated_loc,
+        total = metrics.analysed_loc,
+        clusters = metrics.clusters_total,
+        files = metrics.duplicated_files,
+    );
+    match metrics.threshold.source {
+        ThresholdSource::None => head,
+        ThresholdSource::Cli | ThresholdSource::Config => {
+            let verdict = if metrics.threshold.breached {
+                "breached"
+            } else {
+                "ok"
+            };
+            format!(
+                "{head} · threshold {pct:.2}% ({verdict})",
+                pct = metrics.threshold.percent
+            )
+        }
+    }
 }
 
 /// Builds the plain-English intro line. Avoids jargon; says what was

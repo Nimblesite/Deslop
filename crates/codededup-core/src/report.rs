@@ -20,11 +20,12 @@ use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
     pair::PairScore,
+    report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs, RepoMetrics},
     state::{FileId, FileRegistry},
 };
 
 /// Current report schema version. Bumped on breaking changes only.
-pub const REPORT_SCHEMA_VERSION: u32 = 2;
+pub const REPORT_SCHEMA_VERSION: u32 = 3;
 
 /// Markdown explaining the report schema. Embedded via `include_str!`
 /// from the single source of truth in `docs/specs/REPORTING-CONTEXT.md`
@@ -100,6 +101,11 @@ pub struct Report {
     /// older reports that pre-date the field.
     #[serde(default)]
     pub cache_stats: CacheStats,
+    /// Repo-wide duplication totals ([METRICS-REPO]). Deserialises as
+    /// empty when older (schema v2) reports pre-date the field so
+    /// `--from-report` still round-trips them.
+    #[serde(default)]
+    pub metrics: RepoMetrics,
     /// Markdown schema explanation; see [`SCHEMA_DOC`].
     pub schema_doc: String,
     /// Short agent-oriented playbook; see [`default_action_hints`].
@@ -238,6 +244,12 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     /// Incremental-cache telemetry captured during fingerprinting
     /// ([PIPELINE-INCREMENTAL]).
     pub cache_stats: CacheStats,
+    /// Per-file source bytes used to project occurrence `byte_range`s
+    /// onto line sets for [METRICS-REPO]. Borrowed; never cloned.
+    pub sources: &'a HashMap<FileId, Vec<u8>>,
+    /// Per-file analysed-line counts accumulated during the corpus
+    /// read-pass ([METRICS-REPO]).
+    pub analysed_lines: &'a AnalysedLines,
 }
 
 /// Converts the internal representation into a report ready for
@@ -268,6 +280,14 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
+    let metrics = compute_repo_metrics(MetricsInputs {
+        clusters: inputs.clusters,
+        sources: inputs.sources,
+        file_languages: inputs.file_languages,
+        registry: inputs.registry,
+        exclusion: inputs.exclusion,
+        analysed_lines: inputs.analysed_lines,
+    });
     Report {
         report_schema_version: REPORT_SCHEMA_VERSION,
         tool_version: crate::version().to_owned(),
@@ -275,6 +295,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         files_analysed: inputs.files_analysed,
         clusters_hidden,
         cache_stats: inputs.cache_stats,
+        metrics,
         schema_doc: SCHEMA_DOC.to_owned(),
         action_hints: default_action_hints(),
         embedding_provenance: inputs.embedding_provenance,

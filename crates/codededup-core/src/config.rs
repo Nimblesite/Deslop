@@ -26,7 +26,7 @@ use std::{
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use serde::Deserialize;
 
-use crate::error::CoreError;
+use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".codededup.toml";
@@ -42,6 +42,19 @@ struct RawConfig {
     /// (e.g. `csharp`, `rust`, `python`). Patterns extend `defaults`.
     #[serde(default)]
     language: HashMap<String, RawSection>,
+    /// Opt-in CI gate per [EXIT-CODES]. Populated when a user adds a
+    /// `[threshold]` block to `.codededup.toml`.
+    #[serde(default)]
+    threshold: Option<RawThreshold>,
+}
+
+/// Raw on-disk shape of the `[threshold]` section.
+#[derive(Debug, Default, Clone, Deserialize)]
+struct RawThreshold {
+    /// Percentage above which the analysis run exits `3` per
+    /// [EXIT-CODES]. `None` means "key not set" — the gate is off.
+    #[serde(default)]
+    max_duplication_percent: Option<f64>,
 }
 
 /// One TOML section — shared shape across `[defaults]` and
@@ -71,6 +84,10 @@ pub struct ExclusionConfig {
     default_report_hide: Gitignore,
     /// Per-language overlay matchers, keyed by parser language id.
     per_language: HashMap<String, LanguageMatchers>,
+    /// Optional fail-over threshold loaded from `[threshold]
+    /// max_duplication_percent` per [EXIT-CODES]. `None` means the
+    /// config file did not opt in.
+    fail_over_percent: Option<f64>,
 }
 
 /// Compiled matchers for a single language overlay.
@@ -93,6 +110,7 @@ impl ExclusionConfig {
             default_exclude: empty_matcher(),
             default_report_hide: empty_matcher(),
             per_language: HashMap::new(),
+            fail_over_percent: None,
         }
     }
 
@@ -149,12 +167,22 @@ impl ExclusionConfig {
                 },
             );
         }
+        let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
         Ok(Self {
             source: path.to_path_buf(),
             default_exclude,
             default_report_hide,
             per_language,
+            fail_over_percent,
         })
+    }
+
+    /// Returns the `[threshold] max_duplication_percent` loaded from
+    /// the config file, if any. `None` means the file did not opt in
+    /// to CI gating per [EXIT-CODES].
+    #[must_use]
+    pub const fn fail_over_percent(&self) -> Option<f64> {
+        self.fail_over_percent
     }
 
     /// Returns the source path this config was loaded from, or an empty
@@ -230,4 +258,21 @@ fn build_matcher(source: &Path, patterns: &[String]) -> Result<Gitignore, CoreEr
 /// anything.
 fn empty_matcher() -> Gitignore {
     Gitignore::empty()
+}
+
+/// Validates and returns the `[threshold] max_duplication_percent`
+/// value from the raw config, or `None` when the section is absent.
+fn resolve_threshold(
+    source: &std::path::Path,
+    raw: Option<&RawThreshold>,
+) -> Result<Option<f64>, CoreError> {
+    let Some(percent) = raw.and_then(|block| block.max_duplication_percent) else {
+        return Ok(None);
+    };
+    validate_threshold_percent(percent).map(Some).map_err(|msg| {
+        CoreError::ConfigThreshold {
+            path: source.to_path_buf(),
+            message: msg,
+        }
+    })
 }

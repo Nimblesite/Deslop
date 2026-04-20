@@ -7,6 +7,9 @@
 
 > ⚠️ **CRITICAL: THIS CODEBASE RECEIVES A GRADE OF A+.** WE DON'T ALLOW BAD CODE. NOT EVEN FOR ONE LINE. CODE MUST PASS REVIEW AT Google / Meta / Microsoft. ANYTHING LESS IS ⛔️ ILLEGAL AND MUST BE FIXED IMMEDIATELY.
 
+⚠️ ALL MODELS TRANSFERRED ACROSS THE WIRE MUST USE typeDiagram. NO IFS. NO BUTS
+https://typediagram.dev/docs/language-reference.html ⚠️
+
 > Read this file in full. Rules below are NON-NEGOTIABLE — violations are rejected in review.
 
 ## Project Overview

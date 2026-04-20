@@ -7,13 +7,17 @@
 
 use std::fmt::Write as _;
 
-use crate::report::{Report, ReportCluster};
+use crate::{
+    report::{Report, ReportCluster},
+    report_metrics::ThresholdSource,
+};
 
 /// Renders `report` as terse ASCII text suitable for piping to an agent.
 #[must_use]
 pub fn render_text(report: &Report) -> String {
     let mut out = String::new();
     write_header(&mut out, report);
+    write_metrics(&mut out, report);
     write_provenance(&mut out, report);
     write_cache_stats(&mut out, report);
     write_action_hints(&mut out, report);
@@ -21,6 +25,38 @@ pub fn render_text(report: &Report) -> String {
         write_cluster(&mut out, idx, cluster);
     }
     out
+}
+
+/// Writes the one-line repo-wide duplication header and the active
+/// threshold verdict per [METRICS-REPO]. The metric is always shown;
+/// the threshold line is omitted when no threshold is configured to
+/// keep local runs terse.
+fn write_metrics(out: &mut String, report: &Report) {
+    let metrics = report.metrics;
+    let _ = writeln!(
+        out,
+        "repo: {percent:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
+        percent = metrics.duplication_percent,
+        dup = metrics.duplicated_loc,
+        total = metrics.analysed_loc,
+        clusters = metrics.clusters_total,
+        files = metrics.duplicated_files,
+    );
+    let verdict = match metrics.threshold.source {
+        ThresholdSource::None => return,
+        ThresholdSource::Cli | ThresholdSource::Config => {
+            if metrics.threshold.breached {
+                "breached"
+            } else {
+                "ok"
+            }
+        }
+    };
+    let _ = writeln!(
+        out,
+        "threshold: {pct:.2}% ({verdict})",
+        pct = metrics.threshold.percent,
+    );
 }
 
 /// Writes the incremental-cache line so a human running back-to-back

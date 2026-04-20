@@ -30,6 +30,7 @@ pub mod pair;
 pub mod pipeline;
 pub mod render;
 pub mod report;
+pub mod report_metrics;
 pub mod sibling;
 pub mod state;
 pub mod tokens;
@@ -44,6 +45,10 @@ pub use embedding::{
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
+pub use report_metrics::{
+    compute_repo_metrics, count_analysed_lines, validate_threshold_percent, AnalysedLines,
+    MetricsInputs, RepoMetrics, ThresholdSource, ThresholdSummary,
+};
 
 /// Semantic version of the `codededup-core` library.
 #[must_use]

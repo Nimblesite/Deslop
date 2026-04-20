@@ -15,8 +15,9 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use codededup_core::{
-    debug_ast_dump, render::render_html, render::render_text, EmbeddingMode, EmbeddingSettings,
-    OllamaProvider, PipelineSession, Report, ReportDelta, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+    debug_ast_dump, render::render_html, render::render_text, validate_threshold_percent,
+    EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, PipelineSession, Report,
+    ReportDelta, StubProvider, ThresholdSource, ThresholdSummary, DEFAULT_OLLAMA_ENDPOINT,
     DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 use tracing::Level;
@@ -100,6 +101,25 @@ struct Cli {
     /// `--no-color`).
     #[command(flatten)]
     behaviour: BehaviourFlags,
+
+    /// Duplication percentage above which CodeDedup exits `3`
+    /// ([EXIT-CODES]). Finite float in `[0.0, 100.0]`. Takes
+    /// precedence over `[threshold] max_duplication_percent` in
+    /// `.codededup.toml`. Mutually exclusive with `--no-fail-over`.
+    #[arg(
+        long,
+        value_name = "PERCENT",
+        conflicts_with = "no_fail_over",
+        value_parser = parse_fail_over_percent,
+    )]
+    fail_over: Option<f64>,
+
+    /// Clears any `.codededup.toml` fail-over threshold for this run
+    /// so the CLI can never exit `3`. Useful when running the tool
+    /// locally against a repo whose CI gate the developer does not
+    /// want to trip.
+    #[arg(long)]
+    no_fail_over: bool,
 
     /// Show the researcher view on stderr — taxonomy IDs (Type-1/2/3),
     /// signal letters (s=structural, j=token, e=embedding), AST node
@@ -235,7 +255,8 @@ fn run_cli() -> Result<()> {
             return Err(err);
         }
     };
-    let report = outcome.report;
+    let mut report = outcome.report;
+    apply_threshold(&args, &mut report)?;
     let mut written = emit_all(&report, &formats, &output, &args.path)?;
     if let Some(delta) = outcome.delta.as_ref() {
         let delta_path = output.with_extension("delta.json");
@@ -254,7 +275,53 @@ fn run_cli() -> Result<()> {
             },
         },
     );
+    if report.metrics.breached() {
+        std::process::exit(3);
+    }
     Ok(())
+}
+
+/// Resolves the fail-over threshold from CLI flags + config file and
+/// writes the verdict into `report.metrics.threshold`. Per [EXIT-CODES]:
+/// `--no-fail-over` wins; `--fail-over` beats the config key; absence
+/// means no gate.
+fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
+    if let Some(percent) = args.fail_over {
+        report.metrics.threshold = ThresholdSummary::resolve(
+            percent,
+            ThresholdSource::Cli,
+            report.metrics.duplication_percent,
+        );
+        return Ok(());
+    }
+    if args.no_fail_over {
+        report.metrics.threshold = ThresholdSummary::none();
+        return Ok(());
+    }
+    let config_percent = resolve_config_threshold(args)?;
+    report.metrics.threshold = match config_percent {
+        Some(percent) => ThresholdSummary::resolve(
+            percent,
+            ThresholdSource::Config,
+            report.metrics.duplication_percent,
+        ),
+        None => ThresholdSummary::none(),
+    };
+    Ok(())
+}
+
+/// Loads `.codededup.toml` (if any) to surface the
+/// `[threshold] max_duplication_percent` key without mutating the
+/// pipeline path. Returns `None` when no config file exists or the
+/// key is absent.
+fn resolve_config_threshold(args: &Cli) -> Result<Option<f64>> {
+    let config = match args.config.as_deref() {
+        Some(path) => ExclusionConfig::load(path)
+            .with_context(|| format!("load config {}", path.display()))?,
+        None => ExclusionConfig::discover(&args.path)
+            .with_context(|| format!("discover config in {}", args.path.display()))?,
+    };
+    Ok(config.fail_over_percent())
 }
 
 /// Parses `file` and writes the normalised AST dump to stdout.
@@ -390,6 +457,16 @@ fn assemble_touched(args: &Cli, adds: &[RerunAdd]) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+/// Parses and validates `--fail-over` at clap-time so invalid values
+/// exit `2` (clap's default for argument errors) instead of surfacing
+/// as a runtime `1`.
+fn parse_fail_over_percent(raw: &str) -> Result<f64, String> {
+    let parsed = raw
+        .parse::<f64>()
+        .map_err(|err| format!("--fail-over expects a number: {err}"))?;
+    validate_threshold_percent(parsed)
 }
 
 /// Parses `--embeddings` into the core enum, surfacing a user-facing

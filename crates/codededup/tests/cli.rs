@@ -170,7 +170,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
         .success();
     let json = fs::read_to_string(&out.json)?;
     assert!(
-        json.contains("\"report_schema_version\": 2"),
+        json.contains("\"report_schema_version\": 3"),
         "schema version missing: {json}"
     );
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");

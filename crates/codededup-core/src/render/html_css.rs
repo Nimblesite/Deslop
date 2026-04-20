@@ -20,7 +20,11 @@ pub const SITE_CSS: &str = include_str!("../../../../site/src/assets/css/styles.
 pub const REPORT_CSS: &str = "\
 .report-shell{max-width:80rem;margin-inline:auto;padding:var(--space-12) var(--space-6);}\
 .report-shell h1{font-size:clamp(2rem,4vw,3rem);font-weight:800;margin-bottom:var(--space-3);letter-spacing:-0.04em;}\
-.report-shell .lede{color:var(--on-surface-variant);max-width:48rem;margin-bottom:var(--space-10);}\
+.report-shell .lede{color:var(--on-surface-variant);max-width:48rem;margin-bottom:var(--space-4);}\
+.metrics-banner{font-family:var(--font-mono);font-size:0.875rem;padding:var(--space-3) var(--space-4);border-radius:var(--radius-sm);margin:0 0 var(--space-10);border-left:4px solid var(--secondary-container);background:var(--surface-container-low);color:var(--on-surface);}\
+.metrics-banner--ok{border-left-color:var(--primary-container);color:var(--primary);}\
+.metrics-banner--breached{border-left-color:var(--error,#ff6464);color:var(--error,#ff6464);}\
+.metrics-banner--neutral{border-left-color:var(--secondary-container);color:var(--on-surface-variant);}\
 .report-shell h2{font-size:1.5rem;font-weight:700;margin:var(--space-12) 0 var(--space-6);letter-spacing:-0.02em;}\
 .report-shell .empty{color:var(--on-surface-variant);font-style:italic;}\
 .cluster-card{background:var(--surface-container-low);padding:var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-sm);border-left:4px solid var(--primary-container);}\

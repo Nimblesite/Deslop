@@ -16,6 +16,7 @@ use crate::{
     fpcache::{CachedFile, FingerprintCache},
     lang::LanguageParser,
     report::CacheStats,
+    report_metrics::{count_analysed_lines, AnalysedLines},
     sibling::collect_sibling_fingerprints,
     state::FileId,
 };
@@ -42,6 +43,9 @@ pub struct FingerprintCorpus {
     /// Per-run incremental-cache hit/miss counters
     /// ([PIPELINE-INCREMENTAL]).
     pub cache_stats: CacheStats,
+    /// Per-file physical line counts, accumulated at file-read time
+    /// so [METRICS-REPO] adds no extra I/O pass.
+    pub analysed_lines: AnalysedLines,
 }
 
 /// Parses every discovered file and collects its structural + sibling
@@ -88,6 +92,8 @@ pub fn fingerprint_corpus(
         )?;
         corpus.fingerprints.extend(processed.fingerprints.clone());
         corpus.trees.push(processed.tree.clone());
+        let lines = count_analysed_lines(&source);
+        let _previous_lines = corpus.analysed_lines.insert(discovered.file_id, lines);
         let _previous = corpus.per_file.insert(discovered.file_id, processed);
         let _previous_source = corpus.sources.insert(discovered.file_id, source);
     }
@@ -109,7 +115,7 @@ pub fn parse_one_file(
     parser: &dyn LanguageParser,
     config: &PipelineConfig<'_>,
     stats: &mut CacheStats,
-) -> Result<(CachedFile, Vec<u8>), CoreError> {
+) -> Result<(CachedFile, Vec<u8>, u64), CoreError> {
     let source = read_source(path)?;
     let cache_base = config.root.join(DEFAULT_CACHE_DIR_NAME);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
@@ -120,7 +126,8 @@ pub fn parse_one_file(
     };
     let min_nodes = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let processed = load_or_parse_file(cache, parser, &source, file_id, min_nodes, stats)?;
-    Ok((processed, source))
+    let lines = count_analysed_lines(&source);
+    Ok((processed, source, lines))
 }
 
 /// Returns (lazily-opened) [`FingerprintCache`] for `language`,

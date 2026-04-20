@@ -46,6 +46,16 @@ pub enum CoreError {
         source: toml::de::Error,
     },
 
+    /// `[threshold] max_duplication_percent` in the exclusion config
+    /// failed validation (not finite, outside `[0, 100]`, etc.).
+    #[error("invalid threshold in {path}: {message}")]
+    ConfigThreshold {
+        /// Config path that carried the invalid threshold.
+        path: PathBuf,
+        /// Validator diagnostic message.
+        message: String,
+    },
+
     /// A pattern in the exclusion config was rejected by the
     /// `ignore::gitignore` compiler.
     #[error("invalid glob pattern {pattern:?} in {path}: {source}")]

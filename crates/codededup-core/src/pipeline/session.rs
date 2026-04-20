@@ -26,6 +26,7 @@ use crate::{
     lsh::band_collisions,
     pair::{candidate_pairs, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
+    report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
 };
 
@@ -88,6 +89,10 @@ pub struct PipelineSession {
     /// Running cache-hit telemetry. Accumulates across updates so
     /// subscribers can track long-term cache utility.
     cumulative_stats: CacheStats,
+    /// Per-file analysed-line counts. Updated in place on each
+    /// [`Self::update_files`] call so [METRICS-REPO] never re-reads
+    /// sources from disk.
+    analysed_lines: AnalysedLines,
     /// Files analysed in the most recent generation. Pre-computed so
     /// the render inputs stay cheap.
     files_analysed: usize,
@@ -145,6 +150,7 @@ impl PipelineSession {
             live_paths,
             file_languages,
             cumulative_stats: corpus.cache_stats,
+            analysed_lines: corpus.analysed_lines,
             files_analysed,
         };
         let report = session.render(&config, corpus.cache_stats)?;
@@ -286,7 +292,9 @@ impl PipelineSession {
             .file_id_for(&absolute)
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
-        let (cached, source) = parse_one_file(file_id, &absolute, parser, &config, stats)?;
+        let (cached, source, lines) =
+            parse_one_file(file_id, &absolute, parser, &config, stats)?;
+        let _prev_lines = self.analysed_lines.insert(file_id, lines);
         let _prev = self.per_file.insert(file_id, cached);
         let _prev_source = self.sources.insert(file_id, source);
         let _prev_path = self.live_paths.insert(file_id, absolute);
@@ -309,6 +317,7 @@ impl PipelineSession {
         let _removed_cache = self.per_file.remove(&file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
+        let _removed_lines = self.analysed_lines.remove(&file_id);
         self.files_analysed = self.live_paths.len();
     }
 
@@ -391,6 +400,8 @@ impl PipelineSession {
             exclusion: &self.exclusion,
             embedding_provenance: embedding_outcome.provenance,
             cache_stats: last_pass_stats,
+            sources: &corpus.sources,
+            analysed_lines: &self.analysed_lines,
         }))
     }
 
@@ -411,6 +422,7 @@ impl PipelineSession {
             sources: self.sources.clone(),
             per_file: HashMap::new(),
             cache_stats: CacheStats::default(),
+            analysed_lines: AnalysedLines::new(),
         }
     }
 }
