@@ -111,12 +111,18 @@ struct Cli {
     /// After the initial analysis, re-run each listed path through the
     /// incremental session ([`PipelineSession::update_files`]) and emit
     /// the [`ReportDelta`] between the two generations as
-    /// `<base>.delta.json`. The rerun also drives the delta+session
-    /// path end-to-end; deleted paths are dropped from the corpus on
-    /// the rerun. Primary use: wiring a watcher or LSP transport at
-    /// [DAEMON-WATCHER].
+    /// `<base>.delta.json`. Primary use: simulating a watcher or LSP
+    /// transport driving [LIVE-STATE] updates end-to-end.
     #[arg(long = "rerun-touch", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
     rerun_touch: Vec<PathBuf>,
+
+    /// Remove each listed path from disk between the initial analysis
+    /// and the rerun. Simulates a file deletion observed by a watcher:
+    /// the rerun sees the path as missing and drops it from the corpus
+    /// ([LIVE-STATE] `drop_path`). Implies `--rerun-touch` for each
+    /// listed path. Must name a path inside the scan root.
+    #[arg(long = "rerun-remove", value_name = "PATH", num_args = 1.., action = clap::ArgAction::Append)]
+    rerun_remove: Vec<PathBuf>,
 }
 
 /// Suppression flags for each output format. Packed into their own

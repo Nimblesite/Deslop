@@ -70,6 +70,11 @@ fuse signals → rank → render report
 - Early return with `?` for clean error propagation.
 - Descriptive variable names — no single letters except in closures.
 
+## Website
+
+- ZERO duplicate CSS
+- Hard CSS budget 1.5k LOC
+
 ## Logging Standards
 
 - **`tracing` + `tracing-subscriber` only.** Never `println!`/`eprintln!` for diagnostics.
