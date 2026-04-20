@@ -1,5 +1,7 @@
 // E2E: binary resolver prefers ${CODEDEDUP_BINARY_DIR}, prepends bundled to PATH,
 // and matches versions before accepting a PATH-installed binary.
+// Uses tiny shell scripts — not LSP stubs — because this tests the resolver's
+// PATH + version logic, not the LSP wire protocol.
 
 import * as assert from "node:assert/strict";
 import { resolveBinary } from "../../src/binary";

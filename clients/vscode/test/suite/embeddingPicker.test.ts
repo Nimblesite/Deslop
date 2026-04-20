@@ -1,5 +1,6 @@
-// E2E: the embedding picker lists the stub provider when Ollama is unreachable,
-// and the fake LSP-driven list when it is.
+// E2E: the embedding picker command is registered and invokable.
+// Runs against the real codededup-lsp binary; the LSP forwards embedding/listModels
+// to the real stub + ollama providers in codededup-core.
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";

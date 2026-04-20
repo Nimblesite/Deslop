@@ -88,6 +88,7 @@ fuse signals → rank → render report
 
 ## Testing Rules
 
+- **Testing any UI/Extension with a fake LSP/MCP = ⛔️ ILLEGAL!!!**
 - **Aim for 100% coverage and high mutation score.**
 - **Never delete a failing test. Never skip a test.** Add more failing tests for broken/missing functionality — never remove them.
 - **Specific assertions only.** `assert!(true)` is illegal.
