@@ -642,12 +642,14 @@ fn load_report(path: &std::path::Path) -> Result<Report> {
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
     let mut report = serde_json::from_str::<Report>(&source)
         .with_context(|| format!("parse report {}", path.display()))?;
-    // v3 reports predate [CLONE-BUCKETS] so their `cluster.bucket`
-    // field deserialises as empty. Re-route from the signal triple so
-    // renderers always see a non-empty canonical wire label.
+    // Reports predating [CLONE-BUCKETS] deserialise with an empty
+    // `cluster.bucket`. Re-route from the signal triple so renderers
+    // always see a non-empty canonical wire label.
     for cluster in &mut report.clusters {
         if cluster.bucket.is_empty() {
-            cluster.bucket = classify_signals(cluster.signals).wire_label().to_owned();
+            classify_signals(cluster.signals)
+                .wire_label()
+                .clone_into(&mut cluster.bucket);
         }
     }
     Ok(report)

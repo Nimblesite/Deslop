@@ -21,6 +21,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use codededup_core::buckets::{bucket_labels, classify};
 use codededup_core::live::FileReport;
 use codededup_core::report::{ReportCluster, ReportOccurrence};
 use tower_lsp::lsp_types::{
@@ -111,7 +112,7 @@ fn build_for_cluster(
             )),
             code_description: code_description_for(&cluster.id),
             source: Some("codededup".to_owned()),
-            message: cluster.interpretation.clone(),
+            message: diagnostic_message(cluster),
             related_information: related_info_for(cluster, path, workspace_root, cache),
             tags: None,
             data: None,
@@ -123,6 +124,17 @@ fn build_for_cluster(
 /// applies to. Handles the common relative/absolute skew.
 fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
     occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
+}
+
+/// Builds the diagnostic message shown in the Problems panel / hover /
+/// on-hover balloons. These are **shared-text** surfaces per
+/// [CLONE-BUCKETS-DUAL-LABEL]: humans read them, AI agents scrape them.
+/// So the message uses the hybrid form — plain title with a bracketed
+/// taxonomy suffix — plus the canonical action sentence so the reader
+/// always sees what to do next.
+fn diagnostic_message(cluster: &ReportCluster) -> String {
+    let labels = bucket_labels(classify(cluster));
+    format!("{} — {}", labels.hybrid_title, labels.action_sentence)
 }
 
 /// Builds the `codededup://cluster/<id>` href.

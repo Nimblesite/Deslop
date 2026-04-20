@@ -12,7 +12,11 @@ import {
 } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { SeverityBadge } from "../components/SeverityBadge";
-import type { Severity } from "../../../src/types/report";
+import {
+  bucketLabels,
+  resolveBucket,
+  type Severity,
+} from "../../../src/types/report";
 
 const LANG_OPTIONS: { label: string; value: string | null }[] = [
   { label: "Any language", value: null },
@@ -169,7 +173,33 @@ function ReportApp() {
             >
               <SeverityBadge severity={severity} label={`#${i + 1}`} />
               <div>
-                <div style={{ fontFamily: FONT.ui, fontSize: "14px" }}>{cluster.interpretation}</div>
+                <div
+                  style={{
+                    fontFamily: FONT.ui,
+                    fontSize: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span style={{ fontWeight: 600 }}>{bucketLabels(resolveBucket(cluster)).plainTitle}</span>
+                  {bucketLabels(resolveBucket(cluster)).aiMatch ? (
+                    <span
+                      style={{
+                        background: COLOR.secondaryContainer ?? COLOR.surfaceContainerLow,
+                        color: COLOR.onSurface,
+                        padding: "1px 5px",
+                        borderRadius: "3px",
+                        fontSize: "9px",
+                        letterSpacing: "0.1em",
+                        fontWeight: 700,
+                      }}
+                      title="Detected by the AI embedding pass."
+                    >
+                      AI
+                    </span>
+                  ) : null}
+                </div>
                 <div
                   class="mono"
                   style={{ color: COLOR.onSurfaceMuted, fontSize: "11px", marginTop: "2px" }}

@@ -27,11 +27,13 @@ use crate::{
 
 /// Current report schema version.
 ///
-/// **v4 (current)** — adds `cluster.bucket` (stable wire label for the
-/// [CLONE-BUCKETS] bucket) so consumers stop re-deriving routing from
-/// the signal triple. Additive: deserialises v3 reports with an
-/// inferred bucket via `#[serde(default)]`.
-pub const REPORT_SCHEMA_VERSION: u32 = 4;
+/// Pinned at `1` for the life of the pre-stable development period.
+/// The report shape is still in flux and MAY change between releases
+/// while the tool is in its early stages; consumers should treat any
+/// pre-1.0 report as best-effort. Once the tool stabilises this will
+/// adopt semantic versioning and start bumping on breaking changes.
+/// Until then: do **not** bump this constant.
+pub const REPORT_SCHEMA_VERSION: u32 = 1;
 
 /// Markdown explaining the report schema. Embedded via `include_str!`
 /// from the single source of truth in `docs/specs/REPORTING-CONTEXT.md`
@@ -151,10 +153,11 @@ pub struct ReportCluster {
     pub signals: ReportSignals,
     /// Canonical bucket ([CLONE-BUCKETS]) the cluster falls into.
     /// One of `"identical" | "nearly_identical" | "loosely_similar" |
-    /// "same_behavior"`. Added in schema v4 so every consumer
-    /// (renderer, MCP tool, webview) stops re-deriving routing from the
-    /// signal triple. `#[serde(default)]` lets `--from-report` keep
-    /// round-tripping v3 reports; the renderer re-routes when empty.
+    /// "same_behavior"`. Every consumer (renderer, MCP tool, webview)
+    /// reads this field instead of re-deriving routing from the signal
+    /// triple. `#[serde(default)]` lets `--from-report` keep
+    /// round-tripping older reports that pre-date the field; the
+    /// renderer re-routes when empty.
     #[serde(default)]
     pub bucket: String,
     /// Every occurrence of the clone.

@@ -9,7 +9,7 @@ import { Report } from "../../types/report";
 
 function report(): Report {
   return {
-    report_schema_version: 3,
+    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 5,

@@ -36,7 +36,7 @@ function cluster(id: string, paths: string[]): ReportCluster {
 
 function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 3,
+    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 1,

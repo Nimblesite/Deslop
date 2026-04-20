@@ -17,7 +17,7 @@ function newStore(embedding?: {
   const store = new ReportStore();
   store.setSnapshot(
     {
-      report_schema_version: 3,
+      report_schema_version: 1,
       tool_version: "x",
       min_nodes: 30,
       files_analysed: 0,

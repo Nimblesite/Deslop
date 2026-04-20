@@ -271,7 +271,7 @@ fn report_get_returns_canonical_report_with_schema_doc() -> Result<()> {
         value_get(&report, "/report_schema_version")?
             .as_u64()
             .unwrap_or(0),
-        3
+        1
     );
     let schema_doc = value_get(&report, "/schema_doc")?;
     assert!(

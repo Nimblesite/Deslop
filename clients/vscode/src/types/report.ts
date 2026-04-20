@@ -1,4 +1,4 @@
-// Mirrors codededup-core::report at REPORT_SCHEMA_VERSION = 4.
+// Mirrors codededup-core::report at REPORT_SCHEMA_VERSION = 1.
 // Keep in sync with crates/codededup-core/src/report.rs,
 // crates/codededup-core/src/buckets.rs, and
 // crates/codededup-core/src/report_metrics.rs.

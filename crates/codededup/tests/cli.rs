@@ -170,7 +170,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
         .success();
     let json = fs::read_to_string(&out.json)?;
     assert!(
-        json.contains("\"report_schema_version\": 3"),
+        json.contains("\"report_schema_version\": 1"),
         "schema version missing: {json}"
     );
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
@@ -185,10 +185,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     let html = fs::read_to_string(&out.html)?;
     assert!(html.contains("<!doctype html>"), "html doctype missing");
     assert!(html.contains("Action hints"), "html action hints missing");
-    assert!(
-        html.contains("Deslop report"),
-        "html human intro missing"
-    );
+    assert!(html.contains("Deslop report"), "html human intro missing");
     assert!(
         html.contains("Duplicate groups"),
         "html cluster section heading missing"
@@ -2805,10 +2802,10 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
 #[test]
 fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    // Minimal v2 report without `metrics`. Schema v3 uses #[serde(default)]
-    // to keep this back-compatible.
+    // Minimal report missing `metrics`. `#[serde(default)]` keeps this
+    // back-compatible so older on-disk reports still round-trip.
     let v2 = "{\n\
-              \"report_schema_version\": 2,\n\
+              \"report_schema_version\": 1,\n\
               \"tool_version\": \"legacy\",\n\
               \"min_nodes\": 30,\n\
               \"files_analysed\": 0,\n\

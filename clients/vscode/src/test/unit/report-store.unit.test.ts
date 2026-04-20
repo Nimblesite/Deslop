@@ -7,7 +7,7 @@ import { Report, ReportCluster, ReportDelta } from "../../types/report";
 
 function emptyReport(overrides: Partial<Report> = {}): Report {
   return {
-    report_schema_version: 3,
+    report_schema_version: 1,
     tool_version: "tool-v1",
     min_nodes: 30,
     files_analysed: 0,
