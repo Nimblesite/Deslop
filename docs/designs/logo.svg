@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 160" width="512" height="315" role="img" aria-label="Deslop logo">
+  <title>Deslop</title>
+
+  <!--
+    Stencil D + S, overlapping. Sharp corners only (Kinetic Manuscript).
+    Two-color: crimson (#B3261E) body = D, soft crimson (#FFB4AA) overlay = S.
+    Each letter is one path with a chamfered outer silhouette and inner
+    cutouts via evenodd fill, so the letter shapes read at 28px.
+  -->
+
+  <!-- D: chamfered block, one rectangular cutout -->
+  <path fill="#B3261E" fill-rule="evenodd" d="
+    M 10 20 L 110 20 L 140 50 L 140 110 L 110 140 L 10 140 Z
+    M 34 44 L 34 116 L 100 116 L 116 100 L 116 60 L 100 44 Z
+  "/>
+
+  <!-- S: chamfered silhouette with two cutouts (upper-right and lower-left pockets) -->
+  <path fill="#FFB4AA" fill-rule="evenodd" d="
+    M 140 20 L 250 20 L 250 88 L 240 98 L 148 98 L 148 114 L 250 114 L 250 140 L 128 140 L 118 130 L 118 62 L 128 52 L 220 52 L 220 46 L 140 46 Z
+    M 148 26 L 134 40 L 134 74 L 148 88 L 232 88 L 232 74 L 140 74 L 140 52 L 148 52 Z
+    M 148 120 L 148 140 L 232 140 L 246 126 L 246 120 Z
+  "/>
+</svg>

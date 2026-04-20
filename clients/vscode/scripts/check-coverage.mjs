@@ -1,17 +1,26 @@
-// Enforce VSIX coverage threshold from coverage-thresholds.json.
-// Mirrors the Rust _coverage_check in the repo Makefile.
+// Enforce VSIX coverage threshold from the repo-root
+// `coverage-thresholds.json`. Mirrors the Rust `_coverage_check` in the
+// top-level Makefile — same 1% rounding slack, same ratchet discipline.
+//
+// Single source of truth: ../../coverage-thresholds.json → .vsix.default_threshold.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, "..");
-const thresholds = JSON.parse(
-  readFileSync(resolve(root, "coverage-thresholds.json"), "utf8"),
-);
-const target = Number(thresholds.default_threshold);
+const vsixRoot = resolve(here, "..");
+const repoRoot = resolve(vsixRoot, "..", "..");
+const thresholdsPath = resolve(repoRoot, "coverage-thresholds.json");
 
-const summaryPath = resolve(root, "coverage", "coverage-summary.json");
+const thresholds = JSON.parse(readFileSync(thresholdsPath, "utf8"));
+const vsixCfg = thresholds.vsix;
+if (!vsixCfg || !Number.isFinite(Number(vsixCfg.default_threshold))) {
+  console.error(`${thresholdsPath} is missing .vsix.default_threshold`);
+  process.exit(1);
+}
+const target = Number(vsixCfg.default_threshold);
+
+const summaryPath = resolve(vsixRoot, "coverage", "coverage-summary.json");
 let summary;
 try {
   summary = JSON.parse(readFileSync(summaryPath, "utf8"));

@@ -7,6 +7,7 @@
 
 .PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package
 
+
 # ---------------------------------------------------------------------------
 # OS Detection
 # ---------------------------------------------------------------------------
@@ -36,21 +37,24 @@ build:
 	@echo "==> Building..."
 	cargo build --release --workspace
 
-## test: Fail-fast tests + coverage + threshold enforcement.
+## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
 ##       Does NOT require Ollama — tests whose names contain `ollama_`
 ##       are filtered out via `--skip ollama_`. `make ci-ollama` runs
 ##       the Ollama-gated tests explicitly against a live daemon.
-##       Because the Ollama HTTP client is only exercised by those
-##       tests, `embedding/ollama.rs` is excluded from the coverage
-##       measurement so the default threshold stays honest.
+##       The `--ignore-filename-regex` list lives in
+##       `coverage-thresholds.json` under `.rust.ignore_filename_regex`
+##       (single source of truth). Per-crate thresholds live under
+##       `.rust.crates.<crate>`; `scripts/coverage-check.sh` enforces
+##       each one independently — no workspace roll-up masking.
 test:
-	@echo "==> Testing (fail-fast + coverage + threshold)..."
+	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
-	cargo llvm-cov --workspace --all-targets --features deslop-core/live \
-	    --ignore-filename-regex '(embedding/ollama\.rs|delta\.rs|pipeline/session\.rs|live/watcher\.rs|live/scheduler\.rs|live/wire\.rs|live/clock\.rs|live/errors\.rs|live/notifications\.rs|deslop-lsp/src/main\.rs|deslop-lsp/src/backend\.rs|deslop-lsp/src/custom_methods\.rs|deslop-mcp/src/main\.rs|deslop-mcp/src/server\.rs)' \
+	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
+	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
+	    --ignore-filename-regex "$$_rust_ignore" \
 	    --lcov --output-path lcov.info -- --skip ollama_
-	$(MAKE) _coverage_check
+	@bash scripts/coverage-check.sh lcov.info "$(_COVERAGE_THRESHOLDS_FILE)"
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
 lint:
@@ -71,12 +75,16 @@ clean:
 	$(RM) lcov.info
 	$(RM) .deslop-cache
 
-## ci: fmt check + lint + test + build (full CI simulation — no Ollama required)
+## ci: fmt + lint + Rust test + build + VSIX e2e + VSIX coverage.
+##     Full CI simulation. Runs every non-Ollama test suite, Rust and
+##     VSIX, and enforces per-crate + VSIX coverage thresholds.
+##     Ollama-gated suites run via `make ci-ollama`.
 ci:
 	@$(MAKE) fmt CHECK=1
 	@$(MAKE) lint
 	@$(MAKE) test
 	@$(MAKE) build
+	@$(MAKE) vsix-coverage
 
 ## setup: Post-create dev environment setup (used by devcontainer)
 setup:
@@ -84,24 +92,6 @@ setup:
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
 	@echo "==> Setup complete. Run 'make ci' to validate."
-
-# ---------------------------------------------------------------------------
-# Private: coverage enforcement (called from `test`)
-# ---------------------------------------------------------------------------
-_coverage_check:
-	@if [ ! -f "$(_COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(_COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	THRESHOLD=$$(jq -r '.default_threshold' "$(_COVERAGE_THRESHOLDS_FILE)"); \
-	LH=$$(grep '^LH:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
-	LF=$$(grep '^LF:' lcov.info | awk -F: '{sum+=$$2} END{print sum+0}'); \
-	if [ "$$LF" -eq 0 ]; then echo "FAIL: No lines in lcov.info"; exit 1; fi; \
-	PCT=$$(awk "BEGIN{printf \"%.1f\", $$LH/$$LF*100}"); \
-	PASS=$$(awk "BEGIN{print ($$LH/$$LF*100 - 1.0 >= $${THRESHOLD}) ? 1 : 0}"); \
-	echo "Line coverage: $${PCT}% (threshold: $${THRESHOLD}% + 1% rounding slack)"; \
-	if [ "$$PASS" -eq 0 ]; then \
-	  echo "FAIL: $${PCT}% - 1% rounding slack < $${THRESHOLD}%"; exit 1; \
-	else \
-	  echo "OK: $${PCT}% - 1% rounding slack >= $${THRESHOLD}%"; \
-	fi
 
 # =============================================================================
 # Repo-Specific Targets
@@ -230,11 +220,11 @@ vsix-rebuild:
 help:
 	@echo "Standard targets:"
 	@echo "  build          - Compile/assemble all artifacts"
-	@echo "  test           - Fail-fast tests + coverage + threshold enforcement"
+	@echo "  test           - Fail-fast Rust tests + per-crate coverage threshold"
 	@echo "  lint           - All linters/analyzers (read-only, no formatting)"
 	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
 	@echo "  clean          - Remove build artifacts"
-	@echo "  ci             - lint + test + build (full CI simulation)"
+	@echo "  ci             - fmt + lint + rust test + build + VSIX e2e + VSIX coverage"
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""
 	@echo "Repo-specific targets:"
