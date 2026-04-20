@@ -4,7 +4,12 @@
 //! dispatches to the library. A future MCP/LSP daemon will be a sibling
 //! binary over the same crate.
 
-use std::{fs, io::Write, path::PathBuf};
+use std::{
+    fmt::Write as _,
+    fs,
+    io::Write as _,
+    path::PathBuf,
+};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -76,44 +81,44 @@ fn emit_report(
         }
         OutputFormat::Text => render_text(report),
     };
-    match destination {
-        Some(path) => fs::write(path, &payload)
-            .with_context(|| format!("write report to {}", path.display())),
-        None => {
-            let stdout = std::io::stdout();
-            let mut guard = stdout.lock();
-            guard
-                .write_all(payload.as_bytes())
-                .context("write report to stdout")?;
-            guard
-                .write_all(b"\n")
-                .context("write trailing newline")?;
-            Ok(())
-        }
+    if let Some(path) = destination {
+        return fs::write(path, &payload)
+            .with_context(|| format!("write report to {}", path.display()));
     }
+    let stdout = std::io::stdout();
+    let mut guard = stdout.lock();
+    guard
+        .write_all(payload.as_bytes())
+        .context("write report to stdout")?;
+    guard
+        .write_all(b"\n")
+        .context("write trailing newline")?;
+    Ok(())
 }
 
 /// ASCII-only pretty-printer over the report. See
 /// [PRINCIPLES-AUDIENCE-AGENT].
 fn render_text(report: &Report) -> String {
     let mut out = String::new();
-    out.push_str(&format!(
-        "codededup {tool} (schema v{schema}) — {files} file(s), {clusters} cluster(s)\n",
+    let _ = writeln!(
+        out,
+        "codededup {tool} (schema v{schema}) -- {files} file(s), {clusters} cluster(s)",
         tool = report.tool_version,
         schema = report.report_schema_version,
         files = report.files_analysed,
         clusters = report.clusters.len(),
-    ));
+    );
     for (idx, cluster) in report.clusters.iter().enumerate() {
-        out.push_str(&format!(
-            "#{rank} [{id}] weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n",
+        let _ = writeln!(
+            out,
+            "#{rank} [{id}] weight={weight:.2} size={size} nodes={nodes}\n  {summary}",
             rank = idx.saturating_add(1),
             id = cluster.id,
             weight = cluster.weight,
             size = cluster.size,
             nodes = cluster.canonical_node_count,
             summary = cluster.summary,
-        ));
+        );
     }
     out
 }

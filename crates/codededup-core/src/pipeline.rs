@@ -27,9 +27,14 @@ pub struct PipelineConfig {
 }
 
 /// Runs the full analysis pipeline and returns a rendered report.
+///
+/// # Errors
+///
+/// Returns [`CoreError::Io`] when a discovered source file cannot be read,
+/// and propagates any [`CoreError`] from the language parser.
 pub fn run(config: &PipelineConfig) -> Result<Report, CoreError> {
     let parser = CSharpParser::new();
-    let accepted_extensions: Vec<&str> = parser.file_extensions().iter().copied().collect();
+    let accepted_extensions: Vec<&str> = parser.file_extensions().to_vec();
     let discovery = discover_files(&config.root, &accepted_extensions);
 
     tracing::info!(

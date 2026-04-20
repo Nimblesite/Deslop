@@ -30,6 +30,12 @@ pub trait LanguageParser: Send + Sync {
 
     /// Parses `source` and returns a normalised AST rooted at the file. All
     /// subtrees carry `file_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::GrammarLoad`] if the tree-sitter grammar cannot
+    /// be applied to the parser, and [`CoreError::ParseFailed`] if the
+    /// parser did not produce a tree.
     fn parse_and_normalize(
         &self,
         source: &[u8],

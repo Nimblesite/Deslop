@@ -79,9 +79,7 @@ fn rank_weight(clone_node_count: usize, cluster_size: usize, spanned_bytes: u64)
 /// Converts `usize` to `f64`, clamping to 2^53 (the largest integer that
 /// round-trips through `f64`) to keep the cast precision-safe.
 fn lossless_f64_from_usize(value: usize) -> f64 {
-    u64::try_from(value)
-        .map(lossless_f64_from_u64)
-        .unwrap_or(F64_MAX_EXACT_INTEGER)
+    u64::try_from(value).map_or(F64_MAX_EXACT_INTEGER, lossless_f64_from_u64)
 }
 
 /// Converts `u64` to `f64`, clamping to 2^53.

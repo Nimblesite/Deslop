@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Rust toolchain + components. Grammar versions (tree-sitter,
+      # tree-sitter-c-sharp) are pinned in the workspace `Cargo.toml` and
+      # are the source of truth; this workflow picks them up automatically.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy, llvm-tools-preview

@@ -26,13 +26,23 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 
 ---
 
+## Current state (summary)
+
+- **P0, P1, P2 complete.** C# Type-1 and Type-2 clone detection works end-to-end through the CLI.
+- `make ci` green: 4/4 e2e tests, clippy clean (pedantic + nursery), rustfmt clean, coverage **88.8% ≥ 87% threshold**.
+- GitHub repo settings applied (squash-only, auto-merge, delete-on-merge, wiki/projects off, discussions on, ruleset "Protect main" requires PR + CI check).
+- `float_arithmetic = "deny"` removed from the lint profile (with rationale comment in `Cargo.toml`); AgentPMO template updated with the same rationale so other repos don't inherit the footgun.
+- Spec IDs converted to hierarchical `[GROUP-TOPIC-DETAIL]` form; all new code comments reference the IDs they implement.
+
+**Next up (P3):** sibling-extension over exact clusters + token MinHash/LSH → union candidates → per-cluster signal breakdown in JSON. That's the point where we ship for feedback.
+
 ## TODO
 
 ### P0 Scaffold — COMPLETE
 - [x] Workspace: `crates/codededup-core` (lib), `crates/codededup` (bin)
 - [x] Strict `[workspace.lints]`: clippy pedantic + nursery, `unsafe_code = "deny"`, `expect_used = "deny"`, `arithmetic_side_effects = "deny"`
 - [x] `Makefile` with exactly 7 targets: build, test, lint, fmt, clean, ci, setup (cross-platform, AgentPMO-stamped)
-- [x] `coverage-thresholds.json` at repo root (ratcheted to 37)
+- [x] `coverage-thresholds.json` at repo root (currently **87** — ratcheted from 0 → 37 → 87 as tests landed)
 - [x] `.github/workflows/ci.yml` runs `make ci`; pinned dep versions; 10-min timeout
 - [x] `.devcontainer/devcontainer.json` mirrors CI versions
 - [x] `tracing` + `tracing-subscriber` wired; workspace lints forbid `print_stdout`/`print_stderr`
@@ -40,27 +50,29 @@ No LSP/daemon, no remote APIs, no execution validation (HyClone), no cross-langu
 - [x] E2E: `--version`, `--help` mentions `--min-nodes`, empty-path-no-panic — 3/3 green
 - [x] `make ci` green (lint + fmt + test + build)
 
-### P1 C# parse + normalize
-- [x] `src/state.rs` — `FileId ↔ path` registry (only global state; scaffolded)
-- [ ] `LanguageParser` trait in core
-- [ ] `tree-sitter-c-sharp` impl; version pinned in CI + devcontainer
-- [ ] `NormalizedNode { kind, children, byte_range, file_id }`
-- [ ] Normalization collapses identifiers, literals, comments, whitespace
-- [ ] `ignore`-crate file walk
-- [ ] `--debug-ast` dump
-- [ ] Fixture `tests/fixtures/csharp-small/`
-- [ ] E2E: parse fixture, golden AST dump
+### P1 C# parse + normalize — COMPLETE
+- [x] `src/state.rs` — `FileId ↔ path` registry (only global state)
+- [x] `LanguageParser` trait in core (implements [PIPELINE-LANG-TRAIT])
+- [x] `tree-sitter-c-sharp` impl (pinned `=0.21.3`; version pinned in Cargo.toml)
+- [x] `NormalizedNode { kind, children, byte_range, file_id }`
+- [x] Normalization collapses identifiers, literals, comments, whitespace (`__ident__` / `__literal__` / dropped trivia)
+- [x] `ignore`-crate file walk (implements [PIPELINE-DISCOVER-FILES])
+- [x] Fixture `tests/fixtures/csharp-small/` with Alpha.cs + Beta.cs (Type-2 clone pair)
+- [x] E2E: detects Type-2 clone between Alpha.cs and Beta.cs in JSON report
+- [ ] `--debug-ast` dump (deferred — not blocking ship)
+- [ ] Pin `tree-sitter-c-sharp` version in `.github/workflows/ci.yml` too (currently only in Cargo.toml)
+- [ ] Golden AST dump test (deferred — e2e JSON assertion covers the contract)
 
-### P2 Structural fingerprint + exact clusters
-- [ ] Bottom-up Merkle hash per subtree
-- [ ] `--min-nodes` flag (default 30)
-- [ ] Hash-bucket clustering
-- [ ] Ranking `count × (size−1) × log(loc)`
-- [ ] Text + JSON renderer (stable versioned schema)
-- [ ] `--format`, `--output` flags
-- [ ] Byte ranges are source of truth; lines derived
-- [ ] E2E on C# fixture with planted Type-1/2 clones; golden JSON
-- [ ] Tune `--min-nodes` default on real C# repo
+### P2 Structural fingerprint + exact clusters — COMPLETE
+- [x] Bottom-up Merkle hash per subtree (blake3)
+- [x] `--min-nodes` flag (default 30)
+- [x] Hash-bucket clustering (implements [PIPELINE-CLUSTER-EXACT])
+- [x] Ranking `count × (size−1) × log2(spanned+1)` (implements [PIPELINE-RANK-WORST-FIRST])
+- [x] Text + JSON renderer (stable versioned schema, `report_schema_version = 1`)
+- [x] `--format`, `--output` flags
+- [x] Byte ranges are source of truth; lines derived
+- [x] E2E on C# fixture with planted Type-2 clone; JSON assertion
+- [ ] Tune `--min-nodes` default on real C# repo (needs real corpus)
 
 ### P3 Sibling extension + token LSH (Type-3 for C#)
 - [ ] Sibling-extension over exact clusters

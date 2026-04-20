@@ -172,12 +172,16 @@ struct KindInterner {
 }
 
 impl KindInterner {
+    /// Creates an empty interner. `const` so it can back a `thread_local!`
+    /// without a runtime initialiser.
     const fn new() -> Self {
         Self {
             entries: Vec::new(),
         }
     }
 
+    /// Returns the canonical `&'static str` for `raw`, allocating once per
+    /// previously unseen kind and caching it for reuse.
     fn intern(&mut self, raw: &str) -> &'static str {
         if let Some(existing) = self.entries.iter().find(|stored| **stored == raw) {
             return existing;

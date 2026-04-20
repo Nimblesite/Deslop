@@ -64,6 +64,7 @@ pub struct ReportOccurrence {
 
 /// Converts the internal representation into a report ready for
 /// serialisation.
+#[must_use]
 pub fn render_report(
     clusters: &[Cluster],
     registry: &FileRegistry,
@@ -117,14 +118,11 @@ fn occurrence(
     registry: &FileRegistry,
     scan_root: &Path,
 ) -> ReportOccurrence {
-    let path = registry
-        .path(file_id)
-        .map_or_else(PathBuf::new, |absolute| {
-            absolute
-                .strip_prefix(scan_root)
-                .map(Path::to_path_buf)
-                .unwrap_or_else(|_| absolute.to_path_buf())
-        });
+    let path = registry.path(file_id).map_or_else(PathBuf::new, |absolute| {
+        absolute
+            .strip_prefix(scan_root)
+            .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf)
+    });
     ReportOccurrence {
         path,
         start_byte: byte_range.start,
