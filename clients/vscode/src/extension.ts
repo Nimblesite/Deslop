@@ -33,6 +33,7 @@ import {
   ReportChangedNotification,
   ReportDelta,
   AnalysisState,
+  EmbeddingProgress,
 } from "./types/report";
 
 let client: LanguageClient | undefined;
@@ -214,6 +215,13 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
         kind: "failed",
         message: "Analysis failed — see the Deslop log for details.",
       });
+    }
+  });
+  c.onNotification("deslop/embeddingProgress", (progress: EmbeddingProgress) => {
+    if (progress.phase === "complete" || progress.phase === "failed") {
+      store.setEmbeddingProgress(null);
+    } else {
+      store.setEmbeddingProgress(progress);
     }
   });
 }

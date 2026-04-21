@@ -65,6 +65,7 @@ impl std::fmt::Debug for AnalysisSession {
             .field("pipeline", &self.pipeline)
             .field("latest_report", &self.latest_report)
             .field("generation", &self.generation)
+            .field("embedding_provider_spec", &self.embedding_provider.spec())
             .field("embedding_mode", &self.embedding_mode)
             .field("incremental", &self.incremental)
             .field("config_path", &self.config_path)
@@ -326,6 +327,8 @@ impl AnalysisSession {
         Ok(provenance)
     }
 
+    /// Fires an embedding-progress event through the installed reporter,
+    /// no-op when no reporter is installed.
     fn report_embedding_progress(&self, event: EmbeddingProgress) {
         if let Some(reporter) = self.embedding_progress_reporter.as_ref() {
             reporter(event);

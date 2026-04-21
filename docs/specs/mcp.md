@@ -22,11 +22,12 @@ Each tool has a JSON schema and an agent-readable description. The descriptions 
 
 | Tool | Inputs | Output | Description (agent-facing) |
 |---|---|---|---|
-| `report-get` | `{}` | `Report` (canonical JSON) | Fetch the current full duplication report. Worst offenders first. Call this at session start, or when you want a full picture. |
+| `report-get` | `{ offset, limit }` (both required) | `ReportPage` (slim summary; see [MCP-TOOL-REPORT-PAGINATION]) | Fetch one page of the current duplication report. Worst offenders first. Returns headline metrics + a slim cluster summary slice. Call this at session start; follow up with `cluster-by-id` for any cluster you want to drill into. **Both `offset` and `limit` are required** — the agent must size its own context window. |
+| `report-query` | `{ offset, limit, language?, bucket?, path_contains?, min_score?, min_size? }` | `ReportPage` (same slim summary shape) | Targeted, filterable lookup over the report. Same slim shape as `report-get` but lets the agent narrow by language, clone bucket, file substring, score floor, or subtree-size floor. Use this instead of `report-get` whenever you can describe what you're looking for. See [MCP-TOOL-REPORT-QUERY]. |
 | `report-for-file` | `{ path }` | `FileReport` | All clone clusters whose occurrences touch this file. Call before editing to see what's already a duplicate here. |
 | `report-for-range` | `{ path, start_byte, end_byte }` | `[Cluster]` | Clusters overlapping the byte range you're about to edit. Call before a refactor — tells you if the range is part of a larger clone family. |
 | `find-similar` | `{ path?, start_byte?, end_byte?, snippet?, language? }` | `[Cluster]` | **Before you write a new block, call this.** Give either a byte range on an open file or a snippet + language. Returns existing clusters similar to the input via the full structural + LSH + embedding passes. Prevents you from introducing new clones. See [MCP-TOOL-FINDSIMILAR]. |
-| `cluster-by-id` | `{ id }` | `Cluster` | Fetch a cluster by its stable 16-char id (the one shown in report text and LSP diagnostics). |
+| `cluster-by-id` | `{ id }` | `Cluster` | Fetch a cluster by its stable 16-char id (the one shown in report text and LSP diagnostics). This is the only tool that returns full member lists + occurrence ranges — `report-get` and `report-query` deliberately omit them to keep the page slim. |
 | `list-embedding-models` | `{}` | `[EmbeddingModelInfo]` | Enumerate Ollama models installed on the host plus the `stub` provider. Use before switching models. |
 | `set-embedding-model` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | Switch the live embedding model. Invalidates only the embedding layer; structural + LSH caches stay warm. |
 | `session-config` | `{}` | `SessionConfig` | Min-nodes, active languages, embedding provenance, exclusion config path, cache root. |
@@ -50,6 +51,83 @@ Edge cases:
 - Snippet smaller than `min-nodes` after normalisation → returns empty with a `below_min_nodes: true` field so the agent knows the query was too small to match, not that no clone exists.
 
 No silent no-ops — every outcome is explicit per CLAUDE.md.
+
+### [MCP-TOOL-REPORT-PAGINATION] `report-get` — slim, paginated, agent-sized
+
+The full canonical report is unbounded — a real-world workspace produces megabytes of JSON. Returning that in one frame would blow out an agent's context window every time. `report-get` therefore returns a **slim page** and forces the agent to pick its own page size.
+
+**Required inputs:**
+
+- `offset` — non-negative integer, zero-based cluster index to start at.
+- `limit` — non-negative integer, max clusters in this page. The server trusts the agent to pick a sensible value; **no implicit default** — omitting either field is an `InvalidParams` error. The agent owns its context budget.
+
+**Output (`ReportPage`):**
+
+```text
+{
+  report_schema_version,
+  schema_doc,
+  generation,
+  metrics: { analysed_loc, duplicated_loc, duplication_percent, duplicated_files, clusters_total, threshold },
+  files_analysed,
+  min_nodes,
+  embedding_provenance,
+  cache_stats,
+  action_hints,
+  total_clusters,        // length of the underlying clusters[] BEFORE pagination
+  page: { offset, limit, returned },
+  clusters: [ClusterSummary, ...]
+}
+```
+
+**`ClusterSummary` shape** (deliberately *not* `Cluster`):
+
+```text
+{
+  id,                    // stable 16-char id; pass to cluster-by-id for the full record
+  bucket,                // Identical | NearlyIdentical | LooselySimilar | SameBehavior
+  bucket_type,           // Type-1..Type-4 (academic dual label)
+  score,                 // fused ranking score (worst-first sort key)
+  size_nodes,            // representative subtree size
+  size_loc,              // spanned LOC across all occurrences
+  occurrence_count,      // number of locations
+  language,
+  first_occurrence: { path, start_line, end_line }   // single representative location only
+}
+```
+
+`members[]` and the full `occurrences[]` array are **omitted** from the page — they live behind `cluster-by-id`. This is the load-bearing constraint: the page must stay small even when a single cluster has hundreds of members.
+
+**Why required, not defaulted:** the spec frames the agent as the planner ([MCP-AGENT-PROMPT-GUIDANCE]). A planner that doesn't know how big a page it wants doesn't know how to use the tool. Forcing the parameter makes the agent state its budget explicitly and makes the call self-describing in transcripts.
+
+**`total_clusters`** lets the agent decide whether to keep paging or stop. Agents that just want the top 10 ignore it; agents producing exhaustive audits page until `offset + returned >= total_clusters`.
+
+### [MCP-TOOL-REPORT-QUERY] `report-query` — targeted lookup over the report
+
+`report-get` is for "show me the worst stuff." `report-query` is for "show me the worst stuff matching *X*." Same slim page shape, plus filter knobs:
+
+**Required inputs:** `offset`, `limit` (same contract as [MCP-TOOL-REPORT-PAGINATION]).
+
+**Optional filter inputs** (all combine with logical AND):
+
+- `language` — one of the registered language ids (`csharp`, `rust`, `python`, …). Cluster matches if its language equals this value.
+- `bucket` — one of the canonical [CLONE-BUCKETS] labels. Cluster matches if its bucket equals this value.
+- `path_contains` — case-sensitive substring match against any occurrence path on the cluster (workspace-relative). Cluster matches if any occurrence path contains the substring.
+- `min_score` — float, fused-score floor (inclusive).
+- `min_size` — integer, `size_nodes` floor (inclusive).
+
+**Filtering happens before pagination.** `total_clusters` reflects the count *after* filters apply, so paging is consistent with the filter set.
+
+**Output:** identical to `ReportPage` from `report-get`, plus an echo of the filter inputs so transcripts are reproducible:
+
+```text
+{
+  ...ReportPage fields...,
+  filters: { language, bucket, path_contains, min_score, min_size }   // null fields omitted
+}
+```
+
+**When to use which:** `report-get` for the headline scan, `report-query` whenever the agent has a hypothesis ("show me LooselySimilar Rust clusters in `crates/deslop-core/src/`"). The query tool is *not* a search engine — there is no full-text snippet search, no regex, no AST query. For "I'm about to write this — does it already exist?" use `find-similar`, which has the full LSH + embedding pipeline behind it.
 
 ### [MCP-RESOURCES] Resources
 
@@ -96,7 +174,13 @@ Because the canonical JSON report already embeds `interpretation`, `action_hints
 
 `crates/deslop-mcp/tests/cli.rs` drives the real MCP binary over stdio with the MCP JSON-RPC frames:
 
-- `initialize` + `tools/list` returns the eight tools above with matching schemas.
+- `initialize` + `tools/list` returns the nine tools above with matching schemas.
+- `initialize` capabilities are MCP-spec valid — every advertised capability key maps to an object, never `null`. Capabilities the server does not implement are **omitted**, not nulled. (Regression guard: a `prompts: null` / `logging: null` payload was rejected by Claude Desktop's MCP picker with `expected: object, received: null`. The test asserts no capability value is `null`.)
+- `tools/call report-get` requires both `offset` and `limit`; omitting either returns `InvalidParams`.
+- `tools/call report-get` with a non-trivial fixture returns a `ReportPage` whose serialised size is below a hard byte budget (the budget exists so a pathological cluster count cannot blow up the agent's context). The page contains `total_clusters >= page.returned`, and every cluster carries the `ClusterSummary` shape (no `members[]`, no full `occurrences[]`).
+- `tools/call report-get` with `offset` past the end returns an empty `clusters[]`, `page.returned == 0`, and `total_clusters` unchanged.
+- `tools/call report-query` honours `language`, `bucket`, `path_contains`, `min_score`, `min_size` independently and in combination; the echoed `filters` object reflects the inputs.
+- `tools/call cluster-by-id` with an id discovered via `report-get` returns the full `Cluster` (with `members[]` and `occurrences[]`).
 - `tools/call report-for-file` on a fixture returns the expected cluster.
 - `tools/call find-similar` with a known snippet returns the matching cluster with fused score above threshold.
 - `tools/call find-similar` with unparseable input returns `UnparseableInputError`.

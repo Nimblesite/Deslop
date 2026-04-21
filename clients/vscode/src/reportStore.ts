@@ -78,6 +78,7 @@ export class ReportStore implements vscode.Disposable {
       generation: delta.to_generation,
       lifecycle: { kind: "ready" },
       pendingEmbeddingModel: null,
+      embeddingProgress: null,
     };
     this.emitter.fire(this.state);
   }
@@ -89,6 +90,11 @@ export class ReportStore implements vscode.Disposable {
 
   setPendingEmbeddingModel(modelId: string | null): void {
     this.state = { ...this.state, pendingEmbeddingModel: modelId };
+    this.emitter.fire(this.state);
+  }
+
+  setEmbeddingProgress(progress: EmbeddingProgress | null): void {
+    this.state = { ...this.state, embeddingProgress: progress };
     this.emitter.fire(this.state);
   }
 

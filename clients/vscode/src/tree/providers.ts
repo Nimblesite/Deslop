@@ -256,7 +256,8 @@ export class SessionProvider extends LifecycleAwareProvider {
 
   getChildren(node?: Node): Node[] {
     if (node) return [];
-    const { report, lifecycle, pendingEmbeddingModel } = this.store.current;
+    const { report, lifecycle, pendingEmbeddingModel, embeddingProgress } =
+      this.store.current;
     const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
     if (status) return [status];
     if (!report) return [new StatusNode("No session yet", "info")];
@@ -266,14 +267,33 @@ export class SessionProvider extends LifecycleAwareProvider {
       : activeModel;
     const cache = `${report.cache_stats.hits} hit / ${report.cache_stats.misses} miss`;
     const state = this.clientOf() ? "running" : "stopped";
-    return [
+    const rows: Node[] = [
       new SessionFieldNode("Embedding model", model, "deslop.pickEmbeddingModel"),
+    ];
+    if (embeddingProgress) {
+      rows.push(new SessionFieldNode("Embedding", formatProgress(embeddingProgress)));
+    }
+    rows.push(
       new SessionFieldNode("Cache", cache),
       new SessionFieldNode("Files analysed", String(report.files_analysed)),
       new SessionFieldNode("Schema version", String(report.report_schema_version)),
       new SessionFieldNode("State", state),
-    ];
+    );
+    return rows;
   }
+}
+
+function formatProgress(progress: {
+  done: number;
+  total: number;
+  model_id: string;
+}): string {
+  const done = progress.done.toLocaleString();
+  const total = progress.total.toLocaleString();
+  const percent = progress.total > 0
+    ? Math.floor((progress.done / progress.total) * 100)
+    : 0;
+  return `${progress.model_id} · ${done} / ${total} (${percent}%)`;
 }
 
 function sameFile(reportPath: string, editorPath: string): boolean {

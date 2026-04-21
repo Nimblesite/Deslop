@@ -198,6 +198,7 @@ pub fn url_to_path(url: &Url) -> Option<PathBuf> {
 /// request handler: the session fires progress synchronously into `tx`,
 /// the handler drains `rx` afterwards and `await`s `send_notification`
 /// before returning the JSON-RPC response.
+#[must_use]
 pub fn embedding_progress_channel() -> (
     deslop_core::live::EmbeddingProgressReporter,
     mpsc::UnboundedReceiver<EmbeddingProgress>,
