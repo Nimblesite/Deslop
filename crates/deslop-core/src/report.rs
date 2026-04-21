@@ -25,6 +25,13 @@ use crate::{
     state::{FileId, FileRegistry},
 };
 
+/// Default occurrence cap applied by [`Report::truncate_for_wire`].
+/// Chosen so a pathological 26k-occurrence cluster (real-world alembic
+/// migration case) drops from ~2.7 MB to ~10 KB while still giving the
+/// agent enough distinct locations to act on. Clients page the rest
+/// via `cluster/byId` on the non-live transport.
+pub const LIVE_WIRE_OCCURRENCE_CAP: usize = 100;
+
 /// Current report schema version.
 ///
 /// Pinned at `1` for the life of the pre-stable development period.
@@ -160,14 +167,32 @@ pub struct ReportCluster {
     /// renderer re-routes when empty.
     #[serde(default)]
     pub bucket: String,
-    /// Every occurrence of the clone.
+    /// Every occurrence of the clone. On the live wire this vector is
+    /// capped by [`Report::truncate_for_wire`]; [`occurrences_total`]
+    /// and [`occurrences_truncated`] record the original length so
+    /// clients can page via `cluster/byId` if they need the rest.
     pub occurrences: Vec<ReportOccurrence>,
+    /// Total number of occurrences before wire truncation. Equals
+    /// [`size`] on a full CLI report; set explicitly so live callers
+    /// can surface "N of M" without fetching the full cluster.
+    /// `#[serde(default)]` lets older reports (pre-cap) round-trip —
+    /// callers fall back to `size` when 0.
+    #[serde(default)]
+    pub occurrences_total: usize,
+    /// True when [`occurrences`] was truncated for the wire. False on
+    /// CLI reports and on older reports (`#[serde(default)]`).
+    #[serde(default)]
+    pub occurrences_truncated: bool,
     /// Agent-oriented one-line synthesis (see
-    /// [PRINCIPLES-AUDIENCE-AGENT]).
+    /// [PRINCIPLES-AUDIENCE-AGENT]). Blanked by
+    /// [`Report::truncate_for_wire`] because every client re-derives
+    /// it from `bucket` + `occurrences` + `signals`.
     pub summary: String,
     /// Derived one-line interpretation of the signal combination.
     /// Computed from `signals`; never carries information the signals
-    /// don't already convey, but saves the consumer a lookup.
+    /// don't already convey, but saves the consumer a lookup. Blanked
+    /// by [`Report::truncate_for_wire`] because clients re-derive it
+    /// from `bucket` via the shared bucket-labels helper.
     pub interpretation: String,
 }
 
@@ -337,6 +362,7 @@ fn cluster_to_report<S: BuildHasher>(
     );
     let interpretation = interpret(signals, canonical_node_count);
     let bucket = classify_signals(signals).wire_label().to_owned();
+    let occurrences_total = occurrences.len();
     ReportCluster {
         id: cluster.id.clone(),
         weight: cluster.weight,
@@ -345,6 +371,8 @@ fn cluster_to_report<S: BuildHasher>(
         signals,
         bucket,
         occurrences,
+        occurrences_total,
+        occurrences_truncated: false,
         summary,
         interpretation,
     }
