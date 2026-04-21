@@ -9,9 +9,12 @@
 //! (b) token LSH bucket collisions per `SourcererCC`
 //! ([TECH-TOKEN-SOURCERERCC]).
 
+use std::collections::BTreeMap;
+
 use crate::{
     fingerprint::Fingerprint,
     pair::{FusedCluster, PairScore},
+    state::FileId,
 };
 
 /// A set of fingerprints that share the same hash, i.e. a detected
@@ -68,11 +71,12 @@ pub fn build_ranked_fused_clusters(
 /// as an empty slot so the report remains deterministic in that
 /// degenerate case.
 fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Cluster {
-    let members: Vec<Fingerprint> = fused
+    let raw_members: Vec<Fingerprint> = fused
         .members
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
+    let members = collapse_overlapping_per_file(raw_members);
     let size = members.len();
     let smallest_nodes = members
         .iter()
@@ -94,6 +98,68 @@ fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Cl
         weight,
         signals: fused.mean_score,
     }
+}
+
+/// Collapses overlapping sibling-window occurrences that live in the
+/// same file into a single canonical member per overlapping region.
+///
+/// Fixes issue #2 ([PIPELINE-CLUSTER-EXACT] sibling-extension runaway):
+/// the sibling pass at [`crate::sibling`] emits one fingerprint per
+/// contiguous window of widths 2..=8. When a physical clone spans many
+/// siblings, several windows cover overlapping byte ranges in the same
+/// file and — without this dedup — all survive as distinct members of
+/// the cluster. That inflates `members.len()` (used by
+/// [`rank_weight`]), the rendered `occurrences` list, and the
+/// `cluster-by-id` MCP payload.
+///
+/// Cross-file distinctness is preserved: two occurrences in different
+/// files never collapse, no matter how their byte ranges relate. Two
+/// non-overlapping occurrences inside the same file also survive —
+/// only a transitively overlapping chain collapses to one canonical
+/// member (the widest window, i.e. the largest byte span).
+#[must_use]
+fn collapse_overlapping_per_file(members: Vec<Fingerprint>) -> Vec<Fingerprint> {
+    let mut by_file: BTreeMap<FileId, Vec<Fingerprint>> = BTreeMap::new();
+    for member in members {
+        by_file.entry(member.file_id).or_default().push(member);
+    }
+    let mut out: Vec<Fingerprint> = Vec::new();
+    for bucket in by_file.into_values() {
+        out.extend(collapse_overlapping_single_file(bucket));
+    }
+    out
+}
+
+/// Greedy sweep over one file's occurrences: sort by `(start, -end)`
+/// and keep one canonical member per overlapping run, choosing the
+/// member with the widest byte range (largest physical clone) as the
+/// representative. Equal-width ties keep the first-encountered member
+/// so the result stays deterministic across runs.
+fn collapse_overlapping_single_file(mut bucket: Vec<Fingerprint>) -> Vec<Fingerprint> {
+    bucket.sort_by_key(|member| {
+        (
+            member.byte_range.start,
+            usize::MAX.saturating_sub(member.byte_range.end),
+        )
+    });
+    let mut kept: Vec<Fingerprint> = Vec::with_capacity(bucket.len());
+    for candidate in bucket {
+        match kept.last_mut() {
+            Some(current) if ranges_overlap(current, &candidate) => {
+                if candidate.byte_range.len() > current.byte_range.len() {
+                    *current = candidate;
+                }
+            }
+            _ => kept.push(candidate),
+        }
+    }
+    kept
+}
+
+/// Half-open overlap test on two fingerprints' byte ranges.
+fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.byte_range.start < right.byte_range.end
+        && right.byte_range.start < left.byte_range.end
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
