@@ -50,7 +50,7 @@ export function registerCommands(
       await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
     }),
     vscode.commands.registerCommand("deslop.showSchemaDoc", () =>
-      openSchemaDoc(context, store),
+      openSchemaDoc(context, store, clientOf),
     ),
   );
 }
@@ -115,13 +115,38 @@ export async function compareWithCanonical(store: ReportStore, clusterId: string
   );
 }
 
-export async function openSchemaDoc(ctx: vscode.ExtensionContext, store: ReportStore): Promise<void> {
+export async function openSchemaDoc(
+  ctx: vscode.ExtensionContext,
+  store: ReportStore,
+  clientOf?: ClientFactory,
+): Promise<void> {
+  // Live wire blanks `schema_doc` to keep reportGet tiny. Prefer the
+  // dedicated `deslop/reportSchemaDoc` RPC; fall back to whatever the
+  // snapshot happens to carry (CLI-loaded or older LSP builds).
+  const remote = await fetchSchemaDocViaRpc(clientOf);
+  const fallback = store.current.report?.schema_doc;
+  const content = firstNonEmpty(remote, fallback) ?? "Schema doc unavailable.";
   const doc = await vscode.workspace.openTextDocument({
     language: "markdown",
-    content: store.current.report?.schema_doc ?? "Schema doc unavailable.",
+    content,
   });
   await vscode.window.showTextDocument(doc, { preview: true });
   void ctx;
+}
+
+async function fetchSchemaDocViaRpc(clientOf?: ClientFactory): Promise<string | undefined> {
+  const client = clientOf?.();
+  if (!client) return undefined;
+  try {
+    const text = await client.sendRequest<string>("deslop/reportSchemaDoc");
+    return typeof text === "string" && text.length > 0 ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
+  return values.find((v) => typeof v === "string" && v.length > 0);
 }
 
 export function findClusterContaining(

@@ -114,6 +114,33 @@ pub struct Report {
     pub clusters: Vec<ReportCluster>,
 }
 
+impl Report {
+    /// Projects this report into its live-wire shape: caps every
+    /// cluster's `occurrences` at `cap`, blanks the fat derivable
+    /// strings (`schema_doc`, `summary`, `interpretation`), and records
+    /// the original occurrence count per cluster so clients can surface
+    /// "N of M" and page via `cluster/byId`.
+    ///
+    /// Idempotent: running it twice yields the same shape. Leaves the
+    /// CLI / `render_report` path untouched — only transports that ship
+    /// reports over a JSON-RPC socket should call this.
+    #[must_use]
+    pub fn truncate_for_wire(mut self, cap: usize) -> Self {
+        self.schema_doc.clear();
+        for cluster in &mut self.clusters {
+            let total = cluster.occurrences.len().max(cluster.occurrences_total);
+            cluster.occurrences_total = total;
+            if cluster.occurrences.len() > cap {
+                cluster.occurrences.truncate(cap);
+                cluster.occurrences_truncated = true;
+            }
+            cluster.summary.clear();
+            cluster.interpretation.clear();
+        }
+        self
+    }
+}
+
 /// Per-run incremental-cache telemetry. `hits + misses` equals the
 /// number of files that reached the parse stage — counters are raw
 /// so downstream tooling can compute rates itself. Zero-zero means

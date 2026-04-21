@@ -265,6 +265,10 @@ pub async fn run_stdio(workspace_root: PathBuf, min_nodes: u32) -> anyhow::Resul
         custom_methods::SESSION_CONFIG,
         custom_methods::session_config,
     )
+    .custom_method(
+        custom_methods::REPORT_SCHEMA_DOC,
+        custom_methods::report_schema_doc,
+    )
     .finish();
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
@@ -282,6 +286,7 @@ const NO_PARAM_METHODS: &[&str] = &[
     custom_methods::REPORT_GET,
     custom_methods::LIST_MODELS,
     custom_methods::SESSION_CONFIG,
+    custom_methods::REPORT_SCHEMA_DOC,
 ];
 
 /// Service adapter that injects an empty-object `params` value on

@@ -87,6 +87,30 @@ async fn live_session_first_report_matches_batch_run() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Result<()> {
+    // Exercises the error-propagation arm of `AnalysisSession::new`
+    // ([LIVE-STATE]): the `?` after `initialise_pipeline(...)` must
+    // surface a failure from the underlying `PipelineSession::initialise`
+    // rather than panic or silently succeed. A bogus explicit config
+    // path is the cheapest reliable way to force that failure.
+    let tmp = copy_fixture("csharp-small")?;
+    let bogus_config = tmp.path().join(".deslop.toml-does-not-exist");
+    let provider = Arc::new(StubProvider::new());
+    let outcome = AnalysisSession::new(
+        tmp.path().to_path_buf(),
+        15,
+        false,
+        Some(bogus_config),
+        provider,
+    );
+    assert!(
+        outcome.is_err(),
+        "explicit nonexistent config path must propagate an error"
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
@@ -236,6 +260,15 @@ async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
     let initial_generation = exercise_session_config(&service, &session_lock, tmp.path()).await?;
     exercise_delta_cursor(&service, initial_generation).await;
     exercise_error_paths(&service, &first_id).await;
+    {
+        let session_lock = service.session();
+        let guard = session_lock.lock().await;
+        // Exercises the Debug impl on AnalysisSession; the formatted
+        // string is discarded — the assertion is just on the invariant
+        // that the impl exists and doesn't panic.
+        let debug_repr = format!("{:?}", *guard);
+        assert!(debug_repr.contains("AnalysisSession"));
+    }
     exercise_embedding_swap(&service).await?;
     exercise_path_resolution(&service).await?;
     exercise_transport_hooks(&service).await?;
@@ -373,10 +406,44 @@ async fn exercise_error_paths(service: &LiveService, _first_id: &str) {
 async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     let models = service.embedding_list_models().await;
     assert!(models.iter().all(|m| m.provider_id == "stub"));
+    // Install a progress reporter to verify Starting/Complete events
+    // fire around the swap. The shared Vec records every event the
+    // session emits through the reporter.
+    let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
+        Arc::new(StdMutex::new(Vec::new()));
+    let events_clone = Arc::clone(&events);
+    let reporter: deslop_core::live::EmbeddingProgressReporter =
+        Arc::new(move |event| {
+            if let Ok(mut lock) = events_clone.lock() {
+                lock.push(event);
+            }
+        });
+    {
+        let session_lock = service.session();
+        let mut guard = session_lock.lock().await;
+        guard.set_embedding_progress_reporter(Some(reporter));
+    }
     let provenance = service
         .embedding_set_model("stub", "blake3-stub", None)
         .await?;
     assert!(provenance.is_some_and(|p| p.provider_id == "stub"));
+    {
+        let session_lock = service.session();
+        let mut guard = session_lock.lock().await;
+        guard.set_embedding_progress_reporter(None);
+    }
+    let phases: Vec<deslop_core::live::EmbeddingPhase> = {
+        let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
+        recorded.iter().map(|event| event.phase).collect()
+    };
+    assert!(
+        phases.contains(&deslop_core::live::EmbeddingPhase::Starting),
+        "reporter must see Starting phase: {phases:?}"
+    );
+    assert!(
+        phases.contains(&deslop_core::live::EmbeddingPhase::Complete),
+        "reporter must see Complete phase: {phases:?}"
+    );
     let unknown = service.embedding_set_model("nope", "no", None).await;
     assert!(matches!(
         unknown,

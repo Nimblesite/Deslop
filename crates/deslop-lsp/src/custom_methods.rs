@@ -4,11 +4,36 @@
 
 use std::path::PathBuf;
 
-use deslop_core::live::{FindSimilarRequest, LiveApi};
+use deslop_core::{
+    live::{FindSimilarRequest, LiveApi},
+    report::{Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
+};
 use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::Result as LspResult;
 
 use crate::backend::LspBackend;
+
+/// Method name for `deslop/reportSchemaDoc`. Serves the markdown
+/// `schema_doc` that used to ride every `deslop/reportGet` response;
+/// hoisting it behind its own method is what lets the live wire stay
+/// small ([LSP-WIRE-BUDGET]).
+pub const REPORT_SCHEMA_DOC: &str = "deslop/reportSchemaDoc";
+
+/// Truncates one cluster to [`LIVE_WIRE_OCCURRENCE_CAP`] occurrences,
+/// blanks the derivable summary/interpretation strings, and records
+/// the pre-cap total so clients can page via [`CLUSTER_BY_ID`].
+/// Mirrors [`Report::truncate_for_wire`] but for a single cluster
+/// (used by `report/forFile` + `report/forRange`).
+fn truncate_cluster_for_wire(cluster: &mut ReportCluster) {
+    let total = cluster.occurrences.len().max(cluster.occurrences_total);
+    cluster.occurrences_total = total;
+    if cluster.occurrences.len() > LIVE_WIRE_OCCURRENCE_CAP {
+        cluster.occurrences.truncate(LIVE_WIRE_OCCURRENCE_CAP);
+        cluster.occurrences_truncated = true;
+    }
+    cluster.summary.clear();
+    cluster.interpretation.clear();
+}
 
 /// Method name for `deslop/reportGet`.
 pub const REPORT_GET: &str = "deslop/reportGet";
@@ -76,7 +101,25 @@ pub async fn report_get(
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
     let report = backend.service().report_get().await;
-    Ok(serde_json::to_value(report.as_ref()).unwrap_or(serde_json::Value::Null))
+    let slim: Report = (*report).clone().truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
+    Ok(serde_json::to_value(&slim).unwrap_or(serde_json::Value::Null))
+}
+
+/// Forwards `report/schemaDoc`. Returns the markdown that used to ride
+/// every [`REPORT_GET`] response ([LSP-WIRE-BUDGET]). Clients fetch this
+/// lazily (e.g. VSIX `openSchemaDoc` command) so the live wire stays
+/// small.
+///
+/// # Errors
+///
+/// Never errors today — kept fallible to match the JSON-RPC method
+/// signature.
+pub async fn report_schema_doc(
+    backend: &LspBackend,
+    _params: IgnoredParams,
+) -> LspResult<serde_json::Value> {
+    let report = backend.service().report_get().await;
+    Ok(serde_json::Value::String(report.schema_doc.clone()))
 }
 
 /// Catch-all params for no-arg methods. Accepts any JSON value
@@ -113,7 +156,10 @@ pub async fn report_for_file(
     backend: &LspBackend,
     params: PathParams,
 ) -> LspResult<serde_json::Value> {
-    let result = backend.service().report_for_file(&params.path).await;
+    let mut result = backend.service().report_for_file(&params.path).await;
+    for cluster in &mut result.clusters {
+        truncate_cluster_for_wire(cluster);
+    }
     Ok(serde_json::to_value(result).unwrap_or(serde_json::Value::Null))
 }
 
@@ -127,10 +173,13 @@ pub async fn report_for_range(
     backend: &LspBackend,
     params: RangeParams,
 ) -> LspResult<serde_json::Value> {
-    let clusters = backend
+    let mut clusters = backend
         .service()
         .report_for_range(&params.path, params.start_byte, params.end_byte)
         .await;
+    for cluster in &mut clusters {
+        truncate_cluster_for_wire(cluster);
+    }
     Ok(serde_json::to_value(clusters).unwrap_or(serde_json::Value::Null))
 }
 

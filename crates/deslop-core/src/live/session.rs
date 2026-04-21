@@ -61,19 +61,7 @@ pub struct AnalysisSession {
 
 impl std::fmt::Debug for AnalysisSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AnalysisSession")
-            .field("pipeline", &self.pipeline)
-            .field("latest_report", &self.latest_report)
-            .field("generation", &self.generation)
-            .field("embedding_provider_spec", &self.embedding_provider.spec())
-            .field("embedding_mode", &self.embedding_mode)
-            .field("incremental", &self.incremental)
-            .field("config_path", &self.config_path)
-            .field(
-                "embedding_progress_reporter",
-                &self.embedding_progress_reporter.is_some(),
-            )
-            .finish()
+        f.debug_struct("AnalysisSession").finish_non_exhaustive()
     }
 }
 
@@ -137,10 +125,7 @@ impl AnalysisSession {
     /// invoked around [`Self::set_embedding_model`]. The LSP backend
     /// installs a reporter that forwards events onto the LSP client as
     /// `deslop/embeddingProgress` notifications.
-    pub fn set_embedding_progress_reporter(
-        &mut self,
-        reporter: Option<EmbeddingProgressReporter>,
-    ) {
+    pub fn set_embedding_progress_reporter(&mut self, reporter: Option<EmbeddingProgressReporter>) {
         self.embedding_progress_reporter = reporter;
     }
 
@@ -299,20 +284,7 @@ impl AnalysisSession {
             message: None,
         });
         let live_paths: Vec<PathBuf> = self.live_paths_snapshot();
-        let report = match self.run_pipeline(&live_paths) {
-            Ok(report) => report,
-            Err(error) => {
-                self.report_embedding_progress(EmbeddingProgress {
-                    phase: EmbeddingPhase::Failed,
-                    provider_id: spec.provider_id,
-                    model_id: spec.model_id,
-                    done: 0,
-                    total,
-                    message: Some(error.to_string()),
-                });
-                return Err(error);
-            }
-        };
+        let report = self.run_pipeline(&live_paths)?;
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);

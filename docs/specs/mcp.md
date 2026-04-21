@@ -92,7 +92,7 @@ The full canonical report is unbounded — a real-world workspace produces megab
   size_loc,              // spanned LOC across all occurrences
   occurrence_count,      // number of locations
   language,
-  first_occurrence: { path, start_line, end_line }   // single representative location only
+  first_occurrence: { path, start_byte, end_byte }   // single representative location only; bytes are native, agent converts to lines on demand
 }
 ```
 

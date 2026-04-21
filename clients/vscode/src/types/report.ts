@@ -39,8 +39,19 @@ export interface ReportCluster {
   // Optional so we can still read v3 reports; use classifyCluster() as
   // a fallback when missing.
   bucket?: Bucket;
+  // On the live wire this is capped at LIVE_WIRE_OCCURRENCE_CAP; use
+  // `occurrences_total` / `occurrences_truncated` to tell if the caller
+  // needs to page via `deslop/clusterById`.
   occurrences: ReportOccurrence[];
+  // Pre-cap occurrence count. Defaults to `size` on reports loaded
+  // from a `--from-report` CLI dump that pre-dates the field.
+  occurrences_total?: number;
+  // True when `occurrences` was truncated for the wire. Always false
+  // on `deslop/clusterById` responses.
+  occurrences_truncated?: boolean;
+  // Blanked on the live wire; re-derive from `bucket` via bucketLabels.
   summary: string;
+  // Blanked on the live wire; re-derive from `bucket` via bucketLabels.
   interpretation: string;
 }
 
@@ -255,6 +266,17 @@ export function resolveBucket(cluster: ReportCluster): Bucket {
     return cluster.bucket;
   }
   return classifyCluster(cluster.signals);
+}
+
+// Returns the cluster's interpretation line, falling back to the
+// bucket's action sentence when the live wire has blanked the field.
+// Every UI surface (hover, decorations, panels) funnels through this
+// so the "what does this cluster mean" prose stays consistent whether
+// the cluster came from a live LSP response or a CLI-loaded report.
+export function clusterInterpretation(cluster: ReportCluster): string {
+  return cluster.interpretation && cluster.interpretation.length > 0
+    ? cluster.interpretation
+    : bucketLabels(resolveBucket(cluster)).actionSentence;
 }
 
 // ---------------------------------------------------------------------------

@@ -104,6 +104,8 @@ mod tests {
                 fused: 2.14,
             },
             bucket: "nearly_identical".into(),
+            occurrences_total: occurrences.len(),
+            occurrences_truncated: false,
             occurrences,
             summary: "s".into(),
             interpretation: "i".into(),

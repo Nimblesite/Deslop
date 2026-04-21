@@ -286,6 +286,8 @@ mod tests {
                 fused: 2.2,
             },
             bucket: bucket.into(),
+            occurrences_total: occurrences.len(),
+            occurrences_truncated: false,
             occurrences,
             summary: "summary".into(),
             interpretation: "interp".into(),

@@ -30,6 +30,6 @@ pub use session::{AnalysisSession, EmbeddingProgressReporter};
 pub use watcher::LiveWatcher;
 pub use wire::{
     AnalysisState, ChangeSummary, EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress,
-    FileReport, FindSimilarInput, FindSimilarRequest, FindSimilarResult,
-    ReportChangedNotification, SessionConfig,
+    FileReport, FindSimilarInput, FindSimilarRequest, FindSimilarResult, ReportChangedNotification,
+    SessionConfig,
 };

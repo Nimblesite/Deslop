@@ -91,3 +91,5 @@ clients/vscode/bin/
 --stdio/
 
 .codededup-cache/
+
+clients/vscode/media/webview/

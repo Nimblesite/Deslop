@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 
 use crate::{
     backend::{BackendError, FindSimilarInput, McpBackend},
+    page::{build_page, Pagination, QueryFilters},
     protocol::{ErrorCode, JsonRpcError},
 };
 
@@ -70,7 +71,8 @@ pub fn dispatch_tool_call(
     arguments: &Value,
 ) -> Result<Value, JsonRpcError> {
     match name {
-        "report-get" => call_report_get(backend),
+        "report-get" => call_report_get(backend, arguments),
+        "report-query" => call_report_query(backend, arguments),
         "report-for-file" => call_report_for_file(backend, arguments),
         "report-for-range" => call_report_for_range(backend, arguments),
         "find-similar" => call_find_similar(backend, arguments),
@@ -86,12 +88,18 @@ pub fn dispatch_tool_call(
 }
 
 /// Static tool registry.
-const TOOLS: [ToolDefinition; 8] = [
+const TOOLS: [ToolDefinition; 9] = [
     ToolDefinition {
         name: "report-get",
         description:
-            "Fetch the current full duplication report. Worst offenders first. Call this at session start, or when you want a full picture of the codebase's clone landscape.",
-        input_schema: schema_empty,
+            "Fetch one page of the current duplication report. Worst offenders first. Returns headline metrics + a slim cluster summary slice (no member list, no full occurrences[]). Call this at session start; follow up with cluster-by-id for any cluster you want to drill into. Both `offset` and `limit` are required — the agent must size its own context window.",
+        input_schema: schema_report_get,
+    },
+    ToolDefinition {
+        name: "report-query",
+        description:
+            "Targeted, filterable lookup over the duplication report. Same slim ReportPage shape as report-get, plus optional `language`, `bucket`, `path_contains`, `min_score`, `min_size` filters that combine with logical AND. Use this whenever you can describe what you're looking for instead of dumping the whole report. `offset` + `limit` required.",
+        input_schema: schema_report_query,
     },
     ToolDefinition {
         name: "report-for-file",
@@ -142,6 +150,40 @@ fn schema_empty() -> Value {
     json!({
         "type": "object",
         "properties": {},
+        "additionalProperties": false,
+    })
+}
+
+/// Schema for `report-get`. Both pagination knobs are required so the
+/// agent always states its context budget explicitly
+/// ([MCP-TOOL-REPORT-PAGINATION]).
+fn schema_report_get() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "offset": { "type": "integer", "minimum": 0, "description": "Zero-based cluster index to start at." },
+            "limit": { "type": "integer", "minimum": 0, "description": "Max clusters in this page. Pick a sensible value for your context window." }
+        },
+        "required": ["offset", "limit"],
+        "additionalProperties": false,
+    })
+}
+
+/// Schema for `report-query`. Same pagination contract as `report-get`
+/// plus optional filter knobs ([MCP-TOOL-REPORT-QUERY]).
+fn schema_report_query() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "offset": { "type": "integer", "minimum": 0 },
+            "limit": { "type": "integer", "minimum": 0 },
+            "language": { "type": "string", "enum": ["csharp", "rust", "python"], "description": "Match clusters whose detected source language equals this id." },
+            "bucket": { "type": "string", "enum": ["identical", "nearly_identical", "loosely_similar", "same_behavior"], "description": "Match clusters whose canonical bucket equals this id." },
+            "path_contains": { "type": "string", "description": "Case-sensitive substring match against any occurrence path on the cluster." },
+            "min_score": { "type": "number", "description": "Inclusive ranking-score floor." },
+            "min_size": { "type": "integer", "minimum": 0, "description": "Inclusive subtree-node-count floor (canonical_node_count)." }
+        },
+        "required": ["offset", "limit"],
         "additionalProperties": false,
     })
 }
@@ -217,10 +259,66 @@ fn schema_set_embedding_model() -> Value {
     })
 }
 
-/// `report-get` forwarder.
-fn call_report_get(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
+/// `report-get` forwarder. Renders a slim paginated `ReportPage`
+/// ([MCP-TOOL-REPORT-PAGINATION]).
+fn call_report_get(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
+    let pagination = extract_pagination(args)?;
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    Ok(serde_json::to_value(&*report).unwrap_or(Value::Null))
+    Ok(build_page(
+        &report,
+        backend.generation(),
+        pagination,
+        &QueryFilters::default(),
+    ))
+}
+
+/// `report-query` forwarder. Same `ReportPage` shape as `report-get`
+/// plus AND-combined filters ([MCP-TOOL-REPORT-QUERY]).
+fn call_report_query(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
+    let pagination = extract_pagination(args)?;
+    let filters = extract_filters(args)?;
+    let report = backend.report_get().map_err(backend_to_rpc)?;
+    Ok(build_page(
+        &report,
+        backend.generation(),
+        pagination,
+        &filters,
+    ))
+}
+
+/// Extracts the required `offset` + `limit` pagination knobs.
+fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcError> {
+    let offset = extract_u64(args, "offset")?;
+    let limit = extract_u64(args, "limit")?;
+    Ok(Pagination {
+        offset: usize::try_from(offset).unwrap_or(usize::MAX),
+        limit: usize::try_from(limit).unwrap_or(usize::MAX),
+    })
+}
+
+/// Extracts the optional `report-query` filter knobs. Unknown / wrong-typed
+/// fields are quietly ignored — the JSON schema layer rejects them up
+/// front when a strict client is in use.
+fn extract_filters(args: &Value) -> Result<QueryFilters, JsonRpcError> {
+    Ok(QueryFilters {
+        language: args
+            .get("language")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        bucket: args
+            .get("bucket")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        path_contains: args
+            .get("path_contains")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        min_score: args.get("min_score").and_then(Value::as_f64),
+        min_size: args
+            .get("min_size")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok()),
+    })
 }
 
 /// `report-for-file` forwarder.

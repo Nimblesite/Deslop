@@ -8,9 +8,14 @@
 //!
 //! Implements:
 //! - [MCP-CAPABILITIES] — tools + resources + notifications surface.
-//! - [MCP-TOOLS] — eight agent-facing tools with JSON schemas.
+//! - [MCP-TOOLS] — nine agent-facing tools with JSON schemas.
 //! - [MCP-TOOL-FINDSIMILAR] — keystone `find-similar` tool with two
 //!   input variants and explicit error paths.
+//! - [MCP-TOOL-REPORT-PAGINATION] — `report-get` returns slim
+//!   paginated `ReportPage`s with required `offset` + `limit` so a
+//!   single page can never blow out an agent's context window.
+//! - [MCP-TOOL-REPORT-QUERY] — `report-query` adds language / bucket /
+//!   path / score / size filters over the same slim page shape.
 //! - [MCP-RESOURCES] — `deslop://report` + `deslop://schema`.
 //! - [MCP-NOTIFICATIONS] — `notifications/resources/updated` +
 //!   `notifications/deslop/reportChanged`.
@@ -20,6 +25,7 @@
 //!   LLM planner, not a human reader.
 
 pub mod backend;
+pub mod page;
 pub mod protocol;
 pub mod resources;
 pub mod safety;

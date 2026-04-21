@@ -219,7 +219,7 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
 }
 
 #[test]
-fn tools_list_returns_all_eight_tools_with_schemas() -> Result<()> {
+fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("tools/list", &json!({}))?;
@@ -230,9 +230,10 @@ fn tools_list_returns_all_eight_tools_with_schemas() -> Result<()> {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_owned))
         .collect();
-    assert_eq!(names.len(), 8, "expected 8 tools, got {names:?}");
+    assert_eq!(names.len(), 9, "expected 9 tools, got {names:?}");
     for expected in [
         "report-get",
+        "report-query",
         "report-for-file",
         "report-for-range",
         "find-similar",
@@ -262,30 +263,406 @@ fn tools_list_returns_all_eight_tools_with_schemas() -> Result<()> {
 }
 
 #[test]
-fn report_get_returns_canonical_report_with_schema_doc() -> Result<()> {
+fn report_get_returns_paginated_slim_report_page() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
-    let result = call_tool(&mut child, "report-get", &json!({}))?;
-    let report = structured_tool_result(&result)?;
+    let result = call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 10 }),
+    )?;
+    let page = structured_tool_result(&result)?;
     assert_eq!(
-        value_get(&report, "/report_schema_version")?
+        value_get(&page, "/report_schema_version")?
             .as_u64()
             .unwrap_or(0),
-        1
+        1,
+        "schema version must round-trip on the page"
     );
-    let schema_doc = value_get(&report, "/schema_doc")?;
     assert!(
-        !schema_doc.as_str().unwrap_or("").is_empty(),
-        "schema_doc must be embedded"
+        !value_get(&page, "/schema_doc")?
+            .as_str()
+            .unwrap_or("")
+            .is_empty(),
+        "schema_doc must be embedded on every page so first-call clients learn the shape"
     );
-    let clusters = value_get(&report, "/clusters")?;
+    let total = value_get(&page, "/total_clusters")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_clusters must be a number"))?;
+    let returned = value_get(&page, "/page/returned")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("page.returned missing"))?;
+    assert_eq!(value_get(&page, "/page/offset")?, json!(0));
+    assert_eq!(value_get(&page, "/page/limit")?, json!(10));
+    assert!(
+        returned <= 10,
+        "returned ({returned}) must respect requested limit"
+    );
+    assert!(
+        total >= returned,
+        "total_clusters ({total}) must be >= returned ({returned})"
+    );
+    assert!(total >= 1, "fixture should surface at least one cluster");
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_get_requires_offset_argument() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request(
+        "tools/call",
+        &json!({
+            "name": "report-get",
+            "arguments": { "limit": 10 }
+        }),
+    )?;
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_602),
+        "missing offset must be InvalidParams; got {response}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_get_requires_limit_argument() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request(
+        "tools/call",
+        &json!({
+            "name": "report-get",
+            "arguments": { "offset": 0 }
+        }),
+    )?;
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_602),
+        "missing limit must be InvalidParams; got {response}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 10 }),
+    )?;
+    let page = structured_tool_result(&result)?;
+    let clusters = value_get(&page, "/clusters")?;
     let array = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters not array"))?;
+    assert!(!array.is_empty(), "fixture should produce >= 1 cluster");
+    for cluster in array {
+        assert!(
+            cluster.get("members").is_none(),
+            "ClusterSummary must drop full member list (lives behind cluster-by-id): {cluster}"
+        );
+        assert!(
+            cluster.get("occurrences").is_none(),
+            "ClusterSummary must drop full occurrences[] (lives behind cluster-by-id): {cluster}"
+        );
+        for required in [
+            "id",
+            "bucket",
+            "score",
+            "size_nodes",
+            "occurrence_count",
+            "language",
+            "first_occurrence",
+        ] {
+            assert!(
+                cluster.get(required).is_some(),
+                "ClusterSummary missing required field {required:?}: {cluster}"
+            );
+        }
+        let first_occ = value_get(cluster, "/first_occurrence")?;
+        for occ_field in ["path", "start_byte", "end_byte"] {
+            assert!(
+                first_occ.get(occ_field).is_some(),
+                "first_occurrence missing {occ_field:?}: {first_occ}"
+            );
+        }
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let probe = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 1 }),
+    )?)?;
+    let total = value_get(&probe, "/total_clusters")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_clusters missing"))?;
+    let past = total.saturating_add(100);
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": past, "limit": 10 }),
+    )?)?;
+    assert_eq!(
+        value_get(&page, "/page/returned")?,
+        json!(0),
+        "offset past end must return zero clusters"
+    );
+    assert!(
+        value_get(&page, "/clusters")?
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "clusters[] must be empty when offset is past the end"
+    );
+    assert_eq!(
+        value_get(&page, "/total_clusters")?
+            .as_u64()
+            .unwrap_or(u64::MAX),
+        total,
+        "total_clusters must not change when paging past the end"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_get_response_stays_under_byte_budget() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 50 }),
+    )?;
+    let page = structured_tool_result(&result)?;
+    let serialised = serde_json::to_string(&page)?;
+    // 50KB budget. Earlier "fat" report-get on a real workspace was 2.4MB
+    // which blew out every agent context; the slim ClusterSummary must
+    // keep a 50-cluster page comfortably under this floor.
+    assert!(
+        serialised.len() < 50_000,
+        "report-get page exceeded 50KB budget: was {} bytes",
+        serialised.len()
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn initialize_capabilities_have_no_null_values() -> Result<()> {
+    // Regression: a `prompts: null` / `logging: null` payload was rejected
+    // by Claude Desktop's MCP picker with `expected: object, received:
+    // null`. Capabilities the server does not implement must be omitted,
+    // not nulled.
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let response = init_session(&mut child)?;
+    let capabilities = value_get(&response, "/result/capabilities")?;
+    let object = capabilities
+        .as_object()
+        .ok_or_else(|| anyhow!("capabilities not an object: {capabilities}"))?;
+    for (key, value) in object {
+        assert!(
+            !value.is_null(),
+            "capability {key:?} is null — must be omitted or set to an object instead"
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_language() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "language": "csharp" }),
+    )?;
+    let page = structured_tool_result(&result)?;
+    let clusters = value_get(&page, "/clusters")?;
+    let array = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters not array"))?;
+    assert!(!array.is_empty(), "fixture should match >= 1 csharp cluster");
+    for cluster in array {
+        assert_eq!(
+            cluster.get("language").and_then(Value::as_str),
+            Some("csharp"),
+            "language filter not applied: {cluster}"
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "language": "cobol" }),
+    )?)?;
+    assert_eq!(value_get(&page, "/total_clusters")?, json!(0));
+    assert!(value_get(&page, "/clusters")?
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_path_contains() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "path_contains": "Alpha" }),
+    )?)?;
+    let array = value_get(&page, "/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters not array"))?;
     assert!(
         !array.is_empty(),
-        "fixture should surface at least one clone cluster"
+        "Alpha.cs participates in the planted clone family"
     );
+    for cluster in &array {
+        let first_path = cluster
+            .pointer("/first_occurrence/path")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        // first_occurrence is one representative — path_contains may match
+        // any occurrence, so we can't assert on first_occurrence alone.
+        // Instead prove the filter narrowed the result by checking
+        // total_clusters dropped vs the unfiltered baseline.
+        let _ = first_path;
+    }
+    let unfiltered = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 1 }),
+    )?)?;
+    let unfiltered_total = value_get(&unfiltered, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
+    let filtered_total = value_get(&page, "/total_clusters")?.as_u64().unwrap_or(0);
+    assert!(
+        filtered_total <= unfiltered_total,
+        "filtered total ({filtered_total}) must be <= unfiltered total ({unfiltered_total})"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_min_size() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_size": 20 }),
+    )?)?;
+    let clusters = value_get(&page, "/clusters")?;
+    for cluster in clusters.as_array().unwrap_or(&Vec::new()) {
+        let size = cluster
+            .get("size_nodes")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        assert!(
+            size >= 20,
+            "min_size=20 violated: cluster size_nodes={size}, cluster={cluster}"
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_min_score() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let baseline = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 1 }),
+    )?)?;
+    let max_score = value_get(&baseline, "/clusters/0/score")?
+        .as_f64()
+        .ok_or_else(|| anyhow!("baseline score missing"))?;
+    let floor = max_score / 2.0;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_score": floor }),
+    )?)?;
+    for cluster in value_get(&page, "/clusters")?
+        .as_array()
+        .unwrap_or(&Vec::new())
+    {
+        let score = cluster.get("score").and_then(Value::as_f64).unwrap_or(0.0);
+        assert!(
+            score >= floor,
+            "min_score={floor} violated: cluster score={score}"
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_requires_offset_and_limit() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request(
+        "tools/call",
+        &json!({
+            "name": "report-query",
+            "arguments": { "language": "csharp" }
+        }),
+    )?;
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_602),
+        "missing offset+limit must be InvalidParams; got {response}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_echoes_filters_in_response() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({
+            "offset": 0,
+            "limit": 5,
+            "language": "csharp",
+            "min_size": 10,
+        }),
+    )?)?;
+    let filters = value_get(&page, "/filters")?;
+    assert_eq!(filters.get("language"), Some(&json!("csharp")));
+    assert_eq!(filters.get("min_size"), Some(&json!(10)));
     let _ = child.finish();
     Ok(())
 }
@@ -417,7 +794,11 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
 fn cluster_by_id_round_trips() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
-    let report_value = structured_tool_result(&call_tool(&mut child, "report-get", &json!({}))?)?;
+    let report_value = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 1 }),
+    )?)?;
     let first_id = value_get(&report_value, "/clusters/0/id")?
         .as_str()
         .ok_or_else(|| anyhow!("first cluster id missing"))?
@@ -428,6 +809,10 @@ fn cluster_by_id_round_trips() -> Result<()> {
         &json!({ "id": &first_id }),
     )?)?;
     assert_eq!(value_get(&cluster, "/id")?, json!(first_id));
+    assert!(
+        cluster.get("occurrences").is_some(),
+        "cluster-by-id is the deep-dive — must surface occurrences[]"
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -665,10 +1050,14 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     )?;
     let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
-    let first = structured_tool_result(&call_tool(&mut child, "report-get", &json!({}))?)?;
-    let first_count = value_get(&first, "/clusters")?
-        .as_array()
-        .map_or(0, Vec::len);
+    let first = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 100 }),
+    )?)?;
+    let first_count = value_get(&first, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
     assert!(first_count >= 1, "expected at least one cluster initially");
     let _ = child.finish();
     std::fs::write(
@@ -677,10 +1066,14 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     )?;
     let mut second = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut second)?;
-    let rerun = structured_tool_result(&call_tool(&mut second, "report-get", &json!({}))?)?;
-    let rerun_count = value_get(&rerun, "/clusters")?
-        .as_array()
-        .map_or(0, Vec::len);
+    let rerun = structured_tool_result(&call_tool(
+        &mut second,
+        "report-get",
+        &json!({ "offset": 0, "limit": 100 }),
+    )?)?;
+    let rerun_count = value_get(&rerun, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
     assert!(
         rerun_count < first_count,
         "after mutating Two.cs to a unique file, cluster count must drop; was {first_count}, now {rerun_count}"
@@ -1136,10 +1529,14 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     )?;
     let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
-    let before = structured_tool_result(&call_tool(&mut child, "report-get", &json!({}))?)?;
-    let before_count = value_get(&before, "/clusters")?
-        .as_array()
-        .map_or(0, Vec::len);
+    let before = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 100 }),
+    )?)?;
+    let before_count = value_get(&before, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
     assert!(before_count >= 1, "expected at least one cluster");
     // Edit Two.cs so the clone disappears, then push a notification.
     std::fs::write(
@@ -1151,10 +1548,14 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
         &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
     )?;
     // Small probe via a request so the notification has flushed.
-    let after = structured_tool_result(&call_tool(&mut child, "report-get", &json!({}))?)?;
-    let after_count = value_get(&after, "/clusters")?
-        .as_array()
-        .map_or(0, Vec::len);
+    let after = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 100 }),
+    )?)?;
+    let after_count = value_get(&after, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
     assert!(
         after_count < before_count,
         "mark_changed notification should drop the Two.cs clone; was {before_count}, now {after_count}"

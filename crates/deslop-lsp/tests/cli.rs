@@ -227,6 +227,98 @@ fn lsp_custom_method_report_get_returns_clusters() -> Result<()> {
     Ok(())
 }
 
+/// Regression test for [LSP-WIRE-BUDGET]: the live `deslop/reportGet`
+/// response must not carry the fat `schema_doc` markdown, the derived
+/// `summary` string, or the derived `interpretation` string. Those are
+/// available on the CLI surface and via `deslop/reportSchemaDoc`. This
+/// is what keeps the Node LSP client from V8-OOMing on workspaces with
+/// tens of thousands of occurrences in a single cluster.
+#[test]
+fn lsp_custom_method_report_get_elides_schema_doc_and_prose() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let (mut stdin, mut reader) = take_io(&mut child)?;
+    let (init_id, init_payload) = initialize_request()?;
+    let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
+    let (id, payload) = custom_request_no_params("deslop/reportGet")?;
+    let response = send_and_recv(&mut stdin, &mut reader, id, &payload)?;
+    let result = result_value(&response)?;
+    let schema_doc = result
+        .get("schema_doc")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("schema_doc missing in {response}"))?;
+    assert!(
+        schema_doc.is_empty(),
+        "schema_doc must be empty on the live wire; got {} bytes",
+        schema_doc.len()
+    );
+    let clusters = result
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow!("clusters missing in {response}"))?;
+    assert!(!clusters.is_empty(), "fixture should produce clusters");
+    for cluster in clusters {
+        let summary = cluster.get("summary").and_then(serde_json::Value::as_str);
+        assert_eq!(summary, Some(""), "summary must be blanked on live wire");
+        let interpretation = cluster
+            .get("interpretation")
+            .and_then(serde_json::Value::as_str);
+        assert_eq!(
+            interpretation,
+            Some(""),
+            "interpretation must be blanked on live wire"
+        );
+        let occurrences_total = cluster
+            .get("occurrences_total")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| anyhow!("occurrences_total missing in {cluster}"))?;
+        let occurrences_truncated = cluster
+            .get("occurrences_truncated")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| anyhow!("occurrences_truncated missing in {cluster}"))?;
+        assert!(
+            occurrences_total > 0,
+            "occurrences_total must be populated"
+        );
+        assert!(
+            !occurrences_truncated,
+            "csharp-small fixture has tiny clusters; no truncation expected"
+        );
+    }
+    shut_down(child);
+    Ok(())
+}
+
+/// Regression test for [LSP-WIRE-BUDGET]: clients fetch the schema
+/// markdown on demand via `deslop/reportSchemaDoc` so the live wire
+/// doesn't ship it with every `deslop/reportGet` response.
+#[test]
+fn lsp_custom_method_report_schema_doc_returns_markdown() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let (mut stdin, mut reader) = take_io(&mut child)?;
+    let (init_id, init_payload) = initialize_request()?;
+    let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
+    let (id, payload) = custom_request_no_params("deslop/reportSchemaDoc")?;
+    let response = send_and_recv(&mut stdin, &mut reader, id, &payload)?;
+    let result = result_value(&response)?;
+    let markdown = result
+        .as_str()
+        .ok_or_else(|| anyhow!("reportSchemaDoc must return a string; got {response}"))?;
+    assert!(
+        markdown.len() > 256,
+        "schema doc should be substantial markdown; got {} bytes",
+        markdown.len()
+    );
+    assert!(
+        markdown.contains("schema"),
+        "schema doc should contain the word \"schema\"; got preview {:?}",
+        &markdown[..markdown.len().min(120)]
+    );
+    shut_down(child);
+    Ok(())
+}
+
 #[test]
 fn lsp_custom_method_find_similar_returns_below_min_nodes_for_tiny_snippet() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;

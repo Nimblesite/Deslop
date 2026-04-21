@@ -16,6 +16,7 @@ import {
   ReportCluster,
   Severity,
   bucketLabels,
+  clusterInterpretation,
   resolveBucket,
 } from "../types/report";
 
@@ -266,7 +267,7 @@ export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
   md.isTrusted = true;
   md.supportHtml = true;
   const title = bucketLabels(resolveBucket(cluster)).hybridTitle;
-  md.appendMarkdown(`**${title}** — ${cluster.interpretation}\n\n`);
+  md.appendMarkdown(`**${title}** — ${clusterInterpretation(cluster)}\n\n`);
   md.appendMarkdown(`\`structural\` ${cluster.signals.structural.toFixed(2)}  `);
   md.appendMarkdown(`\`jaccard\` ${cluster.signals.token_jaccard.toFixed(2)}  `);
   md.appendMarkdown(`\`embedding\` ${cluster.signals.embedding_cos.toFixed(2)}  `);
