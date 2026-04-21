@@ -103,9 +103,6 @@ suite("register command implementations", () => {
     const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
     assert.ok(ext, "extension must be discoverable in the test host");
     await ext.activate();
-    console.log("[probe] extension isActive:", ext.isActive);
-    const cmds = await vscode.commands.getCommands(true);
-    console.log("[probe] deslop cmds:", cmds.filter((c) => c.startsWith("deslop.")));
   });
 
   test("openWorstCluster shows info when store is empty", () => {

@@ -106,6 +106,19 @@ export interface ReportChangedNotification {
 
 export type AnalysisState = "idle" | "running" | "errored";
 
+// Wire payload for the `deslop/embeddingProgress` notification.
+// Mirrors deslop-core::live::wire::EmbeddingProgress.
+export type EmbeddingPhase = "starting" | "complete" | "failed";
+
+export interface EmbeddingProgress {
+  phase: EmbeddingPhase;
+  provider_id: string;
+  model_id: string;
+  done: number;
+  total: number;
+  message?: string | null;
+}
+
 // embedding/listModels result.
 export interface EmbeddingModelInfo {
   provider_id: string;

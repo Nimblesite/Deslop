@@ -191,8 +191,6 @@ impl<B: McpBackend> McpServer<B> {
                     "subscribe": true,
                     "listChanged": false
                 },
-                "prompts": null,
-                "logging": null,
             },
             "serverInfo": {
                 "name": MCP_SERVER_NAME,

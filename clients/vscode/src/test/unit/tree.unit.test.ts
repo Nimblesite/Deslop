@@ -180,6 +180,29 @@ suite("SessionProvider", () => {
     assert.ok(state);
   });
 
+  test("SessionProvider renders an Embedding progress row while a swap is in flight", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([]), 0);
+    store.setEmbeddingProgress({
+      phase: "starting",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      done: 0,
+      total: 23797,
+    });
+    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
+    const nodes = provider.getChildren();
+    const progress = nodes.find(
+      (n) => typeof n.label === "string" && n.label === "Embedding",
+    );
+    assert.ok(progress, "Embedding progress row must be present");
+    assert.match(
+      String(progress.description ?? ""),
+      /0\s*\/\s*23[,.]?797/,
+      "progress description must carry done / total",
+    );
+  });
+
   test("Embedding model row shows the pending id with a loading suffix while a swap is in flight", () => {
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);

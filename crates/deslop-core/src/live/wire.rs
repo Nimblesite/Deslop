@@ -158,6 +158,40 @@ pub struct ReportChangedNotification {
     pub summary: ChangeSummary,
 }
 
+/// Phase of the embedding pass surfaced to the editor via
+/// `deslop/embeddingProgress` ([LIVE-NOTIFICATIONS]).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbeddingPhase {
+    /// Pass has just begun. `done` is `0`, `total` is populated.
+    Starting,
+    /// Pass finished successfully. `done == total`.
+    Complete,
+    /// Pass aborted with `message`. `done` reflects subtrees
+    /// embedded before the failure.
+    Failed,
+}
+
+/// Wire payload for the `deslop/embeddingProgress` notification. Fired
+/// around a `deslop/embeddingSetModel` swap so the editor's session
+/// panel can render "X / Y subtrees" instead of freezing on the old
+/// model.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmbeddingProgress {
+    /// Lifecycle phase.
+    pub phase: EmbeddingPhase,
+    /// Provider id the swap targets (`"ollama"`, `"stub"`).
+    pub provider_id: String,
+    /// Model id the swap targets.
+    pub model_id: String,
+    /// Subtrees embedded so far.
+    pub done: u64,
+    /// Total subtrees in the current corpus.
+    pub total: u64,
+    /// Diagnostic message populated only when `phase == Failed`.
+    pub message: Option<String>,
+}
+
 /// Wire payload for the `analysis/state` notification ([LIVE-NOTIFICATIONS]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]

@@ -4,6 +4,7 @@
 import * as vscode from "vscode";
 import {
   ChangeSummary,
+  EmbeddingProgress,
   ReportCluster,
   Report,
   ReportDelta,
@@ -19,6 +20,13 @@ export interface ReportState {
   report: Report | null;
   generation: number;
   lifecycle: LifecyclePhase;
+  /// Model id the user just picked, surfaced in the Session panel while
+  /// the LSP re-runs its embedding pass. Cleared when a fresh snapshot
+  /// arrives.
+  pendingEmbeddingModel: string | null;
+  /// Latest `deslop/embeddingProgress` event from the LSP, or `null`
+  /// when no swap is in flight.
+  embeddingProgress: EmbeddingProgress | null;
 }
 
 export class ReportStore implements vscode.Disposable {
@@ -26,6 +34,8 @@ export class ReportStore implements vscode.Disposable {
     report: null,
     generation: 0,
     lifecycle: { kind: "starting" },
+    pendingEmbeddingModel: null,
+    embeddingProgress: null,
   };
   private readonly emitter = new vscode.EventEmitter<ReportState>();
   private readonly summaryEmitter = new vscode.EventEmitter<ChangeSummary>();
@@ -38,7 +48,13 @@ export class ReportStore implements vscode.Disposable {
   }
 
   setSnapshot(report: Report, generation: number): void {
-    this.state = { report, generation, lifecycle: { kind: "ready" } };
+    this.state = {
+      report,
+      generation,
+      lifecycle: { kind: "ready" },
+      pendingEmbeddingModel: null,
+      embeddingProgress: null,
+    };
     this.emitter.fire(this.state);
   }
 
@@ -61,12 +77,18 @@ export class ReportStore implements vscode.Disposable {
       report: next,
       generation: delta.to_generation,
       lifecycle: { kind: "ready" },
+      pendingEmbeddingModel: null,
     };
     this.emitter.fire(this.state);
   }
 
   setLifecycle(lifecycle: LifecyclePhase): void {
     this.state = { ...this.state, lifecycle };
+    this.emitter.fire(this.state);
+  }
+
+  setPendingEmbeddingModel(modelId: string | null): void {
+    this.state = { ...this.state, pendingEmbeddingModel: modelId };
     this.emitter.fire(this.state);
   }
 

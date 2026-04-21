@@ -27,14 +27,18 @@ use super::{
         stub_model_info, truncate,
     },
     wire::{
-        EmbeddingModelInfo, FileReport, FindSimilarInput, FindSimilarRequest, FindSimilarResult,
-        SessionConfig,
+        EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress, FileReport, FindSimilarInput,
+        FindSimilarRequest, FindSimilarResult, SessionConfig,
     },
 };
 
+/// Sink invoked around a `set_embedding_model` swap so transports can
+/// forward the progress onto `deslop/embeddingProgress`. The reporter
+/// is `Send + Sync` so it survives being moved into a tokio handler.
+pub type EmbeddingProgressReporter = Arc<dyn Fn(EmbeddingProgress) + Send + Sync>;
+
 /// Live analysis session. Wraps [`PipelineSession`] with the live-only
 /// metadata documented in [LIVE-STATE].
-#[derive(Debug)]
 pub struct AnalysisSession {
     /// Underlying analysis state.
     pipeline: PipelineSession,
@@ -51,6 +55,25 @@ pub struct AnalysisSession {
     /// Optional explicit exclusion config path supplied at
     /// construction.
     config_path: Option<PathBuf>,
+    /// Optional sink invoked on set-model progress events.
+    embedding_progress_reporter: Option<EmbeddingProgressReporter>,
+}
+
+impl std::fmt::Debug for AnalysisSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnalysisSession")
+            .field("pipeline", &self.pipeline)
+            .field("latest_report", &self.latest_report)
+            .field("generation", &self.generation)
+            .field("embedding_mode", &self.embedding_mode)
+            .field("incremental", &self.incremental)
+            .field("config_path", &self.config_path)
+            .field(
+                "embedding_progress_reporter",
+                &self.embedding_progress_reporter.is_some(),
+            )
+            .finish()
+    }
 }
 
 impl AnalysisSession {
@@ -105,7 +128,19 @@ impl AnalysisSession {
             embedding_mode,
             incremental,
             config_path,
+            embedding_progress_reporter: None,
         }
+    }
+
+    /// Installs (or clears with `None`) the embedding-progress reporter
+    /// invoked around [`Self::set_embedding_model`]. The LSP backend
+    /// installs a reporter that forwards events onto the LSP client as
+    /// `deslop/embeddingProgress` notifications.
+    pub fn set_embedding_progress_reporter(
+        &mut self,
+        reporter: Option<EmbeddingProgressReporter>,
+    ) {
+        self.embedding_progress_reporter = reporter;
     }
 
     /// Returns an `Arc` to the current report snapshot.
@@ -252,12 +287,49 @@ impl AnalysisSession {
         provider: Arc<dyn EmbeddingProvider>,
     ) -> Result<Option<EmbeddingProvenance>, LiveError> {
         self.embedding_provider = provider;
+        let spec = self.embedding_provider.spec();
+        let total = self.pipeline.fingerprint_count() as u64;
+        self.report_embedding_progress(EmbeddingProgress {
+            phase: EmbeddingPhase::Starting,
+            provider_id: spec.provider_id.clone(),
+            model_id: spec.model_id.clone(),
+            done: 0,
+            total,
+            message: None,
+        });
         let live_paths: Vec<PathBuf> = self.live_paths_snapshot();
-        let report = self.run_pipeline(&live_paths)?;
+        let report = match self.run_pipeline(&live_paths) {
+            Ok(report) => report,
+            Err(error) => {
+                self.report_embedding_progress(EmbeddingProgress {
+                    phase: EmbeddingPhase::Failed,
+                    provider_id: spec.provider_id,
+                    model_id: spec.model_id,
+                    done: 0,
+                    total,
+                    message: Some(error.to_string()),
+                });
+                return Err(error);
+            }
+        };
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
+        self.report_embedding_progress(EmbeddingProgress {
+            phase: EmbeddingPhase::Complete,
+            provider_id: spec.provider_id,
+            model_id: spec.model_id,
+            done: total,
+            total,
+            message: None,
+        });
         Ok(provenance)
+    }
+
+    fn report_embedding_progress(&self, event: EmbeddingProgress) {
+        if let Some(reporter) = self.embedding_progress_reporter.as_ref() {
+            reporter(event);
+        }
     }
 
     /// Lists embedding models available to the session — built-in

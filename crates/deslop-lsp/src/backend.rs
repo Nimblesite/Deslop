@@ -13,9 +13,9 @@ use std::{
 
 use deslop_core::{
     embedding::StubProvider,
-    live::{AnalysisSession, LiveApi, LiveService},
+    live::{AnalysisSession, EmbeddingProgress, LiveApi, LiveService},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response, Result as LspResult},
@@ -39,6 +39,10 @@ pub const SERVER_NAME: &str = "deslop-lsp";
 /// Must match the `source` field stamped by
 /// [`crate::diagnostics::build_for_file`] so clients can filter by it.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
+
+/// Method name for the `deslop/embeddingProgress` custom notification
+/// pushed around a model swap ([VSIX-SESSION-PROGRESS]).
+pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
 #[derive(Debug)]
@@ -71,6 +75,13 @@ impl LspBackend {
         )?;
         let service = Arc::new(LiveService::new(Arc::new(Mutex::new(session))));
         Ok(Self { client, service })
+    }
+
+    /// Returns the LSP client handle. Exposed so request handlers can
+    /// push notifications alongside their response.
+    #[must_use]
+    pub fn client(&self) -> &Client {
+        &self.client
     }
 
     /// Returns the inner live service handle.
@@ -181,6 +192,32 @@ impl LanguageServer for LspBackend {
 #[must_use]
 pub fn url_to_path(url: &Url) -> Option<PathBuf> {
     url.to_file_path().ok()
+}
+
+/// Builds a one-shot sync→async bridge used by the `set_embedding_model`
+/// request handler: the session fires progress synchronously into `tx`,
+/// the handler drains `rx` afterwards and `await`s `send_notification`
+/// before returning the JSON-RPC response.
+pub fn embedding_progress_channel() -> (
+    deslop_core::live::EmbeddingProgressReporter,
+    mpsc::UnboundedReceiver<EmbeddingProgress>,
+) {
+    let (tx, rx) = mpsc::unbounded_channel::<EmbeddingProgress>();
+    let reporter: deslop_core::live::EmbeddingProgressReporter =
+        Arc::new(move |event: EmbeddingProgress| {
+            let _send = tx.send(event);
+        });
+    (reporter, rx)
+}
+
+/// Type-only marker so `tower_lsp::Client::send_notification` can
+/// dispatch our custom method.
+#[derive(Debug)]
+pub enum EmbeddingProgressNotification {}
+
+impl tower_lsp::lsp_types::notification::Notification for EmbeddingProgressNotification {
+    type Params = EmbeddingProgress;
+    const METHOD: &'static str = EMBEDDING_PROGRESS;
 }
 
 /// Boots the LSP server over stdio. Used by the binary entry point

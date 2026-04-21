@@ -113,19 +113,24 @@ build-release:
 	@echo "==> Building release binary..."
 	cargo build --release --package deslop
 
-## install-binary: Clean, build release, and install the binary onto the user's PATH.
-##                 Deletes the installed binary and runs `cargo clean` first so a
-##                 stale build artifact can never shadow the source on disk.
+## install-binary: Clean, build release, and install all three binaries
+##                 (deslop, deslop-lsp, deslop-mcp) onto the user's PATH.
+##                 Deletes the installed binaries and runs `cargo clean` first
+##                 so a stale build artifact can never shadow the source on disk.
 install-binary:
-	@echo "==> Removing previously installed deslop binary..."
-	cargo uninstall deslop 2>/dev/null || true
-	$(RM) "$(HOME)/.cargo/bin/deslop"
+	@for _bin in deslop deslop-lsp deslop-mcp; do \
+	  echo "==> Removing previously installed $$_bin binary..."; \
+	  cargo uninstall $$_bin 2>/dev/null || true; \
+	  $(RM) "$(HOME)/.cargo/bin/$$_bin"; \
+	done
 	@echo "==> Cleaning build artifacts..."
-	cargo clean --release --package deslop
-	@echo "==> Building release binary from clean state..."
-	cargo build --release --package deslop
-	@echo "==> Installing deslop binary..."
-	cargo install --locked --path crates/deslop --force
+	cargo clean --release --package deslop --package deslop-lsp --package deslop-mcp
+	@echo "==> Building release binaries from clean state..."
+	cargo build --release --package deslop --package deslop-lsp --package deslop-mcp
+	@for _crate in deslop deslop-lsp deslop-mcp; do \
+	  echo "==> Installing $$_crate binary..."; \
+	  cargo install --locked --path crates/$$_crate --force; \
+	done
 
 ## vsix-install: Install Node deps for clients/vscode + webview-ui
 vsix-install:

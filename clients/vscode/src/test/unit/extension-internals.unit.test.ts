@@ -99,6 +99,37 @@ suite("extension internals", () => {
     wireNotifications(client, new ReportStore());
     assert.ok(handlers.has("deslop/reportChanged"));
     assert.ok(handlers.has("deslop/analysisState"));
+    assert.ok(handlers.has("deslop/embeddingProgress"));
+  });
+
+  test("wireNotifications embeddingProgress handler pushes the payload into the store", () => {
+    let progressCb: ((p: unknown) => void) | undefined;
+    const client = {
+      onNotification: (name: string, cb: (p: unknown) => void) => {
+        if (name === "deslop/embeddingProgress") progressCb = cb;
+      },
+      sendRequest: () => Promise.resolve(null),
+    } as unknown as LanguageClient;
+    const store = new ReportStore();
+    wireNotifications(client, store);
+    progressCb?.({
+      phase: "starting",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      done: 0,
+      total: 100,
+    });
+    assert.equal(store.current.embeddingProgress?.total, 100);
+    progressCb?.({
+      phase: "complete",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      done: 100,
+      total: 100,
+    });
+    // After complete, the store clears the progress so the Session panel
+    // falls back to the fresh report.
+    assert.equal(store.current.embeddingProgress, null);
   });
 
   test("wireNotifications analysisState handler logs without throwing", () => {

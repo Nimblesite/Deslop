@@ -26,9 +26,10 @@ pub use notifications::{
     broadcast_report_changed, broadcast_state, ReportChangedSender, StateSender,
 };
 pub use scheduler::Scheduler;
-pub use session::AnalysisSession;
+pub use session::{AnalysisSession, EmbeddingProgressReporter};
 pub use watcher::LiveWatcher;
 pub use wire::{
-    AnalysisState, ChangeSummary, EmbeddingModelInfo, FileReport, FindSimilarInput,
-    FindSimilarRequest, FindSimilarResult, ReportChangedNotification, SessionConfig,
+    AnalysisState, ChangeSummary, EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress,
+    FileReport, FindSimilarInput, FindSimilarRequest, FindSimilarResult,
+    ReportChangedNotification, SessionConfig,
 };

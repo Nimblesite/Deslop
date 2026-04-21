@@ -60,7 +60,7 @@ export async function pickEmbeddingModel(
       } else if (picked.entryKind === "refresh") {
         await pickEmbeddingModel(store, clientOf);
       } else if (picked.entryKind === "model" && picked.model) {
-        await setModel(client, picked.model);
+        await setModelFromPicker(client, store, picked.model);
       }
     } finally {
       quickPick.dispose();
@@ -151,6 +151,44 @@ export async function setModel(client: LanguageClient, model: EmbeddingModelInfo
       .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
     vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
   } catch (err) {
+    logError(err, "embedding/setModel");
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`Failed to switch embedding model: ${message}`);
+    log("keeping previous model active");
+  }
+}
+
+// Marks the store's pending embedding model so the Session panel reflects
+// the user's choice immediately, then dispatches the LSP swap. On failure
+// the pending marker is cleared so the UI reverts to the active model.
+export async function setModelFromPicker(
+  client: LanguageClient,
+  store: ReportStore,
+  model: EmbeddingModelInfo,
+): Promise<void> {
+  if (model.provider_id === "stub") {
+    const confirm = await vscode.window.showWarningMessage(
+      "The stub provider is deterministic but not semantically meaningful. \"Same behavior, different code\" (AI) recall is disabled.",
+      { modal: true },
+      "Use stub anyway",
+    );
+    if (confirm !== "Use stub anyway") return;
+  }
+  store.setPendingEmbeddingModel(model.model_id);
+  try {
+    await client.sendRequest("deslop/embeddingSetModel", {
+      provider_id: model.provider_id,
+      model_id: model.model_id,
+    });
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("embedding.provider", model.provider_id, vscode.ConfigurationTarget.Workspace);
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
+    vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
+  } catch (err) {
+    store.setPendingEmbeddingModel(null);
     logError(err, "embedding/setModel");
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`Failed to switch embedding model: ${message}`);

@@ -203,6 +203,17 @@ impl PipelineSession {
         self.min_nodes
     }
 
+    /// Returns the total fingerprint count across every live file.
+    /// Callers use this to size embedding-progress notifications
+    /// before re-running the pass.
+    #[must_use]
+    pub fn fingerprint_count(&self) -> usize {
+        self.per_file
+            .values()
+            .map(|cached| cached.fingerprints.len())
+            .sum()
+    }
+
     /// Returns the path associated with `file_id`, if the session has
     /// seen it.
     #[must_use]

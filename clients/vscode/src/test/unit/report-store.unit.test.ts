@@ -136,4 +136,40 @@ suite("ReportStore", () => {
     store.setSnapshot(emptyReport(), 1);
     assert.equal(store.current.pendingEmbeddingModel, null);
   });
+
+  test("setEmbeddingProgress exposes the latest event and fires onDidChange", () => {
+    const store = new ReportStore();
+    let fired = 0;
+    store.onDidChange(() => {
+      fired += 1;
+    });
+    store.setEmbeddingProgress({
+      phase: "starting",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      done: 0,
+      total: 200,
+    });
+    assert.equal(fired, 1);
+    assert.deepEqual(store.current.embeddingProgress, {
+      phase: "starting",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      done: 0,
+      total: 200,
+    });
+  });
+
+  test("setEmbeddingProgress(null) clears the active progress state", () => {
+    const store = new ReportStore();
+    store.setEmbeddingProgress({
+      phase: "complete",
+      provider_id: "stub",
+      model_id: "blake3-stub",
+      done: 64,
+      total: 64,
+    });
+    store.setEmbeddingProgress(null);
+    assert.equal(store.current.embeddingProgress, null);
+  });
 });

@@ -256,11 +256,14 @@ export class SessionProvider extends LifecycleAwareProvider {
 
   getChildren(node?: Node): Node[] {
     if (node) return [];
-    const { report, lifecycle } = this.store.current;
+    const { report, lifecycle, pendingEmbeddingModel } = this.store.current;
     const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
     if (status) return [status];
     if (!report) return [new StatusNode("No session yet", "info")];
-    const model = report.embedding_provenance?.model_id ?? "off";
+    const activeModel = report.embedding_provenance?.model_id ?? "off";
+    const model = pendingEmbeddingModel
+      ? `${pendingEmbeddingModel} (loading…)`
+      : activeModel;
     const cache = `${report.cache_stats.hits} hit / ${report.cache_stats.misses} miss`;
     const state = this.clientOf() ? "running" : "stopped";
     return [

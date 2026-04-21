@@ -420,6 +420,28 @@ fn send_notification(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
     write_frame(stdin, payload)
 }
 
+/// Sends a request and returns the response plus every notification
+/// received while waiting for it. Used by tests that assert the server
+/// pushed a specific `deslop/*` notification mid-request.
+fn send_and_recv_with_notifications(
+    stdin: &mut ChildStdin,
+    reader: &mut BufReader<ChildStdout>,
+    id: i64,
+    payload: &str,
+) -> Result<(serde_json::Value, Vec<serde_json::Value>)> {
+    write_frame(stdin, payload)?;
+    let mut notifications = Vec::new();
+    loop {
+        let frame = read_frame(reader)?;
+        if frame.get("id").and_then(serde_json::Value::as_i64) == Some(id) {
+            return Ok((frame, notifications));
+        }
+        if frame.get("method").is_some() && frame.get("id").is_none() {
+            notifications.push(frame);
+        }
+    }
+}
+
 #[test]
 fn lsp_initialize_advertises_hover_and_code_lens_providers() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -791,6 +813,69 @@ fn lsp_custom_method_embedding_set_model_swaps_to_stub() -> Result<()> {
         result.is_object() || result.is_null(),
         "set-model should return a structured response or null: {response}"
     );
+    shut_down(child);
+    Ok(())
+}
+
+#[test]
+fn lsp_embedding_set_model_emits_progress_notifications() -> Result<()> {
+    // Session panel reactivity ([VSIX-SESSION-PROGRESS]): the LSP must
+    // push at least one `deslop/embeddingProgress` notification while a
+    // model swap is in flight so the extension can render "X / Y
+    // subtrees" instead of freezing on the old model. Stub provider is
+    // deterministic and fast so the swap completes well within the
+    // request window.
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let (mut stdin, mut reader) = take_io(&mut child)?;
+    let (init_id, init_payload) = initialize_request()?;
+    let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
+    let (id, payload) = custom_request(
+        "deslop/embeddingSetModel",
+        &serde_json::json!({
+            "provider_id": "stub",
+            "model_id": "stub-model",
+        }),
+    )?;
+    let (response, notifications) =
+        send_and_recv_with_notifications(&mut stdin, &mut reader, id, &payload)?;
+    let _result = result_value(&response)?;
+    let progress: Vec<&serde_json::Value> = notifications
+        .iter()
+        .filter(|frame| {
+            frame.get("method").and_then(serde_json::Value::as_str)
+                == Some("deslop/embeddingProgress")
+        })
+        .collect();
+    assert!(
+        !progress.is_empty(),
+        "embedding swap must emit at least one deslop/embeddingProgress notification; saw {notifications:?}"
+    );
+    let params = progress
+        .first()
+        .and_then(|frame| frame.get("params"))
+        .ok_or_else(|| anyhow!("progress notification missing params"))?;
+    let model_id = params
+        .get("model_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("progress params missing model_id: {params}"))?;
+    assert!(
+        !model_id.is_empty(),
+        "progress must populate model_id: {params}"
+    );
+    let provider_id = params
+        .get("provider_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("progress params missing provider_id: {params}"))?;
+    assert_eq!(
+        provider_id, "stub",
+        "progress must name the swapped provider: {params}"
+    );
+    let total = params
+        .get("total")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| anyhow!("progress params missing total: {params}"))?;
+    assert!(total > 0, "total subtrees must be populated: {params}");
     shut_down(child);
     Ok(())
 }
