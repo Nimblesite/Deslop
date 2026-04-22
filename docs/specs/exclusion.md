@@ -1,4 +1,4 @@
-# Exclusion configuration
+# Configuration
 
 ### [EXCLUSION-CONFIG] Exclusion configuration
 A single opt-in configuration file — `.deslop.toml` in the scan root, or `--config <path>` — controls two orthogonal exclusion tiers. Motivating case: generated code. We want to know when hand-written code duplicates a generated file, but we do not want the generated file itself to dominate the top of the report.
@@ -29,3 +29,15 @@ report_hide = ["**/target/**"]
 **No config ⇒ no exclusions.** Current behaviour is preserved. Absence of `.deslop.toml` is not an error and is not warned on.
 
 **`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.
+
+### [CONFIG-CROSS-LANGUAGE] Cross-language comparison
+The same `.deslop.toml` file controls whether clone candidates may span different parser language ids.
+
+```toml
+[analysis]
+allow_cross_language_comparison = false
+```
+
+Default: `false`. Candidate pairs whose two fingerprints belong to different languages are dropped before fusion and transitive-closure clustering. This keeps normal reports focused on code that developers can realistically refactor together and prevents mixed-language scaffolding from dominating the top offenders list.
+
+Opt-in: set `allow_cross_language_comparison = true` to preserve the full language-agnostic candidate union. This is useful for audits that intentionally compare ports, generated client libraries, or semantic equivalents across ecosystems. The option is global for the run; per-language overlays still apply only to exclusion and reporting policy.

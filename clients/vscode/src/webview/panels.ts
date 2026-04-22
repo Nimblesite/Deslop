@@ -150,7 +150,7 @@ function buildHtml(
     </html>`;
 }
 
-export async function handleMessage(store: ReportStore, message: unknown): Promise<void> {
+export async function handleMessage(_store: ReportStore, message: unknown): Promise<void> {
   if (!message || typeof message !== "object") return;
   const m = message as { kind?: string } & Record<string, unknown>;
   switch (m.kind) {
@@ -172,14 +172,6 @@ export async function handleMessage(store: ReportStore, message: unknown): Promi
     case "refresh":
       await vscode.commands.executeCommand("deslop.refreshReport");
       return;
-    case "navigate/next":
-    case "navigate/prev": {
-      const clusters = store.current.report?.clusters ?? [];
-      if (clusters.length === 0) return;
-      // We don't know which cluster is active in the webview from the host side —
-      // the webview already advances its own signal; no-op is acceptable for now.
-      return;
-    }
     case undefined:
       return;
     default:

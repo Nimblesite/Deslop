@@ -12,7 +12,7 @@ The pipeline normalizes each source file's AST (collapsing identifier names, lit
 2. **Sibling-extension** — contiguous sibling windows under a common parent are hashed as groups. Catches near-miss clones where the same sequence of statements appears in different enclosing contexts.
 3. **Token LSH (MinHash over k=5 k-grams of normalized node kinds)** — catches Type-3 clones where structure diverged but the token bag is close. `token_jaccard` is the estimated Jaccard similarity in `[0.0, 1.0]`.
 
-Candidate pairs from all three passes are unioned, then transitively closed into clusters. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.
+Candidate pairs from all three passes are unioned, filtered to same-language endpoints by default, then transitively closed into clusters. `.deslop.toml` can opt back into cross-language comparison with `[analysis] allow_cross_language_comparison = true`. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.
 
 ## Clone buckets (canonical)
 
@@ -84,6 +84,7 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
 - `FUSED_THRESHOLD = 0.85` — a pair must score ≥ this on the fused signal (combination of `structural`, `token_jaccard`, `embedding_cos`) to enter a cluster.
 - `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
+- Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
 
 ## What to do with this report
 

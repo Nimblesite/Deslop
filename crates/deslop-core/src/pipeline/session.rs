@@ -24,7 +24,7 @@ use crate::{
     fpcache::CachedFile,
     lang::LanguageParser,
     lsh::band_collisions,
-    pair::{candidate_pairs, cluster_by_transitive_closure},
+    pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
@@ -40,8 +40,7 @@ use super::{
     signatures::build_signatures,
 };
 
-/// A long-running analysis context. Owned by the daemon; one instance
-/// per workspace root ([LIVE-LIFECYCLE]).
+/// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
 ///
 /// The session owns the [`FileRegistry`] used by its fingerprints, so
 /// `FileId`s issued by a session are only meaningful within that
@@ -417,11 +416,13 @@ impl PipelineSession {
         let signatures = build_signatures(&corpus.fingerprints, &corpus.trees);
         let lsh_pairs = band_collisions(&signatures);
         let embedding_outcome = run_embedding_pass(config, &corpus)?;
-        let pairs = candidate_pairs(
+        let pairs = candidate_pairs_for_language_policy(
             &corpus.fingerprints,
             &signatures,
             &lsh_pairs,
             &embedding_outcome.pairs,
+            &self.file_languages,
+            self.exclusion.allows_cross_language_comparison(),
         );
         let fused_clusters = cluster_by_transitive_closure(&pairs);
         let clusters = build_ranked_fused_clusters(&corpus.fingerprints, &fused_clusters);

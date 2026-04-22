@@ -1,5 +1,6 @@
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
+import { signal } from "@preact/signals";
 
 import {
   analysisState,
@@ -14,6 +15,10 @@ import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
 import { SignalStrip } from "../components/SignalStrip";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { bucketLabels, resolveBucket } from "../../../src/types/report";
+import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
+
+const focusedOccurrenceIndex = signal(0);
+const shortcutHelpExpanded = signal(false);
 
 function ClusterApp() {
   const cluster = selectedCluster.value;
@@ -22,21 +27,34 @@ function ClusterApp() {
   const severity = cluster ? severityByClusterId.value.get(cluster.id) ?? "faint" : "faint";
 
   useEffect(() => {
+    focusedOccurrenceIndex.value = 0;
+  }, [cluster?.id]);
+
+  useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) return;
       if (event.key === "n" && list.length > 0) {
-        const idx = (rank === 0 ? 0 : rank) % list.length;
-        const next = list[idx];
-        if (next) selectedClusterId.value = next.id;
+        selectNextCluster(list, rank);
       }
       if (event.key === "p" && list.length > 0) {
-        const idx = rank <= 1 ? list.length - 1 : rank - 2;
-        const next = list[idx];
-        if (next) selectedClusterId.value = next.id;
+        selectPreviousCluster(list, rank);
+      }
+      if (event.key === "j" && cluster) {
+        moveFocusedOccurrence(cluster, 1);
+      }
+      if (event.key === "k" && cluster) {
+        moveFocusedOccurrence(cluster, -1);
+      }
+      if (event.key === "Enter" && cluster) {
+        openFocusedOccurrence(cluster);
+      }
+      if (event.key === "?") {
+        shortcutHelpExpanded.value = !shortcutHelpExpanded.value;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [rank, list]);
+  }, [rank, list, cluster]);
 
   if (!cluster) {
     return (
@@ -48,6 +66,7 @@ function ClusterApp() {
 
   const canonical = cluster.occurrences[0];
   const bucketInfo = bucketLabels(resolveBucket(cluster));
+  const focusedIndex = focusedIndexFor(cluster);
 
   return (
     <main
@@ -78,7 +97,7 @@ function ClusterApp() {
               gap: "8px",
             }}
           >
-            <span>CLUSTER · {cluster.id}</span>
+            <span title={clusterIdTitle(cluster.id, rank, list.length)}>CLUSTER · {cluster.id}</span>
             {bucketInfo.aiMatch ? (
               <span
                 style={{
@@ -90,7 +109,7 @@ function ClusterApp() {
                   letterSpacing: "0.1em",
                   fontWeight: 700,
                 }}
-                title="Detected by the AI embedding pass — semantically equivalent, syntactically different."
+                title="AI match: Deslop's embedding pass found these locations to be semantically equivalent even though their syntax is different. Review both before merging."
               >
                 AI MATCH
               </span>
@@ -104,6 +123,7 @@ function ClusterApp() {
               fontWeight: 700,
               letterSpacing: "-0.02em",
             }}
+            title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}
           >
             {bucketInfo.plainTitle}
           </h1>
@@ -114,12 +134,17 @@ function ClusterApp() {
               fontFamily: FONT.ui,
               fontSize: "15px",
             }}
+            title={`Recommended reading for this bucket: ${bucketInfo.actionSentence}`}
           >
             {bucketInfo.actionSentence}
           </p>
         </div>
         <div style={{ textAlign: "right" }}>
-          <SeverityBadge severity={severity} label={`#${rank || "?"}`} />
+          <SeverityBadge
+            severity={severity}
+            label={`#${rank || "?"}`}
+            title={rankTitle(rank, list.length, severity)}
+          />
           <div
             style={{
               fontFamily: FONT.mono,
@@ -127,11 +152,15 @@ function ClusterApp() {
               marginTop: "12px",
               fontSize: "12px",
             }}
+            title={clusterStatsTitle(cluster)}
           >
             weight {cluster.weight.toFixed(2)} · size {cluster.size} · × {cluster.occurrences.length}
           </div>
           {canonical ? (
-            <div style={{ fontFamily: FONT.mono, fontSize: "12px", marginTop: "4px" }}>
+            <div
+              style={{ fontFamily: FONT.mono, fontSize: "12px", marginTop: "4px" }}
+              title={canonicalTitle(canonical)}
+            >
               canonical: {canonical.path}
             </div>
           ) : null}
@@ -152,6 +181,7 @@ function ClusterApp() {
         {cluster.occurrences.map((o, i) => (
           <article
             key={`${o.path}-${o.start_byte}`}
+            title={occurrenceTitle(o, i)}
             style={{
               background: i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
               padding: "14px 20px",
@@ -159,10 +189,11 @@ function ClusterApp() {
               gridTemplateColumns: "minmax(0, 1fr) auto",
               gap: "16px",
               alignItems: "center",
+              outline: i === focusedIndex ? `1px solid ${SEVERITY_COLOR[severity]}` : "none",
             }}
           >
             <div>
-              <div style={{ fontFamily: FONT.mono, fontSize: "12px" }}>
+              <div style={{ fontFamily: FONT.mono, fontSize: "12px" }} title={locationTitle(o)}>
                 {o.displayLocation?.label ?? o.path}
               </div>
               <div
@@ -172,6 +203,7 @@ function ClusterApp() {
                   fontSize: "11px",
                   marginTop: "2px",
                 }}
+                title={locationDescriptionTitle(o)}
               >
                 {o.displayLocation?.description ??
                   "line and column unavailable until the file is loaded"}
@@ -179,19 +211,26 @@ function ClusterApp() {
               </div>
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={() => post({ kind: "open/occurrence", occurrence: o })}>
+              <button
+                onClick={() => post({ kind: "open/occurrence", occurrence: o })}
+                title={openTitle(o)}
+                aria-label={openTitle(o)}
+              >
                 Open
               </button>
               <button
                 class={i === 0 ? "" : "primary"}
-                onClick={() =>
+                onClick={() => {
+                  if (i === 0) return;
                   post({
                     kind: "compare/canonical",
                     clusterId: cluster.id,
-                  })
-                }
-                disabled={i === 0}
+                  });
+                }}
+                aria-disabled={i === 0}
                 style={i === 0 ? { opacity: 0.3 } : { color: "inherit" }}
+                title={compareTitle(i)}
+                aria-label={compareTitle(i)}
               >
                 Compare
               </button>
@@ -208,8 +247,20 @@ function ClusterApp() {
           justifyContent: "flex-end",
         }}
       >
-        <button onClick={() => post({ kind: "navigate/prev" })}>← prev cluster (p)</button>
-        <button onClick={() => post({ kind: "navigate/next" })}>next cluster (n) →</button>
+        <button
+          onClick={() => selectPreviousCluster(list, rank)}
+          title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
+          aria-label="Previous cluster"
+        >
+          ← prev cluster (p)
+        </button>
+        <button
+          onClick={() => selectNextCluster(list, rank)}
+          title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
+          aria-label="Next cluster"
+        >
+          next cluster (n) →
+        </button>
       </footer>
       <HotkeyHelp accent={SEVERITY_COLOR[severity]} />
     </main>
@@ -225,10 +276,122 @@ function HotkeyHelp({ accent }: { accent: string }) {
         fontSize: "11px",
         color: COLOR.onSurfaceMuted,
       }}
+      title="Keyboard help for this cluster panel. These shortcuts work while focus is in the webview but not inside a button or input."
     >
-      <span style={{ color: accent }}>j/k</span> next/prev occurrence · <span style={{ color: accent }}>n/p</span> next/prev cluster · <span style={{ color: accent }}>Enter</span> open · <span style={{ color: accent }}>?</span> help
+      <span style={{ color: accent }} title="j moves the focused occurrence down; k moves it up.">
+        j/k
+      </span>{" "}
+      next/prev occurrence ·{" "}
+      <span style={{ color: accent }} title="n moves to the next cluster; p moves to the previous cluster.">
+        n/p
+      </span>{" "}
+      next/prev cluster ·{" "}
+      <span style={{ color: accent }} title="Enter opens the currently focused occurrence in the editor.">
+        Enter
+      </span>{" "}
+      open ·{" "}
+      <button
+        onClick={() => {
+          shortcutHelpExpanded.value = !shortcutHelpExpanded.value;
+        }}
+        title="Show or hide detailed keyboard shortcut help for this cluster panel."
+        aria-label="Toggle keyboard shortcut help"
+        style={{ padding: "2px 6px", color: accent }}
+      >
+        ?
+      </button>{" "}
+      help
+      {shortcutHelpExpanded.value ? (
+        <div
+          style={{ marginTop: "8px", maxWidth: "760px" }}
+          title="Detailed keyboard help: occurrence movement changes the highlighted occurrence row; cluster movement changes the selected cluster; Enter opens the focused occurrence."
+        >
+          j/k changes the highlighted occurrence row. n/p changes the selected cluster. Enter opens the highlighted occurrence in VS Code. ? toggles this help text.
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function selectNextCluster(list: ReportCluster[], rank: number): void {
+  selectClusterByOffset(list, rank, 1);
+}
+
+function selectPreviousCluster(list: ReportCluster[], rank: number): void {
+  selectClusterByOffset(list, rank, -1);
+}
+
+function selectClusterByOffset(list: ReportCluster[], rank: number, offset: number): void {
+  if (list.length === 0) return;
+  const current = rank > 0 ? rank - 1 : 0;
+  const next = (current + offset + list.length) % list.length;
+  selectedClusterId.value = list[next]?.id ?? null;
+  focusedOccurrenceIndex.value = 0;
+}
+
+function moveFocusedOccurrence(cluster: ReportCluster, offset: number): void {
+  const total = cluster.occurrences.length;
+  if (total === 0) return;
+  focusedOccurrenceIndex.value = (focusedIndexFor(cluster) + offset + total) % total;
+}
+
+function openFocusedOccurrence(cluster: ReportCluster): void {
+  const occurrence = cluster.occurrences[focusedIndexFor(cluster)] ?? cluster.occurrences[0];
+  if (occurrence) post({ kind: "open/occurrence", occurrence });
+}
+
+function focusedIndexFor(cluster: ReportCluster): number {
+  const max = Math.max(0, cluster.occurrences.length - 1);
+  return Math.min(Math.max(0, focusedOccurrenceIndex.value), max);
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement &&
+    ["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
+}
+
+function clusterIdTitle(id: string, rank: number, total: number): string {
+  return `Cluster ${id}. Ranked ${rank || "unknown"} of ${total} by Deslop's worst-first duplication impact score.`;
+}
+
+function rankTitle(rank: number, total: number, severity: string): string {
+  return `Rank ${rank || "unknown"} of ${total}. Severity bucket ${severity} is based on this cluster's relative weight in the current report.`;
+}
+
+function clusterStatsTitle(cluster: ReportCluster): string {
+  return `Weight is Deslop's duplication impact score. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${cluster.weight.toFixed(2)}, size ${cluster.size}, occurrences ${cluster.occurrences.length}.`;
+}
+
+function canonicalTitle(occurrence: ReportOccurrence): string {
+  return `Canonical occurrence: Deslop uses this first occurrence as the comparison anchor for this cluster. Location: ${occurrence.displayLocation?.label ?? occurrence.path}.`;
+}
+
+function occurrenceTitle(occurrence: ReportOccurrence, index: number): string {
+  const role = index === 0 ? "Canonical occurrence" : `Occurrence ${index + 1}`;
+  const hidden = occurrence.hidden
+    ? " This occurrence is hidden by report_hide configuration but shown because the cluster also contains visible code."
+    : "";
+  return `${role}: ${occurrence.displayLocation?.label ?? occurrence.path}. ${occurrence.displayLocation?.description ?? "Line and column are unavailable until the file can be read."}${hidden}`;
+}
+
+function locationTitle(occurrence: ReportOccurrence): string {
+  return `Editor target: ${occurrence.displayLocation?.label ?? occurrence.path}. This is the file and human line/column that Open will navigate to.`;
+}
+
+function locationDescriptionTitle(occurrence: ReportOccurrence): string {
+  const hidden = occurrence.hidden ? " Hidden means this path matched report_hide configuration." : "";
+  return `${occurrence.displayLocation?.description ?? "Line and column unavailable because the source file could not be read by the extension host."}${hidden}`;
+}
+
+function openTitle(occurrence: ReportOccurrence): string {
+  return `Open this occurrence in VS Code at ${occurrence.displayLocation?.label ?? occurrence.path}. The editor selection will cover the clone range.`;
+}
+
+function compareTitle(index: number): string {
+  if (index === 0) {
+    return "Compare is disabled on the canonical occurrence because comparing the anchor to itself would not show a useful diff.";
+  }
+  return "Compare this cluster against its canonical occurrence in VS Code's diff editor using Deslop's occurrence-range virtual documents.";
 }
 
 wireMessagePump();

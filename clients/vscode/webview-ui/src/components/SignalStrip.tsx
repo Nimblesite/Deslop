@@ -5,7 +5,16 @@ interface Props {
   signals: ReportSignals;
 }
 
-const LABELS = ["structural", "jaccard", "embedding", "fused"] as const;
+const SIGNAL_CONTEXT = {
+  structural:
+    "Structural score: how much the parsed AST shape matches. High means the code is organized almost the same way even if names or literals changed.",
+  jaccard:
+    "Jaccard score: normalized token overlap after Deslop removes trivia. High means the code text is very similar after formatting and naming noise are ignored.",
+  embedding:
+    "Embedding score: semantic similarity from the local embedding model. High means the code appears to do the same job even when the syntax differs.",
+  fused:
+    "Fused score: Deslop's combined clone signal. A pair generally becomes a reportable cluster when this reaches the configured threshold.",
+} as const;
 
 export function SignalStrip({ signals }: Props) {
   const values: [string, number][] = [
@@ -24,7 +33,7 @@ export function SignalStrip({ signals }: Props) {
       }}
     >
       {values.map(([label, value]) => (
-        <div key={label}>
+        <div key={label} title={signalTitle(label, value)}>
           <div
             class="label"
             style={{
@@ -62,8 +71,11 @@ export function SignalStrip({ signals }: Props) {
           </div>
         </div>
       ))}
-      {/* LABELS unused re-export to silence tree-shake if styling later needs it */}
-      <span style={{ display: "none" }}>{LABELS.join(",")}</span>
     </div>
   );
+}
+
+function signalTitle(label: string, value: number): string {
+  const context = SIGNAL_CONTEXT[label as keyof typeof SIGNAL_CONTEXT];
+  return `${context} Current value: ${value.toFixed(2)}.`;
 }

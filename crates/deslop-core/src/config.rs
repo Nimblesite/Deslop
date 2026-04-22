@@ -64,6 +64,17 @@ struct RawConfig {
     /// `[threshold]` block to `.deslop.toml`.
     #[serde(default)]
     threshold: Option<RawThreshold>,
+    /// Analysis-wide behavior toggles.
+    #[serde(default)]
+    analysis: RawAnalysis,
+}
+
+/// Raw on-disk shape of the `[analysis]` section.
+#[derive(Debug, Default, Clone, Deserialize)]
+struct RawAnalysis {
+    /// Whether candidate pairs may span different parser language ids.
+    #[serde(default)]
+    allow_cross_language_comparison: bool,
 }
 
 /// Raw on-disk shape of the `[threshold]` section.
@@ -119,6 +130,10 @@ pub struct ExclusionConfig {
     /// max_duplication_percent` per [EXIT-CODES]. `None` means the
     /// config file did not opt in.
     fail_over_percent: Option<f64>,
+    /// Whether candidate pairs may span different parser language ids
+    /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
+    /// on same-language refactoring.
+    allow_cross_language_comparison: bool,
 }
 
 /// Compiled matchers for a single language overlay.
@@ -145,6 +160,7 @@ impl ExclusionConfig {
             per_language: HashMap::new(),
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
+            allow_cross_language_comparison: false,
         }
     }
 
@@ -215,6 +231,7 @@ impl ExclusionConfig {
             per_language,
             default_boilerplate_imports,
             fail_over_percent,
+            allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
         })
     }
 
@@ -224,6 +241,13 @@ impl ExclusionConfig {
     #[must_use]
     pub const fn fail_over_percent(&self) -> Option<f64> {
         self.fail_over_percent
+    }
+
+    /// Returns whether candidate pairs may span different parser
+    /// language ids per [CONFIG-CROSS-LANGUAGE].
+    #[must_use]
+    pub const fn allows_cross_language_comparison(&self) -> bool {
+        self.allow_cross_language_comparison
     }
 
     /// Returns the source path this config was loaded from, or an empty

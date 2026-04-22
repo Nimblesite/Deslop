@@ -13,12 +13,16 @@
 //! Pair scores go into the final report (see [PRINCIPLES-AUDIENCE-AGENT])
 //! so agent consumers can tell **why** each cluster was flagged.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    hash::BuildHasher,
+};
 
 use crate::{
     embedding::EmbeddingPair,
     fingerprint::Fingerprint,
     lsh::{estimate_jaccard, Signature},
+    state::FileId,
 };
 
 /// Minimum fused score required before a pair enters a cluster. The
@@ -126,6 +130,48 @@ pub fn candidate_pairs(
     add_lsh_pairs(lsh_pairs, &mut scores);
     add_embedding_pairs(embedding_pairs, &mut scores, &mut cosines);
     finalise_pairs(fingerprints, signatures, scores, &cosines)
+}
+
+/// Returns candidate pairs, optionally dropping cross-language endpoints
+/// before transitive closure per [CONFIG-CROSS-LANGUAGE].
+#[must_use]
+pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    lsh_pairs: &[(usize, usize)],
+    embedding_pairs: &[EmbeddingPair],
+    file_languages: &HashMap<FileId, &'static str, S>,
+    allow_cross_language: bool,
+) -> Vec<CandidatePair> {
+    let pairs = candidate_pairs(fingerprints, signatures, lsh_pairs, embedding_pairs);
+    if allow_cross_language {
+        return pairs;
+    }
+    pairs
+        .into_iter()
+        .filter(|pair| same_language_pair(pair, fingerprints, file_languages))
+        .collect()
+}
+
+/// Returns true when both pair endpoints resolve to the same language id.
+fn same_language_pair<S: BuildHasher>(
+    pair: &CandidatePair,
+    fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> bool {
+    let Some(left) = fingerprints.get(pair.left) else {
+        return false;
+    };
+    let Some(right) = fingerprints.get(pair.right) else {
+        return false;
+    };
+    match (
+        file_languages.get(&left.file_id),
+        file_languages.get(&right.file_id),
+    ) {
+        (Some(left_language), Some(right_language)) => left_language == right_language,
+        _ => false,
+    }
 }
 
 /// Populates `scores` with `1.0` for every structural (Merkle-hash) pair.

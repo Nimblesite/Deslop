@@ -52,7 +52,7 @@ suite("webview handleMessage", () => {
     }
   });
 
-  test("navigate/next and navigate/prev are no-ops when clusters are empty", async () => {
+  test("legacy navigate messages are ignored by the host", async () => {
     const store = new ReportStore();
     await handleMessage(store, { kind: "navigate/next" });
     await handleMessage(store, { kind: "navigate/prev" });
