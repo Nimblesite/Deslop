@@ -985,6 +985,66 @@ fn set_embedding_model_to_stub_succeeds() -> Result<()> {
 }
 
 #[test]
+fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
+    let workspace = copied_fixture_root()?;
+    fs::create_dir_all(workspace.path().join(".vscode"))?;
+    fs::write(
+        workspace.path().join(".vscode/settings.json"),
+        r#"{ "editor.tabSize": 2 }"#,
+    )?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
+    let _ = init_session(&mut child)?;
+    let _result = call_tool(
+        &mut child,
+        "set-embedding-model",
+        &json!({
+            "provider_id": "stub",
+            "model_id": "blake3-stub",
+            "endpoint": "http://127.0.0.1:11434",
+            "user_initiated": true
+        }),
+    )?;
+    let settings = read_workspace_settings(workspace.path())?;
+    assert_eq!(value_get(&settings, "/editor.tabSize")?, json!(2));
+    assert_eq!(
+        value_get(&settings, "/deslop.embedding.endpoint")?,
+        json!("http://127.0.0.1:11434")
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<()> {
+    let workspace = copied_fixture_root()?;
+    fs::write(workspace.path().join(".vscode"), "not a directory")?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request(
+        "tools/call",
+        &json!({
+            "name": "set-embedding-model",
+            "arguments": {
+                "provider_id": "stub",
+                "model_id": "blake3-stub",
+                "user_initiated": true
+            }
+        }),
+    )?;
+    assert!(
+        response.get("error").is_some(),
+        "expected config write error"
+    );
+    let snap = structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    assert!(
+        value_get(&snap, "/embedding_provenance")?.is_null(),
+        "failed settings write must not switch MCP state: {snap}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn set_embedding_model_unknown_provider_errors() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
