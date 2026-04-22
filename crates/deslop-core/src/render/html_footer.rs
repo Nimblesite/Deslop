@@ -33,6 +33,7 @@ pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> 
     );
     write_signals(out, report, escape);
     write_action_hints(out, report, escape);
+    write_boilerplate_hints(out, report, escape);
     write_schema(out, report, escape);
     let _ = write!(out, "</details>");
 }
@@ -81,6 +82,25 @@ fn write_action_hints(out: &mut String, report: &Report, escape: fn(&str) -> Str
             "<li><code>{pattern}</code> — {rec}</li>",
             pattern = escape(&hint.pattern),
             rec = escape(&hint.recommendation),
+        );
+    }
+    let _ = write!(out, "</ul>");
+}
+
+/// Low-noise import/prologue hygiene hints.
+fn write_boilerplate_hints(out: &mut String, report: &Report, escape: fn(&str) -> String) {
+    if report.boilerplate_hints.is_empty() {
+        return;
+    }
+    let _ = write!(out, "<h3>Boilerplate hints</h3><ul>");
+    for hint in &report.boilerplate_hints {
+        let _ = write!(
+            out,
+            "<li><code>{lang}/{kind}</code> - {rec} ({count} occurrence(s))</li>",
+            lang = escape(&hint.language),
+            kind = escape(&hint.kind),
+            rec = escape(&hint.recommendation),
+            count = hint.occurrences.len(),
         );
     }
     let _ = write!(out, "</ul>");

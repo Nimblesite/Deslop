@@ -21,6 +21,7 @@ pub fn render_text(report: &Report) -> String {
     write_provenance(&mut out, report);
     write_cache_stats(&mut out, report);
     write_action_hints(&mut out, report);
+    write_boilerplate_hints(&mut out, report);
     for (idx, cluster) in report.clusters.iter().enumerate() {
         write_cluster(&mut out, idx, cluster);
     }
@@ -113,6 +114,24 @@ fn write_action_hints(out: &mut String, report: &Report) {
     let _ = writeln!(out, "-- action hints --");
     for hint in &report.action_hints {
         let _ = writeln!(out, "  [{}] {}", hint.pattern, hint.recommendation);
+    }
+}
+
+/// Writes import/prologue hygiene hints when report mode is enabled.
+fn write_boilerplate_hints(out: &mut String, report: &Report) {
+    if report.boilerplate_hints.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "-- boilerplate hints --");
+    for hint in &report.boilerplate_hints {
+        let count = hint.occurrences.len();
+        let _ = writeln!(
+            out,
+            "  [{lang}/{kind}] {rec} ({count} occurrence(s))",
+            lang = hint.language,
+            kind = hint.kind,
+            rec = hint.recommendation,
+        );
     }
 }
 

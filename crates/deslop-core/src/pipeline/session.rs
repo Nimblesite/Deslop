@@ -6,8 +6,7 @@
 //! re-parses (or drops) just those files, splices the updated entries
 //! into the in-memory corpus, and re-runs the deterministic-plus-
 //! optional-embedding clustering pipeline. The embedding + fingerprint
-//! caches on disk are shared with the batch path so warm reruns stay
-//! cheap ([PIPELINE-INCREMENTAL], [FUSION-EMBED-PROVIDER]).
+//! caches on disk are shared with the batch path ([PIPELINE-INCREMENTAL]).
 
 use std::{
     collections::HashMap,
@@ -16,6 +15,7 @@ use std::{
 
 use crate::{
     ast::NormalizedNode,
+    boilerplate::{collect_import_boilerplate_ranges, BoilerplateRange},
     cluster::build_ranked_fused_clusters,
     config::ExclusionConfig,
     discover::{discover_files, DiscoveryResult},
@@ -93,8 +93,9 @@ pub struct PipelineSession {
     /// [`Self::update_files`] call so [METRICS-REPO] never re-reads
     /// sources from disk.
     analysed_lines: AnalysedLines,
-    /// Files analysed in the most recent generation. Pre-computed so
-    /// the render inputs stay cheap.
+    /// Import/prologue ranges suppressed from clone ranking.
+    boilerplate_ranges: Vec<BoilerplateRange>,
+    /// Files analysed in the most recent generation.
     files_analysed: usize,
 }
 
@@ -161,6 +162,7 @@ impl PipelineSession {
             file_languages,
             cumulative_stats: corpus.cache_stats,
             analysed_lines: corpus.analysed_lines,
+            boilerplate_ranges: corpus.boilerplate_ranges,
             files_analysed,
         };
         let report = session.render(&config, corpus.cache_stats)?;
@@ -314,6 +316,8 @@ impl PipelineSession {
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
         let (cached, source, lines) = parse_one_file(file_id, &absolute, parser, &config, stats)?;
+        let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
+        self.replace_boilerplate_ranges(file_id, ranges);
         let _prev_lines = self.analysed_lines.insert(file_id, lines);
         let _prev = self.per_file.insert(file_id, cached);
         let _prev_source = self.sources.insert(file_id, source);
@@ -338,7 +342,16 @@ impl PipelineSession {
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
         let _removed_lines = self.analysed_lines.remove(&file_id);
+        self.boilerplate_ranges
+            .retain(|range| range.file_id != file_id);
         self.files_analysed = self.live_paths.len();
+    }
+
+    /// Replaces all remembered boilerplate ranges for one live file.
+    fn replace_boilerplate_ranges(&mut self, file_id: FileId, ranges: Vec<BoilerplateRange>) {
+        self.boilerplate_ranges
+            .retain(|range| range.file_id != file_id);
+        self.boilerplate_ranges.extend(ranges);
     }
 
     /// Returns the registered language id that claims `path`, if any.
@@ -424,6 +437,7 @@ impl PipelineSession {
             cache_stats: last_pass_stats,
             sources: &corpus.sources,
             analysed_lines: &self.analysed_lines,
+            boilerplate_ranges: &corpus.boilerplate_ranges,
         }))
     }
 
@@ -445,6 +459,7 @@ impl PipelineSession {
             per_file: HashMap::new(),
             cache_stats: CacheStats::default(),
             analysed_lines: AnalysedLines::new(),
+            boilerplate_ranges: self.boilerplate_ranges.clone(),
         }
     }
 }

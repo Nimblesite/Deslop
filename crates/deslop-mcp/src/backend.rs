@@ -255,15 +255,15 @@ pub struct SessionBackendConfig {
 }
 
 /// `McpBackend` implementation backed by a [`PipelineSession`] guarded
-/// by a [`Mutex`]. Single-flight execution matches the MCP request
-/// model and avoids interleaving analysis passes.
+/// by a shared [`Mutex`]. Foreground tool calls stay short; selected
+/// embedding refreshes run on a detached low-priority worker.
 #[derive(Debug)]
 pub struct PipelineSessionBackend {
     /// Shared session configuration.
     config: SessionBackendConfig,
     /// Mutable state behind a single mutex so concurrent tool calls
     /// serialise cleanly.
-    state: Mutex<SessionState>,
+    state: Arc<Mutex<SessionState>>,
 }
 
 /// Mutable state behind the backend mutex.
@@ -276,10 +276,12 @@ struct SessionState {
     /// Monotonic generation counter.
     generation: u64,
     /// Active embedding provider (if any).
-    provider: Option<Box<dyn EmbeddingProvider>>,
+    provider: Option<Arc<dyn EmbeddingProvider>>,
     /// [MCP-EMBEDDING-CONSENT] Active embedding mode. Starts from CLI config; selecting a
     /// model turns live embeddings on for subsequent changes.
     embedding_mode: EmbeddingMode,
+    /// Monotonic id for detached embedding refreshes.
+    embedding_revision: u64,
 }
 
 impl PipelineSessionBackend {
@@ -317,12 +319,13 @@ impl PipelineSessionBackend {
         let embedding_mode = config.embedding_mode;
         Ok(Self {
             config,
-            state: Mutex::new(SessionState {
+            state: Arc::new(Mutex::new(SessionState {
                 session,
                 report,
                 generation: 1,
                 provider,
                 embedding_mode,
+                embedding_revision: 0,
             }),
         })
     }
@@ -439,28 +442,34 @@ impl McpBackend for PipelineSessionBackend {
         model_id: &str,
         endpoint: Option<&str>,
     ) -> Result<EmbeddingSpec, BackendError> {
-        let new_provider: Box<dyn EmbeddingProvider> = match provider_id {
-            STUB_PROVIDER_ID => Box::new(StubProvider::new()),
-            DEFAULT_PROVIDER_ID => Box::new(OllamaProvider::connect(
+        let new_provider: Arc<dyn EmbeddingProvider> = match provider_id {
+            STUB_PROVIDER_ID => Arc::new(StubProvider::new()),
+            DEFAULT_PROVIDER_ID => Arc::new(OllamaProvider::connect(
                 endpoint.unwrap_or(&self.config.embedding_endpoint),
                 model_id,
             )?),
             other => return Err(BackendError::UnknownEmbeddingProvider(other.to_owned())),
         };
         let spec = new_provider.spec();
-        {
+        let revision = {
             let mut state = lock_state(&self.state)?;
-            state.provider = Some(new_provider);
+            state.provider = Some(Arc::clone(&new_provider));
             state.embedding_mode = EmbeddingMode::Auto;
-            rerun_live_embedding_report(&self.config.root, &mut state)?;
-            state.generation = state.generation.saturating_add(1);
-        }
+            state.embedding_revision = state.embedding_revision.saturating_add(1);
+            state.embedding_revision
+        };
+        spawn_mcp_embedding_refresh(
+            self.config.clone(),
+            Arc::clone(&self.state),
+            new_provider,
+            revision,
+        );
         info!(
             provider_id = spec.provider_id,
             model_id = spec.model_id,
             model_version = spec.model_version,
             dimensions = spec.dimensions,
-            "mcp_embedding_model_swapped"
+            "mcp_embedding_model_queued"
         );
         Ok(spec)
     }
@@ -631,14 +640,14 @@ fn stub_model_info() -> OllamaModelInfo {
 /// batch runs exactly.
 fn select_provider(
     config: &SessionBackendConfig,
-) -> Result<Option<Box<dyn EmbeddingProvider>>, BackendError> {
+) -> Result<Option<Arc<dyn EmbeddingProvider>>, BackendError> {
     match config.embedding_mode {
         EmbeddingMode::Off => Ok(None),
         EmbeddingMode::Auto | EmbeddingMode::Required => match config.embedding_provider.as_str() {
-            STUB_PROVIDER_ID => Ok(Some(Box::new(StubProvider::new()))),
+            STUB_PROVIDER_ID => Ok(Some(Arc::new(StubProvider::new()))),
             DEFAULT_PROVIDER_ID => {
                 match OllamaProvider::connect(&config.embedding_endpoint, &config.embedding_model) {
-                    Ok(provider) => Ok(Some(Box::new(provider))),
+                    Ok(provider) => Ok(Some(Arc::new(provider))),
                     Err(err) if matches!(config.embedding_mode, EmbeddingMode::Auto) => {
                         warn!(reason = %err, "ollama_unreachable_embedding_disabled_auto");
                         Ok(None)
@@ -651,30 +660,45 @@ fn select_provider(
     }
 }
 
-fn rerun_live_embedding_report(root: &Path, state: &mut SessionState) -> Result<(), BackendError> {
-    let paths = live_paths_snapshot(&state.session);
-    let settings = EmbeddingSettings {
-        mode: state.embedding_mode,
-        provider: state.provider.as_deref(),
-        batch_yield: live_batch_yield(state.embedding_mode),
-        progress: None,
-    };
-    let new_report = state.session.update_files(&paths, settings)?;
-    state.report = Arc::new(new_report);
-    info!(
-        root = %root.display(),
-        files = paths.len(),
-        "mcp_embedding_model_refresh_complete"
-    );
-    Ok(())
+fn spawn_mcp_embedding_refresh(
+    config: SessionBackendConfig,
+    state: Arc<Mutex<SessionState>>,
+    provider: Arc<dyn EmbeddingProvider>,
+    revision: u64,
+) {
+    let _join = std::thread::spawn(move || {
+        if let Err(error) = run_mcp_embedding_refresh(config, state, provider, revision) {
+            warn!(reason = %error, "mcp_embedding_model_refresh_failed");
+        }
+    });
 }
 
-fn live_paths_snapshot(session: &PipelineSession) -> Vec<PathBuf> {
-    session
-        .file_languages()
-        .keys()
-        .filter_map(|file_id| session.registry().path(*file_id).map(Path::to_path_buf))
-        .collect()
+fn run_mcp_embedding_refresh(
+    config: SessionBackendConfig,
+    state: Arc<Mutex<SessionState>>,
+    provider: Arc<dyn EmbeddingProvider>,
+    revision: u64,
+) -> Result<(), BackendError> {
+    let (session, report) = PipelineSession::initialise(
+        config.root.clone(),
+        config.min_nodes,
+        config.incremental,
+        config.config_path.clone(),
+        EmbeddingSettings {
+            mode: EmbeddingMode::Auto,
+            provider: Some(provider.as_ref()),
+            batch_yield: live_batch_yield(EmbeddingMode::Auto),
+            progress: None,
+        },
+    )?;
+    let mut guard = lock_state(&state)?;
+    if guard.embedding_revision == revision {
+        guard.session = session;
+        guard.report = Arc::new(report);
+        guard.generation = guard.generation.saturating_add(1);
+        info!(root = %config.root.display(), "mcp_embedding_model_refresh_complete");
+    }
+    Ok(())
 }
 
 /// Locks the backend state, mapping poisoning onto a stable error.

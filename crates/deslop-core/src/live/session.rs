@@ -15,20 +15,20 @@ use crate::{
     embedding::{EmbeddingMode, EmbeddingProvider},
     lang::LanguageParser,
     pipeline::{EmbeddingSettings, PipelineSession},
-    report::{EmbeddingProvenance, Report, ReportCluster},
-    state::FileRegistry,
+    report::{Report, ReportCluster},
 };
 
 use super::{
+    embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
         cluster_touches_path, earliest_byte_for_path, initialise_pipeline, live_batch_yield,
-        parse_and_hash_snippet, report_running_progress, stub_model_info, truncate,
+        parse_and_hash_snippet, stub_model_info, truncate,
     },
     wire::{
-        EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress, FileReport, FindSimilarInput,
-        FindSimilarRequest, FindSimilarResult, SessionConfig,
+        EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
+        FindSimilarResult, SessionConfig,
     },
 };
 
@@ -57,6 +57,8 @@ pub struct AnalysisSession {
     config_path: Option<PathBuf>,
     /// Optional sink invoked on set-model progress events.
     embedding_progress_reporter: Option<EmbeddingProgressReporter>,
+    /// Monotonic id for queued embedding refreshes.
+    embedding_refresh_revision: u64,
 }
 
 impl std::fmt::Debug for AnalysisSession {
@@ -139,6 +141,7 @@ impl AnalysisSession {
             incremental,
             config_path,
             embedding_progress_reporter: None,
+            embedding_refresh_revision: 0,
         }
     }
 
@@ -278,71 +281,51 @@ impl AnalysisSession {
             .ok_or_else(|| LiveError::UnknownCluster { id: id.to_owned() })
     }
 
-    /// Swaps the embedding provider and re-runs the pipeline.
-    ///
-    /// # Errors
-    ///
-    /// Propagates pipeline errors via [`LiveError::Core`].
-    ///
-    pub fn set_embedding_model(
+    /// Queues a selected-model embedding refresh and returns the
+    /// detached job description. The expensive pipeline pass runs
+    /// outside the session lock.
+    pub(super) fn prepare_embedding_refresh(
         &mut self,
         provider: Arc<dyn EmbeddingProvider>,
-    ) -> Result<Option<EmbeddingProvenance>, LiveError> {
+    ) -> EmbeddingRefreshJob {
         self.embedding_provider = provider;
         self.embedding_mode = EmbeddingMode::Auto;
-        let spec = self.embedding_provider.spec();
+        self.embedding_refresh_revision = self.embedding_refresh_revision.saturating_add(1);
         let total = self.pipeline.fingerprint_count() as u64;
-        self.report_embedding_progress(EmbeddingProgress {
-            phase: EmbeddingPhase::Queued,
-            provider_id: spec.provider_id.clone(),
-            model_id: spec.model_id.clone(),
-            done: 0,
+        let job = EmbeddingRefreshJob::new(EmbeddingRefreshInput {
+            revision: self.embedding_refresh_revision,
+            root: self.pipeline.root().to_path_buf(),
+            min_nodes: self.pipeline.min_nodes(),
+            incremental: self.incremental,
+            config_path: self.config_path.clone(),
+            provider: Arc::clone(&self.embedding_provider),
             total,
-            message: Some("Queued as low-priority background embedding work.".to_owned()),
+            reporter: self.embedding_progress_reporter.clone(),
         });
-        self.report_embedding_progress(EmbeddingProgress {
-            phase: EmbeddingPhase::Starting,
-            provider_id: spec.provider_id.clone(),
-            model_id: spec.model_id.clone(),
-            done: 0,
-            total,
-            message: None,
-        });
-        let live_paths: Vec<PathBuf> = self.live_paths_snapshot();
-        let report = match self.run_pipeline_with_progress(&live_paths, &spec, total) {
-            Ok(report) => report,
-            Err(error) => {
-                self.report_embedding_progress(EmbeddingProgress {
-                    phase: EmbeddingPhase::Failed,
-                    provider_id: spec.provider_id,
-                    model_id: spec.model_id,
-                    done: 0,
-                    total,
-                    message: Some(error.to_string()),
-                });
-                return Err(error);
-            }
-        };
+        job.report_queued();
+        job
+    }
+
+    /// Commits a completed embedding refresh when it is still the
+    /// latest selected-model request.
+    pub(super) fn commit_embedding_refresh(
+        &mut self,
+        job: &EmbeddingRefreshJob,
+        report: Report,
+    ) -> Option<CommittedEmbeddingRefresh> {
+        if job.revision != self.embedding_refresh_revision {
+            return None;
+        }
+        let previous_generation = self.generation;
+        let previous_report = Arc::clone(&self.latest_report);
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
-        self.report_embedding_progress(EmbeddingProgress {
-            phase: EmbeddingPhase::Complete,
-            provider_id: spec.provider_id,
-            model_id: spec.model_id,
-            done: total,
-            total,
-            message: None,
-        });
-        Ok(provenance)
-    }
-
-    /// Fires an embedding-progress event through the installed reporter,
-    /// no-op when no reporter is installed.
-    fn report_embedding_progress(&self, event: EmbeddingProgress) {
-        if let Some(reporter) = self.embedding_progress_reporter.as_ref() {
-            reporter(event);
-        }
+        Some(CommittedEmbeddingRefresh {
+            previous_generation,
+            previous_report,
+            provenance,
+        })
     }
 
     /// Lists embedding models available to the session — built-in
@@ -358,16 +341,6 @@ impl AnalysisSession {
             }
         }
         out
-    }
-
-    /// Snapshot of the absolute paths currently part of the corpus.
-    fn live_paths_snapshot(&self) -> Vec<PathBuf> {
-        let registry: &FileRegistry = self.pipeline.registry();
-        self.pipeline
-            .file_languages()
-            .keys()
-            .filter_map(|file_id| registry.path(*file_id).map(Path::to_path_buf))
-            .collect()
     }
 
     /// Stable list of registered parser ids.
@@ -387,27 +360,6 @@ impl AnalysisSession {
             provider: Some(self.embedding_provider.as_ref()),
             batch_yield: live_batch_yield(self.embedding_mode),
             progress: None,
-        };
-        Ok(self.pipeline.update_files(changed, embedding)?)
-    }
-
-    fn run_pipeline_with_progress(
-        &mut self,
-        changed: &[PathBuf],
-        spec: &crate::embedding::EmbeddingSpec,
-        total: u64,
-    ) -> Result<Report, LiveError> {
-        let reporter = self.embedding_progress_reporter.clone();
-        let provider_id = spec.provider_id.clone();
-        let model_id = spec.model_id.clone();
-        let progress = move |done: usize| {
-            report_running_progress(&reporter, &provider_id, &model_id, done, total);
-        };
-        let embedding = EmbeddingSettings {
-            mode: self.embedding_mode,
-            provider: Some(self.embedding_provider.as_ref()),
-            batch_yield: live_batch_yield(self.embedding_mode),
-            progress: Some(&progress),
         };
         Ok(self.pipeline.update_files(changed, embedding)?)
     }

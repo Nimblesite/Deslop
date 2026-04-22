@@ -13,7 +13,7 @@ import {
 } from "../../tree/providers";
 import { openOccurrence } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
+import { Bucket, Report, ReportCluster, ReportOccurrence } from "../../types/report";
 
 function cluster(
   id: string,
@@ -21,13 +21,14 @@ function cluster(
   occurrencePath: string,
   startByte = 0,
   endByte = 20,
+  bucket: Bucket = "identical",
 ): ReportCluster {
   return {
     id,
     weight,
     size: 2,
     canonical_node_count: 4,
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals(bucket),
     occurrences: [
       { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false },
       {
@@ -40,6 +41,34 @@ function cluster(
     summary: "",
     interpretation: `dup in ${occurrencePath}`,
   };
+}
+
+function bucketSignals(bucket: Bucket) {
+  if (bucket === "nearly_identical") {
+    return { structural: 0.99, token_jaccard: 0.96, embedding_cos: 0, fused: 0.96 };
+  }
+  if (bucket === "loosely_similar") {
+    return { structural: 0.2, token_jaccard: 0.4, embedding_cos: 0, fused: 0.4 };
+  }
+  if (bucket === "same_behavior") {
+    return { structural: 0.2, token_jaccard: 0.3, embedding_cos: 0.9, fused: 0.9 };
+  }
+  return { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
+}
+
+function labelText(item: vscode.TreeItem): string {
+  return typeof item.label === "string" ? item.label : item.label?.label ?? "";
+}
+
+function iconColorId(item: vscode.TreeItem): string {
+  const icon = item.iconPath as vscode.ThemeIcon | undefined;
+  const color = icon?.color;
+  return String(color?.id ?? "");
+}
+
+function tooltipText(item: vscode.TreeItem): string {
+  if (item.tooltip instanceof vscode.MarkdownString) return item.tooltip.value;
+  return String(item.tooltip ?? "");
 }
 
 function report(clusters: ReportCluster[]): Report {
@@ -92,6 +121,86 @@ suite("TopOffendersProvider", () => {
     const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 2);
+  });
+
+  test("groups Top Offenders rows by representative file while preserving impact rank", () => {
+    // [VSIX-TOP-OFFENDERS-FILE-GROUPS] Issue #10: the tree must be
+    // triageable by file without losing current impact/rank ordering.
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("rank-1-beta", 100, "/repo/src/b/Beta.cs"),
+        cluster("rank-2-alpha", 80, "/repo/src/a/Alpha.cs"),
+        cluster("rank-3-alpha", 60, "/repo/src/a/Alpha.cs"),
+        cluster("rank-4-gamma", 40, "/repo/src/c/Gamma.cs"),
+      ]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+
+    const nodes = provider.getChildren();
+    const labels = nodes.map(labelText);
+    const descriptions = nodes.map((node) => String(node.description ?? ""));
+    const label0 = labels[0] ?? "";
+    const label1 = labels[1] ?? "";
+    const label2 = labels[2] ?? "";
+    const label3 = labels[3] ?? "";
+
+    assert.equal(nodes.length, 4, "one top-level row must render per cluster");
+    assert.match(label0, /#2\b/, "Alpha's highest-impact cluster keeps rank #2");
+    assert.match(label1, /#3\b/, "Alpha's lower-impact cluster keeps rank #3");
+    assert.match(label2, /#1\b/, "Beta keeps its original global rank");
+    assert.match(label3, /#4\b/, "Gamma keeps its original global rank");
+    assert.match(label0, /Alpha\.cs/, "first Alpha row must expose file context");
+    assert.match(label1, /Alpha\.cs/, "second Alpha row must expose file context");
+    assert.match(label2, /Beta\.cs/, "Beta row must expose file context");
+    assert.match(label3, /Gamma\.cs/, "Gamma row must expose file context");
+    assert.deepEqual(descriptions, [
+      "rank-2-alpha",
+      "rank-3-alpha",
+      "rank-1-beta",
+      "rank-4-gamma",
+    ]);
+    assert.equal(nodes[0]?.command?.command, "deslop.openCluster");
+    assert.deepEqual(nodes[0]?.command?.arguments, ["rank-2-alpha"]);
+    assert.equal(provider.getChildren(nodes[0]).length, 2);
+  });
+
+  test("renders distinct accessible category color metadata on Top Offenders rows", () => {
+    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Issue #10: category colour
+    // is metadata, not the only signal; labels and a11y text still name it.
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("exact", 100, "/repo/src/a/Exact.cs", 0, 20, "identical"),
+        cluster("near", 90, "/repo/src/b/Near.cs", 0, 20, "nearly_identical"),
+      ]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+
+    const [exact, near] = provider.getChildren();
+    assert.ok(exact, "exact duplicate row must render");
+    assert.ok(near, "near duplicate row must render");
+    assert.ok(exact.iconPath instanceof vscode.ThemeIcon);
+    assert.ok(near.iconPath instanceof vscode.ThemeIcon);
+    assert.notEqual(iconColorId(exact), "", "exact duplicate must carry a theme color");
+    assert.notEqual(iconColorId(near), "", "near duplicate must carry a theme color");
+    assert.notEqual(
+      iconColorId(exact),
+      iconColorId(near),
+      "exact and near duplicate categories must have distinct theme colors",
+    );
+    assert.match(labelText(exact), /Identical code/);
+    assert.match(labelText(near), /Nearly identical code/);
+    assert.match(labelText(exact), /Exact\.cs/);
+    assert.match(labelText(near), /Near\.cs/);
+    assert.match(exact.accessibilityInformation?.label ?? "", /Identical code/);
+    assert.match(near.accessibilityInformation?.label ?? "", /Nearly identical code/);
+    assert.match(exact.accessibilityInformation?.label ?? "", /Exact\.cs/);
+    assert.match(near.accessibilityInformation?.label ?? "", /Near\.cs/);
+    assert.match(tooltipText(exact), /\/repo\/src\/a\/Exact\.cs/);
+    assert.match(tooltipText(near), /\/repo\/src\/b\/Near\.cs/);
   });
 
   test("expanding a cluster node yields OccurrenceNode children", () => {

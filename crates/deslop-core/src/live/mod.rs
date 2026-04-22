@@ -10,6 +10,7 @@
 pub mod api;
 pub mod clock;
 pub mod debouncer;
+pub mod embedding_refresh;
 pub mod errors;
 pub mod notifications;
 pub mod scheduler;

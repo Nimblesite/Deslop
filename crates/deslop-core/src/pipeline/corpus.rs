@@ -9,15 +9,16 @@ use std::{collections::HashMap, fs, path::Path};
 
 use crate::{
     ast::NormalizedNode,
+    boilerplate::{collect_import_boilerplate_ranges, BoilerplateRange},
     discover::DiscoveredFile,
     embedding::cache::DEFAULT_CACHE_DIR_NAME,
     error::CoreError,
-    fingerprint::{collect_fingerprints, Fingerprint},
+    fingerprint::{collect_non_boilerplate_fingerprints, Fingerprint},
     fpcache::{CachedFile, FingerprintCache},
     lang::LanguageParser,
     report::CacheStats,
     report_metrics::{count_analysed_lines, AnalysedLines},
-    sibling::collect_sibling_fingerprints,
+    sibling::collect_non_boilerplate_sibling_fingerprints,
     state::FileId,
 };
 
@@ -46,6 +47,8 @@ pub struct FingerprintCorpus {
     /// Per-file physical line counts, accumulated at file-read time
     /// so [METRICS-REPO] adds no extra I/O pass.
     pub analysed_lines: AnalysedLines,
+    /// Import/prologue byte ranges suppressed from clone fingerprints.
+    pub boilerplate_ranges: Vec<BoilerplateRange>,
 }
 
 /// Parses every discovered file and collects its structural + sibling
@@ -90,6 +93,12 @@ pub fn fingerprint_corpus(
             min_nodes_usize,
             &mut corpus.cache_stats,
         )?;
+        corpus
+            .boilerplate_ranges
+            .extend(collect_import_boilerplate_ranges(
+                &processed.tree,
+                discovered.language,
+            ));
         corpus.fingerprints.extend(processed.fingerprints.clone());
         corpus.trees.push(processed.tree.clone());
         let lines = count_analysed_lines(&source);
@@ -180,13 +189,12 @@ fn load_or_parse_file(
     if let Some(cache) = cache {
         if let Some(hit) = cache.get(source, file_id) {
             stats.hits = stats.hits.saturating_add(1);
-            return Ok(hit);
+            return Ok(with_filtered_fingerprints(hit, min_nodes, parser.id()));
         }
         stats.misses = stats.misses.saturating_add(1);
     }
     let normalised = parser.parse_and_normalize(source, file_id)?;
-    let mut fingerprints = collect_fingerprints(&normalised, min_nodes);
-    fingerprints.extend(collect_sibling_fingerprints(&normalised, min_nodes));
+    let fingerprints = fingerprints_for(&normalised, min_nodes, parser.id());
     let cached = CachedFile {
         tree: normalised,
         fingerprints,
@@ -197,6 +205,29 @@ fn load_or_parse_file(
         }
     }
     Ok(cached)
+}
+
+/// Replaces cached fingerprints with the current boilerplate-filtered set.
+fn with_filtered_fingerprints(
+    mut cached: CachedFile,
+    min_nodes: usize,
+    language: &str,
+) -> CachedFile {
+    cached.fingerprints = fingerprints_for(&cached.tree, min_nodes, language);
+    cached
+}
+
+/// Collects structural and sibling fingerprints after boilerplate filtering.
+fn fingerprints_for(
+    normalised: &NormalizedNode,
+    min_nodes: usize,
+    language: &str,
+) -> Vec<Fingerprint> {
+    let mut fingerprints = collect_non_boilerplate_fingerprints(normalised, min_nodes, language);
+    fingerprints.extend(collect_non_boilerplate_sibling_fingerprints(
+        normalised, min_nodes, language,
+    ));
+    fingerprints
 }
 
 /// Reads a source file into bytes.

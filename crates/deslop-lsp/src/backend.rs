@@ -16,9 +16,11 @@ use deslop_core::{
         EmbeddingMode, EmbeddingProvider, OllamaProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
         DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
     },
-    live::{AnalysisSession, EmbeddingProgress, LiveApi, LiveService},
+    live::{
+        AnalysisSession, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveService,
+    },
 };
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 use tower::Service;
 use tower_lsp::{
     jsonrpc::{Request, Response, Result as LspResult},
@@ -144,7 +146,7 @@ impl LspBackend {
         embedding: LspEmbeddingConfig,
     ) -> Result<Self, deslop_core::live::LiveError> {
         let provider = build_startup_provider(&embedding)?;
-        let session = if matches!(embedding.mode, EmbeddingMode::Off) {
+        let mut session = if matches!(embedding.mode, EmbeddingMode::Off) {
             AnalysisSession::new(workspace_root, min_nodes, false, None, provider)?
         } else {
             AnalysisSession::new_with_mode(
@@ -156,6 +158,7 @@ impl LspBackend {
                 embedding.mode,
             )?
         };
+        session.set_embedding_progress_reporter(Some(progress_reporter(&client)));
         let service = Arc::new(LiveService::new(Arc::new(Mutex::new(session))));
         Ok(Self { client, service })
     }
@@ -277,21 +280,16 @@ pub fn url_to_path(url: &Url) -> Option<PathBuf> {
     url.to_file_path().ok()
 }
 
-/// Builds a one-shot sync→async bridge used by the `set_embedding_model`
-/// request handler: the session fires progress synchronously into `tx`,
-/// the handler drains `rx` afterwards and `await`s `send_notification`
-/// before returning the JSON-RPC response.
-#[must_use]
-pub fn embedding_progress_channel() -> (
-    deslop_core::live::EmbeddingProgressReporter,
-    mpsc::UnboundedReceiver<EmbeddingProgress>,
-) {
-    let (tx, rx) = mpsc::unbounded_channel::<EmbeddingProgress>();
-    let reporter: deslop_core::live::EmbeddingProgressReporter =
-        Arc::new(move |event: EmbeddingProgress| {
-            let _send = tx.send(event);
+fn progress_reporter(client: &Client) -> EmbeddingProgressReporter {
+    let client = client.clone();
+    Arc::new(move |event: EmbeddingProgress| {
+        let client = client.clone();
+        let _join = tokio::spawn(async move {
+            client
+                .send_notification::<EmbeddingProgressNotification>(event)
+                .await;
         });
-    (reporter, rx)
+    })
 }
 
 /// Type-only marker so `tower_lsp::Client::send_notification` can

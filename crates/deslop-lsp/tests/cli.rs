@@ -966,16 +966,11 @@ fn lsp_embedding_set_model_emits_progress_notifications() -> Result<()> {
             "model_id": "stub-model",
         }),
     )?;
-    let (response, notifications) =
+    let (response, mut notifications) =
         send_and_recv_with_notifications(&mut stdin, &mut reader, id, &payload)?;
     let _result = result_value(&response)?;
-    let progress: Vec<&serde_json::Value> = notifications
-        .iter()
-        .filter(|frame| {
-            frame.get("method").and_then(serde_json::Value::as_str)
-                == Some("deslop/embeddingProgress")
-        })
-        .collect();
+    collect_progress_notifications(&mut stdin, &mut reader, &mut notifications)?;
+    let progress = progress_notifications(&notifications);
     assert!(
         !progress.is_empty(),
         "embedding swap must emit at least one deslop/embeddingProgress notification; saw {notifications:?}"
@@ -1007,6 +1002,32 @@ fn lsp_embedding_set_model_emits_progress_notifications() -> Result<()> {
     assert!(total > 0, "total subtrees must be populated: {params}");
     shut_down(child);
     Ok(())
+}
+
+fn collect_progress_notifications(
+    stdin: &mut ChildStdin,
+    reader: &mut BufReader<ChildStdout>,
+    notifications: &mut Vec<serde_json::Value>,
+) -> Result<()> {
+    for _ in 0..4 {
+        if !progress_notifications(notifications).is_empty() {
+            return Ok(());
+        }
+        let (id, payload) = custom_request_no_params("deslop/reportGet")?;
+        let (_response, mut more) = send_and_recv_with_notifications(stdin, reader, id, &payload)?;
+        notifications.append(&mut more);
+    }
+    Ok(())
+}
+
+fn progress_notifications(frames: &[serde_json::Value]) -> Vec<&serde_json::Value> {
+    frames
+        .iter()
+        .filter(|frame| {
+            frame.get("method").and_then(serde_json::Value::as_str)
+                == Some("deslop/embeddingProgress")
+        })
+        .collect()
 }
 
 #[test]

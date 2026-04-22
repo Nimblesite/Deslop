@@ -177,6 +177,59 @@ suite("extension internals", () => {
     assert.equal(store.current.embeddingProgress, null);
   });
 
+  test("wireNotifications embeddingProgress complete refreshes the report", async () => {
+    let progressCb: ((p: unknown) => void) | undefined;
+    const requests: string[] = [];
+    const client = {
+      onNotification: (name: string, cb: (p: unknown) => void) => {
+        if (name === "deslop/embeddingProgress") progressCb = cb;
+      },
+      sendRequest: (name: string) => {
+        requests.push(name);
+        return Promise.resolve({
+          report_schema_version: 1,
+          tool_version: "v",
+          min_nodes: 30,
+          files_analysed: 7,
+          clusters_hidden: 0,
+          cache_stats: { hits: 0, misses: 0 },
+          metrics: {
+            analysed_loc: 0,
+            duplicated_loc: 0,
+            duplication_percent: 0,
+            clusters_total: 0,
+            duplicated_files: 0,
+            threshold: { percent: 0, breached: false, source: "none" },
+          },
+          schema_doc: "",
+          action_hints: [],
+          embedding_provenance: {
+            provider_id: "ollama",
+            model_id: "nomic-embed-text",
+            model_version: "test",
+            dimensions: 768,
+            attempted_subtrees: 1,
+            indexed_subtrees: 1,
+            failed_subtrees: 0,
+          },
+          clusters: [],
+        });
+      },
+    } as unknown as LanguageClient;
+    const store = new ReportStore();
+    wireNotifications(client, store);
+    progressCb?.({
+      phase: "complete",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+      done: 1,
+      total: 1,
+    });
+    await Promise.resolve();
+    assert.ok(requests.includes("deslop/reportGet"));
+    assert.equal(store.current.report?.files_analysed, 7);
+  });
+
   test("wireNotifications analysisState handler logs without throwing", () => {
     let stateCb: ((s: string) => void) | undefined;
     const client = {

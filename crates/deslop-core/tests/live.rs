@@ -8,10 +8,11 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex as StdMutex},
+    sync::{mpsc, Arc, Mutex as StdMutex},
+    time::Duration,
 };
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use anyhow::{anyhow, bail, Context, Result};
 use deslop_core::{
@@ -414,7 +415,12 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
         Arc::new(StdMutex::new(Vec::new()));
     let events_clone = Arc::clone(&events);
+    let completed = Arc::new(tokio::sync::Notify::new());
+    let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
+        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
+            completed_clone.notify_waiters();
+        }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
         }
@@ -427,7 +433,21 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     let provenance = service
         .embedding_set_model("stub", "blake3-stub", None)
         .await?;
-    assert!(provenance.is_some_and(|p| p.provider_id == "stub"));
+    assert!(
+        provenance.is_none(),
+        "embedding_set_model must acknowledge queued work, not block until provenance exists"
+    );
+    tokio::time::timeout(Duration::from_secs(5), completed.notified())
+        .await
+        .context("embedding refresh completion")?;
+    let refreshed = service.report_get().await;
+    assert_eq!(
+        refreshed
+            .embedding_provenance
+            .as_ref()
+            .map(|p| p.provider_id.as_str()),
+        Some("stub")
+    );
     {
         let session_lock = service.session();
         let mut guard = session_lock.lock().await;
@@ -458,6 +478,80 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
         unknown,
         Err(LiveError::UnsupportedProvider { .. })
     ));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocked() -> Result<()> {
+    // [LIVE-EMBEDDING-CONSENT] Selecting a model queues low-priority
+    // embedding work. Query surfaces must keep serving the last
+    // structural/token report while that work is still running.
+    let tmp = copy_fixture("csharp-small")?;
+    let session_lock = make_session_lock(tmp.path())?;
+    let service = LiveService::new(session_lock);
+    let initial = service.report_get().await;
+    assert!(
+        initial.embedding_provenance.is_none(),
+        "fresh live report should be structural/token only"
+    );
+    let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
+        Arc::new(StdMutex::new(Vec::new()));
+    let events_clone = Arc::clone(&events);
+    let completed = Arc::new(tokio::sync::Notify::new());
+    let completed_clone = Arc::clone(&completed);
+    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
+        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
+            completed_clone.notify_waiters();
+        }
+        if let Ok(mut lock) = events_clone.lock() {
+            lock.push(event);
+        }
+    });
+    {
+        let session = service.session();
+        let mut guard = session.lock().await;
+        guard.set_embedding_progress_reporter(Some(reporter));
+    }
+    let (provider, started, release) = BlockingProvider::new();
+    let queued = service.embedding_set_provider(provider).await?;
+    assert!(
+        queued.is_none(),
+        "model selection should return after queuing the embedding refresh"
+    );
+    started
+        .recv_timeout(Duration::from_secs(5))
+        .context("blocking provider did not start")?;
+    let stale = tokio::time::timeout(Duration::from_millis(250), service.report_get())
+        .await
+        .context("report_get blocked behind embedding refresh")?;
+    assert!(
+        stale.embedding_provenance.is_none(),
+        "stale structural/token report should remain visible while embeddings run"
+    );
+    release.send(()).context("release blocking provider")?;
+    tokio::time::timeout(Duration::from_secs(5), completed.notified())
+        .await
+        .context("embedding refresh completion")?;
+    let refreshed = service.report_get().await;
+    assert_eq!(
+        refreshed
+            .embedding_provenance
+            .as_ref()
+            .map(|p| p.provider_id.as_str()),
+        Some("blocking-test")
+    );
+    let phases: Vec<deslop_core::live::EmbeddingPhase> = {
+        let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
+        recorded.iter().map(|event| event.phase).collect()
+    };
+    assert!(
+        phases.contains(&deslop_core::live::EmbeddingPhase::Queued),
+        "queued progress must be emitted before the pass runs: {phases:?}"
+    );
+    assert!(
+        phases.contains(&deslop_core::live::EmbeddingPhase::Running),
+        "running progress must be emitted while provider work is active: {phases:?}"
+    );
     Ok(())
 }
 
@@ -537,6 +631,68 @@ struct CountingProvider {
     embed_calls: AtomicUsize,
 }
 
+#[derive(Debug)]
+struct BlockingProvider {
+    spec: EmbeddingSpec,
+    started: StdMutex<Option<mpsc::Sender<()>>>,
+    release: StdMutex<mpsc::Receiver<()>>,
+    blocked_once: AtomicBool,
+}
+
+impl BlockingProvider {
+    fn new() -> (Arc<Self>, mpsc::Receiver<()>, mpsc::Sender<()>) {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let provider = Self {
+            spec: EmbeddingSpec {
+                provider_id: "blocking-test".to_owned(),
+                model_id: "blocking-model".to_owned(),
+                model_version: "test-v1".to_owned(),
+                dimensions: 32,
+            },
+            started: StdMutex::new(Some(started_tx)),
+            release: StdMutex::new(release_rx),
+            blocked_once: AtomicBool::new(false),
+        };
+        (Arc::new(provider), started_rx, release_tx)
+    }
+}
+
+impl EmbeddingProvider for BlockingProvider {
+    fn spec(&self) -> EmbeddingSpec {
+        self.spec.clone()
+    }
+
+    fn probe(&self) -> Result<(), ProviderError> {
+        Ok(())
+    }
+
+    fn embed(&self, _input: &str) -> Result<Vec<f32>, ProviderError> {
+        Ok(vec![0.25_f32; self.spec.dimensions])
+    }
+
+    fn max_batch_size(&self) -> usize {
+        1
+    }
+
+    fn embed_batch(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
+        if !self.blocked_once.swap(true, Ordering::SeqCst) {
+            if let Ok(mut guard) = self.started.lock() {
+                if let Some(started) = guard.take() {
+                    let _sent = started.send(());
+                }
+            }
+            if let Ok(release) = self.release.lock() {
+                let _released = release.recv();
+            }
+        }
+        Ok(inputs
+            .iter()
+            .map(|_| vec![0.25_f32; self.spec.dimensions])
+            .collect())
+    }
+}
+
 impl CountingProvider {
     fn new(provider_id: &str, model_id: &str) -> Self {
         Self {
@@ -576,20 +732,44 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     // until a user-selected model crosses `embedding/setModel`.
     let tmp = copy_fixture("csharp-small")?;
     let original = Arc::new(StubProvider::new());
-    let mut session =
+    let session =
         AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, original.clone())
             .context("session")?;
+    let service = LiveService::new(Arc::new(tokio::sync::Mutex::new(session)));
 
-    let initial = session.report();
+    let initial = service.report_get().await;
     assert!(
         initial.embedding_provenance.is_none(),
         "live startup must wait for explicit embedding model selection"
     );
-
+    let completed = Arc::new(tokio::sync::Notify::new());
+    let completed_clone = Arc::clone(&completed);
+    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
+        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
+            completed_clone.notify_waiters();
+        }
+    });
+    {
+        let session = service.session();
+        let mut guard = session.lock().await;
+        guard.set_embedding_progress_reporter(Some(reporter));
+    }
     let counting = Arc::new(CountingProvider::new("counting-test", "counting-model"));
-    let provenance = session
-        .set_embedding_model(counting.clone())
-        .context("set_embedding_model")?
+    let queued = service
+        .embedding_set_provider(counting.clone())
+        .await
+        .context("set_embedding_model")?;
+    assert!(
+        queued.is_none(),
+        "model selection returns after queuing the embedding refresh"
+    );
+    tokio::time::timeout(Duration::from_secs(5), completed.notified())
+        .await
+        .context("embedding refresh completion")?;
+    let after = service.report_get().await;
+    let provenance = after
+        .embedding_provenance
+        .clone()
         .ok_or_else(|| anyhow!("post-swap pass must record provenance"))?;
 
     assert_eq!(
@@ -604,7 +784,6 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
         counting.embed_calls(),
     );
 
-    let after = session.report();
     let after_provenance = after
         .embedding_provenance
         .as_ref()

@@ -93,7 +93,7 @@ Shutdown is a graceful drain: stop accepting new edits, finish the current re-an
 
 LSP and MCP are live modes, so local embedding work is opt-in at the model boundary. A fresh live session starts with structural + token/LSH signals only. It must not begin the embedding pass merely because Ollama is installed, because a local model pass can take minutes and can compete with the editor or agent loop for CPU.
 
-Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work starts immediately.
+Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work is queued immediately.
 
 Selected-model embedding refreshes are always low priority. Provider calls run in bounded batches, and live mode inserts short yield/sleep states between batches so the LSP, MCP transport, file watcher, and editor remain responsive. While embedding work is queued or running, `latest_report` remains the last complete structural/token report; live consumers keep serving it until the embedding-enhanced generation is ready.
 
@@ -174,7 +174,7 @@ The `live` module exposes a small, stable query surface through the `LiveApi` tr
 | `cluster/byId` | `{ id: ClusterId }` | `ReportCluster` | Fetch a cluster by stable id (for "jump to other occurrences"). |
 | `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Agent-facing: "is this snippet I'm about to write already present elsewhere?" Runs the fingerprint + LSH + embedding passes on the snippet against the live index; no cache mutation. |
 | `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerates Ollama models available on the host (`/api/tags`) plus the built-in `stub` provider. Powers the VSIX model picker. |
-| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | User-selected consent boundary. Switches the live session to the selected model, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), then starts low-priority embedding work. Structural + LSH caches stay warm. |
+| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | User-selected consent boundary. Switches the live session to the selected model, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), then queues low-priority embedding work. `null` means the refresh was accepted and the new provenance will appear on the next completed report. Structural + LSH caches stay warm. |
 | `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.deslop-cache/` path. |
 
 All methods are synchronous request/response. **No subscribe/unsubscribe primitives** on the query API — deltas are pushed (see [LIVE-NOTIFICATIONS]). Keeping read and push separate makes the transport layering identical for LSP and MCP.

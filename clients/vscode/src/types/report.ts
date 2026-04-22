@@ -13,6 +13,7 @@ export interface Report {
   metrics: RepoMetrics;
   schema_doc: string;
   action_hints: ActionHint[];
+  boilerplate_hints?: BoilerplateHint[];
   embedding_provenance: EmbeddingProvenance | null;
   clusters: ReportCluster[];
 }
@@ -87,6 +88,20 @@ export interface OccurrenceDisplayLocation {
 export interface ActionHint {
   pattern: string;
   recommendation: string;
+}
+
+export interface BoilerplateHint {
+  kind: string;
+  language: string;
+  severity: "info";
+  recommendation: string;
+  occurrences: BoilerplateHintOccurrence[];
+}
+
+export interface BoilerplateHintOccurrence {
+  path: string;
+  start_byte: number;
+  end_byte: number;
 }
 
 export interface RepoMetrics {

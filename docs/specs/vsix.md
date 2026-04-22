@@ -95,7 +95,7 @@ On activation: spawn the bundled `deslop-lsp` binary rooted at the first workspa
 
 A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Marketplace listing) opens the **Duplicate Clusters** view container. Inside:
 
-- **Top Offenders** tree — one node per cluster, ranked worst-first. Each node shows:
+- **Top Offenders** tree — one node per cluster, preserving the report's worst-first rank while sorting root rows for file triage ([VSIX-TOP-OFFENDERS-FILE-GROUPS]). Each node shows:
   - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]).
   - Short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
   - Cluster id in a subdued monospace suffix.
@@ -104,6 +104,18 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 - **Session** panel — compact footer with: active embedding model (linkable, opens the picker), `cache_stats`, `files_analysed`, daemon state (`idle` / `running`).
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
+
+#### [VSIX-TOP-OFFENDERS-FILE-GROUPS] Top Offenders file triage
+
+The Top Offenders tree remains a cluster list, but root rows are sorted by the cluster's representative file so repeated findings from one file stay adjacent. The report's original impact rank is preserved in the row label (`#N`) and is used as the tie-breaker inside each file group, so file triage does not destroy severity ordering.
+
+Each root row includes a human-readable file label in the primary row text. Long tree rows may be truncated by VS Code, but the full representative path stays available in the tooltip and accessibility label. Expanding a root row still reveals the occurrence rows, and invoking the root command still opens the same cluster id.
+
+#### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders category metadata
+
+Top Offenders root rows expose the clone bucket with stable theme-aware icon colour metadata. `Identical code`, `Nearly identical code`, `Loosely similar code`, and `Same behavior, different code` must not share the same colour token.
+
+Colour is never the only signal. The category text remains in the visible label, the tooltip carries the hybrid taxonomy label, and the accessibility label includes the category and representative file.
 
 ### [VSIX-CODE-LENS] Code lens
 

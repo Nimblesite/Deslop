@@ -220,6 +220,11 @@ async function refreshAfterChange(
   store.setSnapshot(snapshot, payload.generation);
 }
 
+async function refreshAfterEmbedding(c: LanguageClient, store: ReportStore): Promise<void> {
+  const snapshot = await c.sendRequest<Report>("deslop/reportGet");
+  store.setSnapshot(snapshot, store.current.generation + 1);
+}
+
 export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   c.onNotification("deslop/reportChanged", (payload: ReportChangedNotification) => {
     store.notifyChange(payload.summary);
@@ -241,6 +246,9 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   c.onNotification("deslop/embeddingProgress", (progress: EmbeddingProgress) => {
     if (progress.phase === "complete") {
       store.setEmbeddingProgress(null);
+      refreshAfterEmbedding(c, store).catch((err: unknown) =>
+        logError(err, "refresh report after embedding"),
+      );
     } else {
       store.setEmbeddingProgress(progress);
     }

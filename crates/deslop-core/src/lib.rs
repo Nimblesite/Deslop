@@ -16,6 +16,7 @@
 //!   Batch runs are "incremental starting from an empty cache."
 
 pub mod ast;
+pub mod boilerplate;
 pub mod buckets;
 pub mod cluster;
 pub mod config;
@@ -33,13 +34,15 @@ pub mod pair;
 pub mod pipeline;
 pub mod render;
 pub mod report;
+pub mod report_boilerplate;
+pub mod report_hints;
 pub mod report_metrics;
 pub mod sibling;
 pub mod state;
 pub mod tokens;
 
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
-pub use config::{ExclusionConfig, DEFAULT_CONFIG_FILENAME};
+pub use config::{BoilerplateImportsMode, ExclusionConfig, DEFAULT_CONFIG_FILENAME};
 pub use delta::ReportDelta;
 pub use embedding::{
     list_ollama_models, EmbeddingMode, EmbeddingProvider, EmbeddingSpec, OllamaModelInfo,
@@ -49,6 +52,7 @@ pub use embedding::{
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
 pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
+pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 pub use report_metrics::{
     compute_repo_metrics, count_analysed_lines, validate_threshold_percent, AnalysedLines,
     MetricsInputs, RepoMetrics, ThresholdSource, ThresholdSummary,

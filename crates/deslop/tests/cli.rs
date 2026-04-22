@@ -1853,6 +1853,7 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = Command::cargo_bin("deslop")?;
     let assertion = cmd
+        .env_remove("RUST_LOG")
         .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
@@ -1904,6 +1905,7 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = Command::cargo_bin("deslop")?;
     let assertion = cmd
+        .env_remove("RUST_LOG")
         .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
@@ -1934,6 +1936,7 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
+        .env_remove("RUST_LOG")
         .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
@@ -2809,8 +2812,9 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
 #[test]
 fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    // Minimal report missing `metrics`. `#[serde(default)]` keeps this
-    // back-compatible so older on-disk reports still round-trip.
+    // Minimal report missing `metrics` and `cluster.bucket`.
+    // `#[serde(default)]` keeps older reports round-tripping while
+    // `--from-report` rehydrates the bucket from the signal triple.
     let v2 = "{\n\
               \"report_schema_version\": 1,\n\
               \"tool_version\": \"legacy\",\n\
@@ -2820,7 +2824,16 @@ fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
               \"schema_doc\": \"\",\n\
               \"action_hints\": [],\n\
               \"embedding_provenance\": null,\n\
-              \"clusters\": []\n\
+              \"clusters\": [{\n\
+                \"id\": \"abc123\",\n\
+                \"weight\": 1.0,\n\
+                \"size\": 2,\n\
+                \"canonical_node_count\": 8,\n\
+                \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0},\n\
+                \"occurrences\": [],\n\
+                \"summary\": \"legacy\",\n\
+                \"interpretation\": \"legacy\"\n\
+              }]\n\
               }\n";
     let legacy_path = tmp.path().join("legacy.json");
     fs::write(&legacy_path, v2)?;
@@ -2839,5 +2852,7 @@ fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
     let json = read_json_report(&out.json)?;
     assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
     assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
+    let bucket = json["clusters"][0]["bucket"].as_str();
+    assert_eq!(bucket, Some("identical"));
     Ok(())
 }

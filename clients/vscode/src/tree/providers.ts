@@ -8,6 +8,7 @@ import { occurrenceDisplayLocation } from "../locations";
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import { indexedSeverity, SEVERITY_DOT } from "../severity";
 import {
+  Bucket,
   bucketLabels,
   ReportCluster,
   ReportOccurrence,
@@ -20,24 +21,42 @@ type Node = ClusterNode | OccurrenceNode | SessionFieldNode | StatusNode;
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
 
+// [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Category colour is metadata
+// backed by text/a11y labels, never the only signal.
+const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
+  identical: { icon: "circle-filled", color: "charts.green" },
+  nearly_identical: { icon: "circle-large-filled", color: "charts.orange" },
+  loosely_similar: { icon: "circle-outline", color: "charts.blue" },
+  same_behavior: { icon: "sparkle", color: "charts.purple" },
+};
+
 class ClusterNode extends vscode.TreeItem {
   constructor(
     readonly cluster: ReportCluster,
     readonly rank: number,
     severity: Severity,
   ) {
-    const labels = bucketLabels(resolveBucket(cluster));
+    const bucket = resolveBucket(cluster);
+    const labels = bucketLabels(bucket);
+    const filePath = representativePath(cluster);
+    const fileLabel = displayPath(filePath);
     // Tree label is a pure-visual surface — plain title only. Tooltip
     // is shared-text (copyable, AI-scrapable on hover-extract), so it
     // carries the hybrid form with bracketed Type-N.
     super(
-      `#${rank} ${SEVERITY_DOT[severity]} ${labels.plainTitle}`,
+      `#${rank} ${SEVERITY_DOT[severity]} ${labels.plainTitle} · ${fileLabel}`,
       vscode.TreeItemCollapsibleState.Collapsed,
     );
     this.description = cluster.id;
     this.contextValue = "deslop.cluster";
+    this.iconPath = categoryIcon(bucket);
+    this.accessibilityInformation = {
+      label: `#${rank} ${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}`,
+      role: "treeitem",
+    };
     this.tooltip = new vscode.MarkdownString(
       `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
+        `file: \`${filePath}\`\n\n` +
         `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${cluster.occurrences.length}\``,
     );
     this.command = {
@@ -46,6 +65,24 @@ class ClusterNode extends vscode.TreeItem {
       arguments: [cluster.id],
     };
   }
+}
+
+function categoryIcon(bucket: Bucket): vscode.ThemeIcon {
+  const style = CATEGORY_STYLE[bucket];
+  return new vscode.ThemeIcon(style.icon, new vscode.ThemeColor(style.color));
+}
+
+function representativePath(cluster: ReportCluster): string {
+  return cluster.occurrences[0]?.path ?? cluster.id;
+}
+
+function displayPath(filePath: string): string {
+  if (!filePath) return "unknown file";
+  return vscode.workspace.asRelativePath(filePath, false);
+}
+
+function fileKey(cluster: ReportCluster): string {
+  return displayPath(representativePath(cluster)).toLocaleLowerCase();
 }
 
 class OccurrenceNode extends vscode.TreeItem {
@@ -209,10 +246,15 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       return [new StatusNode("No duplication detected", "info")];
     }
     const severities = indexedSeverity(report.clusters);
-    return report.clusters.map((cluster, i) => {
-      const severity = severities.get(cluster.id) ?? "faint";
-      return new ClusterNode(cluster, i + 1, severity);
-    });
+    // [VSIX-TOP-OFFENDERS-FILE-GROUPS] Preserve the report's original
+    // impact rank, but sort rows by representative file for triage.
+    return report.clusters
+      .map((cluster, i) => ({ cluster, rank: i + 1, file: fileKey(cluster) }))
+      .sort((a, b) => a.file.localeCompare(b.file) || a.rank - b.rank)
+      .map(({ cluster, rank }) => {
+        const severity = severities.get(cluster.id) ?? "faint";
+        return new ClusterNode(cluster, rank, severity);
+      });
   }
 }
 

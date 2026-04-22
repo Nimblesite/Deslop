@@ -16,6 +16,7 @@ use blake3::Hasher;
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
+    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
     fingerprint::Fingerprint,
 };
 
@@ -37,16 +38,37 @@ const MAX_WINDOW_WIDTH: usize = 8;
 #[must_use]
 pub fn collect_sibling_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    walk(root, min_nodes, &mut out);
+    walk(root, min_nodes, &mut out, None, false);
+    out
+}
+
+/// Emits sibling-window fingerprints excluding import/prologue boilerplate.
+#[must_use]
+pub fn collect_non_boilerplate_sibling_fingerprints(
+    root: &NormalizedNode,
+    min_nodes: usize,
+    language: &str,
+) -> Vec<Fingerprint> {
+    let mut out = Vec::new();
+    walk(root, min_nodes, &mut out, Some(language), false);
     out
 }
 
 /// Recursively inspects `node`'s children, emitting sibling-window
 /// fingerprints whose aggregated node count clears `min_nodes`.
-fn walk(node: &NormalizedNode, min_nodes: usize, out: &mut Vec<Fingerprint>) {
-    emit_windows(&node.children, min_nodes, out);
+fn walk(
+    node: &NormalizedNode,
+    min_nodes: usize,
+    out: &mut Vec<Fingerprint>,
+    language: Option<&str>,
+    inside_boilerplate: bool,
+) {
+    let current_boilerplate = inside_boilerplate || is_boilerplate(language, node);
+    if !current_boilerplate {
+        emit_windows(&node.children, min_nodes, out, language);
+    }
     for child in &node.children {
-        walk(child, min_nodes, out);
+        walk(child, min_nodes, out, language, current_boilerplate);
     }
 }
 
@@ -56,11 +78,19 @@ fn walk(node: &NormalizedNode, min_nodes: usize, out: &mut Vec<Fingerprint>) {
 /// [`MAX_WINDOW_WIDTH`] so each enumerated slice is guaranteed
 /// non-empty — removes the "window can be empty" branch that was
 /// previously impossible to exercise from a test.
-fn emit_windows(siblings: &[NormalizedNode], min_nodes: usize, out: &mut Vec<Fingerprint>) {
+fn emit_windows(
+    siblings: &[NormalizedNode],
+    min_nodes: usize,
+    out: &mut Vec<Fingerprint>,
+    language: Option<&str>,
+) {
     let cumulative = cumulative_node_counts(siblings);
     let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
     for width in 2..=MAX_WINDOW_WIDTH {
         for (start, window) in siblings.windows(width).enumerate() {
+            if boilerplate_window(language, window) {
+                continue;
+            }
             let end = start.saturating_add(width);
             let node_count = window_node_count(&cumulative, start, end);
             if node_count < min_nodes {
@@ -75,6 +105,15 @@ fn emit_windows(siblings: &[NormalizedNode], min_nodes: usize, out: &mut Vec<Fin
             }
         }
     }
+}
+
+/// Returns true when every sibling in `window` is import/prologue boilerplate.
+fn boilerplate_window(language: Option<&str>, window: &[NormalizedNode]) -> bool {
+    language.is_some_and(|lang| {
+        window
+            .iter()
+            .all(|node| is_import_boilerplate_only_subtree(lang, node))
+    })
 }
 
 /// Materialises one sibling-window fingerprint covering
@@ -148,4 +187,12 @@ fn subtree_hash(node: &NormalizedNode) -> [u8; 32] {
         let _ = hasher.update(&child_hash);
     }
     hasher.finalize().into()
+}
+
+/// Returns true when `node` starts or consists entirely of boilerplate.
+fn is_boilerplate(language: Option<&str>, node: &NormalizedNode) -> bool {
+    language.is_some_and(|lang| {
+        is_import_boilerplate_carrier(lang, node.kind)
+            || is_import_boilerplate_only_subtree(lang, node)
+    })
 }

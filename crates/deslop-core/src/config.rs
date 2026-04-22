@@ -31,6 +31,24 @@ use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 
+/// Import/prologue boilerplate reporting mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoilerplateImportsMode {
+    /// Suppress import/prologue-only clones and emit no hygiene hints.
+    Suppress,
+    /// Suppress clone warnings but emit structured low-severity hints.
+    Report,
+}
+
+impl BoilerplateImportsMode {
+    /// Returns true when structured report hints should be emitted.
+    #[must_use]
+    pub const fn reports_hints(self) -> bool {
+        matches!(self, Self::Report)
+    }
+}
+
 /// Raw on-disk TOML shape. Kept separate from [`ExclusionConfig`] so the
 /// runtime type can carry compiled matchers instead of raw pattern strings.
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -68,6 +86,17 @@ struct RawSection {
     /// rendered report.
     #[serde(default)]
     report_hide: Vec<String>,
+    /// Import/prologue boilerplate policy for this section.
+    #[serde(default)]
+    boilerplate: RawBoilerplate,
+}
+
+/// Raw `[*.boilerplate]` subsection.
+#[derive(Debug, Default, Clone, Deserialize)]
+struct RawBoilerplate {
+    /// Import/prologue handling. `None` means inherit/default suppress.
+    #[serde(default)]
+    imports: Option<BoilerplateImportsMode>,
 }
 
 /// Compiled exclusion configuration ready for matching. Built by merging
@@ -84,6 +113,8 @@ pub struct ExclusionConfig {
     default_report_hide: Gitignore,
     /// Per-language overlay matchers, keyed by parser language id.
     per_language: HashMap<String, LanguageMatchers>,
+    /// Shared import/prologue boilerplate mode.
+    default_boilerplate_imports: BoilerplateImportsMode,
     /// Optional fail-over threshold loaded from `[threshold]
     /// max_duplication_percent` per [EXIT-CODES]. `None` means the
     /// config file did not opt in.
@@ -98,6 +129,8 @@ struct LanguageMatchers {
     /// Language-specific report-hide matcher; additive with
     /// `default_report_hide`.
     report_hide: Gitignore,
+    /// Optional language-specific boilerplate import mode.
+    boilerplate_imports: Option<BoilerplateImportsMode>,
 }
 
 impl ExclusionConfig {
@@ -110,6 +143,7 @@ impl ExclusionConfig {
             default_exclude: empty_matcher(),
             default_report_hide: empty_matcher(),
             per_language: HashMap::new(),
+            default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
         }
     }
@@ -155,6 +189,11 @@ impl ExclusionConfig {
     fn compile(path: &Path, raw: &RawConfig) -> Result<Self, CoreError> {
         let default_exclude = build_matcher(path, &raw.defaults.exclude)?;
         let default_report_hide = build_matcher(path, &raw.defaults.report_hide)?;
+        let default_boilerplate_imports = raw
+            .defaults
+            .boilerplate
+            .imports
+            .unwrap_or(BoilerplateImportsMode::Suppress);
         let mut per_language: HashMap<String, LanguageMatchers> = HashMap::new();
         for (language, section) in &raw.language {
             let exclude = build_matcher(path, &section.exclude)?;
@@ -164,6 +203,7 @@ impl ExclusionConfig {
                 LanguageMatchers {
                     exclude,
                     report_hide,
+                    boilerplate_imports: section.boilerplate.imports,
                 },
             );
         }
@@ -173,6 +213,7 @@ impl ExclusionConfig {
             default_exclude,
             default_report_hide,
             per_language,
+            default_boilerplate_imports,
             fail_over_percent,
         })
     }
@@ -222,6 +263,15 @@ impl ExclusionConfig {
         self.per_language
             .get(language)
             .is_some_and(|overlay| matches(&overlay.report_hide, path))
+    }
+
+    /// Returns the import/prologue boilerplate reporting mode for a language.
+    #[must_use]
+    pub fn boilerplate_imports_mode(&self, language: &str) -> BoilerplateImportsMode {
+        self.per_language
+            .get(language)
+            .and_then(|overlay| overlay.boilerplate_imports)
+            .unwrap_or(self.default_boilerplate_imports)
     }
 }
 

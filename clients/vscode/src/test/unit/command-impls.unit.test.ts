@@ -24,7 +24,9 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
         if (tab.input instanceof vscode.TabInputTextDiff) return tab.input;
       }
     }
-    await new Promise<void>((r) => setTimeout(r, 50));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 50);
+    });
   }
   throw new Error("no diff tab opened after compareWithCanonical");
 }

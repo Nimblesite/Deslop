@@ -233,10 +233,10 @@ pub async fn embedding_list_models(
 
 /// Forwards `embedding/setModel`.
 ///
-/// Installs a per-request embedding-progress reporter on the session so
-/// the client sees `deslop/embeddingProgress` notifications around the
-/// swap ([VSIX-SESSION-PROGRESS]). The reporter is cleared before the
-/// response is returned.
+/// Queues the selected-model embedding refresh. The backend installs
+/// a persistent progress reporter at startup, so this request returns
+/// after the job is queued while progress notifications stream
+/// independently ([VSIX-SESSION-PROGRESS]).
 ///
 /// # Errors
 ///
@@ -246,12 +246,6 @@ pub async fn embedding_set_model(
     backend: &LspBackend,
     params: SetModelParams,
 ) -> LspResult<serde_json::Value> {
-    let (reporter, mut receiver) = crate::backend::embedding_progress_channel();
-    {
-        let session = backend.service().session();
-        let mut guard = session.lock().await;
-        guard.set_embedding_progress_reporter(Some(reporter));
-    }
     let outcome = backend
         .service()
         .embedding_set_model(
@@ -260,17 +254,6 @@ pub async fn embedding_set_model(
             params.endpoint.as_deref(),
         )
         .await;
-    {
-        let session = backend.service().session();
-        let mut guard = session.lock().await;
-        guard.set_embedding_progress_reporter(None);
-    }
-    while let Ok(event) = receiver.try_recv() {
-        backend
-            .client()
-            .send_notification::<crate::backend::EmbeddingProgressNotification>(event)
-            .await;
-    }
     match outcome {
         Ok(result) => Ok(serde_json::to_value(result).unwrap_or(serde_json::Value::Null)),
         Err(error) => Err(into_jsonrpc(&error)),

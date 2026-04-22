@@ -17,6 +17,7 @@ use crate::{
 };
 
 use super::{
+    embedding_refresh::{run_embedding_refresh, EmbeddingRefreshJob},
     errors::LiveError,
     session::AnalysisSession,
     wire::{EmbeddingModelInfo, FileReport, FindSimilarRequest, FindSimilarResult, SessionConfig},
@@ -134,6 +135,35 @@ impl LiveService {
         let mut guard = self.previous_reports.lock().await;
         let _previous = guard.insert(generation, report);
     }
+
+    /// Queues an already-constructed provider for low-priority
+    /// embedding refresh work. Returns immediately with `None`; the
+    /// new provenance becomes visible through `report_get` after the
+    /// background pass commits.
+    ///
+    /// # Errors
+    ///
+    /// This path is infallible after provider construction. It stays
+    /// fallible to mirror [`LiveApi::embedding_set_model`].
+    pub async fn embedding_set_provider(
+        &self,
+        provider: Arc<dyn EmbeddingProvider>,
+    ) -> Result<Option<EmbeddingProvenance>, LiveError> {
+        let job = {
+            let mut guard = self.inner.lock().await;
+            guard.prepare_embedding_refresh(provider)
+        };
+        self.spawn_embedding_refresh(job);
+        Ok(None)
+    }
+
+    fn spawn_embedding_refresh(&self, job: EmbeddingRefreshJob) {
+        let inner = Arc::clone(&self.inner);
+        let previous_reports = Arc::clone(&self.previous_reports);
+        let _join = tokio::spawn(async move {
+            run_background_refresh(inner, previous_reports, job).await;
+        });
+    }
 }
 
 #[async_trait]
@@ -202,8 +232,7 @@ impl LiveApi for LiveService {
         endpoint: Option<&str>,
     ) -> Result<Option<EmbeddingProvenance>, LiveError> {
         let provider = build_provider(provider_id, model_id, endpoint)?;
-        let mut guard = self.inner.lock().await;
-        guard.set_embedding_model(provider)
+        self.embedding_set_provider(provider).await
     }
 
     async fn session_config(&self) -> SessionConfig {
@@ -220,6 +249,48 @@ impl LiveApi for LiveService {
             .map(|cluster| cluster.weight)
             .collect()
     }
+}
+
+async fn run_background_refresh(
+    inner: Arc<Mutex<AnalysisSession>>,
+    previous_reports: Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
+    job: EmbeddingRefreshJob,
+) {
+    let outcome = tokio::task::spawn_blocking(move || run_embedding_refresh(job)).await;
+    match outcome {
+        Ok(Ok((job, report))) => commit_background_refresh(inner, previous_reports, job, report).await,
+        Ok(Err(failure)) => report_background_error(failure),
+        Err(error) => tracing::error!(%error, "embedding refresh task failed"),
+    }
+}
+
+async fn commit_background_refresh(
+    inner: Arc<Mutex<AnalysisSession>>,
+    previous_reports: Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
+    job: EmbeddingRefreshJob,
+    report: Report,
+) {
+    let committed = {
+        let mut guard = inner.lock().await;
+        guard.commit_embedding_refresh(&job, report)
+    };
+    if let Some(committed) = committed {
+        let mut history = previous_reports.lock().await;
+        let _previous = history.insert(committed.previous_generation, committed.previous_report);
+        drop(history);
+        job.report_complete();
+        tracing::info!(
+            provider = %job.spec.provider_id,
+            model = %job.spec.model_id,
+            provenance = ?committed.provenance,
+            "embedding refresh committed",
+        );
+    }
+}
+
+fn report_background_error(failure: super::embedding_refresh::FailedEmbeddingRefresh) {
+    failure.job.report_failed(failure.message.clone());
+    tracing::warn!(error = %failure.message, "embedding refresh failed");
 }
 
 /// Constructs an [`EmbeddingProvider`] from a `(provider_id, model_id,

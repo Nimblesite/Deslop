@@ -18,8 +18,8 @@ C# special case: if the same non-static `using` directives appear across many fi
 
 Configuration:
 
-- Default: boilerplate-only clones are suppressed.
-- Opt-in diagnostic mode: `.deslop.toml` can set `boilerplate.imports = "report"` under `[defaults]` or `[language.<id>]` to include them as low-severity hints for teams that explicitly want import hygiene audits.
+- Default: boilerplate-only clones are suppressed and no hint is emitted (`boilerplate.imports = "suppress"`).
+- Opt-in diagnostic mode: `.deslop.toml` can set `boilerplate.imports = "report"` under `[defaults]` or `[language.<id>]` to include them as low-severity hints for teams that explicitly want import hygiene audits. This mode does not restore import-only clone warnings; it emits structured `boilerplate_hints` instead.
 - No mode may rank import/using-only ranges above executable or declarative code clones.
 
 ### [PIPELINE-FINGERPRINT-MERKLE] Structural fingerprint (Merkle)
