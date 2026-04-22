@@ -94,8 +94,15 @@ impl AnalysisSession {
         )
     }
 
-    /// [LIVE-EMBEDDING-CONSENT] Constructs a live session with an already-selected embedding
-    /// model. Used when a client persisted explicit user consent.
+    /// [LIVE-EMBEDDING-CONSENT] Constructs a live session with an
+    /// already-selected embedding model. Used when a client persisted
+    /// explicit user consent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError`] when pipeline initialisation cannot read
+    /// config, discover files, parse sources, or build the initial
+    /// report.
     pub fn new_with_mode(
         root: PathBuf,
         min_nodes: u32,

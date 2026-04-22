@@ -76,6 +76,7 @@ fn parse_min_nodes_value(args: &[String], index: usize) -> Result<u32> {
     Ok(value.parse::<u32>()?)
 }
 
+/// Parses embedding startup flags into the LSP backend config.
 fn parse_embedding_config(args: &[String]) -> Result<LspEmbeddingConfig> {
     let mode = parse_flag_value(args, "--embeddings")
         .unwrap_or("off")
@@ -94,6 +95,7 @@ fn parse_embedding_config(args: &[String]) -> Result<LspEmbeddingConfig> {
     })
 }
 
+/// Returns the string value immediately following `flag`.
 fn parse_flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     args.windows(2).find_map(|pair| {
         if pair.first().is_some_and(|candidate| candidate == flag) {

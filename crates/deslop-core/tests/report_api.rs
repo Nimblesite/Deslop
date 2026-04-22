@@ -19,7 +19,10 @@ use deslop_core::{
 fn truncate_for_wire_caps_occurrences_and_blanks_derivable_text() {
     let report = sample_report().truncate_for_wire(2).truncate_for_wire(2);
     assert!(report.schema_doc.is_empty());
-    let cluster = report.clusters.first().expect("cluster");
+    let Some(cluster) = report.clusters.first() else {
+        assert_eq!(report.clusters.len(), 1);
+        return;
+    };
     assert_eq!(cluster.occurrences.len(), 2);
     assert_eq!(cluster.occurrences_total, 3);
     assert!(cluster.occurrences_truncated);
@@ -42,8 +45,12 @@ fn boilerplate_hints_use_default_recommendation_for_future_languages() -> anyhow
     let ranges = vec![range(file_id, "go", 0, 10), range(file_id, "go", 11, 20)];
     let hints = build_boilerplate_hints(&ranges, &registry, tmp.path(), &config);
     assert_eq!(hints.len(), 1);
-    assert_eq!(hints[0].language, "go");
-    assert!(hints[0].recommendation.contains("harder to read"));
+    let Some(hint) = hints.first() else {
+        assert_eq!(hints.len(), 1);
+        return Ok(());
+    };
+    assert_eq!(hint.language, "go");
+    assert!(hint.recommendation.contains("harder to read"));
     Ok(())
 }
 
@@ -110,12 +117,15 @@ fn sample_cluster() -> ReportCluster {
 }
 
 fn sample_occurrences() -> Vec<ReportOccurrence> {
-    (0..3)
-        .map(|index| ReportOccurrence {
-            path: PathBuf::from(format!("file-{index}.cs")),
-            start_byte: index * 10,
-            end_byte: index * 10 + 5,
-            hidden: false,
+    (0_usize..3)
+        .map(|index| {
+            let start_byte = index.saturating_mul(10);
+            ReportOccurrence {
+                path: PathBuf::from(format!("file-{index}.cs")),
+                start_byte,
+                end_byte: start_byte.saturating_add(5),
+                hidden: false,
+            }
         })
         .collect()
 }

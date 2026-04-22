@@ -2852,7 +2852,12 @@ fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
     let json = read_json_report(&out.json)?;
     assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
     assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
-    let bucket = json["clusters"][0]["bucket"].as_str();
+    let bucket = json
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|clusters| clusters.first())
+        .and_then(|cluster| cluster.get("bucket"))
+        .and_then(serde_json::Value::as_str);
     assert_eq!(bucket, Some("identical"));
     Ok(())
 }

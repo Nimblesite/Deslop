@@ -106,7 +106,8 @@ fn assert_no_prologue_clusters(report: &Value, prologues: &BTreeMap<String, usiz
         let occurrence_end = occurrence
             .get("end_byte")
             .and_then(Value::as_u64)
-            .unwrap_or_default() as usize;
+            .and_then(|value| usize::try_from(value).ok())
+            .unwrap_or_default();
         assert!(
             occurrence_end > *end,
             "prologue cluster survived: {occurrence}"
@@ -125,7 +126,9 @@ fn assert_real_csharp_clone_survives(
         let name = occurrence_name(occurrence).unwrap_or_default();
         let prologue_end = prologues.get(name).copied().unwrap_or_default();
         let end = occurrence.get("end_byte").and_then(Value::as_u64);
-        assert!(end.is_some_and(|value| value as usize > prologue_end));
+        assert!(end
+            .and_then(|value| usize::try_from(value).ok())
+            .is_some_and(|value| value > prologue_end));
     }
     Ok(())
 }
@@ -258,7 +261,7 @@ fn sources() -> [SourceSpec; 6] {
     ]
 }
 
-const CSHARP_ALPHA: &str = r#"using System;
+const CSHARP_ALPHA: &str = r"using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 
@@ -272,9 +275,9 @@ public sealed class Alpha
         return total * 3;
     }
 }
-"#;
+";
 
-const CSHARP_BETA: &str = r#"using System;
+const CSHARP_BETA: &str = r"using System;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 
@@ -288,9 +291,9 @@ public sealed class Beta
         return total * 3;
     }
 }
-"#;
+";
 
-const RUST_ALPHA: &str = r#"use std::collections::HashMap;
+const RUST_ALPHA: &str = r"use std::collections::HashMap;
 use std::sync::Arc;
 
 pub fn alpha(seed: i32) -> i32 {
@@ -299,9 +302,9 @@ pub fn alpha(seed: i32) -> i32 {
         other => other * 17,
     }
 }
-"#;
+";
 
-const RUST_BETA: &str = r#"use std::collections::HashMap;
+const RUST_BETA: &str = r"use std::collections::HashMap;
 use std::sync::Arc;
 
 pub struct Beta {
@@ -313,7 +316,7 @@ impl Beta {
         Self { total }
     }
 }
-"#;
+";
 
 const PYTHON_ALPHA: &str = r#"import os
 import sys
@@ -324,11 +327,11 @@ def alpha(seed):
     return table["seed"] + 41
 "#;
 
-const PYTHON_BETA: &str = r#"import os
+const PYTHON_BETA: &str = r"import os
 import sys
 from pathlib import Path
 
 class Beta:
     def __init__(self, name):
         self.name = name
-"#;
+";

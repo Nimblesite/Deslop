@@ -24,10 +24,12 @@ use tower_lsp::{
     jsonrpc::{Request, Response, Result as LspResult},
     lsp_types::{
         CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
-        DidChangeTextDocumentParams, DocumentDiagnosticParams, DocumentDiagnosticReport,
-        DocumentDiagnosticReportResult, FullDocumentDiagnosticReport, Hover, HoverParams,
-        HoverProviderCapability, InitializeParams, InitializeResult, InitializedParams,
-        MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
+        DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
+        DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
+        DocumentDiagnosticReport, DocumentDiagnosticReportResult, FileEvent,
+        FullDocumentDiagnosticReport, Hover, HoverParams, HoverProviderCapability,
+        InitializeParams, InitializeResult, InitializedParams, MessageType,
+        RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
         TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
     Client, ExitedError, LanguageServer, LspService, Server,
@@ -73,6 +75,7 @@ impl Default for LspEmbeddingConfig {
     }
 }
 
+/// Builds the provider used when the LSP backend starts.
 fn build_startup_provider(
     embedding: &LspEmbeddingConfig,
 ) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
@@ -89,6 +92,7 @@ fn build_startup_provider(
     }
 }
 
+/// Connects to Ollama and maps provider errors into live errors.
 fn connect_ollama_provider(
     embedding: &LspEmbeddingConfig,
 ) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
@@ -124,12 +128,8 @@ impl LspBackend {
         workspace_root: PathBuf,
         min_nodes: u32,
     ) -> Result<Self, deslop_core::live::LiveError> {
-        Self::new_with_config(
-            client,
-            workspace_root,
-            min_nodes,
-            LspEmbeddingConfig::default(),
-        )
+        let embedding = LspEmbeddingConfig::default();
+        Self::new_with_config(client, workspace_root, min_nodes, &embedding)
     }
 
     /// Constructs a backend with explicit embedding startup config.
@@ -141,9 +141,9 @@ impl LspBackend {
         client: Client,
         workspace_root: PathBuf,
         min_nodes: u32,
-        embedding: LspEmbeddingConfig,
+        embedding: &LspEmbeddingConfig,
     ) -> Result<Self, deslop_core::live::LiveError> {
-        let provider = build_startup_provider(&embedding)?;
+        let provider = build_startup_provider(embedding)?;
         let mut session = if matches!(embedding.mode, EmbeddingMode::Off) {
             AnalysisSession::new(workspace_root, min_nodes, false, None, provider)?
         } else {
@@ -172,6 +172,17 @@ impl LspBackend {
     #[must_use]
     pub fn service(&self) -> Arc<LiveService> {
         Arc::clone(&self.service)
+    }
+
+    /// Re-runs analysis for changed paths when VS Code sends file
+    /// lifecycle notifications.
+    async fn apply_changed_paths(&self, paths: &[PathBuf]) {
+        if paths.is_empty() {
+            return;
+        }
+        let session = self.service.session();
+        let mut guard = session.lock().await;
+        let _outcome = guard.apply_changes(paths);
     }
 }
 
@@ -214,13 +225,26 @@ impl LanguageServer for LspBackend {
         Ok(())
     }
 
+    async fn did_change_configuration(&self, _params: DidChangeConfigurationParams) {}
+
+    async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        let paths = paths_from_file_events(&params.changes);
+        self.apply_changed_paths(&paths).await;
+    }
+
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        if let Some(path) = url_to_path(&params.text_document.uri) {
+            self.apply_changed_paths(&[path]).await;
+        }
+    }
+
+    async fn did_close(&self, _params: DidCloseTextDocumentParams) {}
+
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return;
         };
-        let session = self.service.session();
-        let mut guard = session.lock().await;
-        let _outcome = guard.apply_changes(&[path]);
+        self.apply_changed_paths(&[path]).await;
     }
 
     async fn diagnostic(
@@ -278,6 +302,15 @@ pub fn url_to_path(url: &Url) -> Option<PathBuf> {
     url.to_file_path().ok()
 }
 
+/// Extracts filesystem paths from watched-file events.
+fn paths_from_file_events(events: &[FileEvent]) -> Vec<PathBuf> {
+    events
+        .iter()
+        .filter_map(|event| url_to_path(&event.uri))
+        .collect()
+}
+
+/// Builds the progress callback that emits LSP notifications.
 fn progress_reporter(client: &Client) -> EmbeddingProgressReporter {
     let client = client.clone();
     Arc::new(move |event: EmbeddingProgress| {
@@ -324,7 +357,7 @@ pub async fn run_stdio(
             client,
             workspace_root_for_builder.clone(),
             min_nodes,
-            embedding.clone(),
+            &embedding,
         ) {
             Ok(backend) => backend,
             Err(error) => report_init_failure(&error),

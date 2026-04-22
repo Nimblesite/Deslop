@@ -36,6 +36,10 @@ pub struct Cluster {
     pub signals: PairScore,
 }
 
+/// Minimum number of logical locations required for a reportable
+/// duplicate cluster after same-file overlap collapse.
+const MIN_REPORTABLE_MEMBERS: usize = 2;
+
 /// Builds ranked clusters from a fused-cluster list produced by
 /// [`crate::pair::cluster_by_transitive_closure`]. Each `FusedCluster`
 /// references fingerprint indices; this function materialises the full
@@ -52,7 +56,7 @@ pub fn build_ranked_fused_clusters(
 ) -> Vec<Cluster> {
     let mut clusters: Vec<Cluster> = fused_clusters
         .iter()
-        .map(|fused| build_fused_cluster(fingerprints, fused))
+        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
         .collect();
     clusters.sort_by(|left, right| {
         right
@@ -64,40 +68,67 @@ pub fn build_ranked_fused_clusters(
     clusters
 }
 
-/// Rehydrates a single `FusedCluster` into a [`Cluster`]. The
-/// clusterer only emits groups with ≥2 members, and any missing
-/// fingerprint index silently drops that slot from the rehydrated
-/// cluster — a cluster with zero surviving members is still emitted
-/// as an empty slot so the report remains deterministic in that
-/// degenerate case.
-fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Cluster {
-    let raw_members: Vec<Fingerprint> = fused
+/// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
+/// Same-file overlap collapse can reduce a fused group to one logical
+/// location; those groups are artifacts, not duplicates, and are
+/// dropped before ranking.
+fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Option<Cluster> {
+    let members = collapsed_members(fingerprints, fused);
+    if members.len() < MIN_REPORTABLE_MEMBERS {
+        return None;
+    }
+    Some(materialize_cluster(members, fused.mean_score))
+}
+
+/// Collects valid fingerprints for one fused cluster and collapses
+/// overlapping same-file artifacts.
+fn collapsed_members(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<Fingerprint> {
+    let raw_members = fused
         .members
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    let members = collapse_overlapping_per_file(raw_members);
+    collapse_overlapping_per_file(raw_members)
+}
+
+/// Builds the final reportable cluster from already-filtered members.
+fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster {
     let size = members.len();
-    let smallest_nodes = members
-        .iter()
-        .map(|member| member.node_count)
-        .min()
-        .unwrap_or(0);
-    let spanned_bytes: u64 = members
-        .iter()
-        .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
-        .fold(0_u64, u64::saturating_add);
+    let smallest_nodes = smallest_node_count(&members);
+    let spanned_bytes = spanned_byte_count(&members);
     let weight = rank_weight(smallest_nodes, size, spanned_bytes);
-    let id_source = members
-        .iter()
-        .min_by_key(|member| member.hash)
-        .map_or([0_u8; 32], |member| member.hash);
+    let id_source = cluster_id_source(&members);
     Cluster {
         id: encode_short_id(id_source),
         members,
         weight,
-        signals: fused.mean_score,
+        signals,
     }
+}
+
+/// Returns the smallest node count inside a reportable cluster.
+fn smallest_node_count(members: &[Fingerprint]) -> usize {
+    members
+        .iter()
+        .map(|member| member.node_count)
+        .min()
+        .unwrap_or(0)
+}
+
+/// Sums physical byte spans for the ranking formula.
+fn spanned_byte_count(members: &[Fingerprint]) -> u64 {
+    members
+        .iter()
+        .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
+        .fold(0_u64, u64::saturating_add)
+}
+
+/// Selects the deterministic hash source for the public cluster id.
+fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
+    members
+        .iter()
+        .min_by_key(|member| member.hash)
+        .map_or([0_u8; 32], |member| member.hash)
 }
 
 /// Collapses overlapping sibling-window occurrences that live in the

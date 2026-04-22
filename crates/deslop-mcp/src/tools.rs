@@ -281,7 +281,7 @@ fn call_report_get(backend: &dyn McpBackend, args: &Value) -> Result<Value, Json
 /// plus AND-combined filters ([MCP-TOOL-REPORT-QUERY]).
 fn call_report_query(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
     let pagination = extract_pagination(args)?;
-    let filters = extract_filters(args)?;
+    let filters = extract_filters(args);
     let report = backend.report_get().map_err(backend_to_rpc)?;
     Ok(build_page(
         &report,
@@ -304,8 +304,8 @@ fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcError> {
 /// Extracts the optional `report-query` filter knobs. Unknown / wrong-typed
 /// fields are quietly ignored — the JSON schema layer rejects them up
 /// front when a strict client is in use.
-fn extract_filters(args: &Value) -> Result<QueryFilters, JsonRpcError> {
-    Ok(QueryFilters {
+fn extract_filters(args: &Value) -> QueryFilters {
+    QueryFilters {
         language: args
             .get("language")
             .and_then(Value::as_str)
@@ -323,7 +323,7 @@ fn extract_filters(args: &Value) -> Result<QueryFilters, JsonRpcError> {
             .get("min_size")
             .and_then(Value::as_u64)
             .and_then(|value| usize::try_from(value).ok()),
-    })
+    }
 }
 
 /// `report-for-file` forwarder.
@@ -471,6 +471,7 @@ fn call_session_config(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> 
     }))
 }
 
+/// Requires explicit user consent for model-changing tool calls.
 fn require_user_initiated(args: &Value) -> Result<(), JsonRpcError> {
     if args
         .get("user_initiated")

@@ -99,8 +99,7 @@ impl QueryFilters {
             let detected = cluster
                 .occurrences
                 .first()
-                .map(|occ| language_for_path(&occ.path))
-                .unwrap_or("unknown");
+                .map_or("unknown", |occ| language_for_path(&occ.path));
             if detected != language {
                 return false;
             }
@@ -156,6 +155,7 @@ pub struct Pagination {
 
 /// Builds a [`ReportPage`]-shaped JSON value over `report` with the
 /// matched-and-paged cluster slice.
+#[must_use]
 pub fn build_page(
     report: &Report,
     generation: u64,
@@ -172,7 +172,9 @@ pub fn build_page(
     let slice_end = slice_start
         .saturating_add(pagination.limit)
         .min(total_clusters);
-    let summaries: Vec<ClusterSummary> = matched[slice_start..slice_end]
+    let summaries: Vec<ClusterSummary> = matched
+        .get(slice_start..slice_end)
+        .unwrap_or_default()
         .iter()
         .map(|cluster| ClusterSummary::from_report_cluster(cluster))
         .collect();
@@ -215,6 +217,7 @@ pub fn build_page(
 }
 
 impl ClusterSummary {
+    /// Builds a compact page row from a full report cluster.
     fn from_report_cluster(cluster: &ReportCluster) -> Self {
         let first_occurrence = cluster.occurrences.first().map(|occ| OccurrenceSummary {
             path: occ.path.to_string_lossy().into_owned(),
@@ -224,8 +227,7 @@ impl ClusterSummary {
         let language = cluster
             .occurrences
             .first()
-            .map(|occ| language_for_path(&occ.path))
-            .unwrap_or("unknown");
+            .map_or("unknown", |occ| language_for_path(&occ.path));
         let occurrence_count = cluster.occurrences_total.max(cluster.size);
         Self {
             id: cluster.id.clone(),

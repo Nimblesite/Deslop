@@ -3,7 +3,10 @@
 use std::path::PathBuf;
 
 use deslop_core::{
-    ast::ByteRange, embedding::embedding_pairs, fingerprint::Fingerprint, state::FileRegistry,
+    ast::ByteRange,
+    embedding::{embedding_pairs, EmbeddingPair},
+    fingerprint::Fingerprint,
+    state::FileRegistry,
 };
 
 #[test]
@@ -11,7 +14,11 @@ fn embedding_pairs_dedupes_bidirectional_hits_and_filters_weak_neighbors() {
     let (fingerprints, embeddings) = fixture_vectors();
     let pairs = embedding_pairs(&fingerprints, &embeddings);
     assert_eq!(pairs.len(), 1, "expected one high-cosine pair: {pairs:?}");
-    let pair = pairs[0];
+    let pair = pairs.first().copied().unwrap_or(EmbeddingPair {
+        left: usize::MAX,
+        right: usize::MAX,
+        cosine: 0.0,
+    });
     assert_eq!((pair.left, pair.right), (0, 1));
     assert!(pair.cosine > 0.99, "cosine too low: {}", pair.cosine);
 }

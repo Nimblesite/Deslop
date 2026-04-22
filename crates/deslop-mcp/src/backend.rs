@@ -32,8 +32,11 @@ use tracing::{info, warn};
 
 use crate::safety::{resolve_within_root, PathResolutionError};
 
+/// Delay inserted between MCP embedding batches.
 const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
 
+/// Returns the cooperative batch-yield delay for embedding-enabled
+/// modes.
 fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
     if matches!(mode, EmbeddingMode::Off) {
         None
@@ -671,6 +674,7 @@ fn select_provider(
     }
 }
 
+/// Starts a detached MCP embedding refresh after a model change.
 fn spawn_mcp_embedding_refresh(
     config: SessionBackendConfig,
     state: Arc<Mutex<SessionState>>,
@@ -678,16 +682,19 @@ fn spawn_mcp_embedding_refresh(
     revision: u64,
 ) {
     let _join = std::thread::spawn(move || {
-        if let Err(error) = run_mcp_embedding_refresh(config, state, provider, revision) {
+        if let Err(error) =
+            run_mcp_embedding_refresh(&config, state.as_ref(), provider.as_ref(), revision)
+        {
             warn!(reason = %error, "mcp_embedding_model_refresh_failed");
         }
     });
 }
 
+/// Rebuilds the backend session with the selected embedding provider.
 fn run_mcp_embedding_refresh(
-    config: SessionBackendConfig,
-    state: Arc<Mutex<SessionState>>,
-    provider: Arc<dyn EmbeddingProvider>,
+    config: &SessionBackendConfig,
+    state: &Mutex<SessionState>,
+    provider: &dyn EmbeddingProvider,
     revision: u64,
 ) -> Result<(), BackendError> {
     let (session, report) = PipelineSession::initialise(
@@ -697,12 +704,12 @@ fn run_mcp_embedding_refresh(
         config.config_path.clone(),
         EmbeddingSettings {
             mode: EmbeddingMode::Auto,
-            provider: Some(provider.as_ref()),
+            provider: Some(provider),
             batch_yield: live_batch_yield(EmbeddingMode::Auto),
             progress: None,
         },
     )?;
-    let mut guard = lock_state(&state)?;
+    let mut guard = lock_state(state)?;
     if guard.embedding_revision == revision {
         guard.session = session;
         guard.report = Arc::new(report);
@@ -712,6 +719,7 @@ fn run_mcp_embedding_refresh(
     Ok(())
 }
 
+/// Writes shared embedding selection settings for sibling surfaces.
 fn persist_shared_embedding_settings(
     root: &Path,
     spec: &EmbeddingSpec,
@@ -740,6 +748,7 @@ fn persist_shared_embedding_settings(
     write_settings_object(&path, settings)
 }
 
+/// Reads `.vscode/settings.json` as a mutable JSON object.
 fn read_settings_object(
     path: &Path,
 ) -> Result<serde_json::Map<String, serde_json::Value>, BackendError> {
@@ -752,6 +761,7 @@ fn read_settings_object(
     Ok(value.as_object().cloned().unwrap_or_default())
 }
 
+/// Writes a settings object back to disk, creating `.vscode` first.
 fn write_settings_object(
     path: &Path,
     settings: serde_json::Map<String, serde_json::Value>,
@@ -764,6 +774,7 @@ fn write_settings_object(
     fs::write(path, encoded).map_err(|error| config_write_error(path, error))
 }
 
+/// Converts any settings persistence error into a backend error.
 fn config_write_error(path: &Path, error: impl std::fmt::Display) -> BackendError {
     BackendError::ConfigWrite {
         path: path.to_path_buf(),

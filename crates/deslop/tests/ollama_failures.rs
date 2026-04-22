@@ -117,8 +117,13 @@ impl MockOllama {
         let max_embed_batch_len = Arc::new(AtomicUsize::new(0));
         let server_stop = Arc::clone(&stop);
         let server_max_embed_batch_len = Arc::clone(&max_embed_batch_len);
-        let handle =
-            thread::spawn(move || server_loop(listener, server_stop, server_max_embed_batch_len));
+        let handle = thread::spawn(move || {
+            server_loop(
+                &listener,
+                server_stop.as_ref(),
+                server_max_embed_batch_len.as_ref(),
+            );
+        });
         Ok(Self {
             endpoint: format!("http://{addr}"),
             addr,
@@ -147,16 +152,12 @@ impl Drop for MockOllama {
     }
 }
 
-fn server_loop(
-    listener: TcpListener,
-    stop: Arc<AtomicBool>,
-    max_embed_batch_len: Arc<AtomicUsize>,
-) {
+fn server_loop(listener: &TcpListener, stop: &AtomicBool, max_embed_batch_len: &AtomicUsize) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
-            Ok((stream, _)) => handle_stream(stream, &max_embed_batch_len),
+            Ok((stream, _)) => handle_stream(stream, max_embed_batch_len),
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(5))
+                thread::sleep(Duration::from_millis(5));
             }
             Err(_) => break,
         }
@@ -180,19 +181,21 @@ struct HttpRequest {
 fn read_request(stream: &mut TcpStream) -> Result<HttpRequest> {
     let mut data = Vec::new();
     let mut buffer = [0_u8; 1024];
-    while complete_len(&data).is_none_or(|len| data.len() < len) {
+    while complete_len(&data).map_or(true, |len| data.len() < len) {
         let read = stream.read(&mut buffer)?;
         if read == 0 {
             break;
         }
-        data.extend_from_slice(&buffer[..read]);
+        if let Some(chunk) = buffer.get(..read) {
+            data.extend_from_slice(chunk);
+        }
     }
     parse_request(&data)
 }
 
 fn complete_len(data: &[u8]) -> Option<usize> {
     let header_end = header_end(data)?;
-    let headers = String::from_utf8_lossy(&data[..header_end]);
+    let headers = String::from_utf8_lossy(data.get(..header_end)?);
     Some(
         header_end
             .saturating_add(4)
@@ -220,13 +223,14 @@ fn parse_content_length(line: &str) -> Option<usize> {
 
 fn parse_request(data: &[u8]) -> Result<HttpRequest> {
     let header_end = header_end(data).ok_or_else(|| anyhow!("missing header terminator"))?;
-    let headers = String::from_utf8_lossy(&data[..header_end]);
+    let headers = String::from_utf8_lossy(data.get(..header_end).unwrap_or_default());
     let body_start = header_end.saturating_add(4);
     let body_len = content_length(&headers);
     let body_end = body_start.saturating_add(body_len).min(data.len());
     Ok(HttpRequest {
         path: request_path(&headers),
-        body: String::from_utf8_lossy(&data[body_start..body_end]).into_owned(),
+        body: String::from_utf8_lossy(data.get(body_start..body_end).unwrap_or_default())
+            .into_owned(),
     })
 }
 
@@ -241,18 +245,18 @@ fn request_path(headers: &str) -> String {
 
 fn response_for(request: &HttpRequest, max_embed_batch_len: &AtomicUsize) -> String {
     match request.path.as_str() {
-        "/api/tags" => json_response("200 OK", tags_body()),
+        "/api/tags" => json_response("200 OK", &tags_body()),
         "/api/embed" if is_dimension_probe(&request.body) => {
-            json_response("200 OK", json!({ "embeddings": [[1.0, 0.0, 0.0, 0.0]] }))
+            json_response("200 OK", &json!({ "embeddings": [[1.0, 0.0, 0.0, 0.0]] }))
         }
         "/api/embed" => {
             record_embed_batch_len(&request.body, max_embed_batch_len);
             json_response(
                 "500 Internal Server Error",
-                json!({ "error": "input length exceeds the context length" }),
+                &json!({ "error": "input length exceeds the context length" }),
             )
         }
-        _ => json_response("404 Not Found", json!({ "error": "not found" })),
+        _ => json_response("404 Not Found", &json!({ "error": "not found" })),
     }
 }
 
@@ -291,8 +295,8 @@ fn request_inputs(body: &str) -> Option<Vec<String>> {
     })
 }
 
-fn json_response(status: &str, body: Value) -> String {
-    let text = serde_json::to_string(&body).unwrap_or_else(|_| "{}".to_owned());
+fn json_response(status: &str, body: &Value) -> String {
+    let text = serde_json::to_string(body).unwrap_or_else(|_| "{}".to_owned());
     format!(
         "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}",
         text.len()

@@ -27,10 +27,11 @@ use super::{
     wire::{EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress},
 };
 
+/// Delay inserted between live embedding batches.
 const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
 
-// [LIVE-EMBEDDING-CONSENT] Live embedding refreshes yield between
-// provider batches so the editor/agent loop keeps breathing.
+/// [LIVE-EMBEDDING-CONSENT] Returns the live embedding batch-yield
+/// delay for modes that actually call an embedding provider.
 pub(super) fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
     if matches!(mode, EmbeddingMode::Off) {
         None
@@ -39,10 +40,10 @@ pub(super) fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
     }
 }
 
-// [LIVE-EMBEDDING-CONSENT] Progress is observable while the selected
-// model refresh is still below the current report generation.
+/// [LIVE-EMBEDDING-CONSENT] Reports running progress while selected
+/// model refresh work is still below the current report generation.
 pub(super) fn report_running_progress(
-    reporter: &Option<EmbeddingProgressReporter>,
+    reporter: Option<&EmbeddingProgressReporter>,
     provider_id: &str,
     model_id: &str,
     done: usize,

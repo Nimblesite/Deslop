@@ -181,6 +181,7 @@ fn compute_embeddings(
     batch
 }
 
+/// Dispatches pending embedding requests in provider-sized chunks.
 fn process_pending_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
@@ -210,12 +211,15 @@ fn process_pending_embeddings(
     }
 }
 
+/// Reports processed embedding count to the optional progress sink.
 fn report_progress(progress: Option<&dyn Fn(usize)>, batch: &EmbeddingBatch) {
     if let Some(progress) = progress {
         progress(batch.processed());
     }
 }
 
+/// Sleeps between provider chunks when a caller requested cooperative
+/// yielding.
 fn maybe_yield_between_batches(
     batch_yield: Option<Duration>,
     chunk_index: usize,
@@ -225,11 +229,13 @@ fn maybe_yield_between_batches(
     let Some(delay) = batch_yield.filter(|delay| !delay.is_zero()) else {
         return;
     };
-    if chunk_index + 1 < pending_len.div_ceil(max_batch_size) {
+    let next_chunk = chunk_index.saturating_add(1);
+    if next_chunk < pending_len.div_ceil(max_batch_size) {
         thread::sleep(delay);
     }
 }
 
+/// Stores one successful provider vector when its dimensions match.
 fn push_fresh_embedding(
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
@@ -248,6 +254,7 @@ fn push_fresh_embedding(
     batch.push(item.fingerprint_index, vector);
 }
 
+/// Records every pending item in a failed provider batch.
 fn record_failed_chunk<E: std::fmt::Display>(
     batch: &mut EmbeddingBatch,
     chunk: &[PendingEmbedding],
@@ -258,6 +265,7 @@ fn record_failed_chunk<E: std::fmt::Display>(
     }
 }
 
+/// Records one failed pending embedding request.
 fn record_failed_pending<E: std::fmt::Display>(
     batch: &mut EmbeddingBatch,
     item: &PendingEmbedding,
@@ -274,12 +282,16 @@ fn record_failed_pending<E: std::fmt::Display>(
 }
 
 #[derive(Debug)]
+/// Accumulates successful vectors and rejected occurrence counts.
 struct EmbeddingBatch {
+    /// Successful vectors keyed by original fingerprint index.
     vectors: Vec<IndexedEmbedding>,
+    /// Logical occurrences skipped because the provider rejected them.
     failures: usize,
 }
 
 impl EmbeddingBatch {
+    /// Creates an empty batch with space for expected successes.
     fn with_capacity(capacity: usize) -> Self {
         Self {
             vectors: Vec::with_capacity(capacity),
@@ -287,6 +299,7 @@ impl EmbeddingBatch {
         }
     }
 
+    /// Adds one successful embedding vector.
     fn push(&mut self, fingerprint_index: usize, vector: Vec<f32>) {
         self.vectors.push(IndexedEmbedding {
             fingerprint_index,
@@ -294,25 +307,35 @@ impl EmbeddingBatch {
         });
     }
 
+    /// Returns successful vectors plus rejected occurrences.
     fn processed(&self) -> usize {
         self.vectors.len().saturating_add(self.failures)
     }
 }
 
 #[derive(Debug)]
+/// Provider request waiting to be embedded.
 struct PendingEmbedding {
+    /// Original fingerprint index represented by this request.
     fingerprint_index: usize,
+    /// Source text sent to the provider.
     snippet: String,
+    /// Stable content hash used for cache writes and diagnostics.
     snippet_hash: String,
+    /// Logical duplicate occurrences represented by this snippet.
     occurrences: usize,
 }
 
 #[derive(Debug)]
+/// Successful vector tied to its original fingerprint index.
 struct IndexedEmbedding {
+    /// Original fingerprint index.
     fingerprint_index: usize,
+    /// Provider-returned vector.
     vector: Vec<f32>,
 }
 
+/// Builds ANN pairs from successfully embedded snippets.
 fn pairs_from_successful_embeddings(
     fingerprints: &[Fingerprint],
     indexed: &[IndexedEmbedding],
@@ -328,6 +351,8 @@ fn pairs_from_successful_embeddings(
         .collect()
 }
 
+/// Maps pair indices from the compact embedded set back to the full
+/// fingerprint list.
 fn remap_pair(pair: EmbeddingPair, indexed: &[IndexedEmbedding]) -> Option<EmbeddingPair> {
     let left = indexed.get(pair.left)?.fingerprint_index;
     let right = indexed.get(pair.right)?.fingerprint_index;

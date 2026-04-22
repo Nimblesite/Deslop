@@ -157,6 +157,7 @@ impl LiveService {
         Ok(None)
     }
 
+    /// Starts detached low-priority embedding refresh work.
     fn spawn_embedding_refresh(&self, job: EmbeddingRefreshJob) {
         let inner = Arc::clone(&self.inner);
         let previous_reports = Arc::clone(&self.previous_reports);
@@ -251,6 +252,8 @@ impl LiveApi for LiveService {
     }
 }
 
+/// Runs one refresh job on a blocking worker and commits its report if
+/// the job is still current.
 async fn run_background_refresh(
     inner: Arc<Mutex<AnalysisSession>>,
     previous_reports: Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
@@ -259,13 +262,15 @@ async fn run_background_refresh(
     let outcome = tokio::task::spawn_blocking(move || run_embedding_refresh(job)).await;
     match outcome {
         Ok(Ok((job, report))) => {
-            commit_background_refresh(inner, previous_reports, job, report).await
+            commit_background_refresh(inner, previous_reports, job, report).await;
         }
-        Ok(Err(failure)) => report_background_error(failure),
+        Ok(Err(failure)) => report_background_error(&failure),
         Err(error) => tracing::error!(%error, "embedding refresh task failed"),
     }
 }
 
+/// Swaps a completed refresh report into the live session and records
+/// the previous generation for delta queries.
 async fn commit_background_refresh(
     inner: Arc<Mutex<AnalysisSession>>,
     previous_reports: Arc<Mutex<BTreeMap<u64, Arc<Report>>>>,
@@ -290,7 +295,8 @@ async fn commit_background_refresh(
     }
 }
 
-fn report_background_error(failure: super::embedding_refresh::FailedEmbeddingRefresh) {
+/// Emits progress and logs for a failed background refresh.
+fn report_background_error(failure: &super::embedding_refresh::FailedEmbeddingRefresh) {
     failure.job.report_failed(failure.message.clone());
     tracing::warn!(error = %failure.message, "embedding refresh failed");
 }

@@ -94,6 +94,7 @@ impl EmbeddingRefreshJob {
         self.report(EmbeddingPhase::Failed, 0, Some(message));
     }
 
+    /// Sends one progress payload when a reporter exists.
     fn report(&self, phase: EmbeddingPhase, done: u64, message: Option<String>) {
         if let Some(reporter) = self.reporter.as_ref() {
             reporter(EmbeddingProgress {
@@ -144,7 +145,7 @@ pub(super) struct CommittedEmbeddingRefresh {
 #[derive(Debug)]
 pub(super) struct FailedEmbeddingRefresh {
     /// Job that failed.
-    pub(super) job: EmbeddingRefreshJob,
+    pub(super) job: Box<EmbeddingRefreshJob>,
     /// User-facing failure message.
     pub(super) message: String,
 }
@@ -158,7 +159,7 @@ pub(super) fn run_embedding_refresh(
     let model_id = job.spec.model_id.clone();
     let total = job.total;
     let progress = |done: usize| {
-        report_running_progress(&job.reporter, &provider_id, &model_id, done, total);
+        report_running_progress(job.reporter.as_ref(), &provider_id, &model_id, done, total);
     };
     let embedding = EmbeddingSettings {
         mode: EmbeddingMode::Auto,
@@ -176,12 +177,13 @@ pub(super) fn run_embedding_refresh(
     match outcome {
         Ok((_, report)) => Ok((job, report)),
         Err(error) => Err(FailedEmbeddingRefresh {
-            job,
+            job: Box::new(job),
             message: LiveError::from(error).to_string(),
         }),
     }
 }
 
+/// Returns the queued progress message shown to clients.
 fn queue_message() -> String {
     "Queued as low-priority background embedding work.".to_owned()
 }
