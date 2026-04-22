@@ -10,6 +10,7 @@ import {
   tryResolveOptional,
   wireNotifications,
   seedInitialReport,
+  buildServerArgs,
 } from "../../extension";
 import { ReportStore } from "../../reportStore";
 import {
@@ -21,6 +22,14 @@ function fakeCtx(version: unknown): vscode.ExtensionContext {
   return {
     extension: { packageJSON: { version } },
   } as unknown as vscode.ExtensionContext;
+}
+
+function argValue(args: string[], flag: string): string {
+  const index = args.indexOf(flag);
+  assert.ok(index >= 0, `missing ${flag} in ${JSON.stringify(args)}`);
+  const value = args[index + 1];
+  assert.ok(value, `missing value for ${flag} in ${JSON.stringify(args)}`);
+  return value;
 }
 
 suite("extension internals", () => {
@@ -88,6 +97,42 @@ suite("extension internals", () => {
     } finally {
       process.env = saved;
     }
+  });
+
+  test("buildServerArgs forwards embedding mode off for fresh VSIX sessions", async () => {
+    // [LSP-EMBEDDING-CONSENT] The VSIX must launch a fresh LSP with
+    // embeddings disabled until the user selects a model.
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("embedding.mode", "off", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
+    const args = buildServerArgs("/tmp/deslop-workspace", false);
+    assert.equal(args[0], "/tmp/deslop-workspace");
+    assert.equal(argValue(args, "--min-nodes"), "30");
+    assert.equal(argValue(args, "--embeddings"), "off");
+    assert.equal(argValue(args, "--embedding-provider"), "ollama");
+    assert.equal(argValue(args, "--embedding-model"), "nomic-embed-text");
+    assert.equal(argValue(args, "--embedding-endpoint"), "http://127.0.0.1:11434");
+    assert.equal(args.includes("--debug"), false);
+  });
+
+  test("buildServerArgs forwards persisted selected embedding model", async () => {
+    // [LSP-EMBEDDING-CONSENT] After model selection, persisted config
+    // is what makes the next LSP startup begin embeddings immediately.
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "blake3-stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
+    const args = buildServerArgs("/tmp/deslop-workspace", true);
+    assert.equal(args[0], "/tmp/deslop-workspace");
+    assert.ok(args.includes("--debug"), `debug launch must include --debug: ${JSON.stringify(args)}`);
+    assert.equal(argValue(args, "--min-nodes"), "30");
+    assert.equal(argValue(args, "--embeddings"), "auto");
+    assert.equal(argValue(args, "--embedding-provider"), "stub");
+    assert.equal(argValue(args, "--embedding-model"), "blake3-stub");
+    assert.equal(argValue(args, "--embedding-endpoint"), "http://127.0.0.1:11434");
   });
 
   test("wireNotifications registers handlers without throwing", () => {

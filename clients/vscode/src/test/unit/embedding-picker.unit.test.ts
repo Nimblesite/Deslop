@@ -104,8 +104,12 @@ suite("embeddingPicker helpers", () => {
   });
 
   test("setModel happy path persists the workspace config", async () => {
+    const calls: Array<{ method: string; params: unknown }> = [];
     const client = {
-      sendRequest: () => Promise.resolve(undefined),
+      sendRequest: (method: string, params: unknown) => {
+        calls.push({ method, params });
+        return Promise.resolve(undefined);
+      },
     } as unknown as LanguageClient;
     await setModel(client, {
       provider_id: "ollama",
@@ -115,6 +119,16 @@ suite("embeddingPicker helpers", () => {
       size_bytes: null,
       is_embedding_model: true,
     });
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
+    assert.equal(calls[0]?.method, "deslop/embeddingSetModel");
+    assert.deepEqual(calls[0]?.params, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-code",
+    });
+    assert.equal(cfg.get<string>("embedding.provider"), "ollama");
+    assert.equal(cfg.get<string>("embedding.model"), "nomic-embed-code");
+    assert.equal(cfg.get<string>("embedding.mode"), "auto");
   });
 
   test("setModel dispatches deslop/embeddingSetModel with the chosen provider + model", async () => {
@@ -134,25 +148,32 @@ suite("embeddingPicker helpers", () => {
       is_embedding_model: true,
     });
     const swap = calls.find((call) => call.method === "deslop/embeddingSetModel");
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    assert.equal(calls.length, 1, `setModel must dispatch exactly one RPC: ${JSON.stringify(calls)}`);
     assert.ok(swap, `expected embeddingSetModel request; got ${JSON.stringify(calls)}`);
     assert.deepEqual(swap.params, {
       provider_id: "ollama",
       model_id: "nomic-embed-text",
     });
+    assert.equal(cfg.get<string>("embedding.provider"), "ollama");
+    assert.equal(cfg.get<string>("embedding.model"), "nomic-embed-text");
+    assert.equal(cfg.get<string>("embedding.mode"), "auto");
   });
 
   test("setModelFromPicker marks the store's pending model BEFORE dispatching the RPC", async () => {
     const store = newStore();
     const events: string[] = [];
     const recorded: Array<string | null> = [];
+    const calls: Array<{ method: string; params: unknown }> = [];
     store.onDidChange((s) => {
       events.push("change");
       recorded.push(s.pendingEmbeddingModel);
     });
     const client = {
-      sendRequest: () => {
+      sendRequest: (method: string, params: unknown) => {
         // Capture the store's pending state at the moment the RPC is issued.
         events.push(`rpc(${store.current.pendingEmbeddingModel ?? "null"})`);
+        calls.push({ method, params });
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
@@ -164,15 +185,30 @@ suite("embeddingPicker helpers", () => {
       size_bytes: null,
       is_embedding_model: true,
     });
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
+    assert.equal(calls[0]?.method, "deslop/embeddingSetModel");
+    assert.deepEqual(calls[0]?.params, {
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
+    });
     assert.ok(
       events.includes("rpc(nomic-embed-text)"),
       `RPC must fire with pending model already set; got ${JSON.stringify(events)}`,
+    );
+    assert.deepEqual(
+      recorded.filter((value) => value === "nomic-embed-text"),
+      ["nomic-embed-text"],
+      `pending model must be emitted exactly once before RPC: ${JSON.stringify(recorded)}`,
     );
     assert.equal(
       store.current.pendingEmbeddingModel,
       "nomic-embed-text",
       "pending model stays set until the new report arrives",
     );
+    assert.equal(cfg.get<string>("embedding.provider"), "ollama");
+    assert.equal(cfg.get<string>("embedding.model"), "nomic-embed-text");
+    assert.equal(cfg.get<string>("embedding.mode"), "auto");
   });
 
   test("buildItems marks the 'Ollama models' header as a non-pickable separator", () => {
