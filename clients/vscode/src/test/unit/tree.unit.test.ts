@@ -18,7 +18,7 @@ import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 function cluster(
   id: string,
   weight: number,
-  path: string,
+  occurrencePath: string,
   startByte = 0,
   endByte = 20,
 ): ReportCluster {
@@ -29,11 +29,16 @@ function cluster(
     canonical_node_count: 4,
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: [
-      { path, start_byte: startByte, end_byte: endByte, hidden: false },
-      { path: `${path}.other`, start_byte: startByte, end_byte: endByte, hidden: false },
+      { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false },
+      {
+        path: `${occurrencePath}.other`,
+        start_byte: startByte,
+        end_byte: endByte,
+        hidden: false,
+      },
     ],
     summary: "",
-    interpretation: `dup in ${path}`,
+    interpretation: `dup in ${occurrencePath}`,
   };
 }
 
@@ -126,10 +131,12 @@ suite("TopOffendersProvider", () => {
 
       assert.ok(occurrence.command, "occurrence row must be tappable");
       assert.equal(occurrence.command.command, "deslop.openOccurrence");
-      const [argument] = occurrence.command.arguments ?? [];
+      const commandArguments = occurrence.command.arguments;
+      assert.ok(commandArguments, "occurrence command must carry arguments");
+      const argument = commandArguments[0] as ReportOccurrence | undefined;
       assert.ok(argument, "occurrence command must carry the occurrence payload");
 
-      await openOccurrence(argument as ReportOccurrence);
+      await openOccurrence(argument);
 
       const editor = vscode.window.activeTextEditor;
       assert.ok(editor, "tapping the occurrence must open an editor");
@@ -167,6 +174,39 @@ suite("TopOffendersProvider", () => {
     const [root] = provider.getChildren();
     assert.ok(root, "root node must exist");
     assert.strictEqual(provider.getTreeItem(root), root);
+  });
+
+  test("reacts to LSP-fed store snapshots and deltas", () => {
+    const store = new ReportStore();
+    const ticker = new StatusTicker();
+    const provider = new TopOffendersProvider(store, ticker);
+    let treeRefreshes = 0;
+    const sub = provider.onDidChangeTreeData(() => {
+      treeRefreshes += 1;
+    });
+
+    try {
+      store.setSnapshot(report([cluster("stale", 1, "/stale.cs")]), 1);
+      assert.equal(treeRefreshes, 1, "snapshot must refresh the tree");
+      assert.equal(String(provider.getChildren()[0]?.description ?? ""), "stale");
+
+      store.applyDelta({
+        from_generation: 1,
+        to_generation: 2,
+        clusters_added: [cluster("fresh", 50, "/fresh.cs")],
+        clusters_removed: ["stale"],
+        clusters_updated: [],
+        cache_stats: { hits: 2, misses: 0 },
+        tool_version: "v2",
+      });
+
+      assert.equal(treeRefreshes, 2, "delta must refresh the tree");
+      assert.equal(String(provider.getChildren()[0]?.description ?? ""), "fresh");
+    } finally {
+      sub.dispose();
+      provider.dispose();
+      ticker.dispose();
+    }
   });
 });
 
