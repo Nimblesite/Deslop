@@ -298,6 +298,13 @@ Phased rollout — each phase is independently reviewable and `make ci`-green.
 - [ ] Audit `site/src/docs/output-formats.md`, `site/src/docs/how-it-works.md`, `site/src/docs/ai-integration.md`, `site/src/blog/ranking-formula.md` — replace Type-N-only phrasing with bucket-first / Type-N-in-parens per [CLONE-BUCKETS-DUAL-LABEL]. Keep academic refs where the audience is plausibly researcher (reading list, competitor landscape).
 - [ ] Update screenshots / code samples so the published site matches the shipped UI.
 
+**P11.7 — Ratchet + close-out.**
+- [ ] Ripgrep the repo for `Type-1`, `Type-2`, `Type-3`, `Type-4`, `near-miss`, `exact clone`, `semantic clone`, `LSH-only` in human-facing strings (`*.rs` string literals, `*.ts`, `*.tsx`, `clients/vscode/package.json` contributed strings, HTML templates). Every human-facing hit either moves to `bucket_labels()` or gets a `// TODO [CLONE-BUCKETS]` comment rejected in review.
+- [ ] Coverage ratchet: hold at the current threshold or raise by 1 point if the new `bucket_labels()` helper + routing tests lift measured coverage.
+- [ ] Update example README snippets (`examples/README.md` etc.) where the taxonomy wording leaks.
+
+**Non-goals for P11.** No signal-threshold tuning. No new detectors. No changes to cluster ranking / weighting. No CLI-flag churn beyond deleting `--technical`. If a bucket boundary feels wrong on real repos, that's a separate phase against [CLONE-BUCKETS-ROUTING].
+
 ### P12 JetBrains IDE plugin — Rider first
 Implements [jetbrains.md](../specs/jetbrains.md). IntelliJ Platform plugin that launches the existing `deslop-lsp`; Rider is the first real product target because C# is Deslop's first production language.
 
@@ -314,10 +321,3 @@ Implements [jetbrains.md](../specs/jetbrains.md). IntelliJ Platform plugin that 
 - [ ] Add Tool Window: Top Offenders, Focused File, Session. It must consume `deslop/reportGet` and must not re-rank or re-bucket.
 - [ ] Add native embedding model picker that calls `deslop/embeddingListModels` + `deslop/embeddingSetModel`.
 - [ ] Add real Rider/IntelliJ E2E that opens the C# fixture, launches the real LSP, and asserts native diagnostics. No fake LSP.
-
-**P11.7 — Ratchet + close-out.**
-- [ ] Ripgrep the repo for `Type-1`, `Type-2`, `Type-3`, `Type-4`, `near-miss`, `exact clone`, `semantic clone`, `LSH-only` in human-facing strings (`*.rs` string literals, `*.ts`, `*.tsx`, `clients/vscode/package.json` contributed strings, HTML templates). Every human-facing hit either moves to `bucket_labels()` or gets a `// TODO [CLONE-BUCKETS]` comment rejected in review.
-- [ ] Coverage ratchet: hold at the current threshold or raise by 1 point if the new `bucket_labels()` helper + routing tests lift measured coverage.
-- [ ] Update example README snippets (`examples/README.md` etc.) where the taxonomy wording leaks.
-
-**Non-goals for P11.** No signal-threshold tuning. No new detectors. No changes to cluster ranking / weighting. No CLI-flag churn beyond deleting `--technical`. If a bucket boundary feels wrong on real repos, that's a separate phase against [CLONE-BUCKETS-ROUTING].

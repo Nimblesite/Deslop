@@ -8,9 +8,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 internal object DeslopBinaryResolver {
-    private const val BinaryName = "deslop-lsp"
-    private const val EnvDir = "DESLOP_BINARY_DIR"
-    private const val PluginIdValue = "nimblesite.deslop.jetbrains"
+    private const val BINARY_NAME = "deslop-lsp"
+    private const val ENV_DIR = "DESLOP_BINARY_DIR"
+    private const val PLUGIN_ID_VALUE = "nimblesite.deslop.jetbrains"
 
     fun command(): String {
         return envBinary()?.toString()
@@ -20,7 +20,7 @@ internal object DeslopBinaryResolver {
     }
 
     private fun envBinary(): Path? {
-        val dir = System.getenv(EnvDir)?.takeIf(String::isNotBlank) ?: return null
+        val dir = System.getenv(ENV_DIR)?.takeIf(String::isNotBlank) ?: return null
         return Path.of(dir).resolve(binaryName()).takeIf(::isUsable)
     }
 
@@ -33,7 +33,7 @@ internal object DeslopBinaryResolver {
     }
 
     private fun bundledBinary(): Path? {
-        val plugin = PluginManagerCore.getPlugin(PluginId.getId(PluginIdValue)) ?: return null
+        val plugin = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID_VALUE)) ?: return null
         return plugin.pluginPath.resolve("bin")
             .resolve(platformDir())
             .resolve(binaryName())
@@ -45,7 +45,7 @@ internal object DeslopBinaryResolver {
     }
 
     private fun binaryName(): String {
-        return if (SystemInfoRt.isWindows) "$BinaryName.exe" else BinaryName
+        return if (SystemInfoRt.isWindows) "$BINARY_NAME.exe" else BINARY_NAME
     }
 
     private fun platformDir(): String {

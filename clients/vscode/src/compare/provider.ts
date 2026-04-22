@@ -68,21 +68,27 @@ class CompareContentProvider implements vscode.TextDocumentContentProvider {
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     const coords = parseCompareUri(uri);
     const sourcePath = resolveCompareSourcePath(coords.sourcePath);
-    const buffer = await readCompareSource(sourcePath, coords);
+    const source = await readCompareSource(sourcePath, coords);
+    if (source.kind === "unavailable") return source.text;
+    const buffer = source.buffer;
     const start = clamp(coords.startByte, 0, buffer.length);
     const end = clamp(coords.endByte, start, buffer.length);
     return buffer.subarray(start, end).toString("utf8");
   }
 }
 
+type CompareSource =
+  | { readonly kind: "content"; readonly buffer: Buffer }
+  | { readonly kind: "unavailable"; readonly text: string };
+
 async function readCompareSource(
   sourcePath: string,
   coords: CompareCoordinates,
-): Promise<Buffer> {
+): Promise<CompareSource> {
   try {
-    return await fs.readFile(sourcePath);
+    return { kind: "content", buffer: await fs.readFile(sourcePath) };
   } catch (err) {
-    return Buffer.from(compareUnavailableText(coords, err), "utf8");
+    return { kind: "unavailable", text: compareUnavailableText(coords, err) };
   }
 }
 
