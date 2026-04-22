@@ -438,8 +438,16 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
         recorded.iter().map(|event| event.phase).collect()
     };
     assert!(
+        phases.contains(&deslop_core::live::EmbeddingPhase::Queued),
+        "reporter must see Queued phase: {phases:?}"
+    );
+    assert!(
         phases.contains(&deslop_core::live::EmbeddingPhase::Starting),
         "reporter must see Starting phase: {phases:?}"
+    );
+    assert!(
+        phases.contains(&deslop_core::live::EmbeddingPhase::Running),
+        "reporter must see Running phase: {phases:?}"
     );
     assert!(
         phases.contains(&deslop_core::live::EmbeddingPhase::Complete),
@@ -564,6 +572,8 @@ impl EmbeddingProvider for CountingProvider {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
+    // [LIVE-EMBEDDING-CONSENT] Live startup must be deterministic-only
+    // until a user-selected model crosses `embedding/setModel`.
     let tmp = copy_fixture("csharp-small")?;
     let original = Arc::new(StubProvider::new());
     let mut session =

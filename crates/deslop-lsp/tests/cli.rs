@@ -193,6 +193,8 @@ fn lsp_binary_responds_to_initialize() -> Result<()> {
 
 #[test]
 fn lsp_custom_method_session_config_returns_workspace_root() -> Result<()> {
+    // [LSP-EMBEDDING-CONSENT] No launch-time model selection means no
+    // live embedding provenance in the initial session config.
     let workspace = copy_fixture("csharp-small")?;
     let mut child = spawn_lsp(workspace.path(), 15)?;
     let (mut stdin, mut reader) = take_io(&mut child)?;
@@ -220,6 +222,8 @@ fn lsp_custom_method_session_config_returns_workspace_root() -> Result<()> {
 
 #[test]
 fn lsp_selected_embedding_model_runs_on_startup() -> Result<()> {
+    // [LSP-EMBEDDING-CONSENT] A persisted selected model starts the
+    // embedding pass immediately on LSP startup.
     let workspace = copy_fixture("csharp-small")?;
     let mut child = spawn_lsp_with_args(
         workspace.path(),
@@ -944,7 +948,7 @@ fn lsp_custom_method_embedding_set_model_swaps_to_stub() -> Result<()> {
 
 #[test]
 fn lsp_embedding_set_model_emits_progress_notifications() -> Result<()> {
-    // Session panel reactivity ([VSIX-SESSION-PROGRESS]): the LSP must
+    // [VSIX-SESSION-PROGRESS] Session panel reactivity: the LSP must
     // push at least one `deslop/embeddingProgress` notification while a
     // model swap is in flight so the extension can render "X / Y
     // subtrees" instead of freezing on the old model. Stub provider is

@@ -66,7 +66,7 @@ impl std::fmt::Debug for AnalysisSession {
 }
 
 impl AnalysisSession {
-    /// Constructs a new live session by running the first full
+    /// [LIVE-EMBEDDING-CONSENT] Constructs a new live session by running the first full
     /// analysis against `root` without the embedding pass. Live
     /// surfaces require an explicit model selection before local
     /// embedding work starts.
@@ -92,7 +92,7 @@ impl AnalysisSession {
         )
     }
 
-    /// Constructs a live session with an already-selected embedding
+    /// [LIVE-EMBEDDING-CONSENT] Constructs a live session with an already-selected embedding
     /// model. Used when a client persisted explicit user consent.
     pub fn new_with_mode(
         root: PathBuf,

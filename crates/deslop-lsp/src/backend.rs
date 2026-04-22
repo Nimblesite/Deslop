@@ -47,7 +47,7 @@ pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 /// pushed around a model swap ([VSIX-SESSION-PROGRESS]).
 pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
 
-/// Embedding startup settings supplied by the client after the user
+/// [LSP-EMBEDDING-CONSENT] Embedding startup settings supplied by the client after the user
 /// has explicitly selected a model. `Off` means no startup embedding
 /// pass runs.
 #[derive(Debug, Clone)]

@@ -292,6 +292,8 @@ suite("SessionProvider", () => {
   });
 
   test("SessionProvider renders an Embedding progress row while a swap is in flight", () => {
+    // [VSIX-SESSION-PROGRESS] The Session panel must show progress
+    // while the selected model refresh is running.
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
     store.setEmbeddingProgress({
@@ -315,6 +317,8 @@ suite("SessionProvider", () => {
   });
 
   test("Embedding model row shows the pending id with a loading suffix while a swap is in flight", () => {
+    // [VSIX-SESSION-PROGRESS] The pending selected model is visible
+    // before the LSP returns a fresh embedded report.
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
     store.setPendingEmbeddingModel("nomic-embed-text");
@@ -332,6 +336,8 @@ suite("SessionProvider", () => {
   });
 
   test("Embedding model row prompts for selection when live embeddings are off", () => {
+    // [LIVE-EMBEDDING-CONSENT] Fresh live sessions must guide the user
+    // to select a model instead of implying embeddings already ran.
     const store = new ReportStore();
     const snapshot = report([]);
     snapshot.embedding_provenance = null;

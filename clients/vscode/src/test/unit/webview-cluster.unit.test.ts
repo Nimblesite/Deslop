@@ -36,6 +36,16 @@ function hasOccurrencePathAccess(node: ts.Node): boolean {
   return hasOccurrenceByteAccess(node, "path");
 }
 
+function hasRenderedByteLocation(node: ts.Node): boolean {
+  const hasStart = hasDescendant(node, (n) => hasOccurrenceByteAccess(n, "start_byte"));
+  const hasEnd = hasDescendant(node, (n) => hasOccurrenceByteAccess(n, "end_byte"));
+  const hasByteText = hasDescendant(node, (n) => {
+    if (!ts.isJsxText(n) && !ts.isStringLiteral(n)) return false;
+    return /\bbytes?\b/i.test(n.getText());
+  });
+  return hasStart && hasEnd && hasByteText;
+}
+
 function hasHumanLocationText(node: ts.Node): boolean {
   if (!ts.isJsxText(node) && !ts.isStringLiteral(node)) return false;
   const text = node.getText().toLowerCase();
@@ -59,6 +69,18 @@ function findOccurrenceLocationRenderings(root: ts.SourceFile): string[] {
   return [...renderings];
 }
 
+function findRenderedByteLocations(root: ts.SourceFile): string[] {
+  const renderings = new Set<string>();
+  function visit(node: ts.Node): void {
+    if (ts.isJsxElement(node) && hasRenderedByteLocation(node)) {
+      renderings.add("visible byte offset");
+    }
+    node.forEachChild(visit);
+  }
+  visit(root);
+  return [...renderings];
+}
+
 suite("cluster webview occurrence locations", () => {
   test("renders occurrence file, line, and column for human readers", () => {
     // [VSIX-WEBVIEW] / issue #8: cluster detail occurrence rows must
@@ -67,6 +89,14 @@ suite("cluster webview occurrence locations", () => {
       findOccurrenceLocationRenderings(parseClusterWebview()),
       ["file + human line/column"],
       "cluster detail webview must show occurrence file plus human line and column",
+    );
+  });
+
+  test("does not render byte offsets as the visible occurrence location", () => {
+    assert.deepEqual(
+      findRenderedByteLocations(parseClusterWebview()),
+      [],
+      "cluster detail webview must not show start_byte/end_byte as user-facing location text",
     );
   });
 });

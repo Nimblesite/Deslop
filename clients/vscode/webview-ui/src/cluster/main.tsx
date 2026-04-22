@@ -162,7 +162,9 @@ function ClusterApp() {
             }}
           >
             <div>
-              <div style={{ fontFamily: FONT.mono, fontSize: "12px" }}>{o.path}</div>
+              <div style={{ fontFamily: FONT.mono, fontSize: "12px" }}>
+                {o.displayLocation?.label ?? o.path}
+              </div>
               <div
                 style={{
                   fontFamily: FONT.mono,
@@ -171,7 +173,8 @@ function ClusterApp() {
                   marginTop: "2px",
                 }}
               >
-                bytes {o.start_byte}..{o.end_byte}
+                {o.displayLocation?.description ??
+                  "line and column unavailable until the file is loaded"}
                 {o.hidden ? " · hidden" : ""}
               </div>
             </div>

@@ -70,6 +70,18 @@ export interface ReportOccurrence {
   start_byte: number;
   end_byte: number;
   hidden: boolean;
+  // VSIX-only display projection. Not part of the canonical report
+  // schema; the extension host derives it from start_byte before
+  // posting a report into webviews.
+  displayLocation?: OccurrenceDisplayLocation;
+}
+
+export interface OccurrenceDisplayLocation {
+  line: number;
+  column: number;
+  label: string;
+  description: string;
+  commandTitle: string;
 }
 
 export interface ActionHint {

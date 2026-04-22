@@ -167,6 +167,8 @@ export function buildServerArgs(
   workspaceRoot: string | undefined,
   debug: boolean,
 ): string[] {
+  // [LSP-EMBEDDING-CONSENT] Fresh settings pass `--embeddings off`;
+  // the picker persists `auto` only after explicit model selection.
   if (!workspaceRoot) return debug ? ["--debug"] : [];
   const cfg = vscode.workspace.getConfiguration("deslop");
   const args = [workspaceRoot];

@@ -277,7 +277,7 @@ struct SessionState {
     generation: u64,
     /// Active embedding provider (if any).
     provider: Option<Box<dyn EmbeddingProvider>>,
-    /// Active embedding mode. Starts from CLI config; selecting a
+    /// [MCP-EMBEDDING-CONSENT] Active embedding mode. Starts from CLI config; selecting a
     /// model turns live embeddings on for subsequent changes.
     embedding_mode: EmbeddingMode,
 }

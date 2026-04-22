@@ -30,7 +30,7 @@ pub struct EmbeddingSettings<'a> {
     /// Borrowed provider. `None` under [`EmbeddingMode::Off`] or when
     /// the CLI decided the provider was unreachable under `auto`.
     pub provider: Option<&'a dyn EmbeddingProvider>,
-    /// Optional low-priority yield between provider batches. Live
+    /// [LIVE-EMBEDDING-CONSENT] Optional low-priority yield between provider batches. Live
     /// surfaces set this so embedding work does not monopolise CPU.
     pub batch_yield: Option<Duration>,
     /// Optional progress sink called after each provider batch.

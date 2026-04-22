@@ -1,11 +1,10 @@
 // Tree providers for the Duplicate Clusters activity-bar container.
 // Three trees per [VSIX-ACTIVITY-BAR]: Top Offenders, Focused File, Session panel.
 
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
+import { occurrenceDisplayLocation } from "../locations";
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import { indexedSeverity, SEVERITY_DOT } from "../severity";
 import {
@@ -51,7 +50,7 @@ class ClusterNode extends vscode.TreeItem {
 
 class OccurrenceNode extends vscode.TreeItem {
   constructor(readonly occurrence: ReportOccurrence) {
-    const location = occurrenceLocation(occurrence);
+    const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
     if (location) this.description = location.description;
     this.contextValue = "deslop.occurrence";
@@ -302,49 +301,6 @@ function formatProgress(progress: {
   const phase = progress.phase.replace(/_/g, " ");
   const detail = progress.message ? ` · ${progress.message}` : "";
   return `${phase} · ${progress.model_id} · ${done} / ${total} (${percent}%)${detail}`;
-}
-
-interface OccurrenceLocation {
-  label: string;
-  description: string;
-  commandTitle: string;
-}
-
-function occurrenceLocation(occurrence: ReportOccurrence): OccurrenceLocation | undefined {
-  const source = readOccurrenceSource(occurrence.path);
-  if (!source) return undefined;
-  const position = positionForByte(source, occurrence.start_byte);
-  const label = `${occurrence.path}:${position.line}:${position.column}`;
-  return {
-    label,
-    description: `line ${position.line}, column ${position.column}`,
-    commandTitle: `Open ${path.basename(occurrence.path)} at ${position.line}:${position.column}`,
-  };
-}
-
-function readOccurrenceSource(occurrencePath: string): string | undefined {
-  const fsPath = resolveOccurrencePath(occurrencePath);
-  try {
-    return fs.readFileSync(fsPath, "utf8");
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveOccurrencePath(occurrencePath: string): string {
-  if (path.isAbsolute(occurrencePath)) return occurrencePath;
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  return root ? path.join(root, occurrencePath) : occurrencePath;
-}
-
-function positionForByte(source: string, byte: number): { line: number; column: number } {
-  const buffer = Buffer.from(source, "utf8");
-  const safeByte = Math.min(Math.max(byte, 0), buffer.length);
-  const prefix = buffer.slice(0, safeByte).toString("utf8");
-  const line = prefix.split("\n").length;
-  const lastNewline = prefix.lastIndexOf("\n");
-  const columnOffset = lastNewline === -1 ? prefix.length : prefix.length - lastNewline - 1;
-  return { line, column: columnOffset + 1 };
 }
 
 function sameFile(reportPath: string, editorPath: string): boolean {

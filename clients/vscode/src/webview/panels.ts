@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 
 import { COLOR } from "../design";
+import { reportWithDisplayLocations } from "../locations";
 import { ReportStore } from "../reportStore";
 import { Report, ReportOccurrence } from "../types/report";
 
@@ -96,7 +97,10 @@ function wirePanel(
   void kind;
   const push = (report: Report | null): void => {
     if (!report) return;
-    void panel.webview.postMessage({ kind: "report/snapshot", report });
+    void panel.webview.postMessage({
+      kind: "report/snapshot",
+      report: reportWithDisplayLocations(report),
+    });
   };
   push(store.current.report);
   const sub = store.onDidChange((state) => push(state.report));

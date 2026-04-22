@@ -29,6 +29,8 @@ use super::{
 
 const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
 
+// [LIVE-EMBEDDING-CONSENT] Live embedding refreshes yield between
+// provider batches so the editor/agent loop keeps breathing.
 pub(super) fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
     if matches!(mode, EmbeddingMode::Off) {
         None
@@ -37,6 +39,8 @@ pub(super) fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
     }
 }
 
+// [LIVE-EMBEDDING-CONSENT] Progress is observable while the selected
+// model refresh is still below the current report generation.
 pub(super) fn report_running_progress(
     reporter: &Option<EmbeddingProgressReporter>,
     provider_id: &str,
