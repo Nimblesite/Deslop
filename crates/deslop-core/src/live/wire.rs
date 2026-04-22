@@ -163,8 +163,12 @@ pub struct ReportChangedNotification {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EmbeddingPhase {
+    /// User selected a model and the low-priority pass is queued.
+    Queued,
     /// Pass has just begun. `done` is `0`, `total` is populated.
     Starting,
+    /// Pass is actively working through provider batches.
+    Running,
     /// Pass finished successfully. `done == total`.
     Complete,
     /// Pass aborted with `message`. `done` reflects subtrees

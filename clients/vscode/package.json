@@ -5,6 +5,7 @@
   "version": "0.1.0",
   "publisher": "nimblesite",
   "license": "MIT",
+  "icon": "media/logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Nimblesite/Deslop.git",
@@ -118,7 +119,7 @@
             "stub"
           ],
           "default": "ollama",
-          "description": "Embedding provider id."
+          "description": "Embedding provider id used after the user enables live embeddings."
         },
         "deslop.embedding.model": {
           "type": "string",
@@ -137,8 +138,8 @@
             "required",
             "off"
           ],
-          "default": "auto",
-          "description": "Mirrors CLI --embeddings={auto,required,off}."
+          "default": "off",
+          "description": "Live embeddings stay off until a model is selected. The picker persists auto after selection."
         },
         "deslop.incremental": {
           "type": "boolean",

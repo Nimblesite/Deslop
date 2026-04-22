@@ -5,7 +5,10 @@
 //! surface — every helper is `pub(super)` so the module boundary
 //! preserves encapsulation.
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use crate::{
     cluster::encode_short_id,
@@ -18,7 +21,40 @@ use crate::{
     state::FileRegistry,
 };
 
-use super::{errors::LiveError, wire::EmbeddingModelInfo};
+use super::{
+    errors::LiveError,
+    session::EmbeddingProgressReporter,
+    wire::{EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress},
+};
+
+const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
+
+pub(super) fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
+    if matches!(mode, EmbeddingMode::Off) {
+        None
+    } else {
+        Some(LIVE_EMBEDDING_BATCH_SLEEP)
+    }
+}
+
+pub(super) fn report_running_progress(
+    reporter: &Option<EmbeddingProgressReporter>,
+    provider_id: &str,
+    model_id: &str,
+    done: usize,
+    total: u64,
+) {
+    if let Some(reporter) = reporter {
+        reporter(EmbeddingProgress {
+            phase: EmbeddingPhase::Running,
+            provider_id: provider_id.to_owned(),
+            model_id: model_id.to_owned(),
+            done: u64::try_from(done).unwrap_or(u64::MAX).min(total),
+            total,
+            message: None,
+        });
+    }
+}
 
 /// Calls [`PipelineSession::initialise`] with the supplied embedding
 /// provider. Extracted so [`super::session::AnalysisSession::new`]
@@ -34,6 +70,8 @@ pub(super) fn initialise_pipeline(
     let embedding = EmbeddingSettings {
         mode,
         provider: Some(provider),
+        batch_yield: None,
+        progress: None,
     };
     Ok(PipelineSession::initialise(
         root,

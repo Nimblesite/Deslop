@@ -82,12 +82,22 @@ Two consumers of the live analysis live inside the VS Code process (the VSIX UI 
 One `AnalysisSession` per workspace root, owned by the binary that created it. The client (VSIX / LSP client / MCP client) launches a binary, the binary receives an `initialize` frame with the workspace root + config (min-nodes, exclusion config path, embedding settings), and the session:
 
 1. Opens the `.deslop-cache/` for that root (fingerprint cache + embedding cache).
-2. Runs a full initial analysis with incremental semantics on — usually a warm cache on second launch, so startup is cheap.
+2. Runs a full initial deterministic analysis with incremental semantics on — usually a warm cache on second launch, so startup is cheap. The live session does **not** run embeddings here unless the client supplied a previously-selected model.
 3. Starts a file watcher ([LIVE-WATCHER]).
 4. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
 5. Sends `ready` with the initial `Report`.
 
 Shutdown is a graceful drain: stop accepting new edits, finish the current re-analysis, flush caches, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
+
+### [LIVE-EMBEDDING-CONSENT] Explicit live embedding consent
+
+LSP and MCP are live modes, so local embedding work is opt-in at the model boundary. A fresh live session starts with structural + token/LSH signals only. It must not begin the embedding pass merely because Ollama is installed, because a local model pass can take minutes and can compete with the editor or agent loop for CPU.
+
+Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work starts immediately.
+
+Selected-model embedding refreshes are always low priority. Provider calls run in bounded batches, and live mode inserts short yield/sleep states between batches so the LSP, MCP transport, file watcher, and editor remain responsive. While embedding work is queued or running, `latest_report` remains the last complete structural/token report; live consumers keep serving it until the embedding-enhanced generation is ready.
+
+Embedding state is observable through progress notifications with `queued`, `starting`, `running`, `complete`, and `failed` phases. Clients surface those states in a stable place, preferably the VSIX Session panel, with model id, done/total counts where known, and failure text when a provider rejects the pass.
 
 ### [LIVE-STATE] In-process state
 
@@ -164,7 +174,7 @@ The `live` module exposes a small, stable query surface through the `LiveApi` tr
 | `cluster/byId` | `{ id: ClusterId }` | `ReportCluster` | Fetch a cluster by stable id (for "jump to other occurrences"). |
 | `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Agent-facing: "is this snippet I'm about to write already present elsewhere?" Runs the fingerprint + LSH + embedding passes on the snippet against the live index; no cache mutation. |
 | `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerates Ollama models available on the host (`/api/tags`) plus the built-in `stub` provider. Powers the VSIX model picker. |
-| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | Switches the live session to the selected model. Invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]); structural + LSH caches stay warm. |
+| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | User-selected consent boundary. Switches the live session to the selected model, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), then starts low-priority embedding work. Structural + LSH caches stay warm. |
 | `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.deslop-cache/` path. |
 
 All methods are synchronous request/response. **No subscribe/unsubscribe primitives** on the query API — deltas are pushed (see [LIVE-NOTIFICATIONS]). Keeping read and push separate makes the transport layering identical for LSP and MCP.
@@ -175,6 +185,7 @@ The session pushes two notification types:
 
 - `report/changed` — fires after every scheduler pass. Payload: `{ generation: u64, summary: ChangeSummary }` where `ChangeSummary` is `{ clusters_added: usize, clusters_removed: usize, clusters_updated: usize, worst_weight: f64 }`. Subscribers that want the full delta call `report/delta`.
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors. Lets the VSIX render a live status indicator without polling.
+- `embedding/progress` — fires around live embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`. Phases are `queued`, `starting`, `running`, `complete`, and `failed`.
 
 Notifications are fire-and-forget; subscribers that fall behind never block the scheduler.
 

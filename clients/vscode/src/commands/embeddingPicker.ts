@@ -32,7 +32,7 @@ export async function pickEmbeddingModel(
 
   const quickPick = vscode.window.createQuickPick<Entry>();
   quickPick.title = "Deslop — pick an embedding model";
-  quickPick.placeholder = "Switch the embedding provider that feeds the fused score";
+  quickPick.placeholder = "Pick a local model; embedding work starts after selection";
   quickPick.matchOnDescription = true;
   quickPick.matchOnDetail = true;
   quickPick.ignoreFocusOut = false;
@@ -72,6 +72,13 @@ export async function pickEmbeddingModel(
 export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
   const active = store.current.report?.embedding_provenance;
   const items: Entry[] = [];
+
+  items.push({
+    entryKind: "none",
+    label: "Local embeddings run after selection",
+    description: "May be slow; progress stays in Session.",
+    detail: "Deslop does not start the live embedding pass until you choose a model.",
+  });
 
   const ollama = models.filter((m) => m.provider_id === "ollama");
   const stub = models.find((m) => m.provider_id === "stub");
@@ -149,6 +156,9 @@ export async function setModel(client: LanguageClient, model: EmbeddingModelInfo
     await vscode.workspace
       .getConfiguration("deslop")
       .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("embedding.mode", "auto", vscode.ConfigurationTarget.Workspace);
     vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
   } catch (err) {
     logError(err, "embedding/setModel");
@@ -186,6 +196,9 @@ export async function setModelFromPicker(
     await vscode.workspace
       .getConfiguration("deslop")
       .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("embedding.mode", "auto", vscode.ConfigurationTarget.Workspace);
     vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
   } catch (err) {
     store.setPendingEmbeddingModel(null);
@@ -195,6 +208,7 @@ export async function setModelFromPicker(
     log("keeping previous model active");
   }
 }
+
 
 export function isActive(
   active: { provider_id: string; model_id: string } | null | undefined,

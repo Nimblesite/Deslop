@@ -1,7 +1,7 @@
 //! Pipeline configuration types. Shared between the batch entry
 //! point ([`super::run`]) and the incremental session.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use crate::embedding::{EmbeddingMode, EmbeddingProvider};
 
@@ -24,11 +24,26 @@ pub struct PipelineConfig<'a> {
 }
 
 /// Embedding-pass policy + optional provider.
-#[derive(Debug)]
 pub struct EmbeddingSettings<'a> {
     /// Resolved `--embeddings` value.
     pub mode: EmbeddingMode,
     /// Borrowed provider. `None` under [`EmbeddingMode::Off`] or when
     /// the CLI decided the provider was unreachable under `auto`.
     pub provider: Option<&'a dyn EmbeddingProvider>,
+    /// Optional low-priority yield between provider batches. Live
+    /// surfaces set this so embedding work does not monopolise CPU.
+    pub batch_yield: Option<Duration>,
+    /// Optional progress sink called after each provider batch.
+    pub progress: Option<&'a dyn Fn(usize)>,
+}
+
+impl std::fmt::Debug for EmbeddingSettings<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EmbeddingSettings")
+            .field("mode", &self.mode)
+            .field("provider", &self.provider.is_some())
+            .field("batch_yield", &self.batch_yield)
+            .field("progress", &self.progress.is_some())
+            .finish()
+    }
 }

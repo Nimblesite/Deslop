@@ -70,8 +70,10 @@ async fn live_session_first_report_matches_batch_run() -> Result<()> {
         min_nodes: 15,
         config_path: None,
         embedding: EmbeddingSettings {
-            mode: EmbeddingMode::Auto,
+            mode: EmbeddingMode::Off,
             provider: Some(&batch_provider),
+            batch_yield: None,
+            progress: None,
         },
         incremental: false,
     })
@@ -561,7 +563,7 @@ impl EmbeddingProvider for CountingProvider {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn set_embedding_model_drives_the_new_provider_on_next_pass() -> Result<()> {
+async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let original = Arc::new(StubProvider::new());
     let mut session =
@@ -569,11 +571,10 @@ async fn set_embedding_model_drives_the_new_provider_on_next_pass() -> Result<()
             .context("session")?;
 
     let initial = session.report();
-    let initial_provenance = initial
-        .embedding_provenance
-        .as_ref()
-        .ok_or_else(|| anyhow!("initial pass must record stub provenance"))?;
-    assert_eq!(initial_provenance.provider_id, "stub");
+    assert!(
+        initial.embedding_provenance.is_none(),
+        "live startup must wait for explicit embedding model selection"
+    );
 
     let counting = Arc::new(CountingProvider::new("counting-test", "counting-model"));
     let provenance = session

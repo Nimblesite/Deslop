@@ -26,6 +26,8 @@ pub fn run(config: &PipelineConfig<'_>) -> Result<Report, CoreError> {
     let embedding = super::config::EmbeddingSettings {
         mode: config.embedding.mode,
         provider: config.embedding.provider,
+        batch_yield: config.embedding.batch_yield,
+        progress: config.embedding.progress,
     };
     let (_session, report) = PipelineSession::initialise(
         config.root.clone(),

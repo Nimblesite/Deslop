@@ -23,8 +23,8 @@ use super::{
     errors::LiveError,
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
-        cluster_touches_path, earliest_byte_for_path, initialise_pipeline, parse_and_hash_snippet,
-        stub_model_info, truncate,
+        cluster_touches_path, earliest_byte_for_path, initialise_pipeline, live_batch_yield,
+        parse_and_hash_snippet, report_running_progress, stub_model_info, truncate,
     },
     wire::{
         EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress, FileReport, FindSimilarInput,
@@ -66,8 +66,10 @@ impl std::fmt::Debug for AnalysisSession {
 }
 
 impl AnalysisSession {
-    /// Constructs a new session by running the first full analysis
-    /// against `root`.
+    /// Constructs a new live session by running the first full
+    /// analysis against `root` without the embedding pass. Live
+    /// surfaces require an explicit model selection before local
+    /// embedding work starts.
     ///
     /// # Errors
     ///
@@ -80,7 +82,26 @@ impl AnalysisSession {
         config_path: Option<PathBuf>,
         embedding_provider: Arc<dyn EmbeddingProvider>,
     ) -> Result<Self, LiveError> {
-        let mode = EmbeddingMode::Auto;
+        Self::new_with_mode(
+            root,
+            min_nodes,
+            incremental,
+            config_path,
+            embedding_provider,
+            EmbeddingMode::Off,
+        )
+    }
+
+    /// Constructs a live session with an already-selected embedding
+    /// model. Used when a client persisted explicit user consent.
+    pub fn new_with_mode(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding_provider: Arc<dyn EmbeddingProvider>,
+        mode: EmbeddingMode,
+    ) -> Result<Self, LiveError> {
         let (pipeline, report) = initialise_pipeline(
             root,
             min_nodes,
@@ -263,18 +284,22 @@ impl AnalysisSession {
     ///
     /// Propagates pipeline errors via [`LiveError::Core`].
     ///
-    /// TRADEOFF: re-runs `update_files` over every currently-live path
-    /// because [`PipelineSession`] has no narrower "refresh embeddings
-    /// only" entry point. The warm fingerprint cache short-circuits
-    /// parsing for unchanged content so the cost is dominated by the
-    /// embedding pass itself.
     pub fn set_embedding_model(
         &mut self,
         provider: Arc<dyn EmbeddingProvider>,
     ) -> Result<Option<EmbeddingProvenance>, LiveError> {
         self.embedding_provider = provider;
+        self.embedding_mode = EmbeddingMode::Auto;
         let spec = self.embedding_provider.spec();
         let total = self.pipeline.fingerprint_count() as u64;
+        self.report_embedding_progress(EmbeddingProgress {
+            phase: EmbeddingPhase::Queued,
+            provider_id: spec.provider_id.clone(),
+            model_id: spec.model_id.clone(),
+            done: 0,
+            total,
+            message: Some("Queued as low-priority background embedding work.".to_owned()),
+        });
         self.report_embedding_progress(EmbeddingProgress {
             phase: EmbeddingPhase::Starting,
             provider_id: spec.provider_id.clone(),
@@ -284,7 +309,20 @@ impl AnalysisSession {
             message: None,
         });
         let live_paths: Vec<PathBuf> = self.live_paths_snapshot();
-        let report = self.run_pipeline(&live_paths)?;
+        let report = match self.run_pipeline_with_progress(&live_paths, &spec, total) {
+            Ok(report) => report,
+            Err(error) => {
+                self.report_embedding_progress(EmbeddingProgress {
+                    phase: EmbeddingPhase::Failed,
+                    provider_id: spec.provider_id,
+                    model_id: spec.model_id,
+                    done: 0,
+                    total,
+                    message: Some(error.to_string()),
+                });
+                return Err(error);
+            }
+        };
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
@@ -347,6 +385,29 @@ impl AnalysisSession {
         let embedding = EmbeddingSettings {
             mode: self.embedding_mode,
             provider: Some(self.embedding_provider.as_ref()),
+            batch_yield: live_batch_yield(self.embedding_mode),
+            progress: None,
+        };
+        Ok(self.pipeline.update_files(changed, embedding)?)
+    }
+
+    fn run_pipeline_with_progress(
+        &mut self,
+        changed: &[PathBuf],
+        spec: &crate::embedding::EmbeddingSpec,
+        total: u64,
+    ) -> Result<Report, LiveError> {
+        let reporter = self.embedding_progress_reporter.clone();
+        let provider_id = spec.provider_id.clone();
+        let model_id = spec.model_id.clone();
+        let progress = move |done: usize| {
+            report_running_progress(&reporter, &provider_id, &model_id, done, total);
+        };
+        let embedding = EmbeddingSettings {
+            mode: self.embedding_mode,
+            provider: Some(self.embedding_provider.as_ref()),
+            batch_yield: live_batch_yield(self.embedding_mode),
+            progress: Some(&progress),
         };
         Ok(self.pipeline.update_files(changed, embedding)?)
     }

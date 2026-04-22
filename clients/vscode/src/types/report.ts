@@ -122,7 +122,7 @@ export type AnalysisState = "idle" | "running" | "errored";
 
 // Wire payload for the `deslop/embeddingProgress` notification.
 // Mirrors deslop-core::live::wire::EmbeddingProgress.
-export type EmbeddingPhase = "starting" | "complete" | "failed";
+export type EmbeddingPhase = "queued" | "starting" | "running" | "complete" | "failed";
 
 export interface EmbeddingProgress {
   phase: EmbeddingPhase;

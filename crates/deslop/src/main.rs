@@ -367,6 +367,8 @@ fn produce_report(
     let embedding = || EmbeddingSettings {
         mode,
         provider: provider_ref,
+        batch_yield: None,
+        progress: None,
     };
     let (mut session, initial) = PipelineSession::initialise(
         args.path.clone(),

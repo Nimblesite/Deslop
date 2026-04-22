@@ -28,11 +28,17 @@ Each tool has a JSON schema and an agent-readable description. The descriptions 
 | `report-for-range` | `{ path, start_byte, end_byte }` | `[Cluster]` | Clusters overlapping the byte range you're about to edit. Call before a refactor — tells you if the range is part of a larger clone family. |
 | `find-similar` | `{ path?, start_byte?, end_byte?, snippet?, language? }` | `[Cluster]` | **Before you write a new block, call this.** Give either a byte range on an open file or a snippet + language. Returns existing clusters similar to the input via the full structural + LSH + embedding passes. Prevents you from introducing new clones. See [MCP-TOOL-FINDSIMILAR]. |
 | `cluster-by-id` | `{ id }` | `Cluster` | Fetch a cluster by its stable 16-char id (the one shown in report text and LSP diagnostics). This is the only tool that returns full member lists + occurrence ranges — `report-get` and `report-query` deliberately omit them to keep the page slim. |
-| `list-embedding-models` | `{}` | `[EmbeddingModelInfo]` | Enumerate Ollama models installed on the host plus the `stub` provider. Use before switching models. |
-| `set-embedding-model` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | Switch the live embedding model. Invalidates only the embedding layer; structural + LSH caches stay warm. |
+| `list-embedding-models` | `{}` | `[EmbeddingModelInfo]` | Enumerate Ollama models installed on the host plus the `stub` provider. Use before switching models; a fresh MCP live session does not run embeddings automatically. |
+| `set-embedding-model` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | Explicitly select the live embedding model. This starts low-priority embedding work, invalidates only the embedding layer, and leaves structural + LSH results available while embeddings refresh. |
 | `session-config` | `{}` | `SessionConfig` | Min-nodes, active languages, embedding provenance, exclusion config path, cache root. |
 
 All tools are pure reads except `set-embedding-model`. No tool writes source files; no tool modifies the workspace. That guarantee is part of the agent-facing contract.
+
+### [MCP-EMBEDDING-CONSENT] Embedding model consent
+
+The MCP server is a live protocol surface, so it follows [LIVE-EMBEDDING-CONSENT]. Default startup is deterministic-only (`--embeddings off`): agents can read reports, query ranges, and find deterministic duplicates without causing local model work. An agent or host must call `list-embedding-models`, present the choice to the user when the MCP client has a human in the loop, then call `set-embedding-model` with the selected provider/model.
+
+After `set-embedding-model`, embedding refresh starts immediately at low priority with bounded batches and yield states between them. Report tools continue to serve the latest complete report while the embedding-enhanced generation is being prepared.
 
 ### [MCP-TOOL-FINDSIMILAR] `find-similar` — the keystone tool
 

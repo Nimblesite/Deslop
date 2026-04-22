@@ -330,4 +330,22 @@ suite("SessionProvider", () => {
       "pending model id must be visible with a loading hint",
     );
   });
+
+  test("Embedding model row prompts for selection when live embeddings are off", () => {
+    const store = new ReportStore();
+    const snapshot = report([]);
+    snapshot.embedding_provenance = null;
+    store.setSnapshot(snapshot, 0);
+    const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
+    const nodes = provider.getChildren();
+    const embeddingRow = nodes.find(
+      (n) => typeof n.label === "string" && n.label === "Embedding model",
+    );
+    assert.ok(embeddingRow, "Embedding model row must be rendered");
+    assert.match(
+      String(embeddingRow.description ?? ""),
+      /select model/i,
+      "session panel must make model selection discoverable",
+    );
+  });
 });

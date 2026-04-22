@@ -218,6 +218,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
 
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
   <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg">
+  <link rel="icon" type="image/png" href="/assets/img/logo.png">
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
 
   {% for langCode in supportedLanguages %}
@@ -436,6 +437,10 @@ export default function (eleventyConfig) {
   eleventyConfig.addPlugin(syntaxHighlight);
   eleventyConfig.addPlugin(overrideVirtualTemplates);
   eleventyConfig.addPassthroughCopy("src/assets");
+  eleventyConfig.addPassthroughCopy({
+    "../docs/designs/logo.png": "assets/img/logo.png",
+    "../docs/designs/logo.svg": "assets/img/logo.svg",
+  });
 
   return {
     dir: { input: "src", output: "_site" },

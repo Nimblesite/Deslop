@@ -7,6 +7,8 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
+use deslop_core::embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID};
+use deslop_lsp::backend::LspEmbeddingConfig;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -25,12 +27,16 @@ async fn run() -> Result<()> {
     tracing::info!(argv = ?args, "deslop-lsp starting");
     let workspace_root = parse_workspace_root(&args)?;
     let min_nodes = parse_min_nodes(&args)?;
+    let embedding = parse_embedding_config(&args)?;
     tracing::info!(
         workspace_root = %workspace_root.display(),
         min_nodes,
+        embedding_mode = embedding.mode.as_str(),
+        embedding_provider = %embedding.provider_id,
+        embedding_model = %embedding.model_id,
         "deslop-lsp args parsed",
     );
-    deslop_lsp::run_stdio(workspace_root, min_nodes).await
+    deslop_lsp::run_stdio(workspace_root, min_nodes, embedding).await
 }
 
 /// Initialises `tracing-subscriber` against the `RUST_LOG`
@@ -68,4 +74,32 @@ fn parse_min_nodes_value(args: &[String], index: usize) -> Result<u32> {
         .get(next_index)
         .ok_or_else(|| anyhow!("--min-nodes requires a value"))?;
     Ok(value.parse::<u32>()?)
+}
+
+fn parse_embedding_config(args: &[String]) -> Result<LspEmbeddingConfig> {
+    let mode = parse_flag_value(args, "--embeddings")
+        .unwrap_or("off")
+        .parse()?;
+    Ok(LspEmbeddingConfig {
+        mode,
+        provider_id: parse_flag_value(args, "--embedding-provider")
+            .unwrap_or(DEFAULT_PROVIDER_ID)
+            .to_owned(),
+        model_id: parse_flag_value(args, "--embedding-model")
+            .unwrap_or(DEFAULT_OLLAMA_MODEL)
+            .to_owned(),
+        endpoint: parse_flag_value(args, "--embedding-endpoint")
+            .unwrap_or(DEFAULT_OLLAMA_ENDPOINT)
+            .to_owned(),
+    })
+}
+
+fn parse_flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    args.windows(2).find_map(|pair| {
+        if pair.first().is_some_and(|candidate| candidate == flag) {
+            pair.get(1).map(String::as_str)
+        } else {
+            None
+        }
+    })
 }

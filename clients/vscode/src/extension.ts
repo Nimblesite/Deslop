@@ -133,8 +133,8 @@ export async function deactivate(): Promise<void> {
 
 function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
   const workspaceRoot = resolveWorkspaceRoot();
-  const runArgs = workspaceRoot ? [workspaceRoot] : [];
-  const debugArgs = workspaceRoot ? [workspaceRoot, "--debug"] : ["--debug"];
+  const runArgs = buildServerArgs(workspaceRoot, false);
+  const debugArgs = buildServerArgs(workspaceRoot, true);
   log("starting language client", {
     lspPath: lsp.path,
     workspaceRoot: workspaceRoot ?? null,
@@ -163,6 +163,25 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }
 
+export function buildServerArgs(
+  workspaceRoot: string | undefined,
+  debug: boolean,
+): string[] {
+  if (!workspaceRoot) return debug ? ["--debug"] : [];
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const args = [workspaceRoot];
+  if (debug) args.push("--debug");
+  args.push("--min-nodes", String(cfg.get<number>("minNodes", 30)));
+  args.push("--embeddings", cfg.get<string>("embedding.mode", "off"));
+  args.push("--embedding-provider", cfg.get<string>("embedding.provider", "ollama"));
+  args.push("--embedding-model", cfg.get<string>("embedding.model", "nomic-embed-text"));
+  args.push(
+    "--embedding-endpoint",
+    cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434"),
+  );
+  return args;
+}
+
 export function resolveWorkspaceRoot(): string | undefined {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) return undefined;
@@ -178,7 +197,7 @@ function currentInitializationOptions(): Record<string, unknown> {
       provider: cfg.get<string>("embedding.provider", "ollama"),
       model: cfg.get<string>("embedding.model", "nomic-embed-text"),
       endpoint: cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434"),
-      mode: cfg.get<string>("embedding.mode", "auto"),
+      mode: cfg.get<string>("embedding.mode", "off"),
     },
     incremental: cfg.get<boolean>("incremental", true),
     configPath: cfg.get<string>("configPath", ""),
@@ -218,7 +237,7 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
     }
   });
   c.onNotification("deslop/embeddingProgress", (progress: EmbeddingProgress) => {
-    if (progress.phase === "complete" || progress.phase === "failed") {
+    if (progress.phase === "complete") {
       store.setEmbeddingProgress(null);
     } else {
       store.setEmbeddingProgress(progress);

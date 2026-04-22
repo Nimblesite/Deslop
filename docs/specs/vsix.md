@@ -183,19 +183,27 @@ A first-class VSIX surface because the user explicitly asked for it. Trigger:
 
 Flow:
 
-1. VSIX calls `embedding/listModels` on the LSP. The daemon queries Ollama's `/api/tags` endpoint and returns every local model with:
+1. Fresh installs keep `deslop.embedding.mode = "off"` and show `Select model to enable AI matches` in the Session panel. The VSIX must not let the LSP start the live embedding pass until the user opens this picker and selects a model.
+2. VSIX calls `embedding/listModels` on the LSP. The daemon queries Ollama's `/api/tags` endpoint and returns every local model with:
    - `provider_id` (`ollama` / `stub`).
    - `model_id` (e.g. `nomic-embed-code`, `nomic-embed-text`, `codet5p`, `unixcoder`, user-pulled models).
    - `model_version` (`digest` from Ollama).
    - `dimensions` (if known).
    - `size_bytes` (from `/api/tags`).
    - `is_embedding_model: bool` — derived by probing `/api/embed` once and caching; non-embedding models are still shown but tagged as "may not support embeddings."
-2. VSIX renders a QuickPick with:
+3. VSIX renders a QuickPick with:
+   - A disabled notice that selecting a model starts local embedding calculations, may be slow, and progress remains visible in Session.
    - Each installed model as a primary entry, with a short description of its suitability for code (from a bundled hint table: `nomic-embed-code` → "recommended for code clone detection," `unixcoder` → "alternative; strong on cross-language"), and a dimension/size badge.
    - The built-in `stub` provider as the last entry, for users who want deterministic CI-style behaviour without Ollama.
    - A separator + "Pull a new model…" action that opens `https://ollama.com/library` in a browser and a second "Refresh list" action.
-3. On selection, VSIX calls `embedding/setModel`. The daemon swaps providers atomically, invalidates the embedding cache layer only ([FUSION-EMBED-PROVIDER]), and re-runs the embedding pass on existing subtrees. Structural + LSH results are unaffected.
-4. The status bar updates to `embed: nomic-embed-code`; the Session panel updates; a toast confirms `Embedding model switched to nomic-embed-code`.
+4. On selection, VSIX calls `embedding/setModel`, persists `deslop.embedding.mode = "auto"`, and keeps the model id visible as pending until a fresh report arrives. The daemon swaps providers atomically, invalidates the embedding cache layer only ([FUSION-EMBED-PROVIDER]), and re-runs the embedding pass on existing subtrees. Structural + LSH results remain available while this happens.
+5. The status bar updates to `embed: nomic-embed-code`; the Session panel updates; a toast confirms `Embedding model switched to nomic-embed-code`.
+
+### [VSIX-SESSION-PROGRESS] Session embedding progress
+
+The Session panel is the canonical place to check what Deslop is doing. It always includes the active or pending embedding model. When no model has been selected it shows `Select model to enable AI matches` and links to the picker.
+
+During embedding work the panel shows an `Embedding` row with the current phase (`queued`, `starting`, `running`, `failed`), model id, and `done / total` counts. `complete` clears the progress row after the new report lands; `failed` stays visible with the provider message until the user picks another model or a fresh progress event replaces it.
 
 Failure modes:
 
@@ -240,7 +248,7 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.embedding.provider` | `ollama` | `ollama` or `stub`. |
 | `deslop.embedding.model` | `nomic-embed-text` | Selected via picker; this is the persisted value. |
 | `deslop.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
-| `deslop.embedding.mode` | `auto` | Mirrors `--embeddings={auto,required,off}`. |
+| `deslop.embedding.mode` | `off` | Fresh live sessions do not run embeddings until the picker persists `auto` after model selection. |
 | `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
 | `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
 | `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |

@@ -14,7 +14,7 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use deslop_core::{
@@ -30,6 +30,16 @@ use thiserror::Error;
 use tracing::{info, warn};
 
 use crate::safety::{resolve_within_root, PathResolutionError};
+
+const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
+
+fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
+    if matches!(mode, EmbeddingMode::Off) {
+        None
+    } else {
+        Some(LIVE_EMBEDDING_BATCH_SLEEP)
+    }
+}
 
 /// Errors surfaced by the backend during tool execution.
 #[derive(Debug, Error)]
@@ -267,6 +277,9 @@ struct SessionState {
     generation: u64,
     /// Active embedding provider (if any).
     provider: Option<Box<dyn EmbeddingProvider>>,
+    /// Active embedding mode. Starts from CLI config; selecting a
+    /// model turns live embeddings on for subsequent changes.
+    embedding_mode: EmbeddingMode,
 }
 
 impl PipelineSessionBackend {
@@ -289,6 +302,8 @@ impl PipelineSessionBackend {
             EmbeddingSettings {
                 mode: config.embedding_mode,
                 provider: provider.as_deref(),
+                batch_yield: live_batch_yield(config.embedding_mode),
+                progress: None,
             },
         )?;
         let report = Arc::new(report);
@@ -299,6 +314,7 @@ impl PipelineSessionBackend {
             elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
             "mcp_session_initialised"
         );
+        let embedding_mode = config.embedding_mode;
         Ok(Self {
             config,
             state: Mutex::new(SessionState {
@@ -306,6 +322,7 @@ impl PipelineSessionBackend {
                 report,
                 generation: 1,
                 provider,
+                embedding_mode,
             }),
         })
     }
@@ -434,6 +451,8 @@ impl McpBackend for PipelineSessionBackend {
         {
             let mut state = lock_state(&self.state)?;
             state.provider = Some(new_provider);
+            state.embedding_mode = EmbeddingMode::Auto;
+            rerun_live_embedding_report(&self.config.root, &mut state)?;
             state.generation = state.generation.saturating_add(1);
         }
         info!(
@@ -466,10 +485,13 @@ impl McpBackend for PipelineSessionBackend {
             provider,
             report,
             generation,
+            embedding_mode,
         } = &mut *state;
         let settings = EmbeddingSettings {
-            mode: self.config.embedding_mode,
+            mode: *embedding_mode,
             provider: provider.as_deref(),
+            batch_yield: live_batch_yield(*embedding_mode),
+            progress: None,
         };
         let new_report = session.update_files(paths, settings)?;
         *report = Arc::new(new_report);
@@ -627,6 +649,32 @@ fn select_provider(
             other => Err(BackendError::UnknownEmbeddingProvider(other.to_owned())),
         },
     }
+}
+
+fn rerun_live_embedding_report(root: &Path, state: &mut SessionState) -> Result<(), BackendError> {
+    let paths = live_paths_snapshot(&state.session);
+    let settings = EmbeddingSettings {
+        mode: state.embedding_mode,
+        provider: state.provider.as_deref(),
+        batch_yield: live_batch_yield(state.embedding_mode),
+        progress: None,
+    };
+    let new_report = state.session.update_files(&paths, settings)?;
+    state.report = Arc::new(new_report);
+    info!(
+        root = %root.display(),
+        files = paths.len(),
+        "mcp_embedding_model_refresh_complete"
+    );
+    Ok(())
+}
+
+fn live_paths_snapshot(session: &PipelineSession) -> Vec<PathBuf> {
+    session
+        .file_languages()
+        .keys()
+        .filter_map(|file_id| session.registry().path(*file_id).map(Path::to_path_buf))
+        .collect()
 }
 
 /// Locks the backend state, mapping poisoning onto a stable error.

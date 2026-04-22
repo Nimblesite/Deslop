@@ -374,6 +374,8 @@ impl PipelineSession {
             embedding: EmbeddingSettings {
                 mode: embedding.mode,
                 provider: embedding.provider,
+                batch_yield: embedding.batch_yield,
+                progress: embedding.progress,
             },
             incremental: self.incremental,
         }

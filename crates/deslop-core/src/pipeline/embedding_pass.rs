@@ -6,6 +6,8 @@
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
+    thread,
+    time::Duration,
 };
 
 use crate::{
@@ -84,7 +86,14 @@ fn embed_corpus(
         "embedding pass starting",
     );
     let cache = open_cache(&config.root, &spec)?;
-    let batch = compute_embeddings(provider, &cache, corpus, spec.dimensions);
+    let batch = compute_embeddings(
+        provider,
+        &cache,
+        corpus,
+        spec.dimensions,
+        config.embedding.batch_yield,
+        config.embedding.progress,
+    );
     let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
     tracing::info!(
         pair_count = pairs.len(),
@@ -121,6 +130,8 @@ fn compute_embeddings(
     cache: &EmbeddingCache,
     corpus: &FingerprintCorpus,
     dimensions: usize,
+    batch_yield: Option<Duration>,
+    progress: Option<&dyn Fn(usize)>,
 ) -> EmbeddingBatch {
     let mut batch = EmbeddingBatch::with_capacity(corpus.fingerprints.len());
     let mut indexed_hashes: HashSet<String> = HashSet::new();
@@ -151,7 +162,15 @@ fn compute_embeddings(
             occurrences: 1,
         });
     }
-    process_pending_embeddings(provider, cache, &mut batch, &pending, dimensions);
+    process_pending_embeddings(
+        provider,
+        cache,
+        &mut batch,
+        &pending,
+        dimensions,
+        batch_yield,
+        progress,
+    );
     if batch.failures > 0 {
         tracing::warn!(
             failed = batch.failures,
@@ -168,9 +187,11 @@ fn process_pending_embeddings(
     batch: &mut EmbeddingBatch,
     pending: &[PendingEmbedding],
     dimensions: usize,
+    batch_yield: Option<Duration>,
+    progress: Option<&dyn Fn(usize)>,
 ) {
     let max_batch_size = provider.max_batch_size().max(1);
-    for chunk in pending.chunks(max_batch_size) {
+    for (index, chunk) in pending.chunks(max_batch_size).enumerate() {
         let inputs: Vec<String> = chunk.iter().map(|item| item.snippet.clone()).collect();
         match provider.embed_batch(&inputs) {
             Ok(vectors) if vectors.len() == chunk.len() => {
@@ -184,6 +205,28 @@ fn process_pending_embeddings(
             }
             Err(source) => record_failed_chunk(batch, chunk, &source),
         }
+        report_progress(progress, batch);
+        maybe_yield_between_batches(batch_yield, index, pending.len(), max_batch_size);
+    }
+}
+
+fn report_progress(progress: Option<&dyn Fn(usize)>, batch: &EmbeddingBatch) {
+    if let Some(progress) = progress {
+        progress(batch.processed());
+    }
+}
+
+fn maybe_yield_between_batches(
+    batch_yield: Option<Duration>,
+    chunk_index: usize,
+    pending_len: usize,
+    max_batch_size: usize,
+) {
+    let Some(delay) = batch_yield.filter(|delay| !delay.is_zero()) else {
+        return;
+    };
+    if chunk_index + 1 < pending_len.div_ceil(max_batch_size) {
+        thread::sleep(delay);
     }
 }
 
@@ -249,6 +292,10 @@ impl EmbeddingBatch {
             fingerprint_index,
             vector,
         });
+    }
+
+    fn processed(&self) -> usize {
+        self.vectors.len().saturating_add(self.failures)
     }
 }
 

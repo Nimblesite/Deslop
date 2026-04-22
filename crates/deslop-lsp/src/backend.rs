@@ -12,7 +12,10 @@ use std::{
 };
 
 use deslop_core::{
-    embedding::StubProvider,
+    embedding::{
+        EmbeddingMode, EmbeddingProvider, OllamaProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+        DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    },
     live::{AnalysisSession, EmbeddingProgress, LiveApi, LiveService},
 };
 use tokio::sync::{mpsc, Mutex};
@@ -44,6 +47,61 @@ pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 /// pushed around a model swap ([VSIX-SESSION-PROGRESS]).
 pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
 
+/// Embedding startup settings supplied by the client after the user
+/// has explicitly selected a model. `Off` means no startup embedding
+/// pass runs.
+#[derive(Debug, Clone)]
+pub struct LspEmbeddingConfig {
+    /// Live embedding mode.
+    pub mode: EmbeddingMode,
+    /// Provider registry key.
+    pub provider_id: String,
+    /// Model id.
+    pub model_id: String,
+    /// Provider endpoint.
+    pub endpoint: String,
+}
+
+impl Default for LspEmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            mode: EmbeddingMode::Off,
+            provider_id: DEFAULT_PROVIDER_ID.to_owned(),
+            model_id: DEFAULT_OLLAMA_MODEL.to_owned(),
+            endpoint: DEFAULT_OLLAMA_ENDPOINT.to_owned(),
+        }
+    }
+}
+
+fn build_startup_provider(
+    embedding: &LspEmbeddingConfig,
+) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
+    if matches!(embedding.mode, EmbeddingMode::Off) {
+        return Ok(Arc::new(StubProvider::new()));
+    }
+    match embedding.provider_id.as_str() {
+        STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
+        DEFAULT_PROVIDER_ID => connect_ollama_provider(embedding),
+        other => Err(deslop_core::live::LiveError::UnsupportedProvider {
+            requested: other.to_owned(),
+            registered: vec![STUB_PROVIDER_ID.to_owned(), DEFAULT_PROVIDER_ID.to_owned()],
+        }),
+    }
+}
+
+fn connect_ollama_provider(
+    embedding: &LspEmbeddingConfig,
+) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
+    let provider =
+        OllamaProvider::connect(&embedding.endpoint, &embedding.model_id).map_err(|err| {
+            deslop_core::live::LiveError::ProviderUnreachable {
+                endpoint: embedding.endpoint.clone(),
+                message: err.to_string(),
+            }
+        })?;
+    Ok(Arc::new(provider))
+}
+
 /// `tower-lsp` backend backed by a live [`LiveService`].
 #[derive(Debug)]
 pub struct LspBackend {
@@ -66,13 +124,38 @@ impl LspBackend {
         workspace_root: PathBuf,
         min_nodes: u32,
     ) -> Result<Self, deslop_core::live::LiveError> {
-        let session = AnalysisSession::new(
+        Self::new_with_config(
+            client,
             workspace_root,
             min_nodes,
-            false,
-            None,
-            Arc::new(StubProvider::new()),
-        )?;
+            LspEmbeddingConfig::default(),
+        )
+    }
+
+    /// Constructs a backend with explicit embedding startup config.
+    ///
+    /// # Errors
+    ///
+    /// Propagates live-session startup or selected-provider errors.
+    pub fn new_with_config(
+        client: Client,
+        workspace_root: PathBuf,
+        min_nodes: u32,
+        embedding: LspEmbeddingConfig,
+    ) -> Result<Self, deslop_core::live::LiveError> {
+        let provider = build_startup_provider(&embedding)?;
+        let session = if matches!(embedding.mode, EmbeddingMode::Off) {
+            AnalysisSession::new(workspace_root, min_nodes, false, None, provider)?
+        } else {
+            AnalysisSession::new_with_mode(
+                workspace_root,
+                min_nodes,
+                false,
+                None,
+                provider,
+                embedding.mode,
+            )?
+        };
         let service = Arc::new(LiveService::new(Arc::new(Mutex::new(session))));
         Ok(Self { client, service })
     }
@@ -227,7 +310,11 @@ impl tower_lsp::lsp_types::notification::Notification for EmbeddingProgressNotif
 /// # Errors
 ///
 /// Returns `Err` when the backend fails to construct.
-pub async fn run_stdio(workspace_root: PathBuf, min_nodes: u32) -> anyhow::Result<()> {
+pub async fn run_stdio(
+    workspace_root: PathBuf,
+    min_nodes: u32,
+    embedding: LspEmbeddingConfig,
+) -> anyhow::Result<()> {
     tracing::info!(
         workspace_root = %workspace_root.display(),
         exists = workspace_root.exists(),
@@ -237,7 +324,12 @@ pub async fn run_stdio(workspace_root: PathBuf, min_nodes: u32) -> anyhow::Resul
     );
     let workspace_root_for_builder = workspace_root;
     let (service, socket) = LspService::build(move |client| {
-        match LspBackend::new_with_stub(client, workspace_root_for_builder.clone(), min_nodes) {
+        match LspBackend::new_with_config(
+            client,
+            workspace_root_for_builder.clone(),
+            min_nodes,
+            embedding.clone(),
+        ) {
             Ok(backend) => backend,
             Err(error) => report_init_failure(&error),
         }

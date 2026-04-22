@@ -264,7 +264,8 @@ export class SessionProvider extends LifecycleAwareProvider {
     const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
     if (status) return [status];
     if (!report) return [new StatusNode("No session yet", "info")];
-    const activeModel = report.embedding_provenance?.model_id ?? "off";
+    const activeModel =
+      report.embedding_provenance?.model_id ?? "Select model to enable AI matches";
     const model = pendingEmbeddingModel
       ? `${pendingEmbeddingModel} (loading…)`
       : activeModel;
@@ -287,16 +288,20 @@ export class SessionProvider extends LifecycleAwareProvider {
 }
 
 function formatProgress(progress: {
+  phase: string;
   done: number;
   total: number;
   model_id: string;
+  message?: string | null;
 }): string {
   const done = progress.done.toLocaleString();
   const total = progress.total.toLocaleString();
   const percent = progress.total > 0
     ? Math.floor((progress.done / progress.total) * 100)
     : 0;
-  return `${progress.model_id} · ${done} / ${total} (${percent}%)`;
+  const phase = progress.phase.replace(/_/g, " ");
+  const detail = progress.message ? ` · ${progress.message}` : "";
+  return `${phase} · ${progress.model_id} · ${done} / ${total} (${percent}%)${detail}`;
 }
 
 interface OccurrenceLocation {

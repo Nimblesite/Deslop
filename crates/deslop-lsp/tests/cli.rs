@@ -47,11 +47,16 @@ fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
 
 /// Spawns the LSP binary against `workspace_root`.
 fn spawn_lsp(workspace_root: &Path, min_nodes: u32) -> Result<Child> {
+    spawn_lsp_with_args(workspace_root, min_nodes, &[])
+}
+
+fn spawn_lsp_with_args(workspace_root: &Path, min_nodes: u32, extra: &[&str]) -> Result<Child> {
     let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
     let child = Command::new(bin)
         .arg(workspace_root)
         .arg("--min-nodes")
         .arg(min_nodes.to_string())
+        .args(extra)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -203,6 +208,37 @@ fn lsp_custom_method_session_config_returns_workspace_root() -> Result<()> {
     assert!(
         !workspace_root.is_empty(),
         "workspace_root should be non-empty: {workspace_root}"
+    );
+    assert_eq!(
+        result.get("embedding_provenance"),
+        Some(&serde_json::Value::Null),
+        "live LSP startup must not run embeddings before model selection"
+    );
+    shut_down(child);
+    Ok(())
+}
+
+#[test]
+fn lsp_selected_embedding_model_runs_on_startup() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp_with_args(
+        workspace.path(),
+        15,
+        &["--embeddings", "auto", "--embedding-provider", "stub"],
+    )?;
+    let (mut stdin, mut reader) = take_io(&mut child)?;
+    let (init_id, init_payload) = initialize_request()?;
+    let _init = send_and_recv(&mut stdin, &mut reader, init_id, &init_payload)?;
+    let (id, payload) = custom_request_no_params("deslop/reportGet")?;
+    let response = send_and_recv(&mut stdin, &mut reader, id, &payload)?;
+    let result = result_value(&response)?;
+    let provider = result
+        .pointer("/embedding_provenance/provider_id")
+        .and_then(serde_json::Value::as_str);
+    assert_eq!(
+        provider,
+        Some("stub"),
+        "selected model should run immediately"
     );
     shut_down(child);
     Ok(())

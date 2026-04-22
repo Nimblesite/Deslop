@@ -109,7 +109,13 @@ Standard LSP does not have a "give me the live dedup report" request, so the she
 | `deslop/embeddingSetModel` | `embedding/setModel` |
 | `deslop/sessionConfig` | `session/config` |
 
-Notifications (`deslop/reportChanged`, `deslop/analysisState`) mirror the daemon push methods. Namespacing (`deslop/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
+Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embeddingProgress`) mirror the daemon push methods. Namespacing (`deslop/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
+
+### [LSP-EMBEDDING-CONSENT] Startup embedding behaviour
+
+The LSP starts with embeddings off unless its launch arguments carry a model that the user previously selected: `--embeddings auto|required`, `--embedding-provider`, `--embedding-model`, and `--embedding-endpoint`. A fresh VSIX install launches the LSP with `--embeddings off`, so the initial report is structural/token only and no local model work starts silently.
+
+`deslop/embeddingSetModel` is the first-run consent boundary. The client prompts the user through [VSIX-EMBED-PICKER], calls this method with the selected model, and keeps rendering the last complete report while the LSP emits `deslop/embeddingProgress` updates. The embedding pass runs in low-priority batches with short yields between them.
 
 ### [LSP-COMMANDS] `workspace/executeCommand` verbs
 
