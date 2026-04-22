@@ -117,6 +117,8 @@ The LSP starts with embeddings off unless its launch arguments carry a model tha
 
 `deslop/embeddingSetModel` is the first-run consent boundary. The client prompts the user through [VSIX-EMBED-PICKER], calls this method with the selected model, and keeps rendering the last complete report while the LSP emits `deslop/embeddingProgress` updates. The embedding pass runs in low-priority batches with short yields between them.
 
+The LSP and MCP must converge through the same workspace embedding settings. MCP must not choose, infer, rotate, or upgrade the embedding model on its own. When MCP changes the model after explicit user initiation, it persists `deslop.embedding.provider`, `deslop.embedding.model`, `deslop.embedding.endpoint`, and `deslop.embedding.mode` in the VSIX/LSP workspace settings contract before the change is considered accepted. The LSP must treat those settings as authoritative on startup and on configuration reload; neither live surface may keep a private model selection that silently diverges from the other.
+
 ### [LSP-COMMANDS] `workspace/executeCommand` verbs
 
 `executeCommandProvider` advertises:
@@ -147,6 +149,6 @@ Coarse E2E only, per CLAUDE.md. `crates/deslop-lsp/tests/cli.rs` spawns the real
 - Editing a buffer triggers `deslop/reportChanged` with a non-empty delta.
 - `deslop/reportForRange` returns the expected cluster for a known range.
 - `deslop/duplicatesFindSimilar` returns the expected cluster for a hand-crafted snippet.
-- `deslop/embeddingSetModel` swaps the embedding provenance in the next `sessionConfig`.
+- `deslop/embeddingSetModel` queues the selected-model embedding refresh; the new provenance appears in `sessionConfig` after the background pass commits.
 
 No mocking of the live session — the LSP binary links `deslop-core` with `features = ["live"]` and runs against `tests/fixtures/` workspaces.

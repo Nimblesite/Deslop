@@ -258,7 +258,9 @@ async fn run_background_refresh(
 ) {
     let outcome = tokio::task::spawn_blocking(move || run_embedding_refresh(job)).await;
     match outcome {
-        Ok(Ok((job, report))) => commit_background_refresh(inner, previous_reports, job, report).await,
+        Ok(Ok((job, report))) => {
+            commit_background_refresh(inner, previous_reports, job, report).await
+        }
         Ok(Err(failure)) => report_background_error(failure),
         Err(error) => tracing::error!(%error, "embedding refresh task failed"),
     }

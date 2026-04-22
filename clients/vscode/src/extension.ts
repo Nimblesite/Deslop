@@ -121,6 +121,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   }
   wireNotifications(client, reportStore);
   await seedInitialReport(client, reportStore);
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration("deslop.embedding")) return;
+      syncEmbeddingSettingsToLsp(reportStore, () => client).catch((err: unknown) =>
+        logError(err, "sync embedding settings to LSP"),
+      );
+    }),
+  );
   return { get client() { return client; } };
 }
 
@@ -253,6 +261,34 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
       store.setEmbeddingProgress(progress);
     }
   });
+}
+
+export async function syncEmbeddingSettingsToLsp(
+  store: ReportStore,
+  clientOf: () => LanguageClient | undefined,
+): Promise<void> {
+  const c = clientOf();
+  if (!c) return;
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const mode = cfg.get<string>("embedding.mode", "off");
+  if (mode === "off") return;
+  const provider = cfg.get<string>("embedding.provider", "ollama");
+  const model = cfg.get<string>("embedding.model", "nomic-embed-text");
+  const endpoint = cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434");
+  if (store.current.pendingEmbeddingModel === model) return;
+  const active = store.current.report?.embedding_provenance;
+  if (active?.provider_id === provider && active.model_id === model) return;
+  store.setPendingEmbeddingModel(model);
+  try {
+    await c.sendRequest("deslop/embeddingSetModel", {
+      provider_id: provider,
+      model_id: model,
+      endpoint,
+    });
+  } catch (err) {
+    store.setPendingEmbeddingModel(null);
+    throw err;
+  }
 }
 
 export async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise<void> {

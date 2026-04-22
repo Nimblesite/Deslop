@@ -134,7 +134,7 @@ const TOOLS: [ToolDefinition; 9] = [
     ToolDefinition {
         name: "set-embedding-model",
         description:
-            "Switch the live embedding model. Invalidates only the embedding layer; structural + LSH caches stay warm.",
+            "Switch the live embedding model only after explicit user initiation. Persists the shared VSIX/LSP embedding settings; structural + LSH caches stay warm.",
         input_schema: schema_set_embedding_model,
     },
     ToolDefinition {
@@ -252,9 +252,14 @@ fn schema_set_embedding_model() -> Value {
         "properties": {
             "provider_id": { "type": "string", "enum": ["stub", "ollama"] },
             "model_id": { "type": "string", "minLength": 1 },
-            "endpoint": { "type": "string", "description": "Optional override (Ollama only)." }
+            "endpoint": { "type": "string", "description": "Optional override (Ollama only)." },
+            "user_initiated": {
+                "type": "boolean",
+                "const": true,
+                "description": "Must be true only when a human explicitly requested this model switch."
+            }
         },
-        "required": ["provider_id", "model_id"],
+        "required": ["provider_id", "model_id", "user_initiated"],
         "additionalProperties": false,
     })
 }
@@ -431,6 +436,7 @@ fn call_list_embedding_models(backend: &dyn McpBackend) -> Result<Value, JsonRpc
 
 /// `set-embedding-model` forwarder.
 fn call_set_embedding_model(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
+    require_user_initiated(args)?;
     let provider_id = extract_string(args, "provider_id")?;
     let model_id = extract_string(args, "model_id")?;
     let endpoint = args
@@ -463,6 +469,20 @@ fn call_session_config(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> 
         },
         "generation": backend.generation(),
     }))
+}
+
+fn require_user_initiated(args: &Value) -> Result<(), JsonRpcError> {
+    if args
+        .get("user_initiated")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    Err(JsonRpcError::new(
+        ErrorCode::InvalidParams,
+        "set-embedding-model requires explicit user_initiated=true",
+    ))
 }
 
 /// Extracts a required string field from `args`.

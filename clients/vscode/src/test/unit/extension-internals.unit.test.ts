@@ -11,6 +11,7 @@ import {
   wireNotifications,
   seedInitialReport,
   buildServerArgs,
+  syncEmbeddingSettingsToLsp,
 } from "../../extension";
 import { ReportStore } from "../../reportStore";
 import {
@@ -145,6 +146,33 @@ suite("extension internals", () => {
     assert.ok(handlers.has("deslop/reportChanged"));
     assert.ok(handlers.has("deslop/analysisState"));
     assert.ok(handlers.has("deslop/embeddingProgress"));
+  });
+
+  test("syncEmbeddingSettingsToLsp forwards shared workspace settings", async () => {
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "blake3-stub", vscode.ConfigurationTarget.Global);
+    const calls: Array<{ method: string; params: unknown }> = [];
+    const client = {
+      sendRequest: (method: string, params: unknown) => {
+        calls.push({ method, params });
+        return Promise.resolve(null);
+      },
+    } as unknown as LanguageClient;
+    const store = new ReportStore();
+    await syncEmbeddingSettingsToLsp(store, () => client);
+    assert.deepEqual(calls, [
+      {
+        method: "deslop/embeddingSetModel",
+        params: {
+          provider_id: "stub",
+          model_id: "blake3-stub",
+          endpoint: "http://127.0.0.1:11434",
+        },
+      },
+    ]);
+    assert.equal(store.current.pendingEmbeddingModel, "blake3-stub");
   });
 
   test("wireNotifications embeddingProgress handler pushes the payload into the store", () => {

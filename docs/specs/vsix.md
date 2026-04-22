@@ -208,8 +208,9 @@ Flow:
    - Each installed model as a primary entry, with a short description of its suitability for code (from a bundled hint table: `nomic-embed-code` → "recommended for code clone detection," `unixcoder` → "alternative; strong on cross-language"), and a dimension/size badge.
    - The built-in `stub` provider as the last entry, for users who want deterministic CI-style behaviour without Ollama.
    - A separator + "Pull a new model…" action that opens `https://ollama.com/library` in a browser and a second "Refresh list" action.
-4. On selection, VSIX calls `embedding/setModel`, persists `deslop.embedding.mode = "auto"`, and keeps the model id visible as pending until a fresh report arrives. The daemon swaps providers atomically, invalidates the embedding cache layer only ([FUSION-EMBED-PROVIDER]), and re-runs the embedding pass on existing subtrees. Structural + LSH results remain available while this happens.
-5. The status bar updates to `embed: nomic-embed-code`; the Session panel updates; a toast confirms `Embedding model switched to nomic-embed-code`.
+4. On selection, VSIX calls `embedding/setModel`, persists `deslop.embedding.mode = "auto"`, and keeps the model id visible as pending until a fresh report arrives. The daemon queues the provider refresh, invalidates the embedding cache layer only ([FUSION-EMBED-PROVIDER]), and re-runs the embedding pass in low-priority background batches. Structural + LSH results remain available while this happens.
+5. MCP uses the same workspace settings contract. An agent-hosted MCP client must not change the model unless the user explicitly initiated that change. If it does switch the model, it must write the same `deslop.embedding.*` settings the VSIX/LSP reads before the switch is accepted. The VSIX treats those settings as authoritative so LSP and MCP model state does not drift.
+6. The status bar updates to `embed: nomic-embed-code`; the Session panel updates; a toast confirms `Embedding model switched to nomic-embed-code`.
 
 ### [VSIX-SESSION-PROGRESS] Session embedding progress
 

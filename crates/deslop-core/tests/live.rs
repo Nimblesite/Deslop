@@ -732,9 +732,8 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     // until a user-selected model crosses `embedding/setModel`.
     let tmp = copy_fixture("csharp-small")?;
     let original = Arc::new(StubProvider::new());
-    let session =
-        AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, original.clone())
-            .context("session")?;
+    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, original.clone())
+        .context("session")?;
     let service = LiveService::new(Arc::new(tokio::sync::Mutex::new(session)));
 
     let initial = service.report_get().await;

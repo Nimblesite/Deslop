@@ -11,6 +11,7 @@
 //! edge cases + path-traversal rejection + malformed-frame handling.
 
 use std::{
+    fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
@@ -154,6 +155,26 @@ fn fixture_root() -> PathBuf {
     PathBuf::from(manifest_dir).join("tests/fixtures/csharp-mcp")
 }
 
+fn copied_fixture_root() -> Result<TempDir> {
+    let temp = TempDir::new()?;
+    copy_dir_all(&fixture_root(), temp.path())?;
+    Ok(temp)
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let target = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry.path(), &target)?;
+        } else {
+            let _bytes = fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
 fn init_session(child: &mut McpChild) -> Result<Value> {
     child.request(
         "initialize",
@@ -184,6 +205,25 @@ fn structured_tool_result(result: &Value) -> Result<Value> {
         .get("structuredContent")
         .cloned()
         .ok_or_else(|| anyhow!("missing structuredContent in {result}"))
+}
+
+fn wait_for_generation(child: &mut McpChild, minimum: u64) -> Result<Value> {
+    for _ in 0..20 {
+        let result = call_tool(child, "session-config", &json!({}))?;
+        let snap = structured_tool_result(&result)?;
+        let generation = value_get(&snap, "/generation")?.as_u64().unwrap_or(0);
+        if generation >= minimum {
+            return Ok(snap);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(anyhow!("generation did not reach {minimum}"))
+}
+
+fn read_workspace_settings(root: &Path) -> Result<Value> {
+    let path = root.join(".vscode/settings.json");
+    let source = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    Ok(serde_json::from_str(&source)?)
 }
 
 fn value_get(value: &Value, pointer: &str) -> Result<Value> {
@@ -914,18 +954,32 @@ fn list_embedding_models_always_includes_stub() -> Result<()> {
 
 #[test]
 fn set_embedding_model_to_stub_succeeds() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let workspace = copied_fixture_root()?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
         "set-embedding-model",
-        &json!({ "provider_id": "stub", "model_id": "blake3-stub" }),
+        &json!({ "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true }),
     )?;
     let payload = structured_tool_result(&result)?;
     assert_eq!(value_get(&payload, "/provider_id")?, json!("stub"));
     assert_eq!(value_get(&payload, "/model_id")?, json!("blake3-stub"));
     let dimensions = value_get(&payload, "/dimensions")?.as_u64().unwrap_or(0);
     assert!(dimensions > 0, "stub should report non-zero dimensions");
+    let settings = read_workspace_settings(workspace.path())?;
+    assert_eq!(
+        value_get(&settings, "/deslop.embedding.provider")?,
+        json!("stub")
+    );
+    assert_eq!(
+        value_get(&settings, "/deslop.embedding.model")?,
+        json!("blake3-stub")
+    );
+    assert_eq!(
+        value_get(&settings, "/deslop.embedding.mode")?,
+        json!("auto")
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -938,7 +992,7 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
         "tools/call",
         &json!({
             "name": "set-embedding-model",
-            "arguments": { "provider_id": "aztec-cpu", "model_id": "blah" }
+            "arguments": { "provider_id": "aztec-cpu", "model_id": "blah", "user_initiated": true }
         }),
     )?;
     assert!(response.get("error").is_some(), "expected error response");
@@ -1133,13 +1187,13 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
 
 #[test]
 fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
-    let root = fixture_root();
-    let ghost = root.join("Lonely.cs");
+    let workspace = copied_fixture_root()?;
+    let ghost = workspace.path().join("Lonely.cs");
     std::fs::write(
         &ghost,
         "namespace Lonely { class Solo { public int Uniq() => 42; } }",
     )?;
-    let mut child = McpChild::spawn(&root, &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(workspace.path(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1156,16 +1210,16 @@ fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
         clusters.as_array().is_some_and(Vec::is_empty),
         "a unique-content file should not participate in any cluster"
     );
-    std::fs::remove_file(&ghost)?;
+    let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
-    let root = fixture_root();
-    let ghost = root.join("Ghost.cs");
+    let workspace = copied_fixture_root()?;
+    let ghost = workspace.path().join("Ghost.cs");
     std::fs::write(&ghost, "namespace G { class G {} }")?;
-    let mut child = McpChild::spawn(&root, &[])?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1178,24 +1232,23 @@ fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
         clusters.as_array().is_some_and(Vec::is_empty),
         "unknown file should produce no clusters"
     );
-    std::fs::remove_file(&ghost)?;
+    let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let workspace = copied_fixture_root()?;
+    let mut child = McpChild::spawn(workspace.path(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
     let swap_result = call_tool(
         &mut child,
         "set-embedding-model",
-        &json!({ "provider_id": "stub", "model_id": "blake3-stub" }),
+        &json!({ "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true }),
     )?;
     let spec = structured_tool_result(&swap_result)?;
     assert_eq!(value_get(&spec, "/provider_id")?, json!("stub"));
-    let config_result = call_tool(&mut child, "session-config", &json!({}))?;
-    let snap = structured_tool_result(&config_result)?;
-    // Swap bumps generation even though the report itself isn't re-run.
+    let snap = wait_for_generation(&mut child, 2)?;
     let generation = value_get(&snap, "/generation")?.as_u64().unwrap_or(0);
     assert!(
         generation >= 2,
@@ -1216,7 +1269,8 @@ fn set_embedding_model_to_ollama_fails_when_daemon_not_running() -> Result<()> {
             "arguments": {
                 "provider_id": "ollama",
                 "model_id": "nomic-embed-text",
-                "endpoint": "http://127.0.0.1:1"
+                "endpoint": "http://127.0.0.1:1",
+                "user_initiated": true
             }
         }),
     )?;
@@ -1405,7 +1459,23 @@ fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
         "tools/call",
         &json!({
             "name": "set-embedding-model",
-            "arguments": { "provider_id": "stub" }
+            "arguments": { "provider_id": "stub", "user_initiated": true }
+        }),
+    )?;
+    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request(
+        "tools/call",
+        &json!({
+            "name": "set-embedding-model",
+            "arguments": { "provider_id": "stub", "model_id": "blake3-stub" }
         }),
     )?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));

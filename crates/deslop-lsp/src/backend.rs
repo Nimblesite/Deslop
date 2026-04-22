@@ -16,9 +16,7 @@ use deslop_core::{
         EmbeddingMode, EmbeddingProvider, OllamaProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
         DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
     },
-    live::{
-        AnalysisSession, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveService,
-    },
+    live::{AnalysisSession, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveService},
 };
 use tokio::sync::Mutex;
 use tower::Service;

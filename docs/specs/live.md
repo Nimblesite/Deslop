@@ -93,11 +93,13 @@ Shutdown is a graceful drain: stop accepting new edits, finish the current re-an
 
 LSP and MCP are live modes, so local embedding work is opt-in at the model boundary. A fresh live session starts with structural + token/LSH signals only. It must not begin the embedding pass merely because Ollama is installed, because a local model pass can take minutes and can compete with the editor or agent loop for CPU.
 
-Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work is queued immediately.
+Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work is queued immediately. Agent-facing surfaces must not call this boundary autonomously, infer a preferred model, or "upgrade" the model as a convenience; MCP requires an explicit `user_initiated: true` argument and may only set it after a human asked for the switch.
 
 Selected-model embedding refreshes are always low priority. Provider calls run in bounded batches, and live mode inserts short yield/sleep states between batches so the LSP, MCP transport, file watcher, and editor remain responsive. While embedding work is queued or running, `latest_report` remains the last complete structural/token report; live consumers keep serving it until the embedding-enhanced generation is ready.
 
 Embedding state is observable through progress notifications with `queued`, `starting`, `running`, `complete`, and `failed` phases. Clients surface those states in a stable place, preferably the VSIX Session panel, with model id, done/total counts where known, and failure text when a provider rejects the pass.
+
+LSP and MCP model state must not diverge. A user-approved model switch from either live surface writes the same workspace embedding settings (`deslop.embedding.provider`, `deslop.embedding.model`, `deslop.embedding.endpoint`, and `deslop.embedding.mode`) that the VSIX/LSP reads on startup and configuration reload. MCP must not keep a successful model change only in process memory; if it accepts a user-initiated switch, the shared settings file is the source of truth that keeps LSP, VSIX, and MCP reactive to one another.
 
 ### [LIVE-STATE] In-process state
 
