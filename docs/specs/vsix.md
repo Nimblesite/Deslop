@@ -188,7 +188,7 @@ Flow:
    - `model_version` (`digest` from Ollama).
    - `dimensions` (if known).
    - `size_bytes` (from `/api/tags`).
-   - `is_embedding_model: bool` — derived by probing `/api/embeddings` once and caching; non-embedding models are still shown but tagged as "may not support embeddings."
+   - `is_embedding_model: bool` — derived by probing `/api/embed` once and caching; non-embedding models are still shown but tagged as "may not support embeddings."
 2. VSIX renders a QuickPick with:
    - Each installed model as a primary entry, with a short description of its suitability for code (from a bundled hint table: `nomic-embed-code` → "recommended for code clone detection," `unixcoder` → "alternative; strong on cross-language"), and a dimension/size badge.
    - The built-in `stub` provider as the last entry, for users who want deterministic CI-style behaviour without Ollama.

@@ -398,6 +398,56 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 }
 
 #[test]
+fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 10 }),
+    )?)?;
+    let clusters = value_get(&page, "/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters not array"))?;
+    assert!(!clusters.is_empty(), "fixture should produce >= 1 cluster");
+    for summary in &clusters {
+        assert_first_occurrence_matches_full_cluster(&mut child, summary)?;
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+fn assert_first_occurrence_matches_full_cluster(
+    child: &mut McpChild,
+    summary: &Value,
+) -> Result<()> {
+    let id = value_get(summary, "/id")?;
+    let first = value_get(summary, "/first_occurrence")?;
+    let cluster =
+        structured_tool_result(&call_tool(child, "cluster-by-id", &json!({ "id": id }))?)?;
+    let occurrences = value_get(&cluster, "/occurrences")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("occurrences not array"))?;
+    assert!(
+        occurrences.iter().any(|occ| same_occurrence(occ, &first)),
+        "first_occurrence must be present in cluster-by-id occurrences: {summary}"
+    );
+    Ok(())
+}
+
+fn same_occurrence(left: &Value, right: &Value) -> bool {
+    let left_path = left.get("path").and_then(Value::as_str);
+    let right_path = right.get("path").and_then(Value::as_str);
+    let left_start = left.get("start_byte").and_then(Value::as_u64);
+    let right_start = right.get("start_byte").and_then(Value::as_u64);
+    let left_end = left.get("end_byte").and_then(Value::as_u64);
+    let right_end = right.get("end_byte").and_then(Value::as_u64);
+    left_path == right_path && left_start == right_start && left_end == right_end
+}
+
+#[test]
 fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
     let _ = init_session(&mut child)?;
@@ -496,7 +546,10 @@ fn report_query_filters_by_language() -> Result<()> {
     let array = clusters
         .as_array()
         .ok_or_else(|| anyhow!("clusters not array"))?;
-    assert!(!array.is_empty(), "fixture should match >= 1 csharp cluster");
+    assert!(
+        !array.is_empty(),
+        "fixture should match >= 1 csharp cluster"
+    );
     for cluster in array {
         assert_eq!(
             cluster.get("language").and_then(Value::as_str),
@@ -1055,9 +1108,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         "report-get",
         &json!({ "offset": 0, "limit": 100 }),
     )?)?;
-    let first_count = value_get(&first, "/total_clusters")?
-        .as_u64()
-        .unwrap_or(0);
+    let first_count = value_get(&first, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(first_count >= 1, "expected at least one cluster initially");
     let _ = child.finish();
     std::fs::write(
@@ -1071,9 +1122,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         "report-get",
         &json!({ "offset": 0, "limit": 100 }),
     )?)?;
-    let rerun_count = value_get(&rerun, "/total_clusters")?
-        .as_u64()
-        .unwrap_or(0);
+    let rerun_count = value_get(&rerun, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
         rerun_count < first_count,
         "after mutating Two.cs to a unique file, cluster count must drop; was {first_count}, now {rerun_count}"
@@ -1534,9 +1583,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
         "report-get",
         &json!({ "offset": 0, "limit": 100 }),
     )?)?;
-    let before_count = value_get(&before, "/total_clusters")?
-        .as_u64()
-        .unwrap_or(0);
+    let before_count = value_get(&before, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(before_count >= 1, "expected at least one cluster");
     // Edit Two.cs so the clone disappears, then push a notification.
     std::fs::write(
@@ -1553,9 +1600,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
         "report-get",
         &json!({ "offset": 0, "limit": 100 }),
     )?)?;
-    let after_count = value_get(&after, "/total_clusters")?
-        .as_u64()
-        .unwrap_or(0);
+    let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
         after_count < before_count,
         "mark_changed notification should drop the Two.cs clone; was {before_count}, now {after_count}"

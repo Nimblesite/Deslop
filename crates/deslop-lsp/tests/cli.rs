@@ -276,10 +276,7 @@ fn lsp_custom_method_report_get_elides_schema_doc_and_prose() -> Result<()> {
             .get("occurrences_truncated")
             .and_then(serde_json::Value::as_bool)
             .ok_or_else(|| anyhow!("occurrences_truncated missing in {cluster}"))?;
-        assert!(
-            occurrences_total > 0,
-            "occurrences_total must be populated"
-        );
+        assert!(occurrences_total > 0, "occurrences_total must be populated");
         assert!(
             !occurrences_truncated,
             "csharp-small fixture has tiny clusters; no truncation expected"

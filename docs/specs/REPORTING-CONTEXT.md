@@ -51,6 +51,8 @@ Fields:
 | `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |
 | `token_jaccard` | `[0, 1]`. Estimated Jaccard of normalized k-gram token sets. |
 | `embedding_cos` | `[0, 1]` cosine similarity from the semantic-embedding pass, or `0.00` if that pass was disabled for this run. |
+| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `attempted_subtrees` when duplicate snippets collapse before indexing. |
+| `embedding_provenance.failed_subtrees` | Count of subtree embeddings the provider rejected. Rejected subtrees are excluded from embedding ANN rather than substituted with zero vectors. |
 
 Byte ranges come from `tree-sitter`. To display line numbers you must re-derive them from the source file, because byte offsets are the canonical location (they're what an LSP/editor consumes directly).
 

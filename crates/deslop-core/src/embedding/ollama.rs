@@ -1,7 +1,7 @@
 //! Ollama embedding provider.
 //!
 //! Implements [`crate::embedding::EmbeddingProvider`] against the local
-//! Ollama HTTP API (`POST /api/embeddings`, `POST /api/show`). No TLS
+//! Ollama HTTP API (`POST /api/embed`, `GET /api/tags`). No TLS
 //! — Ollama is a loopback-only service by default, and leaving TLS off
 //! keeps the dependency footprint minimal (see `Cargo.toml`).
 
@@ -38,6 +38,10 @@ const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 /// minified files) still contribute a usable prefix instead of
 /// aborting the whole pass.
 const MAX_EMBED_CHARS: usize = 6000;
+/// Number of subtrees sent in one Ollama embedding request. The
+/// endpoint accepts array input, but keeping chunks modest avoids
+/// oversized JSON bodies and long all-or-nothing retries.
+const MAX_BATCH_SIZE: usize = 32;
 
 /// Ollama provider configured for a specific endpoint + model.
 #[derive(Debug, Clone)]
@@ -90,6 +94,7 @@ impl EmbeddingProvider for OllamaProvider {
         let response = ureq::get(&url)
             .config()
             .timeout_global(Some(HTTP_TIMEOUT))
+            .http_status_as_error(false)
             .build()
             .call()
             .map_err(|err| ProviderError::Unreachable {
@@ -106,18 +111,56 @@ impl EmbeddingProvider for OllamaProvider {
     }
 
     fn embed(&self, input: &str) -> Result<Vec<f32>, ProviderError> {
-        let parsed = post_embedding(&self.endpoint, &self.model, input)?;
-        if parsed.embedding.len() != self.spec.dimensions {
+        let embeddings = post_embeddings(&self.endpoint, &self.model, &[input.to_owned()])?;
+        let embedding = embeddings
+            .into_iter()
+            .next()
+            .ok_or_else(|| ProviderError::Malformed {
+                provider_id: PROVIDER_ID.to_owned(),
+                message: "expected one embedding, got none".to_owned(),
+            })?;
+        if embedding.len() != self.spec.dimensions {
             return Err(ProviderError::Malformed {
                 provider_id: PROVIDER_ID.to_owned(),
                 message: format!(
                     "expected {} dims, got {}",
                     self.spec.dimensions,
-                    parsed.embedding.len()
+                    embedding.len()
                 ),
             });
         }
-        Ok(parsed.embedding)
+        Ok(embedding)
+    }
+
+    fn max_batch_size(&self) -> usize {
+        MAX_BATCH_SIZE
+    }
+
+    fn embed_batch(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
+        let embeddings = post_embeddings(&self.endpoint, &self.model, inputs)?;
+        if embeddings.len() != inputs.len() {
+            return Err(ProviderError::Malformed {
+                provider_id: PROVIDER_ID.to_owned(),
+                message: format!(
+                    "expected {} embeddings, got {}",
+                    inputs.len(),
+                    embeddings.len()
+                ),
+            });
+        }
+        for embedding in &embeddings {
+            if embedding.len() != self.spec.dimensions {
+                return Err(ProviderError::Malformed {
+                    provider_id: PROVIDER_ID.to_owned(),
+                    message: format!(
+                        "expected {} dims, got {}",
+                        self.spec.dimensions,
+                        embedding.len()
+                    ),
+                });
+            }
+        }
+        Ok(embeddings)
     }
 }
 
@@ -149,27 +192,34 @@ fn truncate_digest(digest: &str) -> String {
 /// dimensionality. The spec cannot be known ahead of time because
 /// users can swap models via `--embedding-model`.
 fn probe_dimensions(endpoint: &str, model: &str) -> Result<usize, ProviderError> {
-    let parsed = post_embedding(endpoint, model, DIMENSION_PROBE_PROMPT)?;
-    Ok(parsed.embedding.len())
+    let embeddings = post_embeddings(endpoint, model, &[DIMENSION_PROBE_PROMPT.to_owned()])?;
+    let embedding = embeddings.first().ok_or_else(|| ProviderError::Malformed {
+        provider_id: PROVIDER_ID.to_owned(),
+        message: "dimension probe returned no embeddings".to_owned(),
+    })?;
+    Ok(embedding.len())
 }
 
-/// Sends one `POST /api/embeddings` call and returns the parsed
-/// response. Centralises truncation, status handling, and error-body
-/// capture so both `embed` and `probe_dimensions` behave identically.
-fn post_embedding(
+/// Sends one `POST /api/embed` call and returns the parsed
+/// embeddings. Centralises truncation, status handling, and error-body
+/// capture so `embed`, `embed_batch`, and `probe_dimensions` behave
+/// identically.
+fn post_embeddings(
     endpoint: &str,
     model: &str,
-    input: &str,
-) -> Result<EmbedResponse, ProviderError> {
-    let url = format!("{endpoint}/api/embeddings");
-    let prompt = truncate_prompt(input);
+    inputs: &[String],
+) -> Result<Vec<Vec<f32>>, ProviderError> {
+    let url = format!("{endpoint}/api/embed");
+    let input: Vec<String> = inputs.iter().map(|input| truncate_prompt(input)).collect();
     let body = EmbedRequest {
         model,
-        prompt: &prompt,
+        input,
+        truncate: true,
     };
     let mut response = ureq::post(&url)
         .config()
         .timeout_global(Some(HTTP_TIMEOUT))
+        .http_status_as_error(false)
         .build()
         .send_json(&body)
         .map_err(|err| ProviderError::Unreachable {
@@ -193,6 +243,7 @@ fn post_embedding(
     response
         .body_mut()
         .read_json::<EmbedResponse>()
+        .map(|parsed| parsed.embeddings)
         .map_err(|err| ProviderError::Malformed {
             provider_id: PROVIDER_ID.to_owned(),
             message: err.to_string(),
@@ -215,20 +266,22 @@ fn truncate_prompt(input: &str) -> String {
     input.get(..end).unwrap_or("").to_owned()
 }
 
-/// `POST /api/embeddings` request body.
+/// `POST /api/embed` request body.
 #[derive(Debug, Serialize)]
 struct EmbedRequest<'a> {
     /// Model name as registered in Ollama.
     model: &'a str,
-    /// Text to embed.
-    prompt: &'a str,
+    /// Texts to embed.
+    input: Vec<String>,
+    /// Allow Ollama to trim inputs that still exceed the model window.
+    truncate: bool,
 }
 
-/// `POST /api/embeddings` response body.
+/// `POST /api/embed` response body.
 #[derive(Debug, Deserialize)]
 struct EmbedResponse {
-    /// Dense embedding vector produced by the model.
-    embedding: Vec<f32>,
+    /// Dense embedding vectors produced by the model.
+    embeddings: Vec<Vec<f32>>,
 }
 
 /// Subset of the `GET /api/tags` response we actually use. Each
@@ -262,6 +315,7 @@ fn fetch_tags(endpoint: &str) -> Result<TagsResponse, ProviderError> {
     let mut response = ureq::get(&url)
         .config()
         .timeout_global(Some(HTTP_TIMEOUT))
+        .http_status_as_error(false)
         .build()
         .call()
         .map_err(|err| ProviderError::Unreachable {

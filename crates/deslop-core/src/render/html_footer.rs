@@ -102,11 +102,14 @@ fn format_provenance(report: &Report) -> String {
         || "embeddings: off".to_owned(),
         |provenance| {
             format!(
-                "embeddings: {provider}/{model}@{version} ({dims}-d)",
+                "embeddings: {provider}/{model}@{version} ({dims}-d, indexed {indexed}/{attempted}, failures {failed})",
                 provider = provenance.provider_id,
                 model = provenance.model_id,
                 version = provenance.model_version,
                 dims = provenance.dimensions,
+                indexed = provenance.indexed_subtrees,
+                failed = provenance.failed_subtrees,
+                attempted = provenance.attempted_subtrees,
             )
         },
     )

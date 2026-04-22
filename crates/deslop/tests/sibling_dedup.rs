@@ -74,6 +74,65 @@ fn write_nested_clone_fixture(dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Writes a Python fixture under the same path family as the reported
+/// NAP runaway (`alembic/versions/003_cascade_delete_config.py`). The
+/// two files contain equivalent migration-shaped code, which exercises
+/// the sibling-window path without depending on a private checkout.
+fn write_phantom_occurrence_fixture(dir: &Path) -> Result<()> {
+    let alembic_dir = dir.join("alembic").join("versions");
+    let tests_dir = dir.join("tests");
+    fs::create_dir_all(&alembic_dir)?;
+    fs::create_dir_all(&tests_dir)?;
+    fs::write(
+        alembic_dir.join("003_cascade_delete_config.py"),
+        phantom_occurrence_body("upgrade", "rules", "configs"),
+    )?;
+    fs::write(
+        tests_dir.join("test_sandbox_coverage.py"),
+        phantom_occurrence_body("exercise", "jobs", "agents"),
+    )?;
+    Ok(())
+}
+
+fn phantom_occurrence_body(function: &str, child: &str, parent: &str) -> String {
+    format!(
+        "\"\"\"Synthetic cascade-delete migration fixture.\"\"\"\n\
+         from alembic import op\n\
+         import sqlalchemy as sa\n\
+         \n\
+         revision = \"003\"\n\
+         down_revision = \"002\"\n\
+         branch_labels = None\n\
+         depends_on = None\n\
+         \n\
+         \n\
+         def {function}():\n\
+             config_id = sa.Column(\"config_id\", sa.Integer(), nullable=False)\n\
+             op.add_column(\"{child}\", config_id)\n\
+             op.create_index(\"ix_{child}_config_id\", \"{child}\", [\"config_id\"])\n\
+             op.create_foreign_key(\n\
+                 \"fk_{child}_config_id\",\n\
+                 \"{child}\",\n\
+                 \"{parent}\",\n\
+                 [\"config_id\"],\n\
+                 [\"id\"],\n\
+                 ondelete=\"CASCADE\",\n\
+             )\n\
+             op.execute(\"UPDATE {child} SET config_id = 1 WHERE config_id IS NULL\")\n\
+             op.alter_column(\"{child}\", \"config_id\", nullable=False)\n\
+             op.drop_constraint(\"old_{child}_config_id_fkey\", \"{child}\", type_=\"foreignkey\")\n\
+             op.create_foreign_key(\n\
+                 \"fk_{child}_config_id_strict\",\n\
+                 \"{child}\",\n\
+                 \"{parent}\",\n\
+                 [\"config_id\"],\n\
+                 [\"id\"],\n\
+                 ondelete=\"CASCADE\",\n\
+             )\n\
+             op.drop_index(\"ix_{child}_legacy_config\", table_name=\"{child}\")\n"
+    )
+}
+
 /// Runs the CLI against `scan_root`, writing reports under
 /// `<tmp>/report.*`, and returns the parsed JSON report.
 fn run_and_load_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
@@ -172,10 +231,7 @@ fn first_out_of_bounds(report: &serde_json::Value, scan_root: &Path) -> Option<S
 }
 
 /// Per-cluster walker for [`first_out_of_bounds`].
-fn first_out_of_bounds_in_cluster(
-    cluster: &serde_json::Value,
-    scan_root: &Path,
-) -> Option<String> {
+fn first_out_of_bounds_in_cluster(cluster: &serde_json::Value, scan_root: &Path) -> Option<String> {
     let occurrences = cluster.get("occurrences")?.as_array()?;
     let id = cluster
         .get("id")
@@ -215,7 +271,10 @@ fn out_of_bounds_line(
 /// deterministic message).
 fn per_file_counts(cluster: &serde_json::Value) -> Vec<(String, usize)> {
     let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    if let Some(occurrences) = cluster.get("occurrences").and_then(serde_json::Value::as_array) {
+    if let Some(occurrences) = cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+    {
         for occurrence in occurrences {
             if let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) {
                 let entry = counts.entry(path.to_owned()).or_insert(0_usize);
@@ -224,6 +283,86 @@ fn per_file_counts(cluster: &serde_json::Value) -> Vec<(String, usize)> {
         }
     }
     counts.into_iter().collect()
+}
+
+fn first_cluster_count_mismatch(report: &serde_json::Value) -> Option<String> {
+    let clusters = report.get("clusters")?.as_array()?;
+    for cluster in clusters {
+        let size = cluster.get("size")?.as_u64()?;
+        let occurrences = cluster.get("occurrences")?.as_array()?;
+        let occurrences_total = cluster.get("occurrences_total")?.as_u64()?;
+        let occurrences_len = u64::try_from(occurrences.len()).ok()?;
+        if size != occurrences_len || occurrences_total != occurrences_len {
+            let id = cluster
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("?");
+            return Some(format!(
+                "cluster {id}: size={size}, occurrences_total={occurrences_total}, len={occurrences_len}"
+            ));
+        }
+    }
+    None
+}
+
+fn first_unbounded_signal(report: &serde_json::Value) -> Option<String> {
+    let clusters = report.get("clusters")?.as_array()?;
+    for cluster in clusters {
+        let id = cluster
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("?");
+        let fused = cluster
+            .get("signals")?
+            .get("fused")?
+            .as_f64()
+            .unwrap_or(f64::NAN);
+        if !(0.0..=1.0).contains(&fused) {
+            return Some(format!("cluster {id} reports fused={fused}"));
+        }
+    }
+    None
+}
+
+fn duplication_percent(report: &serde_json::Value) -> f64 {
+    report
+        .get("metrics")
+        .and_then(|metrics| metrics.get("duplication_percent"))
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(f64::NAN)
+}
+
+fn max_occurrences_for_path(report: &serde_json::Value, needle: &str) -> usize {
+    let mut max_count = 0_usize;
+    if let Some(clusters) = report.get("clusters").and_then(serde_json::Value::as_array) {
+        for cluster in clusters {
+            let count = occurrences_for_path(cluster, needle);
+            max_count = max_count.max(count);
+        }
+    }
+    max_count
+}
+
+fn occurrences_for_path(cluster: &serde_json::Value, needle: &str) -> usize {
+    cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map(|occurrences| {
+            occurrences
+                .iter()
+                .filter(|occurrence| {
+                    occurrence
+                        .get("path")
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|path| path == needle)
+                })
+                .count()
+        })
+        .unwrap_or_default()
+}
+
+fn line_count(path: &Path) -> Result<usize> {
+    Ok(fs::read_to_string(path)?.lines().count())
 }
 
 // Regression for NAP's "overlapping byte ranges inside the same file"
@@ -342,7 +481,8 @@ fn sibling_window_cluster_has_one_occurrence_per_file() -> Result<()> {
     let sibling_cluster = sibling_cluster.unwrap_or_default();
     for (path, count) in per_file_counts(&sibling_cluster) {
         assert_eq!(
-            count, 1,
+            count,
+            1,
             "sibling-window cluster {:?} reports {count} occurrences in {path}; \
              overlapping windows must collapse to one per file",
             sibling_cluster
@@ -354,12 +494,70 @@ fn sibling_window_cluster_has_one_occurrence_per_file() -> Result<()> {
     Ok(())
 }
 
+// Tracker issue #7 rolls the lower-level phantom-occurrence symptoms
+// into one public contract: report occurrences must be physically
+// grounded in source files, not inflated by sibling-window fanout, and
+// public report metrics/scores must stay sane.
+#[test]
+fn phantom_occurrence_fixture_respects_report_invariants() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    write_phantom_occurrence_fixture(&scan_root)?;
+    let report = run_and_load_report(tmp.path(), &scan_root)?;
+    let clusters = report
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !clusters.is_empty(),
+        "phantom-occurrence fixture must produce clone clusters: {report:#}"
+    );
+    assert!(
+        first_out_of_bounds(&report, &scan_root).is_none(),
+        "every occurrence must point inside its source file: {}",
+        first_out_of_bounds(&report, &scan_root).unwrap_or_default()
+    );
+    assert!(
+        first_overlap(&report).is_none(),
+        "cluster occurrences must not overlap inside one file: {}",
+        first_overlap(&report).unwrap_or_default()
+    );
+    assert!(
+        first_cluster_count_mismatch(&report).is_none(),
+        "cluster counts must be internally consistent: {}",
+        first_cluster_count_mismatch(&report).unwrap_or_default()
+    );
+    assert!(
+        first_unbounded_signal(&report).is_none(),
+        "fused scores must be bounded: {}",
+        first_unbounded_signal(&report).unwrap_or_default()
+    );
+    let duplication = duplication_percent(&report);
+    assert!(
+        (0.0..=100.0).contains(&duplication),
+        "duplication_percent must be within [0, 100], got {duplication}: {report:#}"
+    );
+    let alembic_path = "alembic/versions/003_cascade_delete_config.py";
+    let alembic_lines = line_count(&scan_root.join(alembic_path))?;
+    let max_alembic_occurrences = max_occurrences_for_path(&report, alembic_path);
+    assert!(
+        max_alembic_occurrences <= alembic_lines,
+        "one cluster reports {max_alembic_occurrences} occurrences in {alembic_path}, \
+         but the file has only {alembic_lines} lines"
+    );
+    Ok(())
+}
+
 /// Returns the largest `end_byte - start_byte` across a cluster's
 /// occurrences. Used to identify sibling-window clusters — per-loop
 /// subtree matches in the fixture span <100 bytes each, sibling
 /// windows over 2–3 contiguous loops span ≥100.
 fn max_span_bytes(cluster: &serde_json::Value) -> u64 {
-    let Some(occurrences) = cluster.get("occurrences").and_then(serde_json::Value::as_array) else {
+    let Some(occurrences) = cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+    else {
         return 0;
     };
     let mut best: u64 = 0;

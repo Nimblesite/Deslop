@@ -22,9 +22,9 @@ use crate::{
 };
 
 /// Minimum fused score required before a pair enters a cluster. The
-/// threshold is calibrated against the two deterministic signals only —
-/// exact structural matches score 2.0 (1.0 structural + 1.0 Jaccard);
-/// Type-3 candidates discovered by LSH alone need `token_jaccard` ≥
+/// threshold is calibrated against a unit-bounded fused confidence:
+/// exact structural matches saturate at 1.0, and Type-3 candidates
+/// discovered by LSH alone need `token_jaccard` ≥
 /// [`LSH_ONLY_MIN_JACCARD`] *and* the fused threshold below, which
 /// together keep LSH-only noise out of clusters. The literature
 /// ([TECH-TOKEN-SOURCERERCC]) treats Jaccard ≥ 0.7 as a typical Type-3
@@ -55,20 +55,23 @@ pub struct PairScore {
     pub structural: f64,
     /// Estimated k-gram Jaccard in `[0, 1]`.
     pub token_jaccard: f64,
-    /// Cosine similarity from the embedding pass, in `[0, 1]`. Populated
-    /// in P5 once the `EmbeddingProvider` trait is wired; 0.0 today so
-    /// the fused score is a sum of the two deterministic signals.
+    /// Cosine similarity from the embedding pass, in `[0, 1]`.
     pub embedding_cos: f64,
 }
 
 impl PairScore {
-    /// Max-normalized sum of all three component scores. Each component is
-    /// already in `[0, 1]`, so the fused value lives in `[0, 3]`. The
-    /// ensemble-LLM 2025 paper is explicit that *averaging* hurts; sum /
-    /// max help.
+    /// Max/sum fusion projected back into the public `[0, 1]` confidence
+    /// interval. The ensemble-LLM 2025 paper is explicit that averaging
+    /// hurts; sum and max help, but report consumers require a bounded
+    /// confidence score.
     #[must_use]
     pub fn fused(self) -> f64 {
-        self.structural + self.token_jaccard + self.embedding_cos
+        let raw = self.structural + self.token_jaccard + self.embedding_cos;
+        if raw.is_finite() {
+            raw.clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
     }
 }
 

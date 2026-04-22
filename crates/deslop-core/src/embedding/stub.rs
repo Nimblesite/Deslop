@@ -23,6 +23,9 @@ pub const PROVIDER_ID: &str = "stub";
 /// stay cheap on every `cargo test` run, large enough that distinct
 /// inputs produce visibly distinct vectors.
 const DIMENSIONS: usize = 64;
+/// Stub embeddings are CPU-local and cheap, so let the pipeline
+/// amortise cache and dispatch overhead across larger chunks.
+const MAX_BATCH_SIZE: usize = 1024;
 /// Stable `model_id` reported to consumers. Kept separate from
 /// `PROVIDER_ID` so the two identity fields answer different
 /// questions ("which provider?" vs "which model?").
@@ -60,6 +63,17 @@ impl EmbeddingProvider for StubProvider {
 
     fn embed(&self, input: &str) -> Result<Vec<f32>, ProviderError> {
         Ok(embed_bytes(input.as_bytes()))
+    }
+
+    fn max_batch_size(&self) -> usize {
+        MAX_BATCH_SIZE
+    }
+
+    fn embed_batch(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
+        Ok(inputs
+            .iter()
+            .map(|input| embed_bytes(input.as_bytes()))
+            .collect())
     }
 }
 

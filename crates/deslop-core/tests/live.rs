@@ -412,12 +412,11 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
         Arc::new(StdMutex::new(Vec::new()));
     let events_clone = Arc::clone(&events);
-    let reporter: deslop_core::live::EmbeddingProgressReporter =
-        Arc::new(move |event| {
-            if let Ok(mut lock) = events_clone.lock() {
-                lock.push(event);
-            }
-        });
+    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
+        if let Ok(mut lock) = events_clone.lock() {
+            lock.push(event);
+        }
+    });
     {
         let session_lock = service.session();
         let mut guard = session_lock.lock().await;

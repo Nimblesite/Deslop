@@ -158,8 +158,7 @@ fn collapse_overlapping_single_file(mut bucket: Vec<Fingerprint>) -> Vec<Fingerp
 
 /// Half-open overlap test on two fingerprints' byte ranges.
 fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
-    left.byte_range.start < right.byte_range.end
-        && right.byte_range.start < left.byte_range.end
+    left.byte_range.start < right.byte_range.end && right.byte_range.start < left.byte_range.end
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.

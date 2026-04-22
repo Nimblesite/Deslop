@@ -27,6 +27,9 @@ export interface EmbeddingProvenance {
   model_id: string;
   model_version: string;
   dimensions: number;
+  attempted_subtrees?: number;
+  indexed_subtrees?: number;
+  failed_subtrees?: number;
 }
 
 export interface ReportCluster {

@@ -169,7 +169,9 @@ pub fn build_page(
         .collect();
     let total_clusters = matched.len();
     let slice_start = pagination.offset.min(total_clusters);
-    let slice_end = slice_start.saturating_add(pagination.limit).min(total_clusters);
+    let slice_end = slice_start
+        .saturating_add(pagination.limit)
+        .min(total_clusters);
     let summaries: Vec<ClusterSummary> = matched[slice_start..slice_end]
         .iter()
         .map(|cluster| ClusterSummary::from_report_cluster(cluster))

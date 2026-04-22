@@ -156,8 +156,8 @@ pub struct CacheStats {
 
 /// Provenance block pinning the `(provider_id, model_id, model_version)`
 /// triple used when the embedding pass ran. Serialised into the report
-/// header per [FUSION-EMBED-PROVIDER] so switching providers/models is
-/// visible to consumers.
+/// header per [FUSION-EMBED-PROVIDER] so switching providers/models and
+/// degraded embedding coverage are visible to consumers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingProvenance {
     /// Registry key of the provider (e.g. `"ollama"`).
@@ -168,6 +168,17 @@ pub struct EmbeddingProvenance {
     pub model_version: String,
     /// Embedding dimensionality the provider returned.
     pub dimensions: usize,
+    /// Number of subtree embeddings requested or served from cache.
+    #[serde(default)]
+    pub attempted_subtrees: usize,
+    /// Number of unique successful subtree embeddings fed into ANN.
+    #[serde(default)]
+    pub indexed_subtrees: usize,
+    /// Number of subtree embeddings rejected by the provider. Rejected
+    /// subtrees are excluded from the embedding signal, never represented
+    /// as zero vectors.
+    #[serde(default)]
+    pub failed_subtrees: usize,
 }
 
 /// One cluster as it appears in the rendered report.
@@ -235,7 +246,7 @@ pub struct ReportSignals {
     /// Mean embedding cosine similarity across the pairs. 0.0 until
     /// the P5 embedding pass lands.
     pub embedding_cos: f64,
-    /// Max-normalized sum of the three components ([0, 3]).
+    /// Unit-bounded fused confidence from the three components.
     pub fused: f64,
 }
 

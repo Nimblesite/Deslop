@@ -137,7 +137,7 @@ Implements [EXCLUSION-CONFIG]. Two tiers of exclusion driven by a single `.deslo
 
 ### P5 Embedding pass (hybrid completion) — COMPLETE
 - [x] `EmbeddingProvider` trait at `crates/deslop-core/src/embedding/provider.rs` — pluggable per [FUSION-EMBED-PROVIDER]; providers selected by string id at runtime.
-- [x] Ollama HTTP client (`embedding/ollama.rs`) — loopback-only, no TLS dep; `/api/tags` → digest; `/api/embeddings` → vector. Default model `nomic-embed-text` (137 M params, 768-dim, Apache 2.0). Rationale: ensemble-LLM 2025 finding that "smaller embedding sizes, smaller tokenizer vocabularies and tailored datasets are advantageous"; user-overridable via `--embedding-model` (swap to `nomic-embed-code` / `codet5p` / `unixcoder` once pulled locally).
+- [x] Ollama HTTP client (`embedding/ollama.rs`) — loopback-only, no TLS dep; `/api/tags` → digest; batched `/api/embed` → vectors. Default model `nomic-embed-text` (137 M params, 768-dim, Apache 2.0). Rationale: ensemble-LLM 2025 finding that "smaller embedding sizes, smaller tokenizer vocabularies and tailored datasets are advantageous"; user-overridable via `--embedding-model` (swap to `nomic-embed-code` / `codet5p` / `unixcoder` once pulled locally).
 - [x] Stub provider (`embedding/stub.rs`) — deterministic BLAKE3-derived 64-dim vectors, spec-blessed as the `stub` slot. Lets `make ci` exercise the trait / cache / HNSW / pipeline path without needing a live Ollama daemon.
 - [x] `--embeddings={auto,required,off}` (default `off`; `auto` probes and falls back with `tracing::warn!`; `required` propagates failure as a non-zero exit).
 - [x] `--embedding-provider` / `--embedding-model` / `--embedding-endpoint` CLI surface; invalid values rejected with a clear error.

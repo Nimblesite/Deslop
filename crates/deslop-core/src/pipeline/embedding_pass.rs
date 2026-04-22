@@ -3,7 +3,10 @@
 //! [`EmbeddingProvider`] based on the run's [`EmbeddingMode`], and
 //! returns the ANN-nearest-neighbour pairs plus report provenance.
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use crate::{
     embedding::{
@@ -81,12 +84,22 @@ fn embed_corpus(
         "embedding pass starting",
     );
     let cache = open_cache(&config.root, &spec)?;
-    let embeddings = compute_embeddings(provider, &cache, corpus);
-    let pairs = embedding_pairs(&corpus.fingerprints, &embeddings);
-    tracing::info!(pair_count = pairs.len(), "embedding pass complete");
+    let batch = compute_embeddings(provider, &cache, corpus, spec.dimensions);
+    let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
+    tracing::info!(
+        pair_count = pairs.len(),
+        embedded = batch.vectors.len(),
+        failed = batch.failures,
+        "embedding pass complete"
+    );
     Ok(EmbeddingOutcome {
         pairs,
-        provenance: Some(provenance_from(spec)),
+        provenance: Some(provenance_from(
+            spec,
+            corpus.fingerprints.len(),
+            batch.vectors.len(),
+            batch.failures,
+        )),
     })
 }
 
@@ -100,51 +113,182 @@ fn open_cache(scan_root: &Path, spec: &EmbeddingSpec) -> Result<EmbeddingCache, 
     })
 }
 
-/// Produces an embedding vector per fingerprint. Cache hits short-
-/// circuit the provider call; misses invoke the provider and persist
-/// the result for subsequent runs. Returns a vector aligned with
-/// `corpus.fingerprints` — entry `i` embeds fingerprint `i`.
+/// Produces embedding vectors for fingerprints whose provider request
+/// succeeds. Cache hits short-circuit the provider call; misses invoke
+/// the provider and persist the result for subsequent runs.
 fn compute_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
     corpus: &FingerprintCorpus,
-) -> Vec<Vec<f32>> {
-    let dims = provider.spec().dimensions;
-    let mut embeddings: Vec<Vec<f32>> = Vec::with_capacity(corpus.fingerprints.len());
-    let mut skipped: usize = 0;
-    for fingerprint in &corpus.fingerprints {
+    dimensions: usize,
+) -> EmbeddingBatch {
+    let mut batch = EmbeddingBatch::with_capacity(corpus.fingerprints.len());
+    let mut indexed_hashes: HashSet<String> = HashSet::new();
+    let mut pending_positions: HashMap<String, usize> = HashMap::new();
+    let mut pending: Vec<PendingEmbedding> = Vec::new();
+    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
         let snippet = snippet_for(fingerprint, &corpus.sources);
-        if let Some(cached) = cache.get(&snippet) {
-            embeddings.push(cached);
+        let snippet_hash = content_hash(&snippet);
+        if indexed_hashes.contains(&snippet_hash) {
             continue;
         }
-        match provider.embed(&snippet) {
-            Ok(fresh) => {
-                if let Err(error) = cache.store(&snippet, &fresh) {
-                    tracing::warn!(%error, content_hash = %content_hash(&snippet), "embedding cache write failed");
-                }
-                embeddings.push(fresh);
+        if let Some(position) = pending_positions.get(&snippet_hash).copied() {
+            if let Some(queued) = pending.get_mut(position) {
+                queued.occurrences = queued.occurrences.saturating_add(1);
             }
-            Err(source) => {
-                skipped = skipped.saturating_add(1);
-                tracing::warn!(
-                    error = %source,
-                    snippet_chars = snippet.chars().count(),
-                    content_hash = %content_hash(&snippet),
-                    "embedding provider rejected subtree — substituting zero vector"
-                );
-                embeddings.push(vec![0.0_f32; dims]);
-            }
+            continue;
         }
+        if let Some(cached) = cache.get(&snippet) {
+            let _inserted = indexed_hashes.insert(snippet_hash);
+            batch.push(index, cached);
+            continue;
+        }
+        let _previous = pending_positions.insert(snippet_hash.clone(), pending.len());
+        pending.push(PendingEmbedding {
+            fingerprint_index: index,
+            snippet,
+            snippet_hash,
+            occurrences: 1,
+        });
     }
-    if skipped > 0 {
+    process_pending_embeddings(provider, cache, &mut batch, &pending, dimensions);
+    if batch.failures > 0 {
         tracing::warn!(
-            skipped,
+            failed = batch.failures,
             total = corpus.fingerprints.len(),
-            "embedding pass completed with skipped subtrees"
+            "embedding pass completed with rejected subtrees"
         );
     }
-    embeddings
+    batch
+}
+
+fn process_pending_embeddings(
+    provider: &dyn EmbeddingProvider,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    pending: &[PendingEmbedding],
+    dimensions: usize,
+) {
+    let max_batch_size = provider.max_batch_size().max(1);
+    for chunk in pending.chunks(max_batch_size) {
+        let inputs: Vec<String> = chunk.iter().map(|item| item.snippet.clone()).collect();
+        match provider.embed_batch(&inputs) {
+            Ok(vectors) if vectors.len() == chunk.len() => {
+                for (item, vector) in chunk.iter().zip(vectors) {
+                    push_fresh_embedding(cache, batch, item, vector, dimensions);
+                }
+            }
+            Ok(vectors) => {
+                let message = format!("expected {} embeddings, got {}", chunk.len(), vectors.len());
+                record_failed_chunk(batch, chunk, &message);
+            }
+            Err(source) => record_failed_chunk(batch, chunk, &source),
+        }
+    }
+}
+
+fn push_fresh_embedding(
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    item: &PendingEmbedding,
+    vector: Vec<f32>,
+    dimensions: usize,
+) {
+    if vector.len() != dimensions {
+        let message = format!("expected {dimensions} dims, got {}", vector.len());
+        record_failed_pending(batch, item, &message);
+        return;
+    }
+    if let Err(error) = cache.store(&item.snippet, &vector) {
+        tracing::warn!(%error, content_hash = %item.snippet_hash, "embedding cache write failed");
+    }
+    batch.push(item.fingerprint_index, vector);
+}
+
+fn record_failed_chunk<E: std::fmt::Display>(
+    batch: &mut EmbeddingBatch,
+    chunk: &[PendingEmbedding],
+    error: &E,
+) {
+    for item in chunk {
+        record_failed_pending(batch, item, error);
+    }
+}
+
+fn record_failed_pending<E: std::fmt::Display>(
+    batch: &mut EmbeddingBatch,
+    item: &PendingEmbedding,
+    error: &E,
+) {
+    batch.failures = batch.failures.saturating_add(item.occurrences);
+    tracing::warn!(
+        error = %error,
+        occurrences = item.occurrences,
+        snippet_chars = item.snippet.chars().count(),
+        content_hash = %item.snippet_hash,
+        "embedding provider rejected subtree — skipping embedding signal"
+    );
+}
+
+#[derive(Debug)]
+struct EmbeddingBatch {
+    vectors: Vec<IndexedEmbedding>,
+    failures: usize,
+}
+
+impl EmbeddingBatch {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            vectors: Vec::with_capacity(capacity),
+            failures: 0,
+        }
+    }
+
+    fn push(&mut self, fingerprint_index: usize, vector: Vec<f32>) {
+        self.vectors.push(IndexedEmbedding {
+            fingerprint_index,
+            vector,
+        });
+    }
+}
+
+#[derive(Debug)]
+struct PendingEmbedding {
+    fingerprint_index: usize,
+    snippet: String,
+    snippet_hash: String,
+    occurrences: usize,
+}
+
+#[derive(Debug)]
+struct IndexedEmbedding {
+    fingerprint_index: usize,
+    vector: Vec<f32>,
+}
+
+fn pairs_from_successful_embeddings(
+    fingerprints: &[Fingerprint],
+    indexed: &[IndexedEmbedding],
+) -> Vec<EmbeddingPair> {
+    let successful_fingerprints: Vec<Fingerprint> = indexed
+        .iter()
+        .filter_map(|item| fingerprints.get(item.fingerprint_index).cloned())
+        .collect();
+    let vectors: Vec<Vec<f32>> = indexed.iter().map(|item| item.vector.clone()).collect();
+    embedding_pairs(&successful_fingerprints, &vectors)
+        .into_iter()
+        .filter_map(|pair| remap_pair(pair, indexed))
+        .collect()
+}
+
+fn remap_pair(pair: EmbeddingPair, indexed: &[IndexedEmbedding]) -> Option<EmbeddingPair> {
+    let left = indexed.get(pair.left)?.fingerprint_index;
+    let right = indexed.get(pair.right)?.fingerprint_index;
+    Some(EmbeddingPair {
+        left,
+        right,
+        cosine: pair.cosine,
+    })
 }
 
 /// Returns the source slice for `fingerprint` as a `String`. Invalid
@@ -165,11 +309,19 @@ fn snippet_for(fingerprint: &Fingerprint, sources: &HashMap<FileId, Vec<u8>>) ->
 
 /// Lifts an [`EmbeddingSpec`] into the report-facing
 /// [`EmbeddingProvenance`] struct.
-fn provenance_from(spec: EmbeddingSpec) -> EmbeddingProvenance {
+fn provenance_from(
+    spec: EmbeddingSpec,
+    attempted_subtrees: usize,
+    indexed_subtrees: usize,
+    failed_subtrees: usize,
+) -> EmbeddingProvenance {
     EmbeddingProvenance {
         provider_id: spec.provider_id,
         model_id: spec.model_id,
         model_version: spec.model_version,
         dimensions: spec.dimensions,
+        attempted_subtrees,
+        indexed_subtrees,
+        failed_subtrees,
     }
 }

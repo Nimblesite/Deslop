@@ -53,7 +53,7 @@ flowchart LR
     end
 
     Workspace[(Workspace files)]
-    Ollama[(Ollama<br/>/api/tags · /api/embeddings)]
+    Ollama[(Ollama<br/>/api/tags · /api/embed)]
 
     UI -- "user types · tree click · picker" --> LspClient
     LspClient == "spawns + LSP stdio" ==> LspBin

@@ -143,13 +143,16 @@ fn write_provenance_line(theme: &Theme, report: &Report, technical: bool) {
     };
     if technical {
         eprintln!(
-            "  {dim}embeddings: {provider}/{model}@{version} ({dims}-d){reset}",
+            "  {dim}embeddings: {provider}/{model}@{version} ({dims}-d, indexed {indexed}/{attempted}, failures {failed}){reset}",
             dim = theme.dim,
             reset = theme.reset,
             provider = provenance.provider_id,
             model = provenance.model_id,
             version = provenance.model_version,
             dims = provenance.dimensions,
+            indexed = provenance.indexed_subtrees,
+            failed = provenance.failed_subtrees,
+            attempted = provenance.attempted_subtrees,
         );
     } else {
         eprintln!(

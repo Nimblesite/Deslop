@@ -101,7 +101,9 @@ pub async fn report_get(
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
     let report = backend.service().report_get().await;
-    let slim: Report = (*report).clone().truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
+    let slim: Report = (*report)
+        .clone()
+        .truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
     Ok(serde_json::to_value(&slim).unwrap_or(serde_json::Value::Null))
 }
 

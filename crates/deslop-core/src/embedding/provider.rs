@@ -89,4 +89,22 @@ pub trait EmbeddingProvider: std::fmt::Debug + Send + Sync {
     /// Returns [`ProviderError`] when the provider cannot be reached,
     /// returns an error, or returns a malformed response.
     fn embed(&self, input: &str) -> Result<Vec<f32>, ProviderError>;
+
+    /// Maximum number of inputs the provider is willing to embed in a
+    /// single call to [`EmbeddingProvider::embed_batch`].
+    fn max_batch_size(&self) -> usize {
+        1
+    }
+
+    /// Embeds multiple inputs in one provider call. Providers that do
+    /// not support batching inherit the single-input fallback.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ProviderError`] when the provider cannot produce the
+    /// whole batch. The pipeline treats that as every input in the
+    /// batch failing and continues with other batches.
+    fn embed_batch(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
+        inputs.iter().map(|input| self.embed(input)).collect()
+    }
 }
