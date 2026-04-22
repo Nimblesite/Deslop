@@ -10,7 +10,7 @@ Every user-facing surface (HTML report, CLI summary, VS Code extension) labels c
 
 ## Architecture at a glance
 
-Every binary in the product — CLI, LSP server, MCP server, VS Code extension — is a **thin shell over one shared library** (`deslop-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
+Every binary in the product — CLI, LSP server, MCP server, VS Code extension, JetBrains plugin — is a **thin shell over one shared library** (`deslop-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
 ```mermaid
 flowchart LR
@@ -18,6 +18,10 @@ flowchart LR
 
     subgraph VSCode["VS Code process"]
         VSIX["Deslop VSIX<br/>(live bubble · tree view · picker)"]
+    end
+
+    subgraph JetBrains["JetBrains IDE process<br/>(Rider first)"]
+        JBPlugin["Deslop IntelliJ Platform plugin<br/>(LSP bridge · native IDE surfaces)"]
     end
 
     subgraph AgentHost["AI agent host<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
@@ -41,6 +45,7 @@ flowchart LR
 
     VSIX == "spawns + LSP stdio" ==> LspBin
     VSIX == "bundles + spawns MCP" ==> McpBin
+    JBPlugin == "spawns + LSP stdio" ==> LspBin
     Agent == "spawns + MCP stdio" ==> McpBin
     CI == "spawns one-shot" ==> CliBin
 
@@ -71,6 +76,7 @@ The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX �
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.
+- [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
 - [competitors.md](competitors.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
 
 ## Sibling docs

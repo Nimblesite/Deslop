@@ -67,11 +67,44 @@ export function parseCompareUri(uri: vscode.Uri): CompareCoordinates {
 class CompareContentProvider implements vscode.TextDocumentContentProvider {
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     const coords = parseCompareUri(uri);
-    const buffer = await fs.readFile(coords.sourcePath);
+    const sourcePath = resolveCompareSourcePath(coords.sourcePath);
+    const buffer = await readCompareSource(sourcePath, coords);
     const start = clamp(coords.startByte, 0, buffer.length);
     const end = clamp(coords.endByte, start, buffer.length);
     return buffer.subarray(start, end).toString("utf8");
   }
+}
+
+async function readCompareSource(
+  sourcePath: string,
+  coords: CompareCoordinates,
+): Promise<Buffer> {
+  try {
+    return await fs.readFile(sourcePath);
+  } catch (err) {
+    return Buffer.from(compareUnavailableText(coords, err), "utf8");
+  }
+}
+
+function resolveCompareSourcePath(sourcePath: string): string {
+  if (path.isAbsolute(sourcePath)) return sourcePath;
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  return root ? path.join(root, sourcePath) : sourcePath;
+}
+
+function compareUnavailableText(coords: CompareCoordinates, err: unknown): string {
+  const reason = err instanceof Error ? err.message : String(err);
+  return [
+    "Deslop could not load this compare occurrence.",
+    "",
+    `Cluster: ${coords.clusterId || "unknown"}`,
+    `Side: ${coords.side.toUpperCase()}`,
+    `Path: ${coords.sourcePath || "unknown"}`,
+    "",
+    "Refresh the Deslop report and try Compare again. The file may have moved or been deleted.",
+    "",
+    `Details: ${reason}`,
+  ].join("\n");
 }
 
 function clamp(n: number, lo: number, hi: number): number {

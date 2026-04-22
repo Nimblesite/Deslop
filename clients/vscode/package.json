@@ -189,9 +189,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "compile": "tsc -p ./",
-    "pretest": "npm run compile && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "pretest": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test": "vscode-test",
-    "pretest:ollama": "npm run compile && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "pretest:ollama": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
     "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix"

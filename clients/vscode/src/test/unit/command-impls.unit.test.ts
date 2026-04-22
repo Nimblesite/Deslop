@@ -14,6 +14,7 @@ import {
   compareWithCanonical,
   openSchemaDoc,
 } from "../../commands/register";
+import { buildCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 
@@ -273,6 +274,20 @@ suite("register command implementations", () => {
     const store = new ReportStore();
     store.setSnapshot(report([cluster("c-single", ["/only"])]), 0);
     await compareWithCanonical(store, "c-single");
+  });
+
+  test("compare provider renders a friendly fallback for a stale occurrence file", async () => {
+    const uri = buildCompareUri(
+      { path: "missing-deslop-compare-file.cs", start_byte: 0, end_byte: 20, hidden: false },
+      "a",
+      "stale-cluster",
+    );
+
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const text = doc.getText();
+    assert.match(text, /Deslop could not load this compare occurrence/);
+    assert.match(text, /Refresh the Deslop report and try Compare again/);
+    assert.match(text, /stale-cluster/);
   });
 
   test("openSchemaDoc opens a markdown editor", async () => {

@@ -298,6 +298,23 @@ Phased rollout — each phase is independently reviewable and `make ci`-green.
 - [ ] Audit `site/src/docs/output-formats.md`, `site/src/docs/how-it-works.md`, `site/src/docs/ai-integration.md`, `site/src/blog/ranking-formula.md` — replace Type-N-only phrasing with bucket-first / Type-N-in-parens per [CLONE-BUCKETS-DUAL-LABEL]. Keep academic refs where the audience is plausibly researcher (reading list, competitor landscape).
 - [ ] Update screenshots / code samples so the published site matches the shipped UI.
 
+### P12 JetBrains IDE plugin — Rider first
+Implements [jetbrains.md](../specs/jetbrains.md). IntelliJ Platform plugin that launches the existing `deslop-lsp`; Rider is the first real product target because C# is Deslop's first production language.
+
+- [x] Spec added at [jetbrains.md](../specs/jetbrains.md) with Rider-first scope, platform LSP constraints, binary resolution, settings contract, native UX surfaces, packaging, and testing rules.
+- [x] `clients/jetbrains` Gradle project scaffolded with IntelliJ Platform Gradle Plugin 2.x and Kotlin/JVM.
+- [x] `plugin.xml` declares `com.intellij.modules.lsp` + `com.intellij.modules.ultimate` and registers `com.intellij.platform.lsp.serverSupportProvider`.
+- [x] `DeslopLspServerSupportProvider` starts Deslop only for supported source files (`.cs`, `.rs`, `.py`).
+- [x] `DeslopLspServerDescriptor` launches `deslop-lsp <workspace-root> --min-nodes 30 --embeddings off` through JetBrains' project-wide LSP descriptor.
+- [x] Binary resolver supports `${DESLOP_BINARY_DIR}`, `PATH`, bundled `bin/<platform>/`, and bare `deslop-lsp` fallback.
+- [x] Make targets added: `jetbrains-build`, `jetbrains-verify`, `jetbrains-package`.
+- [ ] Add a settings page mirroring the VSIX settings contract (`minNodes`, embedding provider/model/endpoint/mode, incremental).
+- [ ] Add exact version checking once `deslop-lsp --version` exists; PATH binaries must match plugin version before Marketplace publication.
+- [ ] Stage all five platform binaries into the plugin zip during release packaging.
+- [ ] Add Tool Window: Top Offenders, Focused File, Session. It must consume `deslop/reportGet` and must not re-rank or re-bucket.
+- [ ] Add native embedding model picker that calls `deslop/embeddingListModels` + `deslop/embeddingSetModel`.
+- [ ] Add real Rider/IntelliJ E2E that opens the C# fixture, launches the real LSP, and asserts native diagnostics. No fake LSP.
+
 **P11.7 — Ratchet + close-out.**
 - [ ] Ripgrep the repo for `Type-1`, `Type-2`, `Type-3`, `Type-4`, `near-miss`, `exact clone`, `semantic clone`, `LSH-only` in human-facing strings (`*.rs` string literals, `*.ts`, `*.tsx`, `clients/vscode/package.json` contributed strings, HTML templates). Every human-facing hit either moves to `bucket_labels()` or gets a `// TODO [CLONE-BUCKETS]` comment rejected in review.
 - [ ] Coverage ratchet: hold at the current threshold or raise by 1 point if the new `bucket_labels()` helper + routing tests lift measured coverage.

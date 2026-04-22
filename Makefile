@@ -5,8 +5,10 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
 
+GRADLE ?= gradle
+JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -221,6 +223,17 @@ vsix-rebuild:
 	fi
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 
+## jetbrains-build: Build the JetBrains plugin zip.
+jetbrains-build:
+	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
+
+## jetbrains-verify: Verify JetBrains plugin project and archive structure.
+jetbrains-verify:
+	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
+
+## jetbrains-package: Alias for the JetBrains plugin package artifact.
+jetbrains-package: jetbrains-build
+
 ## help: List all available targets
 help:
 	@echo "Standard targets:"
@@ -244,3 +257,6 @@ help:
 	@echo "  vsix-coverage  - VS Code E2E + enforce coverage threshold"
 	@echo "  vsix-package   - Build the .vsix artifact"
 	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"
+	@echo "  jetbrains-build - Build the JetBrains plugin zip"
+	@echo "  jetbrains-verify - Verify JetBrains plugin configuration and structure"
+	@echo "  jetbrains-package - Alias for jetbrains-build"
