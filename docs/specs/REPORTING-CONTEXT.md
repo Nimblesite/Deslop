@@ -12,7 +12,7 @@ The pipeline normalizes each source file's AST (collapsing identifier names, lit
 2. **Sibling-extension** — contiguous sibling windows under a common parent are hashed as groups. Catches near-miss clones where the same sequence of statements appears in different enclosing contexts.
 3. **Token LSH (MinHash over k=5 k-grams of normalized node kinds)** — catches Type-3 clones where structure diverged but the token bag is close. `token_jaccard` is the estimated Jaccard similarity in `[0.0, 1.0]`.
 
-Candidate pairs from all three passes are unioned, then transitively closed into clusters. Small LSH-only pairs are filtered out (they're usually trivial scaffolding like imports or namespace declarations).
+Candidate pairs from all three passes are unioned, then transitively closed into clusters. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.
 
 ## Clone buckets (canonical)
 
@@ -88,10 +88,11 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 1. **Start at #1 and work down.** The weight formula already prioritises by impact.
 2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are expected to duplicate by design — usually not worth refactoring the generator unless a pattern emerges across many generators.
-3. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
-4. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.
-5. **For `structural=0.00, token_jaccard≥0.95` clusters** — Type-3 candidate. Read both occurrences. The differences are meaningful. Decide whether to (a) unify via a parameter / strategy, or (b) accept them as intentionally divergent.
-6. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.
+3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `<Using Include="..." />`, not extraction.
+4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
+5. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.
+6. **For `structural=0.00, token_jaccard≥0.95` clusters** — Type-3 candidate. Read both occurrences. The differences are meaningful. Decide whether to (a) unify via a parameter / strategy, or (b) accept them as intentionally divergent.
+7. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.
 
 ## Things to keep in mind when interpreting a report
 

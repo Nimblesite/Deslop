@@ -12,6 +12,7 @@ Distribution: `.vsix` attached to each GitHub Release — see [.github/workflows
 4. **Every surface speaks the same schema.** Tree view, hover, code lens, status bar, bubble, webview — all render the same `Report` the JSON file carries. Humans and agents read the same truth.
 5. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
 6. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
+7. **Human-readable before machine-readable.** The VSIX is for developers working in an editor, so ordinary UI labels use friendly file names, line numbers, and columns. Byte offsets are valid in the JSON/AI report and wire schema, but the tree, webviews, bubbles, hovers, status bar, and command titles must not expose raw byte markers as the primary location text.
 
 ### [VSIX-LIVE-BUBBLE] Live duplication bubble — the flagship UX
 
@@ -98,7 +99,7 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
   - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]).
   - Short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
   - Cluster id in a subdued monospace suffix.
-  - Children: one node per occurrence, `path` + byte range rendered as `line:col` for humans. Clicking opens the file at the occurrence.
+  - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
 - **Focused File** tree — the cluster subset overlapping the currently open editor. Collapses when no clusters apply.
 - **Session** panel — compact footer with: active embedding model (linkable, opens the picker), `cache_stats`, `files_analysed`, daemon state (`idle` / `running`).
 
@@ -162,7 +163,7 @@ Command `deslop.openCluster` opens a webview tab. The tab renders a single clust
 - Interpretation and action hints (the same fields the JSON carries).
 - Signal breakdown as four tiny bars: structural, token Jaccard, embedding cosine, fused. Each labelled with its numeric value to two decimals.
 - One collapsible panel per occurrence, each containing:
-  - File path (clickable — opens the file at the byte range).
+  - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
   - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML] rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
   - "Open in editor" and "Reveal in Explorer" buttons.
 

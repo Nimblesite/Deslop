@@ -1,6 +1,9 @@
 // Unit: tree providers. Drive getChildren() directly against seeded stores.
 
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import {
   TopOffendersProvider,
@@ -8,10 +11,17 @@ import {
   SessionProvider,
   StatusTicker,
 } from "../../tree/providers";
+import { openOccurrence } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster } from "../../types/report";
+import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 
-function cluster(id: string, weight: number, path: string): ReportCluster {
+function cluster(
+  id: string,
+  weight: number,
+  path: string,
+  startByte = 0,
+  endByte = 20,
+): ReportCluster {
   return {
     id,
     weight,
@@ -19,8 +29,8 @@ function cluster(id: string, weight: number, path: string): ReportCluster {
     canonical_node_count: 4,
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: [
-      { path, start_byte: 0, end_byte: 20, hidden: false },
-      { path: `${path}.other`, start_byte: 0, end_byte: 20, hidden: false },
+      { path, start_byte: startByte, end_byte: endByte, hidden: false },
+      { path: `${path}.other`, start_byte: startByte, end_byte: endByte, hidden: false },
     ],
     summary: "",
     interpretation: `dup in ${path}`,
@@ -87,6 +97,67 @@ suite("TopOffendersProvider", () => {
     const roots = provider.getChildren();
     const kids = provider.getChildren(roots[0]);
     assert.equal(kids.length, c.occurrences.length);
+  });
+
+  test("occurrence row reports and opens the exact file, line, and column", async () => {
+    // [VSIX-ACTIVITY-BAR] Issue #8: tree occurrence rows must show
+    // path:line:column, not machine-oriented start_byte..end_byte.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deslop-issue-8-tree-"));
+    const occurrencePath = path.join(dir, "ChatProtocol.cs");
+    const source = "namespace Demo;\n\npublic sealed class ChatProtocol {\n    void Send() {}\n}\n";
+    const startByte = Buffer.byteLength(source.slice(0, source.indexOf("void Send")), "utf8");
+    const endByte = startByte + Buffer.byteLength("void Send", "utf8");
+    fs.writeFileSync(occurrencePath, source, "utf8");
+
+    try {
+      const store = new ReportStore();
+      store.setSnapshot(report([cluster("issue-8", 10, occurrencePath, startByte, endByte)]), 0);
+      const provider = new TopOffendersProvider(store, new StatusTicker());
+      const [root] = provider.getChildren();
+      assert.ok(root, "cluster root must exist");
+
+      const [occurrence] = provider.getChildren(root);
+      assert.ok(occurrence, "occurrence child must exist");
+      const label = typeof occurrence.label === "string"
+        ? occurrence.label
+        : occurrence.label?.label ?? "";
+      const description = String(occurrence.description ?? "");
+      const rendered = `${label} ${description}`;
+
+      assert.ok(occurrence.command, "occurrence row must be tappable");
+      assert.equal(occurrence.command.command, "deslop.openOccurrence");
+      const [argument] = occurrence.command.arguments ?? [];
+      assert.ok(argument, "occurrence command must carry the occurrence payload");
+
+      await openOccurrence(argument as ReportOccurrence);
+
+      const editor = vscode.window.activeTextEditor;
+      assert.ok(editor, "tapping the occurrence must open an editor");
+      assert.equal(editor.document.uri.fsPath, occurrencePath);
+      assert.equal(editor.selection.start.line, 3, "cursor should move to line 4");
+      assert.equal(editor.selection.start.character, 4, "cursor should move to column 5");
+      assert.equal(editor.selection.end.character, 13, "selection should cover the occurrence");
+
+      assert.deepEqual(
+        {
+          hasFileName: /ChatProtocol\.cs/.test(rendered),
+          hasLineAndColumn: /ChatProtocol\.cs:4:5/.test(rendered) ||
+            /line\s+4,\s*column\s+5/i.test(rendered),
+          exposesRawByteRange: new RegExp(`\\b${startByte}\\.\\.${endByte}\\b`).test(rendered),
+          usesByteTerminology: /\bbytes?\b/i.test(rendered),
+        },
+        {
+          hasFileName: true,
+          hasLineAndColumn: true,
+          exposesRawByteRange: false,
+          usesByteTerminology: false,
+        },
+        `occurrence row must report the same human target it navigates to, got: ${rendered}`,
+      );
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("getTreeItem returns the node verbatim", () => {
