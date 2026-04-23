@@ -33,39 +33,50 @@ docs.rs + GitHub state at that date.
 
 ---
 
-## [LANG-ROADMAP-RUNTIME-UPGRADE] The tree-sitter 0.22 → 0.25 problem
+## [LANG-ROADMAP-RUNTIME-UPGRADE] The tree-sitter 0.22 → 0.26.8 problem
 
 The workspace pins `tree-sitter = "=0.22.6"` and every current lang
 module calls `tree_sitter_<x>::language()`. That API is gone from
-modern grammars. From 2024 onwards, new tree-sitter grammars use the
-`tree-sitter-language` shim crate and expose a `LANGUAGE` constant
-(or `LANGUAGE_TYPESCRIPT` / `LANGUAGE_TSX`) compatible with
-`tree-sitter ^0.24` and `^0.25`.
+modern grammars. From 2024 onwards, new tree-sitter grammars depend
+on the **`tree-sitter-language ^0.1`** shim crate and expose a
+`LANGUAGE` constant (a `LanguageFn`) convertible to
+`tree_sitter::Language` via `.into()`. The shim is stable across
+`tree-sitter` 0.24 / 0.25 / 0.26, so a grammar declaring
+`tree-sitter ^0.25` (in its `dev-dependencies`, for its own tests)
+still loads cleanly against the **0.26.8 runtime we are targeting**.
 
-| Grammar                    | Latest version | Runtime required |
-|----------------------------|----------------|------------------|
-| tree-sitter-c-sharp (pinned) | 0.21.3       | 0.22             |
-| tree-sitter-rust (pinned)    | 0.21.2       | 0.22             |
-| tree-sitter-python (pinned)  | 0.21.0       | 0.22             |
-| tree-sitter-typescript       | 0.23.2        | 0.24             |
-| tree-sitter-javascript       | 0.25.0        | 0.25             |
-| tree-sitter-go               | 0.25.0        | 0.25             |
-| tree-sitter-java             | 0.23.5        | 0.24             |
-| tree-sitter-cpp              | 0.23.4        | 0.24             |
-| tree-sitter-c                | 0.24.2        | 0.25             |
-| tree-sitter-ruby             | 0.23.1        | 0.24             |
-| tree-sitter-bash             | 0.25.1        | 0.25             |
-| tree-sitter-php              | 0.24.2        | 0.24             |
-| tree-sitter-swift            | 0.7.1         | 0.23             |
-| tree-sitter-kotlin (fwcd)    | 0.3.8         | 0.21 – 0.22      |
-| tree-sitter-dart (nielsenko) | 0.1.0         | 0.25             |
+Latest stable runtime as of 2026-04-23: **`tree-sitter = 0.26.8`**
+(released 2026-03-31, eight patch releases past 0.26.0). Upgrade
+plan: [TS-UPGRADE.md](TS-UPGRADE.md).
+
+| Grammar                      | Latest version | Shim       | Loads on 0.26.8 |
+|------------------------------|----------------|------------|-----------------|
+| tree-sitter-c-sharp (pinned) | 0.21.3         | *(old API)*| ❌ rev to 0.23.5 |
+| tree-sitter-rust (pinned)    | 0.21.2         | *(old API)*| ❌ rev to 0.24.2 |
+| tree-sitter-python (pinned)  | 0.21.0         | *(old API)*| ❌ rev to 0.25.0 |
+| tree-sitter-c-sharp (new)    | 0.23.5         | ^0.1       | ✅               |
+| tree-sitter-rust (new)       | 0.24.2         | ^0.1       | ✅               |
+| tree-sitter-python (new)     | 0.25.0         | ^0.1       | ✅               |
+| tree-sitter-typescript       | 0.23.2         | ^0.1       | ✅               |
+| tree-sitter-javascript       | 0.25.0         | ^0.1       | ✅               |
+| tree-sitter-go               | 0.25.0         | ^0.1       | ✅               |
+| tree-sitter-java             | 0.23.5         | ^0.1       | ✅               |
+| tree-sitter-cpp              | 0.23.4         | ^0.1       | ✅               |
+| tree-sitter-c                | 0.24.2         | ^0.1       | ✅               |
+| tree-sitter-ruby             | 0.23.1         | ^0.1       | ✅               |
+| tree-sitter-bash             | 0.25.1         | ^0.1       | ✅               |
+| tree-sitter-php              | 0.24.2         | ^0.1       | ✅               |
+| tree-sitter-dart (nielsenko) | 0.1.0          | ^0.1       | ✅ (spike first) |
+| tree-sitter-swift            | 0.7.1          | *(ts ^0.23)* | ⚠ generated-file workaround |
+| tree-sitter-kotlin (fwcd)    | 0.3.8          | *(ts 0.21–0.22)* | ❌ incompatible |
 
 **Implication.** Landing TypeScript (or any of Go / Java / C++ / Ruby /
 Bash / PHP / Dart) requires upgrading the workspace to
-`tree-sitter = "=0.25.x"` and migrating the three existing lang
-modules. That migration is P-LANG-0 below and blocks everything else.
-Kotlin is the only notable grammar still on the old runtime — we pass
-on it for now (see [LANG-DECISIONS]).
+`tree-sitter = "=0.26.8"` and migrating the three existing lang
+modules to the new grammar releases listed above. That migration is
+P-LANG-0 below and blocks everything else. Kotlin is stuck on the
+old runtime and Swift has a build-script caveat — both deferred per
+[LANG-DECISIONS].
 
 ---
 
