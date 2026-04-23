@@ -23,6 +23,7 @@ use crate::{
     config::ExclusionConfig,
     pair::PairScore,
     report_boilerplate::{build_boilerplate_hints, ReportBoilerplateHint},
+    report_location::format_occurrence,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs, RepoMetrics},
     state::{FileId, FileRegistry},
 };
@@ -106,8 +107,7 @@ impl Report {
     pub fn truncate_for_wire(mut self, cap: usize) -> Self {
         self.schema_doc.clear();
         for cluster in &mut self.clusters {
-            let total = cluster.occurrences.len().max(cluster.occurrences_total);
-            cluster.occurrences_total = total;
+            cluster.occurrences_total = occurrence_count(cluster);
             if cluster.occurrences.len() > cap {
                 cluster.occurrences.truncate(cap);
                 cluster.occurrences_truncated = true;
@@ -204,12 +204,20 @@ pub struct ReportCluster {
     /// [`Report::truncate_for_wire`] because every client re-derives
     /// it from `bucket` + `occurrences` + `signals`.
     pub summary: String,
-    /// Derived one-line interpretation of the signal combination.
-    /// Computed from `signals`; never carries information the signals
-    /// don't already convey, but saves the consumer a lookup. Blanked
-    /// by [`Report::truncate_for_wire`] because clients re-derive it
-    /// from `bucket` via the shared bucket-labels helper.
+    /// Derived one-line interpretation; blanked by
+    /// [`Report::truncate_for_wire`] because clients re-derive it.
     pub interpretation: String,
+}
+
+/// Returns the authoritative occurrence count for user-facing copy.
+#[must_use]
+pub fn occurrence_count(cluster: &ReportCluster) -> usize {
+    let total = if cluster.occurrences_total > 0 {
+        cluster.occurrences_total
+    } else {
+        cluster.size
+    };
+    total.max(cluster.occurrences.len())
 }
 
 /// Per-cluster signal breakdown; mirrors
@@ -310,6 +318,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
                 inputs.file_languages,
                 inputs.scan_root,
                 inputs.exclusion,
+                inputs.sources,
             );
             let all_hidden = !report_cluster.occurrences.is_empty()
                 && report_cluster.occurrences.iter().all(|occ| occ.hidden);
@@ -358,6 +367,7 @@ fn cluster_to_report<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     scan_root: &Path,
     exclusion: &ExclusionConfig,
+    sources: &HashMap<FileId, Vec<u8>>,
 ) -> ReportCluster {
     let canonical_node_count = cluster
         .members
@@ -382,7 +392,9 @@ fn cluster_to_report<S: BuildHasher>(
     let summary = summarise(
         cluster.members.len(),
         canonical_node_count,
+        &cluster.members,
         &occurrences,
+        sources,
         signals,
     );
     let interpretation = interpret(signals, canonical_node_count);
@@ -436,10 +448,17 @@ fn occurrence<S: BuildHasher>(
 fn summarise(
     size: usize,
     canonical_node_count: usize,
+    members: &[crate::fingerprint::Fingerprint],
     occurrences: &[ReportOccurrence],
+    sources: &HashMap<FileId, Vec<u8>>,
     signals: ReportSignals,
 ) -> String {
-    let locations: Vec<String> = occurrences.iter().take(3).map(format_location).collect();
+    let locations: Vec<String> = occurrences
+        .iter()
+        .zip(members)
+        .take(3)
+        .map(|(occurrence, member)| source_location(occurrence, member.file_id, sources))
+        .collect();
     let suffix = if occurrences.len() > locations.len() {
         format!(
             " (+{} more)",
@@ -468,13 +487,12 @@ fn interpret(signals: ReportSignals, _canonical_node_count: usize) -> String {
     bucket_labels(classify_signals(signals)).agent_summary()
 }
 
-/// Formats one occurrence as `path:start-end`. Extracted so
-/// [`summarise`] stays under the 20-line function budget.
-fn format_location(occurrence: &ReportOccurrence) -> String {
-    format!(
-        "{}:{}-{}",
-        occurrence.path.display(),
-        occurrence.start_byte,
-        occurrence.end_byte
-    )
+/// Formats one occurrence through the shared human-location renderer.
+fn source_location(
+    occurrence: &ReportOccurrence,
+    file_id: FileId,
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> String {
+    let source = sources.get(&file_id).map(Vec::as_slice);
+    format_occurrence(&occurrence.path, occurrence.start_byte, source)
 }

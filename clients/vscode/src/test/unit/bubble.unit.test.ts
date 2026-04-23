@@ -33,9 +33,9 @@ function cluster(signals = {
 }
 
 suite("bubble rendering helpers", () => {
-  test("inlineText includes the severity dot, verdict, count, and filename", () => {
+  test("inlineText includes the severity dot, verdict, authoritative count, and filename", () => {
     const text = inlineText(cluster(), "worst");
-    assert.match(text, /×\s*2/);
+    assert.match(text, /×\s*4/);
     assert.match(text, /Alpha\.cs/);
   });
 
@@ -49,7 +49,7 @@ suite("bubble rendering helpers", () => {
   test("ghostText encodes the signal strip", () => {
     const text = ghostText(cluster(), "top10");
     assert.match(text, /└─/);
-    assert.match(text, /×\s*2/);
+    assert.match(text, /×\s*4/);
   });
 
   test("signalStrip clamps inputs to the bar range", () => {

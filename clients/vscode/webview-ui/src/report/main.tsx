@@ -14,6 +14,7 @@ import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
   bucketLabels,
+  occurrenceCount,
   resolveBucket,
   type Severity,
 } from "../../../src/types/report";
@@ -208,7 +209,7 @@ function ReportApp() {
                 </div>
               </div>
               <div class="mono" style={{ fontSize: "12px", textAlign: "right" }}>
-                × {cluster.occurrences.length}
+                × {occurrenceCount(cluster)}
               </div>
               <div class="mono" style={{ fontSize: "12px", textAlign: "right" }}>
                 w {cluster.weight.toFixed(1)}

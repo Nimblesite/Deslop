@@ -85,6 +85,14 @@ export interface OccurrenceDisplayLocation {
   commandTitle: string;
 }
 
+export function occurrenceCount(cluster: ReportCluster): number {
+  const total =
+    cluster.occurrences_total && cluster.occurrences_total > 0
+      ? cluster.occurrences_total
+      : cluster.size;
+  return Math.max(total, cluster.occurrences.length);
+}
+
 export interface ActionHint {
   pattern: string;
   recommendation: string;

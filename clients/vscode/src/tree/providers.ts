@@ -10,6 +10,7 @@ import { indexedSeverity, SEVERITY_DOT } from "../severity";
 import {
   Bucket,
   bucketLabels,
+  occurrenceCount,
   ReportCluster,
   ReportOccurrence,
   resolveBucket,
@@ -55,9 +56,9 @@ class ClusterNode extends vscode.TreeItem {
       role: "treeitem",
     };
     this.tooltip = new vscode.MarkdownString(
-      `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
+        `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${cluster.occurrences.length}\``,
+        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\``,
     );
     this.command = {
       command: "deslop.openCluster",

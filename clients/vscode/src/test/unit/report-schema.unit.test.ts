@@ -7,9 +7,11 @@ import {
   FUSED_THRESHOLD,
   bucketLabels,
   classifyCluster,
+  occurrenceCount,
   resolveBucket,
   severityOf,
   verdictOf,
+  type ReportCluster,
   type ReportSignals,
 } from "../../types/report";
 
@@ -22,6 +24,21 @@ const signals = (
   token_jaccard: j,
   embedding_cos: e,
   fused: s + j + e,
+});
+
+const cluster = (overrides: Partial<ReportCluster> = {}): ReportCluster => ({
+  id: "x",
+  weight: 1,
+  size: 4,
+  canonical_node_count: 10,
+  signals: signals(0, 0, 0),
+  occurrences: [
+    { path: "A.cs", start_byte: 0, end_byte: 10, hidden: false },
+    { path: "B.cs", start_byte: 0, end_byte: 10, hidden: false },
+  ],
+  summary: "",
+  interpretation: "",
+  ...overrides,
 });
 
 suite("report schema helpers", () => {
@@ -86,32 +103,24 @@ suite("report schema helpers", () => {
   });
 
   test("resolveBucket prefers JSON wire label over recomputation", () => {
-    const bucket = resolveBucket({
-      id: "x",
-      weight: 1,
-      size: 2,
-      canonical_node_count: 10,
-      signals: signals(0, 0, 0),
+    const bucket = resolveBucket(cluster({
       bucket: "same_behavior",
-      occurrences: [],
-      summary: "",
-      interpretation: "",
-    });
+    }));
     assert.equal(bucket, "same_behavior");
   });
 
   test("resolveBucket falls back to signals when v3 JSON has no bucket", () => {
-    const bucket = resolveBucket({
-      id: "x",
-      weight: 1,
-      size: 2,
-      canonical_node_count: 10,
-      signals: signals(1.0, 1.0, 0),
-      occurrences: [],
-      summary: "",
-      interpretation: "",
-    });
+    const bucket = resolveBucket(cluster({ signals: signals(1.0, 1.0, 0) }));
     assert.equal(bucket, "identical");
+  });
+
+  test("occurrenceCount prefers the authoritative total over the loaded subset", () => {
+    assert.equal(occurrenceCount(cluster({ occurrences_total: 35 })), 35);
+  });
+
+  test("occurrenceCount falls back to size when total is missing or zero", () => {
+    assert.equal(occurrenceCount(cluster()), 4);
+    assert.equal(occurrenceCount(cluster({ occurrences_total: 0 })), 4);
   });
 
   test("bucketLabels hybrid_title carries bracketed Type-N on every bucket", () => {

@@ -17,6 +17,7 @@ import {
   Severity,
   bucketLabels,
   clusterInterpretation,
+  occurrenceCount,
   resolveBucket,
 } from "../types/report";
 
@@ -233,7 +234,7 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
 // they use `plainTitle` per [CLONE-BUCKETS-DUAL-LABEL].
 export function inlineText(cluster: ReportCluster, severity: Severity): string {
   const canonical = cluster.occurrences[0];
-  const count = cluster.occurrences.length;
+  const count = occurrenceCount(cluster);
   const title = bucketLabels(resolveBucket(cluster)).plainTitle;
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
   return `  ${SEVERITY_DOT[severity]} ${title} × ${count}${location}`;
@@ -241,7 +242,7 @@ export function inlineText(cluster: ReportCluster, severity: Severity): string {
 
 export function ghostText(cluster: ReportCluster, severity: Severity): string {
   const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  return `  └─ ${SEVERITY_DOT[severity]} ${title}  ${signalStrip(cluster)}  × ${cluster.occurrences.length}`;
+  return `  └─ ${SEVERITY_DOT[severity]} ${title}  ${signalStrip(cluster)}  × ${occurrenceCount(cluster)}`;
 }
 
 export function signalStrip(cluster: ReportCluster): string {

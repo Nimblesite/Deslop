@@ -36,6 +36,7 @@ pub mod render;
 pub mod report;
 pub mod report_boilerplate;
 pub mod report_hints;
+pub mod report_location;
 pub mod report_metrics;
 pub mod sibling;
 pub mod state;

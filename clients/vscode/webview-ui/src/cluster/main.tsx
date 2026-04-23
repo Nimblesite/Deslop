@@ -14,7 +14,7 @@ import {
 import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
 import { SignalStrip } from "../components/SignalStrip";
 import { SeverityBadge } from "../components/SeverityBadge";
-import { bucketLabels, resolveBucket } from "../../../src/types/report";
+import { bucketLabels, occurrenceCount, resolveBucket } from "../../../src/types/report";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
 const focusedOccurrenceIndex = signal(0);
@@ -154,7 +154,7 @@ function ClusterApp() {
             }}
             title={clusterStatsTitle(cluster)}
           >
-            weight {cluster.weight.toFixed(2)} · size {cluster.size} · × {cluster.occurrences.length}
+            weight {cluster.weight.toFixed(2)} · size {cluster.size} · × {occurrenceCount(cluster)}
           </div>
           {canonical ? (
             <div
@@ -359,7 +359,7 @@ function rankTitle(rank: number, total: number, severity: string): string {
 }
 
 function clusterStatsTitle(cluster: ReportCluster): string {
-  return `Weight is Deslop's duplication impact score. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${cluster.weight.toFixed(2)}, size ${cluster.size}, occurrences ${cluster.occurrences.length}.`;
+  return `Weight is Deslop's duplication impact score. Size is the number of cloned AST members. Occurrences is the number of editor locations in this cluster: weight ${cluster.weight.toFixed(2)}, size ${cluster.size}, occurrences ${occurrenceCount(cluster)}.`;
 }
 
 function canonicalTitle(occurrence: ReportOccurrence): string {

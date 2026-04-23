@@ -25,6 +25,7 @@ use crate::{
         html_footer::write_run_details,
     },
     report::{Report, ReportCluster, ReportOccurrence},
+    report_location::format_occurrence,
     report_metrics::ThresholdSource,
 };
 
@@ -91,6 +92,12 @@ impl<'a> SnippetLoader<'a> {
             fs::read_to_string(&absolute).ok()
         });
         cached.as_deref()
+    }
+
+    /// Formats the occurrence location from cached source when present.
+    fn location(&mut self, relative: &Path, start: usize) -> String {
+        let source = self.source(relative).map(str::as_bytes);
+        format_occurrence(relative, start, source)
     }
 }
 
@@ -289,7 +296,7 @@ fn write_cluster_card(out: &mut String, cluster: &ReportCluster, snippets: &mut 
         action = escape(kind_action(kind)),
     );
     write_example(out, occurrences, snippets);
-    write_also_list(out, occurrences);
+    write_also_list(out, occurrences, snippets);
     let _ = write!(out, "</article>");
 }
 
@@ -311,35 +318,33 @@ fn write_example(
         return;
     };
     let language = language_for_path(&example.path);
+    let location = snippets.location(&example.path, example.start_byte);
     match snippets.snippet(&example.path, example.start_byte, example.end_byte) {
         Some((source, start_line)) => {
-            let end_line = start_line.saturating_add(source.matches('\n').count());
             let _ = write!(
                 out,
-                "<p class=\"cluster-card__example\">Example — {path}:{start}-{end}</p>",
-                path = escape(&example.path.display().to_string()),
-                start = start_line,
-                end = end_line,
+                "<p class=\"cluster-card__example\">Example — {location}</p>",
+                location = escape(&location),
             );
             out.push_str(&render_snippet_body(&source, start_line, language));
         }
         None => {
             let _ = write!(
                 out,
-                "<p class=\"cluster-card__example\">Example — {path} (bytes {start}-{end})</p>\
+                "<p class=\"cluster-card__example\">Example — {location}</p>\
                  <p class=\"snippet-missing\">Source unavailable on disk.</p>",
-                path = escape(&example.path.display().to_string()),
-                start = example.start_byte,
-                end = example.end_byte,
+                location = escape(&location),
             );
         }
     }
 }
 
-/// Renders the "also found in …" tail. Inline-prints the next five
-/// locations and folds anything beyond that into a single `<details>`
-/// so a 50-occurrence cluster produces a compact card, not a flood.
-fn write_also_list(out: &mut String, occurrences: &[ReportOccurrence]) {
+/// Renders the compact "also found in …" tail.
+fn write_also_list(
+    out: &mut String,
+    occurrences: &[ReportOccurrence],
+    snippets: &mut SnippetLoader<'_>,
+) {
     if occurrences.len() <= 1 {
         return;
     }
@@ -350,7 +355,7 @@ fn write_also_list(out: &mut String, occurrences: &[ReportOccurrence]) {
         "<p class=\"cluster-card__example\">Also found in:</p><ul class=\"also-list\">"
     );
     for occ in occurrences.iter().take(inline_end).skip(1) {
-        write_also_item(out, occ);
+        write_also_item(out, occ, snippets);
     }
     let _ = write!(out, "</ul>");
     if occurrences.len() > inline_cap {
@@ -360,28 +365,25 @@ fn write_also_list(out: &mut String, occurrences: &[ReportOccurrence]) {
             "<details class=\"also-toggle\"><summary>Show {extra} more location(s)</summary><ul class=\"also-list\">",
         );
         for occ in occurrences.iter().skip(inline_cap) {
-            write_also_item(out, occ);
+            write_also_item(out, occ, snippets);
         }
         let _ = write!(out, "</ul></details>");
     }
 }
 
-/// One row in the "also found in" list. Path + line range + hidden
-/// marker if applicable. No collapsibles, no per-occurrence snippets —
-/// the canonical example already shows the code.
-fn write_also_item(out: &mut String, occ: &ReportOccurrence) {
+/// One row in the "also found in" list.
+fn write_also_item(out: &mut String, occ: &ReportOccurrence, snippets: &mut SnippetLoader<'_>) {
     let class = if occ.hidden { "is-hidden" } else { "" };
     let suffix = if occ.hidden {
         " · hidden by your config"
     } else {
         ""
     };
+    let location = snippets.location(&occ.path, occ.start_byte);
     let _ = write!(
         out,
-        "<li class=\"{class}\">{path}<span class=\"also-loc\">bytes {start}-{end}{suffix}</span></li>",
-        path = escape(&occ.path.display().to_string()),
-        start = occ.start_byte,
-        end = occ.end_byte,
+        "<li class=\"{class}\">{location}<span class=\"also-loc\">{suffix}</span></li>",
+        location = escape(&location),
     );
 }
 

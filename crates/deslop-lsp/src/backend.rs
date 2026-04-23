@@ -284,7 +284,11 @@ impl LanguageServer for LspBackend {
         let Some(cluster) = clusters.into_iter().next() else {
             return Ok(None);
         };
-        Ok(Some(hover::build_for_cluster(&cluster)))
+        let workspace_root = self.service.session_config().await.workspace_root;
+        Ok(Some(hover::build_for_cluster_with_root(
+            &cluster,
+            &workspace_root,
+        )))
     }
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {

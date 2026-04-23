@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use deslop_core::{
     live::{FindSimilarRequest, LiveApi},
-    report::{Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
+    report::{occurrence_count, Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
 };
 use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::Result as LspResult;
@@ -25,8 +25,7 @@ pub const REPORT_SCHEMA_DOC: &str = "deslop/reportSchemaDoc";
 /// Mirrors [`Report::truncate_for_wire`] but for a single cluster
 /// (used by `report/forFile` + `report/forRange`).
 fn truncate_cluster_for_wire(cluster: &mut ReportCluster) {
-    let total = cluster.occurrences.len().max(cluster.occurrences_total);
-    cluster.occurrences_total = total;
+    cluster.occurrences_total = occurrence_count(cluster);
     if cluster.occurrences.len() > LIVE_WIRE_OCCURRENCE_CAP {
         cluster.occurrences.truncate(LIVE_WIRE_OCCURRENCE_CAP);
         cluster.occurrences_truncated = true;

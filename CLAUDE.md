@@ -24,6 +24,15 @@ Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO:
 **Test command:** `make test`
 **Lint command:** `make lint`
 
+## UI
+
+- The initial UI is a VSIX, but we we are also working on IntelliJ and other plugins
+- Consistency across UI panels is CRITICAL
+- Do not DUPLICATE the rendering of text or links like clusters and occurences. Create a shared function that gets reused everywhere
+- What is displayed on screen MUST BE HUMAN READABLE. The display is NOT FOR AI BY DEFAULT
+- However, context menus should always have a "Copy Context For AI" item so that they can feed the context to AI directly
+- Specific AI reports like the JSON file and AI reports generated from it should REMAIN human unreadable. These reports are only targeted for AI
+
 ## Architecture
 
 ```
