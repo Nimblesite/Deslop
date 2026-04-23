@@ -12,15 +12,28 @@ use std::{
 };
 
 use deslop_core::{
-    report::{occurrence_count, ReportCluster, ReportOccurrence},
+    report::{ReportCluster, ReportOccurrence},
     report_location::format_occurrence,
 };
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
+
+use crate::presentation::{cluster_summary, signal_sentence};
 
 /// Builds the hover response for `cluster`.
 #[must_use]
 pub fn build_for_cluster(cluster: &ReportCluster) -> Hover {
     hover_from_markdown(markdown_for(cluster))
+}
+
+/// Builds the hover response for the clusters under the cursor.
+#[must_use]
+pub fn build_for_clusters_with_root(
+    clusters: &[ReportCluster],
+    ranked_clusters: &[ReportCluster],
+    workspace_root: &Path,
+) -> Option<Hover> {
+    let value = markdown_for_clusters_with_root(clusters, ranked_clusters, Some(workspace_root));
+    (!value.is_empty()).then(|| hover_from_markdown(value))
 }
 
 /// Builds the hover response for `cluster`, resolving relative
@@ -47,45 +60,85 @@ pub fn markdown_for(cluster: &ReportCluster) -> String {
     markdown_for_with_root(cluster, None)
 }
 
+/// Renders the hover markdown for multiple clusters.
+#[must_use]
+pub fn markdown_for_clusters(
+    clusters: &[ReportCluster],
+    ranked_clusters: &[ReportCluster],
+) -> String {
+    markdown_for_clusters_with_root(clusters, ranked_clusters, None)
+}
+
 /// Renders the hover markdown body with optional path resolution.
 fn markdown_for_with_root(cluster: &ReportCluster, workspace_root: Option<&Path>) -> String {
-    let header = format!(
-        "### Cluster {id}\n\n{interpretation}\n\n",
-        id = cluster.id,
-        interpretation = cluster.interpretation
-    );
-    let table = signals_table(cluster);
-    let occurrences = occurrences_block(cluster, workspace_root);
-    format!("{header}{table}\n{occurrences}")
+    markdown_for_clusters_with_root(std::slice::from_ref(cluster), &[], workspace_root)
 }
 
-/// Builds the signal table (markdown).
-fn signals_table(cluster: &ReportCluster) -> String {
-    format!(
-        "| Signal | Value |\n|---|---|\n| structural | {structural:.2} |\n| token_jaccard | {jaccard:.2} |\n| embedding_cos | {embedding:.2} |\n| fused | {fused:.2} |\n",
-        structural = cluster.signals.structural,
-        jaccard = cluster.signals.token_jaccard,
-        embedding = cluster.signals.embedding_cos,
-        fused = cluster.signals.fused,
-    )
-}
-
-/// Builds the occurrence bullet list.
-fn occurrences_block(cluster: &ReportCluster, workspace_root: Option<&Path>) -> String {
+/// Renders all hovered clusters as one human-readable markdown list.
+fn markdown_for_clusters_with_root(
+    clusters: &[ReportCluster],
+    ranked_clusters: &[ReportCluster],
+    workspace_root: Option<&Path>,
+) -> String {
     let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
-    let header = format!(
-        "**Occurrences ({count})**:\n",
-        count = occurrence_count(cluster)
-    );
-    let body = cluster
-        .occurrences
+    let mut out = String::new();
+    write_list_header(&mut out, clusters.len());
+    for cluster in clusters {
+        let rank = rank_for(cluster, ranked_clusters);
+        write_cluster_block(&mut out, cluster, rank, workspace_root, &mut cache);
+    }
+    out
+}
+
+/// Writes a short list heading when multiple clusters overlap.
+fn write_list_header(out: &mut String, count: usize) {
+    if count > 1 {
+        let _ = writeln!(out, "**Deslop clusters at this location ({count})**\n");
+    }
+}
+
+/// Writes one cluster and its nested detail rows.
+fn write_cluster_block(
+    out: &mut String,
+    cluster: &ReportCluster,
+    rank: Option<usize>,
+    workspace_root: Option<&Path>,
+    cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
+) {
+    let _ = writeln!(out, "- **{}**", cluster_summary(cluster, rank));
+    write_interpretation(out, cluster);
+    let _ = writeln!(out, "  - {}", signal_sentence(cluster));
+    write_occurrences(out, cluster, workspace_root, cache);
+    let _ = writeln!(out);
+}
+
+/// Writes the interpretation row when the report carries one.
+fn write_interpretation(out: &mut String, cluster: &ReportCluster) {
+    if !cluster.interpretation.trim().is_empty() {
+        let _ = writeln!(out, "  - {}", cluster.interpretation.trim());
+    }
+}
+
+/// Writes the nested occurrence location list.
+fn write_occurrences(
+    out: &mut String,
+    cluster: &ReportCluster,
+    workspace_root: Option<&Path>,
+    cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
+) {
+    let _ = writeln!(out, "  - Occurrences:");
+    for occurrence in &cluster.occurrences {
+        let location = occurrence_display_label(occurrence, workspace_root, cache);
+        let _ = writeln!(out, "    - {location}");
+    }
+}
+
+/// Finds the one-based global impact rank for a cluster.
+fn rank_for(cluster: &ReportCluster, ranked_clusters: &[ReportCluster]) -> Option<usize> {
+    ranked_clusters
         .iter()
-        .fold(String::new(), |mut acc, occurrence| {
-            let location = occurrence_display_label(occurrence, workspace_root, &mut cache);
-            let _ = writeln!(acc, "- {location}");
-            acc
-        });
-    format!("{header}{body}")
+        .position(|ranked| ranked.id == cluster.id)
+        .map(|index| index.saturating_add(1))
 }
 
 /// Formats one occurrence without exposing byte offsets.
@@ -165,20 +218,27 @@ mod tests {
     fn markdown_for_cluster_covers_header_signals_and_occurrences() {
         let cluster = make_cluster();
         let body = markdown_for(&cluster);
-        // Header carries the cluster id and interpretation.
-        assert!(body.contains("### Cluster abc123"), "header: {body}");
+        // Header is for humans: rank/title/count, not the raw stable hash.
+        assert!(
+            !body.contains("### Cluster abc123"),
+            "hover must not lead with the raw cluster hash: {body}"
+        );
+        assert!(
+            body.contains("Identical code [Type-1/2]"),
+            "hover must use the shared bucket title: {body}"
+        );
+        assert!(
+            body.contains("2 occurrences"),
+            "hover must summarize the occurrence count in prose: {body}"
+        );
         assert!(
             body.contains("Identical code. Safe to extract."),
             "interpretation: {body}"
         );
-        // Signals table: each row present with 2dp formatting.
-        assert!(body.contains("| structural | 1.00 |"), "structural: {body}");
-        assert!(body.contains("| token_jaccard | 0.95 |"), "jaccard: {body}");
         assert!(
-            body.contains("| embedding_cos | 0.25 |"),
-            "embedding: {body}"
+            !body.contains("| Signal | Value |"),
+            "hover must not render a large signal table: {body}"
         );
-        assert!(body.contains("| fused | 2.20 |"), "fused: {body}");
         // Occurrence bullet list carries both occurrences without byte ranges.
         assert!(body.contains("**Occurrences (2)**"), "occ header: {body}");
         assert!(

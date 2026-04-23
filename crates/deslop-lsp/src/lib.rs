@@ -11,6 +11,7 @@ pub mod code_lens;
 pub mod custom_methods;
 pub mod diagnostics;
 pub mod hover;
+pub mod presentation;
 pub mod position;
 
 pub use backend::{run_stdio, LspBackend};

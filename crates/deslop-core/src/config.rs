@@ -44,6 +44,9 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
 /// Directory components that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
 
+/// Generated migration path components hidden from summaries.
+const BUILTIN_REPORT_HIDE_COMPONENT_PAIRS: &[(&str, &str)] = &[("alembic", "versions")];
+
 /// File suffixes that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
     ".g.cs",
@@ -338,7 +341,7 @@ fn built_in_excluded(path: &Path) -> bool {
 
 /// Returns true when built-in generated-code rules hide a path from summaries.
 fn built_in_report_hidden(path: &Path) -> bool {
-    has_hidden_component(path) || has_hidden_suffix(path)
+    has_hidden_component(path) || has_hidden_component_pair(path) || has_hidden_suffix(path)
 }
 
 /// Returns true when the path has a generated-code directory component.
@@ -348,6 +351,21 @@ fn has_hidden_component(path: &Path) -> bool {
             .iter()
             .any(|hidden| component == *hidden)
     })
+}
+
+/// Returns true when the path contains a generated-code component pair.
+fn has_hidden_component_pair(path: &Path) -> bool {
+    let components: Vec<String> = path_components(path).collect();
+    BUILTIN_REPORT_HIDE_COMPONENT_PAIRS
+        .iter()
+        .any(|pair| contains_component_pair(&components, *pair))
+}
+
+/// Returns true when adjacent path components match `pair`.
+fn contains_component_pair(components: &[String], pair: (&str, &str)) -> bool {
+    components
+        .windows(2)
+        .any(|window| matches!(window, [first, second] if first == pair.0 && second == pair.1))
 }
 
 /// Returns true when the path's file name has a generated-code suffix.

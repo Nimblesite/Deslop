@@ -475,14 +475,17 @@ mod tests {
             Some(DiagnosticSeverity::WARNING),
             "top percentile → WARNING"
         );
-        let code_field = diagnostic
-            .code
+        assert!(
+            diagnostic.code.is_none(),
+            "cluster hash must not be visible as deslop(<id>) in editor hovers"
+        );
+        let cluster_id = diagnostic
+            .data
             .as_ref()
-            .ok_or_else(|| anyhow!("code populated"))?;
-        let tower_lsp::lsp_types::NumberOrString::String(code) = code_field else {
-            return Err(anyhow!("expected String diagnostic code"));
-        };
-        assert_eq!(code, "cluster-1");
+            .and_then(|data| data.get("cluster_id"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow!("cluster id stored in diagnostic data"))?;
+        assert_eq!(cluster_id, "cluster-1");
         let related = diagnostic
             .related_information
             .as_ref()
