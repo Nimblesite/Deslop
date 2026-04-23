@@ -27,7 +27,7 @@ Multiplying the three gives a number that is dimensionally sensible (effort × r
 
 ## What the formula deliberately excludes
 
-- **Language weight.** A Type-2 C# duplicate and a Type-2 Rust duplicate score identically if their size × count × LOC match. Language preferences belong in configuration, not the ranking.
+- **Language weight.** An identical-code C# duplicate and an identical-code Rust duplicate score identically if their size × count × LOC match. Language preferences belong in configuration, not the ranking.
 - **Signal weight.** The ranking does not multiply by `embedding_cos` or `structural`. Those signals gate whether a cluster exists at all. Once accepted, every cluster is ranked on the same scale.
 - **File age / churn.** Tempting, and wrong. Old stable duplication is still duplication. Adding a churn factor would hide long-standing problems that the team has learned to live with — which is precisely the kind of problem Deslop should surface.
 - **User-configurable weights.** Non-negotiable. If every team tuned their own weights, cross-repo comparison would be meaningless, and "score = 2184" in a blog post would communicate nothing.

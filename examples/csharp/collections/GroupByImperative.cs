@@ -3,8 +3,9 @@ using System.Collections.Generic;
 namespace Examples.Collections
 {
     // Imperative group-by over transactions. Dictionary + foreach.
-    // Pairs with GroupByLinq below (Type-4), and with GroupByStreaming
-    // (Type-3 / Type-4 depending on the subtree).
+    // Pairs with GroupByLinq below (same behavior, different code) and
+    // with GroupByStreaming (nearly identical code shading into
+    // same-behavior, depending on the subtree).
     public static class GroupByImperative
     {
         public static Dictionary<string, decimal> TotalByCategory(

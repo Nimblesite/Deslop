@@ -68,9 +68,9 @@ deslop . --min-nodes 20
 
 Raise it for large codebases where you only want major duplication. Lower it when hunting micro-patterns.
 
-## Enable semantic detection (Type-4)
+## Enable semantic detection (same behavior, different code)
 
-Structural and token passes are deterministic and run without network. Semantic clones — same behaviour, different syntax — require embeddings:
+Structural and token passes are deterministic and run without network. Same-behavior matches — same behaviour, different syntax — require embeddings:
 
 ```bash
 deslop . --embeddings required

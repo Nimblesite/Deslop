@@ -22,7 +22,7 @@ Deslop rebuilds from both assumptions. Output is ranked by the weighted impact o
 
 ## Fast feedback is the entire product
 
-The feature that matters most is not the breadth of languages, not the precision of Type-4 detection, not the cleverness of the fusion. It is **time to first useful signal**. A duplicate that surfaces three commits after it lands is a duplicate you will not refactor. A duplicate that surfaces while the agent is still holding the file open is a duplicate you fix before the next message.
+The feature that matters most is not the breadth of languages, not the precision of same-behavior detection, not the cleverness of the fusion. It is **time to first useful signal**. A duplicate that surfaces three commits after it lands is a duplicate you will not refactor. A duplicate that surfaces while the agent is still holding the file open is a duplicate you fix before the next message.
 
 So the entire pipeline is tuned for that. The cache is keyed so unchanged files are free. The parser is tree-sitter, which is fast enough to handle a 2M-LOC repo cold. The ranking is cheap — one multiplication per cluster. The LSP shell that lands in v2 will light duplication up in the editor at the speed of a spellchecker.
 

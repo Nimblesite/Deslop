@@ -4,8 +4,8 @@ using System.Linq;
 
 namespace Examples.Repositories
 {
-    // Plain CRUD repository. Hand-written but nearly identical in shape to
-    // ProductRepository and OrderRepository below — classic Type-2 clone
+    // Plain CRUD repository. Hand-written but identical in shape to
+    // ProductRepository and OrderRepository below — classic identical-code
     // cluster (renamed `User` → `Product` / `Order`).
     public sealed class UserRepository
     {

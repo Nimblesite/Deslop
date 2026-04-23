@@ -39,7 +39,7 @@ Every report begins with an embedded `schema_doc` explaining the shape to the ag
     {
       "id": "cl_01HZABC…",
       "score": 2184,
-      "kind": "Type-2",
+      "bucket": "identical",
       "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91 },
       "summary": "3 near-identical copies of a 42-node method across UserRepository.cs:120-180, ProductRepository.cs:58-118, OrderRepository.cs:40-102 — safe to extract.",
       "suggestion": "extract_shared_function",
