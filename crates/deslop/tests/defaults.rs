@@ -45,6 +45,38 @@ fn default_run_hides_generated_only_clusters_from_metrics() -> Result<()> {
 }
 
 #[test]
+fn default_run_hides_alembic_migration_only_clusters() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("repo");
+    let versions = root.join("alembic").join("versions");
+    fs::create_dir_all(&versions)?;
+    fs::write(
+        versions.join("001_initial_schema.py"),
+        ALEMBIC_INITIAL_SCHEMA,
+    )?;
+
+    let report = run_report(&root, tmp.path(), 30)?;
+
+    assert_eq!(
+        clusters(&report)?.len(),
+        0,
+        "Alembic migration-only clusters must be hidden: {report}"
+    );
+    assert!(
+        field(&report, "clusters_hidden")
+            .as_u64()
+            .is_some_and(|count| count > 0),
+        "hidden Alembic clusters must be counted: {report}",
+    );
+    assert_eq!(
+        metrics_field(&report, "duplicated_loc").as_u64(),
+        Some(0),
+        "Alembic migration-only duplication must not inflate headline duplicated LOC: {report}",
+    );
+    Ok(())
+}
+
+#[test]
 fn default_run_does_not_cluster_distinct_fastapi_route_decorators() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let root = tmp.path().join("repo");
@@ -130,6 +162,118 @@ public sealed record BetaDto(
     string UpdatedAt
 );
 ";
+
+const ALEMBIC_INITIAL_SCHEMA: &str = r#"
+"""Initial schema."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+revision: str = "001"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "tenants",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("api_key_hash", sa.String(), nullable=False, unique=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("ix_tenants_api_key_hash", "tenants", ["api_key_hash"])
+
+    op.create_table(
+        "agent_configs",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "tenant_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("tenants.id"),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("system_prompt", sa.Text(), nullable=False, server_default=""),
+        sa.Column("model_config", postgresql.JSON(), nullable=False),
+        sa.Column("tools_config", postgresql.JSON(), nullable=False, server_default="[]"),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("ix_agent_configs_tenant_id", "agent_configs", ["tenant_id"])
+
+    op.create_table(
+        "conversations",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "tenant_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("tenants.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "config_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("agent_configs.id"),
+            nullable=False,
+        ),
+        sa.Column("session_id", sa.String(), nullable=False, unique=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("ix_conversations_tenant_id", "conversations", ["tenant_id"])
+    op.create_index("ix_conversations_config_id", "conversations", ["config_id"])
+    op.create_index("ix_conversations_session_id", "conversations", ["session_id"])
+
+    op.create_table(
+        "messages",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "conversation_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("conversations.id"),
+            nullable=False,
+        ),
+        sa.Column("role", sa.String(), nullable=False),
+        sa.Column("content", sa.Text(), nullable=False),
+        sa.Column("tool_calls", postgresql.JSON(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("ix_messages_conversation_id", "messages", ["conversation_id"])
+
+    op.create_table(
+        "agent_logs",
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "conversation_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("conversations.id"),
+            nullable=False,
+        ),
+        sa.Column("level", sa.String(), nullable=False, server_default="info"),
+        sa.Column("message", sa.Text(), nullable=False),
+        sa.Column("metadata", postgresql.JSON(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+    op.create_index("ix_agent_logs_conversation_id", "agent_logs", ["conversation_id"])
+
+
+def downgrade() -> None:
+    op.drop_table("agent_logs")
+    op.drop_table("messages")
+    op.drop_table("conversations")
+    op.drop_table("agent_configs")
+    op.drop_table("tenants")
+"#;
 
 const FASTAPI_ROUTES: &str = r#"
 from fastapi import APIRouter
