@@ -43,7 +43,7 @@ impl LanguageParser for RustParser {
     }
 
     fn grammar(&self) -> tree_sitter::Language {
-        tree_sitter_rust::language()
+        tree_sitter_rust::LANGUAGE.into()
     }
 
     fn parse_and_normalize(
@@ -58,7 +58,7 @@ impl LanguageParser for RustParser {
 
 /// Maps a tree-sitter Rust node kind to its normalised form. Covers the
 /// identifier / literal / trivia families emitted by `tree-sitter-rust`
-/// 0.21.x. Every other named kind passes through interned so the hash
+/// 0.24.x. Every other named kind passes through interned so the hash
 /// stays stable across runs.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
     match raw {

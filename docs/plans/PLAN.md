@@ -11,6 +11,9 @@ Implemented work intentionally not repeated here:
 - Core CLI, C# / Rust / Python parsing, normalization, fingerprinting, LSH,
   embeddings, exclusion config, metrics, fail-over, incremental cache, and
   human-readable HTML reports.
+- P-LANG-0 tree-sitter runtime upgrade to 0.26.8, including modern
+  `LanguageFn` grammar pins and Rust / Python AST-golden coverage
+  ([TS-UPGRADE.md](TS-UPGRADE.md)).
 - Live analysis core, LSP diagnostics, LSP hover, LSP code lens, LSP custom
   `deslop/*` methods, MCP server, and VS Code extension v0.1.
 - Canonical clone buckets in `deslop-core::buckets`, `cluster.bucket` on the

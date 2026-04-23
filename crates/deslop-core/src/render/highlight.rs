@@ -51,9 +51,9 @@ struct Span {
 /// languages so the caller falls back to plain escape.
 fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
     match language {
-        "csharp" => Some(tree_sitter_c_sharp::language()),
-        "rust" => Some(tree_sitter_rust::language()),
-        "python" => Some(tree_sitter_python::language()),
+        "csharp" => Some(tree_sitter_c_sharp::LANGUAGE.into()),
+        "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
+        "python" => Some(tree_sitter_python::LANGUAGE.into()),
         _ => None,
     }
 }

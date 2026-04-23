@@ -33,17 +33,18 @@ docs.rs + GitHub state at that date.
 
 ---
 
-## [LANG-ROADMAP-RUNTIME-UPGRADE] The tree-sitter 0.22 → 0.26.8 problem
+## [LANG-ROADMAP-RUNTIME-UPGRADE] The tree-sitter 0.22 → 0.26.8 upgrade
 
-The workspace pins `tree-sitter = "=0.22.6"` and every current lang
-module calls `tree_sitter_<x>::language()`. That API is gone from
-modern grammars. From 2024 onwards, new tree-sitter grammars depend
-on the **`tree-sitter-language ^0.1`** shim crate and expose a
-`LANGUAGE` constant (a `LanguageFn`) convertible to
-`tree_sitter::Language` via `.into()`. The shim is stable across
-`tree-sitter` 0.24 / 0.25 / 0.26, so a grammar declaring
-`tree-sitter ^0.25` (in its `dev-dependencies`, for its own tests)
-still loads cleanly against the **0.26.8 runtime we are targeting**.
+P-LANG-0 upgraded the workspace from `tree-sitter = "=0.22.6"` to
+`tree-sitter = "=0.26.8"` and migrated the current language modules from
+`tree_sitter_<x>::language()` to each grammar's `LANGUAGE` constant.
+From 2024 onwards, new tree-sitter grammars depend on the
+**`tree-sitter-language ^0.1`** shim crate and expose a `LANGUAGE`
+constant (a `LanguageFn`) convertible to `tree_sitter::Language` via
+`.into()`. The shim is stable across `tree-sitter` 0.24 / 0.25 / 0.26,
+so a grammar declaring `tree-sitter ^0.25` (in its `dev-dependencies`,
+for its own tests) loads cleanly against the **0.26.8 runtime now
+targeted by Deslop**.
 
 Latest stable runtime as of 2026-04-23: **`tree-sitter = 0.26.8`**
 (released 2026-03-31, eight patch releases past 0.26.0). Upgrade
@@ -70,13 +71,10 @@ plan: [TS-UPGRADE.md](TS-UPGRADE.md).
 | tree-sitter-swift            | 0.7.1          | *(ts ^0.23)* | ⚠ generated-file workaround |
 | tree-sitter-kotlin (fwcd)    | 0.3.8          | *(ts 0.21–0.22)* | ❌ incompatible |
 
-**Implication.** Landing TypeScript (or any of Go / Java / C++ / Ruby /
-Bash / PHP / Dart) requires upgrading the workspace to
-`tree-sitter = "=0.26.8"` and migrating the three existing lang
-modules to the new grammar releases listed above. That migration is
-P-LANG-0 below and blocks everything else. Kotlin is stuck on the
-old runtime and Swift has a build-script caveat — both deferred per
-[LANG-DECISIONS].
+**Implication.** TypeScript (and Go / Java / C++ / Ruby / Bash / PHP /
+Dart) can now build on the modern `LanguageFn` grammar surface.
+Kotlin is still stuck on the old runtime and Swift has a build-script
+caveat — both deferred per [LANG-DECISIONS].
 
 ---
 
@@ -304,23 +302,25 @@ All phases follow the existing PLAN.md shape: each bullet produces
 code + e2e fixture + AST golden + grammar pin in `Cargo.toml`,
 `.github/workflows/ci.yml`, and `.devcontainer/`.
 
-### Phase P-LANG-0 — tree-sitter runtime upgrade (BLOCKER)
+### Phase P-LANG-0 — tree-sitter runtime upgrade (CODE COMPLETE, CI BLOCKED)
 
-- [ ] Bump `tree-sitter = "=0.25.8"` in workspace `Cargo.toml`.
-- [ ] Migrate `csharp.rs`, `rust_lang.rs`, `python.rs` to newer grammar
-      versions that target ts 0.25:
-      - `tree-sitter-c-sharp` → latest compatible tag.
-      - `tree-sitter-rust` → 0.24.x.
-      - `tree-sitter-python` → latest compatible tag.
-      Each bump re-generates the AST-golden expected files; diff-review
-      them manually and commit intentionally.
-- [ ] Update `lang::shared::parse_source` to the new
-      `Parser::set_language` signature (takes `&LanguageFn` not
-      `Language` in 0.25).
-- [ ] Re-run `make ci`. Coverage must not drop below the threshold in
-      `coverage-thresholds.json`.
-- [ ] Bump grammar-pin-drift check in CI to understand both the old
-      `::language()` and new `LANGUAGE` const shapes.
+- [x] Bump `tree-sitter = "=0.26.8"` in workspace `Cargo.toml`.
+- [x] Migrate `csharp.rs`, `rust_lang.rs`, `python.rs` to newer grammar
+      versions that target the modern `LanguageFn` surface:
+      - `tree-sitter-c-sharp` → `=0.23.5`.
+      - `tree-sitter-rust` → `=0.24.2`.
+      - `tree-sitter-python` → `=0.25.0`.
+      Rust AST goldens were refreshed for the new
+      `lifetime_parameter` / `type_parameter` wrappers; C# and Python
+      stayed stable.
+- [x] Audit `lang::shared::parse_source` against the 0.26 API.
+      `Parser::set_language` still takes `&Language`, so the shared
+      signature remains unchanged.
+- [x] Re-run Rust-side validation. `make test` passes and coverage rose
+      from 96.0% to 96.1%. Full `make ci` remains blocked by the
+      pre-existing VSIX coverage threshold failure (83.6% vs 95%).
+- [x] Verify grammar-pin-drift check still accepts exact `=x.y.z`
+      runtime and grammar pins; no CI regex edit required.
 
 ### Phase P-LANG-1 — TypeScript + TSX
 

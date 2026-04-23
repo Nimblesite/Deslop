@@ -1767,26 +1767,19 @@ fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
 }
 
 // Implements [PIPELINE-NORMALIZE-AST] golden guard: `--debug-ast`
-// on a hand-picked C# fixture must match the committed expected
-// dump byte-for-byte. Any drift in the grammar version, the
-// `normalise_kind` match arms, or the child-ordering policy will
-// trip this test — which is exactly what we want, because any of
-// those changes silently alters the fingerprint and invalidates
-// every user's cache.
+// on a hand-picked per-language fixture must match the committed
+// expected dump byte-for-byte. Any drift in the grammar version,
+// the `normalise_kind` match arms, or the child-ordering policy
+// will trip this test — which is exactly what we want, because
+// any of those changes silently alters the fingerprint and
+// invalidates every user's cache.
 //
-// The fixture deliberately exercises:
-//   - file-scoped namespace (`namespace Golden;`)
-//   - class modifier + identifier
-//   - method with parameters (identifier collapse)
-//   - comment (must be dropped)
-//   - local declaration + binary expression
-//   - return statement
-// which is enough surface area to catch most regressions in the
-// C# plug-in without requiring the full language grammar.
-#[test]
-fn debug_ast_dump_matches_committed_golden() -> Result<()> {
-    let source = fixture("ast-golden-csharp").join("Sample.cs");
-    let expected_path = fixture("ast-golden-csharp").join("Sample.expected.ast");
+// Each fixture exercises identifier collapse, literal collapse,
+// comment drop, and the language-specific structural forms most
+// likely to shift between grammar patch releases.
+fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
+    let source = fixture(fixture_dir).join(sample_name);
+    let expected_path = fixture(fixture_dir).join("Sample.expected.ast");
     let expected = fs::read_to_string(&expected_path)?;
     let mut cmd = Command::cargo_bin("deslop")?;
     let output = cmd
@@ -1807,6 +1800,21 @@ fn debug_ast_dump_matches_committed_golden() -> Result<()> {
         source.display(),
     );
     Ok(())
+}
+
+#[test]
+fn debug_ast_dump_matches_committed_golden() -> Result<()> {
+    assert_ast_golden("ast-golden-csharp", "Sample.cs")
+}
+
+#[test]
+fn debug_ast_dump_matches_committed_golden_rust() -> Result<()> {
+    assert_ast_golden("ast-golden-rust", "Sample.rs")
+}
+
+#[test]
+fn debug_ast_dump_matches_committed_golden_python() -> Result<()> {
+    assert_ast_golden("ast-golden-python", "Sample.py")
 }
 
 // Implements [PIPELINE-NORMALIZE-AST] unsupported-extension: running

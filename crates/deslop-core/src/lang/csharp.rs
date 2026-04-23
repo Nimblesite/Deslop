@@ -50,7 +50,7 @@ impl LanguageParser for CSharpParser {
     }
 
     fn grammar(&self) -> tree_sitter::Language {
-        tree_sitter_c_sharp::language()
+        tree_sitter_c_sharp::LANGUAGE.into()
     }
 
     fn parse_and_normalize(

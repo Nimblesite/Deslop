@@ -44,7 +44,7 @@ impl LanguageParser for PythonParser {
     }
 
     fn grammar(&self) -> tree_sitter::Language {
-        tree_sitter_python::language()
+        tree_sitter_python::LANGUAGE.into()
     }
 
     fn parse_and_normalize(
@@ -59,7 +59,7 @@ impl LanguageParser for PythonParser {
 
 /// Maps a tree-sitter Python node kind to its normalised form. Covers
 /// the identifier / literal / trivia families emitted by
-/// `tree-sitter-python` 0.21.x.
+/// `tree-sitter-python` 0.25.x.
 fn normalise_kind(raw: &str) -> Option<&'static str> {
     match raw {
         "comment" => None,
