@@ -109,7 +109,7 @@ suite("LiveBubble render", () => {
       const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
       bubble.render(editor, range, [cluster("c-a", 100, 0.95, 35)]);
 
-      assert.equal(captured.length, 1, `expected one inline decoration: ${captured}`);
+      assert.equal(captured.length, 1, `expected one inline decoration: ${captured.join(", ")}`);
       assert.match(captured[0] ?? "", /×\s*5/, "bubble count must match the report snapshot");
       assert.doesNotMatch(
         captured[0] ?? "",

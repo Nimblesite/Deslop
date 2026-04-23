@@ -39,16 +39,19 @@ class ClusterDocumentProvider implements vscode.TextDocumentContentProvider {
 
 function clusterIdFromUri(uri: vscode.Uri): string | undefined {
   if (uri.scheme !== CLUSTER_DOCUMENT_SCHEME) return undefined;
-  if (uri.authority === "cluster") return trimLeadingSlashes(uri.path) || undefined;
+  if (uri.authority === "cluster") return nonEmpty(trimLeadingSlashes(uri.path));
   const segments = uri.path.split("/").filter((segment) => segment.length > 0);
-  if (segments[0] !== "cluster") return undefined;
-  return segments[1] || undefined;
+  return segments[0] === "cluster" ? nonEmpty(segments[1] ?? "") : undefined;
 }
 
 function trimLeadingSlashes(value: string): string {
   let out = value;
   while (out.startsWith("/")) out = out.slice(1);
   return out;
+}
+
+function nonEmpty(value: string): string | undefined {
+  return value.length > 0 ? value : undefined;
 }
 
 function invalidClusterDocument(uri: vscode.Uri): string {

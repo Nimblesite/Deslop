@@ -105,7 +105,7 @@ fn with_ext(base: &Path, ext: &str) -> PathBuf {
     path
 }
 
-const GENERATED_ALPHA: &str = r#"
+const GENERATED_ALPHA: &str = r"
 namespace Contracts.Generated;
 
 public sealed record AlphaDto(
@@ -116,9 +116,9 @@ public sealed record AlphaDto(
     string CreatedAt,
     string UpdatedAt
 );
-"#;
+";
 
-const GENERATED_BETA: &str = r#"
+const GENERATED_BETA: &str = r"
 namespace Contracts.Generated;
 
 public sealed record BetaDto(
@@ -129,7 +129,7 @@ public sealed record BetaDto(
     string CreatedAt,
     string UpdatedAt
 );
-"#;
+";
 
 const FASTAPI_ROUTES: &str = r#"
 from fastapi import APIRouter

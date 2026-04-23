@@ -271,7 +271,7 @@ suite("embeddingPicker helpers", () => {
 
   test("setModel handles non-Error rejections", async () => {
     const client = {
-      sendRequest: () => Promise.reject("string failure"),
+      sendRequest: () => Promise.reject(new Error("string failure")),
     } as unknown as LanguageClient;
     await setModel(client, model("ollama", "broken-model"));
   });
@@ -279,7 +279,7 @@ suite("embeddingPicker helpers", () => {
   test("setModelFromPicker clears pending state after a rejected request", async () => {
     const store = newStore();
     const client = {
-      sendRequest: () => Promise.reject("string failure"),
+      sendRequest: () => Promise.reject(new Error("string failure")),
     } as unknown as LanguageClient;
 
     await setModelFromPicker(client, store, model("ollama", "broken-model"));

@@ -31,6 +31,7 @@ use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 
+/// Directory components that are always excluded from discovery.
 const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "node_modules",
     "target",
@@ -40,7 +41,10 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "__pycache__",
 ];
 
+/// Directory components that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
+
+/// File suffixes that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
     ".g.cs",
     ".generated.cs",
@@ -323,6 +327,7 @@ impl ExclusionConfig {
     }
 }
 
+/// Returns true when a path is in a built-in ignored dependency or build tree.
 fn built_in_excluded(path: &Path) -> bool {
     path_components(path).any(|component| {
         BUILTIN_EXCLUDE_COMPONENTS
@@ -331,10 +336,12 @@ fn built_in_excluded(path: &Path) -> bool {
     })
 }
 
+/// Returns true when built-in generated-code rules hide a path from summaries.
 fn built_in_report_hidden(path: &Path) -> bool {
     has_hidden_component(path) || has_hidden_suffix(path)
 }
 
+/// Returns true when the path has a generated-code directory component.
 fn has_hidden_component(path: &Path) -> bool {
     path_components(path).any(|component| {
         BUILTIN_REPORT_HIDE_COMPONENTS
@@ -343,6 +350,7 @@ fn has_hidden_component(path: &Path) -> bool {
     })
 }
 
+/// Returns true when the path's file name has a generated-code suffix.
 fn has_hidden_suffix(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
         return false;
@@ -353,6 +361,7 @@ fn has_hidden_suffix(path: &Path) -> bool {
         .any(|suffix| lower.ends_with(suffix))
 }
 
+/// Returns lowercase normal path components for case-insensitive matching.
 fn path_components(path: &Path) -> impl Iterator<Item = String> + '_ {
     path.components().filter_map(|component| match component {
         Component::Normal(value) => value.to_str().map(str::to_ascii_lowercase),
