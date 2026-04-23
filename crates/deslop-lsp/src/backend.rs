@@ -281,14 +281,16 @@ impl LanguageServer for LspBackend {
             .service
             .report_for_range(&path, byte, byte.saturating_add(1))
             .await;
-        let Some(cluster) = clusters.into_iter().next() else {
+        if clusters.is_empty() {
             return Ok(None);
-        };
+        }
+        let ranked = self.service.report_get().await;
         let workspace_root = self.service.session_config().await.workspace_root;
-        Ok(Some(hover::build_for_cluster_with_root(
-            &cluster,
+        Ok(hover::build_for_clusters_with_root(
+            &clusters,
+            &ranked.clusters,
             &workspace_root,
-        )))
+        ))
     }
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {

@@ -21,15 +21,14 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use deslop_core::buckets::{bucket_labels, classify};
 use deslop_core::live::FileReport;
 use deslop_core::report::{ReportCluster, ReportOccurrence};
 use tower_lsp::lsp_types::{
-    CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location,
-    Position, Range, Url,
+    Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location, Position, Range, Url,
 };
 
 use crate::position::position_for_byte;
+use crate::presentation::{diagnostic_data, diagnostic_message};
 
 /// Builds the diagnostics for one file report ([LSP-DIAGNOSTICS]).
 ///
@@ -107,15 +106,13 @@ fn build_for_cluster(
         .map(|occurrence| Diagnostic {
             range: byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, source_bytes),
             severity,
-            code: Some(tower_lsp::lsp_types::NumberOrString::String(
-                cluster.id.clone(),
-            )),
-            code_description: code_description_for(&cluster.id),
+            code: None,
+            code_description: None,
             source: Some("deslop".to_owned()),
             message: diagnostic_message(cluster),
             related_information: related_info_for(cluster, path, workspace_root, cache),
             tags: None,
-            data: None,
+            data: Some(diagnostic_data(cluster)),
         })
         .collect()
 }
@@ -124,29 +121,6 @@ fn build_for_cluster(
 /// applies to. Handles the common relative/absolute skew.
 fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
     occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
-}
-
-/// Builds the diagnostic message shown in the Problems panel / hover /
-/// on-hover balloons. These are **shared-text** surfaces per
-/// [CLONE-BUCKETS-DUAL-LABEL]: humans read them, AI agents scrape them.
-/// So the message uses the hybrid form — plain title with a bracketed
-/// taxonomy suffix — plus the canonical action sentence so the reader
-/// always sees what to do next.
-fn diagnostic_message(cluster: &ReportCluster) -> String {
-    let labels = bucket_labels(classify(cluster));
-    format!("{} — {}", labels.hybrid_title, labels.action_sentence)
-}
-
-/// Builds the `deslop://cluster/<id>` href.
-fn code_description_for(cluster_id: &str) -> Option<CodeDescription> {
-    let href = format!("deslop://cluster/{cluster_id}");
-    match Url::parse(&href) {
-        Ok(url) => Some(CodeDescription { href: url }),
-        Err(error) => {
-            tracing::warn!(%error, cluster_id, "invalid cluster href");
-            None
-        }
-    }
 }
 
 /// Maps the cluster weight onto an LSP severity using the bucketing
@@ -420,15 +394,19 @@ mod tests {
     }
 
     #[test]
-    fn code_description_builds_deslop_cluster_url() -> Result<()> {
-        let desc =
-            code_description_for("abc123").ok_or_else(|| anyhow!("valid cluster id yields url"))?;
-        assert_eq!(desc.href.as_str(), "deslop://cluster/abc123");
+    fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
+        let cluster = sample_cluster("abc123", 10.0, vec![occurrence("Alpha.cs", 0, 5)], "identical");
+        let data = diagnostic_data(&cluster);
+        let id = data
+            .get("cluster_id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow!("cluster_id in diagnostic data"))?;
+        assert_eq!(id, "abc123");
         Ok(())
     }
 
     #[test]
-    fn diagnostic_message_combines_hybrid_title_and_action_sentence() {
+    fn diagnostic_message_uses_plain_title_and_action_sentence() {
         let cluster = sample_cluster(
             "c",
             100.0,
@@ -437,6 +415,14 @@ mod tests {
         );
         let message = diagnostic_message(&cluster);
         assert!(message.contains(" — "), "joined with em dash: {message}");
+        assert!(
+            message.contains("Nearly identical code"),
+            "diagnostic message must use human label: {message}"
+        );
+        assert!(
+            !message.contains("Type-"),
+            "diagnostic message must not expose clone taxonomy labels: {message}"
+        );
         assert!(
             !message.is_empty(),
             "non-empty diagnostic message: {message}"

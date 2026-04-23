@@ -1,7 +1,7 @@
 //! `textDocument/hover` provider ([LSP-HOVER]).
 //!
 //! Returns a markdown card for the cluster containing the cursor. The
-//! card lays out the four signals, interpretation line, and occurrence
+//! card lays out the signal sentence and occurrence
 //! list — enough context that the reader can decide whether to
 //! investigate without leaving the file.
 
@@ -106,17 +106,9 @@ fn write_cluster_block(
     cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
 ) {
     let _ = writeln!(out, "- **{}**", cluster_summary(cluster, rank));
-    write_interpretation(out, cluster);
     let _ = writeln!(out, "  - {}", signal_sentence(cluster));
     write_occurrences(out, cluster, workspace_root, cache);
     let _ = writeln!(out);
-}
-
-/// Writes the interpretation row when the report carries one.
-fn write_interpretation(out: &mut String, cluster: &ReportCluster) {
-    if !cluster.interpretation.trim().is_empty() {
-        let _ = writeln!(out, "  - {}", cluster.interpretation.trim());
-    }
 }
 
 /// Writes the nested occurrence location list.
@@ -188,7 +180,7 @@ mod tests {
             canonical_node_count: 12,
             signals: ReportSignals {
                 structural: 1.0,
-                token_jaccard: 0.95,
+                token_jaccard: 1.0,
                 embedding_cos: 0.25,
                 fused: 2.2,
             },
@@ -224,23 +216,20 @@ mod tests {
             "hover must not lead with the raw cluster hash: {body}"
         );
         assert!(
-            body.contains("Identical code [Type-1/2]"),
-            "hover must use the shared bucket title: {body}"
-        );
-        assert!(
             body.contains("2 occurrences"),
             "hover must summarize the occurrence count in prose: {body}"
         );
         assert!(
-            body.contains("Identical code. Safe to extract."),
-            "interpretation: {body}"
+            body.contains("Identical code"),
+            "hover must use plain human labels: {body}"
         );
+        assert!(!body.contains("Type-"), "hover must not expose clone taxonomy: {body}");
         assert!(
             !body.contains("| Signal | Value |"),
             "hover must not render a large signal table: {body}"
         );
         // Occurrence bullet list carries both occurrences without byte ranges.
-        assert!(body.contains("**Occurrences (2)**"), "occ header: {body}");
+        assert!(body.contains("Occurrences:"), "occ header: {body}");
         assert!(
             body.contains("- Alpha.cs:line unavailable"),
             "alpha occ: {body}"
@@ -273,7 +262,7 @@ mod tests {
         cluster.occurrences_total = 35;
         let body = markdown_for(&cluster);
         assert!(
-            body.contains("**Occurrences (35)**"),
+            body.contains("35 occurrences"),
             "hover must report occurrences_total when present: {body}"
         );
         assert!(
@@ -296,8 +285,13 @@ mod tests {
         };
         assert_eq!(markup.kind, MarkupKind::Markdown);
         assert!(
-            markup.value.contains("### Cluster abc123"),
+            markup.value.contains("Identical code"),
             "value: {}",
+            markup.value
+        );
+        assert!(
+            !markup.value.contains("Type-"),
+            "hover markup must stay human-readable: {}",
             markup.value
         );
         assert!(
@@ -314,40 +308,63 @@ mod tests {
         cluster.occurrences_total = 0;
         let body = markdown_for(&cluster);
         assert!(
-            body.contains("**Occurrences (35)**"),
+            body.contains("35 occurrences"),
             "hover must fall back to cluster size for older reports: {body}"
         );
     }
 
     #[test]
-    fn signals_table_formats_each_signal_row() {
+    fn markdown_for_cluster_includes_compact_signal_sentence() {
         let cluster = make_cluster();
-        let table = signals_table(&cluster);
-        for row in [
-            "| Signal | Value |",
-            "| structural | 1.00 |",
-            "| token_jaccard | 0.95 |",
-            "| embedding_cos | 0.25 |",
-            "| fused | 2.20 |",
-        ] {
-            assert!(table.contains(row), "row {row} missing: {table}");
-        }
+        let body = markdown_for(&cluster);
+        assert!(
+            body.contains("signals: structural 1.00, jaccard 1.00, embedding 0.25, fused 2.20."),
+            "compact signal sentence required: {body}"
+        );
     }
 
     #[test]
-    fn occurrences_block_with_empty_list_still_renders_header() {
+    fn markdown_for_cluster_with_empty_occurrence_list_keeps_header() {
         let mut cluster = make_cluster();
         cluster.size = 0;
         cluster.occurrences.clear();
         cluster.occurrences_total = 0;
-        let block = occurrences_block(&cluster, None);
+        let block = markdown_for(&cluster);
         assert!(
-            block.contains("**Occurrences (0)**"),
+            block.contains("Occurrences:"),
             "header required even when empty: {block}"
         );
         assert!(
-            !block.contains("- "),
+            !block.contains("    - "),
             "no bullets should render for an empty list: {block}"
+        );
+    }
+
+    #[test]
+    fn markdown_for_clusters_lists_every_cluster_with_rank() {
+        let first = make_cluster();
+        let mut second = make_cluster();
+        second.id = "def456".into();
+        second.bucket = "nearly_identical".into();
+        second.signals.structural = 0.33;
+        second.signals.token_jaccard = 0.96;
+        second.interpretation = "Nearly identical code. Review both.".into();
+        let body = markdown_for_clusters(&[first.clone(), second.clone()], &[second, first]);
+        assert!(
+            body.contains("Deslop clusters at this location (2)"),
+            "multi-cluster hover must include a list heading: {body}"
+        );
+        assert!(
+            body.contains("- **#1 Nearly identical code"),
+            "cluster rank must be rendered from global ordering: {body}"
+        );
+        assert!(
+            body.contains("- **#2 Identical code"),
+            "all overlapping clusters must render: {body}"
+        );
+        assert!(
+            !body.contains("Type-"),
+            "multi-cluster hover must not expose taxonomy labels: {body}"
         );
     }
 }

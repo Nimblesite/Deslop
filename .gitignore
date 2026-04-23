@@ -89,7 +89,7 @@ clients/vscode/dist/
 clients/vscode/out/
 
 *.vsix
-deslop-lsp
+/deslop-lsp
 
 
 clients/vscode/bin/
