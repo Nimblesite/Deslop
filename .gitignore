@@ -69,11 +69,11 @@ clients/jetbrains/build/
 # =============================================================================
 # Deslop-specific
 # =============================================================================
-.deslop-cache/
-deslop-report.json
-deslop-report.txt
-deslop-report.html
-deslop-*.log
+/.deslop-cache/
+/deslop-report.json
+/deslop-report.txt
+/deslop-report.html
+/deslop-*.log
 
 
 node_modules/
@@ -94,12 +94,15 @@ clients/vscode/out/
 
 clients/vscode/bin/
 
---version/
---stdio/
+/--version/
+/--stdio/
 
-.codededup-cache/
+/.codededup-cache/
 
 clients/vscode/media/webview/
 
 
-.ghissues/
+/.ghissues/
+
+
+crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
