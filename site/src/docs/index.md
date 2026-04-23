@@ -80,7 +80,7 @@ Deslop will use a local Ollama model if one is configured, or degrade gracefully
 
 ## Exclude noise
 
-Generated code, vendored dependencies, and migrations should not appear in the report. Configure once per repo in `.deslop.toml`:
+Generated code and build outputs are filtered by default. Add `.deslop.toml` only for project-specific dependencies, migrations, or training-set code:
 
 ```toml
 exclude = [

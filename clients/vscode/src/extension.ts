@@ -28,6 +28,7 @@ import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
 import { registerCompareProvider } from "./compare/provider";
+import { registerClusterDocumentProvider } from "./clusterDocument";
 import {
   Report,
   ReportChangedNotification,
@@ -57,6 +58,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
 
   const reportStore = new ReportStore();
   context.subscriptions.push(reportStore);
+  registerClusterDocumentProvider(context, reportStore);
 
   const ticker = new StatusTicker();
   context.subscriptions.push(ticker);

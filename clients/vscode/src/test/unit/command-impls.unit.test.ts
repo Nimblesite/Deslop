@@ -118,6 +118,18 @@ suite("register command implementations", () => {
     openWorstCluster(fakeCtx(), store);
   });
 
+  test("path-style deslop cluster URI resolves to a readonly document", async () => {
+    // [VSIX-CLUSTER-DOCUMENT] Issue #24: links emitted as
+    // deslop://cluster/<id> must resolve through the extension provider.
+    const uri = vscode.Uri.parse("deslop://cluster/cluster-for-test");
+    const doc = await vscode.workspace.openTextDocument(uri);
+    const text = doc.getText();
+    assert.equal(doc.uri.scheme, "deslop");
+    assert.equal(doc.uri.authority, "cluster");
+    assert.match(text, /cluster-for-test/);
+    assert.match(text, /Deslop cluster/i);
+  });
+
   test("openOccurrence opens the referenced file at the byte range", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-occ-"));
     const file = path.join(dir, "occ.txt");

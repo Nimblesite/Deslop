@@ -79,6 +79,9 @@ function ClusterApp() {
     <main
       style={{
         padding: "24px 32px",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
         opacity: analysisState.value === "errored" ? 0.5 : 1,
         transition: "opacity 120ms",
       }}
@@ -288,36 +291,37 @@ function ClusterApp() {
         ))}
       </section>
 
-      <footer
-        style={{
-          marginTop: "24px",
-          display: "flex",
-          gap: "12px",
-          justifyContent: "flex-end",
-        }}
-      >
-        <span class="with-help">
-          <button
-            onClick={() => selectPreviousCluster(list, rank)}
-            title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
-            aria-label="Previous cluster"
-          >
-            ← prev cluster (p)
-          </button>
-          <HelpBubble topic="cluster-navigation" />
-        </span>
-        <span class="with-help">
-          <button
-            onClick={() => selectNextCluster(list, rank)}
-            title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
-            aria-label="Next cluster"
-          >
-            next cluster (n) →
-          </button>
-          <HelpBubble topic="cluster-navigation" />
-        </span>
-      </footer>
-      <HotkeyHelp accent={SEVERITY_COLOR[severity]} />
+      <div style={{ marginTop: "auto", paddingTop: "24px" }}>
+        <footer
+          style={{
+            display: "flex",
+            gap: "12px",
+            justifyContent: "flex-end",
+          }}
+        >
+          <span class="with-help">
+            <button
+              onClick={() => selectPreviousCluster(list, rank)}
+              title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
+              aria-label="Previous cluster"
+            >
+              ← prev cluster (p)
+            </button>
+            <HelpBubble topic="cluster-navigation" />
+          </span>
+          <span class="with-help">
+            <button
+              onClick={() => selectNextCluster(list, rank)}
+              title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
+              aria-label="Next cluster"
+            >
+              next cluster (n) →
+            </button>
+            <HelpBubble topic="cluster-navigation" />
+          </span>
+        </footer>
+        <HotkeyHelp accent={SEVERITY_COLOR[severity]} />
+      </div>
     </main>
   );
 }

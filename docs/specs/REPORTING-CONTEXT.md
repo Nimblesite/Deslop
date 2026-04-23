@@ -12,7 +12,7 @@ The pipeline normalizes each source file's AST (collapsing identifier names, lit
 2. **Sibling-extension** — contiguous sibling windows under a common parent are hashed as groups. Catches near-miss clones where the same sequence of statements appears in different enclosing contexts.
 3. **Token LSH (MinHash over k=5 k-grams of normalized node kinds)** — catches Type-3 clones where structure diverged but the token bag is close. `token_jaccard` is the estimated Jaccard similarity in `[0.0, 1.0]`.
 
-Candidate pairs from all three passes are unioned, filtered to same-language endpoints by default, then transitively closed into clusters. `.deslop.toml` can opt back into cross-language comparison with `[analysis] allow_cross_language_comparison = true`. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.
+Candidate pairs from all three passes are unioned, filtered to same-language endpoints by default, then transitively closed into clusters. `.deslop.toml` can opt back into cross-language comparison with `[analysis] allow_cross_language_comparison = true`. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, Python route decorators, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.
 
 ## Clone buckets (canonical)
 
@@ -47,7 +47,7 @@ Fields:
 | `weight` | Ranking score: `node_count × (cluster_size − 1) × log2(1 + total_spanned_bytes)`. Higher = more impact. |
 | `size` | How many copies of this subtree exist. `size=20` means the same pattern appears 20 times. |
 | `nodes` | AST node count of one canonical copy. Bigger subtree = more meaningful clone. |
-| `path:start-end` | **Byte offsets** (NOT line numbers), half-open `[start, end)`. First 3 occurrences shown; `(+N more)` means there are more. |
+| `path:line:column` | Human-readable occurrence location in text/HTML/hover summaries. JSON keeps `start_byte` / `end_byte` for machine navigation. |
 | `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |
 | `token_jaccard` | `[0, 1]`. Estimated Jaccard of normalized k-gram token sets. |
 | `embedding_cos` | `[0, 1]` cosine similarity from the semantic-embedding pass, or `0.00` if that pass was disabled for this run. |
@@ -55,7 +55,7 @@ Fields:
 | `embedding_provenance.failed_subtrees` | Count of subtree embeddings the provider rejected. Rejected subtrees are excluded from embedding ANN rather than substituted with zero vectors. |
 | `boilerplate_hints[]` | Optional low-severity import/prologue hygiene hints emitted only when `.deslop.toml` sets `boilerplate.imports = "report"`. These carry suppressed byte ranges but are not clone clusters and do not affect `weight` or metrics. |
 
-Byte ranges come from `tree-sitter`. To display line numbers you must re-derive them from the source file, because byte offsets are the canonical location (they're what an LSP/editor consumes directly).
+Byte ranges come from `tree-sitter` and remain in JSON/tool payloads. Human-facing summaries derive line and column from the same source bytes so users do not have to read raw byte offsets.
 
 ## Reading the signals together
 
@@ -76,7 +76,7 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 - `duplicated_loc` = lines covered by ≥ 2 non-hidden clone occurrences, deduplicated per file so overlapping sibling-extension ranges count once.
 - `analysed_loc` = physical lines across every file in `files_analysed`.
-- Hidden occurrences (generated code flagged via `.deslop.toml` `report_hide`) are excluded so they cannot inflate the metric.
+- Hidden occurrences (built-in generated-code defaults or `.deslop.toml` `report_hide`) are excluded so they cannot inflate the metric.
 - CI gating: `--fail-over <percent>` (or `[threshold] max_duplication_percent` in `.deslop.toml`) exits `3` when `duplication_percent > threshold`. No threshold → no gate. Use this, not the `weight` column, for pass/fail decisions.
 
 ## Thresholds (typical defaults)
@@ -89,7 +89,7 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 ## What to do with this report
 
 1. **Start at #1 and work down.** The weight formula already prioritises by impact.
-2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are expected to duplicate by design — usually not worth refactoring the generator unless a pattern emerges across many generators.
+2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are hidden by default because they duplicate by design; visible generated-handwritten overlap is still worth reviewing.
 3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `<Using Include="..." />`, not extraction.
 4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
 5. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.

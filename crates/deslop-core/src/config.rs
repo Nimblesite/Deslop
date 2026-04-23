@@ -20,7 +20,7 @@
 use std::{
     collections::HashMap,
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
@@ -30,6 +30,24 @@ use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
+
+const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
+    "node_modules",
+    "target",
+    "dist",
+    "build",
+    ".venv",
+    "__pycache__",
+];
+
+const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
+const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
+    ".g.cs",
+    ".generated.cs",
+    ".designer.cs",
+    ".pb.cs",
+    ".openapi.cs",
+];
 
 /// Import/prologue boilerplate reporting mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -263,6 +281,9 @@ impl ExclusionConfig {
     /// match how [`crate::discover`] walks the tree.
     #[must_use]
     pub fn is_excluded(&self, path: &Path, language: Option<&str>) -> bool {
+        if built_in_excluded(path) {
+            return true;
+        }
         if matches(&self.default_exclude, path) {
             return true;
         }
@@ -281,6 +302,9 @@ impl ExclusionConfig {
     /// files are still analysed — the flag only affects rendering.
     #[must_use]
     pub fn is_report_hidden(&self, path: &Path, language: &str) -> bool {
+        if built_in_report_hidden(path) {
+            return true;
+        }
         if matches(&self.default_report_hide, path) {
             return true;
         }
@@ -297,6 +321,43 @@ impl ExclusionConfig {
             .and_then(|overlay| overlay.boilerplate_imports)
             .unwrap_or(self.default_boilerplate_imports)
     }
+}
+
+fn built_in_excluded(path: &Path) -> bool {
+    path_components(path).any(|component| {
+        BUILTIN_EXCLUDE_COMPONENTS
+            .iter()
+            .any(|ignored| component == *ignored)
+    })
+}
+
+fn built_in_report_hidden(path: &Path) -> bool {
+    has_hidden_component(path) || has_hidden_suffix(path)
+}
+
+fn has_hidden_component(path: &Path) -> bool {
+    path_components(path).any(|component| {
+        BUILTIN_REPORT_HIDE_COMPONENTS
+            .iter()
+            .any(|hidden| component == *hidden)
+    })
+}
+
+fn has_hidden_suffix(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
+        return false;
+    };
+    let lower = file_name.to_ascii_lowercase();
+    BUILTIN_REPORT_HIDE_SUFFIXES
+        .iter()
+        .any(|suffix| lower.ends_with(suffix))
+}
+
+fn path_components(path: &Path) -> impl Iterator<Item = String> + '_ {
+    path.components().filter_map(|component| match component {
+        Component::Normal(value) => value.to_str().map(str::to_ascii_lowercase),
+        _ => None,
+    })
 }
 
 /// Returns `true` when `matcher` classifies `path` as ignored (i.e., the

@@ -1,10 +1,10 @@
-//! Import/prologue boilerplate classification.
+//! Syntax-only boilerplate classification.
 //!
 //! Implements [PIPELINE-BOILERPLATE-FILTER]. The classifier is
 //! intentionally language-aware at the AST-kind level and never scans
-//! raw source text. Downstream stages use it to keep import-only
-//! scaffolding out of clone fingerprints while retaining byte ranges
-//! for optional hygiene hints.
+//! raw source text. Downstream stages use it to keep import/prologue
+//! scaffolding and route decorators out of clone fingerprints while
+//! retaining byte ranges for optional hygiene hints.
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
@@ -89,9 +89,12 @@ fn csharp_carrier(kind: &str) -> bool {
     )
 }
 
-/// Python import carriers.
+/// Python import/prologue and framework-route carriers.
 fn python_carrier(kind: &str) -> bool {
-    matches!(kind, "import_statement" | "import_from_statement")
+    matches!(
+        kind,
+        "import_statement" | "import_from_statement" | "decorator"
+    )
 }
 
 /// Rust import/prologue carriers.
