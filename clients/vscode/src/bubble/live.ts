@@ -143,10 +143,7 @@ export class LiveBubble implements vscode.Disposable {
   ): void {
     const report = this.store.current.report;
     if (!report) return;
-    const best = clusters
-      .filter((c) => c.signals.fused >= FUSED_THRESHOLD)
-      .filter((c) => !this.dismissedClusters.has(c.id))
-      .sort((a, b) => b.weight - a.weight)[0];
+    const best = bestBubbleCluster(report.clusters, clusters, this.dismissedClusters);
     if (!best) {
       this.clearBubble();
       return;
@@ -200,6 +197,19 @@ export class LiveBubble implements vscode.Disposable {
     this.inlayProvider.clear();
     this.active = null;
   }
+}
+
+function bestBubbleCluster(
+  reportClusters: ReportCluster[],
+  probeClusters: ReportCluster[],
+  dismissedClusters: Set<string>,
+): ReportCluster | undefined {
+  const byId = new Map(reportClusters.map((cluster) => [cluster.id, cluster]));
+  return probeClusters
+    .map((cluster) => byId.get(cluster.id) ?? cluster)
+    .filter((cluster) => cluster.signals.fused >= FUSED_THRESHOLD)
+    .filter((cluster) => !dismissedClusters.has(cluster.id))
+    .sort((a, b) => b.weight - a.weight)[0];
 }
 
 class BubbleInlayProvider implements vscode.InlayHintsProvider {

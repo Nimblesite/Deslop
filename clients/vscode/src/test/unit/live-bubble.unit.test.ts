@@ -7,11 +7,16 @@ import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 
-function cluster(id: string, weight: number, fused: number): ReportCluster {
-  return {
+function cluster(
+  id: string,
+  weight: number,
+  fused: number,
+  occurrenceTotal?: number,
+): ReportCluster {
+  const out: ReportCluster = {
     id,
     weight,
-    size: 2,
+    size: occurrenceTotal ?? 2,
     canonical_node_count: 4,
     signals: {
       structural: 1,
@@ -26,6 +31,8 @@ function cluster(id: string, weight: number, fused: number): ReportCluster {
     summary: "",
     interpretation: "interp",
   };
+  if (occurrenceTotal !== undefined) out.occurrences_total = occurrenceTotal;
+  return out;
 }
 
 function report(): Report {
@@ -47,7 +54,7 @@ function report(): Report {
     schema_doc: "",
     action_hints: [],
     embedding_provenance: null,
-    clusters: [cluster("c-a", 10, 0.95)],
+    clusters: [cluster("c-a", 10, 0.95, 5)],
   };
 }
 
@@ -68,6 +75,51 @@ suite("LiveBubble render", () => {
     // idempotent re-render (same cluster + range) is a no-op
     bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
     bubble.dispose();
+  });
+
+  test("inline render uses the authoritative report occurrence count for a probe hit", async () => {
+    // [VSIX-LIVE-BUBBLE] Issue #26: probe results can be a filtered or
+    // broader query shape, but every user-facing surface for the same
+    // cluster id must render the occurrence set from the current report.
+    const store = new ReportStore();
+    store.setSnapshot(report(), 0);
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
+    const bubble = new LiveBubble(store, () => undefined);
+    const captured: string[] = [];
+    const document = {
+      uri: vscode.Uri.file("/tmp/A.cs"),
+      lineAt: () => ({
+        range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 10)),
+      }),
+    } as unknown as vscode.TextDocument;
+    const editor = {
+      document,
+      setDecorations: (_type: vscode.TextEditorDecorationType, options: readonly unknown[]) => {
+        for (const option of options) {
+          const text = (option as {
+            renderOptions?: { after?: { contentText?: string } };
+          }).renderOptions?.after?.contentText;
+          if (text) captured.push(text);
+        }
+      },
+    } as unknown as vscode.TextEditor;
+
+    try {
+      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
+      bubble.render(editor, range, [cluster("c-a", 100, 0.95, 35)]);
+
+      assert.equal(captured.length, 1, `expected one inline decoration: ${captured}`);
+      assert.match(captured[0] ?? "", /×\s*5/, "bubble count must match the report snapshot");
+      assert.doesNotMatch(
+        captured[0] ?? "",
+        /×\s*35/,
+        "bubble count must not use the live probe occurrence total",
+      );
+      assert.match(captured[0] ?? "", /A\.cs/, "bubble keeps the authoritative representative");
+    } finally {
+      bubble.dispose();
+    }
   });
 
   test("ghost mode renders the ghost-line decoration", async () => {
