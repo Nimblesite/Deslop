@@ -100,3 +100,6 @@ clients/vscode/bin/
 .codededup-cache/
 
 clients/vscode/media/webview/
+
+
+.ghissues/
