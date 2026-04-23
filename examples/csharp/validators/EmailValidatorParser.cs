@@ -5,7 +5,7 @@ namespace Examples.Validators
     // Parser-style email validator. Splits on '@' and '.' and checks each
     // segment. Semantically equivalent to the imperative and regex
     // variants — only the embedding pass catches this as a
-    // same-behavior, different-code cluster.
+    // same behavior, different code [Type-4] cluster.
     public static class EmailValidatorParser
     {
         public static bool IsValid(string? input)

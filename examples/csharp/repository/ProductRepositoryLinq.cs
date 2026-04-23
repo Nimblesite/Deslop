@@ -3,10 +3,11 @@ using System.Linq;
 
 namespace Examples.Repositories
 {
-    // Same behavior, different code vs ProductRepository. Exactly the
-    // same behaviour but rewritten via LINQ + expression-bodied members.
-    // Structural and token-level signals miss this entirely — only the
-    // embedding pass surfaces the semantic equivalence.
+    // Same behavior, different code [Type-4] vs ProductRepository.
+    // Exactly the same behaviour but rewritten via LINQ +
+    // expression-bodied members. Structural and token-level signals miss
+    // this entirely — only the embedding pass surfaces the semantic
+    // equivalence.
     public sealed class ProductRepositoryLinq
     {
         private readonly List<Product> store = new List<Product>();

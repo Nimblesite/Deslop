@@ -59,3 +59,20 @@ This plan is embeddings-only. Do not add or change chat, tool, or completion pay
 - The stub is test infrastructure, not a product provider.
 - The current pass does not add Anthropic or Voyage. Anthropic currently does not provide native embeddings, so a future second production embedding provider should be handled as a separate decision.
 - Existing chat, tool, and completion data models remain untouched.
+
+## TODO
+
+- [ ] Add a minimal production embedding provider registry/factory and register only `ollama`.
+- [ ] Move `EmbeddingModelInfo` and `EmbeddingProvenance` into the existing typeDiagram-backed model flow without changing their public fields.
+- [ ] Remove `StubProvider`, `STUB_PROVIDER_ID`, and `blake3-stub` from production `deslop-core` exports and runtime selection code.
+- [ ] Remove production `provider_id == "stub"` handling from live APIs, LSP, MCP, CLI, and VSIX code paths.
+- [ ] Update production model listing so only registered production providers contribute models.
+- [ ] Remove the stub fallback from the VSIX picker and preserve the existing "Ollama not detected" empty-state behavior.
+- [ ] Remove `stub` from production VSIX settings enums, defaults, and picker logic.
+- [ ] Add migration handling for stale workspace settings that still reference `deslop.embedding.provider = "stub"`.
+- [ ] Move the BLAKE3 embedding shim into test-only support and update direct Rust tests to import it from there.
+- [ ] Replace black-box tests that depend on `provider_id: "stub"` with mock Ollama endpoint coverage.
+- [ ] Update MCP tool schema tests and CLI/LSP/MCP tests so production only allows `ollama`.
+- [ ] Add VSIX tests proving the picker, settings, and stale-config behavior no longer expose `stub`.
+- [ ] Build/package the VSIX and verify `blake3-stub`, `StubProvider`, and user-facing `stub` strings are absent from production artifacts.
+- [ ] Run `make test`, `make lint`, and the non-Ollama VSIX test target.

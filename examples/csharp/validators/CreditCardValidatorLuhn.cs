@@ -1,8 +1,8 @@
 namespace Examples.Validators
 {
     // Classic Luhn check — imperative implementation. Paired with
-    // CreditCardValidatorFunctional below for a same-behavior,
-    // different-code cluster.
+    // CreditCardValidatorFunctional below for a same behavior,
+    // different code [Type-4] cluster.
     public static class CreditCardValidatorLuhn
     {
         public static bool IsValid(string? number)

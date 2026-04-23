@@ -20,6 +20,12 @@ Implemented work intentionally not repeated here:
   report, HTML / CLI / VSIX bucket rendering, and AI-match badging.
 - JetBrains plugin scaffold: Gradle project, LSP support provider, descriptor,
   binary resolver, and Make targets.
+- Taxonomy content cleanup: every product-facing `Type-N` mention on the site
+  and in `examples/**` leads with a canonical bucket label from
+  [taxonomy.md [CLONE-BUCKETS-DUAL-LABEL]](../specs/taxonomy.md#clone-buckets-dual-label).
+  Enforced by `scripts/taxonomy-gate.sh` (runs in `make lint`). Research pages
+  (`research-background.md`, `ai-generated-code-duplicate-code.md`) are
+  allowlisted because the taxonomy is their subject.
 
 ## Remaining Plan Files
 
@@ -27,8 +33,6 @@ Implemented work intentionally not repeated here:
   UX beyond diagnostics, hover, code lens, and custom report methods.
 - [VS Code schema docs](vscode-schema-docs-plan.md) - optional build-time
   offline `schema_doc.md` copy for the VSIX.
-- [Taxonomy content cleanup](taxonomy-content-cleanup-plan.md) - update
-  public site and examples to use bucket-first language.
 - [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) -
   settings page, version checks, and bundled binary packaging.
 - [JetBrains native UX](jetbrains-ux-plan.md) - Tool Window and embedding
@@ -42,7 +46,6 @@ Implemented work intentionally not repeated here:
 
 - [ ] Finish [LSP editor surfaces](lsp-editor-surfaces-plan.md).
 - [ ] Finish [VS Code schema docs](vscode-schema-docs-plan.md).
-- [ ] Finish [taxonomy content cleanup](taxonomy-content-cleanup-plan.md).
 - [ ] Finish [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).

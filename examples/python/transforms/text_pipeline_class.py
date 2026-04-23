@@ -1,7 +1,8 @@
 """Class-based text-transformation pipeline.
 
 Each step is a method on a stateful object. Paired with the functional
-and decorator-driven variants — Type-4 cluster with respect to each.
+and decorator-driven variants — same behavior, different code [Type-4]
+cluster with respect to each.
 """
 
 from __future__ import annotations

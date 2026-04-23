@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace Examples.Repositories
 {
-    // Identical-code clone of UserRepository — identical shape, renamed
-    // entity. Normalization collapses identifiers so the Merkle hash
-    // matches.
+    // Identical code [Type-1/2] clone of UserRepository — identical
+    // shape, renamed entity. Normalization collapses identifiers so the
+    // Merkle hash matches.
     public sealed class ProductRepository
     {
         private readonly List<Product> store = new List<Product>();

@@ -1,7 +1,7 @@
 //! Sentinel-value twin of `parse_option.rs` / `parse_result.rs`. Same
 //! three parsers, same semantics, failures collapse to sentinels.
-//! This is the C-idiom variant — classic Type-4 with respect to the
-//! Option / Result implementations.
+//! This is the C-idiom variant — classic same behavior, different
+//! code [Type-4] with respect to the Option / Result implementations.
 
 pub const INVALID_INT: u64 = 0;
 pub const INVALID_BOOL: i8 = -1;

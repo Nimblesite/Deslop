@@ -1,6 +1,7 @@
 //! Explicit-state-machine CSV parser. Semantically equivalent to the
 //! hand-written parser in `csv_hand.rs` but driven by an enum rather
-//! than ad-hoc booleans. Type-4 clone.
+//! than ad-hoc booleans. Same behavior, different code [Type-4]
+//! cluster.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {

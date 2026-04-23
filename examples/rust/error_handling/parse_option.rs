@@ -1,8 +1,8 @@
 //! Parser that reports failure via `Option::None`. Paired with
 //! `parse_result.rs` (same semantics via `Result`) and
 //! `parse_sentinel.rs` (same semantics via sentinel values). Three
-//! different error-handling idioms, same underlying logic — a
-//! Type-4 family.
+//! different error-handling idioms, same underlying logic — a same
+//! behavior, different code [Type-4] family.
 
 pub fn parse_positive_int(input: &str) -> Option<u64> {
     let trimmed = input.trim();

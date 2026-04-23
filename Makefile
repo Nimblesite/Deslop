@@ -59,9 +59,14 @@ test:
 	@bash scripts/coverage-check.sh lcov.info "$(_COVERAGE_THRESHOLDS_FILE)"
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
+##       Also enforces the taxonomy content gate
+##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
+##       mention in site/src and examples must co-locate a canonical
+##       bucket label.
 lint:
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
+	@bash scripts/taxonomy-gate.sh
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 fmt:
