@@ -1,27 +1,17 @@
 import { COLOR, FONT } from "../theme";
+import { HelpedText, helpCopy, type HelpTopic } from "./HelpBubble";
 import type { ReportSignals } from "../../../src/types/report";
 
 interface Props {
   signals: ReportSignals;
 }
 
-const SIGNAL_CONTEXT = {
-  structural:
-    "Structural score: how much the parsed AST shape matches. High means the code is organized almost the same way even if names or literals changed.",
-  jaccard:
-    "Jaccard score: normalized token overlap after Deslop removes trivia. High means the code text is very similar after formatting and naming noise are ignored.",
-  embedding:
-    "Embedding score: semantic similarity from the local embedding model. High means the code appears to do the same job even when the syntax differs.",
-  fused:
-    "Fused score: Deslop's combined clone signal. A pair generally becomes a reportable cluster when this reaches the configured threshold.",
-} as const;
-
 export function SignalStrip({ signals }: Props) {
-  const values: [string, number][] = [
-    ["structural", signals.structural],
-    ["jaccard", signals.token_jaccard],
-    ["embedding", signals.embedding_cos],
-    ["fused", signals.fused],
+  const values: [HelpTopic, string, number][] = [
+    ["structural", "structural", signals.structural],
+    ["jaccard", "jaccard", signals.token_jaccard],
+    ["embedding", "embedding", signals.embedding_cos],
+    ["fused", "fused", signals.fused],
   ];
   return (
     <div
@@ -32,8 +22,8 @@ export function SignalStrip({ signals }: Props) {
         padding: "16px 0",
       }}
     >
-      {values.map(([label, value]) => (
-        <div key={label} title={signalTitle(label, value)}>
+      {values.map(([topic, label, value]) => (
+        <div key={label} title={signalTitle(topic, value)}>
           <div
             class="label"
             style={{
@@ -42,7 +32,7 @@ export function SignalStrip({ signals }: Props) {
               fontFamily: FONT.mono,
             }}
           >
-            {label}
+            <HelpedText topic={topic} title={signalTitle(topic, value)}>{label}</HelpedText>
           </div>
           <div
             style={{
@@ -75,7 +65,6 @@ export function SignalStrip({ signals }: Props) {
   );
 }
 
-function signalTitle(label: string, value: number): string {
-  const context = SIGNAL_CONTEXT[label as keyof typeof SIGNAL_CONTEXT];
-  return `${context} Current value: ${value.toFixed(2)}.`;
+function signalTitle(topic: HelpTopic, value: number): string {
+  return `${helpCopy(topic)} Current value: ${value.toFixed(2)}.`;
 }

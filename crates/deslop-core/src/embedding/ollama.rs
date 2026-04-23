@@ -5,7 +5,7 @@
 //! — Ollama is a loopback-only service by default, and leaving TLS off
 //! keeps the dependency footprint minimal (see `Cargo.toml`).
 
-use std::time::Duration;
+use std::{thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +42,31 @@ const MAX_EMBED_CHARS: usize = 6000;
 /// endpoint accepts array input, but keeping chunks modest avoids
 /// oversized JSON bodies and long all-or-nothing retries.
 const MAX_BATCH_SIZE: usize = 32;
+/// Delay before retrying a failed loopback transport call.
+const TRANSPORT_RETRY_DELAY: Duration = Duration::from_millis(25);
+
+/// Retries one transient HTTP transport failure before surfacing it.
+fn call_with_transport_retry<T, F>(mut call: F) -> Result<T, ProviderError>
+where
+    F: FnMut() -> Result<T, ureq::Error>,
+{
+    match call() {
+        Ok(response) => Ok(response),
+        Err(first) => {
+            tracing::debug!(error = %first, "ollama transport call failed; retrying once");
+            thread::sleep(TRANSPORT_RETRY_DELAY);
+            call().map_err(|error| provider_unreachable(&error))
+        }
+    }
+}
+
+/// Maps a transport error into the provider contract.
+fn provider_unreachable(error: &ureq::Error) -> ProviderError {
+    ProviderError::Unreachable {
+        provider_id: PROVIDER_ID.to_owned(),
+        message: error.to_string(),
+    }
+}
 
 /// Ollama provider configured for a specific endpoint + model.
 #[derive(Debug, Clone)]
@@ -91,16 +116,14 @@ impl EmbeddingProvider for OllamaProvider {
 
     fn probe(&self) -> Result<(), ProviderError> {
         let url = format!("{}/api/tags", self.endpoint);
-        let response = ureq::get(&url)
-            .config()
-            .timeout_global(Some(HTTP_TIMEOUT))
-            .http_status_as_error(false)
-            .build()
-            .call()
-            .map_err(|err| ProviderError::Unreachable {
-                provider_id: PROVIDER_ID.to_owned(),
-                message: err.to_string(),
-            })?;
+        let response = call_with_transport_retry(|| {
+            ureq::get(&url)
+                .config()
+                .timeout_global(Some(HTTP_TIMEOUT))
+                .http_status_as_error(false)
+                .build()
+                .call()
+        })?;
         if !response.status().is_success() {
             return Err(ProviderError::ProviderFailed {
                 provider_id: PROVIDER_ID.to_owned(),
@@ -216,16 +239,14 @@ fn post_embeddings(
         input,
         truncate: true,
     };
-    let mut response = ureq::post(&url)
-        .config()
-        .timeout_global(Some(HTTP_TIMEOUT))
-        .http_status_as_error(false)
-        .build()
-        .send_json(&body)
-        .map_err(|err| ProviderError::Unreachable {
-            provider_id: PROVIDER_ID.to_owned(),
-            message: err.to_string(),
-        })?;
+    let mut response = call_with_transport_retry(|| {
+        ureq::post(&url)
+            .config()
+            .timeout_global(Some(HTTP_TIMEOUT))
+            .http_status_as_error(false)
+            .build()
+            .send_json(&body)
+    })?;
     if !response.status().is_success() {
         let status = response.status();
         let detail = response
@@ -312,16 +333,14 @@ struct TagEntry {
 /// Fetches the `GET /api/tags` payload.
 fn fetch_tags(endpoint: &str) -> Result<TagsResponse, ProviderError> {
     let url = format!("{endpoint}/api/tags");
-    let mut response = ureq::get(&url)
-        .config()
-        .timeout_global(Some(HTTP_TIMEOUT))
-        .http_status_as_error(false)
-        .build()
-        .call()
-        .map_err(|err| ProviderError::Unreachable {
-            provider_id: PROVIDER_ID.to_owned(),
-            message: err.to_string(),
-        })?;
+    let mut response = call_with_transport_retry(|| {
+        ureq::get(&url)
+            .config()
+            .timeout_global(Some(HTTP_TIMEOUT))
+            .http_status_as_error(false)
+            .build()
+            .call()
+    })?;
     if !response.status().is_success() {
         return Err(ProviderError::ProviderFailed {
             provider_id: PROVIDER_ID.to_owned(),

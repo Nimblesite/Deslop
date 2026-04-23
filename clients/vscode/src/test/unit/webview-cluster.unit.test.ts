@@ -14,6 +14,10 @@ function signalStripSourcePath(): string {
   return path.resolve(__dirname, "../../../webview-ui/src/components/SignalStrip.tsx");
 }
 
+function helpBubbleSourcePath(): string {
+  return path.resolve(__dirname, "../../../webview-ui/src/components/HelpBubble.tsx");
+}
+
 function parseSource(sourcePath: string): ts.SourceFile {
   const source = fs.readFileSync(sourcePath, "utf8");
   return ts.createSourceFile(sourcePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -25,6 +29,10 @@ function parseClusterWebview(): ts.SourceFile {
 
 function parseSignalStrip(): ts.SourceFile {
   return parseSource(signalStripSourcePath());
+}
+
+function parseHelpBubble(): ts.SourceFile {
+  return parseSource(helpBubbleSourcePath());
 }
 
 function hasDescendant(node: ts.Node, predicate: (node: ts.Node) => boolean): boolean {
@@ -214,17 +222,55 @@ suite("cluster webview occurrence locations", () => {
     }
   });
 
-  test("signal strip hover copy explains every score", () => {
-    const corpus = stringCorpus(parseSignalStrip());
+  test("cluster webview links visible explanations to website docs", () => {
+    const corpus = stringCorpus(parseClusterWebview());
     for (const phrase of [
-      "Structural score",
-      "Jaccard score",
-      "Embedding score",
-      "Fused score",
+      "cluster-id",
+      "clone-bucket",
+      "ai-match",
+      "rank",
+      "weight",
+      "size",
+      "occurrence-count",
+      "canonical",
+      "signals",
+      "occurrences",
+      "occurrence-location",
+      "hidden-occurrence",
+      "open-action",
+      "compare-action",
+      "cluster-navigation",
+      "keyboard-shortcuts",
+    ]) {
+      assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing docs topic: ${phrase}`);
+    }
+  });
+
+  test("cluster id is rendered as a docs link", () => {
+    const sourceText = parseClusterWebview().getFullText();
+    assert.match(sourceText, /DocTextLink/, "cluster panel must render docs links");
+    assert.match(sourceText, /topic="cluster-id"/, "cluster id must link to its docs section");
+  });
+
+  test("signal strip hover copy explains every score", () => {
+    const corpus = `${stringCorpus(parseSignalStrip())}\n${stringCorpus(parseHelpBubble())}`;
+    for (const phrase of [
+      "AST-shape similarity",
+      "Token-overlap similarity",
+      "Semantic similarity",
+      "Combined clone score",
       "Current value",
     ]) {
       assert.match(corpus, new RegExp(escapeRegExp(phrase)), `missing signal hover: ${phrase}`);
     }
+  });
+
+  test("help bubbles point at deslop.live docs", () => {
+    const source = parseHelpBubble();
+    const corpus = stringCorpus(source);
+    assert.match(corpus, /https:\/\/deslop\.live\/docs\/vscode-cluster-panel\//);
+    assert.match(corpus, /More details/);
+    assert.match(source.getFullText(), /data-doc-topic/);
   });
 });
 

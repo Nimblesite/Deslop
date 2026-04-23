@@ -103,3 +103,4 @@ report_hide = [
 1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula.
 2. Read [AI Integration](/docs/ai-integration/) if you're wiring Deslop into an agent.
 3. Read [Output Formats](/docs/output-formats/) before parsing the JSON yourself.
+4. Read [VS Code Cluster Panel](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.

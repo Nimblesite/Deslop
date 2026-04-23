@@ -13,6 +13,8 @@ export const COLOR = {
   primaryContainer: "#b3261e",
   onPrimaryContainer: "#ffdad4",
 
+  secondaryContainer: "#474746",
+
   tertiary: "#00619e",
   tertiaryContainer: "#003c6b",
 

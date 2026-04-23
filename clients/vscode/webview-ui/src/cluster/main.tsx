@@ -14,6 +14,13 @@ import {
 import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
 import { SignalStrip } from "../components/SignalStrip";
 import { SeverityBadge } from "../components/SeverityBadge";
+import {
+  DocTextLink,
+  HelpBubble,
+  HelpedText,
+  helpCopy,
+  type HelpTopic,
+} from "../components/HelpBubble";
 import { bucketLabels, occurrenceCount, resolveBucket } from "../../../src/types/report";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
@@ -97,22 +104,28 @@ function ClusterApp() {
               gap: "8px",
             }}
           >
-            <span title={clusterIdTitle(cluster.id, rank, list.length)}>CLUSTER · {cluster.id}</span>
+            <HelpedText topic="cluster-id" title={clusterIdTitle(cluster.id, rank, list.length)}>
+              CLUSTER ·{" "}
+              <DocTextLink topic="cluster-id" title={clusterIdTitle(cluster.id, rank, list.length)}>
+                {cluster.id}
+              </DocTextLink>
+            </HelpedText>
             {bucketInfo.aiMatch ? (
-              <span
-                style={{
-                  background: COLOR.secondaryContainer ?? COLOR.surfaceContainerLow,
-                  color: COLOR.onSurface,
-                  padding: "2px 6px",
-                  borderRadius: "3px",
-                  fontSize: "10px",
-                  letterSpacing: "0.1em",
-                  fontWeight: 700,
-                }}
-                title="AI match: Deslop's embedding pass found these locations to be semantically equivalent even though their syntax is different. Review both before merging."
-              >
-                AI MATCH
-              </span>
+              <HelpedText topic="ai-match" title={aiMatchTitle()}>
+                <span
+                  style={{
+                    background: COLOR.secondaryContainer ?? COLOR.surfaceContainerLow,
+                    color: COLOR.onSurface,
+                    padding: "2px 6px",
+                    borderRadius: "3px",
+                    fontSize: "10px",
+                    letterSpacing: "0.1em",
+                    fontWeight: 700,
+                  }}
+                >
+                  AI MATCH
+                </span>
+              </HelpedText>
             ) : null}
           </div>
           <h1
@@ -125,7 +138,9 @@ function ClusterApp() {
             }}
             title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}
           >
-            {bucketInfo.plainTitle}
+            <HelpedText topic="clone-bucket" title={`${bucketInfo.plainTitle}: ${bucketInfo.actionSentence}`}>
+              <DocTextLink topic="clone-bucket">{bucketInfo.plainTitle}</DocTextLink>
+            </HelpedText>
           </h1>
           <p
             style={{
@@ -136,38 +151,52 @@ function ClusterApp() {
             }}
             title={`Recommended reading for this bucket: ${bucketInfo.actionSentence}`}
           >
-            {bucketInfo.actionSentence}
+            <HelpedText topic="clone-bucket">{bucketInfo.actionSentence}</HelpedText>
           </p>
         </div>
         <div style={{ textAlign: "right" }}>
-          <SeverityBadge
-            severity={severity}
-            label={`#${rank || "?"}`}
-            title={rankTitle(rank, list.length, severity)}
-          />
+          <span class="with-help" style={{ justifyContent: "flex-end" }}>
+            <SeverityBadge
+              severity={severity}
+              label={`#${rank || "?"}`}
+              title={rankTitle(rank, list.length, severity)}
+            />
+            <HelpBubble topic="rank" />
+          </span>
           <div
             style={{
               fontFamily: FONT.mono,
               color: COLOR.onSurfaceMuted,
               marginTop: "12px",
               fontSize: "12px",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "10px",
+              flexWrap: "wrap",
             }}
             title={clusterStatsTitle(cluster)}
           >
-            weight {cluster.weight.toFixed(2)} · size {cluster.size} · × {occurrenceCount(cluster)}
+            <StatItem topic="weight" label="weight" value={cluster.weight.toFixed(2)} />
+            <StatItem topic="size" label="size" value={String(cluster.size)} />
+            <StatItem topic="occurrence-count" label="occurrences" value={`× ${occurrenceCount(cluster)}`} />
           </div>
           {canonical ? (
             <div
               style={{ fontFamily: FONT.mono, fontSize: "12px", marginTop: "4px" }}
               title={canonicalTitle(canonical)}
             >
-              canonical: {canonical.path}
+              <HelpedText topic="canonical" title={canonicalTitle(canonical)}>
+                <DocTextLink topic="canonical">canonical</DocTextLink>: {canonical.path}
+              </HelpedText>
             </div>
           ) : null}
         </div>
       </header>
 
       <section style={{ background: COLOR.surfaceContainerLow, padding: "16px 24px" }}>
+        <div class="label" style={{ marginBottom: "8px", fontFamily: FONT.mono }}>
+          <HelpedText topic="signals">SIGNALS</HelpedText>
+        </div>
         <SignalStrip signals={cluster.signals} />
       </section>
 
@@ -176,7 +205,7 @@ function ClusterApp() {
           class="label"
           style={{ color: COLOR.onSurfaceMuted, marginBottom: "12px", fontFamily: FONT.mono }}
         >
-          OCCURRENCES
+          <HelpedText topic="occurrences">OCCURRENCES</HelpedText>
         </div>
         {cluster.occurrences.map((o, i) => (
           <article
@@ -193,8 +222,20 @@ function ClusterApp() {
             }}
           >
             <div>
-              <div style={{ fontFamily: FONT.mono, fontSize: "12px" }} title={locationTitle(o)}>
-                {o.displayLocation?.label ?? o.path}
+              <div
+                class="with-help"
+                style={{ fontFamily: FONT.mono, fontSize: "12px" }}
+                title={locationTitle(o)}
+              >
+                <button
+                  class="text-action"
+                  onClick={() => post({ kind: "open/occurrence", occurrence: o })}
+                  title={openTitle(o)}
+                  aria-label={openTitle(o)}
+                >
+                  {o.displayLocation?.label ?? o.path}
+                </button>
+                <HelpBubble topic="occurrence-location" />
               </div>
               <div
                 style={{
@@ -205,35 +246,43 @@ function ClusterApp() {
                 }}
                 title={locationDescriptionTitle(o)}
               >
-                {o.displayLocation?.description ??
-                  "line and column unavailable until the file is loaded"}
-                {o.hidden ? " · hidden" : ""}
+                <HelpedText
+                  topic={o.hidden ? "hidden-occurrence" : "occurrence-location"}
+                  title={locationDescriptionTitle(o)}
+                >
+                  {o.displayLocation?.description ??
+                    "line and column unavailable until the file is loaded"}
+                  {o.hidden ? " · hidden" : ""}
+                </HelpedText>
               </div>
             </div>
             <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                onClick={() => post({ kind: "open/occurrence", occurrence: o })}
-                title={openTitle(o)}
-                aria-label={openTitle(o)}
-              >
-                Open
-              </button>
-              <button
-                class={i === 0 ? "" : "primary"}
-                onClick={() => {
-                  if (i === 0) return;
-                  post({
-                    kind: "compare/canonical",
-                    clusterId: cluster.id,
-                  });
-                }}
-                aria-disabled={i === 0}
-                style={i === 0 ? { opacity: 0.3 } : { color: "inherit" }}
-                title={compareTitle(i)}
-                aria-label={compareTitle(i)}
-              >
-                Compare
-              </button>
+              <span class="with-help">
+                <button
+                  onClick={() => post({ kind: "open/occurrence", occurrence: o })}
+                  title={openTitle(o)}
+                  aria-label={openTitle(o)}
+                >
+                  Open
+                </button>
+                <HelpBubble topic="open-action" />
+              </span>
+              <span class="with-help">
+                <button
+                  class={i === 0 ? "" : "primary"}
+                  onClick={() => {
+                    if (i === 0) return;
+                    post({ kind: "compare/canonical", clusterId: cluster.id });
+                  }}
+                  aria-disabled={i === 0}
+                  style={i === 0 ? { opacity: 0.3 } : { color: "inherit" }}
+                  title={compareTitle(i)}
+                  aria-label={compareTitle(i)}
+                >
+                  Compare
+                </button>
+                <HelpBubble topic="compare-action" />
+              </span>
             </div>
           </article>
         ))}
@@ -247,20 +296,26 @@ function ClusterApp() {
           justifyContent: "flex-end",
         }}
       >
-        <button
-          onClick={() => selectPreviousCluster(list, rank)}
-          title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
-          aria-label="Previous cluster"
-        >
-          ← prev cluster (p)
-        </button>
-        <button
-          onClick={() => selectNextCluster(list, rank)}
-          title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
-          aria-label="Next cluster"
-        >
-          next cluster (n) →
-        </button>
+        <span class="with-help">
+          <button
+            onClick={() => selectPreviousCluster(list, rank)}
+            title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
+            aria-label="Previous cluster"
+          >
+            ← prev cluster (p)
+          </button>
+          <HelpBubble topic="cluster-navigation" />
+        </span>
+        <span class="with-help">
+          <button
+            onClick={() => selectNextCluster(list, rank)}
+            title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
+            aria-label="Next cluster"
+          >
+            next cluster (n) →
+          </button>
+          <HelpBubble topic="cluster-navigation" />
+        </span>
       </footer>
       <HotkeyHelp accent={SEVERITY_COLOR[severity]} />
     </main>
@@ -300,7 +355,7 @@ function HotkeyHelp({ accent }: { accent: string }) {
       >
         ?
       </button>{" "}
-      help
+      help <HelpBubble topic="keyboard-shortcuts" />
       {shortcutHelpExpanded.value ? (
         <div
           style={{ marginTop: "8px", maxWidth: "760px" }}
@@ -310,6 +365,18 @@ function HotkeyHelp({ accent }: { accent: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function StatItem({ topic, label, value }: { topic: HelpTopic; label: string; value: string }) {
+  const title = `${helpCopy(topic)} Current value: ${value}.`;
+  return (
+    <span class="with-help" title={title}>
+      <span>
+        <DocTextLink topic={topic} title={title}>{label}</DocTextLink> {value}
+      </span>
+      <HelpBubble topic={topic} />
+    </span>
   );
 }
 
@@ -352,6 +419,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function clusterIdTitle(id: string, rank: number, total: number): string {
   return `Cluster ${id}. Ranked ${rank || "unknown"} of ${total} by Deslop's worst-first duplication impact score.`;
+}
+
+function aiMatchTitle(): string {
+  return "AI match: Deslop's embedding pass found semantic equivalence. Review both locations before merging.";
 }
 
 function rankTitle(rank: number, total: number, severity: string): string {

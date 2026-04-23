@@ -12,6 +12,7 @@ export const COLOR = {
   primary: "#ffb4aa",
   primaryContainer: "#b3261e",
   onPrimaryContainer: "#ffdad4",
+  secondaryContainer: "#474746",
   tertiary: "#00619e",
   tertiaryContainer: "#003c6b",
   errorContainer: "#93000a",
@@ -66,6 +67,53 @@ export const GLOBAL_CSS = `
     font-weight: 600;
   }
   button:hover { filter: brightness(1.1); }
+  .doc-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: ${COLOR.onSurfaceMuted};
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+  }
+  .doc-link:hover { color: ${COLOR.primary}; text-decoration-color: ${COLOR.primary}; }
+  .with-help {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+  .help-bubble {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid ${COLOR.ghostBorder};
+    background: ${COLOR.surfaceContainerHigh};
+    color: ${COLOR.onSurfaceMuted};
+    font-family: ${FONT.mono};
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+  }
+  .help-bubble:hover {
+    background: ${COLOR.surfaceContainerHighest};
+    color: ${COLOR.primary};
+    border-color: ${COLOR.primary};
+  }
+  button.text-action {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-family: ${FONT.mono};
+    text-align: left;
+    text-decoration: underline;
+    text-decoration-color: ${COLOR.onSurfaceMuted};
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+  }
   input, select {
     background: ${COLOR.surfaceContainerLowest};
     color: ${COLOR.onSurface};
