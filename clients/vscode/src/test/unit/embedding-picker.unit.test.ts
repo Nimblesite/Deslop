@@ -7,6 +7,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import {
   buildItems,
   formatSize,
+  pickEmbeddingModel,
   isActive,
   setModel,
   setModelFromPicker,
@@ -247,5 +248,41 @@ suite("embeddingPicker helpers", () => {
     const unknown = items.find((i) => i.label?.includes("unknown-model"));
     assert.ok(unknown, "unknown-model entry should exist");
     assert.match(unknown.description ?? "", /may not embed/);
+  });
+
+  test("pickEmbeddingModel reports when the analysis server is absent", async () => {
+    await pickEmbeddingModel(newStore(), () => undefined);
+  });
+
+  test("buildItems marks the deterministic stub entry active", () => {
+    const items = buildItems(
+      [model("stub", "stub", { dimensions: 64, size_bytes: null })],
+      newStore({
+        provider_id: "stub",
+        model_id: "stub",
+        model_version: "0",
+        dimensions: 64,
+      }),
+    );
+    const stub = items.find((i) => i.label?.includes("stub"));
+    assert.ok(stub, "stub entry should exist");
+    assert.match(stub.label, /active/);
+  });
+
+  test("setModel handles non-Error rejections", async () => {
+    const client = {
+      sendRequest: () => Promise.reject("string failure"),
+    } as unknown as LanguageClient;
+    await setModel(client, model("ollama", "broken-model"));
+  });
+
+  test("setModelFromPicker clears pending state after a rejected request", async () => {
+    const store = newStore();
+    const client = {
+      sendRequest: () => Promise.reject("string failure"),
+    } as unknown as LanguageClient;
+
+    await setModelFromPicker(client, store, model("ollama", "broken-model"));
+    assert.equal(store.current.pendingEmbeddingModel, null);
   });
 });

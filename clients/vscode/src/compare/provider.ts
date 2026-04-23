@@ -64,7 +64,7 @@ export function parseCompareUri(uri: vscode.Uri): CompareCoordinates {
   return { sourcePath, startByte, endByte, side, clusterId };
 }
 
-class CompareContentProvider implements vscode.TextDocumentContentProvider {
+export class CompareContentProvider implements vscode.TextDocumentContentProvider {
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     const coords = parseCompareUri(uri);
     const sourcePath = resolveCompareSourcePath(coords.sourcePath);

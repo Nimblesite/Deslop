@@ -12,6 +12,7 @@ import {
   seedInitialReport,
   buildServerArgs,
   syncEmbeddingSettingsToLsp,
+  resolveWorkspaceRoot,
 } from "../../extension";
 import { ReportStore } from "../../reportStore";
 import {
@@ -394,5 +395,19 @@ suite("extension internals", () => {
       sendRequest: () => Promise.reject(new Error("no backend")),
     } as unknown as LanguageClient;
     await seedInitialReport(client, new ReportStore());
+  });
+
+  test("resolveWorkspaceRoot returns the fsPath of the first workspace folder when present", () => {
+    // Under the test runner the workspace always points at the csharp-small
+    // fixture (configured via DESLOP_TEST_FIXTURE / vscode-test.mjs), so
+    // resolveWorkspaceRoot must hand back that directory's fsPath.
+    const folders = vscode.workspace.workspaceFolders;
+    assert.ok(
+      folders && folders.length > 0,
+      "vscode-test runner must open a workspace folder — resolveWorkspaceRoot cannot be exercised otherwise",
+    );
+    const first = folders[0];
+    assert.ok(first, "workspaceFolders[0] must exist");
+    assert.equal(resolveWorkspaceRoot(), first.uri.fsPath);
   });
 });

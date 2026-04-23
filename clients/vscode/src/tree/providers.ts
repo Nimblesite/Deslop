@@ -272,9 +272,13 @@ export class FocusedFileProvider extends LifecycleAwareProvider {
       return node.cluster.occurrences.map((o) => new OccurrenceNode(o));
     }
     if (node) return [];
+    const { report, lifecycle } = this.store.current;
+    if (lifecycle.kind === "failed") {
+      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
+      if (status) return [status];
+    }
     const editor = vscode.window.activeTextEditor;
     if (!editor) return [new StatusNode("No active editor", "info")];
-    const report = this.store.current.report;
     if (!report) return [];
     const activePath = editor.document.uri.fsPath;
     const overlapping = report.clusters.filter((c) =>

@@ -22,8 +22,17 @@ async fn main() -> ExitCode {
 
 /// Parses CLI arguments and starts the server.
 async fn run() -> Result<()> {
-    init_tracing();
     let args: Vec<String> = env::args().collect();
+    if args
+        .iter()
+        .skip(1)
+        .any(|arg| arg == "--version" || arg == "-V")
+    {
+        println!("deslop-lsp {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    init_tracing();
     tracing::info!(argv = ?args, "deslop-lsp starting");
     let workspace_root = parse_workspace_root(&args)?;
     let min_nodes = parse_min_nodes(&args)?;

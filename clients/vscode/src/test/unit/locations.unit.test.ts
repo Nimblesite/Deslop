@@ -50,6 +50,38 @@ suite("occurrence display locations", () => {
       fs.rmSync(fixture.dir, { recursive: true, force: true });
     }
   });
+
+  test("first-line byte yields column=byte+1 (no preceding newline branch)", () => {
+    // Covers the `lastNewline === -1` branch of positionForByte: when the
+    // byte lands on the first source line, column is derived from the raw
+    // prefix length, not from the offset-past-lastNewline formula.
+    const fixture = writeFixture();
+    try {
+      // Byte 7 lands at 'D' of 'Demo' on line 1 ('namespace Demo;').
+      const location = occurrenceDisplayLocation({
+        path: fixture.file,
+        start_byte: 7,
+        end_byte: 11,
+        hidden: false,
+      });
+      assert.equal(location?.line, 1, "first line must be line 1");
+      assert.equal(location?.column, 8, "column is one-indexed past the prefix");
+    } finally {
+      fs.rmSync(fixture.dir, { recursive: true, force: true });
+    }
+  });
+
+  test("missing source file produces no display location", () => {
+    // Covers the `readFileSync` catch → return undefined branch and
+    // therefore the early-return in occurrenceDisplayLocation.
+    const location = occurrenceDisplayLocation({
+      path: "/definitely/not/a/real/path/XYZ.cs",
+      start_byte: 0,
+      end_byte: 1,
+      hidden: false,
+    });
+    assert.equal(location, undefined);
+  });
 });
 
 function writeFixture(): { dir: string; file: string; source: string } {

@@ -199,7 +199,7 @@ export function resolveWorkspaceRoot(): string | undefined {
   return first?.uri.fsPath;
 }
 
-function currentInitializationOptions(): Record<string, unknown> {
+export function currentInitializationOptions(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   return {
     minNodes: cfg.get<number>("minNodes", 30),

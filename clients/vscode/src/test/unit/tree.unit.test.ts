@@ -463,4 +463,44 @@ suite("SessionProvider", () => {
       "session panel must make model selection discoverable",
     );
   });
+
+  test("failed lifecycle renders a Stopped error status node with a revealLog command", () => {
+    // Exercises renderLifecycle's failed branch (StatusNode kind=error).
+    // The status panel must surface the failure AND route the click to
+    // the Deslop output channel so the operator can read the traceback.
+    const store = new ReportStore();
+    store.setLifecycle({ kind: "failed", message: "binary missing" });
+    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
+    const nodes = provider.getChildren();
+    const errorNode = nodes.find(
+      (n) => typeof n.contextValue === "string" && n.contextValue === "deslop.status.error",
+    );
+    assert.ok(errorNode, `expected an error StatusNode, got ${JSON.stringify(nodes.map(labelText))}`);
+    assert.match(labelText(errorNode), /Stopped: binary missing/);
+    assert.equal(errorNode.command?.command, "deslop.revealLog");
+  });
+
+  test("TopOffendersProvider surfaces a failed lifecycle as an error status row", () => {
+    const store = new ReportStore();
+    store.setLifecycle({ kind: "failed", message: "crash" });
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const nodes = provider.getChildren();
+    const errorNode = nodes.find(
+      (n) => typeof n.contextValue === "string" && n.contextValue === "deslop.status.error",
+    );
+    assert.ok(errorNode, "top offenders must show a failed-lifecycle banner");
+    assert.match(labelText(errorNode), /Stopped: crash/);
+  });
+
+  test("FocusedFileProvider surfaces a failed lifecycle as an error status row", () => {
+    const store = new ReportStore();
+    store.setLifecycle({ kind: "failed", message: "oh no" });
+    const provider = new FocusedFileProvider(store, new StatusTicker());
+    const nodes = provider.getChildren();
+    const errorNode = nodes.find(
+      (n) => typeof n.contextValue === "string" && n.contextValue === "deslop.status.error",
+    );
+    assert.ok(errorNode, "focused file panel must show a failed-lifecycle banner");
+    assert.match(labelText(errorNode), /Stopped: oh no/);
+  });
 });

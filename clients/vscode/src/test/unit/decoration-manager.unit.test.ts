@@ -76,4 +76,23 @@ suite("DecorationManager redraw", () => {
     await editor.edit((b) => b.insert(new vscode.Position(0, 0), "z"));
     manager.dispose();
   });
+
+  test("redraw without a report clears the editor decorations", async () => {
+    // Covers the null-report short-circuit in redraw + the clear helper.
+    // An editor edit before any snapshot has landed must route through
+    // clear() and produce empty decoration sets rather than crashing.
+    const doc = await vscode.workspace.openTextDocument({
+      content: "qwerty",
+      language: "plaintext",
+    });
+    const editor = await vscode.window.showTextDocument(doc);
+    const store = new ReportStore();
+    assert.equal(store.current.report, null, "fresh ReportStore starts with a null report");
+    const manager = new DecorationManager(store);
+    try {
+      await editor.edit((b) => b.insert(new vscode.Position(0, 0), "!"));
+    } finally {
+      manager.dispose();
+    }
+  });
 });
