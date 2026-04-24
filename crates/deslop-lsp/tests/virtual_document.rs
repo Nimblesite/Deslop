@@ -88,7 +88,7 @@ fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
         "cluster markdown must embed its id; got: {body}"
     );
     assert!(
-        body.contains(":") && (body.contains(".cs") || body.contains("bytes")),
+        body.contains(':') && (body.contains(".cs") || body.contains("bytes")),
         "cluster markdown must carry occurrence locations; got: {body}"
     );
     let _ = child.kill();

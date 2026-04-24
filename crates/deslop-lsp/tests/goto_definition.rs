@@ -108,9 +108,9 @@ fn definition_returns_none_for_a_file_with_no_clone() -> Result<()> {
         }),
     )?;
 
-    let is_null = response
-        .get("result")
-        .is_some_and(|result| result.is_null() || matches!(result.as_array(), Some(arr) if arr.is_empty()));
+    let is_null = response.get("result").is_some_and(|result| {
+        result.is_null() || matches!(result.as_array(), Some(arr) if arr.is_empty())
+    });
     assert!(
         is_null,
         "cursor in non-duplicate Lonely.cs should resolve to no definition; got: {response}"
@@ -176,7 +176,7 @@ fn cursor_from_report(response: &Value, target: &Path) -> Option<Value> {
                 continue;
             }
             let body = std::fs::read_to_string(target).ok()?;
-            let byte = usize::try_from(start).ok()? + 1;
+            let byte = usize::try_from(start).ok()?.saturating_add(1);
             let (line, character) = byte_position(&body, byte);
             return Some(json!({ "line": line, "character": character }));
         }
@@ -188,13 +188,23 @@ fn cursor_from_report(response: &Value, target: &Path) -> Option<Value> {
 /// dependency so the harness stays lean.
 fn byte_position(body: &str, byte: usize) -> (usize, usize) {
     let capped = byte.min(body.len());
-    let prefix = &body.as_bytes()[..capped];
-    let line = prefix.iter().filter(|b| **b == b'\n').count();
+    let prefix = body.as_bytes().get(..capped).unwrap_or(&[]);
+    let line = count_newlines(prefix);
     let col = match prefix.iter().rposition(|b| *b == b'\n') {
-        Some(nl) => capped - nl - 1,
+        Some(nl) => capped.saturating_sub(nl).saturating_sub(1),
         None => capped,
     };
     (line, col)
+}
+
+fn count_newlines(bytes: &[u8]) -> usize {
+    let mut count = 0_usize;
+    for byte in bytes {
+        if *byte == b'\n' {
+            count = count.saturating_add(1);
+        }
+    }
+    count
 }
 
 fn file_uri(path: &Path) -> Result<String> {

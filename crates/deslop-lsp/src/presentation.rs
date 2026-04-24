@@ -51,7 +51,11 @@ pub fn signal_sentence(cluster: &ReportCluster) -> String {
 /// Formats `N occurrence(s)` with the authoritative cluster count.
 fn occurrence_phrase(cluster: &ReportCluster) -> String {
     let count = occurrence_count(cluster);
-    let suffix = if count == 1 { "occurrence" } else { "occurrences" };
+    let suffix = if count == 1 {
+        "occurrence"
+    } else {
+        "occurrences"
+    };
     format!("{count} {suffix}")
 }
 

@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import { log, logWarn } from "./logging";
 import { occurrenceDisplayLocation } from "./locations";
 import { ReportStore } from "./reportStore";
-import { occurrenceCount, ReportCluster, ReportOccurrence } from "./types/report";
+import { occurrenceCount, Report, ReportCluster, ReportOccurrence } from "./types/report";
 
 export const CLUSTER_DOCUMENT_SCHEME = "deslop";
 
@@ -25,16 +25,20 @@ class ClusterDocumentProvider implements vscode.TextDocumentContentProvider {
   constructor(private readonly store: ReportStore) {}
 
   provideTextDocumentContent(uri: vscode.Uri): string {
-    const clusterId = clusterIdFromUri(uri);
-    log("cluster document requested", { uri: uri.toString(), clusterId });
-    if (!clusterId) return invalidClusterDocument(uri);
-    const cluster = this.store.current.report?.clusters.find((item) => item.id === clusterId);
-    if (!cluster) {
-      logWarn("cluster document missing", { clusterId });
-      return missingClusterDocument(clusterId);
-    }
-    return renderClusterDocument(cluster);
+    return clusterDocumentContent(uri, this.store.current.report);
   }
+}
+
+export function clusterDocumentContent(uri: vscode.Uri, report: Report | null): string {
+  const clusterId = clusterIdFromUri(uri);
+  log("cluster document requested", { uri: uri.toString(), clusterId });
+  if (!clusterId) return invalidClusterDocument(uri);
+  const cluster = report?.clusters.find((item) => item.id === clusterId);
+  if (!cluster) {
+    logWarn("cluster document missing", { clusterId });
+    return missingClusterDocument(clusterId);
+  }
+  return renderClusterDocument(cluster);
 }
 
 function clusterIdFromUri(uri: vscode.Uri): string | undefined {
@@ -88,7 +92,7 @@ function renderClusterDocument(cluster: ReportCluster): string {
 }
 
 function renderOccurrence(occurrence: ReportOccurrence, index: number): string {
-  const location = occurrenceDisplayLocation(occurrence);
+  const location = occurrence.displayLocation ?? occurrenceDisplayLocation(occurrence);
   const label = location?.label ?? occurrence.path;
   const hidden = occurrence.hidden ? " hidden" : "";
   return `${index + 1}. ${label}${hidden}`;

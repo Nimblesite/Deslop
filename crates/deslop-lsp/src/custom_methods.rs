@@ -337,8 +337,11 @@ pub async fn virtual_document(
 /// The three virtual-document URI shapes served by [`virtual_document`].
 #[derive(Debug)]
 enum VirtualDocument {
+    /// Static JSON schema documentation.
     Schema,
+    /// Current duplicate report rendered as text.
     Report,
+    /// One cluster detail document addressed by stable cluster id.
     Cluster(String),
 }
 
@@ -388,10 +391,11 @@ mod tests {
 
     #[test]
     fn parses_cluster_uri_with_id() {
-        match parse_virtual_uri("deslop://cluster/abc-123") {
-            Some(VirtualDocument::Cluster(id)) => assert_eq!(id, "abc-123"),
-            other => panic!("expected Cluster variant, got {other:?}"),
-        }
+        let parsed = parse_virtual_uri("deslop://cluster/abc-123");
+        assert!(
+            matches!(parsed, Some(VirtualDocument::Cluster(ref id)) if id == "abc-123"),
+            "expected Cluster variant, got {parsed:?}"
+        );
     }
 
     #[test]

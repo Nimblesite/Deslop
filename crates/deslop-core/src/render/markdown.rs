@@ -26,11 +26,12 @@ where
     let _ = writeln!(out, "## Occurrences");
     let _ = writeln!(out);
     for (rank, occurrence) in cluster.occurrences.iter().enumerate() {
-        write_occurrence(&mut out, rank + 1, occurrence, &source_of);
+        write_occurrence(&mut out, rank.saturating_add(1), occurrence, &source_of);
     }
     out
 }
 
+/// Writes the cluster title and optional narrative text.
 fn write_header(out: &mut String, cluster: &ReportCluster) {
     let _ = writeln!(out, "# Deslop cluster `{}`", cluster.id);
     let _ = writeln!(out);
@@ -44,6 +45,7 @@ fn write_header(out: &mut String, cluster: &ReportCluster) {
     }
 }
 
+/// Writes the compact numeric signal summary.
 fn write_signals(out: &mut String, cluster: &ReportCluster) {
     let _ = writeln!(out, "- weight: `{:.2}`", cluster.weight);
     let _ = writeln!(
@@ -60,12 +62,9 @@ fn write_signals(out: &mut String, cluster: &ReportCluster) {
     let _ = writeln!(out);
 }
 
-fn write_occurrence<F>(
-    out: &mut String,
-    rank: usize,
-    occurrence: &ReportOccurrence,
-    source_of: &F,
-) where
+/// Writes one occurrence heading and optional source snippet.
+fn write_occurrence<F>(out: &mut String, rank: usize, occurrence: &ReportOccurrence, source_of: &F)
+where
     F: Fn(&str) -> Option<String>,
 {
     let path = occurrence.path.to_string_lossy();
@@ -98,20 +97,32 @@ fn write_occurrence<F>(
 /// should post-process.
 fn byte_position(body: &str, byte: usize) -> (usize, usize) {
     let capped = byte.min(body.len());
-    let prefix = &body.as_bytes()[..capped];
-    let line = prefix.iter().filter(|b| **b == b'\n').count() + 1;
+    let prefix = body.as_bytes().get(..capped).unwrap_or(&[]);
+    let line = count_newlines(prefix).saturating_add(1);
     let col = match prefix.iter().rposition(|b| *b == b'\n') {
-        Some(nl) => capped - nl,
-        None => capped + 1,
+        Some(nl) => capped.saturating_sub(nl),
+        None => capped.saturating_add(1),
     };
     (line, col)
 }
 
+/// Copies a clamped byte range from `body`.
 fn slice_bytes(body: &str, start: usize, end: usize) -> String {
     let bytes = body.as_bytes();
     let start = start.min(bytes.len());
     let end = end.min(bytes.len()).max(start);
-    String::from_utf8_lossy(&bytes[start..end]).into_owned()
+    String::from_utf8_lossy(bytes.get(start..end).unwrap_or(&[])).into_owned()
+}
+
+/// Counts newline bytes without pulling in a dependency for one renderer.
+fn count_newlines(bytes: &[u8]) -> usize {
+    let mut count = 0_usize;
+    for byte in bytes {
+        if *byte == b'\n' {
+            count = count.saturating_add(1);
+        }
+    }
+    count
 }
 
 #[cfg(test)]
@@ -176,8 +187,14 @@ mod tests {
         let c = cluster();
         let body = "alpha\nbeta\ngamma\n".to_owned();
         let out = render_cluster_markdown(&c, move |_| Some(body.clone()));
-        assert!(out.contains("/tmp/A.cs:1:1"), "expected line:col in heading; got: {out}");
-        assert!(out.contains("```\nalpha\n```"), "expected fenced snippet; got: {out}");
+        assert!(
+            out.contains("/tmp/A.cs:1:1"),
+            "expected line:col in heading; got: {out}"
+        );
+        assert!(
+            out.contains("```\nalpha\n```"),
+            "expected fenced snippet; got: {out}"
+        );
     }
 
     #[test]

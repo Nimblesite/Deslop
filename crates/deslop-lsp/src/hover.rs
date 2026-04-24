@@ -223,7 +223,10 @@ mod tests {
             body.contains("Identical code"),
             "hover must use plain human labels: {body}"
         );
-        assert!(!body.contains("Type-"), "hover must not expose clone taxonomy: {body}");
+        assert!(
+            !body.contains("Type-"),
+            "hover must not expose clone taxonomy: {body}"
+        );
         assert!(
             !body.contains("| Signal | Value |"),
             "hover must not render a large signal table: {body}"

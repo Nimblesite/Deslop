@@ -395,7 +395,12 @@ mod tests {
 
     #[test]
     fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
-        let cluster = sample_cluster("abc123", 10.0, vec![occurrence("Alpha.cs", 0, 5)], "identical");
+        let cluster = sample_cluster(
+            "abc123",
+            10.0,
+            vec![occurrence("Alpha.cs", 0, 5)],
+            "identical",
+        );
         let data = diagnostic_data(&cluster);
         let id = data
             .get("cluster_id")
