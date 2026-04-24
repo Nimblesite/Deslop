@@ -62,13 +62,6 @@ Cargo.lock.bak
 # =============================================================================
 # Gradle / IntelliJ Platform
 # =============================================================================
-.gradle/
-clients/jetbrains/.intellijPlatform/
-clients/jetbrains/build/
-
-# =============================================================================
-# Deslop-specific
-# =============================================================================
 
 codededup-report.json
 codededup-report.txt
@@ -95,9 +88,6 @@ clients/vscode/out/
 
 
 .ghissues/
-
-
-
 clients/vscode/bin/
 
 clients/vscode/media/webview/
