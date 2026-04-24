@@ -476,6 +476,76 @@ fn dissimilar_python_functions_across_files_stay_in_separate_clusters() -> Resul
     Ok(())
 }
 
+// Audience: HUMAN. Issue #34. Python test suites conventionally open
+// with a module docstring, `from __future__ import annotations`,
+// `import pytest`, `from typing import TYPE_CHECKING`, and an
+// `if TYPE_CHECKING:` import block. That prologue is pure
+// import/prologue boilerplate: it carries no semantic content a human
+// would recognise as "copy-pasted code". Before the fix for #34 the
+// prologue subtree survived the boilerplate filter (no
+// `future_import_statement` carrier, no module-docstring carrier, and
+// the `if_statement` wrapper around imports was not treated as an
+// imports-only subtree), so deslop reported the prologue as a
+// cross-file clone spanning every Python file in the repo. For a
+// 40-file repo that produced a 109-member cluster; even a 6-file
+// fixture reproduces the symptom.
+//
+// Positive bound: none of the reported clusters point at the file
+// prologue. `start_byte=0` is the structural signature of a prologue
+// occurrence — any cluster whose occurrences all start at byte 0 in
+// every file is the prologue cluster we must not emit.
+#[test]
+fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(fixture("python-prologue-false-positive"))
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for cluster in &clusters {
+        let occurrences = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let cluster_id = cluster
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<unknown>");
+        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut prologue_only = !occurrences.is_empty();
+        for occurrence in &occurrences {
+            if let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) {
+                let _inserted = files.insert(path.to_owned());
+            }
+            let start = occurrence
+                .get("start_byte")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(u64::MAX);
+            if start != 0 {
+                prologue_only = false;
+            }
+        }
+        assert!(
+            !(prologue_only && files.len() > 1),
+            "cluster {cluster_id} is a cross-file prologue cluster spanning {files:?}; \
+             module docstring + `from __future__ import ...` + `if TYPE_CHECKING:` \
+             import blocks must be filtered as boilerplate and never reported as clones",
+        );
+    }
+    Ok(())
+}
+
 // Implements multi-language dispatch — three files routed by extension
 // in one run.
 #[test]
