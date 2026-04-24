@@ -546,6 +546,75 @@ fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
     Ok(())
 }
 
+// Audience: HUMAN. Issue #34, C# arm. The same prologue
+// false-positive that hits Python `from __future__ import` /
+// `if TYPE_CHECKING:` blocks also hits C# files: when many `.cs`
+// files share the same `using ...;` block + `namespace X;` prologue
+// but have entirely different class bodies, the sibling-window pass
+// emits windows that span from the prologue into the class
+// declaration. The `using_directive`/`file_scoped_namespace_declaration`
+// k-grams dominate the window's token signature, so token Jaccard
+// approaches 1.00 and LSH-only matching links every file into one
+// cross-file cluster — even though the structural Merkle hashes
+// disagree. The reported cluster from the user's repo had 109
+// occurrences pinned at line 1, column 1 across the codebase; six
+// distinct files reproduce the same shape here.
+//
+// Positive bound: no cluster's occurrences all start at byte 0
+// across more than one file. A legitimate cross-file clone aligns
+// somewhere inside the file, not at the prologue.
+#[test]
+fn csharp_using_namespace_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(fixture("csharp-prologue-false-positive"))
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for cluster in &clusters {
+        let occurrences = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let cluster_id = cluster
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<unknown>");
+        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut prologue_only = !occurrences.is_empty();
+        for occurrence in &occurrences {
+            if let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) {
+                let _inserted = files.insert(path.to_owned());
+            }
+            let start = occurrence
+                .get("start_byte")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(u64::MAX);
+            if start != 0 {
+                prologue_only = false;
+            }
+        }
+        assert!(
+            !(prologue_only && files.len() > 1),
+            "cluster {cluster_id} is a cross-file C# prologue cluster spanning {files:?}; \
+             `using ...;` directives + `namespace X;` must be filtered as boilerplate \
+             so they never anchor a cross-file clone via LSH-only matching",
+        );
+    }
+    Ok(())
+}
+
 // Implements multi-language dispatch — three files routed by extension
 // in one run.
 #[test]
