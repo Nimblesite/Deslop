@@ -16,6 +16,14 @@ Implemented work intentionally not repeated here:
   ([TS-UPGRADE.md](TS-UPGRADE.md)).
 - Live analysis core, LSP diagnostics, LSP hover, LSP code lens, LSP custom
   `deslop/*` methods, MCP server, and VS Code extension v0.1.
+- VS Code schema docs: `deslop.showSchemaDoc` now prefers the LSP RPC/live
+  report path and falls back to a packaged `dist/schema_doc.md` copy with
+  unit, E2E, and `.vsix` packaging proof.
+- VSIX tree context menus (cluster + occurrence rows): Copy Context For AI,
+  Copy Human Location, Copy Cluster Locations, Copy Source Snippet, Reveal
+  Occurrence In Explorer, Open All Occurrences, Open Cluster Details, and
+  Compare With Canonical. Closes gh issues #11, #12, #13, #15, #16, #17, #19
+  with unit + E2E coverage.
 - Canonical clone buckets in `deslop-core::buckets`, `cluster.bucket` on the
   report, HTML / CLI / VSIX bucket rendering, and AI-match badging.
 - JetBrains plugin scaffold: Gradle project, LSP support provider, descriptor,
@@ -31,8 +39,6 @@ Implemented work intentionally not repeated here:
 
 - [LSP editor surfaces](lsp-editor-surfaces-plan.md) - remaining standard LSP
   UX beyond diagnostics, hover, code lens, and custom report methods.
-- [VS Code schema docs](vscode-schema-docs-plan.md) - optional build-time
-  offline `schema_doc.md` copy for the VSIX.
 - [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) -
   settings page, version checks, and bundled binary packaging.
 - [JetBrains native UX](jetbrains-ux-plan.md) - Tool Window and embedding
@@ -45,7 +51,6 @@ Implemented work intentionally not repeated here:
 ## TODO
 
 - [ ] Finish [LSP editor surfaces](lsp-editor-surfaces-plan.md).
-- [ ] Finish [VS Code schema docs](vscode-schema-docs-plan.md).
 - [ ] Finish [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).

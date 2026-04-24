@@ -396,6 +396,10 @@ pub async fn run_stdio(
         custom_methods::REPORT_SCHEMA_DOC,
         custom_methods::report_schema_doc,
     )
+    .custom_method(
+        custom_methods::VIRTUAL_DOCUMENT,
+        custom_methods::virtual_document,
+    )
     .finish();
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();

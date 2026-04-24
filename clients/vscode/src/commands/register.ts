@@ -10,6 +10,16 @@ import { openClusterPanel, openReportPanel } from "../webview/panels";
 import { pickEmbeddingModel } from "./embeddingPicker";
 import { ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
+import { ClusterNode, OccurrenceNode } from "../tree/providers";
+import {
+  clusterIdForTreeNode,
+  copyClusterLocations,
+  copyContextForAI,
+  copyHumanLocation,
+  copySourceSnippet,
+  openAllOccurrences,
+  revealOccurrenceInExplorer,
+} from "./treeMenus";
 
 type ClientFactory = () => LanguageClient | undefined;
 
@@ -51,6 +61,43 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand("deslop.showSchemaDoc", () =>
       openSchemaDoc(context, store, clientOf),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.copyContextForAI",
+      (node: ClusterNode | OccurrenceNode) => copyContextForAI(node, store),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.copyHumanLocation",
+      (node: OccurrenceNode) => copyHumanLocation(node),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.copyClusterLocations",
+      (node: ClusterNode) => copyClusterLocations(node),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.copySourceSnippet",
+      (node: OccurrenceNode) => copySourceSnippet(node),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.revealOccurrenceInExplorer",
+      (node: OccurrenceNode) => revealOccurrenceInExplorer(node),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.openAllOccurrences",
+      (node: ClusterNode) => openAllOccurrences(node),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.openClusterDetails",
+      (node: ClusterNode | OccurrenceNode) => {
+        const id = clusterIdForTreeNode(node, store);
+        if (!id) {
+          void vscode.window.showInformationMessage(
+            "Deslop: no cluster resolved for this tree row.",
+          );
+          return;
+        }
+        openClusterPanel(context, store, id);
+      },
     ),
   );
 }
@@ -121,11 +168,15 @@ export async function openSchemaDoc(
   clientOf?: ClientFactory,
 ): Promise<void> {
   // Live wire blanks `schema_doc` to keep reportGet tiny. Prefer the
-  // dedicated `deslop/reportSchemaDoc` RPC; fall back to whatever the
-  // snapshot happens to carry (CLI-loaded or older LSP builds).
+  // dedicated `deslop/reportSchemaDoc` RPC, then whatever the snapshot
+  // happens to carry, then the packaged markdown copy for offline use.
   const remote = await fetchSchemaDocViaRpc(clientOf);
   const fallback = store.current.report?.schema_doc;
-  const content = firstNonEmpty(remote, fallback) ?? "Schema doc unavailable.";
+  const packaged = firstNonEmpty(remote, fallback)
+    ? undefined
+    : await readPackagedSchemaDoc(ctx);
+  const content =
+    firstNonEmpty(remote, fallback, packaged) ?? "Schema doc unavailable.";
   const doc = await vscode.workspace.openTextDocument({
     language: "markdown",
     content,
@@ -140,6 +191,19 @@ async function fetchSchemaDocViaRpc(clientOf?: ClientFactory): Promise<string | 
   try {
     const text = await client.sendRequest<string>("deslop/reportSchemaDoc");
     return typeof text === "string" && text.length > 0 ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readPackagedSchemaDoc(
+  ctx: vscode.ExtensionContext,
+): Promise<string | undefined> {
+  try {
+    const uri = vscode.Uri.joinPath(ctx.extensionUri, "dist", "schema_doc.md");
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const text = Buffer.from(bytes).toString("utf8");
+    return text.length > 0 ? text : undefined;
   } catch {
     return undefined;
   }

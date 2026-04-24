@@ -14,9 +14,24 @@ import {
   compareWithCanonical,
   openSchemaDoc,
 } from "../../commands/register";
+import {
+  aiPayloadForCluster,
+  aiPayloadForOccurrence,
+  clusterIdForTreeNode,
+  clusterLocationsText,
+  copyClusterLocations,
+  copyContextForAI,
+  copyHumanLocation,
+  copySourceSnippet,
+  openAllOccurrences,
+  revealOccurrenceInExplorer,
+  sourceSnippetText,
+  OPEN_ALL_THRESHOLD,
+} from "../../commands/treeMenus";
 import { buildCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster } from "../../types/report";
+import { ClusterNode, OccurrenceNode } from "../../tree/providers";
+import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let i = 0; i < 20; i += 1) {
@@ -93,10 +108,20 @@ function report(clusters: ReportCluster[]): Report {
   };
 }
 
+function extensionRoot(): string {
+  return path.resolve(__dirname, "../../..");
+}
+
+function packagedSchemaDocPath(): string {
+  return path.join(extensionRoot(), "dist", "schema_doc.md");
+}
+
 function fakeCtx(): vscode.ExtensionContext {
+  const root = extensionRoot();
   return {
     subscriptions: { push: () => {} },
-    extensionPath: "/tmp",
+    extensionPath: root,
+    extensionUri: vscode.Uri.file(root),
     extension: { packageJSON: { version: "0.0.0" } },
   } as unknown as vscode.ExtensionContext;
 }
@@ -306,9 +331,303 @@ suite("register command implementations", () => {
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
     await openSchemaDoc(fakeCtx(), store);
+    const active = vscode.window.activeTextEditor;
+    assert.ok(active, "schema doc editor should be active");
+    assert.equal(active.document.languageId, "markdown");
+    assert.match(active.document.getText(), /# docs/);
   });
 
-  test("openSchemaDoc renders a fallback when schema_doc is absent", async () => {
+  test("openSchemaDoc reads the packaged fallback when schema_doc is absent", async () => {
+    const expected = fs.readFileSync(packagedSchemaDocPath(), "utf8");
     await openSchemaDoc(fakeCtx(), new ReportStore());
+    const active = vscode.window.activeTextEditor;
+    assert.ok(active, "packaged schema doc editor should be active");
+    assert.equal(active.document.languageId, "markdown");
+    assert.equal(active.document.getText(), expected);
+  });
+});
+
+function occurrence(overrides: Partial<ReportOccurrence> = {}): ReportOccurrence {
+  return {
+    path: "src/foo.cs",
+    start_byte: 0,
+    end_byte: 50,
+    hidden: false,
+    ...overrides,
+  };
+}
+
+function clusterNodeFor(c: ReportCluster, rank = 1): ClusterNode {
+  return new ClusterNode(c, rank, "mid");
+}
+
+function occurrenceNodeFor(o: ReportOccurrence): OccurrenceNode {
+  return new OccurrenceNode(o);
+}
+
+suite("tree menu renderers", () => {
+  test("clusterLocationsText surfaces bucket + count header with one row per occurrence", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-menu-"));
+    const fileA = path.join(dir, "A.cs");
+    const fileB = path.join(dir, "B.cs");
+    fs.writeFileSync(fileA, "public class A { }\n", "utf8");
+    fs.writeFileSync(fileB, "public class B { }\n", "utf8");
+
+    const c = clusterWithRanges("c-x", [
+      { path: fileA, start_byte: 0, end_byte: 10 },
+      { path: fileB, start_byte: 0, end_byte: 10 },
+    ]);
+    c.bucket = "identical";
+
+    const text = clusterLocationsText(c);
+    const lines = text.split("\n");
+    assert.equal(lines.length, 3, "header + 2 occurrences");
+    assert.match(lines[0] ?? "", /^cluster c-x/);
+    assert.match(lines[0] ?? "", /Identical code/);
+    assert.match(lines[0] ?? "", /2 occurrences/);
+    assert.match(lines[1] ?? "", /A\.cs:1:1$/);
+    assert.match(lines[2] ?? "", /B\.cs:1:1$/);
+    assert.ok(!text.includes("start_byte"));
+    assert.ok(!text.includes(".."), "human copy must not include byte ranges");
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("aiPayloadForCluster encodes id, bucket, rank, signals, and byte ranges", () => {
+    const c = clusterWithRanges("c-ai", [
+      { path: "src/foo.cs", start_byte: 10, end_byte: 200 },
+    ]);
+    c.bucket = "same_behavior";
+    c.signals = {
+      structural: 0.1,
+      token_jaccard: 0.2,
+      embedding_cos: 0.9,
+      fused: 0.85,
+    };
+
+    const text = aiPayloadForCluster(c, 7);
+    assert.match(text, /cluster_id: c-ai/);
+    assert.match(text, /rank: 7/);
+    assert.match(text, /bucket: same_behavior/);
+    assert.match(text, /signals: structural=0\.1000/);
+    assert.match(text, /embed=0\.9000/);
+    assert.match(text, /10\.\.200/);
+    assert.match(text, /Use these byte ranges as precise edit anchors/);
+  });
+
+  test("aiPayloadForOccurrence includes parent cluster metadata when available", () => {
+    const c = clusterWithRanges("c-occ", [
+      { path: "src/foo.cs", start_byte: 0, end_byte: 50 },
+      { path: "src/bar.cs", start_byte: 5, end_byte: 80 },
+    ]);
+    c.bucket = "nearly_identical";
+
+    const store = new ReportStore();
+    store.setSnapshot(report([c]), 0);
+
+    const first = c.occurrences[0];
+    assert.ok(first);
+    const text = aiPayloadForOccurrence(first, store);
+    assert.match(text, /occurrence_path: src\/foo\.cs/);
+    assert.match(text, /bytes: 0\.\.50/);
+    assert.match(text, /cluster_id: c-occ/);
+    assert.match(text, /rank: 1/);
+    assert.match(text, /sibling_occurrences: 1/);
+    assert.match(text, /Use these byte ranges as precise edit anchors/);
+  });
+
+  test("aiPayloadForOccurrence omits parent section when store has no cluster for the occurrence", () => {
+    const store = new ReportStore();
+    const text = aiPayloadForOccurrence(occurrence(), store);
+    assert.match(text, /occurrence_path/);
+    assert.ok(!text.includes("cluster_id:"), "no cluster → no parent block");
+  });
+
+  test("sourceSnippetText wraps the occurrence bytes in a fenced code block with a compact header", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip-"));
+    const file = path.join(dir, "snippet.cs");
+    const source = "public class Snippet { int x = 1; }\n";
+    fs.writeFileSync(file, source, "utf8");
+
+    const text = sourceSnippetText({
+      path: file,
+      start_byte: 0,
+      end_byte: 20,
+      hidden: false,
+    });
+
+    assert.match(text, /^.+:1:1 bytes 0\.\.20\n```csharp\n/);
+    assert.ok(text.includes("public class Snippet"), "fenced block carries the bytes");
+    assert.ok(text.endsWith("```"));
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("clusterIdForTreeNode returns cluster id for cluster nodes", () => {
+    const c = clusterWithRanges("c-id", [{ path: "a", start_byte: 0, end_byte: 1 }]);
+    const store = new ReportStore();
+    store.setSnapshot(report([c]), 0);
+    assert.equal(clusterIdForTreeNode(clusterNodeFor(c), store), "c-id");
+  });
+
+  test("clusterIdForTreeNode resolves parent cluster id for occurrence nodes", () => {
+    const c = clusterWithRanges("c-parent", [
+      { path: "src/foo.cs", start_byte: 100, end_byte: 120 },
+    ]);
+    const store = new ReportStore();
+    store.setSnapshot(report([c]), 0);
+    const occ = c.occurrences[0];
+    assert.ok(occ);
+    assert.equal(
+      clusterIdForTreeNode(occurrenceNodeFor(occ), store),
+      "c-parent",
+    );
+  });
+
+  test("clusterIdForTreeNode returns undefined for occurrences with no matching parent", () => {
+    const store = new ReportStore();
+    assert.equal(
+      clusterIdForTreeNode(occurrenceNodeFor(occurrence()), store),
+      undefined,
+    );
+  });
+});
+
+suite("tree menu handlers", () => {
+  suiteSetup(async () => {
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    assert.ok(ext, "extension must be discoverable in the test host");
+    await ext.activate();
+  });
+
+  test("copyHumanLocation copies path:line:column for the occurrence", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-hloc-"));
+    const file = path.join(dir, "hum.cs");
+    fs.writeFileSync(file, "line-a\nline-b\n", "utf8");
+
+    const node = occurrenceNodeFor({
+      path: file,
+      start_byte: 0,
+      end_byte: 3,
+      hidden: false,
+    });
+    await copyHumanLocation(node);
+    const clipboard = await vscode.env.clipboard.readText();
+    assert.equal(clipboard, `${file}:1:1`);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("copyClusterLocations writes the header + every occurrence line to the clipboard", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-cloc-"));
+    const fileA = path.join(dir, "A.cs");
+    const fileB = path.join(dir, "B.cs");
+    fs.writeFileSync(fileA, "A\n", "utf8");
+    fs.writeFileSync(fileB, "B\n", "utf8");
+    const c = clusterWithRanges("c-copy", [
+      { path: fileA, start_byte: 0, end_byte: 1 },
+      { path: fileB, start_byte: 0, end_byte: 1 },
+    ]);
+    c.bucket = "identical";
+
+    await copyClusterLocations(clusterNodeFor(c));
+    const clipboard = await vscode.env.clipboard.readText();
+    const lines = clipboard.split("\n");
+    assert.match(lines[0] ?? "", /cluster c-copy/);
+    assert.equal(lines.length, 3);
+    assert.match(lines[1] ?? "", /A\.cs:1:1$/);
+    assert.match(lines[2] ?? "", /B\.cs:1:1$/);
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("copyContextForAI cluster node writes the AI payload to the clipboard", async () => {
+    const c = clusterWithRanges("c-ctx", [
+      { path: "src/foo.cs", start_byte: 0, end_byte: 50 },
+    ]);
+    c.bucket = "nearly_identical";
+    const store = new ReportStore();
+    store.setSnapshot(report([c]), 0);
+
+    await copyContextForAI(clusterNodeFor(c, 3), store);
+    const clipboard = await vscode.env.clipboard.readText();
+    assert.match(clipboard, /cluster_id: c-ctx/);
+    assert.match(clipboard, /rank: 3/);
+    assert.match(clipboard, /0\.\.50/);
+  });
+
+  test("copyContextForAI occurrence node writes occurrence + parent fields to the clipboard", async () => {
+    const c = clusterWithRanges("c-occ-ctx", [
+      { path: "src/foo.cs", start_byte: 0, end_byte: 9 },
+    ]);
+    c.bucket = "identical";
+    const store = new ReportStore();
+    store.setSnapshot(report([c]), 0);
+
+    const occ = c.occurrences[0];
+    assert.ok(occ);
+    await copyContextForAI(occurrenceNodeFor(occ), store);
+    const clipboard = await vscode.env.clipboard.readText();
+    assert.match(clipboard, /occurrence_path: src\/foo\.cs/);
+    assert.match(clipboard, /cluster_id: c-occ-ctx/);
+    assert.match(clipboard, /bucket: identical/);
+  });
+
+  test("copySourceSnippet copies the fenced source block to the clipboard", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip2-"));
+    const file = path.join(dir, "src.py");
+    fs.writeFileSync(file, "def hi(): return 42\n", "utf8");
+
+    await copySourceSnippet(
+      occurrenceNodeFor({ path: file, start_byte: 0, end_byte: 8, hidden: false }),
+    );
+    const clipboard = await vscode.env.clipboard.readText();
+    assert.match(clipboard, /```python\ndef hi\(/);
+    assert.ok(clipboard.endsWith("```"));
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("revealOccurrenceInExplorer shows an error when the file no longer exists", async () => {
+    const node = occurrenceNodeFor({
+      path: "/tmp/__cdd_does_not_exist__.cs",
+      start_byte: 0,
+      end_byte: 1,
+      hidden: false,
+    });
+    await revealOccurrenceInExplorer(node);
+  });
+
+  test("revealOccurrenceInExplorer calls revealInExplorer for an existing file", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-rev-"));
+    const file = path.join(dir, "reveal.cs");
+    fs.writeFileSync(file, "x\n", "utf8");
+    const node = occurrenceNodeFor({
+      path: file,
+      start_byte: 0,
+      end_byte: 1,
+      hidden: false,
+    });
+    await revealOccurrenceInExplorer(node);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("openAllOccurrences opens every occurrence under the threshold without prompting", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-all-"));
+    const files = ["a", "b"].map((name) => {
+      const p = path.join(dir, `${name}.cs`);
+      fs.writeFileSync(p, `// ${name}\n`, "utf8");
+      return p;
+    });
+    const c = clusterWithRanges(
+      "c-open-all",
+      files.map((p) => ({ path: p, start_byte: 0, end_byte: 3 })),
+    );
+    await openAllOccurrences(clusterNodeFor(c));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("OPEN_ALL_THRESHOLD is the small-cluster confirmation boundary", () => {
+    assert.equal(OPEN_ALL_THRESHOLD, 5);
   });
 });

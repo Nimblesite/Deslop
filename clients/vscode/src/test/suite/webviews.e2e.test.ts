@@ -2,8 +2,30 @@
 // posts a report snapshot to the webview on ready.
 
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as vscode from "vscode";
+import { openSchemaDoc } from "../../commands/register";
+import { ReportStore } from "../../reportStore";
 import { sleep } from "./helpers";
+
+function extensionRoot(): string {
+  return path.resolve(__dirname, "../../..");
+}
+
+function packagedSchemaDoc(): string {
+  return fs.readFileSync(path.join(extensionRoot(), "dist", "schema_doc.md"), "utf8");
+}
+
+function fakeCtx(): vscode.ExtensionContext {
+  const root = extensionRoot();
+  return {
+    subscriptions: { push: () => {} },
+    extensionPath: root,
+    extensionUri: vscode.Uri.file(root),
+    extension: { packageJSON: { version: "0.0.0" } },
+  } as unknown as vscode.ExtensionContext;
+}
 
 suite("webviews", () => {
   test("openReport command opens a webview", async () => {
@@ -20,9 +42,20 @@ suite("webviews", () => {
   });
 
   test("showSchemaDoc opens the embedded schema", async () => {
+    const expected = packagedSchemaDoc();
     await vscode.commands.executeCommand("deslop.showSchemaDoc");
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "schema doc should open in an editor");
-    assert.match(active.document.getText(), /schema/i);
+    assert.equal(active.document.languageId, "markdown");
+    assert.equal(active.document.getText(), expected);
+  });
+
+  test("showSchemaDoc falls back to the packaged schema doc with no client and no report", async () => {
+    const expected = packagedSchemaDoc();
+    await openSchemaDoc(fakeCtx(), new ReportStore());
+    const active = vscode.window.activeTextEditor;
+    assert.ok(active, "packaged schema doc should open in an editor");
+    assert.equal(active.document.languageId, "markdown");
+    assert.equal(active.document.getText(), expected);
   });
 });

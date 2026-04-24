@@ -77,8 +77,90 @@
       {
         "command": "deslop.revealActiveBinary",
         "title": "Deslop: Reveal Active Binary"
+      },
+      {
+        "command": "deslop.copyContextForAI",
+        "title": "Copy Context For AI"
+      },
+      {
+        "command": "deslop.copyHumanLocation",
+        "title": "Copy Human Location"
+      },
+      {
+        "command": "deslop.copyClusterLocations",
+        "title": "Copy Cluster Locations"
+      },
+      {
+        "command": "deslop.copySourceSnippet",
+        "title": "Copy Source Snippet"
+      },
+      {
+        "command": "deslop.revealOccurrenceInExplorer",
+        "title": "Reveal Occurrence In Explorer"
+      },
+      {
+        "command": "deslop.openAllOccurrences",
+        "title": "Open All Occurrences"
+      },
+      {
+        "command": "deslop.openClusterDetails",
+        "title": "Open Cluster Details"
       }
     ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "deslop.openClusterDetails",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.openClusterDetails",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.openAllOccurrences",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.compareWithCanonical",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@3"
+        },
+        {
+          "command": "deslop.revealOccurrenceInExplorer",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.copyContextForAI",
+          "when": "viewItem == deslop.cluster",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "deslop.copyContextForAI",
+          "when": "viewItem == deslop.occurrence",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "deslop.copyClusterLocations",
+          "when": "viewItem == deslop.cluster",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "deslop.copyHumanLocation",
+          "when": "viewItem == deslop.occurrence",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "deslop.copySourceSnippet",
+          "when": "viewItem == deslop.occurrence",
+          "group": "1_copy@3"
+        }
+      ]
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -185,8 +267,8 @@
     ]
   },
   "scripts": {
-    "build": "node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch",
+    "build": "node ./scripts/copy-schema-doc.mjs && node esbuild.mjs",
+    "watch": "node ./scripts/copy-schema-doc.mjs && node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "compile": "tsc -p ./",
@@ -195,7 +277,7 @@
     "pretest:ollama": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
     "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
-    "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix"
+    "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs"
   },
   "dependencies": {
     "pino": "^10.3.1",

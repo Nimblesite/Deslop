@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use deslop_core::{
     live::{FindSimilarRequest, LiveApi},
+    render::{render_cluster_markdown, render_text},
     report::{occurrence_count, Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
 };
 use serde::{Deserialize, Serialize};
@@ -51,6 +52,12 @@ pub const SET_MODEL: &str = "deslop/embeddingSetModel";
 /// Method name for `deslop/sessionConfig`.
 pub const SESSION_CONFIG: &str = "deslop/sessionConfig";
 
+/// Method name for `deslop/virtualDocument`. Resolves `deslop://schema`,
+/// `deslop://report`, and `deslop://cluster/<id>` URIs into markdown so
+/// every LSP client renders the same editor-neutral readonly view
+/// ([LSP-EDITOR-SURFACES]).
+pub const VIRTUAL_DOCUMENT: &str = "deslop/virtualDocument";
+
 /// Parameters for the file/range/cluster lookups.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PathParams {
@@ -74,6 +81,13 @@ pub struct RangeParams {
 pub struct ClusterIdParams {
     /// Stable cluster id.
     pub id: String,
+}
+
+/// Parameters for [`VIRTUAL_DOCUMENT`].
+#[derive(Debug, Deserialize, Serialize)]
+pub struct VirtualDocumentParams {
+    /// `deslop://{schema|report|cluster/<id>}` URI.
+    pub uri: String,
 }
 
 /// Parameters for `embedding/setModel`.
@@ -282,4 +296,121 @@ fn into_jsonrpc(error: &deslop_core::live::LiveError) -> tower_lsp::jsonrpc::Err
     out.message = message.into();
     out.data = serde_json::to_value(wire).ok();
     out
+}
+
+/// Serves markdown for a `deslop://` virtual-document URI
+/// ([LSP-EDITOR-SURFACES]).
+///
+/// # Errors
+///
+/// Returns `invalid_params` for any URI that is not one of
+/// `deslop://schema`, `deslop://report`, or `deslop://cluster/<id>`, and
+/// surfaces [`deslop_core::live::LiveError::UnknownCluster`] when the
+/// embedded id does not match an active cluster.
+pub async fn virtual_document(
+    backend: &LspBackend,
+    params: VirtualDocumentParams,
+) -> LspResult<serde_json::Value> {
+    match parse_virtual_uri(&params.uri) {
+        Some(VirtualDocument::Schema) => {
+            let report = backend.service().report_get().await;
+            Ok(serde_json::Value::String(report.schema_doc.clone()))
+        }
+        Some(VirtualDocument::Report) => {
+            let report = backend.service().report_get().await;
+            Ok(serde_json::Value::String(render_text(&report)))
+        }
+        Some(VirtualDocument::Cluster(id)) => match backend.service().cluster_by_id(&id).await {
+            Ok(cluster) => Ok(serde_json::Value::String(render_cluster_markdown(
+                &cluster,
+                |path| std::fs::read_to_string(path).ok(),
+            ))),
+            Err(error) => Err(into_jsonrpc(&error)),
+        },
+        None => Err(invalid_params(format!(
+            "unsupported deslop:// uri: {}",
+            params.uri
+        ))),
+    }
+}
+
+/// The three virtual-document URI shapes served by [`virtual_document`].
+#[derive(Debug)]
+enum VirtualDocument {
+    Schema,
+    Report,
+    Cluster(String),
+}
+
+/// Parses a `deslop://` URI into a routing tag. Returns `None` for any
+/// other scheme or malformed path.
+fn parse_virtual_uri(uri: &str) -> Option<VirtualDocument> {
+    let rest = uri.strip_prefix("deslop://")?;
+    match rest {
+        "schema" => Some(VirtualDocument::Schema),
+        "report" => Some(VirtualDocument::Report),
+        _ => {
+            let id = rest.strip_prefix("cluster/")?;
+            if id.is_empty() || id.contains('/') {
+                return None;
+            }
+            Some(VirtualDocument::Cluster(id.to_owned()))
+        }
+    }
+}
+
+/// Builds a JSON-RPC `-32602 Invalid params` error with `message`.
+fn invalid_params(message: String) -> tower_lsp::jsonrpc::Error {
+    let mut error = tower_lsp::jsonrpc::Error::invalid_params(message.clone());
+    error.data = Some(serde_json::Value::String(message));
+    error
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_schema_uri() {
+        assert!(matches!(
+            parse_virtual_uri("deslop://schema"),
+            Some(VirtualDocument::Schema)
+        ));
+    }
+
+    #[test]
+    fn parses_report_uri() {
+        assert!(matches!(
+            parse_virtual_uri("deslop://report"),
+            Some(VirtualDocument::Report)
+        ));
+    }
+
+    #[test]
+    fn parses_cluster_uri_with_id() {
+        match parse_virtual_uri("deslop://cluster/abc-123") {
+            Some(VirtualDocument::Cluster(id)) => assert_eq!(id, "abc-123"),
+            other => panic!("expected Cluster variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_empty_cluster_id() {
+        assert!(parse_virtual_uri("deslop://cluster/").is_none());
+    }
+
+    #[test]
+    fn rejects_nested_cluster_path() {
+        assert!(parse_virtual_uri("deslop://cluster/abc/extra").is_none());
+    }
+
+    #[test]
+    fn rejects_non_deslop_scheme() {
+        assert!(parse_virtual_uri("http://example").is_none());
+    }
+
+    #[test]
+    fn rejects_unknown_authority() {
+        assert!(parse_virtual_uri("deslop://whatever").is_none());
+    }
 }

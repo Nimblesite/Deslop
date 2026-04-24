@@ -31,7 +31,7 @@ const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
   same_behavior: { icon: "sparkle", color: "charts.purple" },
 };
 
-class ClusterNode extends vscode.TreeItem {
+export class ClusterNode extends vscode.TreeItem {
   constructor(
     readonly cluster: ReportCluster,
     readonly rank: number,
@@ -86,7 +86,7 @@ function fileKey(cluster: ReportCluster): string {
   return displayPath(representativePath(cluster)).toLocaleLowerCase();
 }
 
-class OccurrenceNode extends vscode.TreeItem {
+export class OccurrenceNode extends vscode.TreeItem {
   constructor(readonly occurrence: ReportOccurrence) {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);

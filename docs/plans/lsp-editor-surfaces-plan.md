@@ -29,11 +29,11 @@ VSIX, and JetBrains-specific native UI stays in the JetBrains plans.
       current command path still depends on client-only behavior.
 - [ ] Add `documentLinkProvider` capability if the hover or virtual document
       content exposes navigable occurrence links.
-- [ ] Implement `deslop://cluster/<id>` virtual document rendering from
+- [x] Implement `deslop://cluster/<id>` virtual document rendering from
       `LiveApi::cluster_by_id`, including snippets and line numbers.
-- [ ] Implement `deslop://report` virtual document rendering from the canonical
+- [x] Implement `deslop://report` virtual document rendering from the canonical
       text renderer.
-- [ ] Implement `deslop://schema` virtual document rendering from
+- [x] Implement `deslop://schema` virtual document rendering from
       `report.schema_doc`.
 - [ ] Advertise `executeCommandProvider` with `deslop.refreshReport`,
       `deslop.openCluster`, `deslop.openReport`, `deslop.pickEmbeddingModel`,

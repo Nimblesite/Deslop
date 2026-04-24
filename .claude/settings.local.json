@@ -114,7 +114,10 @@
       "Bash(echo \"exit=$?\")",
       "Bash(claude mcp *)",
       "WebFetch(domain:developers.openai.com)",
-      "Read(//Users/christianfindlay/.codex/**)"
+      "Read(//Users/christianfindlay/.codex/**)",
+      "Bash(ps -o pid,pcpu,rss,etime,comm -p 7529)",
+      "Bash(ps -eo pid,pcpu,etime,comm,args)",
+      "Bash(grep -E \"deslop-\\(lsp|mcp|$\\)\")"
     ]
   },
   "autoMemoryEnabled": false
