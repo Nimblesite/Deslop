@@ -411,6 +411,74 @@ fn detects_type2_clone_in_python_fixture() -> Result<()> {
     Ok(())
 }
 
+// Audience: HUMAN. Issue #34. When a human opens two Python test
+// files whose functions are structurally unrelated — one synchronous
+// test calling `registry.has(...)` in a for-loop assertion block,
+// one async helper doing `db.add(UsageEvent(...)); await db.flush()`
+// — Deslop must not report them as members of the same clone cluster.
+// A human reading the cluster panel should never see two
+// dissimilar-shape functions sitting side by side claiming to be
+// duplicates; that makes the whole tool untrustworthy.
+//
+// Positive bound: every cluster in the report has occurrences from a
+// single file. Intra-file similarity (e.g. three sibling tests that
+// all do `x = registry.get("..."); result = x(...); assert ...`) is
+// legitimate and allowed.
+#[test]
+fn dissimilar_python_functions_across_files_stay_in_separate_clusters() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(fixture("python-dissimilar-functions"))
+        .arg("--min-nodes")
+        .arg("10")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    for (index, cluster) in clusters.iter().enumerate() {
+        let cluster_id = cluster
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<unknown>");
+        let occurrences = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for occurrence in &occurrences {
+            let Some(path) = occurrence
+                .get("path")
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            let basename = Path::new(path)
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.to_owned());
+            let _inserted = files.insert(basename);
+        }
+        assert_eq!(
+            files.len(),
+            1,
+            "cluster #{index} ({cluster_id}) spans multiple files {files:?}; \
+             the human reader would be confused because the bodies are not similar",
+        );
+    }
+    Ok(())
+}
+
 // Implements multi-language dispatch — three files routed by extension
 // in one run.
 #[test]

@@ -72,4 +72,65 @@ suite("bubble rendering helpers", () => {
     assert.match(text, /command:deslop.compareWithCanonical/);
     assert.match(text, /command:deslop.bubble.dismissCluster/);
   });
+
+  // Audience: HUMAN. Issue #30. The live bubble is the editor-visible
+  // tooltip humans read while coding. Its title must read as a plain
+  // human label ("Identical code", "Nearly identical code", ...). The
+  // panel has room for subtle technical hints, but the headline must
+  // stand alone without academic taxonomy jargon attached.
+  test("bubbleHover title reads as a plain human label (#30)", () => {
+    const c = cluster();
+    c.signals = { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
+    const text = bubbleHover(c).value;
+    const firstLine = text.split("\n")[0] ?? "";
+    assert.match(
+      firstLine,
+      /^\*\*Identical code\*\*\s+—/,
+      `human title must be the plain bucket label; got first line: ${firstLine}`,
+    );
+  });
+
+  // Audience: HUMAN. Issue #31. The hover body humans read must be
+  // short and prose-only: one interpretation sentence plus the action
+  // links. No raw numeric signal strip in the body — the inline
+  // decoration already carries the compact bar strip for at-a-glance
+  // confidence.
+  test("bubbleHover body is one prose sentence plus the action links (#31)", () => {
+    const c = cluster();
+    c.interpretation = "Safe to extract — every copy is the same.";
+    const text = bubbleHover(c).value;
+    assert.match(
+      text,
+      /Safe to extract — every copy is the same\./,
+      `human body must carry the interpretation sentence: ${text}`,
+    );
+    const paragraphs = text
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    assert.equal(
+      paragraphs.length,
+      2,
+      `human body must be exactly two paragraphs (title+interpretation, then action links); got ${paragraphs.length} in: ${text}`,
+    );
+  });
+
+  // Audience: HUMAN. Issue #32. The LSP hover and the VSCode bubble
+  // hover both fire for the same cursor position and VS Code stacks
+  // their markdown — so whichever sentence both render ends up
+  // duplicated on-screen. The LSP hover already carries the full
+  // interpretation ("<bucket> — <action> N occurrences."); the bubble
+  // must stop at the bucket label so the stacked hovers complement
+  // rather than repeat each other.
+  test("bubbleHover title is just the bucket label so the LSP hover owns the interpretation (#32)", () => {
+    const c = cluster();
+    c.interpretation = "Safe to extract — every copy is the same.";
+    const text = bubbleHover(c).value;
+    const firstLine = text.split("\n")[0] ?? "";
+    assert.match(
+      firstLine,
+      /^\*\*[A-Z][A-Za-z ]+\*\*\s*$/,
+      `bubble title must be only the bold bucket label; got: ${firstLine}`,
+    );
+  });
 });

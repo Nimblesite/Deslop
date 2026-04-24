@@ -109,6 +109,24 @@ fuse signals → rank → render report
 - **E2E tests: black-box only** — the CLI binary, fixture directories, rendered reports. Never reach into internals.
 - Coverage threshold lives in `coverage-thresholds.json` and monotonically increaes -1% for rounding
 
+Do not write assertions that guard against AI assertions! Instead, assert **for positive human readable values**. Human readable panels can have subtle technical terms for reference, but they must not **confuse or overwhelm** the user.
+
+⛔️ BAD
+```typescript
+assert.doesNotMatch(
+    md.value,
+    /\[Type-\d|\[Type-\d\/\d|\[weak LSH\]|\[Type-\d,\s*AI match\]/,
+    `human hover must not expose taxonomy labels: ${md.value}`,
+);
+```
+
+✅ GOOD
+```typescript
+const text = inlineText(cluster(), "worst");
+assert.match(text, /×\s*4/);
+assert.match(text, /Alpha\.cs/);
+```
+
 ## Human vs. AI Readability
 
 There are two target audiences: AI and humans. What you write depends on who it's for.
