@@ -443,7 +443,7 @@ suite("tree menu renderers", () => {
     assert.ok(!text.includes("cluster_id:"), "no cluster → no parent block");
   });
 
-  test("sourceSnippetText wraps the occurrence bytes in a fenced code block with a compact header", () => {
+  test("sourceSnippetText header is path line column only for humans (#27)", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-snip-"));
     const file = path.join(dir, "snippet.cs");
     const source = "public class Snippet { int x = 1; }\n";
@@ -456,7 +456,9 @@ suite("tree menu renderers", () => {
       hidden: false,
     });
 
-    assert.match(text, /^.+:1:1 bytes 0\.\.20\n```csharp\n/);
+    const firstLine = text.split("\n")[0] ?? "";
+    assert.match(firstLine, /^.+:1:1$/);
+    assert.ok(!/\bbytes?\b/i.test(firstLine), `human header leaked bytes: ${firstLine}`);
     assert.ok(text.includes("public class Snippet"), "fenced block carries the bytes");
     assert.ok(text.endsWith("```"));
 

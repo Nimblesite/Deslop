@@ -1,6 +1,8 @@
 <!-- agent-pmo:9a71cbf -->
 # Deslop Live — Agent Instructions
 
+⚠️ KILLING A VSCODE PROCESS - EVEN IN THE BROWSER WILL BE MET WITH INSTANT, EXTREME VIOLENCE!
+
 > ⚠️ **TOKEN DISCIPLINE.** Check file size first. `Grep` over `Read`. Use `offset`/`limit`.
 > Smallest diff that solves the problem. Delete dead code, unused imports, stale comments.
 > Call out irrelevant context before proceeding. Bloat degrades reasoning. ⚠️

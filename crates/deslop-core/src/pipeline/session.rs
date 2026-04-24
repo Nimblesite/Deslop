@@ -37,7 +37,7 @@ use super::{
         parser_for_language,
     },
     embedding_pass::run_embedding_pass,
-    signatures::build_signatures,
+    signatures::build_signatures_with_languages,
 };
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
@@ -413,7 +413,11 @@ impl PipelineSession {
         last_pass_stats: CacheStats,
     ) -> Result<Report, CoreError> {
         let corpus = self.snapshot_corpus();
-        let signatures = build_signatures(&corpus.fingerprints, &corpus.trees);
+        let signatures = build_signatures_with_languages(
+            &corpus.fingerprints,
+            &corpus.trees,
+            &self.file_languages,
+        );
         let lsh_pairs = band_collisions(&signatures);
         let embedding_outcome = run_embedding_pass(config, &corpus)?;
         let pairs = candidate_pairs_for_language_policy(

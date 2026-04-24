@@ -13,8 +13,8 @@ use crate::report::{ReportCluster, ReportOccurrence};
 
 /// Renders `cluster` as markdown. `source_of(path)` returns the full
 /// source text of an occurrence path; when it returns `None` the
-/// renderer falls back to `bytes start..end` in the occurrence heading
-/// and omits the snippet block.
+/// renderer prints the path alone and omits the snippet block so human
+/// readers never see raw byte offsets ([LIVE-REPORT-DISPLAY]).
 #[must_use]
 pub fn render_cluster_markdown<F>(cluster: &ReportCluster, source_of: F) -> String
 where
@@ -69,11 +69,7 @@ where
 {
     let path = occurrence.path.to_string_lossy();
     let Some(body) = source_of(&path) else {
-        let _ = writeln!(
-            out,
-            "### {rank}. `{path}` _bytes {}..{}_",
-            occurrence.start_byte, occurrence.end_byte,
-        );
+        let _ = writeln!(out, "### {rank}. `{path}` _line unavailable_");
         let _ = writeln!(out);
         return;
     };
@@ -175,11 +171,25 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_byte_range_when_source_unavailable() {
+    fn no_source_fallback_omits_bytes_and_snippet_for_humans() {
         let c = cluster();
         let out = render_cluster_markdown(&c, |_| None);
-        assert!(out.contains("bytes 0..5"));
-        assert!(!out.contains("```\n"));
+        assert!(
+            out.contains("/tmp/A.cs"),
+            "fallback heading must name the file; got: {out}"
+        );
+        assert!(
+            out.contains("_line unavailable_"),
+            "fallback heading must read human-friendly, not byte offsets; got: {out}"
+        );
+        assert!(
+            !out.contains("bytes"),
+            "raw byte offsets must not leak into human markdown; got: {out}"
+        );
+        assert!(
+            !out.contains("```\n"),
+            "no snippet block when source is absent; got: {out}"
+        );
     }
 
     #[test]

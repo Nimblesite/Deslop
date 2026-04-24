@@ -74,19 +74,25 @@ suite("bubble rendering helpers", () => {
   });
 
   // Audience: HUMAN. Issue #30. The live bubble is the editor-visible
-  // tooltip humans read while coding. Its title must read as a plain
-  // human label ("Identical code", "Nearly identical code", ...). The
-  // panel has room for subtle technical hints, but the headline must
-  // stand alone without academic taxonomy jargon attached.
-  test("bubbleHover title reads as a plain human label (#30)", () => {
+  // tooltip humans read while coding. The bold bucket label at the
+  // start of the title must be the plain human name
+  // ("Identical code", "Nearly identical code", ...), never the
+  // `hybridTitle` variant that appends academic taxonomy tags
+  // (`[Type-1/2]`, `[Type-3]`, `[Type-4, AI match]`, `[weak LSH]`).
+  //
+  // Assertion is phrased as a prefix so it is compatible with #32: if
+  // the bubble later drops the em-dash + interpretation follow-on, the
+  // first line becomes `**Identical code**` alone and this still
+  // passes.
+  test("bubbleHover bucket label in the title is the plain human name (#30)", () => {
     const c = cluster();
     c.signals = { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
     const text = bubbleHover(c).value;
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(
       firstLine,
-      /^\*\*Identical code\*\*\s+—/,
-      `human title must be the plain bucket label; got first line: ${firstLine}`,
+      /^\*\*Identical code\*\*/,
+      `human title must open with the plain bucket label; got first line: ${firstLine}`,
     );
   });
 

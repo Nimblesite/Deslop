@@ -7,7 +7,11 @@
 //! parser, so two Type-2 clones produce identical token streams and Type-3
 //! near-misses produce streams with high k-gram Jaccard.
 
-use crate::{ast::NormalizedNode, fingerprint::Fingerprint};
+use crate::{
+    ast::NormalizedNode,
+    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
+    fingerprint::Fingerprint,
+};
 
 /// k-gram width used by the token LSH pass. Matches the value recommended by
 /// the [TECH-TOKEN-SOURCERERCC] literature: short enough to keep Jaccard
@@ -40,6 +44,30 @@ pub fn token_stream_for_fingerprint(
     Some(token_stream(node))
 }
 
+/// Like [`token_stream_for_fingerprint`], but skips kinds that are
+/// import/prologue boilerplate for `language` (imports, decorators,
+/// namespace carriers) and can resolve synthetic sibling-window byte
+/// ranges. The `MinHash` signature built from this stream therefore
+/// reflects non-boilerplate code only — two files with similar import
+/// prologues no longer collide into false-positive LSH-only clusters
+/// ([PIPELINE-BOILERPLATE-FILTER]).
+#[must_use]
+pub fn token_stream_for_fingerprint_with_language(
+    root: &NormalizedNode,
+    fingerprint: &Fingerprint,
+    language: &str,
+) -> Option<Vec<&'static str>> {
+    let mut out = Vec::new();
+    collect_tokens_in_range(
+        root,
+        fingerprint.byte_range.start,
+        fingerprint.byte_range.end,
+        &mut out,
+        Some(language),
+    )?;
+    Some(out)
+}
+
 /// Computes the set of contiguous k-grams from `tokens`. Returns an empty
 /// vector when `tokens.len() < k` — callers treat that as "no similarity
 /// signal from this subtree."
@@ -70,9 +98,25 @@ fn walk(node: &NormalizedNode, out: &mut Vec<&'static str>) {
     }
 }
 
+/// Pre-order walker that drops import/prologue subtrees for `language`.
+/// Mirrors the filter applied in [`crate::fingerprint`] and
+/// [`crate::sibling`] so the token LSH path sees the same code the
+/// structural pass considered meaningful.
+fn walk_skipping_boilerplate(node: &NormalizedNode, out: &mut Vec<&'static str>, language: &str) {
+    if is_import_boilerplate_carrier(language, node.kind)
+        || is_import_boilerplate_only_subtree(language, node)
+    {
+        return;
+    }
+    out.push(node.kind);
+    for child in &node.children {
+        walk_skipping_boilerplate(child, out, language);
+    }
+}
+
 /// Returns the subtree of `node` whose byte range exactly matches
 /// `[start, end)`, searching depth-first. Returns `None` when no such subtree
-/// exists (e.g. because the fingerprint belongs to a different file).
+/// exists (e.g. because the fingerprint belongs to a synthetic sibling range).
 fn locate(node: &NormalizedNode, start: usize, end: usize) -> Option<&NormalizedNode> {
     if node.byte_range.start == start && node.byte_range.end == end {
         return Some(node);
@@ -86,4 +130,98 @@ fn locate(node: &NormalizedNode, start: usize, end: usize) -> Option<&Normalized
         }
     }
     None
+}
+
+/// Emits tokens for an exact node or synthetic sibling window range.
+fn collect_tokens_in_range(
+    node: &NormalizedNode,
+    start: usize,
+    end: usize,
+    out: &mut Vec<&'static str>,
+    language: Option<&str>,
+) -> Option<()> {
+    if node.byte_range.start == start && node.byte_range.end == end {
+        emit_node_tokens(node, out, language);
+        return Some(());
+    }
+    if node.byte_range.start > start || node.byte_range.end < end {
+        return None;
+    }
+    if emit_child_window(node, start, end, out, language).is_some() {
+        return Some(());
+    }
+    collect_descendant_tokens(node, start, end, out, language)
+}
+
+/// Searches descendants for the requested token range.
+fn collect_descendant_tokens(
+    node: &NormalizedNode,
+    start: usize,
+    end: usize,
+    out: &mut Vec<&'static str>,
+    language: Option<&str>,
+) -> Option<()> {
+    for child in &node.children {
+        if collect_tokens_in_range(child, start, end, out, language).is_some() {
+            return Some(());
+        }
+    }
+    None
+}
+
+/// Emits tokens for a contiguous child window when the range is synthetic.
+fn emit_child_window(
+    node: &NormalizedNode,
+    start: usize,
+    end: usize,
+    out: &mut Vec<&'static str>,
+    language: Option<&str>,
+) -> Option<()> {
+    let window = matching_child_window(node, start, end)?;
+    for child in window {
+        emit_node_tokens(child, out, language);
+    }
+    Some(())
+}
+
+/// Returns the contiguous children spanned by `[start, end)`.
+fn matching_child_window(
+    node: &NormalizedNode,
+    start: usize,
+    end: usize,
+) -> Option<Vec<&NormalizedNode>> {
+    for (first_index, child) in node.children.iter().enumerate() {
+        if child.byte_range.start == start {
+            return window_from(&node.children, first_index, end);
+        }
+    }
+    None
+}
+
+/// Builds a child window starting at `first_index` when it ends at `end`.
+fn window_from(
+    children: &[NormalizedNode],
+    first_index: usize,
+    end: usize,
+) -> Option<Vec<&NormalizedNode>> {
+    let mut window = Vec::new();
+    for child in children.iter().skip(first_index) {
+        if child.byte_range.end > end {
+            return None;
+        }
+        window.push(child);
+        if child.byte_range.end == end {
+            return Some(window);
+        }
+    }
+    None
+}
+
+/// Emits one node with the optional language-aware boilerplate filter.
+fn emit_node_tokens(node: &NormalizedNode, out: &mut Vec<&'static str>, language: Option<&str>) {
+    if let Some(language) = language {
+        walk_skipping_boilerplate(node, out, language);
+    } else {
+        walk(node, out);
+    }
 }

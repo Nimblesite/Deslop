@@ -457,16 +457,13 @@ fn dissimilar_python_functions_across_files_stay_in_separate_clusters() -> Resul
             .unwrap_or_default();
         let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         for occurrence in &occurrences {
-            let Some(path) = occurrence
-                .get("path")
-                .and_then(serde_json::Value::as_str)
-            else {
+            let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) else {
                 continue;
             };
-            let basename = Path::new(path)
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_else(|| path.to_owned());
+            let basename = Path::new(path).file_name().map_or_else(
+                || path.to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            );
             let _inserted = files.insert(basename);
         }
         assert_eq!(

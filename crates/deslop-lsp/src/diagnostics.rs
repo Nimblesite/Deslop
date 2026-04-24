@@ -149,11 +149,7 @@ fn percentile_for(weight: f64, weights: &[f64]) -> f64 {
     let total = weights.len();
     let lesser_f = u32::try_from(lesser).map_or(f64::from(u32::MAX), f64::from);
     let total_f = u32::try_from(total).map_or(f64::from(u32::MAX), f64::from);
-    if total_f == 0.0 {
-        0.0
-    } else {
-        lesser_f / total_f
-    }
+    lesser_f / total_f
 }
 
 /// Translates a byte range in `source_bytes` into a zero-indexed

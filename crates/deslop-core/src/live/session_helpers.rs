@@ -122,6 +122,54 @@ pub(super) fn cluster_overlaps_range(
     })
 }
 
+/// Collapses ranked range hits to one cluster per physical span.
+pub(super) fn collapse_overlapping_clusters_for_range(
+    clusters: Vec<ReportCluster>,
+    path: &Path,
+    start_byte: usize,
+    end_byte: usize,
+) -> Vec<ReportCluster> {
+    let mut kept = Vec::with_capacity(clusters.len());
+    let mut kept_ranges = Vec::new();
+    for cluster in clusters {
+        let Some((start, end)) = cluster_overlap_range(&cluster, path, start_byte, end_byte) else {
+            continue;
+        };
+        if kept_ranges
+            .iter()
+            .any(|(left, right)| ranges_overlap(*left, *right, start, end))
+        {
+            continue;
+        }
+        kept_ranges.push((start, end));
+        kept.push(cluster);
+    }
+    kept
+}
+
+/// Returns the widest occurrence in `cluster` that overlaps the query.
+fn cluster_overlap_range(
+    cluster: &ReportCluster,
+    path: &Path,
+    start_byte: usize,
+    end_byte: usize,
+) -> Option<(usize, usize)> {
+    cluster
+        .occurrences
+        .iter()
+        .filter(|occurrence| occurrence_path_matches(occurrence.path.as_path(), path))
+        .filter(|occurrence| {
+            ranges_overlap(
+                occurrence.start_byte,
+                occurrence.end_byte,
+                start_byte,
+                end_byte,
+            )
+        })
+        .max_by_key(|occurrence| occurrence.end_byte.saturating_sub(occurrence.start_byte))
+        .map(|occurrence| (occurrence.start_byte, occurrence.end_byte))
+}
+
 /// Returns the smallest start byte across the occurrences of
 /// `cluster` that live in `path`.
 pub(super) fn earliest_byte_for_path(cluster: &ReportCluster, path: &Path) -> usize {

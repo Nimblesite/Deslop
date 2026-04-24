@@ -36,16 +36,35 @@ async fn run() -> Result<()> {
     tracing::info!(argv = ?args, "deslop-lsp starting");
     let workspace_root = parse_workspace_root(&args)?;
     let min_nodes = parse_min_nodes(&args)?;
+    let worker_threads = parse_worker_threads(&args)?;
     let embedding = parse_embedding_config(&args)?;
     tracing::info!(
         workspace_root = %workspace_root.display(),
         min_nodes,
+        worker_threads,
         embedding_mode = embedding.mode.as_str(),
         embedding_provider = %embedding.provider_id,
         embedding_model = %embedding.model_id,
         "deslop-lsp args parsed",
     );
     deslop_lsp::run_stdio(workspace_root, min_nodes, embedding).await
+}
+
+/// Reads the optional `--worker-threads` value, defaulting to 0 which
+/// means "use tokio's default (one worker per CPU)". Users who need
+/// to background-ise the analyser on large workspaces per issue #28
+/// pass a positive integer to cap the worker pool.
+fn parse_worker_threads(args: &[String]) -> Result<usize> {
+    for (index, arg) in args.iter().enumerate() {
+        if arg == "--worker-threads" {
+            let next_index = index.saturating_add(1);
+            let value = args
+                .get(next_index)
+                .ok_or_else(|| anyhow!("--worker-threads requires a value"))?;
+            return Ok(value.parse::<usize>()?);
+        }
+    }
+    Ok(0)
 }
 
 /// Initialises `tracing-subscriber` against the `RUST_LOG`

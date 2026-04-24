@@ -19,10 +19,23 @@ use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
 use crate::presentation::{cluster_summary, signal_sentence};
 
+/// Which audience a rendered hover card targets. The human LSP hover
+/// in an editor hides raw numeric signal scores; the agent-facing
+/// `markdown_for*` API keeps them so callers scraping hovers through
+/// the LSP protocol still see the full signal breakdown.
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum Audience {
+    /// Visible-to-human hover shown in VS Code / any LSP editor.
+    Human,
+    /// Machine-readable text rendered by the public `markdown_for*`
+    /// API used by agent-facing report scrapers.
+    Agent,
+}
+
 /// Builds the hover response for `cluster`.
 #[must_use]
 pub fn build_for_cluster(cluster: &ReportCluster) -> Hover {
-    hover_from_markdown(markdown_for(cluster))
+    hover_from_markdown(human_markdown(std::slice::from_ref(cluster), &[], None))
 }
 
 /// Builds the hover response for the clusters under the cursor.
@@ -32,15 +45,8 @@ pub fn build_for_clusters_with_root(
     ranked_clusters: &[ReportCluster],
     workspace_root: &Path,
 ) -> Option<Hover> {
-    let value = markdown_for_clusters_with_root(clusters, ranked_clusters, Some(workspace_root));
+    let value = human_markdown(clusters, ranked_clusters, Some(workspace_root));
     (!value.is_empty()).then(|| hover_from_markdown(value))
-}
-
-/// Builds the hover response for `cluster`, resolving relative
-/// occurrence paths against `workspace_root`.
-#[must_use]
-pub fn build_for_cluster_with_root(cluster: &ReportCluster, workspace_root: &Path) -> Hover {
-    hover_from_markdown(markdown_for_with_root(cluster, Some(workspace_root)))
 }
 
 /// Wraps rendered markdown in an LSP hover response.
@@ -54,38 +60,53 @@ fn hover_from_markdown(value: String) -> Hover {
     }
 }
 
-/// Renders the hover markdown body.
+/// Renders the agent-facing hover markdown body for a single cluster.
+/// Keeps the signal breakdown so agents scraping the hover via the
+/// LSP protocol see the same evidence as the JSON report.
 #[must_use]
 pub fn markdown_for(cluster: &ReportCluster) -> String {
-    markdown_for_with_root(cluster, None)
+    render_clusters(std::slice::from_ref(cluster), &[], None, Audience::Agent)
 }
 
-/// Renders the hover markdown for multiple clusters.
+/// Renders the agent-facing hover markdown for multiple clusters.
 #[must_use]
 pub fn markdown_for_clusters(
     clusters: &[ReportCluster],
     ranked_clusters: &[ReportCluster],
 ) -> String {
-    markdown_for_clusters_with_root(clusters, ranked_clusters, None)
+    render_clusters(clusters, ranked_clusters, None, Audience::Agent)
 }
 
-/// Renders the hover markdown body with optional path resolution.
-fn markdown_for_with_root(cluster: &ReportCluster, workspace_root: Option<&Path>) -> String {
-    markdown_for_clusters_with_root(std::slice::from_ref(cluster), &[], workspace_root)
-}
-
-/// Renders all hovered clusters as one human-readable markdown list.
-fn markdown_for_clusters_with_root(
+/// Renders human-visible hover markdown without raw signal details.
+fn human_markdown(
     clusters: &[ReportCluster],
     ranked_clusters: &[ReportCluster],
     workspace_root: Option<&Path>,
+) -> String {
+    render_clusters(clusters, ranked_clusters, workspace_root, Audience::Human)
+}
+
+/// Core rendering entry point; branches on `audience` to keep or drop
+/// the signal sentence.
+fn render_clusters(
+    clusters: &[ReportCluster],
+    ranked_clusters: &[ReportCluster],
+    workspace_root: Option<&Path>,
+    audience: Audience,
 ) -> String {
     let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
     let mut out = String::new();
     write_list_header(&mut out, clusters.len());
     for cluster in clusters {
         let rank = rank_for(cluster, ranked_clusters);
-        write_cluster_block(&mut out, cluster, rank, workspace_root, &mut cache);
+        write_cluster_block(
+            &mut out,
+            cluster,
+            rank,
+            workspace_root,
+            &mut cache,
+            audience,
+        );
     }
     out
 }
@@ -104,9 +125,12 @@ fn write_cluster_block(
     rank: Option<usize>,
     workspace_root: Option<&Path>,
     cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
+    audience: Audience,
 ) {
     let _ = writeln!(out, "- **{}**", cluster_summary(cluster, rank));
-    let _ = writeln!(out, "  - {}", signal_sentence(cluster));
+    if audience == Audience::Agent {
+        let _ = writeln!(out, "  - {}", signal_sentence(cluster));
+    }
     write_occurrences(out, cluster, workspace_root, cache);
     let _ = writeln!(out);
 }

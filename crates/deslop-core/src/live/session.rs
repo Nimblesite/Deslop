@@ -23,8 +23,8 @@ use super::{
     errors::LiveError,
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
-        cluster_touches_path, earliest_byte_for_path, initialise_pipeline, live_batch_yield,
-        parse_and_hash_snippet, stub_model_info, truncate,
+        cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
+        initialise_pipeline, live_batch_yield, parse_and_hash_snippet, stub_model_info, truncate,
     },
     wire::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
@@ -266,12 +266,14 @@ impl AnalysisSession {
         start_byte: usize,
         end_byte: usize,
     ) -> Vec<ReportCluster> {
-        self.latest_report
+        let clusters = self
+            .latest_report
             .clusters
             .iter()
             .filter(|cluster| cluster_overlaps_range(cluster, path, start_byte, end_byte))
             .cloned()
-            .collect()
+            .collect();
+        collapse_overlapping_clusters_for_range(clusters, path, start_byte, end_byte)
     }
 
     /// Looks up a cluster by its stable id.

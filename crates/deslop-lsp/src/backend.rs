@@ -76,7 +76,12 @@ impl Default for LspEmbeddingConfig {
     }
 }
 
-/// Builds the provider used when the LSP backend starts.
+/// Builds the provider used when the LSP backend starts. For
+/// `EmbeddingMode::Auto`, unreachable Ollama endpoints fall back to
+/// [`StubProvider`] with a warning log so the editor keeps working
+/// — embeddings are optional per issue #35. `EmbeddingMode::Required`
+/// preserves hard-fail semantics because the user explicitly opted
+/// into embeddings.
 fn build_startup_provider(
     embedding: &LspEmbeddingConfig,
 ) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
@@ -85,11 +90,33 @@ fn build_startup_provider(
     }
     match embedding.provider_id.as_str() {
         STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
-        DEFAULT_PROVIDER_ID => connect_ollama_provider(embedding),
+        DEFAULT_PROVIDER_ID => connect_ollama_or_fallback(embedding),
         other => Err(deslop_core::live::LiveError::UnsupportedProvider {
             requested: other.to_owned(),
             registered: vec![STUB_PROVIDER_ID.to_owned(), DEFAULT_PROVIDER_ID.to_owned()],
         }),
+    }
+}
+
+/// Connects Ollama with auto-mode fallback. On `Auto` + provider
+/// unreachable we log a warning and return [`StubProvider`] so the
+/// LSP keeps answering requests. On `Required` we propagate the
+/// error so the editor surfaces "start ollama and retry".
+fn connect_ollama_or_fallback(
+    embedding: &LspEmbeddingConfig,
+) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
+    match connect_ollama_provider(embedding) {
+        Ok(provider) => Ok(provider),
+        Err(error) if matches!(embedding.mode, EmbeddingMode::Auto) => {
+            tracing::warn!(
+                %error,
+                endpoint = %embedding.endpoint,
+                model = %embedding.model_id,
+                "ollama embedding provider unreachable; falling back to stub so the LSP stays alive"
+            );
+            Ok(Arc::new(StubProvider::new()))
+        }
+        Err(error) => Err(error),
     }
 }
 

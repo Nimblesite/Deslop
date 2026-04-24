@@ -2,7 +2,7 @@
 //! ([LSP-CUSTOM-METHODS]). Each method is a thin async forwarder onto
 //! the [`deslop_core::live::LiveApi`] surface.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Instant};
 
 use deslop_core::{
     live::{FindSimilarRequest, LiveApi},
@@ -113,10 +113,19 @@ pub async fn report_get(
     backend: &LspBackend,
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
+    let started = Instant::now();
     let report = backend.service().report_get().await;
     let slim: Report = (*report)
         .clone()
         .truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
+    let clusters = slim.clusters.len();
+    let elapsed_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    tracing::info!(
+        handler = REPORT_GET,
+        clusters,
+        elapsed_ms,
+        "deslop/reportGet handler complete"
+    );
     Ok(serde_json::to_value(&slim).unwrap_or(serde_json::Value::Null))
 }
 

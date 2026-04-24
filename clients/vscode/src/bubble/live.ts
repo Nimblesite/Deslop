@@ -271,18 +271,22 @@ export function shortPath(p: string): string {
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
-// Hover tooltip is a shared-text surface — agents scrape hovers via
-// LSP too — so use `hybridTitle` ("Identical code [Type-1/2]", etc.).
+// The bubble hover sits above the LSP hover in VS Code's stacked
+// markdown. The LSP card already carries the bucket title, action
+// sentence, and occurrences list — so the bubble is just a compact
+// header (plain bucket label) plus action links. Raw signal scores
+// and clone-taxonomy tags belong on agent surfaces (diagnostic
+// `data`, Copy-for-AI), not on the human tooltip.
 export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   md.supportHtml = true;
-  const title = bucketLabels(resolveBucket(cluster)).hybridTitle;
-  md.appendMarkdown(`**${title}** — ${clusterInterpretation(cluster)}\n\n`);
-  md.appendMarkdown(`\`structural\` ${cluster.signals.structural.toFixed(2)}  `);
-  md.appendMarkdown(`\`jaccard\` ${cluster.signals.token_jaccard.toFixed(2)}  `);
-  md.appendMarkdown(`\`embedding\` ${cluster.signals.embedding_cos.toFixed(2)}  `);
-  md.appendMarkdown(`\`fused\` ${cluster.signals.fused.toFixed(2)}\n\n`);
+  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
+  // Title owns its own line so the bold bucket label is the first
+  // thing the human reads; the action sentence follows on the next
+  // line in the same paragraph. Markdown renders this as one prose
+  // block, separate from the action links below.
+  md.appendMarkdown(`**${title}**\n${clusterInterpretation(cluster)}\n\n`);
   const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   const dismissArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   md.appendMarkdown(

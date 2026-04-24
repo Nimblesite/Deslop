@@ -186,7 +186,7 @@ export function sourceSnippetText(occurrence: ReportOccurrence): string {
   const snippet = readOccurrenceBytes(occurrence);
   const language = languageForPath(occurrence.path);
   return [
-    `${humanLocation(occurrence)} bytes ${occurrence.start_byte}..${occurrence.end_byte}`,
+    humanLocation(occurrence),
     "```" + language,
     snippet,
     "```",

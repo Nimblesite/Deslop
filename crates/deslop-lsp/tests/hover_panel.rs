@@ -233,7 +233,10 @@ fn overlap_cursor_from_report(response: &Value, target: &Path) -> Option<(Value,
             if end <= start {
                 continue;
             }
-            ranges.push((start as usize, end as usize));
+            ranges.push((
+                usize::try_from(start).unwrap_or(usize::MAX),
+                usize::try_from(end).unwrap_or(usize::MAX),
+            ));
         }
     }
     let mut best: Option<(usize, usize)> = None;
@@ -278,7 +281,13 @@ fn top_level_sub_bullets(markdown: &str) -> Vec<String> {
         .lines()
         .filter_map(|line| line.strip_prefix("  - "))
         .map(|rest| rest.split(':').next().unwrap_or(rest).trim().to_owned())
-        .map(|head| if head == "Occurrences" { "Occurrences:".to_owned() } else { head })
+        .map(|head| {
+            if head == "Occurrences" {
+                "Occurrences:".to_owned()
+            } else {
+                head
+            }
+        })
         .collect()
 }
 
@@ -306,12 +315,22 @@ fn count_card_headlines(markdown: &str) -> usize {
 fn byte_position(body: &str, byte: usize) -> (usize, usize) {
     let capped = byte.min(body.len());
     let prefix = body.as_bytes().get(..capped).unwrap_or(&[]);
-    let line = prefix.iter().filter(|b| **b == b'\n').count();
+    let line = count_newlines(prefix);
     let col = match prefix.iter().rposition(|b| *b == b'\n') {
         Some(nl) => capped.saturating_sub(nl).saturating_sub(1),
         None => capped,
     };
     (line, col)
+}
+
+fn count_newlines(bytes: &[u8]) -> usize {
+    let mut count = 0_usize;
+    for byte in bytes {
+        if *byte == b'\n' {
+            count = count.saturating_add(1);
+        }
+    }
+    count
 }
 
 fn file_uri(path: &Path) -> Result<String> {
