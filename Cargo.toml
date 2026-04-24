@@ -1,9 +1,11 @@
-# agent-pmo:424c8f8
+# agent-pmo:9a71cbf
 [workspace]
 resolver = "2"
 members = [
-    "crates/codededup-core",
-    "crates/codededup",
+    "crates/deslop-core",
+    "crates/deslop",
+    "crates/deslop-lsp",
+    "crates/deslop-mcp",
 ]
 
 [workspace.package]
@@ -11,7 +13,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.80"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/MelbourneDeveloper/CodeDedup"
+repository = "https://github.com/Nimblesite/Deslop"
 
 [workspace.dependencies]
 anyhow = "=1.0.86"
@@ -19,21 +21,26 @@ thiserror = "=1.0.63"
 clap = { version = "=4.5.16", features = ["derive"] }
 tracing = "=0.1.40"
 tracing-subscriber = { version = "=0.3.18", features = ["env-filter"] }
-serde = { version = "=1.0.210", features = ["derive"] }
-serde_json = "=1.0.128"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.149"
 toml = "=0.8.22"
 assert_cmd = "=2.0.16"
 predicates = "=3.1.2"
 tempfile = "=3.12.0"
-tree-sitter = "=0.22.6"
-tree-sitter-c-sharp = "=0.21.3"
-tree-sitter-rust = "=0.21.2"
-tree-sitter-python = "=0.21.0"
+tree-sitter = "=0.26.8"
+tree-sitter-c-sharp = "=0.23.5"
+tree-sitter-rust = "=0.24.2"
+tree-sitter-python = "=0.25.0"
 ignore = "=0.4.23"
 blake3 = "=1.5.4"
 ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
-notify = { version = "=6.1.1", default-features = false, features = ["macos_fsevent"] }
+notify = "=6.1.1"
+tokio = { version = "=1.40.0", features = ["rt-multi-thread", "macros", "sync", "io-util", "io-std", "time"] }
+tower = { version = "=0.4.13", default-features = false }
+tower-lsp = "=0.20.0"
+futures = "=0.3.31"
+async-trait = "=0.1.83"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

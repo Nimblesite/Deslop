@@ -1,0 +1,17 @@
+.vscode/**
+.vscode-test/**
+.c8rc.json
+.vscode-test.mjs
+coverage/**
+coverage-thresholds.json
+src/**
+test/**
+webview-ui/**
+node_modules/**
+out/test/**
+scripts/**
+**/*.ts
+**/*.map
+tsconfig.json
+esbuild.mjs
+.eslintrc*

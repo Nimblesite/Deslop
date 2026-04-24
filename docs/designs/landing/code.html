@@ -3,7 +3,7 @@
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>CodeDedup - The Kinetic Manuscript</title>
+<title>Deslop - The Kinetic Manuscript</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
@@ -85,7 +85,7 @@
 <!-- TopNavBar -->
 <nav class="bg-[#131313]/80 backdrop-blur-xl docked full-width top-0 sticky z-50">
 <div class="flex justify-between items-center w-full px-6 py-4 max-w-full mx-auto">
-<div class="text-xl font-bold tracking-tighter text-[#ffb4aa] font-headline">CodeDedup</div>
+<div class="text-xl font-bold tracking-tighter text-[#ffb4aa] font-headline">Deslop</div>
 <div class="hidden md:flex space-x-6 items-center">
 <a class="font-label text-sm text-white/60 hover:text-white transition-colors hover:bg-[#2a2a2a] transition-all duration-150" href="#">Features</a>
 <a class="font-label text-sm text-[#ffb4aa] border-b-2 border-[#b3261e] pb-1 hover:bg-[#2a2a2a] transition-all duration-150 Active: scale-95 transition-transform" href="#">Docs</a>
@@ -115,14 +115,14 @@
 <span class="text-primary-container block mt-2">you see it first.</span>
 </h1>
 <p class="font-body text-on-surface-variant text-lg md:text-xl leading-relaxed mb-10 max-w-xl">
-                    High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
+                    High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Catch semantic duplication before it pollutes your production codebase — and pair it with AI-assisted and mechanical fix tooling built on the same engine.
                 </p>
 <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
 <button class="bg-gradient-to-r from-primary to-primary-container text-on-primary-container px-8 py-4 rounded-sm font-label text-sm font-bold shadow-[0_10px_30px_rgba(179,38,30,0.3)] hover:scale-105 transition-transform">
                         Run Demo Scan
                     </button>
 <div class="bg-surface-container-low px-6 py-4 rounded-sm border border-outline-variant/20 flex items-center gap-3">
-<span class="font-label text-sm text-secondary">cargo install codededup</span>
+<span class="font-label text-sm text-secondary">code --install-extension deslop-vscode-*.vsix</span>
 <button class="text-primary hover:text-primary-fixed transition-colors">
 <span class="material-symbols-outlined text-[18px]">content_copy</span>
 </button>
@@ -141,7 +141,7 @@
 <div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
 <div class="w-2.5 h-2.5 rounded-full bg-surface-container-highest"></div>
 </div>
-<span class="font-label text-xs text-secondary-fixed-dim">codededup scan ./src</span>
+<span class="font-label text-xs text-secondary-fixed-dim">deslop scan ./src</span>
 </div>
 <div class="p-6 font-label text-sm leading-relaxed overflow-x-auto text-on-surface">
 <div class="text-secondary mb-4">Initializing AST parsers... <span class="text-tertiary">[0.002s]</span></div>

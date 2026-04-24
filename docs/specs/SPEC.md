@@ -1,19 +1,27 @@
-# CodeDedup — Research & Spec
+# Deslop — Research & Spec
 
-This doc indexes the formal research and design spec for CodeDedup. **Primary goal:** pick techniques that are (a) fast enough for a CLI to run on a whole repo, (b) accurate across Type-1 → Type-3 clones (and Type-4 where feasible), and (c) compatible with a future **long-running MCP/LSP** mode — incremental, per-file, byte-range-addressable, and cheap to keep live under a file watcher.
+This doc indexes the formal research and design spec for Deslop. **Primary goal:** build a **live duplicate-code analysis server** (LSP + MCP) that stays fast enough to sit in an AI coding agent's inner loop and an editor's keystroke loop — incremental, per-file, byte-range-addressable, cheap to keep live under a file watcher, and accurate across the four clone buckets in [CLONE-BUCKETS] (canonical human-facing labels; academic Type-1 → Type-4 mapping preserved in the same table). The CLI is a secondary surface — same engine, run once, emit a report — used for CI gates and cold-cache audits. Every design decision is judged against whether it still works when the pipeline runs a thousand times per minute, not once per PR.
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 
+## Canonical clone buckets
+
+Every user-facing surface (HTML report, CLI summary, VS Code extension) labels clusters with the four buckets defined in **[taxonomy.md §[CLONE-BUCKETS]](taxonomy.md)** — `Identical`, `NearlyIdentical`, `LooselySimilar`, `SameBehavior`. That table is the single source of truth. The dual-labelling policy in [CLONE-BUCKETS-DUAL-LABEL] explains when the academic `Type-1 → Type-4` labels appear (JSON + agent-facing surfaces) and when they must not (human UI).
+
 ## Architecture at a glance
 
-Every binary in the product — CLI, LSP server, MCP server, VS Code extension — is a **thin shell over one shared library** (`codededup-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
+Every binary in the product — CLI, LSP server, MCP server, VS Code extension, JetBrains plugin — is a **thin shell over one shared library** (`deslop-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
 ```mermaid
 flowchart LR
     CI(["CI / terminal"])
 
     subgraph VSCode["VS Code process"]
-        VSIX["CodeDedup VSIX<br/>(live bubble · tree view · picker)"]
+        VSIX["Deslop VSIX<br/>(live bubble · tree view · picker)"]
+    end
+
+    subgraph JetBrains["JetBrains IDE process<br/>(Rider first)"]
+        JBPlugin["Deslop IntelliJ Platform plugin<br/>(LSP bridge · native IDE surfaces)"]
     end
 
     subgraph AgentHost["AI agent host<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
@@ -21,12 +29,12 @@ flowchart LR
     end
 
     subgraph Binaries["Binaries (processes)"]
-        LspBin["codededup-lsp"]
-        McpBin["codededup-mcp"]
-        CliBin["codededup (CLI)"]
+        LspBin["deslop-lsp"]
+        McpBin["deslop-mcp"]
+        CliBin["deslop (CLI)"]
     end
 
-    subgraph CoreCrate["codededup-core (one crate)"]
+    subgraph CoreCrate["deslop-core (one crate)"]
         Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
         Pipeline["pipeline module<br/>PipelineSession · update_files · discover · parse<br/>fingerprint · LSH · embed · rank · render"]
         Live --> Pipeline
@@ -37,6 +45,7 @@ flowchart LR
 
     VSIX == "spawns + LSP stdio" ==> LspBin
     VSIX == "bundles + spawns MCP" ==> McpBin
+    JBPlugin == "spawns + LSP stdio" ==> LspBin
     Agent == "spawns + MCP stdio" ==> McpBin
     CI == "spawns one-shot" ==> CliBin
 
@@ -56,18 +65,19 @@ The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX �
 ## Topic files
 
 - [principles.md](principles.md) — `[PRINCIPLES-*]` audience-for-AI-agents, long-running-daemon constraints.
-- [taxonomy.md](taxonomy.md) — `[CLONE-TYPE-TAXONOMY]` Type-1 / Type-2 / Type-3 / Type-4 ground rules.
+- [taxonomy.md](taxonomy.md) — `[CLONE-BUCKETS]` canonical human-facing buckets (`Identical` / `NearlyIdentical` / `LooselySimilar` / `SameBehavior`), dual-labelling policy, signal routing, and academic `[CLONE-TYPE-TAXONOMY]` reference (Type-1 / Type-2 / Type-3 / Type-4).
 - [landscape.md](landscape.md) — `[TECH-*]` survey of token / AST / hashing / neural / LLM techniques (2009 → 2026).
-- [fusion.md](fusion.md) — `[FUSION-*]` why CodeDedup is hybrid (not pure-RAG); embedding + ANN choices; max-sum fusion strategy.
+- [fusion.md](fusion.md) — `[FUSION-*]` why Deslop is hybrid (not pure-RAG); embedding + ANN choices; max-sum fusion strategy.
 - [pipeline.md](pipeline.md) — `[PIPELINE-*]`, `[STATE-*]`, `[OUTPUT-*]`, `[METRICS-*]`, `[EXIT-CODES]` per-stage design: language plugin trait, discovery, normalization, Merkle fingerprint, clustering, ranking, `[PIPELINE-INCREMENTAL]` on-disk fingerprint cache, JSON / text / HTML output, human-readable HTML mode, repo-wide duplication metric + fail-over threshold.
-- [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.codededup.toml` `exclude` / `report_hide` tiers and per-language overlays.
+- [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.deslop.toml` `exclude` / `report_hide` tiers and per-language overlays; `[CONFIG-CROSS-LANGUAGE]` candidate-pair language scope.
 - [decisions.md](decisions.md) — `[DECISION-*]` defaults with fallback rules (`--min-nodes`, cross-language, two-pass Type-3 recall).
 - [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
 - [live.md](live.md) — `[LIVE-*]` in-memory analysis session behind the LSP and MCP servers: lifecycle, watcher, scheduler, delta protocol, `LiveApi` query surface, push notifications. No daemon process.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.
-- [competitors.md](competitors.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where CodeDedup beats them.
+- [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
+- [competitors.md](competitors.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
 
 ## Sibling docs
 

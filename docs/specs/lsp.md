@@ -1,8 +1,8 @@
 # LSP shell
 
-Thin Language Server Protocol shell over [LIVE-BINARY]. Makes the live CodeDedup report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
+Thin Language Server Protocol shell over [LIVE-BINARY]. Makes the live Deslop report available to any LSP-compatible editor (VS Code via the VSIX, Neovim, Helix, Zed, Emacs `lsp-mode`, JetBrains via LSP4IJ). The VSIX is the polished reference client; the LSP is the open interface.
 
-Crate: `crates/codededup-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-lsp` (pure Rust, no C deps; already used by `rust-analyzer` and dozens of other servers).
+Crate: `crates/deslop-lsp`. Transport: JSON-RPC over stdio. Framework: `tower-lsp` (pure Rust, no C deps; already used by `rust-analyzer` and dozens of other servers).
 
 ### [LSP-TRANSPORT] Transport + framing
 
@@ -22,7 +22,7 @@ Declared in the `initialize` response:
 | `executeCommandProvider` | Commands for: toggle daemon, refresh report, open full report, pick embedding model, extract-to-shared-function (future). |
 | `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as `Information` / `Hint` diagnostics. Severity scales with cluster weight ([LSP-SEVERITY]). |
 | `workspace/didChangeWatchedFiles` | Register for writes outside the editor (build output, generated files, `git checkout`). |
-| Custom: `codededup/*` | Methods listed in [LSP-CUSTOM-METHODS]. |
+| Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS]. |
 
 ### [LSP-SEVERITY] Mapping cluster weight → diagnostic severity
 
@@ -35,7 +35,13 @@ Cluster weights (`count × (size−1) × log2(1 + spanned_loc)`) are unbounded, 
 | 10 – 50% | `Hint` | Faded underline, Problems panel only if filter allows. |
 | Bottom 50% | Not published as a diagnostic | Still visible via code lens + hover. |
 
+**Percentile is computed across the whole report, not per file.** A cluster's severity is its weight's percentile against the weights of every cluster in the live report. A cluster that is the worst offender in a sleepy file but mid-tier overall must rank mid-tier in the Problems panel — otherwise a quiet file with three trivial near-misses would publish a `Warning` while the actual hot files compete for the same bucket. This matches the "worst offenders first" rank order surfaced everywhere else (CLI text report, VSIX top-offenders tree, HTML report).
+
+Because severity depends on the global weight set, the diagnostic provider declares `inter_file_dependencies: true` ([LSP-CAPABILITIES]); editing one file shifts every other file's percentile, and the client must refresh the corresponding diagnostics.
+
 Severity is **never** `Error` — duplication isn't a compile error, and polluting the error stream breaks existing developer workflows (CI red on clone count is a future opt-in, not the default). Percentile thresholds are fixed; the user doesn't tune severity, they tune `min-nodes` and exclusion patterns instead.
+
+Severity bucketing lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 
@@ -44,9 +50,9 @@ Each published diagnostic carries:
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
 - `code` — the 16-char cluster id (same one used in text/HTML reports; stable across runs).
-- `codeDescription.href` — `codededup://cluster/<id>` custom URI (see [LSP-VIRTUAL-DOC]).
+- `codeDescription.href` — `deslop://cluster/<id>` custom URI (see [LSP-VIRTUAL-DOC]).
 - `message` — the cluster's `interpretation` string (already agent-readable per [PRINCIPLES-AUDIENCE-AGENT]).
-- `source` — `"codededup"`.
+- `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
 
@@ -62,7 +68,7 @@ At the first line of every clone occurrence, a code lens reading:
 
 The leading glyph (`●●`) is a two-dot severity badge whose colour matches the diagnostic severity. It's Unicode, not ANSI — LSP clients render their own. The text carries the same signal breakdown that appears in the JSON report so a user reading inline has parity with an agent reading the JSON.
 
-Clicking the lens cycles `textDocument/definition` through the remaining occurrences, wrapping at the end. Shift-click runs `codededup.openCluster` (see [LSP-CUSTOM-METHODS]).
+Clicking the lens cycles `textDocument/definition` through the remaining occurrences, wrapping at the end. Shift-click runs `deslop.openCluster` (see [LSP-CUSTOM-METHODS]).
 
 ### [LSP-HOVER] Hover
 
@@ -71,20 +77,20 @@ Hovering inside a clone range returns a `MarkupContent` (`markdown`) body:
 - **Header:** cluster id, weight, rank (`#12 of 2040`), severity badge.
 - **Interpretation:** one-liner from `cluster.interpretation`.
 - **Signals:** table of `structural / token_jaccard / embedding_cos / fused`.
-- **Occurrences:** clickable list of all `path:start-end` locations (markdown links to `codededup://cluster/<id>?occurrence=<i>`).
+- **Occurrences:** clickable list of all `path:start-end` locations (markdown links to `deslop://cluster/<id>?occurrence=<i>`).
 - **Action hints:** matching entries from `report.action_hints` — the same playbook surfaced in the JSON header.
 
 No snippets in the hover — snippets are in the virtual doc ([LSP-VIRTUAL-DOC]). Keeping the hover narrow keeps it usable in small editor windows.
 
 ### [LSP-VIRTUAL-DOC] Virtual document scheme
 
-The shell registers a `codededup://` URI scheme via `textDocument/didOpen` for paths the client resolves through the custom scheme. Three document types:
+The shell registers a `deslop://` URI scheme via `textDocument/didOpen` for paths the client resolves through the custom scheme. Three document types:
 
 | URI | Content |
 |---|---|
-| `codededup://cluster/<id>` | Full cluster detail: interpretation, signals, all occurrences with inlined source snippets + line numbers (same shape as the HTML `<details>` panels from [OUTPUT-HUMAN-HTML]). |
-| `codededup://report` | The current report rendered as the canonical text format ([OUTPUT-SCHEMA-JSON] → text renderer). Refreshes on `report/changed`. |
-| `codededup://schema` | The embedded `schema_doc` from the report. |
+| `deslop://cluster/<id>` | Full cluster detail: interpretation, signals, all occurrences with inlined source snippets + line numbers (same shape as the HTML `<details>` panels from [OUTPUT-HUMAN-HTML]). |
+| `deslop://report` | The current report rendered as the canonical text format ([OUTPUT-SCHEMA-JSON] → text renderer). Refreshes on `report/changed`. |
+| `deslop://schema` | The embedded `schema_doc` from the report. |
 
 The daemon is the authority — virtual docs are regenerated per request, not stored. Editors that support syntax highlighting on virtual docs (VS Code, Neovim, Helix) get highlighted source snippets for free; others fall back to monospace.
 
@@ -94,26 +100,34 @@ Standard LSP does not have a "give me the live dedup report" request, so the she
 
 | LSP method | Forwards to |
 |---|---|
-| `codededup/reportGet` | `report/get` |
-| `codededup/reportForFile` | `report/forFile` |
-| `codededup/reportForRange` | `report/forRange` |
-| `codededup/clusterById` | `cluster/byId` |
-| `codededup/duplicatesFindSimilar` | `duplicates/findSimilar` |
-| `codededup/embeddingListModels` | `embedding/listModels` |
-| `codededup/embeddingSetModel` | `embedding/setModel` |
-| `codededup/sessionConfig` | `session/config` |
+| `deslop/reportGet` | `report/get` |
+| `deslop/reportForFile` | `report/forFile` |
+| `deslop/reportForRange` | `report/forRange` |
+| `deslop/clusterById` | `cluster/byId` |
+| `deslop/duplicatesFindSimilar` | `duplicates/findSimilar` |
+| `deslop/embeddingListModels` | `embedding/listModels` |
+| `deslop/embeddingSetModel` | `embedding/setModel` |
+| `deslop/sessionConfig` | `session/config` |
 
-Notifications (`codededup/reportChanged`, `codededup/analysisState`) mirror the daemon push methods. Namespacing (`codededup/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
+Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embeddingProgress`) mirror the daemon push methods. Namespacing (`deslop/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
+
+### [LSP-EMBEDDING-CONSENT] Startup embedding behaviour
+
+The LSP starts with embeddings off unless its launch arguments carry a model that the user previously selected: `--embeddings auto|required`, `--embedding-provider`, `--embedding-model`, and `--embedding-endpoint`. A fresh VSIX install launches the LSP with `--embeddings off`, so the initial report is structural/token only and no local model work starts silently.
+
+`deslop/embeddingSetModel` is the first-run consent boundary. The client prompts the user through [VSIX-EMBED-PICKER], calls this method with the selected model, and keeps rendering the last complete report while the LSP emits `deslop/embeddingProgress` updates. The embedding pass runs in low-priority batches with short yields between them.
+
+The LSP and MCP must converge through the same workspace embedding settings. MCP must not choose, infer, rotate, or upgrade the embedding model on its own. When MCP changes the model after explicit user initiation, it persists `deslop.embedding.provider`, `deslop.embedding.model`, `deslop.embedding.endpoint`, and `deslop.embedding.mode` in the VSIX/LSP workspace settings contract before the change is considered accepted. The LSP must treat those settings as authoritative on startup and on configuration reload; neither live surface may keep a private model selection that silently diverges from the other.
 
 ### [LSP-COMMANDS] `workspace/executeCommand` verbs
 
 `executeCommandProvider` advertises:
 
-- `codededup.refreshReport` — force a full re-analysis (drop incremental state, re-run). Rarely needed; the scheduler is reliable.
-- `codededup.openCluster` — open `codededup://cluster/<id>` in the client.
-- `codededup.openReport` — open `codededup://report`.
-- `codededup.pickEmbeddingModel` — tell the client to prompt the user with the result of `embedding/listModels` and call `embedding/setModel` with the selection. The VSIX implements the prompt as a proper picker ([VSIX-EMBED-PICKER]); other clients fall back to a `showMessageRequest`.
-- `codededup.toggleIncremental` — flip the daemon's incremental-cache behaviour (rare; mostly for debugging cache invalidation).
+- `deslop.refreshReport` — force a full re-analysis (drop incremental state, re-run). Rarely needed; the scheduler is reliable.
+- `deslop.openCluster` — open `deslop://cluster/<id>` in the client.
+- `deslop.openReport` — open `deslop://report`.
+- `deslop.pickEmbeddingModel` — tell the client to prompt the user with the result of `embedding/listModels` and call `embedding/setModel` with the selection. The VSIX implements the prompt as a proper picker ([VSIX-EMBED-PICKER]); other clients fall back to a `showMessageRequest`.
+- `deslop.toggleIncremental` — flip the daemon's incremental-cache behaviour (rare; mostly for debugging cache invalidation).
 
 No `extract-to-function` command in v1 — that's an edit action that belongs downstream of a real refactor engine. Listed here as the eventual home for it so clients know where it will live.
 
@@ -121,20 +135,20 @@ No `extract-to-function` command in v1 — that's an edit action that belongs do
 
 This LSP is used by AI agents (Claude Code, Cursor, Continue) the same way it's used by a human editor. Two implications:
 
-- **Hover, code lens, and diagnostics all carry the cluster id.** An agent reading a diagnostic can call `codededup/clusterById` and get the full JSON cluster (with signals, interpretation, action hints) without re-parsing a hover string.
-- **`codededup/duplicatesFindSimilar` is documented as the agent-facing entry point.** Before the agent commits new code, it can ask "is this block already present elsewhere?" and get back concrete clusters to refactor into. See [MCP-TOOL-FINDSIMILAR] for the MCP equivalent.
+- **Hover, code lens, and diagnostics all carry the cluster id.** An agent reading a diagnostic can call `deslop/clusterById` and get the full JSON cluster (with signals, interpretation, action hints) without re-parsing a hover string.
+- **`deslop/duplicatesFindSimilar` is documented as the agent-facing entry point.** Before the agent commits new code, it can ask "is this block already present elsewhere?" and get back concrete clusters to refactor into. See [MCP-TOOL-FINDSIMILAR] for the MCP equivalent.
 
 The LSP does not attempt to auto-surface clone warnings to the agent — the agent asks. This keeps the protocol predictable and the agent in control of its own context budget.
 
 ### [LSP-TESTING] E2E tests
 
-Coarse E2E only, per CLAUDE.md. `crates/codededup-lsp/tests/cli.rs` spawns the real LSP binary, talks JSON-RPC over stdio, and asserts against:
+Coarse E2E only, per CLAUDE.md. `crates/deslop-lsp/tests/cli.rs` spawns the real LSP binary, talks JSON-RPC over stdio, and asserts against:
 
 - `initialize` + `initialized` handshake returning expected capabilities.
 - Opening a fixture workspace produces diagnostics on the known-clone files.
-- Editing a buffer triggers `codededup/reportChanged` with a non-empty delta.
-- `codededup/reportForRange` returns the expected cluster for a known range.
-- `codededup/duplicatesFindSimilar` returns the expected cluster for a hand-crafted snippet.
-- `codededup/embeddingSetModel` swaps the embedding provenance in the next `sessionConfig`.
+- Editing a buffer triggers `deslop/reportChanged` with a non-empty delta.
+- `deslop/reportForRange` returns the expected cluster for a known range.
+- `deslop/duplicatesFindSimilar` returns the expected cluster for a hand-crafted snippet.
+- `deslop/embeddingSetModel` queues the selected-model embedding refresh; the new provenance appears in `sessionConfig` after the background pass commits.
 
-No mocking of the live session — the LSP binary links `codededup-core` with `features = ["live"]` and runs against `tests/fixtures/` workspaces.
+No mocking of the live session — the LSP binary links `deslop-core` with `features = ["live"]` and runs against `tests/fixtures/` workspaces.

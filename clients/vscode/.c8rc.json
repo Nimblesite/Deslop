@@ -1,0 +1,12 @@
+{
+  "all": true,
+  "include": ["out/test/src/**/*.js"],
+  "exclude": [
+    "out/test/src/logging.js",
+    "out/test/src/**/*.d.ts",
+    "out/test/test/**"
+  ],
+  "reporter": ["text", "lcov", "json-summary"],
+  "report-dir": "coverage",
+  "temp-directory": "coverage/.tmp"
+}

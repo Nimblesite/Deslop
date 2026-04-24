@@ -2,7 +2,7 @@
 
 Paired with ``recurrences_iterative.py`` and
 ``recurrences_memoised.py`` — same three functions, three idioms,
-three Type-4 clusters.
+three same behavior, different code [Type-4] clusters.
 """
 
 from __future__ import annotations

@@ -1,0 +1,9 @@
+<idea-plugin>
+    <depends>com.intellij.modules.ultimate</depends>
+    <depends>com.intellij.modules.lsp</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <platform.lsp.serverSupportProvider
+            implementation="com.nimblesite.deslop.jetbrains.DeslopLspServerSupportProvider" />
+    </extensions>
+</idea-plugin>

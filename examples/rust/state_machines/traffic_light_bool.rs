@@ -1,6 +1,7 @@
 //! Bit-flag twin of `traffic_light_enum.rs`. The state is encoded as
 //! a pair of bools `(red_on, green_on)`; yellow is `(false, false)`.
-//! Completely different AST and tokens — Type-4 via embeddings.
+//! Completely different AST and tokens — same behavior, different
+//! code [Type-4] via embeddings.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Light {

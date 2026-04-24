@@ -2,7 +2,7 @@
 
 ### [FUSION-POLICY-HYBRID] The state of the art is HYBRID, not pure-RAG
 
-**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** CodeDedup is hybrid.
+**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** Deslop is hybrid.
 
 ### [FUSION-POLICY-NO-PURE-RAG] No paper recommends pure embeddings / pure RAG
 
@@ -28,7 +28,7 @@ The pattern is consistent: **structure (AST/graph) + learned representation (emb
 - **Smaller embedding sizes beat larger ones** for clone detection. This directly contradicts the "bigger vector DB = better" intuition of pure-RAG.
 - **Reports must cite exact byte ranges** (LSP requirement per CLAUDE.md). Pure embedding similarity gives you "these two fragments are similar" but not "this specific subtree of fragment A matches this specific subtree of fragment B." AST fingerprinting gives that natively; Rator showed it's also achievable from tree encoding with Top-2/Top-3 localization.
 
-### [FUSION-SIGNALS-THREE-LAYER] CodeDedup is hybrid by design
+### [FUSION-SIGNALS-THREE-LAYER] Deslop is hybrid by design
 
 The pipeline fuses three signals:
 
@@ -47,7 +47,7 @@ All three run by default. The research doesn't support shipping without embeddin
 - **Ensemble by max/sum, never average.** The 2025 ensemble paper is specific: averaging *hurts*; max and sum help. Score normalization is mandatory before combining.
 - **Cache by `(file_content_hash, provider_id, model_id, model_version)`.** Re-runs are free; switching providers or models invalidates only the embedding layer and leaves structural/LSH caches intact. LSP incremental mode reuses the same cache unchanged.
 - **Index granularity: AST subtrees above min-node threshold**, not whole files. We already have those subtrees from the structural pass — embed them directly. This keeps embeddings byte-range-addressable and dramatically reduces the N in k-NN.
-- **Determinism caveat.** Embedding + ANN is approximate. Mitigate by: (a) recording `provider_id`, `model_id`, and `model_version` in the `.codededup-cache` header and the report, (b) using deterministic ANN parameters (fixed seed, fixed ef_construction), (c) final ranking is still computed over the *union* of structural + LSH + embedding candidates, so a missed ANN neighbor only loses recall, never changes existing cluster content.
+- **Determinism caveat.** Embedding + ANN is approximate. Mitigate by: (a) recording `provider_id`, `model_id`, and `model_version` in the `.deslop-cache` header and the report, (b) using deterministic ANN parameters (fixed seed, fixed ef_construction), (c) final ranking is still computed over the *union* of structural + LSH + embedding candidates, so a missed ANN neighbor only loses recall, never changes existing cluster content.
 
 ### [FUSION-STRATEGY-MAX-SUM] Fusion strategy (how the three signals combine)
 

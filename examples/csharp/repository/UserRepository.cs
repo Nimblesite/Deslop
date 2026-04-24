@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace Examples.Repositories
 {
-    // Plain CRUD repository. Hand-written but nearly identical in shape to
-    // ProductRepository and OrderRepository below — classic Type-2 clone
-    // cluster (renamed `User` → `Product` / `Order`).
+    // Plain CRUD repository. Hand-written but identical in shape to
+    // ProductRepository and OrderRepository below — classic identical
+    // code [Type-1/2] cluster (renamed `User` → `Product` / `Order`).
     public sealed class UserRepository
     {
         private readonly List<User> store = new List<User>();

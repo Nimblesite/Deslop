@@ -1,8 +1,8 @@
 //! Imperative aggregates over `&[i64]`. Each function has a
 //! semantically-equivalent iterator-chain twin in `aggregates_iter.rs`
 //! and a recursive twin in `aggregates_recursive.rs`. Structural hash
-//! and token Jaccard miss the Type-4 relationship; only the embedding
-//! pass surfaces it.
+//! and token Jaccard miss the same behavior, different code [Type-4]
+//! relationship; only the embedding pass surfaces it.
 
 pub fn sum(values: &[i64]) -> i64 {
     let mut total: i64 = 0;

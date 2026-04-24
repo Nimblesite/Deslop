@@ -1,9 +1,9 @@
 //! Naive `split`-based CSV parser. Does not honour quoted commas —
 //! incomplete compared to `csv_hand.rs`, but sold as "CSV parsing" in
-//! a lot of real code. A Type-3 clone of the hand-written parser
-//! (same intent, missing edge cases). The embedding pass should pair
-//! it with `csv_hand.rs` with non-zero cosine even though token
-//! Jaccard is low.
+//! a lot of real code. Nearly identical code [Type-3] vs the
+//! hand-written parser (same intent, missing edge cases). The
+//! embedding pass should pair it with `csv_hand.rs` with non-zero
+//! cosine even though token Jaccard is low.
 
 pub fn parse_row(input: &str) -> Vec<String> {
     input

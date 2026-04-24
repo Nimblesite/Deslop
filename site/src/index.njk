@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
-title: CodeDedup — Duplicate-code detection for the AI era
-description: High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
+title: Deslop — Live duplicate-code server for AI coding agents
+description: A running LSP + MCP server that streams real-time duplicate-code signals to Claude, Cursor, Copilot, and your editor as code is written. Tree-sitter parsing, AST fingerprints, semantic fusion — worst offenders surface inline, not in a batch report after the copy-paste already landed.
 ---
 
 <div class="home">
@@ -9,50 +9,56 @@ description: High-performance AST fingerprinting via tree-sitter. Built in Rust 
     <div class="hero__left">
       <div class="eyebrow-chip"><span>v2.4.0-stable released</span></div>
       <h1>
-        When your agent copy-pastes,
-        <em>you see it first.</em>
+        Your agent is about to copy-paste.
+        <em>Deslop tells it not to.</em>
       </h1>
       <p class="hero__lede">
-        High-performance AST fingerprinting via tree-sitter. Built in Rust for millisecond execution. Detect semantic duplication before it pollutes your production codebase.
+        Deslop is a <strong>live analysis server</strong> — LSP + MCP, running in your workspace — that feeds real-time duplicate-code signals to Claude, Cursor, Copilot, and your editor <em>as code is written</em>. Tree-sitter parsing, AST fingerprints, semantic fusion, millisecond response. Batch CLI reports are one output; the live stream is the product.
       </p>
       <div class="hero__cta">
-        <a href="/docs/" class="btn-primary">Run Demo Scan</a>
+        <a href="https://github.com/Nimblesite/Deslop/releases/latest" class="btn-primary" target="_blank" rel="noopener noreferrer">Install the VS Code extension</a>
         <div class="install-chip">
-          <code>cargo install codededup</code>
+          <code>code --install-extension deslop-vscode-*.vsix</code>
           <button aria-label="Copy install command">
             <span class="material-symbols-outlined">content_copy</span>
           </button>
         </div>
       </div>
+      <p class="hero__sublede">
+        VS Code extension is the preferred install — you get the live bubble, the MCP server, the LSP server, and the CLI in a single bundle. Other IDE extensions coming soon. Just want the CLI? <code>brew install nimblesite/tap/deslop</code> or <code>scoop install deslop</code> (after adding the <a href="https://github.com/Nimblesite/scoop-bucket" target="_blank" rel="noopener noreferrer">Nimblesite bucket</a>).
+      </p>
     </div>
 
     <div class="hero__right">
       <div class="report-card">
         <div class="report-chrome">
           <div class="report-chrome__dots"><span></span><span></span><span></span></div>
-          <span class="report-chrome__path">codededup scan ./src</span>
+          <span class="report-chrome__path">deslop-mcp · live · claude-code</span>
         </div>
-        <pre class="report-body"><span class="muted">Initializing AST parsers... <span class="ok">[0.002s]</span></span><span class="muted">Scanning 4,208 files... <span class="ok">[0.145s]</span></span><div class="cluster">
+        <pre class="report-body"><span class="muted">→ agent: <span class="ok">find-similar</span> { path: "auth/middleware.ts", range: L42–L71 }</span>
+<span class="muted">← deslop: streaming clusters…</span>
+<div class="cluster">
   <div class="cluster__head">
-    <span class="cluster__title">Cluster 01A_AUTH (Similarity: 98.4%)</span>
-    <span class="cluster__cost">Cost: HIGH</span>
+    <span class="cluster__title">Nearly identical code [Type-3]</span>
+    <span class="cluster__cost">fused 0.94</span>
   </div>
   <div class="cluster__files">
-    <span>src/middleware/auth.ts</span><span>L12–L84</span>
     <span>src/utils/legacy_auth.ts</span><span>L104–L176</span>
+    <span>src/middleware/auth.ts</span><span>L12–L84</span>
   </div>
 </div>
 <div class="cluster cluster--low">
   <div class="cluster__head">
-    <span class="cluster__title">Cluster 04B_DB (Similarity: 82.1%)</span>
-    <span class="cluster__cost">Cost: LOW</span>
+    <span class="cluster__title">Same behavior, different code [Type-4]</span>
+    <span class="cluster__cost">embed 0.82</span>
   </div>
   <div class="cluster__files">
     <span>src/db/connection.rs</span><span>L40–L55</span>
     <span>src/db/pool.rs</span><span>L12–L27</span>
   </div>
 </div>
-<div class="report-footer">Found 12 clusters. Total structural duplication: <strong>4.2%</strong></div></pre>
+<span class="muted">agent decision: <strong>reuse `legacy_auth.verify()`</strong> · no copy-paste emitted</span>
+<div class="report-footer">Live LSP · 4,208 files indexed · 18 ms per keystroke</div></pre>
       </div>
     </div>
   </section>

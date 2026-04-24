@@ -1,6 +1,6 @@
 {
-  "_agent_pmo": "424c8f8",
-  "name": "CodeDedup (Rust)",
+  "_agent_pmo": "9a71cbf",
+  "name": "Deslop (Rust)",
   "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}

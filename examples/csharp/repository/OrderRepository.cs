@@ -3,10 +3,11 @@ using System.Collections.Generic;
 
 namespace Examples.Repositories
 {
-    // Type-3 near-miss of UserRepository / ProductRepository. Shape is the
-    // same but this variant adds a cache-invalidation hook and a "soft
-    // delete" path, so structural hash differs — LSH + embeddings still
-    // surface the family resemblance.
+    // Nearly identical code [Type-3] vs UserRepository /
+    // ProductRepository. Shape is the same but this variant adds a
+    // cache-invalidation hook and a "soft delete" path, so the
+    // structural hash differs — LSH + embeddings still surface the
+    // family resemblance.
     public sealed class OrderRepository
     {
         private readonly List<Order> store = new List<Order>();

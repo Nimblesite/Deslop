@@ -3,7 +3,7 @@
 Paired with ``client_urllib.py`` (stdlib urllib) and
 ``client_httpx.py`` (modern ``httpx``) — three implementations of the
 same client surface. Every call site behaves identically; the AST
-differs dramatically. Type-4 family.
+differs dramatically. Same behavior, different code [Type-4] family.
 """
 
 from __future__ import annotations

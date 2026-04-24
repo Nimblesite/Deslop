@@ -2,7 +2,8 @@
 
 Uses ``functools.lru_cache`` so the recursive shape is preserved but
 each subproblem runs once. Semantically equivalent to the bare
-recursion and the iteration variants — Type-4 across all three.
+recursion and the iteration variants — same behavior, different code
+[Type-4] across all three.
 """
 
 from __future__ import annotations

@@ -7,7 +7,8 @@ namespace Examples.AsyncPatterns
     // FileProcessorAsync (async/await) and FileProcessorTaskContinuation
     // (explicit Task.ContinueWith) — all three produce the same result
     // through very different control-flow shapes. Only the embedding
-    // pass surfaces the Type-4 equivalence.
+    // pass surfaces the same behavior, different code [Type-4]
+    // equivalence.
     public static class FileProcessorSync
     {
         public static IReadOnlyList<string> LoadLines(string path)

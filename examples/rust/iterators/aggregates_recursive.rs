@@ -1,6 +1,7 @@
 //! Recursive twin of `aggregates_loop.rs` / `aggregates_iter.rs`.
 //! Same five functions re-expressed via tail recursion over a slice
-//! prefix. Pure Type-4 with respect to the other two files.
+//! prefix. Pure same behavior, different code [Type-4] with respect
+//! to the other two files.
 
 pub fn sum(values: &[i64]) -> i64 {
     match values.split_first() {

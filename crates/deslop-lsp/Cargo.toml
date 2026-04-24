@@ -1,0 +1,38 @@
+[package]
+name = "deslop-lsp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Deslop LSP server — live duplicate-code analysis streamed to any LSP-capable editor as code is written."
+
+[[bin]]
+name = "deslop-lsp"
+path = "src/main.rs"
+
+[lib]
+name = "deslop_lsp"
+path = "src/lib.rs"
+
+[dependencies]
+deslop-core = { path = "../deslop-core", features = ["live"] }
+tower.workspace = true
+tower-lsp.workspace = true
+tokio.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+assert_cmd.workspace = true
+tempfile.workspace = true
+tower-lsp.workspace = true
+
+[lints]
+workspace = true

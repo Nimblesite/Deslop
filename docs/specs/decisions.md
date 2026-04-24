@@ -12,7 +12,7 @@ Default `--min-nodes` = **30**. Subtrees below this threshold are excluded from 
    - **Noise** — boilerplate (single-statement clones, trivial getters, default `ToString` overrides, test-only assertions repeated across many tests).
 3. The best default maximises **signal-in-top-20 / 20** across the three corpora. Break ties by picking the lower `--min-nodes` (better Type-3 recall).
 4. Also check `clusters.len()` and the `cache_stats.misses` runtime — a default that produces >10 000 clusters or >3x the runtime of the next tier is hostile to the CLI workflow regardless of precision.
-5. If the chosen default changes, bump the default in `crates/codededup/src/main.rs`, note the corpus and date in this decision, and re-run `tests/cli.rs` — several fixture-driven tests hard-code `--min-nodes` in their arg strings and will need their values revisited.
+5. If the chosen default changes, bump the default in `crates/deslop/src/main.rs`, note the corpus and date in this decision, and re-run `tests/cli.rs` — several fixture-driven tests hard-code `--min-nodes` in their arg strings and will need their values revisited.
 
 **Guardrails** (apply to any ship, with or without a tuning run):
 
@@ -22,7 +22,9 @@ Default `--min-nodes` = **30**. Subtrees below this threshold are excluded from 
 
 ### [DECISION-CROSS-LANGUAGE] Cross-language clones
 
-Out of scope for v1. The normalization format is identical across languages so that a future cross-language pass can compare fingerprints directly without rework. Do not add heuristics, mappings, or type-system bridges until cross-language is an explicit feature goal.
+Supported but opt-in. The normalization format is identical across languages, so the candidate union can compare fingerprints from different parser language ids without a second pipeline. However, the default user workflow is same-language refactoring, and mixed-language matches are often ports, generated clients, or syntax scaffolding rather than extractable duplication.
+
+Default: cross-language comparison is disabled via [CONFIG-CROSS-LANGUAGE]. Users may enable it for audit scenarios, but the pipeline must not add heuristics, mappings, or type-system bridges until cross-language clone detection becomes an explicit feature goal.
 
 ### [DECISION-TYPE3-TWO-PASS] Type-3 recall via AST sibling-extension + token LSH
 

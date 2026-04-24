@@ -4,10 +4,10 @@ title: Regex on source code is illegal
 date: 2026-04-10
 author: Christian Findlay
 tags: posts
-excerpt: CodeDedup parses every language with tree-sitter. No regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with.
+excerpt: Deslop parses every language with tree-sitter. No regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with.
 ---
 
-Most clone detectors you have used — CPD, Simian, jscpd — are fundamentally line-matchers. They take your source, tokenize or hash it by line, and find runs of matching lines. That approach has two features: it is fast, and it predates anyone writing a parser that is fast enough to not be the bottleneck. Tree-sitter changed the second fact. CodeDedup refuses to pretend otherwise.
+Most clone detectors you have used — CPD, Simian, jscpd — are fundamentally line-matchers. They take your source, tokenize or hash it by line, and find runs of matching lines. That approach has two features: it is fast, and it predates anyone writing a parser that is fast enough to not be the bottleneck. Tree-sitter changed the second fact. Deslop refuses to pretend otherwise.
 
 ## What line-matching misses
 
@@ -35,12 +35,12 @@ The pipeline this enables is linear, deterministic, and cheap. No heuristics. No
 
 The `CLAUDE.md` for this repo says it plainly: **regex on source code is illegal.** Not "avoid," not "prefer parsers" — illegal. That rule exists because regex-on-source is a slippery slope. The first one handles a niche case a parser cannot easily express. The second one fixes a bug in the first. By the fifth, the codebase has a regex layer shadowing a parser layer and nobody can reason about which one fires first.
 
-Tree-sitter is not a convenience in CodeDedup — it is the entire foundation. Every clone type the tool detects, every signal it fuses, every byte range it emits comes from the AST. Removing tree-sitter would not cost a feature; it would leave no tool behind.
+Tree-sitter is not a convenience in Deslop — it is the entire foundation. Every clone type the tool detects, every signal it fuses, every byte range it emits comes from the AST. Removing tree-sitter would not cost a feature; it would leave no tool behind.
 
 ## What this means for you
 
 - **Rename refactors do not hide duplication.** A cluster survives an identifier rename because the fingerprint runs on the normalized AST.
-- **Formatting changes do not create false positives.** Reformatting a file with `rustfmt` does not change what CodeDedup sees.
+- **Formatting changes do not create false positives.** Reformatting a file with `rustfmt` does not change what Deslop sees.
 - **Language parity is real.** The same fingerprinting logic runs on C#, Rust, Python, and every language added later. Cross-language comparisons (when they make sense) use the same math.
 
-Line-matching is a 1990s compromise with hardware that no longer exists. Tree-sitter is the upgrade. CodeDedup ships the upgrade as the baseline, not a premium tier.
+Line-matching is a 1990s compromise with hardware that no longer exists. Tree-sitter is the upgrade. Deslop ships the upgrade as the baseline, not a premium tier.

@@ -4,7 +4,7 @@ namespace Examples.Validators
 {
     // Regex-based email validator. Semantically equivalent to
     // EmailValidatorImperative. Completely different AST and tokens —
-    // pure Type-4.
+    // pure same behavior, different code [Type-4] cluster.
     public static class EmailValidatorRegex
     {
         private static readonly Regex Pattern = new Regex(

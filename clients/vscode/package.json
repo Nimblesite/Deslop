@@ -1,0 +1,303 @@
+{
+  "name": "deslop-vscode",
+  "displayName": "Deslop",
+  "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
+  "version": "0.1.0",
+  "publisher": "nimblesite",
+  "license": "MIT",
+  "icon": "media/logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Nimblesite/Deslop.git",
+    "directory": "clients/vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "duplication",
+    "clone detection",
+    "refactoring",
+    "code quality",
+    "DRY"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onUri:deslop",
+    "onLanguage:csharp",
+    "onLanguage:rust",
+    "onLanguage:python",
+    "workspaceContains:**/*.cs",
+    "workspaceContains:**/*.rs",
+    "workspaceContains:**/*.py"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "deslop.openReport",
+        "title": "Deslop: Open Report"
+      },
+      {
+        "command": "deslop.openWorstCluster",
+        "title": "Deslop: Open Worst Cluster"
+      },
+      {
+        "command": "deslop.jumpToNextOccurrence",
+        "title": "Deslop: Jump to Next Occurrence in Cluster"
+      },
+      {
+        "command": "deslop.compareWithCanonical",
+        "title": "Deslop: Compare With Canonical Occurrence"
+      },
+      {
+        "command": "deslop.pickEmbeddingModel",
+        "title": "Deslop: Pick Embedding Model"
+      },
+      {
+        "command": "deslop.refreshReport",
+        "title": "Deslop: Refresh Report (force full re-analysis)"
+      },
+      {
+        "command": "deslop.toggleShowAllLenses",
+        "title": "Deslop: Toggle Show All Code Lenses"
+      },
+      {
+        "command": "deslop.showSchemaDoc",
+        "title": "Deslop: Show Schema Documentation"
+      },
+      {
+        "command": "deslop.openCluster",
+        "title": "Deslop: Open Cluster"
+      },
+      {
+        "command": "deslop.revealActiveBinary",
+        "title": "Deslop: Reveal Active Binary"
+      },
+      {
+        "command": "deslop.copyContextForAI",
+        "title": "Copy Context For AI"
+      },
+      {
+        "command": "deslop.copyHumanLocation",
+        "title": "Copy Human Location"
+      },
+      {
+        "command": "deslop.copyClusterLocations",
+        "title": "Copy Cluster Locations"
+      },
+      {
+        "command": "deslop.copySourceSnippet",
+        "title": "Copy Source Snippet"
+      },
+      {
+        "command": "deslop.revealOccurrenceInExplorer",
+        "title": "Reveal Occurrence In Explorer"
+      },
+      {
+        "command": "deslop.openAllOccurrences",
+        "title": "Open All Occurrences"
+      },
+      {
+        "command": "deslop.openClusterDetails",
+        "title": "Open Cluster Details"
+      }
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "deslop.openClusterDetails",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.openClusterDetails",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.openAllOccurrences",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.compareWithCanonical",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@3"
+        },
+        {
+          "command": "deslop.revealOccurrenceInExplorer",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.copyContextForAI",
+          "when": "viewItem == deslop.cluster",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "deslop.copyContextForAI",
+          "when": "viewItem == deslop.occurrence",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "deslop.copyClusterLocations",
+          "when": "viewItem == deslop.cluster",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "deslop.copyHumanLocation",
+          "when": "viewItem == deslop.occurrence",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "deslop.copySourceSnippet",
+          "when": "viewItem == deslop.occurrence",
+          "group": "1_copy@3"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deslop",
+          "title": "Deslop",
+          "icon": "media/activity-bar.svg"
+        }
+      ]
+    },
+    "views": {
+      "deslop": [
+        {
+          "id": "deslop.topOffenders",
+          "name": "Top Offenders"
+        },
+        {
+          "id": "deslop.focusedFile",
+          "name": "Focused File"
+        },
+        {
+          "id": "deslop.session",
+          "name": "Session"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Deslop",
+      "properties": {
+        "deslop.minNodes": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "description": "Minimum AST node count for a subtree to be fingerprinted. Forwarded to the LSP at initialize."
+        },
+        "deslop.embedding.provider": {
+          "type": "string",
+          "enum": [
+            "ollama",
+            "stub"
+          ],
+          "default": "ollama",
+          "description": "Embedding provider id used after the user enables live embeddings."
+        },
+        "deslop.embedding.model": {
+          "type": "string",
+          "default": "nomic-embed-text",
+          "description": "Embedding model id. Change via the picker; this value is persisted."
+        },
+        "deslop.embedding.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "description": "Ollama HTTP endpoint. Loopback-only by default."
+        },
+        "deslop.embedding.mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "required",
+            "off"
+          ],
+          "default": "off",
+          "description": "Live embeddings stay off until a model is selected. The picker persists auto after selection."
+        },
+        "deslop.incremental": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable on-disk fingerprint cache (.deslop-cache)."
+        },
+        "deslop.showAllLenses": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show code lenses below the 50th-percentile weight threshold."
+        },
+        "deslop.configPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to .deslop.toml. Mirrors CLI --config."
+        },
+        "deslop.liveBubble.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the live duplication bubble as you type."
+        },
+        "deslop.liveBubble.mode": {
+          "type": "string",
+          "enum": [
+            "inline",
+            "ghost"
+          ],
+          "default": "inline",
+          "description": "Bubble layout: inline decoration + inlay hint, or a phantom ghost line below the range."
+        }
+      }
+    },
+    "mcpServers": [
+      {
+        "id": "deslop",
+        "name": "Deslop",
+        "description": "Live duplicate-code analysis for the current workspace.",
+        "command": "${extensionPath}/bin/${platform}/deslop-mcp",
+        "args": [],
+        "env": {}
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node ./scripts/copy-schema-doc.mjs && node esbuild.mjs",
+    "watch": "node ./scripts/copy-schema-doc.mjs && node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "compile": "tsc -p ./",
+    "pretest": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "test": "vscode-test",
+    "pretest:ollama": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
+    "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs"
+  },
+  "dependencies": {
+    "pino": "^10.3.1",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.9",
+    "@types/node": "^20.12.0",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
+    "@typescript-eslint/parser": "^8.59.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.1.1",
+    "c8": "^10.1.2",
+    "esbuild": "^0.25.0",
+    "eslint": "^10.2.1",
+    "glob": "^11.0.0",
+    "mocha": "^10.8.2",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.59.0"
+  }
+}

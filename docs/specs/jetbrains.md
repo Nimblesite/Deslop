@@ -1,0 +1,119 @@
+# JetBrains IDEs — IntelliJ Platform plugin
+
+The JetBrains client is a **thin IntelliJ Platform plugin** over `deslop-lsp`. It is not a second analysis engine, not a ReSharper backend, and not a fork of the VSIX UI. The first product target is **Rider**, because Deslop's first production language is C#, but the implementation must stay platform-shaped so the same plugin can later run in IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion, GoLand, and other JetBrains IDEs that expose the IntelliJ Platform LSP API.
+
+Official platform constraints: JetBrains' LSP API is exposed through `com.intellij.modules.lsp`, stdio support starts at 2023.2, pull diagnostics at 2025.1/2025.2, and code lens at 2026.1. The Deslop plugin targets the 2026.1 platform line for the first public build so diagnostics, hover, and code lens can map to the existing [lsp.md](lsp.md) contract without native reimplementation. See JetBrains' official [Language Server Protocol](https://plugins.jetbrains.com/docs/intellij/language-server-protocol.html) and [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/configuring-gradle.html) docs.
+
+### [JETBRAINS-PRINCIPLES] Client principles
+
+1. **One engine.** The plugin launches `deslop-lsp` and consumes standard LSP diagnostics, hover, code lens, document links, and commands. No clone detection, ranking, byte-range conversion, or bucket routing lives in Kotlin.
+2. **Rider first, platform always.** The plugin is tested first in Rider because C# users are the immediate market, but source code must avoid Rider-only APIs unless a spec section explicitly allows them.
+3. **Native first.** JetBrains users should see Deslop through familiar IDE surfaces: editor highlighting, Problems, hover, code lens, status widget, and later a Tool Window. The plugin does not import the VSIX webview UI.
+4. **Offline install.** Public plugin zips must include the `deslop-lsp` binary for every supported OS/architecture, because JetBrains Marketplace cannot publish OS-specific plugin zips and activation must not download executable code.
+5. **No silent model work.** Startup embeddings follow [LSP-EMBEDDING-CONSENT]. Fresh installs launch with `--embeddings off`; model selection is a user action.
+
+### [JETBRAINS-TARGET] Supported products
+
+The first supported matrix is:
+
+| Tier | Product | Purpose |
+|---|---|---|
+| Primary | Rider 2026.1+ | First real user target for C# duplication. |
+| Build baseline | IntelliJ Platform 2026.1+ | Keeps the plugin on platform LSP APIs rather than Rider-only APIs. |
+| Smoke later | IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion | Validate the same plugin as Rust/Python support matures. |
+
+The plugin descriptor depends on `com.intellij.modules.lsp` and `com.intellij.modules.ultimate`, matching the platform LSP requirement. Android Studio is out of scope because JetBrains does not expose this LSP integration there.
+
+### [JETBRAINS-LSP] LSP server integration
+
+`clients/jetbrains` registers one `LspServerSupportProvider` through `com.intellij.platform.lsp.serverSupportProvider`. When a supported file opens (`.cs`, `.rs`, `.py`), the provider starts a project-wide `ProjectWideLspServerDescriptor` named `Deslop`.
+
+The descriptor launches:
+
+```text
+deslop-lsp <workspace-root> --min-nodes <n> --embeddings off
+```
+
+Initial scope:
+
+- `textDocument/diagnostic` lights up duplicate occurrences through JetBrains' native error/warning/highlight pipeline.
+- `textDocument/hover` displays cluster id, interpretation, signals, and occurrences once the LSP implementation provides them.
+- `textDocument/codeLens` carries inline clone summaries on 2026.1+ IDEs.
+
+The plugin must not parse hover markdown to recover structured data. Native Tool Window and settings work must call the `deslop/*` custom LSP methods once the IntelliJ LSP client wrapper is extended for custom requests.
+
+### [JETBRAINS-BINARY] Binary resolution
+
+Resolution order mirrors [VSIX-BINARY-VERSIONING]:
+
+1. `${DESLOP_BINARY_DIR}/deslop-lsp[.exe]` for local development and nightly testing.
+2. `deslop-lsp[.exe]` on `PATH` for Homebrew/Scoop/system installs.
+3. Bundled `bin/<platform>/deslop-lsp[.exe]` inside the plugin zip.
+4. Bare `deslop-lsp` as the last fallback so developer sandboxes can still rely on the IDE process environment.
+
+Release packaging must stage:
+
+| Platform | Directory |
+|---|---|
+| macOS arm64 | `bin/darwin-arm64/` |
+| macOS x64 | `bin/darwin-x64/` |
+| Linux x64 | `bin/linux-x64/` |
+| Linux arm64 | `bin/linux-arm64/` |
+| Windows x64 | `bin/win32-x64/` |
+
+Version checking is required before Marketplace publication: a PATH binary is accepted only when `deslop-lsp --version` matches the plugin version exactly. Until the LSP binary grows `--version`, development builds may skip that check and use the binary chosen by the resolver.
+
+### [JETBRAINS-SETTINGS] Settings contract
+
+The first scaffold hard-codes `min_nodes = 30` and `embeddings = off`. The user-facing settings page must later mirror the VSIX settings names so workspace state stays portable:
+
+- `deslop.minNodes`
+- `deslop.embedding.provider`
+- `deslop.embedding.model`
+- `deslop.embedding.endpoint`
+- `deslop.embedding.mode`
+- `deslop.incremental`
+
+When the plugin adds model selection, it must persist the same workspace embedding settings described in [LSP-EMBEDDING-CONSENT]. The LSP and MCP must still converge through one setting contract.
+
+### [JETBRAINS-UX] Native IDE surfaces
+
+First public UX:
+
+- Editor highlighting via LSP diagnostics.
+- Problems panel entries with `source = "deslop"` and stable cluster ids.
+- Hover detail and code lens when provided by the LSP.
+- Language Services status widget entry named `Deslop`.
+
+Post-scaffold UX:
+
+- Tool Window named `Duplicate Clusters` with Top Offenders, Focused File, and Session tabs.
+- Worst-offender action from Search Everywhere / Find Action.
+- Embedding model picker using JetBrains' native popup list.
+- Compare-with-canonical action using the IDE diff viewer.
+
+The Tool Window consumes the canonical `Report` from `deslop/reportGet`; it never re-ranks clusters or recomputes buckets.
+
+### [JETBRAINS-MCP] MCP relationship
+
+The JetBrains plugin does not embed MCP in v1. Agents inside Rider can use `deslop-mcp` through their own MCP host, while the IDE plugin owns human editor feedback through LSP. A later JetBrains-specific MCP bridge may be added only if there is a concrete agent host inside JetBrains IDEs that cannot launch the normal `deslop-mcp` binary.
+
+### [JETBRAINS-PACKAGING] Packaging
+
+`clients/jetbrains` builds a JetBrains plugin zip through the IntelliJ Platform Gradle Plugin. GitHub Release packaging eventually attaches:
+
+```text
+deslop-jetbrains-<version>.zip
+```
+
+The version is lock-step with the Rust binaries and VSIX. Marketplace publishing is manual until publisher credentials, signing, and approval flow are set up.
+
+### [JETBRAINS-TESTING] Testing
+
+Testing follows the repository rule: **no fake LSP/MCP**. Acceptable test layers:
+
+- Gradle `verifyPluginProjectConfiguration` and `verifyPluginStructure`.
+- Headless IntelliJ Platform tests for pure Kotlin helpers like binary resolution.
+- Rider/IntelliJ UI tests that launch the real `deslop-lsp` binary against fixture workspaces and assert native IDE diagnostics or Tool Window rows.
+
+The first scaffold may ship with structure verification only. Before a public plugin zip, CI must exercise at least one real IDE test path against the real `deslop-lsp` binary.

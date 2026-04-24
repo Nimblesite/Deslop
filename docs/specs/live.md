@@ -1,6 +1,6 @@
 # Live analysis — in-memory session behind the LSP and MCP servers
 
-CodeDedup v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `codededup-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
+Deslop v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `deslop-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
 
 **There is no daemon process.** The `live` module just keeps an analysis session alive for as long as the binary that owns it is running. The LSP server and the MCP server are long-running because LSP and MCP are long-running protocols; they're not background services, they're conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`).
 
@@ -8,12 +8,12 @@ See also: [lsp.md](lsp.md), [mcp.md](mcp.md), [vsix.md](vsix.md).
 
 ### [LIVE-PACKAGING] Crate + binary layout
 
-The `live` module lives **inside `codededup-core`**, gated behind the `live` cargo feature. Two thin binaries link it:
+The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo feature. Two thin binaries link it:
 
-- `crates/codededup-lsp` — JSON-RPC over stdio (LSP transport).
-- `crates/codededup-mcp` — JSON-RPC over stdio (Model Context Protocol transport).
+- `crates/deslop-lsp` — JSON-RPC over stdio (LSP transport).
+- `crates/deslop-mcp` — JSON-RPC over stdio (Model Context Protocol transport).
 
-Both binaries stay under 100 LOC of glue — transport demux, dispatch, shutdown. All live-session logic — state, watcher, scheduler, query API — is reachable from `codededup_core::live::*` once the feature is enabled. Nothing in the pipeline moves; no pipeline code is duplicated.
+Both binaries stay under 100 LOC of glue — transport demux, dispatch, shutdown. All live-session logic — state, watcher, scheduler, query API — is reachable from `deslop_core::live::*` once the feature is enabled. Nothing in the pipeline moves; no pipeline code is duplicated.
 
 End-to-end flow — who owns each box, who talks to whom, and where the live analysis lives:
 
@@ -23,7 +23,7 @@ flowchart LR
 
     subgraph VSCode["VS Code process"]
         direction TB
-        subgraph VSIX["CodeDedup VSIX (TypeScript extension)"]
+        subgraph VSIX["Deslop VSIX (TypeScript extension)"]
             direction TB
             UI["Live bubble · tree view · webview<br/>Ollama model picker · status bar"]
             LspClient["LSP client"]
@@ -40,12 +40,12 @@ flowchart LR
 
     subgraph Binaries["Binaries (processes)"]
         direction TB
-        LspBin["codededup-lsp<br/>(stdio JSON-RPC)"]
-        McpBin["codededup-mcp<br/>(stdio MCP)"]
-        CliBin["codededup (CLI)<br/>(one-shot batch)"]
+        LspBin["deslop-lsp<br/>(stdio JSON-RPC)"]
+        McpBin["deslop-mcp<br/>(stdio MCP)"]
+        CliBin["deslop (CLI)<br/>(one-shot batch)"]
     end
 
-    subgraph CoreCrate["codededup-core (one crate)"]
+    subgraph CoreCrate["deslop-core (one crate)"]
         direction TB
         Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
         Pipeline["pipeline module<br/>PipelineSession · update_files()<br/>discover · parse · fingerprint · LSH · embed · rank · render"]
@@ -53,7 +53,7 @@ flowchart LR
     end
 
     Workspace[(Workspace files)]
-    Ollama[(Ollama<br/>/api/tags · /api/embeddings)]
+    Ollama[(Ollama<br/>/api/tags · /api/embed)]
 
     UI -- "user types · tree click · picker" --> LspClient
     LspClient == "spawns + LSP stdio" ==> LspBin
@@ -75,19 +75,31 @@ flowchart LR
 
 **The CLI does not enable the `live` feature.** CLI builds stay zero-watcher, zero-background-thread, zero `notify` dependency — identical to v1. The feature flag — not a separate crate — is what keeps the CLI lean. One crate, one lint profile, one version, one place to add a language. See [principles.md §[PRINCIPLES-LONG-RUNNING-DAEMON]](principles.md).
 
-Two consumers of the live analysis live inside the VS Code process (the VSIX UI through the LSP client, and any MCP-aware agent inside VS Code through the bundled MCP host), and one lives outside (an AI agent running in a terminal that spawns `codededup-mcp` directly). All three paths — VSIX UI, in-editor agent, external agent — end at the same `AnalysisSession` in the `live` module and the same `PipelineSession` underneath. Nothing is re-implemented per client.
+Two consumers of the live analysis live inside the VS Code process (the VSIX UI through the LSP client, and any MCP-aware agent inside VS Code through the bundled MCP host), and one lives outside (an AI agent running in a terminal that spawns `deslop-mcp` directly). All three paths — VSIX UI, in-editor agent, external agent — end at the same `AnalysisSession` in the `live` module and the same `PipelineSession` underneath. Nothing is re-implemented per client.
 
 ### [LIVE-LIFECYCLE] Session lifecycle
 
 One `AnalysisSession` per workspace root, owned by the binary that created it. The client (VSIX / LSP client / MCP client) launches a binary, the binary receives an `initialize` frame with the workspace root + config (min-nodes, exclusion config path, embedding settings), and the session:
 
-1. Opens the `.codededup-cache/` for that root (fingerprint cache + embedding cache).
-2. Runs a full initial analysis with incremental semantics on — usually a warm cache on second launch, so startup is cheap.
+1. Opens the `.deslop-cache/` for that root (fingerprint cache + embedding cache).
+2. Runs a full initial deterministic analysis with incremental semantics on — usually a warm cache on second launch, so startup is cheap. The live session does **not** run embeddings here unless the client supplied a previously-selected model.
 3. Starts a file watcher ([LIVE-WATCHER]).
 4. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
 5. Sends `ready` with the initial `Report`.
 
-Shutdown is a graceful drain: stop accepting new edits, finish the current re-analysis, flush caches, exit. The session never writes outside `.codededup-cache/` and never modifies source files.
+Shutdown is a graceful drain: stop accepting new edits, finish the current re-analysis, flush caches, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
+
+### [LIVE-EMBEDDING-CONSENT] Explicit live embedding consent
+
+LSP and MCP are live modes, so local embedding work is opt-in at the model boundary. A fresh live session starts with structural + token/LSH signals only. It must not begin the embedding pass merely because Ollama is installed, because a local model pass can take minutes and can compete with the editor or agent loop for CPU.
+
+Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work is queued immediately. Agent-facing surfaces must not call this boundary autonomously, infer a preferred model, or "upgrade" the model as a convenience; MCP requires an explicit `user_initiated: true` argument and may only set it after a human asked for the switch.
+
+Selected-model embedding refreshes are always low priority. Provider calls run in bounded batches, and live mode inserts short yield/sleep states between batches so the LSP, MCP transport, file watcher, and editor remain responsive. While embedding work is queued or running, `latest_report` remains the last complete structural/token report; live consumers keep serving it until the embedding-enhanced generation is ready.
+
+Embedding state is observable through progress notifications with `queued`, `starting`, `running`, `complete`, and `failed` phases. Clients surface those states in a stable place, preferably the VSIX Session panel, with model id, done/total counts where known, and failure text when a provider rejects the pass.
+
+LSP and MCP model state must not diverge. A user-approved model switch from either live surface writes the same workspace embedding settings (`deslop.embedding.provider`, `deslop.embedding.model`, `deslop.embedding.endpoint`, and `deslop.embedding.mode`) that the VSIX/LSP reads on startup and configuration reload. MCP must not keep a successful model change only in process memory; if it accepts a user-initiated switch, the shared settings file is the source of truth that keeps LSP, VSIX, and MCP reactive to one another.
 
 ### [LIVE-STATE] In-process state
 
@@ -95,7 +107,7 @@ The `live` module keeps one `AnalysisSession` in memory:
 
 ```rust
 pub struct AnalysisSession {
-    pipeline: PipelineSession,        // analysis state (codededup-core::pipeline)
+    pipeline: PipelineSession,        // analysis state (deslop-core::pipeline)
     latest_report: Arc<Report>,       // immutable snapshot, swapped atomically
     generation: u64,                  // monotonic; bumped every re-analysis
     subscribers: Vec<Subscriber>,     // LSP/MCP clients awaiting deltas
@@ -107,7 +119,7 @@ pub struct AnalysisSession {
 
 `latest_report` is an `Arc<Report>` swapped under a lock so readers get a consistent snapshot. `generation` lets a subscriber skip forward: *"I last saw generation 42, what changed since?"* This is the same version-cursor pattern an LSP uses for document syncs.
 
-All mutable state is reachable from `AnalysisSession`. Nothing in `codededup-core` adds new process-global mutable state — [STATE-FILE-REGISTRY] is still the only blessed global, and it's owned per-session through `PipelineSession`.
+All mutable state is reachable from `AnalysisSession`. Nothing in `deslop-core` adds new process-global mutable state — [STATE-FILE-REGISTRY] is still the only blessed global, and it's owned per-session through `PipelineSession`.
 
 ### [LIVE-WATCHER] File watcher
 
@@ -147,7 +159,7 @@ pub struct ReportDelta {
 }
 ```
 
-`ReportDelta` lives in `codededup_core::delta` (no feature gate — it's a pure projection over two reports, useful to any consumer). Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]) — same clone, same id, even after an edit. That stability is what makes the delta shape useful: an IDE can keep its tree view mounted and just flip colours when a cluster's signals or occurrence set changes.
+`ReportDelta` lives in `deslop_core::delta` (no feature gate — it's a pure projection over two reports, useful to any consumer). Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]) — same clone, same id, even after an edit. That stability is what makes the delta shape useful: an IDE can keep its tree view mounted and just flip colours when a cluster's signals or occurrence set changes.
 
 Clients that miss too many generations (or connect mid-session) ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
 
@@ -164,8 +176,8 @@ The `live` module exposes a small, stable query surface through the `LiveApi` tr
 | `cluster/byId` | `{ id: ClusterId }` | `ReportCluster` | Fetch a cluster by stable id (for "jump to other occurrences"). |
 | `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Agent-facing: "is this snippet I'm about to write already present elsewhere?" Runs the fingerprint + LSH + embedding passes on the snippet against the live index; no cache mutation. |
 | `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerates Ollama models available on the host (`/api/tags`) plus the built-in `stub` provider. Powers the VSIX model picker. |
-| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance` | Switches the live session to the selected model. Invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]); structural + LSH caches stay warm. |
-| `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.codededup-cache/` path. |
+| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | User-selected consent boundary. Switches the live session to the selected model, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), then queues low-priority embedding work. `null` means the refresh was accepted and the new provenance will appear on the next completed report. Structural + LSH caches stay warm. |
+| `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.deslop-cache/` path. |
 
 All methods are synchronous request/response. **No subscribe/unsubscribe primitives** on the query API — deltas are pushed (see [LIVE-NOTIFICATIONS]). Keeping read and push separate makes the transport layering identical for LSP and MCP.
 
@@ -175,6 +187,7 @@ The session pushes two notification types:
 
 - `report/changed` — fires after every scheduler pass. Payload: `{ generation: u64, summary: ChangeSummary }` where `ChangeSummary` is `{ clusters_added: usize, clusters_removed: usize, clusters_updated: usize, worst_weight: f64 }`. Subscribers that want the full delta call `report/delta`.
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors. Lets the VSIX render a live status indicator without polling.
+- `embedding/progress` — fires around live embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`. Phases are `queued`, `starting`, `running`, `complete`, and `failed`.
 
 Notifications are fire-and-forget; subscribers that fall behind never block the scheduler.
 

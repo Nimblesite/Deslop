@@ -3,8 +3,9 @@ using System.Collections.Generic;
 namespace Examples.Collections
 {
     // Imperative statistics. All three methods have a matching
-    // functional twin in StatisticsFunctional — cross-file Type-4
-    // clusters that only the embedding pass surfaces.
+    // functional twin in StatisticsFunctional — cross-file same
+    // behavior, different code [Type-4] clusters that only the
+    // embedding pass surfaces.
     public static class StatisticsImperative
     {
         public static double Mean(IReadOnlyList<double> values)

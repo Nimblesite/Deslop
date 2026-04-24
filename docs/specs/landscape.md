@@ -17,7 +17,7 @@ URLs:
 ### [TECH-AST-FINGERPRINT] AST fingerprinting (Baxter 1998, Chilowicz 2009)
 
 - **Baxter et al.** — seminal work: hash AST subtrees, cluster by hash, then extend to near-miss via tree edit distance.
-- **Chilowicz et al.** — *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* — allows exact subtree clustering + approximate extension over sibling sequences. This is effectively what CodeDedup is building.
+- **Chilowicz et al.** — *"each node of an AST is associated with a fingerprint based on a hash value (incrementally computed) of the subtree rooted at the node"* — allows exact subtree clustering + approximate extension over sibling sequences. This is effectively what Deslop is building.
 - **ASPDup** — AST-sequence-based progressive duplicate detection; recent practical variant.
 
 URLs:

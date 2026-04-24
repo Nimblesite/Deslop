@@ -1,7 +1,7 @@
 //! Hand-written CSV row parser. Supports quoted fields and escaped
 //! double-quotes. Paired with `csv_split.rs` (naive `split`-based
-//! parser) and `csv_state.rs` (explicit state machine) — three Type-4
-//! variants of the same parser.
+//! parser) and `csv_state.rs` (explicit state machine) — three same
+//! behavior, different code [Type-4] variants of the same parser.
 
 pub fn parse_row(input: &str) -> Vec<String> {
     let mut fields: Vec<String> = Vec::new();

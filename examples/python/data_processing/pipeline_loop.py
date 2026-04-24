@@ -4,7 +4,8 @@ Walks a list of transactions in a plain ``for`` loop. Paired with
 ``pipeline_comprehension.py`` (same semantics via list comprehensions
 + ``sum``) and ``pipeline_generator.py`` (same semantics via generator
 expressions and ``functools.reduce``). Structural and token signals
-miss the Type-4 equivalence; only the embedding pass surfaces it.
+miss the same behavior, different code [Type-4] equivalence; only the
+embedding pass surfaces it.
 """
 
 from __future__ import annotations
