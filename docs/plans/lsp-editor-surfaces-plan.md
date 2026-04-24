@@ -22,8 +22,8 @@ VSIX, and JetBrains-specific native UI stays in the JetBrains plans.
 
 ## TODO
 
-- [ ] Add `definitionProvider` capability and handler.
-- [ ] Implement "go to definition from inside a clone range" as a jump to the
+- [x] Add `definitionProvider` capability and handler.
+- [x] Implement "go to definition from inside a clone range" as a jump to the
       canonical occurrence for that cluster.
 - [ ] Add deterministic cycling semantics for code-lens "jump to next" if the
       current command path still depends on client-only behavior.

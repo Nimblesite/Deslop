@@ -27,8 +27,9 @@ use tower_lsp::{
         DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
         DocumentDiagnosticReport, DocumentDiagnosticReportResult, FileEvent,
-        FullDocumentDiagnosticReport, Hover, HoverParams, HoverProviderCapability,
-        InitializeParams, InitializeResult, InitializedParams, MessageType,
+        FullDocumentDiagnosticReport, GotoDefinitionParams, GotoDefinitionResponse, Hover,
+        HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
+        InitializedParams, Location, MessageType, OneOf, Range,
         RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
         TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
@@ -210,6 +211,7 @@ impl LanguageServer for LspBackend {
                 code_lens_provider: Some(CodeLensOptions {
                     resolve_provider: Some(false),
                 }),
+                definition_provider: Some(OneOf::Left(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -299,6 +301,75 @@ impl LanguageServer for LspBackend {
         };
         let file_report = self.service.report_for_file(&path).await;
         Ok(Some(code_lens::build_for_file(&file_report)))
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> LspResult<Option<GotoDefinitionResponse>> {
+        let td_params = params.text_document_position_params;
+        let Some(path) = url_to_path(&td_params.text_document.uri) else {
+            return Ok(None);
+        };
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            return Ok(None);
+        };
+        let byte = position::byte_for_position(&source, td_params.position);
+        let clusters = self
+            .service
+            .report_for_range(&path, byte, byte.saturating_add(1))
+            .await;
+        let Some(cluster) = clusters.into_iter().next() else {
+            return Ok(None);
+        };
+        let workspace_root = self.service.session_config().await.workspace_root;
+        let Some(canonical) = pick_canonical(&cluster.occurrences, &workspace_root, &path, byte)
+        else {
+            return Ok(None);
+        };
+        let absolute = absolute_path(&workspace_root, &canonical.path);
+        let target_source = std::fs::read_to_string(&absolute).unwrap_or_default();
+        let start = position::position_for_byte(&target_source, canonical.start_byte);
+        let end = position::position_for_byte(&target_source, canonical.end_byte);
+        let Ok(uri) = Url::from_file_path(&absolute) else {
+            return Ok(None);
+        };
+        Ok(Some(GotoDefinitionResponse::Scalar(Location {
+            uri,
+            range: Range { start, end },
+        })))
+    }
+}
+
+/// Picks the occurrence the caller should jump to from a cursor at
+/// `(cursor_path, cursor_byte)`. Prefers the first occurrence that is
+/// NOT the one the cursor sits in; falls back to the first occurrence
+/// overall when every member lives in the same byte range. Resolves
+/// relative occurrence paths against `workspace_root` before comparing.
+fn pick_canonical<'a>(
+    occurrences: &'a [deslop_core::report::ReportOccurrence],
+    workspace_root: &std::path::Path,
+    cursor_path: &std::path::Path,
+    cursor_byte: usize,
+) -> Option<&'a deslop_core::report::ReportOccurrence> {
+    occurrences
+        .iter()
+        .find(|occurrence| {
+            let absolute = absolute_path(workspace_root, &occurrence.path);
+            !(absolute == cursor_path
+                && occurrence.start_byte <= cursor_byte
+                && cursor_byte < occurrence.end_byte)
+        })
+        .or_else(|| occurrences.first())
+}
+
+/// Joins `path` onto `workspace_root` when `path` is relative. Returns
+/// `path` unchanged when it is already absolute.
+fn absolute_path(workspace_root: &std::path::Path, path: &std::path::Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace_root.join(path)
     }
 }
 
