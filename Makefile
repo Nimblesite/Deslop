@@ -145,7 +145,9 @@ vsix-install:
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
 
 ## vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
-vsix-build:
+##             Depends on `vsix-install` so a cold CI checkout has the
+##             webview-ui + extension Node deps needed for esbuild bundling.
+vsix-build: vsix-install
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
