@@ -476,37 +476,59 @@ fn dissimilar_python_functions_across_files_stay_in_separate_clusters() -> Resul
     Ok(())
 }
 
-// Audience: HUMAN. Issue #34. Python test suites conventionally open
-// with a module docstring, `from __future__ import annotations`,
-// `import pytest`, `from typing import TYPE_CHECKING`, and an
-// `if TYPE_CHECKING:` import block. That prologue is pure
-// import/prologue boilerplate: it carries no semantic content a human
-// would recognise as "copy-pasted code". Before the fix for #34 the
-// prologue subtree survived the boilerplate filter (no
-// `future_import_statement` carrier, no module-docstring carrier, and
-// the `if_statement` wrapper around imports was not treated as an
-// imports-only subtree), so deslop reported the prologue as a
-// cross-file clone spanning every Python file in the repo. For a
-// 40-file repo that produced a 109-member cluster; even a 6-file
-// fixture reproduces the symptom.
-//
-// Positive bound: none of the reported clusters point at the file
-// prologue. `start_byte=0` is the structural signature of a prologue
-// occurrence — any cluster whose occurrences all start at byte 0 in
-// every file is the prologue cluster we must not emit.
-#[test]
-fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("python-prologue-false-positive"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
+// Returns the byte slice of `path` spanned by `occurrence`'s reported
+// `[start_byte, end_byte)`. Used by the prologue-cluster regressions
+// to read the source text the report claims is a clone.
+fn occurrence_source(scan_root: &Path, occurrence: &serde_json::Value) -> Option<Vec<u8>> {
+    let path = occurrence.get("path").and_then(serde_json::Value::as_str)?;
+    let start = usize::try_from(
+        occurrence
+            .get("start_byte")
+            .and_then(serde_json::Value::as_u64)?,
+    )
+    .ok()?;
+    let end = usize::try_from(
+        occurrence
+            .get("end_byte")
+            .and_then(serde_json::Value::as_u64)?,
+    )
+    .ok()?;
+    let bytes = fs::read(scan_root.join(path)).ok()?;
+    bytes.get(start..end).map(<[u8]>::to_vec)
+}
+
+// Returns true when `text` opens with a top-level import/prologue
+// construct in any of the languages Deslop currently parses: a Python
+// triple-quoted module docstring, `import` / `from` / `if TYPE_CHECKING:`,
+// a C# `using` directive or `namespace` declaration, or a Rust
+// `use` / `extern crate` statement. The check looks only at the first
+// non-whitespace line so a window that starts with prologue and
+// extends into real code still counts as prologue-anchored.
+fn opens_with_prologue_keyword(text: &str) -> bool {
+    let trimmed = text.trim_start();
+    if trimmed.starts_with("\"\"\"") || trimmed.starts_with("'''") {
+        return true;
+    }
+    let first_line = trimmed.lines().next().unwrap_or("").trim_start();
+    if first_line.starts_with("if TYPE_CHECKING") {
+        return true;
+    }
+    let token = first_line.split_whitespace().next().unwrap_or("");
+    matches!(
+        token,
+        "use" | "using" | "namespace" | "import" | "from" | "extern"
+    )
+}
+
+// Asserts no cluster in `report` is a cross-file prologue false
+// positive: a multi-file cluster whose every occurrence starts on an
+// import/use/namespace/docstring line. Drives all three issue-#34
+// regression tests (Python, C#, Rust).
+fn assert_no_cross_file_prologue_cluster(
+    report: &serde_json::Value,
+    scan_root: &Path,
+    label: &str,
+) {
     let clusters = report
         .pointer("/clusters")
         .and_then(serde_json::Value::as_array)
@@ -523,26 +545,54 @@ fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
             .and_then(serde_json::Value::as_str)
             .unwrap_or("<unknown>");
         let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        let mut prologue_only = !occurrences.is_empty();
+        let mut all_prologue = !occurrences.is_empty();
         for occurrence in &occurrences {
             if let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) {
                 let _inserted = files.insert(path.to_owned());
             }
-            let start = occurrence
-                .get("start_byte")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(u64::MAX);
-            if start != 0 {
-                prologue_only = false;
+            let bytes = occurrence_source(scan_root, occurrence).unwrap_or_default();
+            let text = std::str::from_utf8(&bytes).unwrap_or("");
+            if !opens_with_prologue_keyword(text) {
+                all_prologue = false;
             }
         }
         assert!(
-            !(prologue_only && files.len() > 1),
-            "cluster {cluster_id} is a cross-file prologue cluster spanning {files:?}; \
-             module docstring + `from __future__ import ...` + `if TYPE_CHECKING:` \
-             import blocks must be filtered as boilerplate and never reported as clones",
+            !(all_prologue && files.len() > 1),
+            "{label}: cluster {cluster_id} is a cross-file prologue cluster spanning \
+             {files:?}; import / use / namespace / docstring scaffolding must never \
+             anchor a cross-file clone",
         );
     }
+}
+
+// Audience: HUMAN. Issue #34. Python test suites conventionally open
+// with a module docstring, `from __future__ import annotations`,
+// `import pytest`, `from typing import TYPE_CHECKING`, and an
+// `if TYPE_CHECKING:` import block. That prologue is pure
+// import/prologue boilerplate: it carries no semantic content a human
+// would recognise as "copy-pasted code". Before the fix for #34 the
+// prologue subtree survived the boilerplate filter (no
+// `future_import_statement` carrier, no module-docstring carrier, and
+// the `if_statement` wrapper around imports was not treated as an
+// imports-only subtree), so deslop reported the prologue as a
+// cross-file clone spanning every Python file in the repo. For a
+// 40-file repo that produced a 109-member cluster; even a 6-file
+// fixture reproduces the symptom.
+#[test]
+fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let scan_root = fixture("python-prologue-false-positive");
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    assert_no_cross_file_prologue_cluster(&report, &scan_root, "python prologue");
     Ok(())
 }
 
@@ -559,59 +609,51 @@ fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
 // disagree. The reported cluster from the user's repo had 109
 // occurrences pinned at line 1, column 1 across the codebase; six
 // distinct files reproduce the same shape here.
-//
-// Positive bound: no cluster's occurrences all start at byte 0
-// across more than one file. A legitimate cross-file clone aligns
-// somewhere inside the file, not at the prologue.
 #[test]
 fn csharp_using_namespace_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
+    let scan_root = fixture("csharp-prologue-false-positive");
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
-        .arg(fixture("csharp-prologue-false-positive"))
+        .arg(&scan_root)
         .arg("--output")
         .arg(tmp.path().join("report"))
         .assert()
         .success();
     let json = fs::read_to_string(&out.json)?;
     let report: serde_json::Value = serde_json::from_str(&json)?;
-    let clusters = report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    for cluster in &clusters {
-        let occurrences = cluster
-            .get("occurrences")
-            .and_then(serde_json::Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let cluster_id = cluster
-            .get("id")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("<unknown>");
-        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        let mut prologue_only = !occurrences.is_empty();
-        for occurrence in &occurrences {
-            if let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) {
-                let _inserted = files.insert(path.to_owned());
-            }
-            let start = occurrence
-                .get("start_byte")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(u64::MAX);
-            if start != 0 {
-                prologue_only = false;
-            }
-        }
-        assert!(
-            !(prologue_only && files.len() > 1),
-            "cluster {cluster_id} is a cross-file C# prologue cluster spanning {files:?}; \
-             `using ...;` directives + `namespace X;` must be filtered as boilerplate \
-             so they never anchor a cross-file clone via LSH-only matching",
-        );
-    }
+    assert_no_cross_file_prologue_cluster(&report, &scan_root, "csharp prologue");
+    Ok(())
+}
+
+// Audience: HUMAN. Issue #34, Rust arm. Six Rust files share the same
+// eight-line `use ...;` block but contain completely different items
+// (a function, a struct, an async fetcher, a trait, a CSV parser, a
+// retry policy). Sibling windows that begin on a `use_declaration`
+// and extend into the next `function_item` / `struct_item` /
+// `trait_item` carry token signatures dominated by
+// `use_declaration __ident__` k-grams, pushing token Jaccard to 1.00.
+// `use_declaration` is already a boilerplate carrier for subtree
+// fingerprints, but the sibling-window emitter still produces windows
+// that *start* inside the use block — and those windows do anchor
+// cross-file LSH-only clusters. The fix must keep import scaffolding
+// from anchoring cross-file matches in any language we parse.
+#[test]
+fn rust_use_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let scan_root = fixture("rust-prologue-false-positive");
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    assert_no_cross_file_prologue_cluster(&report, &scan_root, "rust prologue");
     Ok(())
 }
 

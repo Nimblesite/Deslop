@@ -36,8 +36,18 @@ export function registerCommands(
     vscode.commands.registerCommand("deslop.openCluster", (id: string) =>
       openClusterPanel(context, store, id),
     ),
-    vscode.commands.registerCommand("deslop.openOccurrence", (o: ReportOccurrence) =>
-      openOccurrence(o),
+    vscode.commands.registerCommand(
+      "deslop.openOccurrence",
+      async (target: unknown) => {
+        const occurrence = occurrenceFromCommandTarget(target);
+        if (!occurrence) {
+          void vscode.window.showInformationMessage(
+            "Deslop: no occurrence resolved for this command.",
+          );
+          return;
+        }
+        await openOccurrence(occurrence);
+      },
     ),
     vscode.commands.registerCommand("deslop.jumpToNextOccurrence", () =>
       jumpToNextOccurrence(store),
@@ -127,6 +137,28 @@ export async function openOccurrence(occurrence: ReportOccurrence): Promise<void
   const end = byteToPosition(doc, occurrence.end_byte);
   editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
   editor.selection = new vscode.Selection(start, end);
+}
+
+function occurrenceFromCommandTarget(target: unknown): ReportOccurrence | undefined {
+  if (isOccurrenceNode(target)) return target.occurrence;
+  return isReportOccurrence(target) ? target : undefined;
+}
+
+function isOccurrenceNode(target: unknown): target is OccurrenceNode {
+  if (typeof target !== "object" || target === null || !("occurrence" in target)) {
+    return false;
+  }
+  return isReportOccurrence(target.occurrence);
+}
+
+function isReportOccurrence(target: unknown): target is ReportOccurrence {
+  if (typeof target !== "object" || target === null) return false;
+  const occurrence = target as Partial<ReportOccurrence>;
+  return (
+    typeof occurrence.path === "string" &&
+    typeof occurrence.start_byte === "number" &&
+    typeof occurrence.end_byte === "number"
+  );
 }
 
 export function jumpToNextOccurrence(store: ReportStore): void {

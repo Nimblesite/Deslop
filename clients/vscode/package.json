@@ -75,6 +75,10 @@
         "title": "Deslop: Open Cluster"
       },
       {
+        "command": "deslop.openOccurrence",
+        "title": "Deslop: Go to Occurrence"
+      },
+      {
         "command": "deslop.revealActiveBinary",
         "title": "Deslop: Reveal Active Binary"
       },
@@ -115,9 +119,9 @@
           "group": "navigation@1"
         },
         {
-          "command": "deslop.openClusterDetails",
+          "command": "deslop.openOccurrence",
           "when": "viewItem == deslop.occurrence",
-          "group": "navigation@2"
+          "group": "navigation@1"
         },
         {
           "command": "deslop.openAllOccurrences",
@@ -130,9 +134,14 @@
           "group": "navigation@3"
         },
         {
+          "command": "deslop.openClusterDetails",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@2"
+        },
+        {
           "command": "deslop.revealOccurrenceInExplorer",
           "when": "viewItem == deslop.occurrence",
-          "group": "navigation@1"
+          "group": "navigation@3"
         },
         {
           "command": "deslop.copyContextForAI",

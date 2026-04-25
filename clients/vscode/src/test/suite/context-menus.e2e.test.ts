@@ -122,6 +122,29 @@ suite("tree context menu commands", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  test("deslop.openOccurrence accepts an occurrence tree row", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-go-"));
+    const file = path.join(dir, "go.cs");
+    fs.writeFileSync(file, "zero\none\ntwo\n", "utf8");
+
+    try {
+      await vscode.commands.executeCommand(
+        "deslop.openOccurrence",
+        occurrenceNode({ path: file, start_byte: 5, end_byte: 8, hidden: false }),
+      );
+
+      const editor = vscode.window.activeTextEditor;
+      assert.ok(editor, "occurrence command must open an editor");
+      assert.equal(editor.document.uri.fsPath, file);
+      assert.equal(editor.selection.start.line, 1);
+      assert.equal(editor.selection.start.character, 0);
+      assert.equal(editor.selection.end.character, 3);
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("deslop.openAllOccurrences opens every occurrence under the threshold", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-all-"));
     const files = ["alpha", "beta"].map((name) => {
