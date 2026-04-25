@@ -1,0 +1,21 @@
+[defaults]
+exclude = [
+  "**/.deslop-cache/**",
+  "**/.vscode-test/**",
+  "**/__generated__/**",
+  "**/bin/**",
+  "**/coverage/**",
+  "**/dist/**",
+  "**/generated/**",
+  "**/media/webview/**",
+  "**/node_modules/**",
+  "**/obj/**",
+  "**/out/**",
+  "**/target/**",
+  "**/*.designer.cs",
+  "**/*.g.cs",
+  "**/*.generated.cs",
+  "**/*.openapi.cs",
+  "**/*.pb.cs",
+  "**/_site/**",
+]

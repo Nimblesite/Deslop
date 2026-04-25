@@ -75,6 +75,14 @@
         "title": "Deslop: Open Cluster"
       },
       {
+        "command": "deslop.openOccurrence",
+        "title": "Deslop: Go to Occurrence"
+      },
+      {
+        "command": "deslop.openCanonicalFile",
+        "title": "Open Canonical File"
+      },
+      {
         "command": "deslop.revealActiveBinary",
         "title": "Deslop: Reveal Active Binary"
       },
@@ -105,9 +113,31 @@
       {
         "command": "deslop.openClusterDetails",
         "title": "Open Cluster Details"
+      },
+      {
+        "command": "deslop.topOffenders.showByCluster",
+        "title": "Deslop: Group Top Offenders by Cluster",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "deslop.topOffenders.showByFile",
+        "title": "Deslop: Group Top Offenders by File",
+        "icon": "$(list-flat)"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "deslop.topOffenders.showByCluster",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'file'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.topOffenders.showByFile",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'cluster'",
+          "group": "navigation@1"
+        }
+      ],
       "view/item/context": [
         {
           "command": "deslop.openClusterDetails",
@@ -115,24 +145,34 @@
           "group": "navigation@1"
         },
         {
+          "command": "deslop.openCanonicalFile",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.openOccurrence",
+          "when": "viewItem == deslop.occurrence",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.openAllOccurrences",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@3"
+        },
+        {
+          "command": "deslop.compareWithCanonical",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@4"
+        },
+        {
           "command": "deslop.openClusterDetails",
           "when": "viewItem == deslop.occurrence",
           "group": "navigation@2"
         },
         {
-          "command": "deslop.openAllOccurrences",
-          "when": "viewItem == deslop.cluster",
-          "group": "navigation@2"
-        },
-        {
-          "command": "deslop.compareWithCanonical",
-          "when": "viewItem == deslop.cluster",
-          "group": "navigation@3"
-        },
-        {
           "command": "deslop.revealOccurrenceInExplorer",
           "when": "viewItem == deslop.occurrence",
-          "group": "navigation@1"
+          "group": "navigation@3"
         },
         {
           "command": "deslop.copyContextForAI",
@@ -233,6 +273,16 @@
           "type": "boolean",
           "default": false,
           "description": "Show code lenses below the 50th-percentile weight threshold."
+        },
+        "deslop.topOffenders.groupBy": {
+          "type": "string",
+          "enum": [
+            "cluster",
+            "file"
+          ],
+          "default": "cluster",
+          "scope": "window",
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
         "deslop.configPath": {
           "type": "string",

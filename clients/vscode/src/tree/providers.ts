@@ -1,138 +1,44 @@
 // Tree providers for the Duplicate Clusters activity-bar container.
-// Three trees per [VSIX-ACTIVITY-BAR]: Top Offenders, Focused File, Session panel.
+// Three trees per [VSIX-ACTIVITY-BAR]: Top Offenders, Focused File,
+// Session panel. Top Offenders dispatches between cluster mode and
+// file mode per [VSIX-TOP-OFFENDERS-GROUPING].
 
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-import { occurrenceDisplayLocation } from "../locations";
 import { ReportStore, LifecyclePhase } from "../reportStore";
-import { indexedSeverity, SEVERITY_DOT } from "../severity";
+import { indexedSeverity } from "../severity";
 import {
-  Bucket,
-  bucketLabels,
-  occurrenceCount,
-  ReportCluster,
-  ReportOccurrence,
-  resolveBucket,
-  Severity,
-} from "../types/report";
+  BucketGroupNode,
+  ClusterNode,
+  FileNode,
+  Node,
+  OccurrenceNode,
+  SessionFieldNode,
+  StatusNode,
+} from "./nodes";
+import {
+  buildClusterMode,
+  buildFileMode,
+  getBucketGroupChildren,
+  getFileNodeChildren,
+  GroupBy,
+} from "./grouping";
 
-type Node = ClusterNode | OccurrenceNode | SessionFieldNode | StatusNode;
+// Re-export node classes so existing call sites
+// (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
+// keep working without import-path churn.
+export {
+  BucketGroupNode,
+  ClusterNode,
+  FileNode,
+  OccurrenceNode,
+  SessionFieldNode,
+  StatusNode,
+} from "./nodes";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
-
-// [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Category colour is metadata
-// backed by text/a11y labels, never the only signal.
-const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
-  identical: { icon: "circle-filled", color: "charts.green" },
-  nearly_identical: { icon: "circle-large-filled", color: "charts.orange" },
-  loosely_similar: { icon: "circle-outline", color: "charts.blue" },
-  same_behavior: { icon: "sparkle", color: "charts.purple" },
-};
-
-export class ClusterNode extends vscode.TreeItem {
-  constructor(
-    readonly cluster: ReportCluster,
-    readonly rank: number,
-    severity: Severity,
-  ) {
-    const bucket = resolveBucket(cluster);
-    const labels = bucketLabels(bucket);
-    const filePath = representativePath(cluster);
-    const fileLabel = displayPath(filePath);
-    // Tree label is a pure-visual surface — plain title only. Tooltip
-    // is shared-text (copyable, AI-scrapable on hover-extract), so it
-    // carries the hybrid form with bracketed Type-N.
-    super(
-      `#${rank} ${SEVERITY_DOT[severity]} ${labels.plainTitle} · ${fileLabel}`,
-      vscode.TreeItemCollapsibleState.Collapsed,
-    );
-    this.description = cluster.id;
-    this.contextValue = "deslop.cluster";
-    this.iconPath = categoryIcon(bucket);
-    this.accessibilityInformation = {
-      label: `#${rank} ${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}`,
-      role: "treeitem",
-    };
-    this.tooltip = new vscode.MarkdownString(
-        `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
-        `file: \`${filePath}\`\n\n` +
-        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\``,
-    );
-    this.command = {
-      command: "deslop.openCluster",
-      title: "Open cluster",
-      arguments: [cluster.id],
-    };
-  }
-}
-
-function categoryIcon(bucket: Bucket): vscode.ThemeIcon {
-  const style = CATEGORY_STYLE[bucket];
-  return new vscode.ThemeIcon(style.icon, new vscode.ThemeColor(style.color));
-}
-
-function representativePath(cluster: ReportCluster): string {
-  return cluster.occurrences[0]?.path ?? cluster.id;
-}
-
-function displayPath(filePath: string): string {
-  if (!filePath) return "unknown file";
-  return vscode.workspace.asRelativePath(filePath, false);
-}
-
-function fileKey(cluster: ReportCluster): string {
-  return displayPath(representativePath(cluster)).toLocaleLowerCase();
-}
-
-export class OccurrenceNode extends vscode.TreeItem {
-  constructor(readonly occurrence: ReportOccurrence) {
-    const location = occurrenceDisplayLocation(occurrence);
-    super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
-    if (location) this.description = location.description;
-    this.contextValue = "deslop.occurrence";
-    this.command = {
-      command: "deslop.openOccurrence",
-      title: location?.commandTitle ?? "Open occurrence",
-      arguments: [occurrence],
-    };
-  }
-}
-
-class SessionFieldNode extends vscode.TreeItem {
-  constructor(label: string, value: string, commandId?: string) {
-    super(label, vscode.TreeItemCollapsibleState.None);
-    this.description = value;
-    if (commandId) {
-      this.command = { command: commandId, title: label };
-    }
-  }
-}
-
-class StatusNode extends vscode.TreeItem {
-  constructor(
-    message: string,
-    kind: "info" | "busy" | "error",
-    tooltip?: string,
-  ) {
-    super(message, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = `deslop.status.${kind}`;
-    if (kind === "busy") {
-      this.iconPath = new vscode.ThemeIcon("sync~spin");
-    } else if (kind === "error") {
-      this.iconPath = new vscode.ThemeIcon(
-        "error",
-        new vscode.ThemeColor("errorForeground"),
-      );
-      this.command = {
-        command: "deslop.revealLog",
-        title: "Reveal Deslop log",
-      };
-    }
-    if (tooltip) this.tooltip = tooltip;
-  }
-}
 
 function renderLifecycle(
   lifecycle: LifecyclePhase,
@@ -227,6 +133,11 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
 
   abstract getChildren(node?: Node): Node[];
 
+  /** Force a tree rebuild. Used by config-driven view-state changes. */
+  refresh(): void {
+    this.emitter.fire();
+  }
+
   dispose(): void {
     this.tickerSub?.dispose();
     for (const d of this.disposables) d.dispose();
@@ -234,8 +145,20 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 }
 
+// [VSIX-TOP-OFFENDERS-GROUPING] Reads `deslop.topOffenders.groupBy`
+// (cluster | file, default cluster) and dispatches into the matching
+// builder. Unknown / missing values fall back to "cluster" — never panic.
+function readGroupBy(): GroupBy {
+  const raw = vscode.workspace
+    .getConfiguration("deslop")
+    .get<string>("topOffenders.groupBy", "cluster");
+  return raw === "file" ? "file" : "cluster";
+}
+
 export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
+    if (node instanceof FileNode) return getFileNodeChildren(node);
+    if (node instanceof BucketGroupNode) return getBucketGroupChildren(node);
     if (node instanceof ClusterNode) {
       return node.cluster.occurrences.map((o) => new OccurrenceNode(o));
     }
@@ -247,15 +170,9 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       return [new StatusNode("No duplication detected", "info")];
     }
     const severities = indexedSeverity(report.clusters);
-    // [VSIX-TOP-OFFENDERS-FILE-GROUPS] Preserve the report's original
-    // impact rank, but sort rows by representative file for triage.
-    return report.clusters
-      .map((cluster, i) => ({ cluster, rank: i + 1, file: fileKey(cluster) }))
-      .sort((a, b) => a.file.localeCompare(b.file) || a.rank - b.rank)
-      .map(({ cluster, rank }) => {
-        const severity = severities.get(cluster.id) ?? "faint";
-        return new ClusterNode(cluster, rank, severity);
-      });
+    return readGroupBy() === "file"
+      ? buildFileMode(report.clusters, severities)
+      : buildClusterMode(report.clusters, severities);
   }
 }
 

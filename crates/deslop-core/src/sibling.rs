@@ -107,12 +107,12 @@ fn emit_windows(
     }
 }
 
-/// Returns true when every sibling in `window` is import/prologue boilerplate.
+/// Returns true when `window` contains import/prologue boilerplate.
 fn boilerplate_window(language: Option<&str>, window: &[NormalizedNode]) -> bool {
     language.is_some_and(|lang| {
         window
             .iter()
-            .all(|node| is_import_boilerplate_only_subtree(lang, node))
+            .any(|node| is_import_boilerplate_only_subtree(lang, node))
     })
 }
 

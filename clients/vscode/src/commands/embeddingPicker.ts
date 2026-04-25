@@ -37,22 +37,14 @@ export async function pickEmbeddingModel(
   quickPick.matchOnDetail = true;
   quickPick.ignoreFocusOut = false;
   quickPick.busy = true;
-  quickPick.show();
-
-  let models: EmbeddingModelInfo[] = [];
-  try {
-    models = await client.sendRequest<EmbeddingModelInfo[]>("deslop/embeddingListModels", {});
-  } catch (err) {
-    logError(err, "embedding/listModels");
-  }
-  quickPick.busy = false;
-  quickPick.items = buildItems(models, store);
-
+  let disposed = false;
+  quickPick.onDidHide(() => {
+    disposed = true;
+    quickPick.dispose();
+  });
   quickPick.onDidAccept(async () => {
     const picked = quickPick.selectedItems[0] ?? quickPick.activeItems[0];
-    if (!picked || picked.entryKind === "none") {
-      return;
-    }
+    if (!picked || picked.entryKind === "none") return;
     quickPick.hide();
     try {
       if (picked.entryKind === "pull") {
@@ -66,7 +58,17 @@ export async function pickEmbeddingModel(
       quickPick.dispose();
     }
   });
-  quickPick.onDidHide(() => quickPick.dispose());
+  quickPick.show();
+
+  let models: EmbeddingModelInfo[] = [];
+  try {
+    models = await client.sendRequest<EmbeddingModelInfo[]>("deslop/embeddingListModels", {});
+  } catch (err) {
+    logError(err, "embedding/listModels");
+  }
+  if (disposed) return;
+  quickPick.busy = false;
+  quickPick.items = buildItems(models, store);
 }
 
 export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {

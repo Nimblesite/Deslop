@@ -64,6 +64,60 @@ function model(
   };
 }
 
+interface FakeQuickPick extends vscode.QuickPick<vscode.QuickPickItem> {
+  disposed: boolean;
+  hideHandlerCount: number;
+  shown: boolean;
+  fireHide(): void;
+}
+
+function fakeQuickPick(): FakeQuickPick {
+  const hideHandlers: Array<() => void> = [];
+  const quickPick = {
+    activeItems: [] as readonly vscode.QuickPickItem[],
+    busy: false,
+    disposed: false,
+    hideHandlerCount: 0,
+    items: [] as readonly vscode.QuickPickItem[],
+    selectedItems: [] as readonly vscode.QuickPickItem[],
+    shown: false,
+    fireHide() {
+      for (const handler of hideHandlers) handler();
+    },
+    hide() {
+      quickPick.fireHide();
+    },
+    dispose() {
+      quickPick.disposed = true;
+    },
+    show() {
+      quickPick.shown = true;
+    },
+    onDidAccept() {
+      return { dispose() {} };
+    },
+    onDidHide(handler: () => void) {
+      hideHandlers.push(handler);
+      quickPick.hideHandlerCount = hideHandlers.length;
+      return { dispose() {} };
+    },
+  } as unknown as FakeQuickPick;
+  return quickPick;
+}
+
+function installQuickPick(quickPick: FakeQuickPick): () => void {
+  const win = vscode.window as unknown as {
+    createQuickPick: typeof vscode.window.createQuickPick;
+  };
+  const original = win.createQuickPick;
+  win.createQuickPick = function createQuickPick<T extends vscode.QuickPickItem>() {
+    return quickPick as unknown as vscode.QuickPick<T>;
+  };
+  return () => {
+    win.createQuickPick = original;
+  };
+}
+
 suite("embeddingPicker helpers", () => {
   test("formatSize grows through B/KiB/MiB/GiB", () => {
     assert.match(formatSize(100), /B$/);
@@ -252,6 +306,38 @@ suite("embeddingPicker helpers", () => {
 
   test("pickEmbeddingModel reports when the analysis server is absent", async () => {
     await pickEmbeddingModel(newStore(), () => undefined);
+  });
+
+  test("pickEmbeddingModel closes the loading picker when model discovery is still pending", async () => {
+    const quickPick = fakeQuickPick();
+    const restoreQuickPick = installQuickPick(quickPick);
+    const client = {
+      sendRequest: () => new Promise<EmbeddingModelInfo[]>(() => {
+        // Intentionally pending to model an unresponsive provider lookup.
+      }),
+    } as unknown as LanguageClient;
+
+    try {
+      const pendingPicker = pickEmbeddingModel(newStore(), () => client);
+      assert.equal(typeof pendingPicker.then, "function");
+      await Promise.resolve();
+      assert.equal(quickPick.shown, true, "picker must be shown immediately");
+      assert.equal(quickPick.busy, true, "picker must show loading while models are queried");
+      assert.equal(
+        quickPick.hideHandlerCount,
+        1,
+        "loading picker must register its hide handler before model discovery completes",
+      );
+
+      quickPick.fireHide();
+      assert.equal(
+        quickPick.disposed,
+        true,
+        "closing the loading picker must dispose it even when model discovery has not returned",
+      );
+    } finally {
+      restoreQuickPick();
+    }
   });
 
   test("buildItems marks the deterministic stub entry active", () => {

@@ -7,6 +7,7 @@ use blake3::Hasher;
 
 use crate::{
     ast::NormalizedNode,
+    boilerplate::is_import_boilerplate_only_subtree,
     fingerprint::Fingerprint,
     lsh::{minhash_signature, Signature, SIGNATURE_LEN},
     state::FileId,
@@ -36,7 +37,10 @@ pub fn build_signatures_with_languages<S: BuildHasher>(
             continue;
         };
         let tokens = match language {
-            Some(language @ "python") => {
+            Some("python") => {
+                token_stream_for_fingerprint_with_language(root, fingerprint, "python")
+            }
+            Some(language) if exact_range_contains_boilerplate(root, fingerprint, language) => {
                 token_stream_for_fingerprint_with_language(root, fingerprint, language)
             }
             _ => token_stream_for_fingerprint(root, fingerprint),
@@ -60,6 +64,36 @@ fn tree_for_file<'a>(
     trees
         .iter()
         .find(|tree| tree.file_id == fingerprint.file_id)
+}
+
+/// Returns true when an exact fingerprint range contains prologue syntax.
+fn exact_range_contains_boilerplate(
+    node: &NormalizedNode,
+    fingerprint: &Fingerprint,
+    language: &str,
+) -> bool {
+    if node.byte_range.start == fingerprint.byte_range.start
+        && node.byte_range.end == fingerprint.byte_range.end
+    {
+        return subtree_contains_boilerplate(node, language);
+    }
+    if node.byte_range.start > fingerprint.byte_range.start
+        || node.byte_range.end < fingerprint.byte_range.end
+    {
+        return false;
+    }
+    node.children
+        .iter()
+        .any(|child| exact_range_contains_boilerplate(child, fingerprint, language))
+}
+
+/// Returns true when `node` or a descendant is import/prologue boilerplate.
+fn subtree_contains_boilerplate(node: &NormalizedNode, language: &str) -> bool {
+    is_import_boilerplate_only_subtree(language, node)
+        || node
+            .children
+            .iter()
+            .any(|child| subtree_contains_boilerplate(child, language))
 }
 
 /// Produces a signature from a prepared token stream using the configured

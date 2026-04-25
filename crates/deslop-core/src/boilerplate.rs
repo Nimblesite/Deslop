@@ -8,6 +8,7 @@
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
+    lang::shared::{IDENTIFIER_KIND, LITERAL_KIND},
     state::FileId,
 };
 
@@ -37,6 +38,9 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
 #[must_use]
 pub fn is_import_boilerplate_only_subtree(language: &str, node: &NormalizedNode) -> bool {
     if is_import_boilerplate_carrier(language, node.kind) {
+        return true;
+    }
+    if is_language_specific_boilerplate_subtree(language, node) {
         return true;
     }
     !node.children.is_empty()
@@ -93,11 +97,41 @@ fn csharp_carrier(kind: &str) -> bool {
 fn python_carrier(kind: &str) -> bool {
     matches!(
         kind,
-        "import_statement" | "import_from_statement" | "decorator"
+        "future_import_statement" | "import_statement" | "import_from_statement" | "decorator"
     )
 }
 
 /// Rust import/prologue carriers.
 fn rust_carrier(kind: &str) -> bool {
     matches!(kind, "use_declaration" | "extern_crate_declaration")
+}
+
+/// Language-specific wrappers whose children encode prologue-only syntax.
+fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNode) -> bool {
+    matches!(language, "python") && is_python_prologue_subtree(node)
+}
+
+/// Python module docstrings and guarded import blocks are prologue syntax.
+fn is_python_prologue_subtree(node: &NormalizedNode) -> bool {
+    is_python_docstring_statement(node) || is_python_import_guard(node)
+}
+
+/// Python docstrings parse as expression statements containing a literal.
+fn is_python_docstring_statement(node: &NormalizedNode) -> bool {
+    node.kind == "expression_statement"
+        && !node.children.is_empty()
+        && node.children.iter().all(|child| child.kind == LITERAL_KIND)
+}
+
+/// `if TYPE_CHECKING:` blocks contain an identifier guard plus imports.
+fn is_python_import_guard(node: &NormalizedNode) -> bool {
+    matches!(node.kind, "if_statement" | "block")
+        && !node.children.is_empty()
+        && node.children.iter().all(is_python_import_guard_child)
+}
+
+/// Children allowed inside a Python import-only guard.
+fn is_python_import_guard_child(node: &NormalizedNode) -> bool {
+    matches!(node.kind, IDENTIFIER_KIND | LITERAL_KIND)
+        || is_import_boilerplate_only_subtree("python", node)
 }

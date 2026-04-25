@@ -186,7 +186,7 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     } else if signals.embedding_cos >= 0.80 && signals.structural < 0.50 {
         ClusterKind::SameBehavior
     } else if signals.structural >= 0.99
-        || (signals.structural > 0.0 && signals.token_jaccard >= 0.95)
+        || (signals.structural >= 0.10 && signals.token_jaccard >= 0.95)
         || (signals.structural <= 0.01 && signals.token_jaccard >= 0.90)
     {
         ClusterKind::NearlyIdentical

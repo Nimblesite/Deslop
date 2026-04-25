@@ -122,6 +122,58 @@ suite("tree context menu commands", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  test("deslop.openOccurrence accepts an occurrence tree row", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-go-"));
+    const file = path.join(dir, "go.cs");
+    fs.writeFileSync(file, "zero\none\ntwo\n", "utf8");
+
+    try {
+      await vscode.commands.executeCommand(
+        "deslop.openOccurrence",
+        occurrenceNode({ path: file, start_byte: 5, end_byte: 8, hidden: false }),
+      );
+
+      const editor = vscode.window.activeTextEditor;
+      assert.ok(editor, "occurrence command must open an editor");
+      assert.equal(editor.document.uri.fsPath, file);
+      assert.equal(editor.selection.start.line, 1);
+      assert.equal(editor.selection.start.character, 0);
+      assert.equal(editor.selection.end.character, 3);
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("deslop.openCanonicalFile opens the cluster's first occurrence by line and column", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-canon-"));
+    const canonical = path.join(dir, "Canonical.cs");
+    const sibling = path.join(dir, "Sibling.cs");
+    const source = "header\n    canonical call\n";
+    const startByte = Buffer.byteLength("header\n    ", "utf8");
+    const endByte = startByte + Buffer.byteLength("canonical", "utf8");
+    fs.writeFileSync(canonical, source, "utf8");
+    fs.writeFileSync(sibling, "sibling call\n", "utf8");
+
+    try {
+      const c = cluster("c-e2e-canon", "identical", [
+        { path: canonical, start_byte: startByte, end_byte: endByte },
+        { path: sibling, start_byte: 0, end_byte: 7 },
+      ]);
+      await vscode.commands.executeCommand("deslop.openCanonicalFile", clusterNode(c));
+
+      const editor = vscode.window.activeTextEditor;
+      assert.ok(editor, "canonical command must open an editor");
+      assert.equal(editor.document.uri.fsPath, canonical);
+      assert.equal(editor.selection.start.line, 1);
+      assert.equal(editor.selection.start.character, 4);
+      assert.equal(editor.selection.end.character, 13);
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("deslop.openAllOccurrences opens every occurrence under the threshold", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-e2e-all-"));
     const files = ["alpha", "beta"].map((name) => {

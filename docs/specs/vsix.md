@@ -13,6 +13,7 @@ Distribution: `.vsix` attached to each GitHub Release — see [.github/workflows
 5. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
 6. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
 7. **Human-readable before machine-readable.** The VSIX is for developers working in an editor, so ordinary UI labels use friendly file names, line numbers, and columns. Byte offsets are valid in the JSON/AI report and wire schema, but the tree, webviews, bubbles, hovers, status bar, and command titles must not expose raw byte markers as the primary location text.
+8. **Reactive end-to-end.** Every surface — tree, decorations, bubble, code lens, status bar, hovers, webviews, badges — derives from `@preact/signals` over the single [VSIX-STATE] store. `deslop/reportChanged` updates settle in one microtask across every surface. Stale UI is a correctness bug per [VSIX-REACTIVITY-INVARIANT], not a polish issue.
 
 ### [VSIX-LIVE-BUBBLE] Live duplication bubble — the flagship UX
 
@@ -60,26 +61,32 @@ No competitor ([competitors.md](competitors.md)) tells a developer about duplica
 The VSIX ships:
 
 - The extension TypeScript (`clients/vscode/src/extension.ts`, under 500 lines per CLAUDE.md; UI logic split into `webview/`, `tree/`, `decorations/`, `commands/`).
+- A pre-built `deslop` CLI binary per platform, colocated with the server binaries for process-local PATH exposure after verification.
 - A pre-built `deslop-lsp` binary per platform (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). Download-on-first-activate is **not** acceptable — the extension either works offline immediately or it doesn't install.
 - A pre-built `deslop-mcp` binary per platform, colocated, registered with any MCP-aware VS Code host (Claude Code, Copilot Chat with MCP, etc.) via the extension's MCP contribution point.
+- `deployment-toolkit.json` at the VSIX extension root. The manifest is the package authority for required executable components, expected versions, host startup checks, and allowed native files under `bin/<platform>/`.
 - The shared `deslop-report-view` webview bundle (preact + no external CSS framework; see [VSIX-WEBVIEW]).
 - The extension's own `schema_doc.md` pulled from `docs/specs/REPORTING-CONTEXT.md` at build time — the same `include_str!` content the report embeds. Drift is impossible.
 
 ### [VSIX-BINARY-VERSIONING] Binary versioning + PATH exposure
 
-**One version, one zip.** The bundled `deslop-lsp` / `deslop-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
+**One version, one zip.** The bundled `deslop`, `deslop-lsp`, and `deslop-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
 
-**PATH fallback.** On activation, the extension checks whether `deslop`, `deslop-lsp`, and `deslop-mcp` are already reachable from the user's shell `PATH`. If any are — typically because the user installed via the Homebrew tap (`brew install nimblesite/tap/deslop`) or the Scoop bucket (`scoop install deslop`) — the extension uses the externally installed binary and stays out of the way. This respects the "one source of truth" principle for users who run the CLI in their terminal: the terminal `deslop` and the in-editor `deslop-lsp` should be the same binary (same version, same caches, same config) whenever that's user-installable.
+**Manifest-backed activation.** On activation, the extension loads `deployment-toolkit.json` from the extension root and reads `hosts.vscode.activationVerifies`. Required components, currently `deslop-lsp` and `deslop-mcp`, must be resolved and version-checked before the LSP client, MCP integration, file watchers, workspace parsing, or live analysis starts. The manifest's `expectedVersion`, component id, binary name, platform map, and required flag are authoritative; `package.json` must not become a second source of truth for executable compatibility.
 
-If none of the binaries are on `PATH`, the extension falls back to the bundled copy from `bin/<platform>/` and — on first activation only — prepends that directory to the current VS Code process's `PATH` so terminals spawned from the integrated terminal, task runners, and the Run/Debug panel can invoke `deslop` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew install nimblesite/tap/deslop` (Homebrew) or `scoop install deslop` (Scoop, after adding the [Nimblesite bucket](https://github.com/Nimblesite/scoop-bucket)); the VSIX does not try to be a system package manager.
+**Overrides are resolver inputs.** User settings and environment variables select candidate locations; they never bypass manifest verification. Supported inputs are:
 
-Order of resolution on activation:
+- `deslop.lspPath` and `deslop.mcpPath` per-component absolute paths.
+- `DESLOP_LSP_PATH` and `DESLOP_MCP_PATH` per-component environment paths.
+- `DESLOP_BINARY_DIR` as a directory containing manifest-named binaries.
+- Bundled binaries under `${extensionPath}/bin/${platform}/`.
+- `PATH` lookup as the final external fallback.
 
-1. If `${DESLOP_BINARY_DIR}` is set, use it (escape hatch for nightly / local builds).
-2. Otherwise, look up `deslop-lsp` on `PATH` via `which` / `where`. If found and the `--version` output matches the extension's `package.json` `version` exactly, use it. Version mismatch logs a `warn!` and falls back to bundled — we refuse to speak a wire protocol against a binary that might not implement it.
-3. Otherwise, use the bundled binary under `${extensionPath}/bin/${platform}/` and prepend that directory to `process.env.PATH` for the current VS Code session.
+An explicitly configured path or environment path that resolves to the wrong component, wrong version, or non-executable file blocks activation with a visible error. A stale `PATH` binary is ignored when a matching bundled binary exists. A bundled binary mismatch blocks activation because the package itself is corrupt. Missing required binaries block activation; optional components may degrade only when the manifest marks them optional.
 
-`deslop-mcp` follows the same resolution order. Both binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
+If the verified bundled directory is selected, the extension may prepend that directory to the current VS Code process's `PATH` so integrated terminals, task runners, and Run/Debug can invoke `deslop` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew install nimblesite/tap/deslop` (Homebrew) or `scoop install deslop` (Scoop, after adding the [Nimblesite bucket](https://github.com/Nimblesite/scoop-bucket)); the VSIX does not try to be a system package manager.
+
+Activation binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path, source, component id, and version that were accepted so a user debugging a mismatch can see the resolver result without reading logs. Package verification is covered by [DEPLOY-VSIX-PACKAGE] and release gates by [DEPLOY-CI-GATES].
 
 ### [VSIX-ACTIVATION] Activation
 
@@ -89,14 +96,14 @@ Activation events:
 - `onCommand:deslop.openReport` — cold activation when the user explicitly asks for the report.
 - `workspaceContains:**/*.cs`, `**/*.rs`, `**/*.py` — pre-warm the LSP on project open.
 
-On activation: spawn the bundled `deslop-lsp` binary rooted at the first workspace folder, start the LSP client, wire up the VSIX UI surfaces below. Multi-root workspaces get one LSP process per root.
+On activation: load `deployment-toolkit.json`, verify all required VS Code activation components from `hosts.vscode.activationVerifies`, then spawn the resolved `deslop-lsp` binary rooted at the first workspace folder and wire up the VSIX UI surfaces below. Multi-root workspaces get one LSP process per root, but binary verification is per extension activation session, not per workspace root.
 
 ### [VSIX-ACTIVITY-BAR] Activity bar + tree view
 
 A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Marketplace listing) opens the **Duplicate Clusters** view container. Inside:
 
-- **Top Offenders** tree — one node per cluster, preserving the report's worst-first rank while sorting root rows for file triage ([VSIX-TOP-OFFENDERS-FILE-GROUPS]). Each node shows:
-  - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]).
+- **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for cluster-vs-file grouping modes. In every mode, cluster rows show:
+  - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]). The badge is the cluster's global position in the worst-first report and never re-numbers per mode ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
   - Cluster id in a subdued monospace suffix.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
@@ -105,11 +112,29 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
-#### [VSIX-TOP-OFFENDERS-FILE-GROUPS] Top Offenders file triage
+#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster vs File grouping modes
 
-The Top Offenders tree remains a cluster list, but root rows are sorted by the cluster's representative file so repeated findings from one file stay adjacent. The report's original impact rank is preserved in the row label (`#N`) and is used as the tie-breaker inside each file group, so file triage does not destroy severity ordering.
+The Top Offenders tree exposes two grouping modes. Both order siblings worst-offender first; only the tree shape and what counts as a root differs.
 
-Each root row includes a human-readable file label in the primary row text. Long tree rows may be truncated by VS Code, but the full representative path stays available in the tooltip and accessibility label. Expanding a root row still reveals the occurrence rows, and invoking the root command still opens the same cluster id.
+The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"`, default `"cluster"`). VS Code's standard user→workspace precedence applies: a workspace value pinned in `.vscode/settings.json` overrides the user-level default, so a repo team can lock a lens for everyone working in that repo while individuals keep their own machine-wide default elsewhere.
+
+A view-title toggle in the Top Offenders header switches modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render.
+
+#### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
+
+Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label keeps the form `#N <severity-dot> <plainTitle> · <file>` because the file is not implicit from any parent.
+
+#### [VSIX-TOP-OFFENDERS-FILE-MODE] File mode
+
+Root rows are files. A file's child nodes are bucket groups, one per [CLONE-BUCKETS-DUAL-LABEL] bucket present in that file (no empty groups). Each bucket group expands to its clusters; each cluster expands to its occurrence leaves.
+
+Files sort by max cluster weight desc (primary — "worst offender first" applied to the file's most-painful cluster), with sum-of-weights desc as the tiebreaker and `localeCompare` of the path as the final stable key. Bucket groups within a file sort by max cluster weight desc. Clusters within a bucket group sort by weight desc.
+
+Cluster row labels in file mode drop the trailing `· <file>` suffix because the parent file row already shows it. The tooltip is mode-invariant — it always carries the full path so the AI-scrapable hover surface stays stable.
+
+#### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global #N rank
+
+The `#N` badge on a cluster row is the cluster's position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — `#1` is always the worst cluster in the repo, regardless of which lens the user picked.
 
 #### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders category metadata
 
@@ -146,26 +171,35 @@ Rules that fall out of that:
 - When the LSP reconnects, the store is reset and every surface re-renders from empty — no stale colour on a tree node, no stale verdict on the bubble, no stale percentage on the status bar.
 - Disposables are attached to the store, not scattered across provider objects, so extension shutdown tears everything down deterministically.
 
-Centralisation is the enabler for [VSIX-WEBVIEW-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
+Centralisation is the enabler for [VSIX-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
 
-### [VSIX-WEBVIEW-REACTIVITY] Preact Signals for every reactive surface
+### [VSIX-REACTIVITY] Preact Signals everywhere — every VSIX surface is reactive
 
-**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** Every observable value — the current `Report`, the selected cluster id, the severity-bucketed rank map, the active embedding provenance, the `analysis/state` flag — is exposed as a `signal<T>` derived from the central store. UI components read signals synchronously; the framework tracks dependencies and re-renders the minimum necessary subtree when a signal changes.
+**This is a top-level invariant, not a webview implementation detail.** Deslop Live is reactive end-to-end: the file watcher fires, the scheduler re-analyses, the LSP pushes [`deslop/reportChanged`](live.md#live-notifications), the extension applies the delta to the [VSIX-STATE] store — and **every surface that displays report data must update in the same microtask**. Tree providers, decorations, the live bubble, code lenses, the status bar, hovers, the cluster webview, the embedding picker, the activity-bar badge, the session panel: all of them read from `@preact/signals`-backed values derived from the single store. **No surface holds its own cached copy of the report. No surface schedules its own refresh independent of a signal change.**
 
-This gives us three hard guarantees:
+`@preact/signals-core` is a workspace dependency available to **both** `clients/vscode/src/**` (extension host) and `clients/vscode/webview-ui/**` (webview) — it is *not* limited to webview UI. The extension host owns the canonical `signal<Report | null>`; webviews receive `postMessage` updates that mirror those signals locally.
 
-1. **Zero stale UI.** The moment the store receives a `ReportDelta`, every dependent signal updates in the same microtask. A cluster that disappeared from the report cannot remain on screen. A verdict whose signals changed cannot keep its old colour. "Last-known-good" rendering is impossible by construction because there is no imperative render loop that could fall behind.
-2. **Deterministic updates.** Signals settle transactionally — batches of updates during one delta application produce a single render. No intermediate flash of a partially-updated webview.
-3. **Shared code between tree and webview.** Tree providers compute their own `TreeDataProvider` events from the same signals the webviews consume, so a user who has the activity-bar view and a cluster webview open at once sees them update in lock-step.
+Three hard guarantees, applied to every surface (tree included):
 
-Implementation shape:
+1. **Zero stale UI after `deslop/reportChanged`.** The moment the store applies a delta, every dependent signal updates in the same microtask. A cluster that disappeared from the report cannot remain on screen — not in the bubble, not in the tree, not in a hover, not in the gutter, not in a code lens. "Last-known-good" rendering is impossible by construction because there is no imperative render loop that could fall behind.
+2. **Deterministic updates.** Signals settle transactionally — batches of updates during one delta application produce a single render across all surfaces. No intermediate flash of a partially-updated tree, no half-updated bubble showing yesterday's signals.
+3. **Shared signal graph between extension-host and webview.** Tree providers and decoration managers `effect()` over the same signals the webviews mirror, so a user with the activity-bar tree and a cluster webview open at once sees them update in lock-step.
 
-- `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`).
-- The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state.
-- Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle.
-- No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed.
+#### [VSIX-REACTIVITY-TREE] Tree providers are signal-driven
 
-**Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the bubble is showing a cluster that was refuted 300 ms ago, we've broken the brand promise.
+`TopOffendersProvider`, `FocusedFileProvider`, `SessionProvider` — and any future tree — derive their `getChildren` output from the store's signals via a `computed()` view. Their `onDidChangeTreeData` event fires from one place: a `signals.effect()` watching the relevant computed value. **The tree must not call `reportGet` directly, must not maintain a parallel `clusters` array, and must not be refreshed from outside the signal graph.** Removing 500 lines from a watched file fires `deslop/reportChanged` → store applies delta → computed `topOffenders.value` recomputes → `onDidChangeTreeData` fires → VS Code calls `getChildren` → tree shows the new state. Any surface still showing a cluster that no longer exists in `report.clusters` is a correctness bug.
+
+#### [VSIX-REACTIVITY-DECORATIONS] Decorations and bubble are signal-driven
+
+`DecorationManager` and `LiveBubble` `effect()` over `report` + `selectedClusterId` + `editorVisibleRanges`. When `deslop/reportChanged` removes a cluster, the corresponding decorations and bubbles disappear in the same microtask without an explicit `clear()` call from any handler — the effect re-runs, finds the cluster gone, and the diff drops the decoration set.
+
+#### [VSIX-REACTIVITY-WEBVIEW] Webviews mirror the signal graph
+
+**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`). The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state. Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle. No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed.
+
+#### [VSIX-REACTIVITY-INVARIANT] Staleness is a correctness bug
+
+**Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the tree is showing a cluster that was refuted 300 ms ago, we've broken the brand promise. Concrete acceptance test (E2E, against the real LSP binary): open a fixture workspace with N clusters; assert tree, decorations, and bubble all show N. Edit one of the duplicated files to delete a duplicate. After the [LIVE-WATCHER] debounce window plus one scheduler pass, assert tree, decorations, and bubble all show N − 1 **without any user-initiated refresh**. The test fails if any surface still references the removed cluster id. This invariant is enforced via that E2E and via lint rules in `clients/vscode/eslint.config.mjs` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` calls outside the bootstrap path, and `TreeDataProvider` implementations that don't subscribe to a store signal.
 
 ### [VSIX-WEBVIEW] Cluster detail webview
 
@@ -285,7 +319,7 @@ The extension posts VS Code notifications sparingly:
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 
-VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `deslop` with the same workspace root the LSP uses. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
+VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `deslop` with the same workspace root the LSP uses. The contributed command path must resolve to one of the manifest-approved artifacts; package verification fails if the contribution and `deployment-toolkit.json` drift. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
 
 Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) can still wire the MCP up manually via the agent's own config. The VSIX bundling is convenience, not a lock-in.
 
@@ -301,5 +335,7 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.
 - Cluster webview renders interpretation, signals, and occurrences.
 - Full-report webview refreshes on daemon notification.
+- Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` fallback, missing binary, component-name mismatch, and version mismatch.
+- VSIX archive package tests prove `extension/deployment-toolkit.json` exists, `deslop`, `deslop-lsp`, and `deslop-mcp` are under `extension/bin/<platform>/`, no undeclared executable is present there, and every bundled binary reports the manifest `expectedVersion`.
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.
