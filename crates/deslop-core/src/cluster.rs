@@ -65,7 +65,7 @@ pub fn build_ranked_fused_clusters(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
-    clusters
+    collapse_cross_cluster_overlap(clusters)
 }
 
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
@@ -190,6 +190,93 @@ fn collapse_overlapping_single_file(mut bucket: Vec<Fingerprint>) -> Vec<Fingerp
 /// Half-open overlap test on two fingerprints' byte ranges.
 fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
     left.byte_range.start < right.byte_range.end && right.byte_range.start < left.byte_range.end
+}
+
+/// Returns `true` when `inner` lies fully inside `outer` in the same file.
+fn fingerprint_contains(outer: &Fingerprint, inner: &Fingerprint) -> bool {
+    outer.file_id == inner.file_id
+        && outer.byte_range.start <= inner.byte_range.start
+        && inner.byte_range.end <= outer.byte_range.end
+}
+
+/// Returns `true` when every occurrence in `inner_set` is strictly
+/// contained within at least one occurrence in `outer_set`.
+fn all_occurrences_contained_in_some(inner_set: &[Fingerprint], outer_set: &[Fingerprint]) -> bool {
+    !inner_set.is_empty()
+        && inner_set.iter().all(|candidate| {
+            outer_set
+                .iter()
+                .any(|other| fingerprint_contains(other, candidate))
+        })
+}
+
+/// Returns `true` when every file mentioned in `outer_set` is also
+/// mentioned in `inner_set`. When this is false the outer cluster
+/// covers additional files (e.g. cross-language) that the inner does
+/// not, so the outer must not be dropped.
+fn outer_files_covered_by_inner(inner_set: &[Fingerprint], outer_set: &[Fingerprint]) -> bool {
+    outer_set.iter().all(|outer_fp| {
+        inner_set
+            .iter()
+            .any(|inner_fp| inner_fp.file_id == outer_fp.file_id)
+    })
+}
+
+/// Collapses redundant nested clusters produced by the same physical
+/// code being fingerprinted at multiple AST subtree depths.
+///
+/// Fixes issue #50 ([PIPELINE-CLUSTER-EXACT] cross-cluster overlap):
+/// nested AST subtrees over the same physical code (e.g.
+/// `attribute_list + method_declaration` vs. bare `method_declaration`)
+/// form separate fused clusters whose occurrence byte ranges nest inside
+/// one another. When every occurrence of an inner cluster is contained
+/// within some occurrence of an outer cluster they are logically the
+/// same duplicated region. Only one should survive.
+///
+/// Survivor selection:
+/// - Equal or better structural on the outer → drop inner (outer is
+///   heavier and at least as precise).
+/// - Inner has strictly better structural AND outer covers no files that
+///   inner does not → drop outer (inner is a higher-quality view of the
+///   same scope). The file-set guard preserves cross-language clusters:
+///   a cross-language outer cluster (cs + rs + py) must not be dropped
+///   when only a same-language inner cluster (cs only) has higher
+///   structural, because the outer conveys unique cross-file information.
+///
+/// Runs after sorting so the weight order is available for tiebreaking.
+fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
+    let len = clusters.len();
+    let mut dropped = vec![false; len];
+    for outer in 0..len {
+        if dropped[outer] {
+            continue;
+        }
+        for inner in (outer.saturating_add(1))..len {
+            if dropped[inner] {
+                continue;
+            }
+            if !all_occurrences_contained_in_some(
+                &clusters[inner].members,
+                &clusters[outer].members,
+            ) {
+                continue;
+            }
+            if clusters[outer].signals.structural >= clusters[inner].signals.structural {
+                dropped[inner] = true;
+            } else if outer_files_covered_by_inner(
+                &clusters[inner].members,
+                &clusters[outer].members,
+            ) {
+                dropped[outer] = true;
+                break;
+            }
+        }
+    }
+    clusters
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, cluster)| (!dropped[index]).then_some(cluster))
+        .collect()
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
