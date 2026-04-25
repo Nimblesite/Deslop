@@ -13,6 +13,7 @@ Distribution: `.vsix` attached to each GitHub Release — see [.github/workflows
 5. **Never block an edit.** The daemon is a sidecar; analysis runs asynchronously; UI updates ride notifications. A typing pause of 250 ms triggers re-analysis, not every keystroke.
 6. **Legible, not decorative.** No animated icons, no gradient flourishes that obscure content. Density is high but scannable — the user is hunting for duplication, not admiring chrome. Severity is communicated by colour ramp + glyph, nothing else.
 7. **Human-readable before machine-readable.** The VSIX is for developers working in an editor, so ordinary UI labels use friendly file names, line numbers, and columns. Byte offsets are valid in the JSON/AI report and wire schema, but the tree, webviews, bubbles, hovers, status bar, and command titles must not expose raw byte markers as the primary location text.
+8. **Reactive end-to-end.** Every surface — tree, decorations, bubble, code lens, status bar, hovers, webviews, badges — derives from `@preact/signals` over the single [VSIX-STATE] store. `deslop/reportChanged` updates settle in one microtask across every surface. Stale UI is a correctness bug per [VSIX-REACTIVITY-INVARIANT], not a polish issue.
 
 ### [VSIX-LIVE-BUBBLE] Live duplication bubble — the flagship UX
 
@@ -170,26 +171,35 @@ Rules that fall out of that:
 - When the LSP reconnects, the store is reset and every surface re-renders from empty — no stale colour on a tree node, no stale verdict on the bubble, no stale percentage on the status bar.
 - Disposables are attached to the store, not scattered across provider objects, so extension shutdown tears everything down deterministically.
 
-Centralisation is the enabler for [VSIX-WEBVIEW-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
+Centralisation is the enabler for [VSIX-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
 
-### [VSIX-WEBVIEW-REACTIVITY] Preact Signals for every reactive surface
+### [VSIX-REACTIVITY] Preact Signals everywhere — every VSIX surface is reactive
 
-**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** Every observable value — the current `Report`, the selected cluster id, the severity-bucketed rank map, the active embedding provenance, the `analysis/state` flag — is exposed as a `signal<T>` derived from the central store. UI components read signals synchronously; the framework tracks dependencies and re-renders the minimum necessary subtree when a signal changes.
+**This is a top-level invariant, not a webview implementation detail.** Deslop Live is reactive end-to-end: the file watcher fires, the scheduler re-analyses, the LSP pushes [`deslop/reportChanged`](live.md#live-notifications), the extension applies the delta to the [VSIX-STATE] store — and **every surface that displays report data must update in the same microtask**. Tree providers, decorations, the live bubble, code lenses, the status bar, hovers, the cluster webview, the embedding picker, the activity-bar badge, the session panel: all of them read from `@preact/signals`-backed values derived from the single store. **No surface holds its own cached copy of the report. No surface schedules its own refresh independent of a signal change.**
 
-This gives us three hard guarantees:
+`@preact/signals-core` is a workspace dependency available to **both** `clients/vscode/src/**` (extension host) and `clients/vscode/webview-ui/**` (webview) — it is *not* limited to webview UI. The extension host owns the canonical `signal<Report | null>`; webviews receive `postMessage` updates that mirror those signals locally.
 
-1. **Zero stale UI.** The moment the store receives a `ReportDelta`, every dependent signal updates in the same microtask. A cluster that disappeared from the report cannot remain on screen. A verdict whose signals changed cannot keep its old colour. "Last-known-good" rendering is impossible by construction because there is no imperative render loop that could fall behind.
-2. **Deterministic updates.** Signals settle transactionally — batches of updates during one delta application produce a single render. No intermediate flash of a partially-updated webview.
-3. **Shared code between tree and webview.** Tree providers compute their own `TreeDataProvider` events from the same signals the webviews consume, so a user who has the activity-bar view and a cluster webview open at once sees them update in lock-step.
+Three hard guarantees, applied to every surface (tree included):
 
-Implementation shape:
+1. **Zero stale UI after `deslop/reportChanged`.** The moment the store applies a delta, every dependent signal updates in the same microtask. A cluster that disappeared from the report cannot remain on screen — not in the bubble, not in the tree, not in a hover, not in the gutter, not in a code lens. "Last-known-good" rendering is impossible by construction because there is no imperative render loop that could fall behind.
+2. **Deterministic updates.** Signals settle transactionally — batches of updates during one delta application produce a single render across all surfaces. No intermediate flash of a partially-updated tree, no half-updated bubble showing yesterday's signals.
+3. **Shared signal graph between extension-host and webview.** Tree providers and decoration managers `effect()` over the same signals the webviews mirror, so a user with the activity-bar tree and a cluster webview open at once sees them update in lock-step.
 
-- `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`).
-- The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state.
-- Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle.
-- No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed.
+#### [VSIX-REACTIVITY-TREE] Tree providers are signal-driven
 
-**Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the bubble is showing a cluster that was refuted 300 ms ago, we've broken the brand promise.
+`TopOffendersProvider`, `FocusedFileProvider`, `SessionProvider` — and any future tree — derive their `getChildren` output from the store's signals via a `computed()` view. Their `onDidChangeTreeData` event fires from one place: a `signals.effect()` watching the relevant computed value. **The tree must not call `reportGet` directly, must not maintain a parallel `clusters` array, and must not be refreshed from outside the signal graph.** Removing 500 lines from a watched file fires `deslop/reportChanged` → store applies delta → computed `topOffenders.value` recomputes → `onDidChangeTreeData` fires → VS Code calls `getChildren` → tree shows the new state. Any surface still showing a cluster that no longer exists in `report.clusters` is a correctness bug.
+
+#### [VSIX-REACTIVITY-DECORATIONS] Decorations and bubble are signal-driven
+
+`DecorationManager` and `LiveBubble` `effect()` over `report` + `selectedClusterId` + `editorVisibleRanges`. When `deslop/reportChanged` removes a cluster, the corresponding decorations and bubbles disappear in the same microtask without an explicit `clear()` call from any handler — the effect re-runs, finds the cluster gone, and the diff drops the decoration set.
+
+#### [VSIX-REACTIVITY-WEBVIEW] Webviews mirror the signal graph
+
+**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`). The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state. Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle. No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed.
+
+#### [VSIX-REACTIVITY-INVARIANT] Staleness is a correctness bug
+
+**Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the tree is showing a cluster that was refuted 300 ms ago, we've broken the brand promise. Concrete acceptance test (E2E, against the real LSP binary): open a fixture workspace with N clusters; assert tree, decorations, and bubble all show N. Edit one of the duplicated files to delete a duplicate. After the [LIVE-WATCHER] debounce window plus one scheduler pass, assert tree, decorations, and bubble all show N − 1 **without any user-initiated refresh**. The test fails if any surface still references the removed cluster id. This invariant is enforced via that E2E and via lint rules in `clients/vscode/eslint.config.mjs` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` calls outside the bootstrap path, and `TreeDataProvider` implementations that don't subscribe to a store signal.
 
 ### [VSIX-WEBVIEW] Cluster detail webview
 

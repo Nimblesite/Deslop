@@ -4,6 +4,10 @@
 
 This is not a batch scanner that prints a report and exits. It is a long-running server feeding live analysis over LSP (for editors) and MCP (for agents) over the same tree-sitter engine.
 
+## Live = Reactive
+
+**Live means reactive.** When you change code, every Deslop surface — the live bubble, the editor decorations, the **TOP OFFENDERS** tree, the cluster webview, the status bar, the MCP query results, the agent's view of the workspace — reflects the new state **immediately**. Not on the next save. Not when the editor refreshes. Not on a polling timer. **Immediately.** As soon as the file watcher fires and the pipeline finishes its incremental pass, every reader sees the same fresh report in the same microtask. A cluster that no longer exists in the source code cannot remain on screen, in a hover, in a code lens, or in an MCP response. Stale UI is a correctness bug, not a polish issue. The CLI is the cold-cache fallback for one-shot audits — every other surface is reactive by construction. See [SPEC §[PRINCIPLES-LIVE-IS-REACTIVE]](docs/specs/principles.md#principles-live-is-reactive) and [vsix.md §[VSIX-REACTIVITY-INVARIANT]](docs/specs/vsix.md#vsix-reactivity-invariant) for the enforcing rules.
+
 Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no regex, no line diffing, no false positives from reformatting.
 
 - **MCP server (`deslop-mcp`)** — tools an AI agent can call mid-generation: *"before I write this block, is something like it already in the repo?"* Feeds Claude / Cursor / Codex / Continue a live duplicate-awareness channel that predates the copy-paste.

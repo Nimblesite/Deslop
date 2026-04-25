@@ -183,13 +183,13 @@ All methods are synchronous request/response. **No subscribe/unsubscribe primiti
 
 ### [LIVE-NOTIFICATIONS] Push notifications
 
-The session pushes two notification types:
+The session pushes three notification types:
 
-- `report/changed` — fires after every scheduler pass. Payload: `{ generation: u64, summary: ChangeSummary }` where `ChangeSummary` is `{ clusters_added: usize, clusters_removed: usize, clusters_updated: usize, worst_weight: f64 }`. Subscribers that want the full delta call `report/delta`.
+- `report/changed` — fires after every scheduler pass that produced a non-empty delta (cluster added / removed / updated, or signal change on any existing cluster). Payload: `{ generation: u64, summary: ChangeSummary }` where `ChangeSummary` is `{ clusters_added: usize, clusters_removed: usize, clusters_updated: usize, worst_weight: f64 }`. Subscribers that want the full delta call `report/delta`. The session must fire this notification for **every** observable change, including pure removals (a deduplication edit that drops the cluster count from N to N-1 still fires `clusters_removed >= 1` and the VSIX must redraw — see [VSIX-REACTIVITY-INVARIANT]). Suppressing the notification because the *worst* cluster is unchanged is a bug.
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors. Lets the VSIX render a live status indicator without polling.
 - `embedding/progress` — fires around live embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`. Phases are `queued`, `starting`, `running`, `complete`, and `failed`.
 
-Notifications are fire-and-forget; subscribers that fall behind never block the scheduler.
+Notifications are fire-and-forget on the wire; subscribers that fall behind never block the scheduler. **The contract on the receiver side is non-negotiable: every editor client must apply the delta to its in-process store and re-render every surface that depends on the changed clusters.** For the VSIX that store + re-render path is mandated by [VSIX-REACTIVITY] (one signal graph, every surface). A client that receives `report/changed` and leaves any UI surface showing the pre-notification state is broken.
 
 ### [LIVE-PERF-BUDGETS] Performance budgets
 
