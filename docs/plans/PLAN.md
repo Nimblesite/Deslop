@@ -59,6 +59,11 @@ Implemented work intentionally not repeated here:
   `refactor.extract` code action for true Type-1 clusters. Blocked on
   [#42](https://github.com/Nimblesite/Deslop/issues/42) splitting Type-1 from
   Type-2 in the bucket.
+- [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md)
+  \- two new MCP tools (`extract-method-plan`, `extract-method-apply`) that
+  combine a mechanical AST-derived scaffold with an AI-filled name slot. AI
+  never writes code; it picks one method name and one canonical name per
+  parameter slot. Blocked on the Type-1 path landing.
 - [VSIX reactivity](vsix-reactivity-plan.md) - Preact Signals across every
   VSIX surface so `deslop/reportChanged` updates the tree, decorations, and
   bubble in lock-step. Closes the staleness bug where deleted duplicates
@@ -75,4 +80,6 @@ Implemented work intentionally not repeated here:
       operator feedback.
 - [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md)
       (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
+- [ ] Finish [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md)
+      (blocked on the Type-1 path landing).
 - [ ] Finish [VSIX reactivity](vsix-reactivity-plan.md).

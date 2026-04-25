@@ -18,6 +18,106 @@
 
 const tseslint = require("typescript-eslint");
 
+function isFunctionNode(node) {
+  return [
+    "ArrowFunctionExpression",
+    "FunctionDeclaration",
+    "FunctionExpression",
+  ].includes(node?.type);
+}
+
+function propertyName(member) {
+  const property = member.property;
+  if (!property) return null;
+  if (property.type === "Identifier") return property.name;
+  if (property.type === "Literal") return String(property.value);
+  return null;
+}
+
+function isQuickPickFactoryCall(node) {
+  return (
+    node?.type === "CallExpression" &&
+    node.callee?.type === "MemberExpression" &&
+    propertyName(node.callee) === "createQuickPick"
+  );
+}
+
+function collectQuickPickLifecycle(node, root, out) {
+  if (!node || typeof node.type !== "string") return;
+  if (node !== root && isFunctionNode(node)) return;
+  if (
+    node.type === "VariableDeclarator" &&
+    node.id?.type === "Identifier" &&
+    isQuickPickFactoryCall(node.init)
+  ) {
+    out.creations.set(node.id.name, node);
+  }
+  if (node.type === "AwaitExpression") out.awaits.push(node);
+  if (
+    node.type === "CallExpression" &&
+    node.callee?.type === "MemberExpression" &&
+    node.callee.object?.type === "Identifier" &&
+    propertyName(node.callee) === "onDidHide"
+  ) {
+    out.hideCalls.set(node.callee.object.name, node);
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "parent") continue;
+    if (Array.isArray(value)) {
+      for (const child of value) collectQuickPickLifecycle(child, root, out);
+    } else if (value && typeof value.type === "string") {
+      collectQuickPickLifecycle(value, root, out);
+    }
+  }
+}
+
+const quickPickLifecyclePlugin = {
+  rules: {
+    "quick-pick-hide-before-await": {
+      meta: {
+        type: "problem",
+        docs: {
+          description: "Require QuickPick hide/dispose handlers before the first await.",
+        },
+        messages: {
+          handlerAfterAwait:
+            "Register {{name}}.onDidHide before the first await after createQuickPick, so loading pickers can always close/dispose.",
+        },
+        schema: [],
+      },
+      create(context) {
+        return {
+          ":function"(node) {
+            if (!node.body || node.body.type !== "BlockStatement") return;
+            const out = {
+              creations: new Map(),
+              awaits: [],
+              hideCalls: new Map(),
+            };
+            collectQuickPickLifecycle(node.body, node.body, out);
+            for (const [name, creation] of out.creations) {
+              const creationStart = creation.range?.[0] ?? Number.MAX_SAFE_INTEGER;
+              const firstAwait = out.awaits.find(
+                (awaitNode) => (awaitNode.range?.[0] ?? 0) > creationStart,
+              );
+              if (!firstAwait) continue;
+              const hideCall = out.hideCalls.get(name);
+              const hideStart = hideCall?.range?.[0] ?? Number.MAX_SAFE_INTEGER;
+              if (hideStart > (firstAwait.range?.[0] ?? 0)) {
+                context.report({
+                  node: firstAwait,
+                  messageId: "handlerAfterAwait",
+                  data: { name },
+                });
+              }
+            }
+          },
+        };
+      },
+    },
+  },
+};
+
 module.exports = tseslint.config(
   {
     // Lint only source + tests. node_modules, out, dist, coverage,
@@ -41,6 +141,9 @@ module.exports = tseslint.config(
   },
   ...tseslint.configs.recommendedTypeChecked,
   {
+    plugins: {
+      "deslop-local": quickPickLifecyclePlugin,
+    },
     languageOptions: {
       parserOptions: {
         projectService: true,
@@ -64,6 +167,7 @@ module.exports = tseslint.config(
       "@typescript-eslint/await-thenable": "error",
       "@typescript-eslint/require-await": "error",
       "@typescript-eslint/return-await": ["error", "always"],
+      "deslop-local/quick-pick-hide-before-await": "error",
 
       // === Tier 2: type-safety escape hatches (all elevated from warn) ===
       "@typescript-eslint/no-unsafe-argument": "error",

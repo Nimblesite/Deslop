@@ -22,7 +22,7 @@ import * as assert from "node:assert/strict";
 import * as http from "node:http";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
-import type { Report, EmbeddingProvenance } from "../../types/report";
+import type { Report, EmbeddingModelInfo, EmbeddingProvenance } from "../../types/report";
 import { sleep } from "../suite/helpers";
 
 const EXT_ID = "nimblesite.deslop-vscode";
@@ -41,12 +41,8 @@ interface SetModelResponse {
   dimensions: number;
 }
 
-/// Fail fast with a clear message if the daemon is unreachable or the
-/// required model is missing. Without this, the LSP's first
-/// `embedding/listModels` call blocks for the full 60-second HTTP
-/// timeout and the test dies as an opaque mocha timeout.
-async function preflightOllama(): Promise<void> {
-  await new Promise<void>((resolvePreflight, reject) => {
+async function ollamaModelNames(): Promise<string[]> {
+  return await new Promise<string[]>((resolveNames, reject) => {
     const req = http.get(`${OLLAMA_ENDPOINT}/api/tags`, { timeout: 2000 }, (res) => {
       const chunks: Buffer[] = [];
       res.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -59,17 +55,7 @@ async function preflightOllama(): Promise<void> {
           const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
             models?: Array<{ name: string }>;
           };
-          const names = (body.models ?? []).map((m) => m.name);
-          const haveModel = names.some((n) => n === OLLAMA_MODEL || n.startsWith(`${OLLAMA_MODEL}:`));
-          if (!haveModel) {
-            reject(
-              new Error(
-                `Ollama is running but model '${OLLAMA_MODEL}' is missing. Run: ollama pull ${OLLAMA_MODEL}`,
-              ),
-            );
-            return;
-          }
-          resolvePreflight();
+          resolveNames((body.models ?? []).map((model) => model.name));
         } catch (err) {
           reject(err instanceof Error ? err : new Error(String(err)));
         }
@@ -83,6 +69,19 @@ async function preflightOllama(): Promise<void> {
       reject(new Error(`Ollama not reachable at ${OLLAMA_ENDPOINT}: ${err.message}`));
     });
   });
+}
+
+/// Fail fast with a clear message if the daemon is unreachable or the
+/// required model is missing. Without this, the LSP's first
+/// `embedding/listModels` call blocks for the full 60-second HTTP
+/// timeout and the test dies as an opaque mocha timeout.
+async function preflightOllama(): Promise<void> {
+  const names = await ollamaModelNames();
+  const haveModel = names.some((n) => n === OLLAMA_MODEL || n.startsWith(`${OLLAMA_MODEL}:`));
+  assert.ok(
+    haveModel,
+    `Ollama is running but model '${OLLAMA_MODEL}' is missing. Run: ollama pull ${OLLAMA_MODEL}`,
+  );
 }
 
 /// Set Global-scope config BEFORE the extension activates so the LSP
@@ -226,6 +225,32 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     assert.ok(
       cluster.signals.embedding_cos > cluster.signals.token_jaccard,
       `embedding_cos (${cluster.signals.embedding_cos}) must dominate token_jaccard (${cluster.signals.token_jaccard}) for Type-4`,
+    );
+  });
+
+  test("[ollama-non-ci] embeddingListModels lists the real local Ollama models", async function () {
+    this.timeout(90_000);
+    const installedNames = await ollamaModelNames();
+    assert.ok(installedNames.length > 0, "Ollama /api/tags must return at least one real model");
+
+    const listed = await client.sendRequest<EmbeddingModelInfo[]>(
+      "deslop/embeddingListModels",
+      {},
+    );
+    const listedOllamaIds = listed
+      .filter((model) => model.provider_id === "ollama")
+      .map((model) => model.model_id);
+    const installedBareIds = installedNames.map((name) => name.split(":")[0] ?? name);
+
+    for (const bareId of installedBareIds) {
+      assert.ok(
+        listedOllamaIds.includes(bareId),
+        `embeddingListModels must include real Ollama model '${bareId}'; got ${JSON.stringify(listedOllamaIds)}`,
+      );
+    }
+    assert.ok(
+      listed.some((model) => model.provider_id === "stub"),
+      "embeddingListModels must keep the deterministic stub alongside real Ollama models",
     );
   });
 

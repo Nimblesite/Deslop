@@ -312,11 +312,14 @@ suite("embeddingPicker helpers", () => {
     const quickPick = fakeQuickPick();
     const restoreQuickPick = installQuickPick(quickPick);
     const client = {
-      sendRequest: () => new Promise<EmbeddingModelInfo[]>(() => undefined),
+      sendRequest: () => new Promise<EmbeddingModelInfo[]>(() => {
+        // Intentionally pending to model an unresponsive provider lookup.
+      }),
     } as unknown as LanguageClient;
 
     try {
-      void pickEmbeddingModel(newStore(), () => client);
+      const pendingPicker = pickEmbeddingModel(newStore(), () => client);
+      assert.equal(typeof pendingPicker.then, "function");
       await Promise.resolve();
       assert.equal(quickPick.shown, true, "picker must be shown immediately");
       assert.equal(quickPick.busy, true, "picker must show loading while models are queried");
