@@ -70,6 +70,16 @@ export function registerCommands(
       const next = !cfg.get<boolean>("showAllLenses", false);
       await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
     }),
+    // [VSIX-TOP-OFFENDERS-GROUPING] Mode-set commands write to the
+    // workspace target so the choice persists per-repo. Two distinct
+    // commands (rather than a toggle) keep the title-bar button text
+    // honest: each button reads "switch to <next>", not "toggle".
+    vscode.commands.registerCommand("deslop.topOffenders.showByCluster", () =>
+      setTopOffendersGroupBy("cluster"),
+    ),
+    vscode.commands.registerCommand("deslop.topOffenders.showByFile", () =>
+      setTopOffendersGroupBy("file"),
+    ),
     vscode.commands.registerCommand("deslop.showSchemaDoc", () =>
       openSchemaDoc(context, store, clientOf),
     ),
@@ -114,6 +124,15 @@ export function registerCommands(
         openClusterPanel(context, store, id);
       },
     ),
+  );
+}
+
+async function setTopOffendersGroupBy(value: "cluster" | "file"): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  await cfg.update(
+    "topOffenders.groupBy",
+    value,
+    vscode.ConfigurationTarget.Workspace,
   );
 }
 

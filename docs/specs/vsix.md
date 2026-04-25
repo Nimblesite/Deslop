@@ -60,26 +60,32 @@ No competitor ([competitors.md](competitors.md)) tells a developer about duplica
 The VSIX ships:
 
 - The extension TypeScript (`clients/vscode/src/extension.ts`, under 500 lines per CLAUDE.md; UI logic split into `webview/`, `tree/`, `decorations/`, `commands/`).
+- A pre-built `deslop` CLI binary per platform, colocated with the server binaries for process-local PATH exposure after verification.
 - A pre-built `deslop-lsp` binary per platform (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). Download-on-first-activate is **not** acceptable — the extension either works offline immediately or it doesn't install.
 - A pre-built `deslop-mcp` binary per platform, colocated, registered with any MCP-aware VS Code host (Claude Code, Copilot Chat with MCP, etc.) via the extension's MCP contribution point.
+- `deployment-toolkit.json` at the VSIX extension root. The manifest is the package authority for required executable components, expected versions, host startup checks, and allowed native files under `bin/<platform>/`.
 - The shared `deslop-report-view` webview bundle (preact + no external CSS framework; see [VSIX-WEBVIEW]).
 - The extension's own `schema_doc.md` pulled from `docs/specs/REPORTING-CONTEXT.md` at build time — the same `include_str!` content the report embeds. Drift is impossible.
 
 ### [VSIX-BINARY-VERSIONING] Binary versioning + PATH exposure
 
-**One version, one zip.** The bundled `deslop-lsp` / `deslop-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
+**One version, one zip.** The bundled `deslop`, `deslop-lsp`, and `deslop-mcp` binaries ship inside the VSIX and are versioned **lock-step** with the extension. Version `X.Y.Z` of the VSIX always contains version `X.Y.Z` of the binaries — no independent bumps, no "works with any binary ≥ …" fuzziness. The publish workflow ([VSIX-PUBLISH]) builds the Rust workspace and the TypeScript extension in the same job so the binaries that leave CI are the ones the Marketplace listing installs. No post-install downloads, no network dependency at activation time, no drift between the bundled binary and the wire contract the extension speaks.
 
-**PATH fallback.** On activation, the extension checks whether `deslop`, `deslop-lsp`, and `deslop-mcp` are already reachable from the user's shell `PATH`. If any are — typically because the user installed via the Homebrew tap (`brew install nimblesite/tap/deslop`) or the Scoop bucket (`scoop install deslop`) — the extension uses the externally installed binary and stays out of the way. This respects the "one source of truth" principle for users who run the CLI in their terminal: the terminal `deslop` and the in-editor `deslop-lsp` should be the same binary (same version, same caches, same config) whenever that's user-installable.
+**Manifest-backed activation.** On activation, the extension loads `deployment-toolkit.json` from the extension root and reads `hosts.vscode.activationVerifies`. Required components, currently `deslop-lsp` and `deslop-mcp`, must be resolved and version-checked before the LSP client, MCP integration, file watchers, workspace parsing, or live analysis starts. The manifest's `expectedVersion`, component id, binary name, platform map, and required flag are authoritative; `package.json` must not become a second source of truth for executable compatibility.
 
-If none of the binaries are on `PATH`, the extension falls back to the bundled copy from `bin/<platform>/` and — on first activation only — prepends that directory to the current VS Code process's `PATH` so terminals spawned from the integrated terminal, task runners, and the Run/Debug panel can invoke `deslop` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew install nimblesite/tap/deslop` (Homebrew) or `scoop install deslop` (Scoop, after adding the [Nimblesite bucket](https://github.com/Nimblesite/scoop-bucket)); the VSIX does not try to be a system package manager.
+**Overrides are resolver inputs.** User settings and environment variables select candidate locations; they never bypass manifest verification. Supported inputs are:
 
-Order of resolution on activation:
+- `deslop.lspPath` and `deslop.mcpPath` per-component absolute paths.
+- `DESLOP_LSP_PATH` and `DESLOP_MCP_PATH` per-component environment paths.
+- `DESLOP_BINARY_DIR` as a directory containing manifest-named binaries.
+- Bundled binaries under `${extensionPath}/bin/${platform}/`.
+- `PATH` lookup as the final external fallback.
 
-1. If `${DESLOP_BINARY_DIR}` is set, use it (escape hatch for nightly / local builds).
-2. Otherwise, look up `deslop-lsp` on `PATH` via `which` / `where`. If found and the `--version` output matches the extension's `package.json` `version` exactly, use it. Version mismatch logs a `warn!` and falls back to bundled — we refuse to speak a wire protocol against a binary that might not implement it.
-3. Otherwise, use the bundled binary under `${extensionPath}/bin/${platform}/` and prepend that directory to `process.env.PATH` for the current VS Code session.
+An explicitly configured path or environment path that resolves to the wrong component, wrong version, or non-executable file blocks activation with a visible error. A stale `PATH` binary is ignored when a matching bundled binary exists. A bundled binary mismatch blocks activation because the package itself is corrupt. Missing required binaries block activation; optional components may degrade only when the manifest marks them optional.
 
-`deslop-mcp` follows the same resolution order. Both binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path that was picked so a user debugging a version mismatch can see it without reading logs.
+If the verified bundled directory is selected, the extension may prepend that directory to the current VS Code process's `PATH` so integrated terminals, task runners, and Run/Debug can invoke `deslop` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew install nimblesite/tap/deslop` (Homebrew) or `scoop install deslop` (Scoop, after adding the [Nimblesite bucket](https://github.com/Nimblesite/scoop-bucket)); the VSIX does not try to be a system package manager.
+
+Activation binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path, source, component id, and version that were accepted so a user debugging a mismatch can see the resolver result without reading logs. Package verification is covered by [DEPLOY-VSIX-PACKAGE] and release gates by [DEPLOY-CI-GATES].
 
 ### [VSIX-ACTIVATION] Activation
 
@@ -89,14 +95,14 @@ Activation events:
 - `onCommand:deslop.openReport` — cold activation when the user explicitly asks for the report.
 - `workspaceContains:**/*.cs`, `**/*.rs`, `**/*.py` — pre-warm the LSP on project open.
 
-On activation: spawn the bundled `deslop-lsp` binary rooted at the first workspace folder, start the LSP client, wire up the VSIX UI surfaces below. Multi-root workspaces get one LSP process per root.
+On activation: load `deployment-toolkit.json`, verify all required VS Code activation components from `hosts.vscode.activationVerifies`, then spawn the resolved `deslop-lsp` binary rooted at the first workspace folder and wire up the VSIX UI surfaces below. Multi-root workspaces get one LSP process per root, but binary verification is per extension activation session, not per workspace root.
 
 ### [VSIX-ACTIVITY-BAR] Activity bar + tree view
 
 A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Marketplace listing) opens the **Duplicate Clusters** view container. Inside:
 
-- **Top Offenders** tree — one node per cluster, preserving the report's worst-first rank while sorting root rows for file triage ([VSIX-TOP-OFFENDERS-FILE-GROUPS]). Each node shows:
-  - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]).
+- **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for cluster-vs-file grouping modes. In every mode, cluster rows show:
+  - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]). The badge is the cluster's global position in the worst-first report and never re-numbers per mode ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
   - Cluster id in a subdued monospace suffix.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
@@ -105,11 +111,29 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
-#### [VSIX-TOP-OFFENDERS-FILE-GROUPS] Top Offenders file triage
+#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster vs File grouping modes
 
-The Top Offenders tree remains a cluster list, but root rows are sorted by the cluster's representative file so repeated findings from one file stay adjacent. The report's original impact rank is preserved in the row label (`#N`) and is used as the tie-breaker inside each file group, so file triage does not destroy severity ordering.
+The Top Offenders tree exposes two grouping modes. Both order siblings worst-offender first; only the tree shape and what counts as a root differs.
 
-Each root row includes a human-readable file label in the primary row text. Long tree rows may be truncated by VS Code, but the full representative path stays available in the tooltip and accessibility label. Expanding a root row still reveals the occurrence rows, and invoking the root command still opens the same cluster id.
+The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"`, default `"cluster"`). VS Code's standard user→workspace precedence applies: a workspace value pinned in `.vscode/settings.json` overrides the user-level default, so a repo team can lock a lens for everyone working in that repo while individuals keep their own machine-wide default elsewhere.
+
+A view-title toggle in the Top Offenders header switches modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render.
+
+#### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
+
+Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label keeps the form `#N <severity-dot> <plainTitle> · <file>` because the file is not implicit from any parent.
+
+#### [VSIX-TOP-OFFENDERS-FILE-MODE] File mode
+
+Root rows are files. A file's child nodes are bucket groups, one per [CLONE-BUCKETS-DUAL-LABEL] bucket present in that file (no empty groups). Each bucket group expands to its clusters; each cluster expands to its occurrence leaves.
+
+Files sort by max cluster weight desc (primary — "worst offender first" applied to the file's most-painful cluster), with sum-of-weights desc as the tiebreaker and `localeCompare` of the path as the final stable key. Bucket groups within a file sort by max cluster weight desc. Clusters within a bucket group sort by weight desc.
+
+Cluster row labels in file mode drop the trailing `· <file>` suffix because the parent file row already shows it. The tooltip is mode-invariant — it always carries the full path so the AI-scrapable hover surface stays stable.
+
+#### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global #N rank
+
+The `#N` badge on a cluster row is the cluster's position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — `#1` is always the worst cluster in the repo, regardless of which lens the user picked.
 
 #### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders category metadata
 
@@ -285,7 +309,7 @@ The extension posts VS Code notifications sparingly:
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 
-VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `deslop` with the same workspace root the LSP uses. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
+VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `deslop` with the same workspace root the LSP uses. The contributed command path must resolve to one of the manifest-approved artifacts; package verification fails if the contribution and `deployment-toolkit.json` drift. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
 
 Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) can still wire the MCP up manually via the agent's own config. The VSIX bundling is convenience, not a lock-in.
 
@@ -301,5 +325,7 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.
 - Cluster webview renders interpretation, signals, and occurrences.
 - Full-report webview refreshes on daemon notification.
+- Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` fallback, missing binary, component-name mismatch, and version mismatch.
+- VSIX archive package tests prove `extension/deployment-toolkit.json` exists, `deslop`, `deslop-lsp`, and `deslop-mcp` are under `extension/bin/<platform>/`, no undeclared executable is present there, and every bundled binary reports the manifest `expectedVersion`.
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.

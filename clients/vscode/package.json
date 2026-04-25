@@ -113,9 +113,31 @@
       {
         "command": "deslop.openClusterDetails",
         "title": "Open Cluster Details"
+      },
+      {
+        "command": "deslop.topOffenders.showByCluster",
+        "title": "Deslop: Group Top Offenders by Cluster",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "deslop.topOffenders.showByFile",
+        "title": "Deslop: Group Top Offenders by File",
+        "icon": "$(list-flat)"
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "deslop.topOffenders.showByCluster",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'file'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.topOffenders.showByFile",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'cluster'",
+          "group": "navigation@1"
+        }
+      ],
       "view/item/context": [
         {
           "command": "deslop.openClusterDetails",
@@ -251,6 +273,16 @@
           "type": "boolean",
           "default": false,
           "description": "Show code lenses below the 50th-percentile weight threshold."
+        },
+        "deslop.topOffenders.groupBy": {
+          "type": "string",
+          "enum": [
+            "cluster",
+            "file"
+          ],
+          "default": "cluster",
+          "scope": "window",
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
         "deslop.configPath": {
           "type": "string",

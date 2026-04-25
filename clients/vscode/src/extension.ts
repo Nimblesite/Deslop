@@ -63,6 +63,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   const ticker = new StatusTicker();
   context.subscriptions.push(ticker);
 
+  // [VSIX-TOP-OFFENDERS-GROUPING] Seed the context key synchronously
+  // BEFORE the tree provider is registered so the title-bar toggle
+  // button has a `when`-clause value to match against on cold start.
+  syncTopOffendersGroupByContext();
+
   const topOffenders = new TopOffendersProvider(reportStore, ticker);
   const focusedFile = new FocusedFileProvider(reportStore, ticker);
   const session = new SessionProvider(reportStore, ticker, () => client);
@@ -74,6 +79,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     vscode.window.registerTreeDataProvider("deslop.focusedFile", focusedFile),
     vscode.window.registerTreeDataProvider("deslop.session", session),
     vscode.commands.registerCommand("deslop.revealLog", () => initOutputChannel().show(true)),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration("deslop.topOffenders.groupBy")) return;
+      syncTopOffendersGroupByContext();
+      topOffenders.refresh();
+    }),
   );
 
   try {
@@ -139,6 +149,22 @@ export async function deactivate(): Promise<void> {
     await client.stop();
     client = undefined;
   }
+}
+
+// [VSIX-TOP-OFFENDERS-GROUPING] Mirror the persisted setting onto a
+// VS Code context key so the title-bar toggle's mutually exclusive
+// `when` clauses can render the right button. Unknown / missing
+// values fall back to "cluster" — the spec's default.
+function syncTopOffendersGroupByContext(): void {
+  const raw = vscode.workspace
+    .getConfiguration("deslop")
+    .get<string>("topOffenders.groupBy", "cluster");
+  const value = raw === "file" ? "file" : "cluster";
+  void vscode.commands.executeCommand(
+    "setContext",
+    "deslop.topOffendersGroupBy",
+    value,
+  );
 }
 
 function startLanguageClient(lsp: ResolvedBinary): LanguageClient {

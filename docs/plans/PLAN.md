@@ -28,6 +28,10 @@ Implemented work intentionally not repeated here:
   report, HTML / CLI / VSIX bucket rendering, and AI-match badging.
 - JetBrains plugin scaffold: Gradle project, LSP support provider, descriptor,
   binary resolver, and Make targets.
+- Deployment Toolkit manifest scaffold: `deployment-toolkit.json` declares the
+  Deslop executables, VSIX, JetBrains plugin, host activation checks, and
+  release channels. Remaining migration work is tracked separately because it
+  changes release and startup guarantees, not editor UI behavior.
 - Taxonomy content cleanup: every product-facing `Type-N` mention on the site
   and in `examples/**` leads with a canonical bucket label from
   [taxonomy.md [CLONE-BUCKETS-DUAL-LABEL]](../specs/taxonomy.md#clone-buckets-dual-label).
@@ -41,6 +45,10 @@ Implemented work intentionally not repeated here:
   UX beyond diagnostics, hover, code lens, and custom report methods.
 - [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) -
   settings page, version checks, and bundled binary packaging.
+- [Deployment Toolkit migration](deployment-toolkit-migration-plan.md) -
+  GitHub issues #37-#41: binary version contract, manifest-backed VS Code and
+  JetBrains startup verification, VSIX / plugin package verification, and CI
+  release gates.
 - [JetBrains native UX](jetbrains-ux-plan.md) - Tool Window and embedding
   picker over the existing LSP custom methods.
 - [JetBrains E2E](jetbrains-e2e-plan.md) - real Rider / IntelliJ tests with the
@@ -52,6 +60,7 @@ Implemented work intentionally not repeated here:
 
 - [ ] Finish [LSP editor surfaces](lsp-editor-surfaces-plan.md).
 - [ ] Finish [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md).
+- [ ] Finish [Deployment Toolkit migration](deployment-toolkit-migration-plan.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
 - [ ] Revisit [Interactive TUI](interactive-tui-plan.md) after more real CLI
