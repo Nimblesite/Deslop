@@ -222,6 +222,18 @@ fn outer_files_covered_by_inner(inner_set: &[Fingerprint], outer_set: &[Fingerpr
     })
 }
 
+/// Returns `true` when `index` is already marked for removal.
+fn cluster_dropped(dropped: &[bool], index: usize) -> bool {
+    dropped.get(index).copied().unwrap_or(true)
+}
+
+/// Marks `index` for removal when the slot exists.
+fn drop_cluster(dropped: &mut [bool], index: usize) {
+    if let Some(slot) = dropped.get_mut(index) {
+        *slot = true;
+    }
+}
+
 /// Collapses redundant nested clusters produced by the same physical
 /// code being fingerprinted at multiple AST subtree depths.
 ///
@@ -248,26 +260,26 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     let len = clusters.len();
     let mut dropped = vec![false; len];
     for outer in 0..len {
-        if dropped[outer] {
+        if cluster_dropped(&dropped, outer) {
             continue;
         }
+        let Some(outer_cluster) = clusters.get(outer) else {
+            continue;
+        };
         for inner in (outer.saturating_add(1))..len {
-            if dropped[inner] {
+            if cluster_dropped(&dropped, inner) {
                 continue;
             }
-            if !all_occurrences_contained_in_some(
-                &clusters[inner].members,
-                &clusters[outer].members,
-            ) {
+            let Some(inner_cluster) = clusters.get(inner) else {
+                continue;
+            };
+            if !all_occurrences_contained_in_some(&inner_cluster.members, &outer_cluster.members) {
                 continue;
             }
-            if clusters[outer].signals.structural >= clusters[inner].signals.structural {
-                dropped[inner] = true;
-            } else if outer_files_covered_by_inner(
-                &clusters[inner].members,
-                &clusters[outer].members,
-            ) {
-                dropped[outer] = true;
+            if outer_cluster.signals.structural >= inner_cluster.signals.structural {
+                drop_cluster(&mut dropped, inner);
+            } else if outer_files_covered_by_inner(&inner_cluster.members, &outer_cluster.members) {
+                drop_cluster(&mut dropped, outer);
                 break;
             }
         }
@@ -275,7 +287,7 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     clusters
         .into_iter()
         .enumerate()
-        .filter_map(|(index, cluster)| (!dropped[index]).then_some(cluster))
+        .filter_map(|(index, cluster)| (!cluster_dropped(&dropped, index)).then_some(cluster))
         .collect()
 }
 
