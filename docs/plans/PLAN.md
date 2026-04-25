@@ -55,6 +55,10 @@ Implemented work intentionally not repeated here:
   real `deslop-lsp` binary.
 - [Interactive TUI](interactive-tui-plan.md) - deliberately deferred terminal
   UI work.
+- [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) - LSP
+  `refactor.extract` code action for true Type-1 clusters. Blocked on
+  [#42](https://github.com/Nimblesite/Deslop/issues/42) splitting Type-1 from
+  Type-2 in the bucket.
 
 ## TODO
 
@@ -65,3 +69,5 @@ Implemented work intentionally not repeated here:
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
 - [ ] Revisit [Interactive TUI](interactive-tui-plan.md) after more real CLI
       operator feedback.
+- [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md)
+      (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
