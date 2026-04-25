@@ -79,6 +79,14 @@ export function clusterIdForTreeNode(
   return findParentCluster(node.occurrence, store)?.id;
 }
 
+/// Returns the first occurrence in a cluster, which is the canonical
+/// instance used by the tree label, compare command, and report ordering.
+export function canonicalOccurrenceForCluster(
+  node: ClusterNode,
+): ReportOccurrence | undefined {
+  return node.cluster.occurrences[0];
+}
+
 /// Reveals the occurrence file in the VS Code Explorer. Issue #16.
 export async function revealOccurrenceInExplorer(
   node: OccurrenceNode,

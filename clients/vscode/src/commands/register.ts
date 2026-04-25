@@ -12,6 +12,7 @@ import { ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import {
+  canonicalOccurrenceForCluster,
   clusterIdForTreeNode,
   copyClusterLocations,
   copyContextForAI,
@@ -97,6 +98,10 @@ export function registerCommands(
       (node: ClusterNode) => openAllOccurrences(node),
     ),
     vscode.commands.registerCommand(
+      "deslop.openCanonicalFile",
+      (node: ClusterNode) => openCanonicalOccurrence(node),
+    ),
+    vscode.commands.registerCommand(
       "deslop.openClusterDetails",
       (node: ClusterNode | OccurrenceNode) => {
         const id = clusterIdForTreeNode(node, store);
@@ -110,6 +115,17 @@ export function registerCommands(
       },
     ),
   );
+}
+
+export async function openCanonicalOccurrence(node: ClusterNode): Promise<void> {
+  const occurrence = canonicalOccurrenceForCluster(node);
+  if (!occurrence) {
+    void vscode.window.showInformationMessage(
+      "Deslop: no canonical occurrence resolved for this cluster.",
+    );
+    return;
+  }
+  await openOccurrence(occurrence);
 }
 
 export function openWorstCluster(ctx: vscode.ExtensionContext, store: ReportStore): void {

@@ -79,6 +79,10 @@
         "title": "Deslop: Go to Occurrence"
       },
       {
+        "command": "deslop.openCanonicalFile",
+        "title": "Open Canonical File"
+      },
+      {
         "command": "deslop.revealActiveBinary",
         "title": "Deslop: Reveal Active Binary"
       },
@@ -119,6 +123,11 @@
           "group": "navigation@1"
         },
         {
+          "command": "deslop.openCanonicalFile",
+          "when": "viewItem == deslop.cluster",
+          "group": "navigation@2"
+        },
+        {
           "command": "deslop.openOccurrence",
           "when": "viewItem == deslop.occurrence",
           "group": "navigation@1"
@@ -126,12 +135,12 @@
         {
           "command": "deslop.openAllOccurrences",
           "when": "viewItem == deslop.cluster",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "deslop.compareWithCanonical",
           "when": "viewItem == deslop.cluster",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "deslop.openClusterDetails",
