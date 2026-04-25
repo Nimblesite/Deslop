@@ -117,7 +117,9 @@
       "Read(//Users/christianfindlay/.codex/**)",
       "Bash(ps -o pid,pcpu,rss,etime,comm -p 7529)",
       "Bash(ps -eo pid,pcpu,etime,comm,args)",
-      "Bash(grep -E \"deslop-\\(lsp|mcp|$\\)\")"
+      "Bash(grep -E \"deslop-\\(lsp|mcp|$\\)\")",
+      "Skill(fix-bug)",
+      "Skill(fix-bug:*)"
     ]
   },
   "autoMemoryEnabled": false
