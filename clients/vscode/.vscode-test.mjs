@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, "out", "test", "fixtures", "csharp-small");
-const releaseDir = path.join(here, "..", "..", "target", "release");
 
 export default defineConfig({
   tests: [
@@ -20,7 +19,9 @@ export default defineConfig({
       launchArgs: ["--disable-extensions"],
       env: {
         DESLOP_TEST_FIXTURE: fixture,
-        DESLOP_BINARY_DIR: releaseDir,
+        DESLOP_BINARY_DIR: "",
+        DESLOP_LSP_PATH: "",
+        DESLOP_MCP_PATH: "",
       },
       mocha: {
         ui: "tdd",

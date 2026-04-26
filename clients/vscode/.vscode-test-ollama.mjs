@@ -1,6 +1,6 @@
 // @ts-check
 // Ollama-gated VSIX e2e tests. Points a REAL VS Code instance at the
-// real deslop-lsp binary with provider="ollama" + model="nomic-embed-text",
+// bundled deslop-lsp binary with provider="ollama" + model="nomic-embed-text",
 // over the csharp-type4 fixture (recursive vs. iterative — semantically
 // equivalent, structurally distinct, so only an embedding pass can match).
 //
@@ -13,7 +13,6 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, "out", "test", "fixtures", "csharp-type4");
-const releaseDir = path.join(here, "..", "..", "target", "release");
 
 export default defineConfig({
   tests: [
@@ -24,7 +23,9 @@ export default defineConfig({
       launchArgs: ["--disable-extensions"],
       env: {
         DESLOP_TEST_FIXTURE: fixture,
-        DESLOP_BINARY_DIR: releaseDir,
+        DESLOP_BINARY_DIR: "",
+        DESLOP_LSP_PATH: "",
+        DESLOP_MCP_PATH: "",
       },
       mocha: {
         ui: "tdd",

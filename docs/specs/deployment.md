@@ -109,6 +109,24 @@ directory. They must fail on a missing manifest, missing binary, extra binary,
 non-executable binary where executability is meaningful, or wrong-version
 binary.
 
+### [DEPLOY-EXTENSION-BUNDLED-TESTS] Extension tests must use bundled binaries
+
+IDE extension tests must run against binaries bundled inside the extension
+artifact or extension development directory. They must not point resolver
+environment variables at `target/release`, cargo installs, package-manager
+installs, or any other PATH-visible binary.
+
+For VS Code, `vsix-test`, `vsix-coverage`, and `vsix-test-ollama` must stage
+`deslop`, `deslop-lsp`, and `deslop-mcp` under
+`clients/vscode/bin/<platform>/` before activation, clear
+`DESLOP_BINARY_DIR`, `DESLOP_LSP_PATH`, and `DESLOP_MCP_PATH`, and assert that
+the resolved LSP and MCP sources are `bundled`.
+
+Before test entry points run, the build must remove cargo-installed Deslop
+binaries and fail if `deslop`, `deslop-lsp`, or `deslop-mcp` still resolve on
+`PATH`. This keeps extension tests honest: a missing or stale bundle cannot be
+masked by a developer machine install.
+
 ### [DEPLOY-JETBRAINS-PACKAGE] JetBrains package contract
 
 The JetBrains plugin package must include `deployment-toolkit.json` at plugin

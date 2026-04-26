@@ -11,6 +11,11 @@ make vsix-package
 make jetbrains-package
 ```
 
+Test entry points remove cargo-installed `deslop`, `deslop-lsp`, and
+`deslop-mcp` binaries before running. VSIX tests stage the release binaries
+inside `clients/vscode/bin/<platform>/` and clear resolver override
+environment variables so activation proves the extension bundle, not PATH.
+
 `make jetbrains-package` currently builds the JetBrains plugin zip without the
 product-local archive verifier. Re-enable `scripts/verify-jetbrains-package.mjs`
 through GitHub #55 after the local JetBrains Gradle validation path in GitHub

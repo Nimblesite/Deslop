@@ -88,6 +88,23 @@ If the verified bundled directory is selected, the extension may prepend that di
 
 Activation binaries are resolved once per session; a `Deslop: Reveal Active Binary` command (under [VSIX-COMMANDS]) shows the path, source, component id, and version that were accepted so a user debugging a mismatch can see the resolver result without reading logs. Package verification is covered by [DEPLOY-VSIX-PACKAGE] and release gates by [DEPLOY-CI-GATES].
 
+#### [VSIX-BUNDLED-BINARY-TESTS] Extension tests use the bundle
+
+VSIX tests must exercise the same binary layout the installed extension uses:
+`${extensionPath}/bin/${platform}/`. Test configuration must not point
+`DESLOP_BINARY_DIR`, `DESLOP_LSP_PATH`, or `DESLOP_MCP_PATH` at
+`target/release`, `~/.cargo/bin`, Homebrew, Scoop, or any other external
+install. The Makefile stages the release binaries into the extension bundle
+before `vsix-test`, `vsix-coverage`, and `vsix-test-ollama` run, then clears
+the override environment variables in the VS Code test host.
+
+Before test entry points run, installed `deslop`, `deslop-lsp`, and
+`deslop-mcp` binaries are removed from the cargo install path and the build
+fails if any of those commands still resolve on `PATH`. A passing extension
+test must prove `resolvedLsp.source = "bundled"` and
+`resolvedMcp.source = "bundled"` so a stale machine-level install cannot hide a
+broken VSIX package.
+
 ### [VSIX-ACTIVATION] Activation
 
 Activation events:

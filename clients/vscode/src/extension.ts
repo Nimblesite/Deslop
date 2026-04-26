@@ -51,6 +51,8 @@ let resolvedMcp: ResolvedBinary | undefined;
 /// LanguageClient without parallel activation or command-surface hacks.
 export interface ExtensionApi {
   readonly client: LanguageClient | undefined;
+  readonly resolvedLsp: ResolvedBinary | undefined;
+  readonly resolvedMcp: ResolvedBinary | undefined;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<ExtensionApi> {
@@ -117,7 +119,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     client = startLanguageClient(resolvedLsp);
   } catch (err) {
     surfaceStartupFailure(err, reportStore);
-    return { get client() { return client; } };
+    return currentApi();
   }
 
   const decorations = new DecorationManager(reportStore);
@@ -142,7 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     await client.start();
   } catch (err) {
     surfaceStartupFailure(err, reportStore);
-    return { get client() { return client; } };
+    return currentApi();
   }
   wireNotifications(client, reportStore);
   await seedInitialReport(client, reportStore);
@@ -154,7 +156,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
       );
     }),
   );
-  return { get client() { return client; } };
+  return currentApi();
 }
 
 export async function deactivate(): Promise<void> {
@@ -162,6 +164,14 @@ export async function deactivate(): Promise<void> {
     await client.stop();
     client = undefined;
   }
+}
+
+function currentApi(): ExtensionApi {
+  return {
+    get client() { return client; },
+    get resolvedLsp() { return resolvedLsp; },
+    get resolvedMcp() { return resolvedMcp; },
+  };
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Mirror the persisted setting onto a
