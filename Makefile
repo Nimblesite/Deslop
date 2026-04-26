@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
 
 GRADLE ?= gradle
 JETBRAINS_DIR := clients/jetbrains
@@ -91,6 +91,7 @@ ci:
 	@$(MAKE) lint
 	@$(MAKE) test
 	@$(MAKE) build
+	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
 
 ## setup: Post-create dev environment setup (used by devcontainer)
@@ -138,6 +139,11 @@ install-binary:
 	  echo "==> Installing $$_crate binary..."; \
 	  cargo install --locked --path crates/$$_crate --force; \
 	done
+
+## deployment-verify: Validate deployment manifest and built binary contracts.
+deployment-verify: build
+	node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
+	node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release
 
 ## vsix-install: Install Node deps for clients/vscode + webview-ui
 vsix-install:
@@ -196,6 +202,7 @@ _vsix-stage-and-package:
 	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
 	   chmod +x "$$_dest/$$_bin$$_ext"; \
 	 done
+	cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
 	cd clients/vscode && npm run package
 
 ## vsix-clean: Remove VSIX-specific build artifacts (staged bin/, node_modules,
@@ -209,6 +216,7 @@ vsix-clean:
 	$(RM) clients/vscode/out
 	$(RM) clients/vscode/dist
 	$(RM) clients/vscode/deslop-vscode.vsix
+	$(RM) clients/vscode/deployment-toolkit.json
 	$(RM) clients/vscode/coverage
 
 ## vsix-install-code: Install the packaged clients/vscode/deslop-vscode.vsix
@@ -235,7 +243,10 @@ vsix-rebuild:
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 
 ## jetbrains-build: Build the JetBrains plugin zip.
+##                 JetBrains archive verification is deferred to GitHub #55
+##                 while the local Gradle validation path is tracked in #56.
 jetbrains-build:
+	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
 
 ## jetbrains-verify: Verify JetBrains plugin project and archive structure.
@@ -253,6 +264,7 @@ help:
 	@echo "  lint           - All linters/analyzers (read-only, no formatting)"
 	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
 	@echo "  clean          - Remove build artifacts"
+	@echo "  deployment-verify - Validate deployment manifest and built binary contracts"
 	@echo "  ci             - fmt + lint + rust test + build + VSIX e2e + VSIX coverage"
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""

@@ -89,5 +89,6 @@ clients/vscode/out/
 
 .ghissues/
 clients/vscode/bin/
+clients/vscode/deployment-toolkit.json
 
 clients/vscode/media/webview/

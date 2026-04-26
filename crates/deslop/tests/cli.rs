@@ -18,6 +18,7 @@ use std::{fmt::Write as _, fs, path::Path, path::PathBuf};
 use anyhow::Result;
 use assert_cmd::Command;
 use predicates::str::contains;
+use serde_json::Value;
 
 /// Returns the absolute path of a fixture under `tests/fixtures/<name>`.
 fn fixture(name: &str) -> PathBuf {
@@ -104,8 +105,31 @@ fn prints_version_and_exits_zero() -> Result<()> {
         .arg("--version")
         .assert()
         .success()
-        .stdout(contains("deslop"));
+        .stdout("deslop 0.1.0\n")
+        .stderr("");
     Ok(())
+}
+
+#[test]
+fn prints_json_version_contract() -> Result<()> {
+    let output = Command::cargo_bin("deslop")?
+        .arg("--version")
+        .arg("--json")
+        .output()?;
+    assert!(output.status.success(), "status was {}", output.status);
+    let value: Value = serde_json::from_slice(&output.stdout)?;
+    assert_version_manifest(&value, "deslop", "cli");
+    assert!(output.stderr.is_empty(), "stderr must stay empty");
+    Ok(())
+}
+
+fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
+    assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
+    assert_eq!(value.get("name"), Some(&Value::from(name)));
+    assert_eq!(value.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(value.get("kind"), Some(&Value::from(kind)));
+    assert_eq!(value.get("language"), Some(&Value::from("rust")));
+    assert_eq!(value.get("product"), Some(&Value::from("deslop")));
 }
 
 // Implements [CLI-INVOCATION-HELP]: `--help` advertises the configurable

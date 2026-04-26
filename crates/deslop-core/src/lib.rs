@@ -41,6 +41,7 @@ pub mod report_metrics;
 pub mod sibling;
 pub mod state;
 pub mod tokens;
+pub mod version_contract;
 
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use config::{BoilerplateImportsMode, ExclusionConfig, DEFAULT_CONFIG_FILENAME};
@@ -57,6 +58,9 @@ pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence}
 pub use report_metrics::{
     compute_repo_metrics, count_analysed_lines, validate_threshold_percent, AnalysedLines,
     MetricsInputs, RepoMetrics, ThresholdSource, ThresholdSummary,
+};
+pub use version_contract::{
+    json_version_line, plain_version_line, version_contract_output, ComponentKind,
 };
 
 /// Semantic version of the `deslop-core` library.

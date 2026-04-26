@@ -11,7 +11,9 @@ internal class DeslopLspServerSupportProvider : LspServerSupportProvider {
         serverStarter: LspServerSupportProvider.LspServerStarter,
     ) {
         if (DeslopSupportedFiles.includes(file)) {
-            serverStarter.ensureServerStarted(DeslopLspServerDescriptor(project))
+            runCatching { DeslopBinaryResolver.resolveLsp() }
+                .onSuccess { serverStarter.ensureServerStarted(DeslopLspServerDescriptor(project, it)) }
+                .onFailure { DeslopStartupNotifier.show(project, it.message.orEmpty()) }
         }
     }
 }

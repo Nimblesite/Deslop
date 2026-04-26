@@ -7,13 +7,24 @@
 use std::{env, path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
-use deslop_core::embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID};
+use deslop_core::{
+    embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID},
+    version_contract_output, ComponentKind,
+};
 use deslop_lsp::backend::LspEmbeddingConfig;
+use tokio::runtime::{Builder, Runtime};
 use tracing_subscriber::EnvFilter;
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> ExitCode {
-    if let Err(error) = run().await {
+fn main() -> ExitCode {
+    let args: Vec<String> = env::args().collect();
+    if let Err(error) = print_version_contract(&args) {
+        tracing::error!(%error, "deslop-lsp version output failed");
+        return ExitCode::from(1);
+    }
+    if requests_version(&args) {
+        return ExitCode::SUCCESS;
+    }
+    if let Err(error) = build_runtime().and_then(|runtime| runtime.block_on(run(args))) {
         tracing::error!(%error, "deslop-lsp exited with error");
         return ExitCode::from(1);
     }
@@ -21,17 +32,7 @@ async fn main() -> ExitCode {
 }
 
 /// Parses CLI arguments and starts the server.
-async fn run() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args
-        .iter()
-        .skip(1)
-        .any(|arg| arg == "--version" || arg == "-V")
-    {
-        println!("deslop-lsp {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
-    }
-
+async fn run(args: Vec<String>) -> Result<()> {
     init_tracing();
     tracing::info!(argv = ?args, "deslop-lsp starting");
     let workspace_root = parse_workspace_root(&args)?;
@@ -48,6 +49,26 @@ async fn run() -> Result<()> {
         "deslop-lsp args parsed",
     );
     deslop_lsp::run_stdio(workspace_root, min_nodes, embedding).await
+}
+
+/// Builds the Tokio runtime only after version preflight has returned false.
+fn build_runtime() -> Result<Runtime> {
+    Ok(Builder::new_multi_thread().enable_all().build()?)
+}
+
+/// Prints Deployment Toolkit version output when requested.
+fn print_version_contract(args: &[String]) -> Result<()> {
+    if let Some(output) = version_contract_output(args, "deslop-lsp", ComponentKind::Lsp)? {
+        print!("{output}");
+    }
+    Ok(())
+}
+
+/// Returns whether args request version output.
+fn requests_version(args: &[String]) -> bool {
+    args.iter()
+        .skip(1)
+        .any(|arg| matches!(arg.as_str(), "--version" | "-V"))
 }
 
 /// Reads the optional `--worker-threads` value, defaulting to 0 which

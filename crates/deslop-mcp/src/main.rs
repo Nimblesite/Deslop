@@ -4,12 +4,12 @@
 //! configure tracing, construct the [`PipelineSessionBackend`], and
 //! drive the server against stdin / stdout.
 
-use std::{io, path::PathBuf, sync::Arc};
+use std::{env, io, path::PathBuf, sync::Arc};
 
 use clap::Parser;
 use deslop_core::{
     embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL},
-    EmbeddingMode, DEFAULT_PROVIDER_ID,
+    version_contract_output, ComponentKind, EmbeddingMode, DEFAULT_PROVIDER_ID,
 };
 use deslop_mcp::{McpServer, PipelineSessionBackend, SessionBackendConfig};
 use tracing::error;
@@ -58,7 +58,19 @@ struct Cli {
 }
 
 fn main() {
-    if let Err(err) = run() {
+    let args: Vec<String> = env::args().collect();
+    match version_contract_output(&args, "deslop-mcp", ComponentKind::Mcp) {
+        Ok(Some(output)) => {
+            print!("{output}");
+            return;
+        }
+        Ok(None) => {}
+        Err(err) => {
+            error!(reason = %err, "mcp_version_contract_failure");
+            std::process::exit(1);
+        }
+    }
+    if let Err(err) = run(args) {
         error!(reason = %err, "mcp_server_failure");
         std::process::exit(1);
     }
@@ -70,9 +82,9 @@ fn main() {
 ///
 /// Returns any error surfaced by backend construction or the
 /// transport loop.
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     install_tracing();
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(args);
     let mode: EmbeddingMode = cli.embeddings.parse()?;
     let config = SessionBackendConfig {
         root: cli.root,

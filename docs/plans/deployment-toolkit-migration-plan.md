@@ -129,7 +129,8 @@ Wire the release path so deployment drift fails before publish:
   `deslop-mcp`.
 - LSP and MCP initialize metadata verification.
 - VSIX package contents verification.
-- JetBrains package contents verification.
+- JetBrains package contents verification (implemented but temporarily
+  deferred to GitHub #55 pending the Gradle validation work in GitHub #56).
 
 Use shared `deploy-toolkit` commands when available. Until they are published,
 add product-local tests that prove the same behavior.
@@ -146,34 +147,37 @@ need authenticated `gh` access for referenced docs and fixture updates.
 
 ## TODO
 
-- [ ] Fetch and re-read all five GitHub issues plus private Deployment Toolkit
+- [x] Fetch and re-read all five GitHub issues plus private Deployment Toolkit
       docs before implementation.
-- [ ] Compare local `deployment-toolkit.json` with private
+- [x] Compare local `deployment-toolkit.json` with private
       `fixtures/manifests/deslop.json` and reconcile drift.
-- [ ] Add failing tests for `deslop`, `deslop-lsp`, and `deslop-mcp` plain
+- [x] Add failing tests for `deslop`, `deslop-lsp`, and `deslop-mcp` plain
       version output.
-- [ ] Add failing tests for `--version --json` schema output for all three
+- [x] Add failing tests for `--version --json` schema output for all three
       binaries.
-- [ ] Implement version flags before any runtime startup or workspace parsing.
-- [ ] Add LSP initialize metadata tests for `deslop-lsp`.
-- [ ] Add MCP initialize metadata tests for `deslop-mcp`.
-- [ ] Replace VS Code binary resolution with manifest-backed startup
+- [x] Implement version flags before any runtime startup or workspace parsing.
+- [x] Add LSP initialize metadata tests for `deslop-lsp`.
+- [x] Add MCP initialize metadata tests for `deslop-mcp`.
+- [x] Replace VS Code binary resolution with manifest-backed startup
       verification for `deslop-lsp` and `deslop-mcp`.
-- [ ] Add VS Code resolver tests for user setting, env path, env directory,
+- [x] Add VS Code resolver tests for user setting, env path, env directory,
       PATH fallback, bundled success, missing binary, component mismatch, and
       version mismatch.
-- [ ] Ensure VSIX packaging includes `deployment-toolkit.json` at extension
+- [x] Ensure VSIX packaging includes `deployment-toolkit.json` at extension
       root.
-- [ ] Add generated `.vsix` archive verification for manifest-listed binaries
+- [x] Add generated `.vsix` archive verification for manifest-listed binaries
       and undeclared executables.
-- [ ] Update JetBrains packaging to include `deployment-toolkit.json` at plugin
+- [x] Update JetBrains packaging to include `deployment-toolkit.json` at plugin
       root.
-- [ ] Add JetBrains resolver checks before LSP descriptor startup.
-- [ ] Add JetBrains tests for env directory, PATH, bundled, missing, mismatch,
+- [x] Add JetBrains resolver checks before LSP descriptor startup.
+- [x] Add JetBrains tests for env directory, PATH, bundled, missing, mismatch,
       and notification/Event Log behavior.
-- [ ] Add CI gates for manifest validation and built binary version checks.
-- [ ] Add CI gates for VSIX and JetBrains package verification.
-- [ ] Update private Deployment Toolkit fixtures and Deslop migration docs when
-      the product contract changes.
-- [ ] Update release/publish docs with private Deployment Toolkit access
+- [x] Add CI gates for manifest validation and built binary version checks.
+- [x] Add CI gates for VSIX package verification.
+- [ ] Re-enable JetBrains package archive verification in `make
+      jetbrains-package` (GitHub #55).
+- [ ] Restore a reliable local JetBrains Gradle validation path (GitHub #56).
+- [x] Inspect private Deployment Toolkit fixtures and Deslop migration docs;
+      no product manifest drift required.
+- [x] Update release/publish docs with private Deployment Toolkit access
       requirements.

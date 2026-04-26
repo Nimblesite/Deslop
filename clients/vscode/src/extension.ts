@@ -10,10 +10,16 @@ import {
 } from "vscode-languageclient/node";
 
 import {
-  resolveBinary,
   BundledBinaryMissingError,
   UnsupportedPlatformError,
   ResolvedBinary,
+  loadDeploymentManifest,
+  resolveBinary,
+  resolveHostBinaries,
+  BinaryVerificationError,
+  BinaryMissingError,
+  DeploymentManifest,
+  BinarySettings,
 } from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
 import { ReportStore } from "./reportStore";
@@ -87,8 +93,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   );
 
   try {
-    resolvedLsp = resolveBinary(context.extensionPath, "lsp", currentExtensionVersion(context));
-    resolvedMcp = tryResolveOptional(context.extensionPath, "mcp", currentExtensionVersion(context));
+    const manifest = loadDeploymentManifest(context.extensionPath);
+    const resolved = resolveHostBinaries(
+      context.extensionPath,
+      "vscode",
+      manifest,
+      currentBinarySettings(),
+    );
+    resolvedLsp = requireResolved(resolved, "deslop-lsp");
+    resolvedMcp = resolved["deslop-mcp"];
     log("lsp resolved", {
       path: resolvedLsp.path,
       source: resolvedLsp.source,
@@ -331,14 +344,32 @@ export async function seedInitialReport(c: LanguageClient, store: ReportStore): 
 export function tryResolveOptional(
   extensionPath: string,
   kind: "mcp",
-  version: string,
+  manifest: DeploymentManifest,
+  settings: BinarySettings = {},
 ): ResolvedBinary | undefined {
   try {
-    return resolveBinary(extensionPath, kind, version);
+    return resolveBinary(extensionPath, kind, manifest, settings);
   } catch (err) {
     logError(err, `resolve ${kind} (optional)`);
     return undefined;
   }
+}
+
+function currentBinarySettings(): BinarySettings {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  return {
+    lspPath: cfg.get<string>("lspPath", ""),
+    mcpPath: cfg.get<string>("mcpPath", ""),
+  };
+}
+
+function requireResolved(
+  resolved: Record<string, ResolvedBinary>,
+  componentId: string,
+): ResolvedBinary {
+  const binary = resolved[componentId];
+  if (!binary) throw new Error(`Required Deslop component ${componentId} did not resolve.`);
+  return binary;
 }
 
 export function currentExtensionVersion(context: vscode.ExtensionContext): string {
@@ -365,9 +396,11 @@ export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
   logError(err, "language client startup");
   const isMissing = err instanceof BundledBinaryMissingError;
   const isUnsupported = err instanceof UnsupportedPlatformError;
+  const isMismatch = err instanceof BinaryVerificationError;
+  const isConfiguredMissing = err instanceof BinaryMissingError;
   const message =
-    isMissing || isUnsupported
-      ? (err).message
+    isMissing || isUnsupported || isMismatch || isConfiguredMissing
+      ? err.message
       : "Deslop failed to start its analysis server. See the Deslop output channel.";
   store?.setLifecycle({ kind: "failed", message });
   vscode.window

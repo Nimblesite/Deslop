@@ -186,6 +186,42 @@ fn init_session(child: &mut McpChild) -> Result<Value> {
     )
 }
 
+#[test]
+fn prints_exact_version_contract() -> Result<()> {
+    let binary = env!("CARGO_BIN_EXE_deslop-mcp");
+    let output = Command::new(binary).arg("--version").output()?;
+    assert!(output.status.success(), "status was {}", output.status);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "deslop-mcp 0.1.0\n"
+    );
+    assert!(output.stderr.is_empty(), "stderr must stay empty");
+    Ok(())
+}
+
+#[test]
+fn prints_json_version_contract() -> Result<()> {
+    let binary = env!("CARGO_BIN_EXE_deslop-mcp");
+    let output = Command::new(binary)
+        .arg("--version")
+        .arg("--json")
+        .output()?;
+    assert!(output.status.success(), "status was {}", output.status);
+    let value: Value = serde_json::from_slice(&output.stdout)?;
+    assert_version_manifest(&value, "deslop-mcp", "mcp");
+    assert!(output.stderr.is_empty(), "stderr must stay empty");
+    Ok(())
+}
+
+fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
+    assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
+    assert_eq!(value.get("name"), Some(&Value::from(name)));
+    assert_eq!(value.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(value.get("kind"), Some(&Value::from(kind)));
+    assert_eq!(value.get("language"), Some(&Value::from("rust")));
+    assert_eq!(value.get("product"), Some(&Value::from("deslop")));
+}
+
 fn call_tool(child: &mut McpChild, name: &str, arguments: &Value) -> Result<Value> {
     let response = child.request(
         "tools/call",
@@ -245,6 +281,10 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     assert_eq!(
         value_get(&response, "/result/serverInfo/name")?,
         json!("deslop-mcp")
+    );
+    assert_eq!(
+        value_get(&response, "/result/serverInfo/version")?,
+        json!("0.1.0")
     );
     assert!(
         value_get(&response, "/result/capabilities/tools")?.is_object(),
