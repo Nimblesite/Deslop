@@ -9,10 +9,16 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio},
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        mpsc::{self, Receiver},
+    },
+    time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
+
+type FrameResult = std::result::Result<serde_json::Value, String>;
 
 /// JSON-RPC id counter for this integration-test process.
 static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
@@ -40,6 +46,46 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
         "normal VS Code notifications must be implemented or explicit no-ops: {stderr_text}"
     );
     Ok(())
+}
+
+/// [LIVE-NOTIFICATIONS] A pure-removal edit must push reportChanged
+/// and expose the removed cluster ids through reportDelta.
+#[test]
+fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let beta = workspace.path().join("Beta.cs");
+    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+    let frames = spawn_frame_reader(stdout);
+
+    let (init_id, init) = initialize_request()?;
+    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
+    let initial = request_response(&mut stdin, &frames, "deslop/reportGet", &serde_json::json!({}))?;
+    ensure!(cluster_count(&initial) > 0, "fixture must start with duplicate clusters");
+
+    fs::write(&beta, unrelated_csharp())?;
+    write_frame(&mut stdin, &watched_file_changed(&beta)?)?;
+    let changed = recv_method(&frames, "deslop/reportChanged", Duration::from_secs(5))?;
+    let removed = json_u64(&changed, "/params/summary/clusters_removed")?;
+    ensure!(removed > 0, "reportChanged must describe at least one removed cluster");
+
+    let params = serde_json::json!({ "since_generation": 1 });
+    let delta = request_response(&mut stdin, &frames, "deslop/reportDelta", &params)?;
+    ensure!(
+        json_array_len(&delta, "/result/clusters_removed")? > 0,
+        "reportDelta must include removed cluster ids"
+    );
+    Ok(())
+}
+
+struct KillOnDrop<'a>(&'a mut Child);
+
+impl Drop for KillOnDrop<'_> {
+    fn drop(&mut self) {
+        let _kill = self.0.kill();
+        let _wait = self.0.wait();
+    }
 }
 
 /// Returns a workspace-relative fixture path.
@@ -112,6 +158,19 @@ fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<serde_json::Value> 
     Ok(serde_json::from_slice(&buf)?)
 }
 
+/// Reads frames on a background thread so tests can time out waiting
+/// for notifications without blocking forever on stdout.
+fn spawn_frame_reader(mut stdout: BufReader<ChildStdout>) -> Receiver<FrameResult> {
+    let (tx, rx) = mpsc::channel();
+    let _reader = std::thread::spawn(move || loop {
+        let frame = read_frame(&mut stdout).map_err(|error| error.to_string());
+        if tx.send(frame).is_err() {
+            break;
+        }
+    });
+    rx
+}
+
 /// Reads the `Content-Length` header block.
 fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
     let mut content_length: Option<usize> = None;
@@ -142,6 +201,72 @@ fn send_and_recv(
             return Ok(frame);
         }
     }
+}
+
+/// Sends a request and waits for the matching response from a frame channel.
+fn send_and_recv_frame(
+    stdin: &mut ChildStdin,
+    frames: &Receiver<FrameResult>,
+    id: i64,
+    payload: &str,
+) -> Result<serde_json::Value> {
+    write_frame(stdin, payload)?;
+    recv_response(frames, id, Duration::from_secs(10))
+}
+
+/// Builds, sends, and receives a JSON-RPC request.
+fn request_response(
+    stdin: &mut ChildStdin,
+    frames: &Receiver<FrameResult>,
+    method: &str,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value> {
+    let (id, payload) = request(method, params)?;
+    send_and_recv_frame(stdin, frames, id, &payload)
+}
+
+/// Waits until a response with `id` arrives.
+fn recv_response(
+    frames: &Receiver<FrameResult>,
+    id: i64,
+    timeout: Duration,
+) -> Result<serde_json::Value> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let frame = recv_next(frames, deadline, &format!("response id {id}"))?;
+        if frame.get("id").and_then(serde_json::Value::as_i64) == Some(id) {
+            return Ok(frame);
+        }
+    }
+}
+
+/// Waits until a notification with `method` arrives.
+fn recv_method(
+    frames: &Receiver<FrameResult>,
+    method: &str,
+    timeout: Duration,
+) -> Result<serde_json::Value> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let frame = recv_next(frames, deadline, method)?;
+        if frame.get("method").and_then(serde_json::Value::as_str) == Some(method) {
+            return Ok(frame);
+        }
+    }
+}
+
+/// Receives one frame before `deadline`.
+fn recv_next(
+    frames: &Receiver<FrameResult>,
+    deadline: Instant,
+    label: &str,
+) -> Result<serde_json::Value> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    ensure!(!remaining.is_zero(), "timed out waiting for {label}");
+    let frame = frames
+        .recv_timeout(remaining)
+        .map_err(|_error| anyhow!("timed out waiting for {label}"))?;
+    frame.map_err(|error| anyhow!(error))
 }
 
 /// Builds an `initialize` request.
@@ -200,6 +325,21 @@ fn normal_vscode_notifications(path: &Path) -> Result<Vec<String>> {
     ])
 }
 
+/// Builds the watched-file notification VS Code sends after a save.
+fn watched_file_changed(path: &Path) -> Result<String> {
+    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
+        .map_err(|()| anyhow!("path is not absolute: {}", path.display()))?;
+    notification(
+        "workspace/didChangeWatchedFiles",
+        &serde_json::json!({ "changes": [{ "uri": uri.as_str(), "type": 2 }] }),
+    )
+}
+
+/// Replacement content with no duplicated method body.
+fn unrelated_csharp() -> &'static str {
+    "public class Beta {\n    public string Name() {\n        return \"unique\";\n    }\n}\n"
+}
+
 /// Builds a JSON-RPC notification.
 fn notification(method: &str, params: &serde_json::Value) -> Result<String> {
     let payload = serde_json::json!({
@@ -208,6 +348,31 @@ fn notification(method: &str, params: &serde_json::Value) -> Result<String> {
         "params": params
     });
     Ok(serde_json::to_string(&payload)?)
+}
+
+/// Returns the report cluster count from a JSON-RPC response frame.
+fn cluster_count(frame: &serde_json::Value) -> usize {
+    frame
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len)
+}
+
+/// Reads a required integer field from a JSON frame.
+fn json_u64(frame: &serde_json::Value, pointer: &str) -> Result<u64> {
+    frame
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| anyhow!("missing numeric field {pointer}: {frame}"))
+}
+
+/// Reads a required array length from a JSON frame.
+fn json_array_len(frame: &serde_json::Value, pointer: &str) -> Result<usize> {
+    frame
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_array)
+        .map(Vec::len)
+        .ok_or_else(|| anyhow!("missing array field {pointer}: {frame}"))
 }
 
 /// Stops the child process and returns stderr.

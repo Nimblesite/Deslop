@@ -87,8 +87,9 @@ fn cluster_bucket(cluster: &serde_json::Value) -> String {
 // completely unrelated test files share only generic xUnit
 // scaffolding kinds; LSH-only kind-gram Jaccard saturation must not
 // route the resulting pair into the [CLONE-BUCKETS] `NearlyIdentical`
-// bucket. They may legitimately surface as `LooselySimilar` (LSH-only
-// hint) but never as `NearlyIdentical`.
+// bucket. LooselySimilar is suppressed entirely in the ranked output
+// per issue #58, so neither bucket must appear for boilerplate-only
+// matches.
 #[test]
 fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
     let tmp = tempfile::tempdir()?;

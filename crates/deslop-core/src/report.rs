@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ast::ByteRange,
     boilerplate::BoilerplateRange,
-    buckets::{bucket_labels, classify_signals},
+    buckets::{bucket_labels, classify_signals, ClusterKind},
     cluster::Cluster,
     config::ExclusionConfig,
     pair::PairScore,
@@ -320,8 +320,18 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
                 inputs.exclusion,
                 inputs.sources,
             );
-            let all_hidden = !report_cluster.occurrences.is_empty()
-                && report_cluster.occurrences.iter().all(|occ| occ.hidden);
+            // [#58 FUSION-STRATEGY-GATE-NO-TOKEN-ONLY]: LooselySimilar clusters
+            // carry only token-overlap signal with no structural or semantic
+            // anchor. Token-only matches (test boilerplate, import scaffolding)
+            // push token_jaccard near 1.0 while structural stays near 0,
+            // causing these to rank as #1 offenders despite containing no
+            // actionable duplication. Exclude them from the human-facing ranked
+            // output; the raw analysis data remains available via the pipeline.
+            let loosely_similar =
+                classify_signals(report_cluster.signals) == ClusterKind::LooselySimilar;
+            let all_hidden = loosely_similar
+                || (!report_cluster.occurrences.is_empty()
+                    && report_cluster.occurrences.iter().all(|occ| occ.hidden));
             (report_cluster, all_hidden)
         })
         .collect();
