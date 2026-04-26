@@ -61,14 +61,25 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
 
     let (init_id, init) = initialize_request()?;
     let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(&mut stdin, &frames, "deslop/reportGet", &serde_json::json!({}))?;
-    ensure!(cluster_count(&initial) > 0, "fixture must start with duplicate clusters");
+    let initial = request_response(
+        &mut stdin,
+        &frames,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    ensure!(
+        cluster_count(&initial) > 0,
+        "fixture must start with duplicate clusters"
+    );
 
     fs::write(&beta, unrelated_csharp())?;
     write_frame(&mut stdin, &watched_file_changed(&beta)?)?;
     let changed = recv_method(&frames, "deslop/reportChanged", Duration::from_secs(5))?;
     let removed = json_u64(&changed, "/params/summary/clusters_removed")?;
-    ensure!(removed > 0, "reportChanged must describe at least one removed cluster");
+    ensure!(
+        removed > 0,
+        "reportChanged must describe at least one removed cluster"
+    );
 
     let params = serde_json::json!({ "since_generation": 1 });
     let delta = request_response(&mut stdin, &frames, "deslop/reportDelta", &params)?;

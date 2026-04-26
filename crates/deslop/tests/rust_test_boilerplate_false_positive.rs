@@ -42,10 +42,7 @@ fn run_report(tmp: &Path, scan_root: &Path) -> Result<Value> {
 }
 
 fn cluster_bucket(cluster: &Value) -> &str {
-    cluster
-        .get("bucket")
-        .and_then(Value::as_str)
-        .unwrap_or("?")
+    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
 }
 
 fn cluster_paths(cluster: &Value) -> Vec<String> {
