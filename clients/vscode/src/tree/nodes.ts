@@ -29,7 +29,7 @@ export type Node =
 // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Category colour is metadata
 // backed by text/a11y labels, never the only signal.
 export const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
-  identical: { icon: "circle-filled", color: "charts.green" },
+  identical: { icon: "circle-filled", color: "charts.red" },
   nearly_identical: { icon: "circle-large-filled", color: "charts.orange" },
   loosely_similar: { icon: "circle-outline", color: "charts.blue" },
   same_behavior: { icon: "sparkle", color: "charts.purple" },
