@@ -17,6 +17,12 @@ use crate::{
     },
 };
 
+/// Builds a `FileId → &NormalizedNode` index to avoid O(files) linear scans
+/// for every fingerprint in [`build_signatures_with_languages`].
+fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode> {
+    trees.iter().map(|tree| (tree.file_id, tree)).collect()
+}
+
 /// Language-aware signature builder. When the fingerprint's file has
 /// a known language in `file_languages`, import/prologue boilerplate
 /// is stripped from the token stream so shared import patterns stop
@@ -29,10 +35,11 @@ pub fn build_signatures_with_languages<S: BuildHasher>(
     trees: &[NormalizedNode],
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> Vec<Signature> {
+    let tree_index = build_tree_index(trees);
     let mut signatures: Vec<Signature> = Vec::with_capacity(fingerprints.len());
     for fingerprint in fingerprints {
         let language = file_languages.get(&fingerprint.file_id).copied();
-        let Some(root) = tree_for_file(trees, fingerprint) else {
+        let Some(root) = tree_index.get(&fingerprint.file_id).copied() else {
             signatures.push(empty_signature(fingerprint, language));
             continue;
         };
@@ -52,18 +59,6 @@ pub fn build_signatures_with_languages<S: BuildHasher>(
         signatures.push(signature);
     }
     signatures
-}
-
-/// Returns the normalised AST root for `fingerprint`'s file by scanning
-/// the per-run tree list. O(n) per lookup; acceptable because the number
-/// of files is small compared to the number of fingerprints.
-fn tree_for_file<'a>(
-    trees: &'a [NormalizedNode],
-    fingerprint: &Fingerprint,
-) -> Option<&'a NormalizedNode> {
-    trees
-        .iter()
-        .find(|tree| tree.file_id == fingerprint.file_id)
 }
 
 /// Returns true when an exact fingerprint range contains prologue syntax.
@@ -126,26 +121,21 @@ fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signatu
 
 /// Fingerprint-scoped signature used when no k-grams are available. This
 /// avoids treating unrelated empty token sets as perfect LSH matches.
+/// Uses blake3 XOF to derive all 128 slot values from a single hash call.
 fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
-    let mut signature = [0_u64; SIGNATURE_LEN];
-    for (index, slot) in signature.iter_mut().enumerate() {
-        *slot = fallback_slot(fingerprint, index);
-    }
-    signature
-}
-
-/// Derives one deterministic fallback slot from stable fingerprint data.
-fn fallback_slot(fingerprint: &Fingerprint, index: usize) -> u64 {
     let mut hasher = Hasher::new();
     let _ = hasher.update(&fingerprint.hash);
     let _ = hasher.update(&fingerprint.byte_range.start.to_le_bytes());
     let _ = hasher.update(&fingerprint.byte_range.end.to_le_bytes());
-    let _ = hasher.update(&index.to_le_bytes());
-    let digest = hasher.finalize();
-    let mut narrow = [0_u8; 8];
-    let slice = digest.as_bytes().get(..8).unwrap_or(&[0_u8; 8]);
-    narrow.copy_from_slice(slice);
-    u64::from_le_bytes(narrow)
+    let mut expanded = [0u8; SIGNATURE_LEN * 8];
+    hasher.finalize_xof().fill(&mut expanded);
+    let mut signature = [0_u64; SIGNATURE_LEN];
+    for (slot, chunk) in signature.iter_mut().zip(expanded.chunks_exact(8)) {
+        let mut arr = [0u8; 8];
+        arr.copy_from_slice(chunk);
+        *slot = u64::from_le_bytes(arr);
+    }
+    signature
 }
 
 /// Default signature used for legacy non-Python empty token streams.

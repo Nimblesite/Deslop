@@ -1,4 +1,4 @@
-//! Regression test for issue #58: LooselySimilar catch-all surfaces
+//! Regression test for issue #58: `LooselySimilar` catch-all surfaces
 //! boilerplate-only test-file matches as top offenders.
 //!
 //! The `deslop-core` test suite (`embedding_pairs.rs`, `report_api.rs`,

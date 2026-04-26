@@ -62,6 +62,9 @@ Cargo.lock.bak
 # =============================================================================
 # Gradle / IntelliJ Platform
 # =============================================================================
+clients/jetbrains/.gradle/
+clients/jetbrains/.intellijPlatform/
+clients/jetbrains/build/
 
 codededup-report.json
 codededup-report.txt

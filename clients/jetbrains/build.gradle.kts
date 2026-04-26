@@ -1,19 +1,26 @@
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
 plugins {
     kotlin("jvm") version "2.3.20"
-    id("org.jetbrains.intellij.platform") version "2.14.0"
+    id("org.jetbrains.intellij.platform")
 }
 
 group = "com.nimblesite"
 version = "0.1.0"
-
-repositories {
-    mavenCentral()
-    intellijPlatform {
-        defaultRepositories()
-    }
-}
 
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
@@ -51,40 +58,61 @@ tasks.test {
     useJUnitPlatform()
 }
 
-tasks.named("prepareSandbox") {
-    doLast {
-        val pluginRoots = pluginSandboxRoots()
-        val manifest = rootProject.layout.projectDirectory.file("../../deployment-toolkit.json").asFile
-        val lsp = lspBinary()
-        pluginRoots.forEach { pluginRoot ->
-            copy {
-                from(manifest)
-                into(pluginRoot)
-            }
-            val targetDir = pluginRoot.resolve("bin/${hostPlatform()}")
-            copy {
-                from(lsp)
-                into(targetDir)
-            }
-            targetDir.resolve(lsp.name).setExecutable(true, false)
-        }
+val hostPlatformName = hostPlatform()
+val lspBinaryName = if (hostPlatformName.startsWith("win32")) "deslop-lsp.exe" else "deslop-lsp"
+val binaryDirectory = System.getenv("DESLOP_BINARY_DIR")?.let(::File)
+    ?: rootProject.layout.projectDirectory.dir("../../target/release").asFile
+val lspBinaryFile = binaryDirectory.resolve(lspBinaryName)
+val deploymentManifestFile = rootProject.layout.projectDirectory
+    .file("../../deployment-toolkit.json")
+    .asFile
+
+abstract class CopyLspArtifactsToSandbox : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val deploymentManifest: RegularFileProperty
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val lspBinary: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val pluginDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val hostPlatform: Property<String>
+
+    @TaskAction
+    fun copyArtifacts() {
+        val binaryFile = lspBinary.get().asFile
+        if (!binaryFile.isFile) throw GradleException("Missing $binaryFile; build deslop-lsp first.")
+
+        val pluginRoot = pluginDirectory.get().asFile.toPath()
+        val targetDir = pluginRoot.resolve("bin").resolve(hostPlatform.get())
+        val targetBinary = targetDir.resolve(binaryFile.name)
+        Files.createDirectories(pluginRoot)
+        Files.createDirectories(targetDir)
+        Files.copy(
+            deploymentManifest.get().asFile.toPath(),
+            pluginRoot.resolve("deployment-toolkit.json"),
+            StandardCopyOption.REPLACE_EXISTING,
+        )
+        Files.copy(binaryFile.toPath(), targetBinary, StandardCopyOption.REPLACE_EXISTING)
+        targetBinary.toFile().setExecutable(true, false)
     }
 }
 
-fun pluginSandboxRoots(): List<File> {
-    val pluginsDir = layout.buildDirectory.dir("idea-sandbox/plugins").get().asFile
-    val roots = pluginsDir.listFiles { file -> file.isDirectory }?.toList().orEmpty()
-    if (roots.isEmpty()) throw GradleException("No JetBrains sandbox plugin root found.")
-    return roots
+val prepareSandbox = tasks.named<PrepareSandboxTask>("prepareSandbox")
+val copyLspArtifactsToSandbox = tasks.register<CopyLspArtifactsToSandbox>("copyLspArtifactsToSandbox") {
+    dependsOn(prepareSandbox)
+    deploymentManifest.set(deploymentManifestFile)
+    lspBinary.set(lspBinaryFile)
+    pluginDirectory.set(prepareSandbox.flatMap { it.pluginDirectory })
+    hostPlatform.set(hostPlatformName)
 }
 
-fun lspBinary(): File {
-    val name = if (hostPlatform().startsWith("win32")) "deslop-lsp.exe" else "deslop-lsp"
-    val dir = System.getenv("DESLOP_BINARY_DIR")?.let(::file)
-        ?: rootProject.layout.projectDirectory.dir("../../target/release").asFile
-    val binary = dir.resolve(name)
-    if (!binary.isFile) throw GradleException("Missing $binary; build deslop-lsp first.")
-    return binary
+tasks.named("buildPlugin") {
+    dependsOn(copyLspArtifactsToSandbox)
 }
 
 fun hostPlatform(): String {

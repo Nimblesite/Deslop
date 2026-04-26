@@ -242,7 +242,7 @@ fn recv_response(
     id: i64,
     timeout: Duration,
 ) -> Result<serde_json::Value> {
-    let deadline = Instant::now() + timeout;
+    let deadline = deadline_after(timeout)?;
     loop {
         let frame = recv_next(frames, deadline, &format!("response id {id}"))?;
         if frame.get("id").and_then(serde_json::Value::as_i64) == Some(id) {
@@ -257,13 +257,19 @@ fn recv_method(
     method: &str,
     timeout: Duration,
 ) -> Result<serde_json::Value> {
-    let deadline = Instant::now() + timeout;
+    let deadline = deadline_after(timeout)?;
     loop {
         let frame = recv_next(frames, deadline, method)?;
         if frame.get("method").and_then(serde_json::Value::as_str) == Some(method) {
             return Ok(frame);
         }
     }
+}
+
+fn deadline_after(timeout: Duration) -> Result<Instant> {
+    Instant::now()
+        .checked_add(timeout)
+        .ok_or_else(|| anyhow!("timeout duration is too large"))
 }
 
 /// Receives one frame before `deadline`.

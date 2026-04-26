@@ -16,7 +16,10 @@ use deslop_core::{
         EmbeddingMode, EmbeddingProvider, OllamaProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
         DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
     },
-    live::{AnalysisSession, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveService},
+    live::{
+        AnalysisSession, ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi,
+        LiveError, LiveService, ReportChangedNotification,
+    },
 };
 use tokio::sync::Mutex;
 use tower::Service;
@@ -49,6 +52,10 @@ pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 /// Method name for the `deslop/embeddingProgress` custom notification
 /// pushed around a model swap ([VSIX-SESSION-PROGRESS]).
 pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
+
+/// Method name for the `deslop/reportChanged` custom notification
+/// pushed after an analysis generation changes.
+pub const REPORT_CHANGED: &str = "deslop/reportChanged";
 
 /// [LSP-EMBEDDING-CONSENT] Embedding startup settings supplied by the client after the user
 /// has explicitly selected a model. `Off` means no startup embedding
@@ -173,12 +180,12 @@ impl LspBackend {
     ) -> Result<Self, deslop_core::live::LiveError> {
         let provider = build_startup_provider(embedding)?;
         let mut session = if matches!(embedding.mode, EmbeddingMode::Off) {
-            AnalysisSession::new(workspace_root, min_nodes, false, None, provider)?
+            AnalysisSession::new(workspace_root, min_nodes, true, None, provider)?
         } else {
             AnalysisSession::new_with_mode(
                 workspace_root,
                 min_nodes,
-                false,
+                true,
                 None,
                 provider,
                 embedding.mode,
@@ -208,9 +215,40 @@ impl LspBackend {
         if paths.is_empty() {
             return;
         }
+        match self.changed_paths_notification(paths).await {
+            Ok(Some(notification)) => {
+                self.client
+                    .send_notification::<ReportChangedLspNotification>(notification)
+                    .await;
+            }
+            Ok(None) => {}
+            Err(error) => tracing::error!(%error, "failed to apply changed paths"),
+        }
+    }
+
+    /// Applies paths and converts a non-empty delta into an LSP notification.
+    async fn changed_paths_notification(
+        &self,
+        paths: &[PathBuf],
+    ) -> Result<Option<ReportChangedNotification>, LiveError> {
         let session = self.service.session();
-        let mut guard = session.lock().await;
-        let _outcome = guard.apply_changes(paths);
+        let (previous_generation, previous_report, delta) = {
+            let mut guard = session.lock().await;
+            let previous_generation = guard.generation();
+            let previous_report = guard.report();
+            let delta = guard.apply_changes(paths)?;
+            (previous_generation, previous_report, delta)
+        };
+        self.service
+            .remember_snapshot(previous_generation, previous_report)
+            .await;
+        if delta.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(ReportChangedNotification {
+            generation: delta.to_generation,
+            summary: ChangeSummary::from_delta(&delta),
+        }))
     }
 }
 
@@ -437,6 +475,16 @@ impl tower_lsp::lsp_types::notification::Notification for EmbeddingProgressNotif
     const METHOD: &'static str = EMBEDDING_PROGRESS;
 }
 
+/// Type-only marker so `tower_lsp::Client::send_notification` can
+/// dispatch `deslop/reportChanged`.
+#[derive(Debug)]
+pub enum ReportChangedLspNotification {}
+
+impl tower_lsp::lsp_types::notification::Notification for ReportChangedLspNotification {
+    type Params = ReportChangedNotification;
+    const METHOD: &'static str = REPORT_CHANGED;
+}
+
 /// Boots the LSP server over stdio. Used by the binary entry point
 /// and by E2E tests that drive the binary as a black box.
 ///
@@ -468,6 +516,7 @@ pub async fn run_stdio(
         }
     })
     .custom_method(custom_methods::REPORT_GET, custom_methods::report_get)
+    .custom_method(custom_methods::REPORT_DELTA, custom_methods::report_delta)
     .custom_method(
         custom_methods::REPORT_FOR_FILE,
         custom_methods::report_for_file,
@@ -513,6 +562,7 @@ pub async fn run_stdio(
 /// `-32602 Missing params field` before the handler runs.
 const NO_PARAM_METHODS: &[&str] = &[
     custom_methods::REPORT_GET,
+    custom_methods::REPORT_DELTA,
     custom_methods::LIST_MODELS,
     custom_methods::SESSION_CONFIG,
     custom_methods::REPORT_SCHEMA_DOC,

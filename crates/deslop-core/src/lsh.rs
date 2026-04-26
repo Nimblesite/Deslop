@@ -39,13 +39,22 @@ pub type Signature = [u64; SIGNATURE_LEN];
 /// Computes a [`Signature`] for a set of k-grams of normalised node kinds.
 /// Deterministic: given the same input it always returns the same output,
 /// across processes and architectures.
+///
+/// Uses blake3 XOF to derive all 128 slot values from a single hash call
+/// per k-gram — 128× fewer hasher allocations than the naïve seeded approach.
 #[must_use]
 pub fn minhash_signature(kgrams: &[&[&'static str]]) -> Signature {
     let mut signature: Signature = [EMPTY_HASH_SENTINEL; SIGNATURE_LEN];
+    let mut expanded = [0u8; SIGNATURE_LEN * 8];
     for gram in kgrams {
-        let kgram_bytes = kgram_bytes(gram);
-        for (index, slot) in signature.iter_mut().enumerate() {
-            let candidate = seeded_hash(&kgram_bytes, index);
+        let gram_bytes = kgram_bytes(gram);
+        let mut hasher = Hasher::new();
+        let _ = hasher.update(&gram_bytes);
+        hasher.finalize_xof().fill(&mut expanded);
+        for (slot, chunk) in signature.iter_mut().zip(expanded.chunks_exact(8)) {
+            let mut arr = [0u8; 8];
+            arr.copy_from_slice(chunk);
+            let candidate = u64::from_le_bytes(arr);
             if candidate < *slot {
                 *slot = candidate;
             }
@@ -139,19 +148,4 @@ fn kgram_bytes(gram: &[&'static str]) -> Vec<u8> {
         buffer.push(0);
     }
     buffer
-}
-
-/// Returns a deterministic 64-bit hash of `payload` seeded with `index`.
-/// Uses `blake3` throughout for one dependency surface.
-fn seeded_hash(payload: &[u8], index: usize) -> u64 {
-    let mut hasher = Hasher::new();
-    let seed = u64::try_from(index).unwrap_or(u64::MAX);
-    let _ = hasher.update(&seed.to_le_bytes());
-    let _ = hasher.update(payload);
-    let digest = hasher.finalize();
-    let bytes = digest.as_bytes();
-    let mut narrow = [0_u8; 8];
-    let slice = bytes.get(..8).unwrap_or(&[0_u8; 8]);
-    narrow.copy_from_slice(slice);
-    u64::from_le_bytes(narrow)
 }
