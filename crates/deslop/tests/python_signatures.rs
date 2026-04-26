@@ -1,4 +1,4 @@
-//! Tests proving that the MinHash signature pipeline works correctly for
+//! Tests proving that the `MinHash` signature pipeline works correctly for
 //! Python after the XOF-based fix ([FUSION-SIGNALS-THREE-LAYER]).
 //!
 //! Bug 1 — `minhash_signature` produced 128 separate blake3 calls per
@@ -8,7 +8,7 @@
 //!
 //! Bug 2 — `tree_for_file` did a linear scan through all trees per
 //! fingerprint.  Fixed by pre-building a `HashMap<FileId, &NormalizedNode>`
-//! once.  A wrong HashMap mapping contaminates token streams; the
+//! once.  A wrong `HashMap` mapping contaminates token streams; the
 //! cross-file Type-3 assertion catches that.
 
 use std::{fs, path::Path, path::PathBuf};
@@ -64,17 +64,19 @@ fn occurrence_files(cluster: &serde_json::Value) -> Vec<String> {
         .map(|occ| {
             occ.iter()
                 .filter_map(|o| {
-                    o.get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .map(|p| {
-                            Path::new(p)
-                                .file_name()
-                                .map_or_else(|| p.to_owned(), |n| n.to_string_lossy().into_owned())
-                        })
+                    o.get("path").and_then(serde_json::Value::as_str).map(|p| {
+                        Path::new(p)
+                            .file_name()
+                            .map_or_else(|| p.to_owned(), |n| n.to_string_lossy().into_owned())
+                    })
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn is_exact_one(value: f64) -> bool {
+    (value - 1.0).abs() <= f64::EPSILON
 }
 
 // [FUSION-SIGNALS-THREE-LAYER] Type-2 Python clones (identical after
@@ -90,16 +92,19 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
         !clusters.is_empty(),
         "python-small must produce at least one cluster",
     );
-    let top = clusters[0];
+    let top = clusters
+        .first()
+        .copied()
+        .ok_or_else(|| anyhow::anyhow!("python-small must produce at least one cluster"))?;
     let token_jaccard = signal(top, "token_jaccard");
-    assert_eq!(
-        token_jaccard, 1.0,
+    assert!(
+        is_exact_one(token_jaccard),
         "Type-2 Python clone must have token_jaccard = 1.0 (identical k-gram sets), \
          got {token_jaccard}"
     );
     let structural = signal(top, "structural");
-    assert_eq!(
-        structural, 1.0,
+    assert!(
+        is_exact_one(structural),
         "Type-2 Python clone must also have structural = 1.0, got {structural}",
     );
     Ok(())
@@ -133,12 +138,12 @@ fn python_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jacc
             occurrence_files(cluster).into_iter().collect();
         files.contains("alpha.py") && files.contains("beta.py")
     });
-    let cluster = cross_file.unwrap_or_else(|| {
-        panic!(
+    let Some(cluster) = cross_file else {
+        anyhow::bail!(
             "python-type3 must produce a cross-file cluster spanning alpha.py and beta.py; \
              got clusters: {clusters:#?}"
-        )
-    });
+        );
+    };
     let token_jaccard = signal(cluster, "token_jaccard");
     assert!(
         token_jaccard > 0.0,
@@ -167,7 +172,10 @@ fn python_token_jaccard_is_deterministic_across_runs() -> Result<()> {
         .iter()
         .map(|c| signal(c, "token_jaccard").to_bits())
         .collect();
-    assert!(!jaccards1.is_empty(), "python-small must produce at least one cluster");
+    assert!(
+        !jaccards1.is_empty(),
+        "python-small must produce at least one cluster"
+    );
     assert_eq!(
         jaccards1, jaccards2,
         "token_jaccard values must be bit-identical across runs on the same corpus \
