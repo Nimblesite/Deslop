@@ -28,6 +28,7 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
+    "onStartupFinished",
     "onUri:deslop",
     "onLanguage:csharp",
     "onLanguage:rust",

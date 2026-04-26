@@ -6,6 +6,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 interface PackageContribution {
+  activationEvents: string[];
   contributes: {
     commands: CommandContribution[];
     menus: Record<string, MenuContribution[]>;
@@ -34,6 +35,14 @@ function commandTitle(pkg: PackageContribution, command: string): string | undef
 }
 
 suite("package menu contributions", () => {
+  test("activationEvents includes onStartupFinished so analysis begins at VS Code startup", () => {
+    const pkg = extensionPackage();
+    assert.ok(
+      pkg.activationEvents.includes("onStartupFinished"),
+      `activationEvents must include "onStartupFinished" — analysis must not wait for panel open. Got: ${JSON.stringify(pkg.activationEvents)}`,
+    );
+  });
+
   test("occurrence context menu compares with canonical instead of opening", () => {
     const pkg = extensionPackage();
     const contextItems = pkg.contributes.menus["view/item/context"];
