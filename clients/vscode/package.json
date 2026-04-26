@@ -55,6 +55,10 @@
         "title": "Deslop: Compare With Canonical Occurrence"
       },
       {
+        "command": "deslop.compareOccurrenceWithCanonical",
+        "title": "Compare With Canonical"
+      },
+      {
         "command": "deslop.pickEmbeddingModel",
         "title": "Deslop: Pick Embedding Model"
       },
@@ -126,6 +130,12 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "deslop.compareOccurrenceWithCanonical",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "deslop.topOffenders.showByCluster",
@@ -150,7 +160,7 @@
           "group": "navigation@2"
         },
         {
-          "command": "deslop.openOccurrence",
+          "command": "deslop.compareOccurrenceWithCanonical",
           "when": "viewItem == deslop.occurrence",
           "group": "navigation@1"
         },

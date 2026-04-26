@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
 use assert_cmd::Command;
@@ -50,6 +50,39 @@ fn initialize_reports_server_info_version() -> Result<()> {
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
     let _ = child.kill();
     Ok(())
+}
+
+#[test]
+fn reload_uses_fingerprint_cache_for_unchanged_workspace() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let _cold = report_after_start(workspace.path())?;
+    let warm = report_after_start(workspace.path())?;
+    let hits = cache_stat(&warm, "hits")?;
+    assert!(
+        hits > 0,
+        "warm LSP restart must reuse fingerprint cache entries, got report: {warm}"
+    );
+    Ok(())
+}
+
+fn report_after_start(workspace: &Path) -> Result<Value> {
+    let mut child = spawn_lsp(workspace, 15)?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let response = call(&mut stdin, &mut stdout, "deslop/reportGet", &Value::Null)?;
+    let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
+    let _ = child.kill();
+    response
+        .get("result")
+        .cloned()
+        .ok_or_else(|| anyhow!("missing report result: {response}"))
+}
+
+fn cache_stat(report: &Value, field: &str) -> Result<u64> {
+    report
+        .pointer(&format!("/cache_stats/{field}"))
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("missing cache_stats.{field}: {report}"))
 }
 
 fn pointer<'a>(value: &'a Value, path: &str) -> Result<&'a str> {

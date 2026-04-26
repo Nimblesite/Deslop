@@ -258,15 +258,19 @@ vsix-install-code:
 
 ## vsix-rebuild: Nuke every build artifact (cargo target/, staged bin/, node_modules,
 ##               dist/, out/, old .vsix), rebuild the workspace + webview + extension
-##               from scratch, repackage the .vsix, and install it into the local
-##               `code` CLI. Use when "why isn't my change showing up" strikes.
-##               Composes existing targets — does not duplicate their logic.
+##               from scratch, repackage the .vsix, install it into the local `code`
+##               CLI, and scrub any cargo-installed PATH copies so the installed VSIX
+##               bundle is the only source of truth. Use when "why isn't my change
+##               showing up" strikes. Composes existing targets — does not duplicate
+##               their logic.
 vsix-rebuild:
 	@$(MAKE) clean
 	@$(MAKE) vsix-clean
 	@$(MAKE) vsix-package
 	@$(MAKE) vsix-install-code
+	@$(MAKE) delete-path-binaries
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
+	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
 ## jetbrains-build: Build the JetBrains plugin zip.
 ##                 JetBrains archive verification is deferred to GitHub #55
