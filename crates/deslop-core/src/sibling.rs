@@ -76,9 +76,10 @@ fn walk(
 /// Returns `true` when every element of `hashes` is identical.
 ///
 /// A uniform sibling sequence means every same-width window is trivially
-/// hash-equivalent — none of those matches represent real duplicates.
-/// [PIPELINE-FINGERPRINT-MERKLE] BUG #61: suppress fingerprinting entirely
-/// so the clusterer never sees these spurious cross-window collisions.
+/// hash-equivalent — none of those windows represent real duplicates since
+/// the clusterer would see thousands of identical fingerprints. Individual
+/// subtree fingerprinting already covers the case where multiple identical
+/// subtrees exist side-by-side.
 fn all_hashes_uniform(hashes: &[[u8; 32]]) -> bool {
     match hashes.first() {
         None => true,
@@ -92,6 +93,11 @@ fn all_hashes_uniform(hashes: &[[u8; 32]]) -> bool {
 /// [`MAX_WINDOW_WIDTH`] so each enumerated slice is guaranteed
 /// non-empty — removes the "window can be empty" branch that was
 /// previously impossible to exercise from a test.
+///
+/// [PIPELINE-FINGERPRINT-MERKLE] BUG #61 is handled in [`walk`] via
+/// [`is_literal_data_subtree`]: literal-only containers (dicts, lists) are
+/// treated as boilerplate before `emit_windows` is ever reached, so
+/// their child entries never enter the sibling window fingerprinter.
 fn emit_windows(
     siblings: &[NormalizedNode],
     min_nodes: usize,
@@ -101,8 +107,10 @@ fn emit_windows(
     let cumulative = cumulative_node_counts(siblings);
     let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
     // [PIPELINE-FINGERPRINT-MERKLE] BUG #61: when every sibling hashes
-    // identically after normalisation (e.g. a dict of `int: str` entries),
-    // every same-width window is trivially equal — not a real clone.
+    // identically after normalisation (e.g. a C# repetitive pattern), every
+    // same-width window is trivially equal — not a real clone. Individual
+    // subtree fingerprinting already captures those. Skip all windows to
+    // avoid an O(n²) explosion of redundant clusters.
     if all_hashes_uniform(&child_hashes) {
         return;
     }

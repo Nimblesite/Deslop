@@ -13,7 +13,7 @@ use std::{
 
 use deslop_core::{
     embedding::{
-        EmbeddingMode, EmbeddingProvider, OllamaProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+        EmbeddingMode, EmbeddingProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
         DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
     },
     live::{
@@ -105,51 +105,19 @@ fn build_startup_provider(
     }
 }
 
-/// Connects Ollama, falling back to [`StubProvider`] on any connection
-/// failure. Embeddings are always optional per issue #35: the LSP must
-/// stay alive regardless of mode so VS Code never crash-loops. A warning
-/// is emitted for `Auto`; an error for `Required` so the user can see
-/// their explicit opt-in was not honoured.
+/// Connects Ollama, falling back to a stub via the shared core function.
+/// Both `Auto` and `Required` survive — the LSP must never crash-loop
+/// VS Code per issue #35. Log level differs: warn for Auto, error for Required.
 fn connect_ollama_or_fallback(
     embedding: &LspEmbeddingConfig,
 ) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
-    match connect_ollama_provider(embedding) {
-        Ok(provider) => Ok(provider),
-        Err(error) if matches!(embedding.mode, EmbeddingMode::Required) => {
-            tracing::error!(
-                %error,
-                endpoint = %embedding.endpoint,
-                model = %embedding.model_id,
-                "ollama embedding provider unreachable with --embeddings required; \
-                 falling back to stub — embeddings are disabled but the LSP stays alive"
-            );
-            Ok(Arc::new(StubProvider::new()))
-        }
-        Err(error) => {
-            tracing::warn!(
-                %error,
-                endpoint = %embedding.endpoint,
-                model = %embedding.model_id,
-                "ollama embedding provider unreachable; falling back to stub so the LSP stays alive"
-            );
-            Ok(Arc::new(StubProvider::new()))
-        }
-    }
+    Ok(deslop_core::embedding::connect_or_stub(
+        embedding.mode,
+        &embedding.endpoint,
+        &embedding.model_id,
+    ))
 }
 
-/// Connects to Ollama and maps provider errors into live errors.
-fn connect_ollama_provider(
-    embedding: &LspEmbeddingConfig,
-) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
-    let provider =
-        OllamaProvider::connect(&embedding.endpoint, &embedding.model_id).map_err(|err| {
-            deslop_core::live::LiveError::ProviderUnreachable {
-                endpoint: embedding.endpoint.clone(),
-                message: err.to_string(),
-            }
-        })?;
-    Ok(Arc::new(provider))
-}
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
 #[derive(Debug)]

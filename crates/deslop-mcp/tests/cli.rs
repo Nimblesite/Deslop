@@ -15,7 +15,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -244,7 +244,12 @@ fn structured_tool_result(result: &Value) -> Result<Value> {
 }
 
 fn wait_for_generation(child: &mut McpChild, minimum: u64) -> Result<Value> {
-    for _ in 0..20 {
+    // Use a deadline rather than a fixed iteration count so this helper
+    // remains reliable under `cargo llvm-cov` where instrumentation
+    // overhead can make the background embedding refresh 10× slower
+    // than in a normal test run — issue #57.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while Instant::now() < deadline {
         let result = call_tool(child, "session-config", &json!({}))?;
         let snap = structured_tool_result(&result)?;
         let generation = value_get(&snap, "/generation")?.as_u64().unwrap_or(0);
@@ -1691,8 +1696,43 @@ fn binary_starts_with_ollama_auto_falls_back_to_stub() -> Result<()> {
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
     let snapshot = structured_tool_result(&result)?;
-    // When Ollama is unreachable under auto, provenance stays null.
-    assert_eq!(value_get(&snapshot, "/embedding_provenance")?, json!(null));
+    // Unreachable Ollama falls back to stub — provenance shows stub provider.
+    assert_eq!(
+        value_get(&snapshot, "/embedding_provenance/provider_id")?,
+        json!("stub"),
+        "auto mode must fall back to stub when Ollama is unreachable: {snapshot}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+/// Audience: HUMAN. Issue #35. Even with `--embeddings required`, an
+/// unreachable Ollama must not crash the MCP binary — the server stays
+/// alive with stub embeddings. Positive invariant: `session-config`
+/// returns stub provenance (not null, not a crash).
+#[test]
+fn binary_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
+    let mut child = McpChild::spawn(
+        &fixture_root(),
+        &[
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-endpoint",
+            "http://127.0.0.1:1",
+        ],
+    )?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "session-config", &json!({}))?;
+    let snapshot = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&snapshot, "/embedding_provenance/provider_id")?,
+        json!("stub"),
+        "required mode must fall back to stub (not crash) when Ollama is unreachable: {snapshot}"
+    );
     let _ = child.finish();
     Ok(())
 }

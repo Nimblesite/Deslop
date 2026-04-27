@@ -152,10 +152,50 @@ impl Drop for MockOllama {
     }
 }
 
+/// Issue #57 / Bug 1. `server_loop` accepts connections from a
+/// non-blocking listener. Accepted streams inherit non-blocking mode,
+/// so `read_request` can return `WouldBlock` when a large request body
+/// (> 1 024 bytes) spans two read calls and the second read fires
+/// before all bytes have arrived in the kernel buffer. The server must
+/// make the accepted stream blocking before reading.
+#[test]
+fn mock_ollama_handles_request_body_larger_than_read_buffer() -> Result<()> {
+    let server = MockOllama::spawn()?;
+    // Build a synthetic POST /api/embed body with > 1 024 bytes of input
+    // so read_request must issue at least two read() calls on the stream.
+    let big_input: String = std::iter::repeat("x").take(900).collect();
+    let body = format!(r#"{{"model":"nomic-embed-text","input":["{big_input}"]}}"#);
+    let request = format!(
+        "POST /api/embed HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body,
+    );
+    assert!(
+        request.len() > 1024,
+        "request must exceed the 1 024-byte read buffer to exercise the multi-read path"
+    );
+    let mut stream = TcpStream::connect(server.addr)?;
+    stream.write_all(request.as_bytes())?;
+    let mut response = Vec::new();
+    let _ = stream.read_to_end(&mut response)?;
+    assert!(
+        !response.is_empty(),
+        "server must respond to a request body larger than the read buffer; \
+         non-blocking accepted streams cause WouldBlock on the second read and \
+         silently drop the connection instead"
+    );
+    Ok(())
+}
+
 fn server_loop(listener: &TcpListener, stop: &AtomicBool, max_embed_batch_len: &AtomicUsize) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
-            Ok((stream, _)) => handle_stream(stream, max_embed_batch_len),
+            Ok((stream, _)) => {
+                // Switch accepted stream to blocking so read_request never gets
+                // WouldBlock on large (> 1 024 B) request bodies — issue #57.
+                let _ = stream.set_nonblocking(false);
+                handle_stream(stream, max_embed_batch_len);
+            }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
             }

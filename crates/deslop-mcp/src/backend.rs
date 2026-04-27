@@ -659,16 +659,11 @@ fn select_provider(
         EmbeddingMode::Off => Ok(None),
         EmbeddingMode::Auto | EmbeddingMode::Required => match config.embedding_provider.as_str() {
             STUB_PROVIDER_ID => Ok(Some(Arc::new(StubProvider::new()))),
-            DEFAULT_PROVIDER_ID => {
-                match OllamaProvider::connect(&config.embedding_endpoint, &config.embedding_model) {
-                    Ok(provider) => Ok(Some(Arc::new(provider))),
-                    Err(err) if matches!(config.embedding_mode, EmbeddingMode::Auto) => {
-                        warn!(reason = %err, "ollama_unreachable_embedding_disabled_auto");
-                        Ok(None)
-                    }
-                    Err(err) => Err(err.into()),
-                }
-            }
+            DEFAULT_PROVIDER_ID => Ok(Some(deslop_core::embedding::connect_or_stub(
+                config.embedding_mode,
+                &config.embedding_endpoint,
+                &config.embedding_model,
+            ))),
             other => Err(BackendError::UnknownEmbeddingProvider(other.to_owned())),
         },
     }

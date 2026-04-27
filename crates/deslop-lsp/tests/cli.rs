@@ -12,11 +12,13 @@ use crate::common::{call, copy_fixture, handshake, spawn_lsp, take_io};
 
 // Implements the deployment-toolkit binary contract: every IDE-launched
 // executable must expose a stable plain text version line.
+// Timeout is generous to accommodate `cargo llvm-cov` instrumentation
+// overhead when the whole suite runs concurrently.
 #[test]
 fn prints_exact_version_contract() -> Result<()> {
     let mut cmd = Command::cargo_bin("deslop-lsp")?;
     let _assertion = cmd
-        .timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(10))
         .arg("--version")
         .assert()
         .success()
@@ -28,7 +30,7 @@ fn prints_exact_version_contract() -> Result<()> {
 #[test]
 fn prints_json_version_contract() -> Result<()> {
     let output = Command::cargo_bin("deslop-lsp")?
-        .timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(10))
         .arg("--version")
         .arg("--json")
         .output()?;
