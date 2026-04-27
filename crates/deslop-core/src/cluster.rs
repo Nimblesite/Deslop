@@ -68,26 +68,6 @@ pub fn build_ranked_fused_clusters(
     collapse_cross_cluster_overlap(clusters)
 }
 
-/// Returns `true` when all members live in one file with non-overlapping
-/// byte ranges, meaning every occurrence is a sibling of the others rather
-/// than a real cross-location duplicate.
-///
-/// [PIPELINE-FINGERPRINT-MERKLE] BUG #62: after normalisation, sibling
-/// nodes that are structurally identical (e.g. every `int: str` dict entry)
-/// produce duplicate fingerprints entirely within one file. Every occurrence
-/// is adjacent to the others — not a real clone.
-fn all_single_file_non_overlapping(members: &[Fingerprint]) -> bool {
-    let file_id = match members.first() {
-        None => return true,
-        Some(fp) => fp.file_id,
-    };
-    members.iter().all(|fp| fp.file_id == file_id)
-        && members
-            .iter()
-            .zip(members.iter().skip(1))
-            .all(|(a, b)| !ranges_overlap(a, b))
-}
-
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
 /// Same-file overlap collapse can reduce a fused group to one logical
 /// location; those groups are artifacts, not duplicates, and are
@@ -95,12 +75,6 @@ fn all_single_file_non_overlapping(members: &[Fingerprint]) -> bool {
 fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Option<Cluster> {
     let members = collapsed_members(fingerprints, fused);
     if members.len() < MIN_REPORTABLE_MEMBERS {
-        return None;
-    }
-    // [PIPELINE-FINGERPRINT-MERKLE] BUG #62: suppress uniform-sibling
-    // false positives where every occurrence is a non-overlapping sibling
-    // in the same file — these are not real cross-location duplicates.
-    if all_single_file_non_overlapping(&members) {
         return None;
     }
     Some(materialize_cluster(members, fused.mean_score))

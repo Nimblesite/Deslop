@@ -105,16 +105,27 @@ fn build_startup_provider(
     }
 }
 
-/// Connects Ollama with auto-mode fallback. On `Auto` + provider
-/// unreachable we log a warning and return [`StubProvider`] so the
-/// LSP keeps answering requests. On `Required` we propagate the
-/// error so the editor surfaces "start ollama and retry".
+/// Connects Ollama, falling back to [`StubProvider`] on any connection
+/// failure. Embeddings are always optional per issue #35: the LSP must
+/// stay alive regardless of mode so VS Code never crash-loops. A warning
+/// is emitted for `Auto`; an error for `Required` so the user can see
+/// their explicit opt-in was not honoured.
 fn connect_ollama_or_fallback(
     embedding: &LspEmbeddingConfig,
 ) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
     match connect_ollama_provider(embedding) {
         Ok(provider) => Ok(provider),
-        Err(error) if matches!(embedding.mode, EmbeddingMode::Auto) => {
+        Err(error) if matches!(embedding.mode, EmbeddingMode::Required) => {
+            tracing::error!(
+                %error,
+                endpoint = %embedding.endpoint,
+                model = %embedding.model_id,
+                "ollama embedding provider unreachable with --embeddings required; \
+                 falling back to stub — embeddings are disabled but the LSP stays alive"
+            );
+            Ok(Arc::new(StubProvider::new()))
+        }
+        Err(error) => {
             tracing::warn!(
                 %error,
                 endpoint = %embedding.endpoint,
@@ -123,7 +134,6 @@ fn connect_ollama_or_fallback(
             );
             Ok(Arc::new(StubProvider::new()))
         }
-        Err(error) => Err(error),
     }
 }
 

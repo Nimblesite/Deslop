@@ -7,7 +7,6 @@ import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
 import {
   bucketLabels,
-  clusterInterpretation,
   ReportCluster,
   ReportOccurrence,
   resolveBucket,
@@ -82,23 +81,14 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
   });
 }
 
-// Decoration hover is a shared-text surface per [CLONE-BUCKETS-DUAL-LABEL]
-// (humans read it on hover, agents scrape it via LSP/MCP). Uses
-// hybridTitle + actionSentence so the label class stays consistent
-// with the LSP diagnostic message, live bubble hover, and Problems
-// panel — one shared-text vocabulary across every hover in the IDE.
+// Decoration hover is visible in the editor, so keep it human-first.
+// Taxonomy labels and numeric signal details stay in diagnostic data
+// and Copy Context For AI, not in this tooltip.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   const labels = bucketLabels(resolveBucket(cluster));
-  md.appendMarkdown(`**${labels.hybridTitle}** — ${labels.actionSentence}\n\n`);
-  md.appendMarkdown(`${clusterInterpretation(cluster)}\n\n`);
-  md.appendMarkdown(
-    `structural \`${cluster.signals.structural.toFixed(2)}\` · ` +
-      `jaccard \`${cluster.signals.token_jaccard.toFixed(2)}\` · ` +
-      `embedding \`${cluster.signals.embedding_cos.toFixed(2)}\` · ` +
-      `fused \`${cluster.signals.fused.toFixed(2)}\`\n\n`,
-  );
+  md.appendMarkdown(`**${labels.plainTitle}** — ${labels.actionSentence}\n\n`);
   md.appendMarkdown(
     `[Open cluster](command:deslop.openCluster?${encodeURIComponent(JSON.stringify([cluster.id]))})`,
   );
