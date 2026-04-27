@@ -248,7 +248,8 @@ fn wait_for_generation(child: &mut McpChild, minimum: u64) -> Result<Value> {
     // remains reliable under `cargo llvm-cov` where instrumentation
     // overhead can make the background embedding refresh 10× slower
     // than in a normal test run — issue #57.
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let now = Instant::now();
+    let deadline = now.checked_add(Duration::from_secs(30)).unwrap_or(now);
     while Instant::now() < deadline {
         let result = call_tool(child, "session-config", &json!({}))?;
         let snap = structured_tool_result(&result)?;

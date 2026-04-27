@@ -66,6 +66,7 @@ export class LiveBubble implements vscode.Disposable {
         [{ language: "csharp" }, { language: "rust" }, { language: "python" }],
         this.inlayProvider,
       ),
+      this.store.onDidChange(() => this.clearRemovedActiveCluster()),
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
     );
@@ -196,6 +197,14 @@ export class LiveBubble implements vscode.Disposable {
     }
     this.inlayProvider.clear();
     this.active = null;
+  }
+
+  private clearRemovedActiveCluster(): void {
+    const active = this.active;
+    if (!active) return;
+    const report = this.store.current.report;
+    const stillPresent = report?.clusters.some((cluster) => cluster.id === active.clusterId);
+    if (!stillPresent) this.clearBubble();
   }
 }
 

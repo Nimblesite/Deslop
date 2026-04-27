@@ -267,14 +267,19 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
             if cluster_dropped(&dropped, inner) {
                 continue;
             }
-            // `outer` and `inner` are guaranteed in-bounds by the loop range.
-            let outer_structural = clusters[outer].signals.structural;
-            let inner_members = &clusters[inner].members;
-            let outer_members = &clusters[outer].members;
+            let Some(outer_cluster) = clusters.get(outer) else {
+                continue;
+            };
+            let Some(inner_cluster) = clusters.get(inner) else {
+                continue;
+            };
+            let outer_structural = outer_cluster.signals.structural;
+            let inner_members = &inner_cluster.members;
+            let outer_members = &outer_cluster.members;
             if !all_occurrences_contained_in_some(inner_members, outer_members) {
                 continue;
             }
-            if outer_structural >= clusters[inner].signals.structural {
+            if outer_structural >= inner_cluster.signals.structural {
                 drop_cluster(&mut dropped, inner);
             } else if outer_files_covered_by_inner(inner_members, outer_members) {
                 drop_cluster(&mut dropped, outer);

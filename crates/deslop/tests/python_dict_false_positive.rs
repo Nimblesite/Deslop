@@ -68,7 +68,7 @@ fn intra_file_clusters(report: &serde_json::Value) -> Vec<&serde_json::Value> {
             let occurrences = cluster
                 .pointer("/occurrences")
                 .and_then(serde_json::Value::as_array)
-                .map(|v| v.as_slice())
+                .map(Vec::as_slice)
                 .unwrap_or_default();
             let paths: std::collections::BTreeSet<&str> = occurrences
                 .iter()

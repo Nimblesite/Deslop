@@ -111,11 +111,11 @@ fn occurrence_text<'a>(occurrence: &'a serde_json::Value, key: &str) -> Result<&
 }
 
 fn occurrence_byte(occurrence: &serde_json::Value, key: &str) -> Result<usize> {
-    occurrence
+    let value = occurrence
         .get(key)
         .and_then(serde_json::Value::as_u64)
-        .map(|value| value as usize)
-        .with_context(|| format!("missing occurrence {key}"))
+        .with_context(|| format!("missing occurrence {key}"))?;
+    usize::try_from(value).with_context(|| format!("occurrence {key} too large"))
 }
 
 fn non_identical_source_slices(slices: &[Vec<u8>]) -> bool {
@@ -134,7 +134,10 @@ fn identical_clusters_with_different_source(
         .cloned()
         .unwrap_or_default();
     let mut offenders = Vec::new();
-    for cluster in clusters.iter().filter(|cluster| cluster_bucket(cluster) == "identical") {
+    for cluster in clusters
+        .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "identical")
+    {
         let slices = occurrence_slices(cluster, scan_root)?;
         if non_identical_source_slices(&slices) {
             offenders.push(format!(

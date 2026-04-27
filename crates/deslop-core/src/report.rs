@@ -24,6 +24,7 @@ use crate::{
     fingerprint::Fingerprint,
     pair::PairScore,
     report_boilerplate::{build_boilerplate_hints, ReportBoilerplateHint},
+    report_literals::value_tokens_are_identical,
     report_location::format_occurrence,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs, RepoMetrics},
     state::{FileId, FileRegistry},
@@ -408,8 +409,9 @@ fn cluster_to_report<S: BuildHasher>(
         sources,
         signals,
     );
-    let interpretation = interpret(signals, &cluster.members, sources);
-    let bucket = classify_signals(signals).wire_label().to_owned();
+    let kind = report_bucket_kind(signals, &cluster.members, sources, file_languages);
+    let interpretation = interpret(kind, &cluster.members, sources);
+    let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
     ReportCluster {
         id: cluster.id.clone(),
@@ -488,19 +490,33 @@ fn summarise(
     )
 }
 
-/// Maps the signal triple onto a one-line interpretation for AI agents.
-/// JSON `cluster.interpretation` is an AI-only surface per
-/// [CLONE-BUCKETS-DUAL-LABEL]. The Type-1/Type-2 distinction additionally
-/// checks raw source slices so Type-2 clusters never receive Type-1 extract
-/// guidance ([AUTOFIX-EXTRACT-DEPENDENCIES]).
-fn interpret(
+/// Routes the signal triple into the report bucket. The `Identical` bucket
+/// additionally requires matching C# value tokens so renamed identifiers still
+/// qualify while value-changing clones do not.
+fn report_bucket_kind(
     signals: ReportSignals,
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
-) -> String {
+    file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+) -> ClusterKind {
     let kind = classify_signals(signals);
+    if kind == ClusterKind::Identical
+        && !value_tokens_are_identical(members, sources, file_languages)
+    {
+        ClusterKind::NearlyIdentical
+    } else {
+        kind
+    }
+}
+
+/// Maps the report bucket onto a one-line interpretation for AI agents.
+fn interpret(
+    kind: ClusterKind,
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> String {
     if kind == ClusterKind::Identical && !source_slices_are_identical(members, sources) {
-        return "Identical code. Same structure after identifier/literal normalization; \
+        return "Identical code. Same structure after identifier normalization; \
                 extract only after choosing parameters. (Type-2 renamed clone)"
             .to_owned();
     }

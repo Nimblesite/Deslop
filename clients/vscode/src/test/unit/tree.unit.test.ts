@@ -123,7 +123,7 @@ suite("TopOffendersProvider", () => {
     assert.equal(nodes.length, 2);
   });
 
-  test("groups Top Offenders rows by representative file while preserving impact rank", () => {
+  test("cluster rows preserve impact rank and expose representative file", () => {
     // [VSIX-TOP-OFFENDERS-FILE-GROUPS] Issue #10: the tree must be
     // triageable by file without losing current impact/rank ordering.
     const store = new ReportStore();
@@ -146,23 +146,23 @@ suite("TopOffendersProvider", () => {
     const label2 = labels[2] ?? "";
     const label3 = labels[3] ?? "";
 
-    assert.equal(nodes.length, 4, "one top-level row must render per cluster");
-    assert.match(label0, /#2\b/, "Alpha's highest-impact cluster keeps rank #2");
-    assert.match(label1, /#3\b/, "Alpha's lower-impact cluster keeps rank #3");
-    assert.match(label2, /#1\b/, "Beta keeps its original global rank");
+    assert.equal(nodes.length, 4, "cluster mode must render one top-level row per cluster");
+    assert.match(label0, /#1\b/, "Beta keeps its global rank #1");
+    assert.match(label1, /#2\b/, "Alpha's highest-impact cluster keeps rank #2");
+    assert.match(label2, /#3\b/, "Alpha's lower-impact cluster keeps rank #3");
     assert.match(label3, /#4\b/, "Gamma keeps its original global rank");
-    assert.match(label0, /Alpha\.cs/, "first Alpha row must expose file context");
-    assert.match(label1, /Alpha\.cs/, "second Alpha row must expose file context");
-    assert.match(label2, /Beta\.cs/, "Beta row must expose file context");
+    assert.match(label0, /Beta\.cs/, "Beta row must expose file context");
+    assert.match(label1, /Alpha\.cs/, "first Alpha row must expose file context");
+    assert.match(label2, /Alpha\.cs/, "second Alpha row must expose file context");
     assert.match(label3, /Gamma\.cs/, "Gamma row must expose file context");
     assert.deepEqual(descriptions, [
+      "rank-1-beta",
       "rank-2-alpha",
       "rank-3-alpha",
-      "rank-1-beta",
       "rank-4-gamma",
     ]);
     assert.equal(nodes[0]?.command?.command, "deslop.openCluster");
-    assert.deepEqual(nodes[0]?.command?.arguments, ["rank-2-alpha"]);
+    assert.deepEqual(nodes[0]?.command?.arguments, ["rank-1-beta"]);
     assert.equal(provider.getChildren(nodes[0]).length, 2);
   });
 

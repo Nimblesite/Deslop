@@ -145,12 +145,28 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
 ) -> Vec<CandidatePair> {
     let pairs = candidate_pairs(fingerprints, signatures, lsh_pairs, embedding_pairs);
     if allow_cross_language {
-        return pairs;
+        return pairs
+            .into_iter()
+            .map(|pair| cross_language_opt_in_pair(pair, fingerprints, file_languages))
+            .collect();
     }
     pairs
         .into_iter()
         .filter(|pair| same_language_pair(pair, fingerprints, file_languages))
         .collect()
+}
+
+/// Explicit cross-language opt-in keeps LSH candidates subject to the
+/// Jaccard/fused gates, but not the same-language low-node-count guard.
+fn cross_language_opt_in_pair<S: BuildHasher>(
+    mut pair: CandidatePair,
+    fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> CandidatePair {
+    if pair.score.structural <= 0.0 && !same_language_pair(&pair, fingerprints, file_languages) {
+        pair.min_node_count = pair.min_node_count.max(LSH_ONLY_MIN_NODE_COUNT);
+    }
+    pair
 }
 
 /// Returns true when both pair endpoints resolve to the same language id.

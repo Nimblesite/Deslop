@@ -3139,3 +3139,48 @@ fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
     assert_eq!(bucket, Some("identical"));
     Ok(())
 }
+
+// Implements [CLONE-BUCKETS-DUAL-LABEL]: `--from-report` must preserve a
+// schema-carried `same_behavior` bucket instead of re-routing from signals.
+#[test]
+fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let report = "{\n\
+                  \"report_schema_version\": 1,\n\
+                  \"tool_version\": \"synthetic\",\n\
+                  \"min_nodes\": 30,\n\
+                  \"files_analysed\": 1,\n\
+                  \"clusters_hidden\": 0,\n\
+                  \"schema_doc\": \"\",\n\
+                  \"action_hints\": [],\n\
+                  \"embedding_provenance\": null,\n\
+                  \"clusters\": [{\n\
+                    \"id\": \"same-behavior\",\n\
+                    \"weight\": 4.0,\n\
+                    \"size\": 2,\n\
+                    \"canonical_node_count\": 12,\n\
+                    \"signals\": {\"structural\": 0.0, \"token_jaccard\": 0.0, \"embedding_cos\": 0.9, \"fused\": 0.9},\n\
+                    \"bucket\": \"same_behavior\",\n\
+                    \"occurrences\": [{\"path\": \"missing.unknown\", \"start_byte\": 0, \"end_byte\": 0, \"hidden\": false}],\n\
+                    \"summary\": \"synthetic semantic clone\",\n\
+                    \"interpretation\": \"semantic clone\"\n\
+                  }]\n\
+                  }\n";
+    let report_path = tmp.path().join("semantic.json");
+    fs::write(&report_path, report)?;
+    let output_prefix = tmp.path().join("report");
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(tmp.path())
+        .arg("--from-report")
+        .arg(&report_path)
+        .arg("--output")
+        .arg(&output_prefix)
+        .assert()
+        .success();
+    let html = fs::read_to_string(&out.html)?;
+    assert!(html.contains("Same behavior, different code"));
+    assert!(html.contains("AI match"));
+    Ok(())
+}

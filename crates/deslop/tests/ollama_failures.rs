@@ -72,6 +72,48 @@ fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn ollama_context_rejection_retries_small_subtrees_individually() -> Result<()> {
+    let server = MockOllama::spawn_with(MockBehavior::RejectMultiInputEmbeds)?;
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--embeddings")
+        .arg("required")
+        .arg("--embedding-provider")
+        .arg("ollama")
+        .arg("--embedding-model")
+        .arg("nomic-embed-text")
+        .arg("--embedding-endpoint")
+        .arg(server.endpoint())
+        .assert()
+        .success();
+    let provenance = embedding_provenance(tmp.path())?;
+    assert!(
+        metric(&provenance, "attempted_subtrees") > 0,
+        "embedding attempts must be surfaced: {provenance}"
+    );
+    assert_eq!(
+        metric(&provenance, "failed_subtrees"),
+        0,
+        "a context error on an aggregate Ollama request must retry the small \
+         snippets instead of marking the whole batch failed: {provenance}"
+    );
+    assert!(
+        server.max_embed_batch_len() > 1,
+        "fixture must reproduce an aggregate batch before retry; max batch was {}",
+        server.max_embed_batch_len()
+    );
+    Ok(())
+}
+
 fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -108,8 +150,18 @@ struct MockOllama {
     handle: Option<JoinHandle<()>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum MockBehavior {
+    RejectAllEmbeds,
+    RejectMultiInputEmbeds,
+}
+
 impl MockOllama {
     fn spawn() -> Result<Self> {
+        Self::spawn_with(MockBehavior::RejectAllEmbeds)
+    }
+
+    fn spawn_with(behavior: MockBehavior) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -122,6 +174,7 @@ impl MockOllama {
                 &listener,
                 server_stop.as_ref(),
                 server_max_embed_batch_len.as_ref(),
+                behavior,
             );
         });
         Ok(Self {
@@ -163,7 +216,7 @@ fn mock_ollama_handles_request_body_larger_than_read_buffer() -> Result<()> {
     let server = MockOllama::spawn()?;
     // Build a synthetic POST /api/embed body with > 1 024 bytes of input
     // so read_request must issue at least two read() calls on the stream.
-    let big_input: String = std::iter::repeat("x").take(900).collect();
+    let big_input = "x".repeat(900);
     let body = format!(r#"{{"model":"nomic-embed-text","input":["{big_input}"]}}"#);
     let request = format!(
         "POST /api/embed HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
@@ -187,14 +240,19 @@ fn mock_ollama_handles_request_body_larger_than_read_buffer() -> Result<()> {
     Ok(())
 }
 
-fn server_loop(listener: &TcpListener, stop: &AtomicBool, max_embed_batch_len: &AtomicUsize) {
+fn server_loop(
+    listener: &TcpListener,
+    stop: &AtomicBool,
+    max_embed_batch_len: &AtomicUsize,
+    behavior: MockBehavior,
+) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
                 // Switch accepted stream to blocking so read_request never gets
                 // WouldBlock on large (> 1 024 B) request bodies — issue #57.
                 let _ = stream.set_nonblocking(false);
-                handle_stream(stream, max_embed_batch_len);
+                handle_stream(stream, max_embed_batch_len, behavior);
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
@@ -204,11 +262,11 @@ fn server_loop(listener: &TcpListener, stop: &AtomicBool, max_embed_batch_len: &
     }
 }
 
-fn handle_stream(mut stream: TcpStream, max_embed_batch_len: &AtomicUsize) {
+fn handle_stream(mut stream: TcpStream, max_embed_batch_len: &AtomicUsize, behavior: MockBehavior) {
     let Ok(request) = read_request(&mut stream) else {
         return;
     };
-    let response = response_for(&request, max_embed_batch_len);
+    let response = response_for(&request, max_embed_batch_len, behavior);
     let _ = stream.write_all(response.as_bytes());
 }
 
@@ -283,7 +341,11 @@ fn request_path(headers: &str) -> String {
         .to_owned()
 }
 
-fn response_for(request: &HttpRequest, max_embed_batch_len: &AtomicUsize) -> String {
+fn response_for(
+    request: &HttpRequest,
+    max_embed_batch_len: &AtomicUsize,
+    behavior: MockBehavior,
+) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
         "/api/embed" if is_dimension_probe(&request.body) => {
@@ -291,13 +353,30 @@ fn response_for(request: &HttpRequest, max_embed_batch_len: &AtomicUsize) -> Str
         }
         "/api/embed" => {
             record_embed_batch_len(&request.body, max_embed_batch_len);
-            json_response(
-                "500 Internal Server Error",
-                &json!({ "error": "input length exceeds the context length" }),
-            )
+            embed_response(&request.body, behavior)
         }
         _ => json_response("404 Not Found", &json!({ "error": "not found" })),
     }
+}
+
+fn embed_response(body: &str, behavior: MockBehavior) -> String {
+    let inputs = request_inputs(body).unwrap_or_default();
+    match behavior {
+        MockBehavior::RejectAllEmbeds => context_length_error(),
+        MockBehavior::RejectMultiInputEmbeds if inputs.len() > 1 => context_length_error(),
+        MockBehavior::RejectMultiInputEmbeds => {
+            let embeddings: Vec<Vec<f32>> =
+                inputs.iter().map(|_| vec![1.0, 0.0, 0.0, 0.0]).collect();
+            json_response("200 OK", &json!({ "embeddings": embeddings }))
+        }
+    }
+}
+
+fn context_length_error() -> String {
+    json_response(
+        "500 Internal Server Error",
+        &json!({ "error": "input length exceeds the context length" }),
+    )
 }
 
 fn tags_body() -> Value {

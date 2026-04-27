@@ -167,6 +167,55 @@ suite("LiveBubble render", () => {
     bubble.dispose();
   });
 
+  test("store delta removing the active cluster clears the bubble", async () => {
+    const store = new ReportStore();
+    store.setSnapshot(report(), 1);
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
+    const calls: (readonly unknown[])[] = [];
+    const document = {
+      uri: vscode.Uri.file("/tmp/A.cs"),
+      lineAt: () => ({
+        range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 10)),
+      }),
+    } as unknown as vscode.TextDocument;
+    const editor = {
+      document,
+      setDecorations: (_type: vscode.TextEditorDecorationType, options: readonly unknown[]) => {
+        calls.push(options);
+      },
+    } as unknown as vscode.TextEditor;
+    const bubble = new LiveBubble(store, () => undefined);
+
+    try {
+      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
+      bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
+      assert.ok(
+        calls.some((options) => options.length > 0),
+        "fixture must start with an active inline bubble",
+      );
+
+      const beforeDelta = calls.length;
+      store.applyDelta({
+        from_generation: 1,
+        to_generation: 2,
+        clusters_added: [],
+        clusters_removed: ["c-a"],
+        clusters_updated: [],
+        cache_stats: { hits: 0, misses: 0 },
+        tool_version: "v2",
+      });
+      const deltaCalls = calls.slice(beforeDelta);
+
+      assert.ok(
+        deltaCalls.some((options) => options.length === 0),
+        "reportChanged removal must clear a bubble for a removed cluster",
+      );
+    } finally {
+      bubble.dispose();
+    }
+  });
+
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
     const doc = await vscode.workspace.openTextDocument({
       content: "line one\nline two\n",

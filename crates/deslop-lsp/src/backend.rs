@@ -97,7 +97,7 @@ fn build_startup_provider(
     }
     match embedding.provider_id.as_str() {
         STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
-        DEFAULT_PROVIDER_ID => connect_ollama_or_fallback(embedding),
+        DEFAULT_PROVIDER_ID => Ok(connect_ollama_or_fallback(embedding)),
         other => Err(deslop_core::live::LiveError::UnsupportedProvider {
             requested: other.to_owned(),
             registered: vec![STUB_PROVIDER_ID.to_owned(), DEFAULT_PROVIDER_ID.to_owned()],
@@ -108,16 +108,13 @@ fn build_startup_provider(
 /// Connects Ollama, falling back to a stub via the shared core function.
 /// Both `Auto` and `Required` survive — the LSP must never crash-loop
 /// VS Code per issue #35. Log level differs: warn for Auto, error for Required.
-fn connect_ollama_or_fallback(
-    embedding: &LspEmbeddingConfig,
-) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
-    Ok(deslop_core::embedding::connect_or_stub(
+fn connect_ollama_or_fallback(embedding: &LspEmbeddingConfig) -> Arc<dyn EmbeddingProvider> {
+    deslop_core::embedding::connect_or_stub(
         embedding.mode,
         &embedding.endpoint,
         &embedding.model_id,
-    ))
+    )
 }
-
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
 #[derive(Debug)]

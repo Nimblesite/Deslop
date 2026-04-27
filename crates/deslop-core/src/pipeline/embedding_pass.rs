@@ -13,7 +13,7 @@ use std::{
 use crate::{
     embedding::{
         cache::DEFAULT_CACHE_DIR_NAME, content_hash, embedding_pairs, EmbeddingCache,
-        EmbeddingMode, EmbeddingPair, EmbeddingProvider, EmbeddingSpec,
+        EmbeddingMode, EmbeddingPair, EmbeddingProvider, EmbeddingSpec, ProviderError,
     },
     error::CoreError,
     fingerprint::Fingerprint,
@@ -193,21 +193,72 @@ fn process_pending_embeddings(
 ) {
     let max_batch_size = provider.max_batch_size().max(1);
     for (index, chunk) in pending.chunks(max_batch_size).enumerate() {
-        let inputs: Vec<String> = chunk.iter().map(|item| item.snippet.clone()).collect();
-        match provider.embed_batch(&inputs) {
-            Ok(vectors) if vectors.len() == chunk.len() => {
-                for (item, vector) in chunk.iter().zip(vectors) {
-                    push_fresh_embedding(cache, batch, item, vector, dimensions);
-                }
-            }
-            Ok(vectors) => {
-                let message = format!("expected {} embeddings, got {}", chunk.len(), vectors.len());
-                record_failed_chunk(batch, chunk, &message);
-            }
-            Err(source) => record_failed_chunk(batch, chunk, &source),
-        }
+        embed_chunk(provider, cache, batch, chunk, dimensions);
         report_progress(progress, batch);
         maybe_yield_between_batches(batch_yield, index, pending.len(), max_batch_size);
+    }
+}
+
+/// Embeds one chunk, splitting failed multi-input requests so a
+/// context error on an aggregate Ollama request does not discard small
+/// snippets that succeed on their own.
+fn embed_chunk(
+    provider: &dyn EmbeddingProvider,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    chunk: &[PendingEmbedding],
+    dimensions: usize,
+) {
+    let inputs: Vec<String> = chunk.iter().map(|item| item.snippet.clone()).collect();
+    match provider.embed_batch(&inputs) {
+        Ok(vectors) if vectors.len() == chunk.len() => {
+            push_fresh_embeddings(cache, batch, chunk, vectors, dimensions);
+        }
+        Ok(vectors) => record_bad_vector_count(batch, chunk, vectors.len()),
+        Err(source) if chunk.len() > 1 => {
+            split_and_retry(provider, cache, batch, chunk, dimensions, &source);
+        }
+        Err(source) => record_failed_chunk(batch, chunk, &source),
+    }
+}
+
+/// Stores all successful vectors from one provider response.
+fn push_fresh_embeddings(
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    chunk: &[PendingEmbedding],
+    vectors: Vec<Vec<f32>>,
+    dimensions: usize,
+) {
+    for (item, vector) in chunk.iter().zip(vectors) {
+        push_fresh_embedding(cache, batch, item, vector, dimensions);
+    }
+}
+
+/// Records a malformed response that did not preserve batch arity.
+fn record_bad_vector_count(batch: &mut EmbeddingBatch, chunk: &[PendingEmbedding], actual: usize) {
+    let message = format!("expected {} embeddings, got {actual}", chunk.len());
+    record_failed_chunk(batch, chunk, &message);
+}
+
+/// Bisects a failed provider batch and retries both halves.
+fn split_and_retry(
+    provider: &dyn EmbeddingProvider,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    chunk: &[PendingEmbedding],
+    dimensions: usize,
+    source: &ProviderError,
+) {
+    tracing::debug!(
+        error = %source,
+        inputs = chunk.len(),
+        "embedding batch failed; retrying smaller chunks"
+    );
+    let mid = chunk.len() / 2;
+    if let (Some(left), Some(right)) = (chunk.get(..mid), chunk.get(mid..)) {
+        embed_chunk(provider, cache, batch, left, dimensions);
+        embed_chunk(provider, cache, batch, right, dimensions);
     }
 }
 

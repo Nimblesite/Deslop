@@ -37,7 +37,11 @@ use std::sync::Arc;
 /// so the user knows their explicit opt-in was not fulfilled; `Auto`
 /// logs at warn. The CLI batch tool enforces hard-fail semantics via its
 /// own code path where `Required` is genuinely terminal.
-pub fn connect_or_stub(mode: EmbeddingMode, endpoint: &str, model: &str) -> Arc<dyn EmbeddingProvider> {
+pub fn connect_or_stub(
+    mode: EmbeddingMode,
+    endpoint: &str,
+    model: &str,
+) -> Arc<dyn EmbeddingProvider> {
     match OllamaProvider::connect(endpoint, model) {
         Ok(provider) => Arc::new(provider),
         Err(err) if matches!(mode, EmbeddingMode::Required) => {
