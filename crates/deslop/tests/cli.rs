@@ -3184,3 +3184,90 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
     assert!(html.contains("AI match"));
     Ok(())
 }
+
+// Implements [PIPELINE-CLUSTER-EXACT] cross-cluster overlap collapse — issue #33.
+//
+// When the same physical code is fingerprinted at multiple AST depths, two
+// separate clusters can form whose occurrence sets are in a containment
+// relationship: every occurrence of cluster A appears (same file, same byte
+// range) inside an occurrence of cluster B.  `collapse_cross_cluster_overlap`
+// must remove A (the redundant inner cluster) so the report never carries two
+// clusters representing the same duplicated region.
+//
+// The bug this guards: the collapse only checked whether the *lower-weight*
+// cluster's occurrences were inside the *higher-weight* cluster's, never the
+// reverse.  When the higher-weight cluster happened to be the logically-inner
+// one (a strict occurrence-subset of the lower-weight cluster), both survived.
+#[test]
+fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(fixture("csharp-prologue-false-positive"))
+        .arg("--min-nodes")
+        .arg("2")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = read_json_report(&out.json)?;
+    let clusters = json
+        .get("clusters")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow::anyhow!("clusters missing from report"))?;
+    for (index_a, cluster_a) in clusters.iter().enumerate() {
+        let occs_a = cluster_a
+            .get("occurrences")
+            .and_then(|v| v.as_array())
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        for (index_b, cluster_b) in clusters.iter().enumerate() {
+            if index_a == index_b {
+                continue;
+            }
+            let occs_b = cluster_b
+                .get("occurrences")
+                .and_then(|v| v.as_array())
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            if all_occurrences_json_contained(occs_b, occs_a) {
+                let id_a = cluster_a
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                let id_b = cluster_b
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                anyhow::bail!(
+                    "cluster {id_b} is a strict occurrence-subset of cluster {id_a} — \
+                     cross-cluster overlap collapse must prevent this redundancy; \
+                     got {len_b} occurrences all inside {len_a} occurrences",
+                    len_b = occs_b.len(),
+                    len_a = occs_a.len(),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Returns `true` when every occurrence in `inner` is present in `outer`
+/// at the same file and byte range (non-strict containment).
+fn all_occurrences_json_contained(
+    inner: &[serde_json::Value],
+    outer: &[serde_json::Value],
+) -> bool {
+    !inner.is_empty()
+        && inner.iter().all(|oi| {
+            let path = oi.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let start = oi.get("start_byte").and_then(|v| v.as_u64()).unwrap_or(0);
+            let end = oi.get("end_byte").and_then(|v| v.as_u64()).unwrap_or(0);
+            outer.iter().any(|oo| {
+                oo.get("path").and_then(|v| v.as_str()).unwrap_or("") == path
+                    && oo.get("start_byte").and_then(|v| v.as_u64()).unwrap_or(0) <= start
+                    && end <= oo.get("end_byte").and_then(|v| v.as_u64()).unwrap_or(0)
+            })
+        })
+}

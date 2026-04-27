@@ -57,12 +57,27 @@ fn initialize_reports_server_info_version() -> Result<()> {
 #[test]
 fn reload_uses_fingerprint_cache_for_unchanged_workspace() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let _cold = report_after_start(workspace.path())?;
-    let warm = report_after_start(workspace.path())?;
-    let hits = cache_stat(&warm, "hits")?;
+    let cold = report_after_start(workspace.path())?;
+    let cold_hits = cache_stat(&cold, "hits")?;
+    let cold_misses = cache_stat(&cold, "misses")?;
+    assert_eq!(
+        cold_hits, 0,
+        "cold LSP start must have zero cache hits — nothing in cache yet: {cold}"
+    );
     assert!(
-        hits > 0,
-        "warm LSP restart must reuse fingerprint cache entries, got report: {warm}"
+        cold_misses >= 1,
+        "cold LSP start must register at least one fingerprint-cache miss: {cold}"
+    );
+    let warm = report_after_start(workspace.path())?;
+    let warm_hits = cache_stat(&warm, "hits")?;
+    let warm_misses = cache_stat(&warm, "misses")?;
+    assert_eq!(
+        warm_misses, 0,
+        "warm LSP restart must have zero fingerprint-cache misses — all files must be served from cache: {warm}"
+    );
+    assert_eq!(
+        warm_hits, cold_misses,
+        "warm LSP restart must hit the cache for every file that was a miss on the cold run: {warm}"
     );
     Ok(())
 }
