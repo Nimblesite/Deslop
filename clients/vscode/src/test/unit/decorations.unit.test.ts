@@ -12,7 +12,8 @@ function cluster(): ReportCluster {
     weight: 10,
     size: 4,
     canonical_node_count: 5,
-    signals: { structural: 1, token_jaccard: 0.9, embedding_cos: 0.8, fused: 0.95 },
+    bucket: "same_behavior",
+    signals: { structural: 0.1, token_jaccard: 0.2, embedding_cos: 0.9, fused: 0.95 },
     occurrences: [
       { path: "/a.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/b.cs", start_byte: 0, end_byte: 10, hidden: false },
@@ -23,14 +24,16 @@ function cluster(): ReportCluster {
 }
 
 suite("decorations helpers", () => {
-  test("hoverFor embeds every signal + a command link", () => {
+  test("hoverFor renders human copy plus a command link without raw AI data", () => {
     const md = hoverFor(cluster());
     const text = md.value;
-    assert.match(text, /interp/);
-    assert.match(text, /structural/);
-    assert.match(text, /jaccard/);
-    assert.match(text, /embedding/);
-    assert.match(text, /fused/);
+    assert.match(text, /Same behavior, different code/);
+    assert.match(text, /read both before merging/i);
+    assert.doesNotMatch(text, /Type-/);
+    assert.doesNotMatch(text, /structural/i);
+    assert.doesNotMatch(text, /jaccard/i);
+    assert.doesNotMatch(text, /embedding/i);
+    assert.doesNotMatch(text, /fused/i);
     assert.match(text, /command:deslop.openCluster/);
   });
 

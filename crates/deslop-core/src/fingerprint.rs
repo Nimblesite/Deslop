@@ -10,6 +10,7 @@ use blake3::Hasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
+    lang::shared::LITERAL_KIND,
     state::FileId,
 };
 
@@ -61,7 +62,8 @@ fn hash_and_collect(
     let _ = hasher.update(node.kind.as_bytes());
     let _ = hasher.update(b"\0");
     let mut subtree_node_count: usize = 1;
-    let current_boilerplate = inside_boilerplate || is_boilerplate(language, node);
+    let current_boilerplate =
+        inside_boilerplate || is_boilerplate(language, node) || is_literal_data_subtree(node);
     for child in &node.children {
         let (child_hash, child_size) =
             hash_and_collect(child, min_nodes, out, language, current_boilerplate);
@@ -86,4 +88,21 @@ fn is_boilerplate(language: Option<&str>, node: &NormalizedNode) -> bool {
         is_import_boilerplate_carrier(lang, node.kind)
             || is_import_boilerplate_only_subtree(lang, node)
     })
+}
+
+/// Returns true for one literal-data element inside a literal-only block.
+pub(crate) fn is_literal_data_item(node: &NormalizedNode) -> bool {
+    node.kind == LITERAL_KIND || is_literal_data_subtree(node)
+}
+
+/// Returns true for Python-style literal-only data containers.
+pub(crate) fn is_literal_data_subtree(node: &NormalizedNode) -> bool {
+    is_literal_data_carrier(node.kind)
+        && !node.children.is_empty()
+        && node.children.iter().all(is_literal_data_item)
+}
+
+/// Returns true for normalized node kinds that only arrange literal data.
+fn is_literal_data_carrier(kind: &str) -> bool {
+    matches!(kind, "dictionary" | "pair" | "list" | "tuple" | "set")
 }

@@ -17,7 +17,7 @@ use blake3::Hasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
-    fingerprint::Fingerprint,
+    fingerprint::{is_literal_data_item, is_literal_data_subtree, Fingerprint},
 };
 
 /// Synthetic node kind used as the hash prefix for a sibling window. The
@@ -63,12 +63,26 @@ fn walk(
     language: Option<&str>,
     inside_boilerplate: bool,
 ) {
-    let current_boilerplate = inside_boilerplate || is_boilerplate(language, node);
+    let current_boilerplate =
+        inside_boilerplate || is_boilerplate(language, node) || is_literal_data_subtree(node);
     if !current_boilerplate {
         emit_windows(&node.children, min_nodes, out, language);
     }
     for child in &node.children {
         walk(child, min_nodes, out, language, current_boilerplate);
+    }
+}
+
+/// Returns `true` when every element of `hashes` is identical.
+///
+/// A uniform sibling sequence means every same-width window is trivially
+/// hash-equivalent — none of those matches represent real duplicates.
+/// [PIPELINE-FINGERPRINT-MERKLE] BUG #61: suppress fingerprinting entirely
+/// so the clusterer never sees these spurious cross-window collisions.
+fn all_hashes_uniform(hashes: &[[u8; 32]]) -> bool {
+    match hashes.first() {
+        None => true,
+        Some(first) => hashes.iter().all(|h| h == first),
     }
 }
 
@@ -86,9 +100,18 @@ fn emit_windows(
 ) {
     let cumulative = cumulative_node_counts(siblings);
     let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
+    // [PIPELINE-FINGERPRINT-MERKLE] BUG #61: when every sibling hashes
+    // identically after normalisation (e.g. a dict of `int: str` entries),
+    // every same-width window is trivially equal — not a real clone.
+    if all_hashes_uniform(&child_hashes) {
+        return;
+    }
     for width in 2..=MAX_WINDOW_WIDTH {
         for (start, window) in siblings.windows(width).enumerate() {
             if boilerplate_window(language, window) {
+                continue;
+            }
+            if literal_data_window(window) {
                 continue;
             }
             let end = start.saturating_add(width);
@@ -114,6 +137,11 @@ fn boilerplate_window(language: Option<&str>, window: &[NormalizedNode]) -> bool
             .iter()
             .any(|node| is_import_boilerplate_only_subtree(lang, node))
     })
+}
+
+/// Returns true when every sibling in `window` is literal data.
+fn literal_data_window(window: &[NormalizedNode]) -> bool {
+    window.iter().all(is_literal_data_item)
 }
 
 /// Materialises one sibling-window fingerprint covering
