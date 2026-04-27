@@ -1,14 +1,16 @@
-// Unit tests for the binary resolver. Covers every branch of the env→PATH→bundled
-// decision tree without needing VS Code.
+// Unit tests for manifest-backed binary resolution.
 
 import * as assert from "node:assert/strict";
 import {
   resolveBinary,
+  resolveHostBinaries,
   BundledBinaryMissingError,
   UnsupportedPlatformError,
+  BinaryVerificationError,
+  type DeploymentManifest,
 } from "../../binary";
 import { mkdirSync, writeFileSync, chmodSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { delimiter, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 function platformId(): string {
@@ -20,93 +22,129 @@ function platformId(): string {
   throw new Error(`unsupported ${process.platform}-${process.arch}`);
 }
 
-function writeVersionScript(path: string, version: string): void {
-  writeFileSync(path, `#!/bin/sh\necho 'deslop ${version}'\n`);
-  chmodSync(path, 0o755);
+function writeVersionScript(filePath: string, name: string, version: string): void {
+  writeFileSync(filePath, `#!/bin/sh\necho '${name} ${version}'\n`);
+  chmodSync(filePath, 0o755);
+}
+
+function manifest(): DeploymentManifest {
+  return {
+    manifestVersion: 1,
+    product: { id: "deslop", version: "0.1.0" },
+    components: [
+      component("deslop-lsp", "lsp", "DESLOP_LSP_PATH"),
+      component("deslop-mcp", "mcp", "DESLOP_MCP_PATH"),
+      component("deslop", "cli", undefined),
+    ],
+    hosts: { vscode: { activationVerifies: ["deslop-lsp", "deslop-mcp"] } },
+  };
+}
+
+function component(id: string, kind: string, pathVar: string | undefined) {
+  const env = pathVar
+    ? { pathVar, dirVar: "DESLOP_BINARY_DIR" }
+    : { dirVar: "DESLOP_BINARY_DIR" };
+  return {
+    id,
+    kind,
+    language: "rust",
+    binaryName: id,
+    expectedVersion: "0.1.0",
+    bundled: { bundlePath: "bin/${platform}/${binaryName}${exe}" },
+    env,
+    required: true,
+  };
 }
 
 suite("binary resolver", () => {
   const tmp = resolve(tmpdir(), `deslop-binary-${process.pid}-${Date.now()}`);
   const envDir = resolve(tmp, "env");
   const pathDir = resolve(tmp, "pathdir");
+  const userDir = resolve(tmp, "user");
   const extDir = resolve(tmp, "ext");
   const bundledDir = resolve(extDir, "bin", platformId());
 
   suiteSetup(() => {
     mkdirSync(envDir, { recursive: true });
     mkdirSync(pathDir, { recursive: true });
+    mkdirSync(userDir, { recursive: true });
     mkdirSync(bundledDir, { recursive: true });
-    writeVersionScript(resolve(envDir, "deslop-lsp"), "9.9.9");
-    writeVersionScript(resolve(pathDir, "deslop-lsp"), "0.1.0");
-    writeVersionScript(resolve(bundledDir, "deslop-lsp"), "0.1.0");
-    writeVersionScript(resolve(envDir, "deslop-mcp"), "9.9.9");
-    writeVersionScript(resolve(bundledDir, "deslop-mcp"), "0.1.0");
-    writeVersionScript(resolve(bundledDir, "deslop"), "0.1.0");
+    writeVersionScript(resolve(envDir, "deslop-lsp"), "deslop-lsp", "9.9.9");
+    writeVersionScript(resolve(envDir, "deslop-mcp"), "deslop-mcp", "0.1.0");
+    writeVersionScript(resolve(pathDir, "deslop-lsp"), "deslop-lsp", "9.9.9");
+    writeVersionScript(resolve(bundledDir, "deslop-lsp"), "deslop-lsp", "0.1.0");
+    writeVersionScript(resolve(bundledDir, "deslop-mcp"), "deslop-mcp", "0.1.0");
+    writeVersionScript(resolve(bundledDir, "deslop"), "deslop", "0.1.0");
+    writeVersionScript(resolve(userDir, "deslop-lsp"), "deslop-lsp", "9.9.9");
   });
 
   suiteTeardown(() => {
-    try {
-      rmSync(tmp, { recursive: true, force: true });
-    } catch {
-      /* ignore */
-    }
+    rmSync(tmp, { recursive: true, force: true });
   });
 
-  test("DESLOP_BINARY_DIR wins over PATH + bundled", () => {
-    const env = { ...process.env, DESLOP_BINARY_DIR: envDir };
-    const resolved = resolveBinary(extDir, "lsp", "0.1.0", env);
-    assert.equal(resolved.source, "env");
-    assert.equal(resolved.kind, "lsp");
-    assert.ok(resolved.path.startsWith(envDir));
+  test("user setting mismatch blocks activation", () => {
+    assert.throws(
+      () =>
+        resolveBinary(extDir, "lsp", manifest(), {
+          lspPath: resolve(userDir, "deslop-lsp"),
+        }),
+      BinaryVerificationError,
+    );
   });
 
-  test("PATH wins when version matches", () => {
-    const env: NodeJS.ProcessEnv = { ...process.env, PATH: pathDir };
-    delete env["DESLOP_BINARY_DIR"];
-    const resolved = resolveBinary(extDir, "lsp", "0.1.0", env);
-    assert.equal(resolved.source, "path");
+  test("env path mismatch blocks activation", () => {
+    const env: NodeJS.ProcessEnv = { DESLOP_LSP_PATH: resolve(envDir, "deslop-lsp") };
+    assert.throws(() => resolveBinary(extDir, "lsp", manifest(), {}, env), /9\.9\.9/);
+  });
+
+  test("env directory mismatch blocks activation", () => {
+    const env: NodeJS.ProcessEnv = { DESLOP_BINARY_DIR: envDir };
+    assert.throws(() => resolveBinary(extDir, "lsp", manifest(), {}, env), /env-dir/);
+  });
+
+  test("PATH mismatch falls back to matching bundled binary", () => {
+    const env: NodeJS.ProcessEnv = { PATH: pathDir };
+    const resolved = resolveBinary(extDir, "lsp", manifest(), {}, env);
+    assert.equal(resolved.source, "bundled");
     assert.equal(resolved.version, "0.1.0");
+    assert.ok(env["PATH"]?.split(delimiter).includes(bundledDir) ?? false);
   });
 
-  test("PATH falls back to bundled when version mismatches", () => {
-    const env = { ...process.env, PATH: pathDir } as NodeJS.ProcessEnv;
-    delete env["DESLOP_BINARY_DIR"];
-    const resolved = resolveBinary(extDir, "lsp", "9.9.9", env);
-    assert.equal(resolved.source, "bundled");
-    assert.ok(env["PATH"]?.split(":").includes(bundledDir) ?? env["PATH"]?.split(";").includes(bundledDir));
+  test("bundled success resolves all VS Code activation checks", () => {
+    const resolved = resolveHostBinaries(extDir, "vscode", manifest(), {}, { PATH: "" });
+    assert.equal(resolved["deslop-lsp"]?.source, "bundled");
+    assert.equal(resolved["deslop-mcp"]?.source, "bundled");
   });
 
-  test("bundled used when neither env nor PATH has the binary", () => {
-    const env = { ...process.env, PATH: "/nonexistent" } as NodeJS.ProcessEnv;
-    delete env["DESLOP_BINARY_DIR"];
-    const resolved = resolveBinary(extDir, "lsp", "0.1.0", env);
-    assert.equal(resolved.source, "bundled");
-  });
-
-  test("bundled-missing throws BundledBinaryMissingError", () => {
-    const env = { ...process.env, PATH: "" } as NodeJS.ProcessEnv;
-    delete env["DESLOP_BINARY_DIR"];
+  test("missing bundled binary blocks activation", () => {
     const emptyExt = resolve(tmp, "empty-ext");
     mkdirSync(resolve(emptyExt, "bin", platformId()), { recursive: true });
     assert.throws(
-      () => resolveBinary(emptyExt, "lsp", "0.1.0", env),
+      () => resolveBinary(emptyExt, "lsp", manifest(), {}, { PATH: "" }),
       BundledBinaryMissingError,
     );
   });
 
-  test("mcp resolves alongside lsp", () => {
-    const env = { ...process.env, DESLOP_BINARY_DIR: envDir };
-    const resolved = resolveBinary(extDir, "mcp", "0.1.0", env);
-    assert.equal(resolved.kind, "mcp");
-    assert.equal(resolved.source, "env");
+  test("binary name mismatch blocks activation", () => {
+    const mismatchExt = resolve(tmp, "mismatch-ext");
+    const mismatchBin = resolve(mismatchExt, "bin", platformId());
+    mkdirSync(mismatchBin, { recursive: true });
+    writeVersionScript(resolve(mismatchBin, "deslop-lsp"), "deslop", "0.1.0");
+    assert.throws(
+      () => resolveBinary(mismatchExt, "lsp", manifest(), {}, { PATH: "" }),
+      /Found deslop 0\.1\.0/,
+    );
   });
 
-  test("cli kind resolves to bundled deslop", () => {
-    const env = { ...process.env, PATH: "" } as NodeJS.ProcessEnv;
-    delete env["DESLOP_BINARY_DIR"];
-    const resolved = resolveBinary(extDir, "cli", "0.1.0", env);
-    assert.equal(resolved.kind, "cli");
-    assert.equal(resolved.source, "bundled");
+  test("bundled version mismatch blocks activation", () => {
+    const staleExt = resolve(tmp, "stale-ext");
+    const staleBin = resolve(staleExt, "bin", platformId());
+    mkdirSync(staleBin, { recursive: true });
+    writeVersionScript(resolve(staleBin, "deslop-lsp"), "deslop-lsp", "9.9.9");
+    assert.throws(
+      () => resolveBinary(staleExt, "lsp", manifest(), {}, { PATH: "" }),
+      /Expected 0\.1\.0/,
+    );
   });
 
   test("UnsupportedPlatformError has expected shape", () => {
@@ -117,22 +155,5 @@ suite("binary resolver", () => {
   test("BundledBinaryMissingError exposes path", () => {
     const err = new BundledBinaryMissingError("/nope");
     assert.equal(err.binaryPath, "/nope");
-  });
-
-  test("env dir without binary falls through to PATH", () => {
-    const emptyEnv = resolve(tmp, "empty-env");
-    mkdirSync(emptyEnv, { recursive: true });
-    const env = { ...process.env, DESLOP_BINARY_DIR: emptyEnv, PATH: pathDir };
-    const resolved = resolveBinary(extDir, "lsp", "0.1.0", env);
-    assert.equal(resolved.source, "path");
-  });
-
-  test("prependToPath is idempotent", () => {
-    const env = { ...process.env, PATH: "" } as NodeJS.ProcessEnv;
-    delete env["DESLOP_BINARY_DIR"];
-    resolveBinary(extDir, "lsp", "0.1.0", env);
-    const first = env["PATH"];
-    resolveBinary(extDir, "lsp", "0.1.0", env);
-    assert.equal(env["PATH"], first);
   });
 });

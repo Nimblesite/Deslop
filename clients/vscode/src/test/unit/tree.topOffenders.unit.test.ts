@@ -26,6 +26,7 @@ import {
   tooltipText,
   withGroupBy,
 } from "./tree.helpers";
+import { CATEGORY_STYLE } from "../../tree/nodes";
 
 suite("TopOffendersProvider", () => {
   test("renders an Analysing… placeholder before the first report arrives", () => {
@@ -363,6 +364,34 @@ suite("TopOffendersProvider", () => {
     assert.match(near.accessibilityInformation?.label ?? "", /Near\.cs/);
     assert.match(tooltipText(exact), /\/repo\/src\/a\/Exact\.cs/);
     assert.match(tooltipText(near), /\/repo\/src\/b\/Near\.cs/);
+  });
+
+  test("identical cluster icon is red not green — green implies safe, but identical code is worst severity", () => {
+    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Identical = error level, must not use green.
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([cluster("clone", 100, "/repo/src/Clone.cs", 0, 20, "identical")]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [node] = provider.getChildren();
+    assert.ok(node, "identical cluster must render a node");
+    assert.equal(
+      iconColorId(node),
+      "charts.red",
+      "identical clones are the highest severity — icon must be red, not green",
+    );
+  });
+
+  test("no category style uses charts.green — green is never correct for code duplication", () => {
+    // [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Green implies safety/good; duplicates are never good.
+    for (const [bucket, style] of Object.entries(CATEGORY_STYLE)) {
+      assert.notEqual(
+        style.color,
+        "charts.green",
+        `${bucket} must not use charts.green — green implies the code is in good shape`,
+      );
+    }
   });
 
   test("expanding a cluster node yields OccurrenceNode children", () => {

@@ -8,6 +8,8 @@
 //! text and HTML views unless suppressed ([OUTPUT-SCHEMA-JSON]).
 
 mod logging;
+mod output;
+mod rerun;
 mod summary;
 
 use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
@@ -15,21 +17,19 @@ use std::{env, fs, io::Write as _, path::PathBuf, str::FromStr};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use deslop_core::{
-    classify_signals, debug_ast_dump, render::render_html, render::render_text,
-    validate_threshold_percent, EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider,
-    PipelineSession, Report, ReportDelta, StubProvider, ThresholdSource, ThresholdSummary,
-    DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    debug_ast_dump, validate_threshold_percent, version_contract_output, ComponentKind,
+    EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, PipelineSession, Report,
+    ReportDelta, StubProvider, ThresholdSource, ThresholdSummary, DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
 };
 use tracing::Level;
 
 use crate::{
     logging::LogSink,
+    output::{emit_all, load_report, write_file, FormatSelection, OutputPaths},
+    rerun::{assemble_touched, parse_rerun_adds},
     summary::{ColorChoice, PreambleKnobs, WrittenArtefacts},
 };
-
-/// Default base name for the three-format output written to CWD when
-/// `--output` is not provided.
-const DEFAULT_OUTPUT_STEM: &str = "deslop-report";
 
 /// Command-line interface for `Deslop`.
 #[derive(Debug, Parser)]
@@ -216,7 +216,12 @@ fn main() {
 /// be wrapped with a non-zero exit code without losing the
 /// `anyhow::Error` chain.
 fn run_cli() -> Result<()> {
-    let args = Cli::parse();
+    let raw_args: Vec<String> = env::args().collect();
+    if let Some(output) = version_contract_output(&raw_args, "deslop", ComponentKind::Cli)? {
+        print!("{output}");
+        return Ok(());
+    }
+    let args = Cli::parse_from(raw_args);
     if let Some(file) = args.debug_ast.as_deref() {
         return run_debug_ast(file);
     }
@@ -229,7 +234,7 @@ fn run_cli() -> Result<()> {
     summary::preamble(
         color,
         &args.path,
-        &output.base,
+        output.base_path(),
         &log_sink,
         &PreambleKnobs {
             min_nodes: args.min_nodes,
@@ -241,9 +246,9 @@ fn run_cli() -> Result<()> {
     tracing::info!(
         path = %args.path.display(),
         min_nodes = args.min_nodes,
-        json = formats.json,
-        text = formats.text,
-        html = formats.html,
+        json = formats.json_enabled(),
+        text = formats.text_enabled(),
+        html = formats.html_enabled(),
         embeddings = mode.as_str(),
         incremental = args.behaviour.incremental,
         "deslop invoked",
@@ -259,7 +264,7 @@ fn run_cli() -> Result<()> {
     apply_threshold(&args, &mut report)?;
     let mut written = emit_all(&report, &formats, &output, &args.path)?;
     if let Some(delta) = outcome.delta.as_ref() {
-        let delta_path = output.with_extension("delta.json");
+        let delta_path = output.path_with_extension("delta.json");
         let payload = serde_json::to_string_pretty(delta).context("serialise delta as JSON")?;
         write_file(&delta_path, payload.as_bytes())?;
         written.push(delta_path);
@@ -409,58 +414,6 @@ fn produce_report(
     })
 }
 
-/// Parsed `--rerun-add` entry: copy `src` to `dst` between the initial
-/// analysis and the rerun, then replay `dst` through `update_files`.
-#[derive(Debug)]
-struct RerunAdd {
-    /// Source path copied from (must exist at rerun time).
-    src: PathBuf,
-    /// Destination path copied to (inside the scan root).
-    dst: PathBuf,
-}
-
-/// Parses the `SRC=DST` spec. Rejects specs that do not contain exactly
-/// one `=` separator.
-fn parse_rerun_adds(specs: &[String]) -> Result<Vec<RerunAdd>> {
-    specs
-        .iter()
-        .map(|spec| {
-            let (src, dst) = spec
-                .split_once('=')
-                .ok_or_else(|| anyhow::anyhow!("--rerun-add spec must be SRC=DST, got {spec:?}"))?;
-            Ok(RerunAdd {
-                src: PathBuf::from(src),
-                dst: PathBuf::from(dst),
-            })
-        })
-        .collect()
-}
-
-/// Merges `--rerun-touch`, `--rerun-remove`, and `--rerun-add` paths
-/// into the single vector passed to [`PipelineSession::update_files`].
-/// Deletions and additions are implicitly touched so the session picks
-/// them up.
-fn assemble_touched(args: &Cli, adds: &[RerunAdd]) -> Vec<PathBuf> {
-    let capacity = args
-        .rerun_touch
-        .len()
-        .saturating_add(args.rerun_remove.len())
-        .saturating_add(adds.len());
-    let mut out: Vec<PathBuf> = Vec::with_capacity(capacity);
-    out.extend(args.rerun_touch.iter().cloned());
-    for path in &args.rerun_remove {
-        if !out.contains(path) {
-            out.push(path.clone());
-        }
-    }
-    for add in adds {
-        if !out.contains(&add.dst) {
-            out.push(add.dst.clone());
-        }
-    }
-    out
-}
-
 /// Parses and validates `--fail-over` at clap-time so invalid values
 /// exit `2` (clap's default for argument errors) instead of surfacing
 /// as a runtime `1`.
@@ -520,139 +473,4 @@ fn build_ollama_provider(
     }
     tracing::warn!(%source, "embedding provider unreachable — continuing without Type-4 recall");
     Ok(None)
-}
-
-/// Which of the three output formats are enabled for this run.
-#[derive(Debug)]
-struct FormatSelection {
-    /// Emit canonical JSON (`<base>.json`).
-    json: bool,
-    /// Emit terse text view (`<base>.txt`).
-    text: bool,
-    /// Emit human-readable HTML view (`<base>.html`).
-    html: bool,
-}
-
-impl FormatSelection {
-    /// Builds the selection from the three suppression flags. Errors
-    /// out when all three are suppressed — silent runs are never
-    /// helpful.
-    fn from_args(args: &Cli) -> Result<Self> {
-        let selection = Self {
-            json: !args.suppress.nojson,
-            text: !args.suppress.notext,
-            html: !args.suppress.nohtml,
-        };
-        if !selection.json && !selection.text && !selection.html {
-            bail!("at least one of --nojson/--notext/--nohtml must remain enabled");
-        }
-        Ok(selection)
-    }
-}
-
-/// Resolved output base path; renderers append their own extension.
-#[derive(Debug)]
-struct OutputPaths {
-    /// `<base>` such that `<base>.json` etc. are the final paths.
-    base: PathBuf,
-}
-
-impl OutputPaths {
-    /// Picks the base path. When the user passed `--output`, use it
-    /// verbatim; otherwise write into the current working directory
-    /// under [`DEFAULT_OUTPUT_STEM`].
-    fn new(explicit: Option<&std::path::Path>) -> Self {
-        let base = explicit.map_or_else(
-            || {
-                env::current_dir()
-                    .unwrap_or_default()
-                    .join(DEFAULT_OUTPUT_STEM)
-            },
-            std::path::Path::to_path_buf,
-        );
-        Self { base }
-    }
-
-    /// Returns the concrete on-disk path for a given extension.
-    fn with_extension(&self, extension: &str) -> PathBuf {
-        let mut path = self.base.clone();
-        let stem = path
-            .file_name()
-            .map(std::ffi::OsStr::to_os_string)
-            .unwrap_or_default();
-        let mut new_name = stem;
-        new_name.push(".");
-        new_name.push(extension);
-        path.set_file_name(new_name);
-        path
-    }
-
-    /// Directory that the report files sit in. Used as the default
-    /// location for the timestamped log file so all per-run output
-    /// lives together.
-    fn directory(&self) -> &std::path::Path {
-        self.base.parent().unwrap_or(std::path::Path::new("."))
-    }
-}
-
-/// Writes every enabled format for `report` to its derived path under
-/// `output`, returning the paths actually written (for the finish
-/// footer).
-fn emit_all(
-    report: &Report,
-    formats: &FormatSelection,
-    output: &OutputPaths,
-    scan_root: &std::path::Path,
-) -> Result<Vec<PathBuf>> {
-    let mut written: Vec<PathBuf> = Vec::with_capacity(3);
-    if formats.json {
-        let json = serde_json::to_string_pretty(report).context("serialise report as JSON")?;
-        let path = output.with_extension("json");
-        write_file(&path, json.as_bytes())?;
-        written.push(path);
-    }
-    if formats.text {
-        let text = render_text(report);
-        let path = output.with_extension("txt");
-        write_file(&path, text.as_bytes())?;
-        written.push(path);
-    }
-    if formats.html {
-        let html = render_html(report, Some(scan_root));
-        let path = output.with_extension("html");
-        write_file(&path, html.as_bytes())?;
-        written.push(path);
-    }
-    Ok(written)
-}
-
-/// Writes `payload` to `path`, creating parent directories as needed.
-fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
-    let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
-    fs::create_dir_all(parent).with_context(|| format!("create parent {}", parent.display()))?;
-    let mut file =
-        fs::File::create(path).with_context(|| format!("create report file {}", path.display()))?;
-    file.write_all(payload)
-        .with_context(|| format!("write report file {}", path.display()))?;
-    tracing::info!(path = %path.display(), bytes = payload.len(), "wrote report file");
-    Ok(())
-}
-
-/// Loads a canonical JSON report from disk for `--from-report`.
-fn load_report(path: &std::path::Path) -> Result<Report> {
-    let source =
-        fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    let mut report = serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))?;
-    // Reports predating [CLONE-BUCKETS] deserialise with an empty
-    // `cluster.bucket`. Re-route from the signal triple so renderers
-    // always see a non-empty canonical wire label.
-    for cluster in &mut report.clusters {
-        if cluster.bucket.is_empty() {
-            classify_signals(cluster.signals)
-                .wire_label()
-                .clone_into(&mut cluster.bucket);
-        }
-    }
-    Ok(report)
 }

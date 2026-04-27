@@ -60,12 +60,14 @@ suite("extension internals", () => {
     revealActiveBinary(
       {
         kind: "lsp",
+        componentId: "deslop-lsp",
         source: "bundled",
         path: "/tmp/lsp",
         version: "1.0.0",
       },
       {
         kind: "mcp",
+        componentId: "deslop-mcp",
         source: "bundled",
         path: "/tmp/mcp",
         version: "1.0.0",
@@ -77,9 +79,10 @@ suite("extension internals", () => {
     revealActiveBinary(
       {
         kind: "lsp",
-        source: "env",
+        componentId: "deslop-lsp",
+        source: "env-dir",
         path: "/tmp/lsp",
-        version: null,
+        version: "1.0.0",
       },
       undefined,
     );
@@ -94,7 +97,7 @@ suite("extension internals", () => {
     delete process.env["DESLOP_BINARY_DIR"];
     process.env["PATH"] = "/nope";
     try {
-      const result = tryResolveOptional("/nonexistent/extension", "mcp", "0.1.0");
+      const result = tryResolveOptional("/nonexistent/extension", "mcp", optionalManifest());
       assert.equal(result, undefined);
     } finally {
       process.env = saved;
@@ -411,3 +414,22 @@ suite("extension internals", () => {
     assert.equal(resolveWorkspaceRoot(), first.uri.fsPath);
   });
 });
+
+function optionalManifest() {
+  return {
+    manifestVersion: 1,
+    product: { id: "deslop", version: "0.1.0" },
+    components: [
+      {
+        id: "deslop-mcp",
+        kind: "mcp",
+        language: "rust",
+        binaryName: "deslop-mcp",
+        expectedVersion: "0.1.0",
+        bundled: { bundlePath: "bin/${platform}/${binaryName}${exe}" },
+        required: true,
+      },
+    ],
+    hosts: {},
+  };
+}

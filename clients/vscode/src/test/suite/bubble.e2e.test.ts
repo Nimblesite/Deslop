@@ -6,10 +6,26 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
+interface BinaryExport {
+  readonly source?: string;
+  readonly path?: string;
+}
+
+interface ExtensionExports {
+  readonly resolvedLsp?: BinaryExport;
+  readonly resolvedMcp?: BinaryExport;
+}
+
 suite("live bubble (real LSP)", () => {
-  test("extension spawns the real deslop-lsp binary", () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
-    assert.ok(ext?.isActive, "extension must be active against the real LSP");
+  test("extension spawns bundled Deslop binaries", async () => {
+    const ext = vscode.extensions.getExtension<ExtensionExports>("nimblesite.deslop-vscode");
+    assert.ok(ext, "extension must be installed");
+    const api = await ext.activate();
+    assert.ok(ext.isActive, "extension must be active against the real LSP");
+    assert.equal(api.resolvedLsp?.source, "bundled");
+    assert.equal(api.resolvedMcp?.source, "bundled");
+    assert.match(api.resolvedLsp?.path ?? "", /[/\\]bin[/\\][^/\\]+[/\\]deslop-lsp(?:\.exe)?$/);
+    assert.match(api.resolvedMcp?.path ?? "", /[/\\]bin[/\\][^/\\]+[/\\]deslop-mcp(?:\.exe)?$/);
   });
 
   test("editing a duplicated range triggers re-analysis", async () => {

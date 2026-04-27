@@ -37,6 +37,8 @@ fn truncate_cluster_for_wire(cluster: &mut ReportCluster) {
 
 /// Method name for `deslop/reportGet`.
 pub const REPORT_GET: &str = "deslop/reportGet";
+/// Method name for `deslop/reportDelta`.
+pub const REPORT_DELTA: &str = "deslop/reportDelta";
 /// Method name for `deslop/reportForFile`.
 pub const REPORT_FOR_FILE: &str = "deslop/reportForFile";
 /// Method name for `deslop/reportForRange`.
@@ -63,6 +65,13 @@ pub const VIRTUAL_DOCUMENT: &str = "deslop/virtualDocument";
 pub struct PathParams {
     /// Workspace-relative or absolute path.
     pub path: PathBuf,
+}
+
+/// Parameters for `report/delta`.
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct ReportDeltaParams {
+    /// Generation the client already has. Missing means "previous generation."
+    pub since_generation: Option<u64>,
 }
 
 /// Parameters for `report/forRange`.
@@ -144,6 +153,31 @@ pub async fn report_schema_doc(
 ) -> LspResult<serde_json::Value> {
     let report = backend.service().report_get().await;
     Ok(serde_json::Value::String(report.schema_doc.clone()))
+}
+
+/// Forwards `report/delta`.
+///
+/// # Errors
+///
+/// Never errors today — kept fallible to match the JSON-RPC method
+/// signature.
+pub async fn report_delta(
+    backend: &LspBackend,
+    params: ReportDeltaParams,
+) -> LspResult<serde_json::Value> {
+    let since = match params.since_generation {
+        Some(generation) => generation,
+        None => previous_generation(backend).await,
+    };
+    let delta = backend.service().report_delta(since).await;
+    Ok(serde_json::to_value(delta).unwrap_or(serde_json::Value::Null))
+}
+
+/// Returns the generation immediately before the current live snapshot.
+async fn previous_generation(backend: &LspBackend) -> u64 {
+    let session = backend.service().session();
+    let guard = session.lock().await;
+    guard.generation().saturating_sub(1)
 }
 
 /// Catch-all params for no-arg methods. Accepts any JSON value

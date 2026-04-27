@@ -413,13 +413,23 @@ impl PipelineSession {
         last_pass_stats: CacheStats,
     ) -> Result<Report, CoreError> {
         let corpus = self.snapshot_corpus();
+        tracing::debug!(
+            fingerprints = corpus.fingerprints.len(),
+            "building signatures"
+        );
         let signatures = build_signatures_with_languages(
             &corpus.fingerprints,
             &corpus.trees,
             &self.file_languages,
         );
+        tracing::debug!(signatures = signatures.len(), "running LSH band collisions");
         let lsh_pairs = band_collisions(&signatures);
+        tracing::debug!(lsh_pairs = lsh_pairs.len(), "running embedding pass");
         let embedding_outcome = run_embedding_pass(config, &corpus)?;
+        tracing::debug!(
+            embedding_pairs = embedding_outcome.pairs.len(),
+            "collecting candidate pairs"
+        );
         let pairs = candidate_pairs_for_language_policy(
             &corpus.fingerprints,
             &signatures,
@@ -428,8 +438,18 @@ impl PipelineSession {
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );
+        tracing::debug!(
+            candidate_pairs = pairs.len(),
+            "clustering by transitive closure"
+        );
         let fused_clusters = cluster_by_transitive_closure(&pairs);
+        tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
         let clusters = build_ranked_fused_clusters(&corpus.fingerprints, &fused_clusters);
+        tracing::info!(
+            ranked_clusters = clusters.len(),
+            fingerprints = corpus.fingerprints.len(),
+            "render complete"
+        );
         Ok(render_report(ReportInputs {
             clusters: &clusters,
             registry: &self.registry,

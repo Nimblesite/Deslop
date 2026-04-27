@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
 
 GRADLE ?= gradle
 JETBRAINS_DIR := clients/jetbrains
@@ -49,7 +49,7 @@ build:
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `scripts/coverage-check.sh` enforces
 ##       each one independently — no workspace roll-up masking.
-test:
+test: delete-path-binaries
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
@@ -91,6 +91,7 @@ ci:
 	@$(MAKE) lint
 	@$(MAKE) test
 	@$(MAKE) build
+	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
 
 ## setup: Post-create dev environment setup (used by devcontainer)
@@ -139,6 +140,35 @@ install-binary:
 	  cargo install --locked --path crates/$$_crate --force; \
 	done
 
+## delete-path-binaries: Remove cargo-installed Deslop binaries before tests so
+##                       extension tests cannot accidentally pass by resolving
+##                       PATH instead of the extension bundle. VS Code extension
+##                       directories in PATH are skipped — the resolver's bundled
+##                       candidate (clients/vscode/bin/<platform>/) always wins
+##                       because it is evaluated before the path candidate.
+delete-path-binaries:
+	@echo "==> Removing cargo-installed Deslop binaries from PATH..."
+	@for _bin in deslop deslop-lsp deslop-mcp; do \
+	  cargo uninstall $$_bin 2>/dev/null || true; \
+	  $(RM) "$(HOME)/.cargo/bin/$$_bin" "$(HOME)/.cargo/bin/$$_bin.exe"; \
+	  _found=$$(command -v $$_bin 2>/dev/null || true); \
+	  if [ -n "$$_found" ]; then \
+	    case "$$_found" in \
+	      */.vscode/extensions/*|*/.vscode-server/extensions/*|*/.cursor/extensions/*) \
+	        echo "SKIP: $$_bin at $$_found is a VS Code extension bundle — not a PATH install" ;; \
+	      *) \
+	        echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
+	        echo "Remove it before running tests; extension tests must use bundled binaries."; \
+	        exit 1 ;; \
+	    esac; \
+	  fi; \
+	done
+
+## deployment-verify: Validate deployment manifest and built binary contracts.
+deployment-verify: build
+	node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
+	node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release
+
 ## vsix-install: Install Node deps for clients/vscode + webview-ui
 vsix-install:
 	cd clients/vscode && npm install --no-audit --no-fund
@@ -152,20 +182,20 @@ vsix-build: vsix-install
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
 
-## vsix-test: Run VS Code E2E tests against the REAL deslop-lsp binary.
-vsix-test: vsix-install vsix-build
+## vsix-test: Run VS Code E2E tests against bundled extension binaries only.
+vsix-test: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm test
 
 ## vsix-test-ollama: Run the Ollama-gated VSIX e2e suite (csharp-type4
 ##                   fixture, provider=ollama, model=nomic-embed-text).
 ##                   NEVER runs in `make ci` / `make vsix-test`. Requires
 ##                   a local Ollama daemon and the model pulled.
-vsix-test-ollama: vsix-install vsix-build
+vsix-test-ollama: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
 ## vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
 ##                Threshold lives in clients/vscode/coverage-thresholds.json.
-vsix-coverage: vsix-install vsix-build
+vsix-coverage: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run coverage
 
 ## vsix-package: Build the .vsix artifact (does not publish).
@@ -174,9 +204,9 @@ vsix-coverage: vsix-install vsix-build
 ##               extension can resolve them via the bundled path
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
-vsix-package: vsix-install vsix-build _vsix-stage-and-package
+vsix-package: delete-path-binaries vsix-install vsix-build _vsix-stage-and-package
 
-_vsix-stage-and-package:
+_vsix-stage-bundled-binaries:
 	@_uname_s=$$(uname -s); _uname_m=$$(uname -m); \
 	 case "$$_uname_s-$$_uname_m" in \
 	   Darwin-arm64)   _platform=darwin-arm64 ;; \
@@ -196,6 +226,9 @@ _vsix-stage-and-package:
 	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
 	   chmod +x "$$_dest/$$_bin$$_ext"; \
 	 done
+	cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+
+_vsix-stage-and-package: _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run package
 
 ## vsix-clean: Remove VSIX-specific build artifacts (staged bin/, node_modules,
@@ -209,6 +242,7 @@ vsix-clean:
 	$(RM) clients/vscode/out
 	$(RM) clients/vscode/dist
 	$(RM) clients/vscode/deslop-vscode.vsix
+	$(RM) clients/vscode/deployment-toolkit.json
 	$(RM) clients/vscode/coverage
 
 ## vsix-install-code: Install the packaged clients/vscode/deslop-vscode.vsix
@@ -224,18 +258,25 @@ vsix-install-code:
 
 ## vsix-rebuild: Nuke every build artifact (cargo target/, staged bin/, node_modules,
 ##               dist/, out/, old .vsix), rebuild the workspace + webview + extension
-##               from scratch, repackage the .vsix, and install it into the local
-##               `code` CLI. Use when "why isn't my change showing up" strikes.
-##               Composes existing targets — does not duplicate their logic.
+##               from scratch, repackage the .vsix, install it into the local `code`
+##               CLI, and scrub any cargo-installed PATH copies so the installed VSIX
+##               bundle is the only source of truth. Use when "why isn't my change
+##               showing up" strikes. Composes existing targets — does not duplicate
+##               their logic.
 vsix-rebuild:
 	@$(MAKE) clean
 	@$(MAKE) vsix-clean
 	@$(MAKE) vsix-package
 	@$(MAKE) vsix-install-code
+	@$(MAKE) delete-path-binaries
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
+	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
 ## jetbrains-build: Build the JetBrains plugin zip.
+##                 JetBrains archive verification is deferred to GitHub #55
+##                 while the local Gradle validation path is tracked in #56.
 jetbrains-build:
+	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
 
 ## jetbrains-verify: Verify JetBrains plugin project and archive structure.
@@ -253,6 +294,7 @@ help:
 	@echo "  lint           - All linters/analyzers (read-only, no formatting)"
 	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
 	@echo "  clean          - Remove build artifacts"
+	@echo "  deployment-verify - Validate deployment manifest and built binary contracts"
 	@echo "  ci             - fmt + lint + rust test + build + VSIX e2e + VSIX coverage"
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""

@@ -53,8 +53,12 @@ export function registerCommands(
     vscode.commands.registerCommand("deslop.jumpToNextOccurrence", () =>
       jumpToNextOccurrence(store),
     ),
-    vscode.commands.registerCommand("deslop.compareWithCanonical", (id: string) =>
-      compareWithCanonical(store, id),
+    vscode.commands.registerCommand("deslop.compareWithCanonical", (target: unknown) =>
+      compareWithCanonicalTarget(store, target),
+    ),
+    vscode.commands.registerCommand(
+      "deslop.compareOccurrenceWithCanonical",
+      (target: unknown) => compareWithCanonicalTarget(store, target),
     ),
     vscode.commands.registerCommand("deslop.pickEmbeddingModel", () =>
       pickEmbeddingModel(store, clientOf),
@@ -213,19 +217,105 @@ export function jumpToNextOccurrence(store: ReportStore): void {
   openOccurrence(next).catch(() => undefined);
 }
 
+export async function compareWithCanonicalTarget(
+  store: ReportStore,
+  target: unknown,
+): Promise<void> {
+  if (isOccurrenceNode(target)) {
+    const selection = selectedOccurrenceCompare(store, target.occurrence);
+    if (!selection) return;
+    await openCompareDiff(selection.cluster.id, selection.canonical, selection.selected);
+    return;
+  }
+  const clusterId = clusterIdFromCompareTarget(store, target);
+  if (!clusterId) return;
+  await compareWithCanonical(store, clusterId);
+}
+
+interface OccurrenceCompareSelection {
+  readonly cluster: ReportCluster;
+  readonly canonical: ReportOccurrence;
+  readonly selected: ReportOccurrence;
+}
+
+function selectedOccurrenceCompare(
+  store: ReportStore,
+  occurrence: ReportOccurrence,
+): OccurrenceCompareSelection | undefined {
+  const cluster = parentClusterForOccurrence(store, occurrence);
+  const canonical = cluster?.occurrences[0];
+  const selected = cluster?.occurrences.find((candidate) =>
+    sameOccurrence(candidate, occurrence),
+  );
+  if (!cluster || !canonical || !selected || sameOccurrence(canonical, selected)) {
+    return undefined;
+  }
+  return { cluster, canonical, selected };
+}
+
+function parentClusterForOccurrence(
+  store: ReportStore,
+  occurrence: ReportOccurrence,
+): ReportCluster | undefined {
+  return store.current.report?.clusters.find((cluster) =>
+    cluster.occurrences.some((candidate) => sameOccurrence(candidate, occurrence)),
+  );
+}
+
+function sameOccurrence(left: ReportOccurrence, right: ReportOccurrence): boolean {
+  return (
+    left.path === right.path &&
+    left.start_byte === right.start_byte &&
+    left.end_byte === right.end_byte
+  );
+}
+
+function clusterIdFromCompareTarget(
+  store: ReportStore,
+  target: unknown,
+): string | undefined {
+  if (typeof target === "string") return target;
+  if (isCompareTreeTarget(target)) return clusterIdForTreeNode(target, store);
+  return undefined;
+}
+
+function isCompareTreeTarget(
+  target: unknown,
+): target is ClusterNode | OccurrenceNode {
+  return isOccurrenceNode(target) || isClusterNode(target);
+}
+
+function isClusterNode(target: unknown): target is ClusterNode {
+  if (typeof target !== "object" || target === null || !("cluster" in target)) {
+    return false;
+  }
+  const cluster = (target as Partial<ClusterNode>).cluster as
+    | Partial<ReportCluster>
+    | undefined;
+  return typeof cluster?.id === "string" && Array.isArray(cluster.occurrences);
+}
+
 export async function compareWithCanonical(store: ReportStore, clusterId: string): Promise<void> {
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster || cluster.occurrences.length < 2) return;
   const [a, b] = cluster.occurrences;
   if (!a || !b) return;
+  await openCompareDiff(cluster.id, a, b);
+}
+
+async function openCompareDiff(
+  clusterId: string,
+  a: ReportOccurrence,
+  b: ReportOccurrence,
+): Promise<void> {
   // Always diff occurrence bytes via the deslop-compare provider — same-file
   // clusters would otherwise collapse to "whole file vs. itself" because
   // `vscode.diff` dedupes identical URIs into a single editor pane.
   await vscode.commands.executeCommand(
     "vscode.diff",
-    buildCompareUri(a, "a", cluster.id),
-    buildCompareUri(b, "b", cluster.id),
-    `Compare (cluster ${cluster.id})`,
+    buildCompareUri(a, "a", clusterId),
+    buildCompareUri(b, "b", clusterId),
+    `Compare (cluster ${clusterId})`,
   );
 }
 

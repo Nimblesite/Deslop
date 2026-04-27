@@ -88,6 +88,9 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Deployment manifest and binary gates
+        run: make deployment-verify
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -137,6 +140,9 @@ jobs:
       - name: vsix-test (full E2E against real LSP)
         run: xvfb-run -a make vsix-test
 
+      - name: vsix-package deployment gate
+        run: make vsix-package
+
       - name: Upload VSIX coverage
         uses: actions/upload-artifact@v4
         if: always()
@@ -145,3 +151,29 @@ jobs:
           path: |
             clients/vscode/coverage/
           retention-days: 7
+
+  jetbrains:
+    name: JetBrains package gate
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.0.0"
+
+      - name: jetbrains-package deployment gate
+        run: make jetbrains-package

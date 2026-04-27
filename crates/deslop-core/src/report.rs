@@ -18,9 +18,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     ast::ByteRange,
     boilerplate::BoilerplateRange,
-    buckets::{bucket_labels, classify_signals},
+    buckets::{bucket_labels, classify_signals, ClusterKind},
     cluster::Cluster,
     config::ExclusionConfig,
+    fingerprint::Fingerprint,
     pair::PairScore,
     report_boilerplate::{build_boilerplate_hints, ReportBoilerplateHint},
     report_location::format_occurrence,
@@ -320,8 +321,18 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
                 inputs.exclusion,
                 inputs.sources,
             );
-            let all_hidden = !report_cluster.occurrences.is_empty()
-                && report_cluster.occurrences.iter().all(|occ| occ.hidden);
+            // [#58 FUSION-STRATEGY-GATE-NO-TOKEN-ONLY]: LooselySimilar clusters
+            // carry only token-overlap signal with no structural or semantic
+            // anchor. Token-only matches (test boilerplate, import scaffolding)
+            // push token_jaccard near 1.0 while structural stays near 0,
+            // causing these to rank as #1 offenders despite containing no
+            // actionable duplication. Exclude them from the human-facing ranked
+            // output; the raw analysis data remains available via the pipeline.
+            let loosely_similar =
+                classify_signals(report_cluster.signals) == ClusterKind::LooselySimilar;
+            let all_hidden = loosely_similar
+                || (!report_cluster.occurrences.is_empty()
+                    && report_cluster.occurrences.iter().all(|occ| occ.hidden));
             (report_cluster, all_hidden)
         })
         .collect();
@@ -397,7 +408,7 @@ fn cluster_to_report<S: BuildHasher>(
         sources,
         signals,
     );
-    let interpretation = interpret(signals, canonical_node_count);
+    let interpretation = interpret(signals, &cluster.members, sources);
     let bucket = classify_signals(signals).wire_label().to_owned();
     let occurrences_total = occurrences.len();
     ReportCluster {
@@ -477,14 +488,50 @@ fn summarise(
     )
 }
 
-/// Maps the signal triple onto a one-line interpretation for AI
-/// agents. JSON `cluster.interpretation` is an AI-only surface per
-/// [CLONE-BUCKETS-DUAL-LABEL], so the output composes plain title +
-/// action sentence + `Type-N`. The `canonical_node_count` is unused
-/// today — kept in the signature so callers don't churn; routing
-/// lives in `buckets::classify_signals`.
-fn interpret(signals: ReportSignals, _canonical_node_count: usize) -> String {
-    bucket_labels(classify_signals(signals)).agent_summary()
+/// Maps the signal triple onto a one-line interpretation for AI agents.
+/// JSON `cluster.interpretation` is an AI-only surface per
+/// [CLONE-BUCKETS-DUAL-LABEL]. The Type-1/Type-2 distinction additionally
+/// checks raw source slices so Type-2 clusters never receive Type-1 extract
+/// guidance ([AUTOFIX-EXTRACT-DEPENDENCIES]).
+fn interpret(
+    signals: ReportSignals,
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> String {
+    let kind = classify_signals(signals);
+    if kind == ClusterKind::Identical && !source_slices_are_identical(members, sources) {
+        return "Identical code. Same structure after identifier/literal normalization; \
+                extract only after choosing parameters. (Type-2 renamed clone)"
+            .to_owned();
+    }
+    bucket_labels(kind).agent_summary()
+}
+
+/// Returns true when every cluster member maps to the same raw source bytes.
+fn source_slices_are_identical(
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+) -> bool {
+    let Some(first) = members
+        .first()
+        .and_then(|member| source_slice(member, sources))
+    else {
+        return false;
+    };
+    members
+        .iter()
+        .skip(1)
+        .all(|member| source_slice(member, sources).is_some_and(|slice| slice == first))
+}
+
+/// Borrows the source bytes covered by one fingerprint range.
+fn source_slice<'a>(
+    member: &Fingerprint,
+    sources: &'a HashMap<FileId, Vec<u8>>,
+) -> Option<&'a [u8]> {
+    sources
+        .get(&member.file_id)?
+        .get(member.byte_range.start..member.byte_range.end)
 }
 
 /// Formats one occurrence through the shared human-location renderer.

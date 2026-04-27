@@ -6,7 +6,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.ProjectWideLspServerDescriptor
 import java.nio.file.Path
 
-internal class DeslopLspServerDescriptor(project: Project) :
+internal class DeslopLspServerDescriptor(
+    project: Project,
+    private val binary: DeslopResolvedBinary,
+) :
     ProjectWideLspServerDescriptor(project, "Deslop") {
 
     override fun isSupportedFile(file: VirtualFile): Boolean {
@@ -15,7 +18,7 @@ internal class DeslopLspServerDescriptor(project: Project) :
 
     override fun createCommandLine(): GeneralCommandLine {
         val workspaceRoot = workspaceRoot()
-        return GeneralCommandLine(DeslopBinaryResolver.command())
+        return GeneralCommandLine(binary.path.toString())
             .withParameters(workspaceRoot.toString(), "--min-nodes", "30", "--embeddings", "off")
             .withWorkDirectory(workspaceRoot.toFile())
     }

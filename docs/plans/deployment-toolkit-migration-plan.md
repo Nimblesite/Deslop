@@ -129,13 +129,73 @@ Wire the release path so deployment drift fails before publish:
   `deslop-mcp`.
 - LSP and MCP initialize metadata verification.
 - VSIX package contents verification.
-- JetBrains package contents verification.
+- JetBrains package contents verification (implemented but temporarily
+  deferred to GitHub #55 pending the Gradle validation work in GitHub #56).
 
 Use shared `deploy-toolkit` commands when available. Until they are published,
 add product-local tests that prove the same behavior.
 
 Release/publish docs must state that Deployment Toolkit is private and agents
 need authenticated `gh` access for referenced docs and fixture updates.
+
+## Critical Invariants — Never Break These
+
+The following rules are non-negotiable. Every future Deployment Toolkit migration,
+test harness change, or CI update must preserve them. Violations here have
+historically been subtle (tests passing green while testing the wrong binary) and
+are therefore called out explicitly.
+
+### Rule 1: Binaries must be bundled inside the extension package
+
+Every extension that requires `deslop-lsp` or `deslop-mcp` must bundle those
+binaries inside the extension archive for every supported platform. A platform that
+lacks a bundled binary fails with a hard error at activation — it does not silently
+fall back to PATH. This is enforced by:
+
+- `_vsix-stage-bundled-binaries` (Makefile) — copies `target/release/deslop-lsp`
+  and `target/release/deslop-mcp` into `clients/vscode/bin/<platform>/` before
+  packaging and before running any VSIX tests.
+- `scripts/verify-vsix-package.mjs` — extracts the `.vsix` archive, verifies each
+  `activationVerifies` binary is present and executable, and runs `--version` on
+  the extracted binary to confirm its identity.
+- `BundledBinaryMissingError` in `binary.ts` — the resolver throws this error with
+  `hardFailure: true`, so there is no path-fallback when the bundled binary is
+  absent.
+
+### Rule 2: Extension tests must use the bundled binary, not target/release or PATH
+
+The resolver priority chain is:
+`user-setting → env-path → env-dir (DESLOP_BINARY_DIR) → bundled → path`
+
+`env-dir` is position 3 and beats `bundled` at position 4. Setting
+`DESLOP_BINARY_DIR` in the test environment to `target/release` (or any directory
+other than the staged extension bin) bypasses the bundled path entirely and makes
+tests meaningless for proving deployment correctness.
+
+**The law:**
+
+- `.vscode-test.mjs` must clear `DESLOP_BINARY_DIR: ""`, `DESLOP_LSP_PATH: ""`,
+  and `DESLOP_MCP_PATH: ""` so the resolver reaches the `bundled` candidate.
+- `_vsix-stage-bundled-binaries` must run before every `vsix-test`, `vsix-coverage`,
+  and `vsix-package` invocation so the staged binaries exist.
+- At least one E2E test must assert `resolvedLsp.source === "bundled"` and
+  `resolvedMcp.source === "bundled"` via the `ExtensionApi` returned by
+  `activate()`. This assertion is in `bubble.e2e.test.ts`.
+
+### Rule 3: make test must eliminate PATH-installed binaries before running
+
+`delete-path-binaries` (called by `make test`, `make vsix-test`, `make vsix-coverage`,
+and `make vsix-package`) removes cargo-installed copies of `deslop`, `deslop-lsp`,
+and `deslop-mcp` from `~/.cargo/bin`. It then checks `command -v <binary>` and
+fails the build if any binary is still reachable from PATH, EXCEPT binaries found
+inside a VS Code or Cursor extension directory (`*/.vscode/extensions/*` etc.) —
+those are extension-bundled copies that the resolver's `bundled` candidate already
+beats.
+
+If this target is ever changed to a no-op, softer check, or exception-added, the
+author must update this section with a dated rationale.
+
+---
 
 ## Open Decisions
 
@@ -146,34 +206,41 @@ need authenticated `gh` access for referenced docs and fixture updates.
 
 ## TODO
 
-- [ ] Fetch and re-read all five GitHub issues plus private Deployment Toolkit
+- [x] Fetch and re-read all five GitHub issues plus private Deployment Toolkit
       docs before implementation.
-- [ ] Compare local `deployment-toolkit.json` with private
+- [x] Compare local `deployment-toolkit.json` with private
       `fixtures/manifests/deslop.json` and reconcile drift.
-- [ ] Add failing tests for `deslop`, `deslop-lsp`, and `deslop-mcp` plain
+- [x] Add failing tests for `deslop`, `deslop-lsp`, and `deslop-mcp` plain
       version output.
-- [ ] Add failing tests for `--version --json` schema output for all three
+- [x] Add failing tests for `--version --json` schema output for all three
       binaries.
-- [ ] Implement version flags before any runtime startup or workspace parsing.
-- [ ] Add LSP initialize metadata tests for `deslop-lsp`.
-- [ ] Add MCP initialize metadata tests for `deslop-mcp`.
-- [ ] Replace VS Code binary resolution with manifest-backed startup
+- [x] Implement version flags before any runtime startup or workspace parsing.
+- [x] Add LSP initialize metadata tests for `deslop-lsp`.
+- [x] Add MCP initialize metadata tests for `deslop-mcp`.
+- [x] Replace VS Code binary resolution with manifest-backed startup
       verification for `deslop-lsp` and `deslop-mcp`.
-- [ ] Add VS Code resolver tests for user setting, env path, env directory,
+- [x] Add VS Code resolver tests for user setting, env path, env directory,
       PATH fallback, bundled success, missing binary, component mismatch, and
       version mismatch.
-- [ ] Ensure VSIX packaging includes `deployment-toolkit.json` at extension
+- [x] Ensure VSIX packaging includes `deployment-toolkit.json` at extension
       root.
-- [ ] Add generated `.vsix` archive verification for manifest-listed binaries
+- [x] Add generated `.vsix` archive verification for manifest-listed binaries
       and undeclared executables.
-- [ ] Update JetBrains packaging to include `deployment-toolkit.json` at plugin
+- [x] Force VSIX tests to stage and resolve bundled extension binaries instead
+      of `target/release` or PATH-installed binaries.
+- [x] Make test entry points scrub installed Deslop binaries from PATH before
+      tests run.
+- [x] Update JetBrains packaging to include `deployment-toolkit.json` at plugin
       root.
-- [ ] Add JetBrains resolver checks before LSP descriptor startup.
-- [ ] Add JetBrains tests for env directory, PATH, bundled, missing, mismatch,
+- [x] Add JetBrains resolver checks before LSP descriptor startup.
+- [x] Add JetBrains tests for env directory, PATH, bundled, missing, mismatch,
       and notification/Event Log behavior.
-- [ ] Add CI gates for manifest validation and built binary version checks.
-- [ ] Add CI gates for VSIX and JetBrains package verification.
-- [ ] Update private Deployment Toolkit fixtures and Deslop migration docs when
-      the product contract changes.
-- [ ] Update release/publish docs with private Deployment Toolkit access
+- [x] Add CI gates for manifest validation and built binary version checks.
+- [x] Add CI gates for VSIX package verification.
+- [ ] Re-enable JetBrains package archive verification in `make
+      jetbrains-package` (GitHub #55).
+- [ ] Restore a reliable local JetBrains Gradle validation path (GitHub #56).
+- [x] Inspect private Deployment Toolkit fixtures and Deslop migration docs;
+      no product manifest drift required.
+- [x] Update release/publish docs with private Deployment Toolkit access
       requirements.
