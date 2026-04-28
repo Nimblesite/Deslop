@@ -276,12 +276,18 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
             let outer_structural = outer_cluster.signals.structural;
             let inner_members = &inner_cluster.members;
             let outer_members = &outer_cluster.members;
-            if !all_occurrences_contained_in_some(inner_members, outer_members) {
-                continue;
-            }
-            if outer_structural >= inner_cluster.signals.structural {
-                drop_cluster(&mut dropped, inner);
-            } else if outer_files_covered_by_inner(inner_members, outer_members) {
+            if all_occurrences_contained_in_some(inner_members, outer_members) {
+                // Inner's occurrences all nest inside outer's — outer dominates.
+                if outer_structural >= inner_cluster.signals.structural {
+                    drop_cluster(&mut dropped, inner);
+                } else if outer_files_covered_by_inner(inner_members, outer_members) {
+                    drop_cluster(&mut dropped, outer);
+                    break;
+                }
+            } else if all_occurrences_contained_in_some(outer_members, inner_members) {
+                // Outer's occurrences all nest inside inner's — inner dominates.
+                // Drop the outer (higher-weight but narrower) cluster regardless of
+                // structural signal: inner covers every file outer covers and more.
                 drop_cluster(&mut dropped, outer);
                 break;
             }
