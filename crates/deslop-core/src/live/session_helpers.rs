@@ -320,6 +320,7 @@ pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
     }
 }
 
+/// Removes a cached report that failed compatibility or schema parsing.
 fn delete_incompatible_cached_report(path: &Path) {
     match std::fs::remove_file(path) {
         Ok(()) => tracing::warn!(path = %path.display(), "cached_report_incompatible_deleted"),
@@ -367,15 +368,15 @@ mod tests {
     use super::try_load_cached_report;
 
     #[test]
-    fn incompatible_cached_report_is_deleted_when_cache_seed_fails() {
-        let temp = tempfile::tempdir().expect("tempdir");
+    fn incompatible_cached_report_is_deleted_when_cache_seed_fails(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
         let cache_dir = temp
             .path()
             .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
-        std::fs::create_dir_all(&cache_dir).expect("cache dir");
+        std::fs::create_dir_all(&cache_dir)?;
         let state_path = cache_dir.join(super::STATE_FILE_NAME);
-        std::fs::write(&state_path, br#"{"tool_version":"stale","clusters":[]}"#)
-            .expect("write incompatible state");
+        std::fs::write(&state_path, br#"{"tool_version":"stale","clusters":[]}"#)?;
 
         assert!(
             state_path.exists(),
@@ -389,5 +390,6 @@ mod tests {
             !state_path.exists(),
             "incompatible cached state must be deleted so startup runs a fresh scan"
         );
+        Ok(())
     }
 }

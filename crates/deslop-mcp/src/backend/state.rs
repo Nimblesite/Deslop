@@ -232,6 +232,7 @@ fn read_state_report(state_file: &Path) -> Result<Report, BackendError> {
     }
 }
 
+/// Removes an LSP state file that failed report JSON parsing.
 fn delete_incompatible_state_file(
     state_file: &Path,
     parse_error: &serde_json::Error,

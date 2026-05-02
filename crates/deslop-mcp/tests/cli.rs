@@ -646,7 +646,9 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
         1,
         "issue #113: tools/list must expose exactly one find-similar tool: {tools:?}"
     );
-    let tool = find_similar_tools[0];
+    let tool = find_similar_tools
+        .first()
+        .ok_or_else(|| anyhow!("find-similar tool must be present"))?;
     let description = tool
         .get("description")
         .and_then(Value::as_str)
