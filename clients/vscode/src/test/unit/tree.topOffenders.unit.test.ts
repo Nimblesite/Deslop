@@ -83,6 +83,28 @@ suite("TopOffendersProvider", () => {
     assert.equal(provider.getChildren(first).length, 2);
   });
 
+  test("issue_47_cluster_tooltip_keeps_labeled_cluster_id_after_human_description", () => {
+    const store = new ReportStore();
+    const clusterId = "1802186da488862f";
+    store.setSnapshot(
+      report([cluster(clusterId, 48_936.95, "/repo/src/ICD10/CliE2ETests.cs")]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [node] = provider.getChildren();
+    assert.ok(node, "cluster row must render");
+    assert.notEqual(
+      String(node.description ?? ""),
+      clusterId,
+      "row description must not use the hex cluster id as the human anchor",
+    );
+    assert.match(
+      tooltipText(node),
+      /cluster id:\s+`1802186da488862f`/,
+      "tooltip must keep the machine id discoverable behind a labeled cluster id field",
+    );
+  });
+
   test("file mode roots are FileNodes sorted by max cluster weight desc", async () => {
     // [VSIX-TOP-OFFENDERS-FILE-MODE]
     const store = new ReportStore();

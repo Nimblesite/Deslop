@@ -1967,6 +1967,52 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 }
 
 #[test]
+fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> Result<()> {
+    let workspace = copied_fixture_root()?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
+    let _ = init_session(&mut child)?;
+    let before = structured_tool_result(&call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 100 }),
+    )?)?;
+    let before_count = value_get(&before, "/total_clusters")?.as_u64().unwrap_or(0);
+    assert!(before_count >= 1, "expected at least one cluster before edit");
+
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    let mut state: Value = serde_json::from_slice(&std::fs::read(&state_file)?)?;
+    *state
+        .get_mut("clusters")
+        .ok_or_else(|| anyhow!("fixture state missing clusters"))? = json!([]);
+    std::fs::write(&state_file, serde_json::to_vec_pretty(&state)?)?;
+
+    let after = structured_tool_result(&call_tool(
+        &mut child,
+        "rescan",
+        &json!({
+            "paths": [workspace.path().join("Beta.cs").to_string_lossy().into_owned()],
+            "n": 100
+        }),
+    )?)?;
+    let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);
+    assert!(
+        after_count < before_count,
+        "issue #89: rescan must synchronously reload state and return fresh top offenders; was {before_count}, now {after_count}"
+    );
+    assert_eq!(
+        value_get(&after, "/n")?.as_u64(),
+        Some(100),
+        "issue #89: rescan must echo the requested top-offenders count"
+    );
+    assert!(
+        value_get(&after, "/clusters")?.is_array(),
+        "issue #89: rescan must return top-offenders clusters"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;

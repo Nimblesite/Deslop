@@ -1,9 +1,6 @@
-use std::{
-    collections::BTreeSet,
-    fmt,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-};
+//! Regression coverage for GH#45 pipeline observability.
+
+use std::{collections::BTreeSet, fmt, path::{Path, PathBuf}, sync::{Arc, Mutex}};
 
 use anyhow::{Context, Result};
 use deslop_core::{
@@ -99,8 +96,6 @@ impl CapturedEvents {
 
 #[derive(Debug)]
 struct CapturedEvent {
-    target: &'static str,
-    level: tracing::Level,
     fields: BTreeSet<String>,
 }
 
@@ -135,12 +130,9 @@ impl Subscriber for CaptureSubscriber {
     fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
 
     fn event(&self, event: &Event<'_>) {
-        let metadata = event.metadata();
         let mut visitor = FieldCollector::default();
         event.record(&mut visitor);
         self.captured.push(CapturedEvent {
-            target: metadata.target(),
-            level: *metadata.level(),
             fields: visitor.fields,
         });
     }

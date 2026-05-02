@@ -96,7 +96,8 @@ export class ClusterNode extends vscode.TreeItem {
     this.tooltip = new vscode.MarkdownString(
       `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\``,
+        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        `cluster id: \`${cluster.id}\``,
     );
     this.command = {
       command: "deslop.openCluster",

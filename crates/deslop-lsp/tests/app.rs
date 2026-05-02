@@ -11,6 +11,7 @@ use deslop_core::embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLL
 use deslop_lsp::app::{
     action_from_args, run_process, run_process_result, run_startup_with, LspAction, LspStartup,
 };
+use deslop_lsp::backend::LspEmbeddingConfig;
 use serde_json::Value;
 
 /// Plain `--version` prints the exact Deployment Toolkit contract and
@@ -55,25 +56,15 @@ fn json_version_is_handled_before_server_startup() -> Result<()> {
     Ok(())
 }
 
-/// A normal invocation parses every startup flag into one app-layer
-/// configuration object for the server runner.
+/// A normal invocation parses the supported startup flags into one
+/// app-layer configuration object for the server runner.
 #[test]
-fn serve_action_carries_full_startup_configuration() -> Result<()> {
+fn serve_action_carries_supported_startup_configuration() -> Result<()> {
     let startup = serve_startup(action_from_args([
         "deslop-lsp",
         "/tmp/deslop-workspace",
-        "--min-nodes",
-        "42",
         "--worker-threads",
         "3",
-        "--embeddings",
-        "auto",
-        "--embedding-provider",
-        "stub",
-        "--embedding-model",
-        "unit-model",
-        "--embedding-endpoint",
-        "http://127.0.0.1:9999",
         "--stdio",
     ])?)?;
 
@@ -81,13 +72,13 @@ fn serve_action_carries_full_startup_configuration() -> Result<()> {
         startup.workspace_root,
         PathBuf::from("/tmp/deslop-workspace")
     );
-    assert_eq!(startup.min_nodes, 42);
+    assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 3);
-    assert_eq!(startup.embedding.mode, EmbeddingMode::Auto);
-    assert_eq!(startup.embedding.mode.as_str(), "auto");
-    assert_eq!(startup.embedding.provider_id, "stub");
-    assert_eq!(startup.embedding.model_id, "unit-model");
-    assert_eq!(startup.embedding.endpoint, "http://127.0.0.1:9999");
+    assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
+    assert_eq!(startup.embedding.mode.as_str(), "off");
+    assert_eq!(startup.embedding.provider_id, "ollama");
+    assert_eq!(startup.embedding.model_id, DEFAULT_OLLAMA_MODEL);
+    assert_eq!(startup.embedding.endpoint, DEFAULT_OLLAMA_ENDPOINT);
     Ok(())
 }
 
@@ -117,7 +108,7 @@ fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
     let mut stdout = Vec::new();
     let mut observed: Option<LspStartup> = None;
     run_process_result(
-        ["deslop-lsp", "/tmp/deslop-runner", "--min-nodes", "7"],
+        ["deslop-lsp", "/tmp/deslop-runner", "--worker-threads", "2"],
         &mut stdout,
         |startup| {
             observed = Some(startup);
@@ -128,8 +119,8 @@ fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
     let startup = observed.ok_or_else(|| anyhow!("server runner was not called"))?;
     assert!(stdout.is_empty(), "serve path must not write CLI stdout");
     assert_eq!(startup.workspace_root, PathBuf::from("/tmp/deslop-runner"));
-    assert_eq!(startup.min_nodes, 7);
-    assert_eq!(startup.worker_threads, 0);
+    assert_eq!(startup.min_nodes, 30);
+    assert_eq!(startup.worker_threads, 2);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
     Ok(())
 }
@@ -157,19 +148,12 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
         workspace_root: PathBuf::from("/tmp/deslop-async"),
         min_nodes: 11,
         worker_threads: 1,
-        embedding: serve_startup(action_from_args([
-            "deslop-lsp",
-            "/tmp/ignored",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "stub",
-            "--embedding-model",
-            "async-model",
-            "--embedding-endpoint",
-            "http://127.0.0.1:1234",
-        ])?)?
-        .embedding,
+        embedding: LspEmbeddingConfig {
+            mode: EmbeddingMode::Required,
+            provider_id: "stub".to_owned(),
+            model_id: "async-model".to_owned(),
+            endpoint: "http://127.0.0.1:1234".to_owned(),
+        },
     };
     let mut observed: Option<LspStartup> = None;
 
@@ -213,20 +197,12 @@ fn startup_dispatch_propagates_async_server_error() -> Result<()> {
 fn invalid_arguments_return_user_facing_errors() -> Result<()> {
     assert_error_contains(["deslop-lsp"], "usage: deslop-lsp")?;
     assert_error_contains(
-        ["deslop-lsp", "/tmp/ws", "--min-nodes"],
-        "--min-nodes requires",
-    )?;
-    assert_error_contains(
-        ["deslop-lsp", "/tmp/ws", "--min-nodes", "abc"],
-        "invalid digit",
-    )?;
-    assert_error_contains(
         ["deslop-lsp", "/tmp/ws", "--worker-threads"],
         "--worker-threads requires",
     )?;
     assert_error_contains(
-        ["deslop-lsp", "/tmp/ws", "--embeddings", "banana"],
-        "expected one of auto/required/off",
+        ["deslop-lsp", "/tmp/ws", "--unknown"],
+        "unsupported LSP startup flag",
     )?;
     Ok(())
 }

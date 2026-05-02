@@ -244,20 +244,9 @@ export function buildServerArgs(
   workspaceRoot: string | undefined,
   debug: boolean,
 ): string[] {
-  // [LSP-EMBEDDING-CONSENT] Fresh settings pass `--embeddings off`;
-  // the picker persists `auto` only after explicit model selection.
   if (!workspaceRoot) return debug ? ["--debug"] : [];
-  const cfg = vscode.workspace.getConfiguration("deslop");
   const args = [workspaceRoot];
   if (debug) args.push("--debug");
-  args.push("--min-nodes", String(cfg.get<number>("minNodes", 30)));
-  args.push("--embeddings", cfg.get<string>("embedding.mode", "off"));
-  args.push("--embedding-provider", cfg.get<string>("embedding.provider", "ollama"));
-  args.push("--embedding-model", cfg.get<string>("embedding.model", "nomic-embed-text"));
-  args.push(
-    "--embedding-endpoint",
-    cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434"),
-  );
   return args;
 }
 
