@@ -629,6 +629,63 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
 }
 
 #[test]
+fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request("tools/list", &json!({}))?;
+    let tools_value = value_get(&response, "/result/tools")?;
+    let tools = tools_value
+        .as_array()
+        .ok_or_else(|| anyhow!("tools/list result.tools must be an array"))?;
+    let find_similar_tools: Vec<&Value> = tools
+        .iter()
+        .filter(|tool| tool.get("name").and_then(Value::as_str) == Some("find-similar"))
+        .collect();
+    assert_eq!(
+        find_similar_tools.len(),
+        1,
+        "issue #113: tools/list must expose exactly one find-similar tool: {tools:?}"
+    );
+    let tool = find_similar_tools[0];
+    let description = tool
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("find-similar tool must include a description"))?;
+    assert!(
+        description.starts_with("Call BEFORE writing new code"),
+        "issue #113: find-similar description must lead with prevention guidance: {description}"
+    );
+    assert!(
+        description.contains("PREVENT"),
+        "issue #113: find-similar description must explicitly name prevention: {description}"
+    );
+    assert!(
+        description.contains("avoid introducing new clones"),
+        "issue #113: find-similar description must explain the duplication risk: {description}"
+    );
+    assert!(
+        description.contains("reuse"),
+        "issue #113: find-similar description must point agents toward reuse: {description}"
+    );
+    let schema = tool
+        .get("inputSchema")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("find-similar tool must include an input schema object"))?;
+    let properties = schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("find-similar schema must include properties"))?;
+    for field in ["path", "start_byte", "end_byte", "snippet", "language"] {
+        assert!(
+            properties.contains_key(field),
+            "issue #113: find-similar schema must document {field}: {properties:?}"
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn report_get_returns_paginated_slim_report_page() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;

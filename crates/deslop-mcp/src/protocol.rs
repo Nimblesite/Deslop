@@ -32,10 +32,7 @@ pub fn jsonrpc_response_ok(id: RequestId, result: Value) -> JsonRpcResponse {
 
 /// Builds an error-shaped [`JsonRpcErrorResponse`] for `id` with `error`.
 #[must_use]
-pub fn jsonrpc_error_response(
-    id: Option<RequestId>,
-    error: JsonRpcError,
-) -> JsonRpcErrorResponse {
+pub fn jsonrpc_error_response(id: Option<RequestId>, error: JsonRpcError) -> JsonRpcErrorResponse {
     JsonRpcErrorResponse {
         jsonrpc: JSONRPC_VERSION.to_owned(),
         id,

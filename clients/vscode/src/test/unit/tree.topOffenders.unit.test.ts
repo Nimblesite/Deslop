@@ -637,19 +637,30 @@ suite("TopOffendersProvider", () => {
       cluster("dirty-only", 100, "/repo/Dirty.cs"),
       [reportOccurrence("/repo/Dirty.cs", 10, 20)],
     );
-    const mixed = withOccurrences(
-      cluster("mixed", 90, "/repo/Dirty.cs"),
+    const mixedSingleton = withOccurrences(
+      cluster("mixed-singleton", 95, "/repo/Dirty.cs"),
       [
         reportOccurrence("/repo/Dirty.cs", 30, 40),
         reportOccurrence("/repo/Clean.cs", 50, 60),
       ],
     );
+    const mixedPeers = withOccurrences(
+      cluster("mixed-peers", 90, "/repo/Dirty.cs"),
+      [
+        reportOccurrence("/repo/Dirty.cs", 70, 80),
+        reportOccurrence("/repo/CleanA.cs", 90, 100),
+        reportOccurrence("/repo/CleanB.cs", 110, 120),
+      ],
+    );
     const clean = withOccurrences(
       cluster("clean", 80, "/repo/Other.cs"),
-      [reportOccurrence("/repo/Other.cs", 70, 80)],
+      [
+        reportOccurrence("/repo/OtherA.cs", 130, 140),
+        reportOccurrence("/repo/OtherB.cs", 150, 160),
+      ],
     );
     const store = new ReportStore();
-    store.setSnapshot(report([dirtyOnly, mixed, clean]), 9);
+    store.setSnapshot(report([dirtyOnly, mixedSingleton, mixedPeers, clean]), 9);
     const ticker = new StatusTicker();
     const provider = new TopOffendersProvider(store, ticker);
     let treeRefreshes = 0;
@@ -659,21 +670,22 @@ suite("TopOffendersProvider", () => {
 
     try {
       const before = provider.getChildren();
-      assert.equal(before.length, 3, "fixture starts with three top-offender rows");
+      assert.equal(before.length, 4, "fixture starts with four top-offender rows");
       assert.match(before.map(labelText).join("\n"), /Dirty\.cs/, "fixture must expose dirty offsets");
 
       store.markFileDirty("/repo/Dirty.cs");
 
       const after = provider.getChildren();
       const labels = after.map(labelText);
-      const mixedNode = after.find((node) => labelText(node).includes("Clean.cs"));
+      const mixedNode = after.find((node) => labelText(node).includes("CleanA.cs"));
 
       assert.equal(treeRefreshes, 1, "dirty pruning must refresh the tree once");
-      assert.equal(after.length, 2, "dirty-only cluster must disappear from top offenders");
+      assert.equal(after.length, 2, "dirty-only and singleton clusters must disappear from top offenders");
       assert.doesNotMatch(labels.join("\n"), /Dirty\.cs/, "stale dirty-file offsets must be hidden");
-      assert.ok(mixedNode, "mixed cluster must remain via its clean occurrence");
+      assert.doesNotMatch(labels.join("\n"), /Clean\.cs/, "one-copy mixed cluster must be hidden");
+      assert.ok(mixedNode, "mixed cluster must remain via its clean peer occurrences");
       assert.match(labelText(mixedNode), /#1\b/, "surviving cluster is re-ranked after pruning");
-      assert.equal(provider.getChildren(mixedNode).length, 1, "only the clean occurrence remains expandable");
+      assert.equal(provider.getChildren(mixedNode).length, 2, "only clean peer occurrences remain expandable");
     } finally {
       sub.dispose();
       provider.dispose();

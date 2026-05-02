@@ -33,7 +33,11 @@ fn issue_93_embedding_signal_only_marks_pairs_that_lsh_missed() -> Result<()> {
     ];
 
     let candidates = candidate_pairs(&fingerprints, &signatures, &lsh_pairs, &embedding_pairs);
-    assert_eq!(candidates.len(), 2, "fixture should produce two candidate pairs");
+    assert_eq!(
+        candidates.len(),
+        2,
+        "fixture should produce two candidate pairs"
+    );
 
     let lsh_visible = candidates
         .iter()
@@ -43,8 +47,8 @@ fn issue_93_embedding_signal_only_marks_pairs_that_lsh_missed() -> Result<()> {
         lsh_visible.score.token_jaccard >= LSH_ONLY_MIN_JACCARD,
         "fixture must prove this pair was already visible to LSH"
     );
-    assert_eq!(
-        lsh_visible.score.embedding_cos, 0.0,
+    assert!(
+        lsh_visible.score.embedding_cos.abs() < f64::EPSILON,
         "issue #93: embedding signal must not be credited to pairs LSH already found"
     );
 
@@ -66,7 +70,11 @@ fn issue_93_embedding_signal_only_marks_pairs_that_lsh_missed() -> Result<()> {
     );
 
     let clusters = cluster_by_transitive_closure(&candidates);
-    assert_eq!(clusters.len(), 2, "both candidate pairs should survive separately");
+    assert_eq!(
+        clusters.len(),
+        2,
+        "both candidate pairs should survive separately"
+    );
     let unique_cluster = clusters
         .iter()
         .find(|cluster| cluster.members == vec![2, 3])

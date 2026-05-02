@@ -79,7 +79,7 @@ const TOOLS: [ToolDefinition; 12] = [
     ToolDefinition {
         name: "find-similar",
         description:
-            "Find clusters similar to a byte range or snippet. Call before writing to avoid introducing new clones.",
+            "Call BEFORE writing new code to PREVENT duplication: find existing clusters similar to a byte range or snippet, reuse the canonical, and avoid introducing new clones.",
         input_schema: schema_find_similar,
     },
     ToolDefinition {
@@ -181,9 +181,7 @@ pub fn backend_to_rpc(err: crate::backend::BackendError) -> JsonRpcError {
             ErrorCode::UnsupportedLanguage,
             format!("language {lang:?} is not registered"),
         ),
-        BackendError::Path(inner) => {
-            jsonrpc_error(ErrorCode::PathOutsideRoot, inner.to_string())
-        }
+        BackendError::Path(inner) => jsonrpc_error(ErrorCode::PathOutsideRoot, inner.to_string()),
         BackendError::UnknownCluster(id) => jsonrpc_error(
             ErrorCode::InvalidParams,
             format!("no cluster with id {id:?}"),

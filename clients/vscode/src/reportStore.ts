@@ -127,7 +127,7 @@ export class ReportStore implements vscode.Disposable {
         continue;
       }
       changed = true;
-      if (kept.length === 0) continue;
+      if (kept.length < 2) continue;
       const oldTotal = occurrenceTotal(cluster);
       const nextTotal = Math.max(kept.length, oldTotal - removed);
       clusters.push({

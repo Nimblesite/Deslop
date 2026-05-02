@@ -19,13 +19,19 @@
 //! - **#72** — `monkeypatch.setenv("KEY", "VAL")` test scaffolding
 //!   clusters because every two-setenv test looks the same after
 //!   normalisation. Scaffolding is not logic.
+//! - **#75** — every first-party Rust language plug-in implements the
+//!   same `LanguageParser` trait surface. The adapter shape is required
+//!   by the trait contract, not extractable business logic.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
 //! source bytes) falls through unchanged.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{
+    collections::{BTreeSet, HashMap},
+    hash::BuildHasher,
+};
 
 use tree_sitter::Node;
 
@@ -46,6 +52,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         return false;
     };
     is_polymorphic_signature_cluster(&snippets)
+        || is_rust_language_parser_adapter_cluster(&snippets)
         || is_literal_variation_call_cluster(&snippets)
         || is_monkeypatch_scaffolding_literal_cluster(&snippets)
         || is_python_all_exports_cluster(&snippets)
@@ -72,6 +79,132 @@ fn is_python_all_exports_snippet(snippet: &Snippet<'_>) -> bool {
     enclosing_kind(tree.root_node(), snippet.range, &["expression_statement"])
         .or_else(|| enclosing_kind(tree.root_node(), snippet.range, &["assignment"]))
         .is_some_and(|node| python_node_assigns_all_exports(node, snippet.source))
+}
+
+/// Detects **issue #75**: the Rust source files that implement the
+/// first-party language plug-ins all carry the same `LanguageParser`
+/// adapter surface. Each implementation has language-specific constants
+/// and grammar functions, but the trait contract forces the same method
+/// outline, so the cluster is not actionable duplication.
+fn is_rust_language_parser_adapter_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
+        return false;
+    }
+    let mut files = BTreeSet::new();
+    for snippet in snippets {
+        let _inserted = files.insert(snippet.file_id);
+    }
+    if files.len() < 2 {
+        return false;
+    }
+    let shapes: Option<Vec<RustImplShape>> = snippets
+        .iter()
+        .map(rust_language_parser_impl_shape)
+        .collect();
+    let Some(shapes) = shapes else { return false };
+    let Some(first) = shapes.first() else {
+        return false;
+    };
+    let expected_methods = language_parser_method_names();
+    first.trait_name == b"LanguageParser"
+        && first.methods == expected_methods
+        && shapes
+            .iter()
+            .all(|shape| shape.trait_name == first.trait_name && shape.methods == expected_methods)
+        && shapes
+            .iter()
+            .any(|shape| shape.impl_source != first.impl_source)
+}
+
+/// Parsed shape of one Rust `impl Trait for Type` block.
+struct RustImplShape {
+    /// Trait name from the `impl Trait for Type` header.
+    trait_name: Vec<u8>,
+    /// Method names declared directly inside the impl block.
+    methods: BTreeSet<Vec<u8>>,
+    /// Raw impl bytes used to avoid suppressing exact copies.
+    impl_source: Vec<u8>,
+}
+
+/// Returns the `LanguageParser` impl contained in `snippet.range`.
+fn rust_language_parser_impl_shape(snippet: &Snippet<'_>) -> Option<RustImplShape> {
+    let tree = parse_for(snippet)?;
+    let mut shapes = Vec::new();
+    collect_rust_impl_shapes(tree.root_node(), snippet.range, snippet.source, &mut shapes);
+    shapes
+        .into_iter()
+        .find(|shape| shape.trait_name == b"LanguageParser")
+}
+
+/// Recursively collects Rust impl blocks fully contained in `range`.
+fn collect_rust_impl_shapes(
+    node: Node<'_>,
+    range: ByteRange,
+    source: &[u8],
+    out: &mut Vec<RustImplShape>,
+) {
+    if node.end_byte() <= range.start || node.start_byte() >= range.end {
+        return;
+    }
+    if node.kind() == "impl_item"
+        && node.start_byte() >= range.start
+        && node.end_byte() <= range.end
+    {
+        if let Some(shape) = rust_impl_shape_from_node(node, source) {
+            out.push(shape);
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_rust_impl_shapes(child, range, source, out);
+    }
+}
+
+/// Extracts trait header and direct method names from one Rust impl node.
+fn rust_impl_shape_from_node(node: Node<'_>, source: &[u8]) -> Option<RustImplShape> {
+    let impl_source = source.get(node.start_byte()..node.end_byte())?;
+    let header = impl_source.split(|byte| *byte == b'{').next()?;
+    let header = std::str::from_utf8(header).ok()?.trim();
+    let rest = header.strip_prefix("impl ")?;
+    let (trait_name, _implementor) = rest.split_once(" for ")?;
+    Some(RustImplShape {
+        trait_name: trait_name.trim().as_bytes().to_vec(),
+        methods: rust_impl_method_names(node, source),
+        impl_source: impl_source.to_vec(),
+    })
+}
+
+/// Returns method names declared directly under a Rust impl block.
+fn rust_impl_method_names(node: Node<'_>, source: &[u8]) -> BTreeSet<Vec<u8>> {
+    let mut methods = BTreeSet::new();
+    collect_rust_function_names(node, source, &mut methods);
+    methods
+}
+
+/// Walks Rust function items inside an impl block.
+fn collect_rust_function_names(node: Node<'_>, source: &[u8], out: &mut BTreeSet<Vec<u8>>) {
+    if node.kind() == "function_item" {
+        if let Some(name) = node
+            .child_by_field_name("name")
+            .and_then(|name| source.get(name.start_byte()..name.end_byte()))
+        {
+            let _inserted = out.insert(name.to_vec());
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_rust_function_names(child, source, out);
+    }
+}
+
+/// Required `LanguageParser` trait surface.
+fn language_parser_method_names() -> BTreeSet<Vec<u8>> {
+    BTreeSet::from([
+        b"id".to_vec(),
+        b"file_extensions".to_vec(),
+        b"grammar".to_vec(),
+        b"parse_and_normalize".to_vec(),
+    ])
 }
 
 /// Returns true when `node` (an `expression_statement` or `assignment`)

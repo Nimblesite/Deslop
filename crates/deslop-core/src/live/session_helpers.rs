@@ -314,7 +314,18 @@ pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
         }
         Err(error) => {
             tracing::warn!(%error, path = %path.display(), "cached_report_parse_failed");
+            delete_incompatible_cached_report(&path);
             None
+        }
+    }
+}
+
+fn delete_incompatible_cached_report(path: &Path) {
+    match std::fs::remove_file(path) {
+        Ok(()) => tracing::warn!(path = %path.display(), "cached_report_incompatible_deleted"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            tracing::warn!(%error, path = %path.display(), "cached_report_delete_failed");
         }
     }
 }
@@ -348,5 +359,35 @@ pub(super) fn append_ollama_models(
             recommended: entry.is_embedding_model,
             reachable: true,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::try_load_cached_report;
+
+    #[test]
+    fn incompatible_cached_report_is_deleted_when_cache_seed_fails() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let cache_dir = temp
+            .path()
+            .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+        std::fs::create_dir_all(&cache_dir).expect("cache dir");
+        let state_path = cache_dir.join(super::STATE_FILE_NAME);
+        std::fs::write(&state_path, br#"{"tool_version":"stale","clusters":[]}"#)
+            .expect("write incompatible state");
+
+        assert!(
+            state_path.exists(),
+            "test setup must start with an incompatible state file"
+        );
+        assert!(
+            try_load_cached_report(temp.path()).is_none(),
+            "incompatible cached state must not seed a live session"
+        );
+        assert!(
+            !state_path.exists(),
+            "incompatible cached state must be deleted so startup runs a fresh scan"
+        );
     }
 }

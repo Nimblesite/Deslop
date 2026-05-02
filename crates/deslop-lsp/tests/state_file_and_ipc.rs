@@ -123,6 +123,145 @@ fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
     Ok(())
 }
 
+/// [LIVE-CACHE-SEED] A valid state file is a real startup snapshot, not
+/// a dead end: the LSP must serve it immediately, then install the
+/// background pipeline and keep applying incremental file updates.
+#[test]
+fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let state_path = workspace.path().join(STATE_FILE);
+    seed_cached_report(&state_path)?;
+    let cached_bytes = fs::read(&state_path)?;
+
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let seeded = call(
+        &mut stdin,
+        &mut stdout,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    ensure!(
+        seeded.pointer("/result/clusters/0/id") == Some(&serde_json::json!("cached-gh73")),
+        "valid cached state must be served before the background scan lands: {seeded}"
+    );
+    ensure!(
+        seeded.pointer("/result/files_analysed") == Some(&serde_json::json!(73)),
+        "valid cached state metadata must be preserved at startup: {seeded}"
+    );
+
+    wait_for_state_file_change(&state_path, &cached_bytes, ANALYSIS_TIMEOUT)?;
+    let refreshed_bytes = fs::read(&state_path)?;
+    let refreshed: serde_json::Value = serde_json::from_slice(&refreshed_bytes)?;
+    let refreshed_count = cluster_count(&refreshed);
+    ensure!(
+        refreshed_count > 0,
+        "background full scan must recreate a real current state file: {refreshed}"
+    );
+    ensure!(
+        refreshed
+            .get("clusters")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|clusters| clusters
+                .iter()
+                .all(|cluster| cluster.get("id") != Some(&serde_json::json!("cached-gh73")))),
+        "background full scan must replace the staged cache marker: {refreshed}"
+    );
+
+    let beta = workspace.path().join("Beta.cs");
+    fs::write(
+        &beta,
+        b"public class Beta {\n    public string Name() {\n        return \"unique\";\n    }\n}\n",
+    )?;
+    write_frame(&mut stdin, &watched_file_changed(&beta)?)?;
+
+    wait_for_state_file_change(&state_path, &refreshed_bytes, ANALYSIS_TIMEOUT)?;
+    let updated: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)?;
+    let updated_count = cluster_count(&updated);
+    ensure!(
+        updated_count < refreshed_count,
+        "incremental update after cache load must reduce cluster count: {refreshed_count} -> {updated_count}"
+    );
+
+    let live = call(
+        &mut stdin,
+        &mut stdout,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    let live_count = live
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    ensure!(
+        live_count == updated_count,
+        "live reportGet must match the incrementally updated state file: {live}"
+    );
+    Ok(())
+}
+
+/// [LIVE-CACHE-SEED] If the persisted state cannot be loaded as the
+/// current report shape, startup must ignore it and write a fresh scan.
+#[test]
+fn incompatible_state_file_is_wiped_and_startup_scans_from_scratch() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let state_path = workspace.path().join(STATE_FILE);
+    let parent = state_path
+        .parent()
+        .ok_or_else(|| anyhow!("state path must have parent: {}", state_path.display()))?;
+    fs::create_dir_all(parent)?;
+    fs::write(
+        &state_path,
+        br#"{"tool_version":"stale","files_analysed":999,"clusters":[]}"#,
+    )?;
+    let bad_bytes = fs::read(&state_path)?;
+
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
+
+    let fresh_bytes = fs::read(&state_path)?;
+    ensure!(
+        fresh_bytes != bad_bytes,
+        "startup must replace incompatible persisted state"
+    );
+    let fresh: serde_json::Value = serde_json::from_slice(&fresh_bytes)?;
+    ensure!(
+        fresh.pointer("/tool_version") != Some(&serde_json::json!("stale")),
+        "fresh scan must not preserve the incompatible tool marker: {fresh}"
+    );
+    ensure!(
+        fresh.pointer("/files_analysed") != Some(&serde_json::json!(999)),
+        "fresh scan must not preserve incompatible cached metadata: {fresh}"
+    );
+    ensure!(
+        cluster_count(&fresh) > 0,
+        "fresh scan must analyse the workspace and write real clusters: {fresh}"
+    );
+
+    let live = call(
+        &mut stdin,
+        &mut stdout,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    let live_count = live
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    ensure!(
+        live_count == cluster_count(&fresh),
+        "live reportGet must match the fresh scan written to state: {live}"
+    );
+    Ok(())
+}
+
 /// [LIVE-STATE-FILE] After a file edit triggers re-analysis, the state
 /// file must be overwritten with a report reflecting the change.
 #[test]

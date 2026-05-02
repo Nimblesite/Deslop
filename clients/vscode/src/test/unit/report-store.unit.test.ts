@@ -110,7 +110,7 @@ suite("ReportStore", () => {
     assert.equal(store.current.generation, 2);
   });
 
-  test("markFileDirty removes stale offsets for an edited file (#78)", () => {
+  test("markFileDirty removes stale offsets without surfacing singleton clusters (#78, #117)", () => {
     const store = new ReportStore();
     let fired = 0;
     store.onDidChange(() => {
@@ -120,11 +120,19 @@ suite("ReportStore", () => {
       emptyReport({
         clusters: [
           cluster("only-dirty", 30, [occurrence("/repo/Dirty.cs", 10, 20)]),
-          cluster("mixed", 20, [
+          cluster("mixed-singleton", 25, [
             occurrence("/repo/Dirty.cs", 30, 40),
             occurrence("/repo/Clean.cs", 50, 60),
           ]),
-          cluster("untouched", 10, [occurrence("/repo/Other.cs", 70, 80)]),
+          cluster("mixed-peers", 20, [
+            occurrence("/repo/Dirty.cs", 70, 80),
+            occurrence("/repo/CleanA.cs", 90, 100),
+            occurrence("/repo/CleanB.cs", 110, 120),
+          ]),
+          cluster("untouched", 10, [
+            occurrence("/repo/OtherA.cs", 130, 140),
+            occurrence("/repo/OtherB.cs", 150, 160),
+          ]),
         ],
       }),
       7,
@@ -137,16 +145,20 @@ suite("ReportStore", () => {
     assert.equal(store.current.generation, 7, "dirty pruning must not fake a fresh LSP generation");
     assert.deepEqual(
       out.clusters.map((c) => c.id),
-      ["mixed", "untouched"],
-      "clusters with only stale occurrences are removed, others keep rank order",
+      ["mixed-peers", "untouched"],
+      "clusters with fewer than two remaining occurrences are removed, others keep rank order",
     );
     assert.deepEqual(
       out.clusters[0]?.occurrences.map((o) => o.path),
-      ["/repo/Clean.cs"],
-      "mixed cluster keeps only occurrences outside the edited file",
+      ["/repo/CleanA.cs", "/repo/CleanB.cs"],
+      "mixed cluster keeps clean peer occurrences outside the edited file",
     );
-    assert.equal(out.clusters[0]?.size, 1, "visible count is reduced after pruning stale offsets");
-    assert.equal(out.clusters[0]?.occurrences_total, 1, "wire total is reduced with visible count");
+    assert.equal(out.clusters[0]?.size, 2, "visible count is reduced after pruning stale offsets");
+    assert.equal(out.clusters[0]?.occurrences_total, 2, "wire total is reduced with visible count");
+    assert.ok(
+      out.clusters.every((c) => c.occurrences.length >= 2),
+      "dirty pruning must not leave a one-copy top offender",
+    );
     assert.equal(out.metrics.clusters_total, 2, "metrics reflect the locally visible cluster count");
     assert.equal(fired, 2, "setSnapshot and markFileDirty both notify subscribers");
   });
