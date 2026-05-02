@@ -162,8 +162,8 @@ pub trait McpBackend: Send + Sync {
     fn session_config(&self) -> Result<SessionConfigSnapshot, BackendError>;
 
     /// Signals to the backend that one or more watched files have
-    /// changed. Implementations that track a `PipelineSession` will
-    /// re-run analysis, bump [`Self::generation`], and push
+    /// changed. The [`StateFileBackend`] implementation reloads the
+    /// LSP-written state file and pushes
     /// `notifications/resources/updated` + `notifications/deslop/reportChanged`
     /// through the stored sender ([MCP-NOTIFICATIONS]).
     ///

@@ -19,6 +19,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use assert_cmd::cargo::cargo_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -150,15 +151,54 @@ impl WaitTimeout for Child {
     }
 }
 
-fn fixture_root() -> PathBuf {
+/// Source fixture — never written to directly.
+fn raw_fixture_root() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     PathBuf::from(manifest_dir).join("tests/fixtures/csharp-mcp")
 }
 
+/// Shared read-only fixture with a pre-generated state file.
+/// Initialised once per test-binary run so the analysis only runs once.
+static SHARED_FIXTURE: std::sync::LazyLock<TempDir> = std::sync::LazyLock::new(|| {
+    let temp = TempDir::new().expect("tempdir");
+    copy_dir_all(&raw_fixture_root(), temp.path()).expect("copy fixture");
+    generate_state_file(temp.path(), 15).expect("generate state file");
+    temp
+});
+
+fn fixture_root() -> &'static Path {
+    SHARED_FIXTURE.path()
+}
+
 fn copied_fixture_root() -> Result<TempDir> {
     let temp = TempDir::new()?;
-    copy_dir_all(&fixture_root(), temp.path())?;
+    copy_dir_all(&raw_fixture_root(), temp.path())?;
+    generate_state_file(temp.path(), 15)?;
     Ok(temp)
+}
+
+/// Runs `deslop <root> --min-nodes <n>` and writes the JSON output to
+/// `{root}/.deslop-cache/live-report.json` so `StateFileBackend` can
+/// read it without an LSP.
+fn generate_state_file(root: &Path, min_nodes: u32) -> Result<()> {
+    let out_prefix = root.join(".deslop-cache").join("report-gen");
+    fs::create_dir_all(root.join(".deslop-cache"))?;
+    let binary = cargo_bin("deslop");
+    let status = Command::new(&binary)
+        .arg(root)
+        .arg("--min-nodes")
+        .arg(min_nodes.to_string())
+        .arg("--output")
+        .arg(&out_prefix)
+        .arg("--notext")
+        .arg("--nohtml")
+        .arg("--log-to-console")
+        .status()?;
+    anyhow::ensure!(status.success(), "deslop analysis failed with {status}");
+    let json_src = out_prefix.with_extension("json");
+    let state_dst = root.join(".deslop-cache").join("live-report.json");
+    fs::rename(&json_src, &state_dst)?;
+    Ok(())
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
@@ -356,7 +396,7 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
 
 #[test]
 fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "top-offenders", &json!({ "n": 3 }))?;
     let payload = structured_tool_result(&result)?;
@@ -412,7 +452,7 @@ fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> 
 
 #[test]
 fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "top-offenders", &json!({}))?;
     let payload = structured_tool_result(&result)?;
@@ -449,7 +489,7 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
 
 #[test]
 fn report_get_returns_paginated_slim_report_page() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -494,7 +534,7 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
 
 #[test]
 fn report_get_requires_offset_argument() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -514,7 +554,7 @@ fn report_get_requires_offset_argument() -> Result<()> {
 
 #[test]
 fn report_get_requires_limit_argument() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -534,7 +574,7 @@ fn report_get_requires_limit_argument() -> Result<()> {
 
 #[test]
 fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -584,7 +624,7 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 
 #[test]
 fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -634,7 +674,7 @@ fn same_occurrence(left: &Value, right: &Value) -> bool {
 
 #[test]
 fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let probe = structured_tool_result(&call_tool(
         &mut child,
@@ -674,7 +714,7 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
 
 #[test]
 fn report_get_response_stays_under_byte_budget() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -719,7 +759,7 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_language() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -748,7 +788,7 @@ fn report_query_filters_by_language() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -765,7 +805,7 @@ fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_path_contains() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -810,7 +850,7 @@ fn report_query_filters_by_path_contains() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_size() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -834,7 +874,7 @@ fn report_query_filters_by_min_size() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_score() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let baseline = structured_tool_result(&call_tool(
         &mut child,
@@ -866,7 +906,7 @@ fn report_query_filters_by_min_score() -> Result<()> {
 
 #[test]
 fn report_query_requires_offset_and_limit() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -886,7 +926,7 @@ fn report_query_requires_offset_and_limit() -> Result<()> {
 
 #[test]
 fn report_query_echoes_filters_in_response() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -907,7 +947,7 @@ fn report_query_echoes_filters_in_response() -> Result<()> {
 
 #[test]
 fn report_for_file_returns_only_matching_clusters() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -943,7 +983,7 @@ fn report_for_file_returns_only_matching_clusters() -> Result<()> {
 
 #[test]
 fn report_for_range_rejects_inverted_range() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -959,7 +999,7 @@ fn report_for_range_rejects_inverted_range() -> Result<()> {
 
 #[test]
 fn find_similar_snippet_returns_below_min_nodes_for_tiny_input() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "500"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1008,7 +1048,7 @@ fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
 
 #[test]
 fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let alpha = fixture_root().join("Alpha.cs");
     let source = std::fs::read_to_string(&alpha)?;
@@ -1030,7 +1070,7 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
 
 #[test]
 fn cluster_by_id_round_trips() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let report_value = structured_tool_result(&call_tool(
         &mut child,
@@ -1207,7 +1247,7 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
 
 #[test]
 fn session_config_reports_workspace_root_and_languages() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
     let payload = structured_tool_result(&result)?;
@@ -1261,7 +1301,7 @@ fn resources_list_returns_report_and_schema_uris() -> Result<()> {
 
 #[test]
 fn resources_read_report_returns_parseable_json() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("resources/read", &json!({ "uri": "deslop://report" }))?;
     let text = value_get(&response, "/result/contents/0/text")?
@@ -1360,7 +1400,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         temp.path().join("Two.cs"),
         include_str!("fixtures/csharp-mcp/Beta.cs"),
     )?;
-    let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut child)?;
     let first = structured_tool_result(&call_tool(
         &mut child,
@@ -1374,7 +1414,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         temp.path().join("Two.cs"),
         "namespace Lone { class Only { public int Go() => 1; } }\n",
     )?;
-    let mut second = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    let mut second = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut second)?;
     let rerun = structured_tool_result(&call_tool(
         &mut second,
@@ -1398,7 +1438,7 @@ fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
         &ghost,
         "namespace Lonely { class Solo { public int Uniq() => 42; } }",
     )?;
-    let mut child = McpChild::spawn(workspace.path(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1444,7 +1484,7 @@ fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
 #[test]
 fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
     let workspace = copied_fixture_root()?;
-    let mut child = McpChild::spawn(workspace.path(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
     let swap_result = call_tool(
         &mut child,
@@ -1491,7 +1531,7 @@ fn set_embedding_model_to_ollama_fails_when_daemon_not_running() -> Result<()> {
 
 #[test]
 fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let alpha = fixture_root().join("Alpha.cs");
     let source = std::fs::read_to_string(&alpha)?;
@@ -1513,7 +1553,7 @@ fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
 
 #[test]
 fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1608,7 +1648,7 @@ fn string_request_id_round_trips_through_dispatch() -> Result<()> {
 
 #[test]
 fn relative_path_inside_workspace_is_accepted() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1714,7 +1754,7 @@ fn mcp_sends_empty_line_and_server_keeps_going() -> Result<()> {
 
 #[test]
 fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     // Query a file that doesn't exist but whose *parent* (the scan
     // root) does. This exercises safety::canonicalise_best_effort's
@@ -1757,14 +1797,7 @@ fn path_in_nonexistent_subdirectory_is_rejected_as_io_failure() -> Result<()> {
 fn binary_starts_with_stub_embeddings_auto_mode() -> Result<()> {
     let mut child = McpChild::spawn(
         &fixture_root(),
-        &[
-            "--min-nodes",
-            "15",
-            "--embeddings",
-            "auto",
-            "--embedding-provider",
-            "stub",
-        ],
+        &["--embeddings", "auto", "--embedding-provider", "stub"],
     )?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
@@ -1783,8 +1816,6 @@ fn binary_starts_with_ollama_auto_falls_back_to_stub() -> Result<()> {
     let mut child = McpChild::spawn(
         &fixture_root(),
         &[
-            "--min-nodes",
-            "15",
             "--embeddings",
             "auto",
             "--embedding-provider",
@@ -1815,8 +1846,6 @@ fn binary_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> 
     let mut child = McpChild::spawn(
         &fixture_root(),
         &[
-            "--min-nodes",
-            "15",
             "--embeddings",
             "required",
             "--embedding-provider",
@@ -1886,7 +1915,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
         temp.path().join("Two.cs"),
         include_str!("fixtures/csharp-mcp/Beta.cs"),
     )?;
-    let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut child)?;
     let before = structured_tool_result(&call_tool(
         &mut child,
@@ -1921,7 +1950,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 
 #[test]
 fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     child.notify("notifications/deslop/filesChanged", &json!({ "paths": [] }))?;
     // Server must remain responsive after a no-op notification.
@@ -1946,7 +1975,7 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
         temp.path().join("Two.cs"),
         include_str!("fixtures/csharp-mcp/Beta.cs"),
     )?;
-    let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut child)?;
 
     // Modify a file then notify the server.

@@ -19,6 +19,7 @@ mod unix {
 
     use deslop_core::live::{LiveApi, LiveService};
     use serde_json::{json, Value};
+    use tokio::runtime::Handle;
 
     /// IPC server bound to `.deslop-cache/deslop.sock`.
     ///
@@ -43,7 +44,11 @@ mod unix {
             let listener = UnixListener::bind(&socket_path)?;
             tracing::info!(path = %socket_path.display(), "ipc_socket_bound");
             let server = Self { socket_path };
-            spawn_accept_loop(listener, service);
+            // Capture the tokio handle here — IpcServer::start is called from
+            // the tokio runtime. The accept/connection threads are plain OS
+            // threads and Handle::try_current() would fail inside them.
+            let handle = Handle::current();
+            spawn_accept_loop(listener, service, handle);
             Ok(server)
         }
     }
@@ -57,11 +62,11 @@ mod unix {
 
     /// Spawns the accept loop on a dedicated thread. The thread exits when
     /// the listener is closed (server shutdown).
-    fn spawn_accept_loop(listener: UnixListener, service: Arc<LiveService>) {
+    fn spawn_accept_loop(listener: UnixListener, service: Arc<LiveService>, handle: Handle) {
         let _thread = std::thread::spawn(move || {
             for stream in listener.incoming() {
                 match stream {
-                    Ok(stream) => spawn_connection(stream, Arc::clone(&service)),
+                    Ok(stream) => spawn_connection(stream, Arc::clone(&service), handle.clone()),
                     Err(error) => {
                         tracing::warn!(%error, "ipc_accept_error");
                         break;
@@ -72,20 +77,20 @@ mod unix {
     }
 
     /// Spawns a thread to handle a single client connection.
-    fn spawn_connection(stream: UnixStream, service: Arc<LiveService>) {
-        let _thread = std::thread::spawn(move || handle_connection(&stream, &service));
+    fn spawn_connection(stream: UnixStream, service: Arc<LiveService>, handle: Handle) {
+        let _thread = std::thread::spawn(move || handle_connection(&stream, &service, &handle));
     }
 
     /// Reads one JSON-RPC line, dispatches it, writes the response, then
     /// closes the connection. Short-lived by design.
-    fn handle_connection(stream: &UnixStream, service: &Arc<LiveService>) {
+    fn handle_connection(stream: &UnixStream, service: &Arc<LiveService>, handle: &Handle) {
         let peer = stream.try_clone();
         let mut reader = BufReader::new(stream);
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
             return;
         }
-        let response = handle_line(line.trim(), service);
+        let response = handle_line(line.trim(), service, handle);
         let mut writer = match peer {
             Ok(w) => w,
             Err(error) => {
@@ -99,7 +104,7 @@ mod unix {
     }
 
     /// Parses one JSON-RPC line and returns the response value.
-    fn handle_line(line: &str, service: &Arc<LiveService>) -> Value {
+    fn handle_line(line: &str, service: &Arc<LiveService>, handle: &Handle) -> Value {
         let request: Value = match serde_json::from_str(line) {
             Ok(v) => v,
             Err(_) => return parse_error(),
@@ -107,18 +112,20 @@ mod unix {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         let method = request.get("method").and_then(Value::as_str).unwrap_or("");
         let params = request.get("params").cloned().unwrap_or(Value::Null);
-        let result = dispatch(method, params, service);
+        let result = dispatch(method, params, service, handle);
         json_rpc_response(&id, result)
     }
 
     /// Routes a JSON-RPC method to the appropriate [`LiveService`] call.
-    fn dispatch(method: &str, params: Value, service: &Arc<LiveService>) -> Result<Value, Value> {
-        let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            return Err(json!({"code": -32603, "message": "no tokio runtime"}));
-        };
+    fn dispatch(
+        method: &str,
+        params: Value,
+        service: &Arc<LiveService>,
+        handle: &Handle,
+    ) -> Result<Value, Value> {
         match method {
-            "duplicates/findSimilar" => dispatch_find_similar(params, service, &handle),
-            "embedding/listModels" => dispatch_list_models(service, &handle),
+            "duplicates/findSimilar" => dispatch_find_similar(params, service, handle),
+            "embedding/listModels" => dispatch_list_models(service, handle),
             _ => Err(json!({"code": -32601, "message": "method not found"})),
         }
     }
