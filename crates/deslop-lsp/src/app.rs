@@ -91,15 +91,6 @@ where
     }
 }
 
-/// Starts the real stdio LSP server for parsed app configuration.
-///
-/// # Errors
-///
-/// Returns Tokio runtime construction or LSP server startup errors.
-pub fn run_stdio_process(startup: LspStartup) -> Result<()> {
-    run_startup_with(startup, crate::run_stdio)
-}
-
 /// Runs parsed startup using an injected async server function.
 ///
 /// # Errors

@@ -40,4 +40,6 @@ type FindSimilarResult {
   below_min_nodes: Bool
 }
 
-alias ReportCluster = ReportClusterJson
+# `ReportCluster` is a domain type defined in `crate::report`. typeDiagram
+# treats it as an external reference; the generator injects the matching
+# `use` statement (see `scripts/typediagram-gen.mjs`).

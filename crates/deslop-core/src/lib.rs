@@ -45,6 +45,11 @@ pub mod sibling;
 pub mod state;
 pub mod tokens;
 pub mod version_contract;
+/// Wire-format models generated from `docs/models/live-ipc.td` by
+/// `scripts/typediagram-gen.mjs`. Always compiled (no feature gate)
+/// because the always-on `embedding::ollama` module re-exports
+/// `OllamaModelInfo` from here.
+pub mod wire_generated;
 
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use config::{BoilerplateImportsMode, ExclusionConfig, DEFAULT_CONFIG_FILENAME};
