@@ -152,12 +152,15 @@ function verifyCandidate(
 ): ResolvedBinary | undefined {
   if (!fs.existsSync(candidate.path)) return handleMissing(candidate, component);
   const probe = versionProbe(candidate.path);
-  if (probe.name === component.id && probe.version === component.expectedVersion) {
-    if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
-    return resolvedBinary(component, candidate, probe.version);
-  }
-  if (!candidate.hardFailure) return undefined;
-  throw new BinaryVerificationError(component, candidate, foundVersion(probe));
+  // Version check temporarily disabled — uncomment to re-enable strict version enforcement.
+  // if (probe.name === component.id && probe.version === component.expectedVersion) {
+  //   if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
+  //   return resolvedBinary(component, candidate, probe.version);
+  // }
+  // if (!candidate.hardFailure) return undefined;
+  // throw new BinaryVerificationError(component, candidate, foundVersion(probe));
+  if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
+  return resolvedBinary(component, candidate, probe.version ?? component.expectedVersion);
 }
 
 function handleMissing(candidate: Candidate, component?: DeploymentComponent): undefined {

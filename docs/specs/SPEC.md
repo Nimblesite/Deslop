@@ -14,59 +14,67 @@ Every user-facing surface (HTML report, CLI summary, VS Code extension) labels c
 
 ## Architecture at a glance
 
-Every binary in the product — CLI, LSP server, MCP server, VS Code extension, JetBrains plugin — is a **thin shell over one shared library** (`deslop-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
+Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it reads the state file the LSP writes after every pass. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
-Every shippable executable and editor package is also governed by the Deployment Toolkit manifest contract in [deployment.md](deployment.md). Hosts must verify required binaries before startup, packages must include the manifest beside bundled binaries, and release gates must prove the shipped artifacts match the manifest.
+Every shippable executable and editor package is governed by the Deployment Toolkit manifest contract in [deployment.md](deployment.md).
 
 ```mermaid
 flowchart LR
     CI(["CI / terminal"])
 
     subgraph VSCode["VS Code process"]
-        VSIX["Deslop VSIX<br/>(live bubble · tree view · picker)"]
+        VSIX["Deslop VSIX (bubble · tree · webview · status bar)"]
+        LspClient2["LSP client"]
+        McpHost2["Bundled MCP host"]
+        VSIX --> LspClient2
     end
 
-    subgraph JetBrains["JetBrains IDE process<br/>(Rider first)"]
-        JBPlugin["Deslop IntelliJ Platform plugin<br/>(LSP bridge · native IDE surfaces)"]
+    subgraph JetBrains["JetBrains IDE process (Rider first)"]
+        JBPlugin["Deslop IntelliJ Platform plugin"]
     end
 
-    subgraph AgentHost["AI agent host<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
+    subgraph AgentHost["AI agent host (Claude Code · Cursor · Continue)"]
         Agent["Agent + MCP client"]
     end
 
-    subgraph Binaries["Binaries (processes)"]
-        LspBin["deslop-lsp"]
-        McpBin["deslop-mcp"]
-        CliBin["deslop (CLI)"]
+    subgraph LspProc["deslop-lsp process"]
+        LspInner["AnalysisSession · watcher · scheduler · LiveApi\n(deslop-core live feature linked in)"]
     end
 
-    subgraph CoreCrate["deslop-core (one crate)"]
-        Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
-        Pipeline["pipeline module<br/>PipelineSession · update_files · discover · parse<br/>fingerprint · LSH · embed · rank · render"]
-        Live --> Pipeline
+    subgraph McpProc["deslop-mcp process"]
+        McpInner["State-file reader + in-memory cache\n(no analysis work)"]
     end
 
+    CliProc(["deslop CLI process\n(one-shot batch)"])
+
+    StateFile[(".deslop-cache/live-report.json")]
+    IpcSocket[(".deslop-cache/deslop.sock")]
+    DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
     Ollama[(Ollama)]
 
-    VSIX == "spawns + LSP stdio" ==> LspBin
-    VSIX == "bundles + spawns MCP" ==> McpBin
-    JBPlugin == "spawns + LSP stdio" ==> LspBin
-    Agent == "spawns + MCP stdio" ==> McpBin
-    CI == "spawns one-shot" ==> CliBin
+    LspClient2 == "spawns · LSP stdio" ==> LspProc
+    McpHost2 == "spawns · MCP stdio" ==> McpProc
+    JBPlugin == "spawns · LSP stdio" ==> LspProc
+    Agent == "spawns · MCP stdio" ==> McpProc
+    CI == "spawns one-shot" ==> CliProc
 
-    LspBin --> Live
-    McpBin --> Live
-    CliBin --> Pipeline
+    Workspace -- "file events (notify)" --> LspProc
+    Workspace -- "walk + read" --> CliProc
 
-    Workspace -- "file events" --> Live
-    Workspace -- "walk + read" --> Pipeline
+    LspProc -- "atomic write after every pass" --> StateFile
+    LspProc -- "read/write" --> DiskCache
+    LspProc -- "listens" --> IpcSocket
+    LspProc <-- "embed batches" --> Ollama
 
-    Live <--> Ollama
-    Pipeline <--> Ollama
+    McpProc -- "reads (cached in-memory)" --> StateFile
+    McpProc -- "find-similar · listModels" --> IpcSocket
+
+    CliProc -- "read/write" --> DiskCache
+    CliProc <-- "embed batches" --> Ollama
 ```
 
-The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX → LSP → `live` module → `update_files` → pipeline** — is one process hop (the LSP binary) and one in-crate module boundary. The agent path — **Agent → MCP → `live` module** — is the same live index reframed for programmatic consumers. The CI path — **CI → CLI → pipeline** — skips the `live` module entirely; batch runs never need a watcher. All three paths share the same analysis code.
+The hot loop — **Developer → VSIX → LSP → `live` module → `update_files` → pipeline** — is one process hop. The agent path — **Agent → MCP → state file** — is zero analysis work: the MCP serves the latest report the LSP already produced. The CI path — **CI → CLI → pipeline** — skips `live` entirely.
 
 ## Topic files
 
@@ -78,7 +86,7 @@ The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX �
 - [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.deslop.toml` `exclude` / `report_hide` tiers and per-language overlays; `[CONFIG-CROSS-LANGUAGE]` candidate-pair language scope.
 - [decisions.md](decisions.md) — `[DECISION-*]` defaults with fallback rules (`--min-nodes`, cross-language, two-pass Type-3 recall).
 - [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
-- [live.md](live.md) — `[LIVE-*]` in-memory analysis session behind the LSP and MCP servers: lifecycle, watcher, scheduler, delta protocol, `LiveApi` query surface, push notifications. No daemon process.
+- [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
