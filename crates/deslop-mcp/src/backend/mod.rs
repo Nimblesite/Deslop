@@ -2,49 +2,29 @@
 //!
 //! The MCP server is a transport adapter; the backend holds the live
 //! analysis state. This file ships one concrete implementation,
-//! [`PipelineSessionBackend`], which owns a
-//! [`deslop_core::PipelineSession`] and re-runs analysis on every
-//! agent-driven `mark_changed` signal.
+//! [`StateFileBackend`], which reads `.deslop-cache/live-report.json`
+//! written by the LSP server.
 //!
 //! When `deslop_core::live::LiveApi` lands (P7), a `LiveApiBackend`
 //! impl slots in without changing the server code — that is the whole
 //! point of this trait ([MCP-WHY-LIVE], [MCP-CAPABILITIES]).
 
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use std::path::{Path, PathBuf};
 
 use crate::NotificationSender;
 
 use deslop_core::{
     report::{CacheStats, ReportCluster},
-    CoreError, EmbeddingMode, EmbeddingProvenance, EmbeddingSpec, OllamaModelInfo, ProviderError,
-    Report,
+    CoreError, EmbeddingProvenance, EmbeddingSpec, OllamaModelInfo, Report,
 };
 use thiserror::Error;
 
 use crate::safety::PathResolutionError;
 
 mod filters;
-mod persistence;
-mod pipeline;
-mod refresh;
+mod state;
 
-pub use pipeline::PipelineSessionBackend;
-
-/// Delay inserted between MCP embedding batches.
-pub(super) const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
-
-/// Returns the cooperative batch-yield delay for embedding-enabled
-/// modes.
-pub(super) fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
-    if matches!(mode, EmbeddingMode::Off) {
-        None
-    } else {
-        Some(LIVE_EMBEDDING_BATCH_SLEEP)
-    }
-}
+pub use state::StateFileBackend;
 
 /// Errors surfaced by the backend during tool execution.
 #[derive(Debug, Error)]
@@ -56,9 +36,6 @@ pub enum BackendError {
     /// ([MCP-SAFETY]).
     #[error(transparent)]
     Path(#[from] PathResolutionError),
-    /// Embedding provider unreachable / misbehaving.
-    #[error("embedding provider failure: {0}")]
-    Provider(#[from] ProviderError),
     /// The requested cluster id is not present in the current report.
     #[error("no cluster with id {0:?}")]
     UnknownCluster(String),
@@ -69,21 +46,18 @@ pub enum BackendError {
     /// `find-similar` received a snippet tree-sitter could not parse.
     #[error("failed to parse snippet: {0}")]
     UnparseableInput(String),
-    /// A registered embedding provider id is unknown — only `ollama`
-    /// and `stub` are supported on the fast path.
+    /// A registered embedding provider id is unknown.
     #[error("embedding provider {0:?} is not registered")]
     UnknownEmbeddingProvider(String),
     /// Internal mutex was poisoned. Fatal — the session is toast.
     #[error("backend state mutex poisoned; analysis aborted")]
     MutexPoisoned,
-    /// Persisting shared VSIX/LSP embedding settings failed.
-    #[error("failed to write shared embedding settings at {path:?}: {message}")]
-    ConfigWrite {
-        /// Settings file path.
-        path: PathBuf,
-        /// Failure message.
-        message: String,
-    },
+    /// The LSP server is not running — its state file does not exist.
+    #[error("LSP is not running — start deslop-lsp to enable this tool")]
+    LspNotRunning,
+    /// The LSP state file exists but could not be parsed.
+    #[error("state file corrupt: {0}")]
+    StateFileCorrupt(String),
 }
 
 /// Read-only view over the server-facing capabilities of the backend.
@@ -254,23 +228,11 @@ pub struct SessionConfigSnapshot {
     pub cumulative_cache_stats: CacheStats,
 }
 
-/// Knobs for constructing a [`PipelineSessionBackend`].
+/// Knobs for constructing a [`StateFileBackend`].
 #[derive(Debug, Clone)]
 pub struct SessionBackendConfig {
     /// Workspace root to analyse.
     pub root: PathBuf,
-    /// Minimum subtree node count (mirrors the CLI `--min-nodes` flag).
-    pub min_nodes: u32,
-    /// Whether to consult the on-disk fingerprint cache.
-    pub incremental: bool,
-    /// Embedding-pass mode.
-    pub embedding_mode: EmbeddingMode,
-    /// Embedding provider id (`stub`, `ollama`, …).
-    pub embedding_provider: String,
-    /// Embedding model id (meaningful for the `ollama` provider).
-    pub embedding_model: String,
-    /// Embedding endpoint override (currently only Ollama honours it).
-    pub embedding_endpoint: String,
     /// Optional `.deslop.toml` override path.
     pub config_path: Option<PathBuf>,
 }

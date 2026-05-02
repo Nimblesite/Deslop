@@ -421,6 +421,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "deslop-core",
+ "notify",
  "predicates",
  "serde",
  "serde_json",

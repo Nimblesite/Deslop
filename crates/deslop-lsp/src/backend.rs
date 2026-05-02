@@ -128,6 +128,10 @@ pub struct LspBackend {
     /// Scheduler kept alive so its broadcast channels remain open
     /// ([LIVE-SCHEDULER]).
     _scheduler: deslop_core::live::Scheduler,
+    /// IPC socket server that exposes `duplicates/findSimilar` and
+    /// `embedding/listModels` to the MCP server ([LSP-IPC]).
+    /// `None` when the socket could not be bound (non-fatal).
+    _ipc: Option<crate::ipc::IpcServer>,
 }
 
 impl LspBackend {
@@ -176,9 +180,17 @@ impl LspBackend {
         let root = session.root().to_path_buf();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
-        let (_watcher, _scheduler) =
-            crate::file_watch::start(&root, session, client.clone())?;
-        Ok(Self { client, service, _watcher, _scheduler })
+        let (_watcher, _scheduler) = crate::file_watch::start(&root, session, client.clone())?;
+        let _ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service))
+            .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
+            .ok();
+        Ok(Self {
+            client,
+            service,
+            _watcher,
+            _scheduler,
+            _ipc,
+        })
     }
 
     /// Returns the LSP client handle. Exposed so request handlers can

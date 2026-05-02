@@ -30,9 +30,7 @@ use deslop_core::{
 use tokio::sync::{broadcast::Receiver, Mutex};
 use tower_lsp::Client;
 
-use crate::backend::{
-    AnalysisStateLspNotification, ReportChangedLspNotification, ANALYSIS_STATE,
-};
+use crate::backend::{AnalysisStateLspNotification, ReportChangedLspNotification, ANALYSIS_STATE};
 
 /// File extensions the watcher monitors — one entry per supported language.
 const WATCHED_EXTENSIONS: &[&str] = &["cs", "rs", "py"];
@@ -54,8 +52,10 @@ pub fn start(
 ) -> Result<(LiveWatcher, Scheduler), LiveError> {
     let extensions: Vec<String> = WATCHED_EXTENSIONS.iter().map(|e| (*e).to_owned()).collect();
     let exclusion = Arc::new(ExclusionConfig::empty());
-    let (watcher, watcher_rx) = LiveWatcher::start(root, extensions, exclusion)
-        .map_err(|err| LiveError::WatcherInit { message: err.to_string() })?;
+    let (watcher, watcher_rx) =
+        LiveWatcher::start(root, extensions, exclusion).map_err(|err| LiveError::WatcherInit {
+            message: err.to_string(),
+        })?;
     let scheduler = Scheduler::with_system_clock(session, watcher_rx);
     let report_rx = scheduler.subscribe_report_changed();
     let state_rx = scheduler.subscribe_state();

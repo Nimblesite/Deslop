@@ -341,6 +341,7 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
+        self.write_state_file();
         Some(CommittedEmbeddingRefresh {
             previous_generation,
             previous_report,
@@ -448,6 +449,30 @@ impl AnalysisSession {
                 .map(|parser| parser.id().to_owned())
                 .collect(),
         })
+    }
+
+    /// [LIVE-STATE-FILE] Atomically writes the current report snapshot to
+    /// `{cache_dir}/live-report.json`. Best-effort: failures are logged
+    /// at `warn` level and never propagated to callers.
+    fn write_state_file(&self) {
+        let cache_dir = self
+            .pipeline
+            .root()
+            .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+        if let Err(error) = std::fs::create_dir_all(&cache_dir) {
+            tracing::warn!(%error, "state_file_dir_create_failed");
+            return;
+        }
+        match serde_json::to_vec(self.latest_report.as_ref()) {
+            Err(error) => tracing::warn!(%error, "state_file_serialize_failed"),
+            Ok(bytes) => {
+                if let Err(error) = atomic_write_json(&cache_dir, &bytes) {
+                    tracing::warn!(%error, "state_file_atomic_write_failed");
+                } else {
+                    tracing::info!(generation = self.generation, "state_file_written");
+                }
+            }
+        }
     }
 
     /// Asserts `path` is under the workspace root.

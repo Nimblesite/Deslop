@@ -439,7 +439,10 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
         "every cluster must have a weight"
     );
     let sorted = weights.windows(2).all(|w| w[0] >= w[1]);
-    assert!(sorted, "clusters must be worst-first by weight: {weights:?}");
+    assert!(
+        sorted,
+        "clusters must be worst-first by weight: {weights:?}"
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1985,7 +1988,10 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
         "notification must not carry an id: {frame2}"
     );
     assert!(
-        frame2.pointer("/params/generation").and_then(Value::as_u64).is_some(),
+        frame2
+            .pointer("/params/generation")
+            .and_then(Value::as_u64)
+            .is_some(),
         "reportChanged must include a numeric generation: {frame2}"
     );
 

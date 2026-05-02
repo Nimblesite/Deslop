@@ -184,7 +184,11 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         clusters: vec![cluster],
     };
     let diagnostics = build_for_file(&file_report, workspace.path());
-    assert_eq!(diagnostics.len(), 1, "one diagnostic for the Alpha.cs occurrence");
+    assert_eq!(
+        diagnostics.len(),
+        1,
+        "one diagnostic for the Alpha.cs occurrence"
+    );
     let diagnostic = diagnostics
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
@@ -220,7 +224,10 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         "related label must be 'Canonical', not an indexed occurrence string: {}",
         canonical.message
     );
-    assert_eq!(diagnostic.range.start.line, 0, "start on first line of Alpha.cs");
+    assert_eq!(
+        diagnostic.range.start.line, 0,
+        "start on first line of Alpha.cs"
+    );
     Ok(())
 }
 
@@ -236,12 +243,7 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
         ("same_behavior", DiagnosticSeverity::WARNING),
     ];
     for (bucket, expected_severity) in buckets {
-        let cluster = sample_cluster(
-            "c",
-            1.0,
-            vec![occurrence("A.cs", 0, 2)],
-            bucket,
-        );
+        let cluster = sample_cluster("c", 1.0, vec![occurrence("A.cs", 0, 2)], bucket);
         let file_report = FileReport {
             path: PathBuf::from("A.cs"),
             clusters: vec![cluster],

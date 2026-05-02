@@ -39,7 +39,13 @@ pub fn build_for_file(report: &FileReport, workspace_root: &Path) -> Vec<Diagnos
         .clusters
         .iter()
         .flat_map(|cluster| {
-            build_for_cluster(cluster, &report.path, workspace_root, &primary_source, &mut source_cache)
+            build_for_cluster(
+                cluster,
+                &report.path,
+                workspace_root,
+                &primary_source,
+                &mut source_cache,
+            )
         })
         .collect()
 }
@@ -104,9 +110,9 @@ fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
 fn severity_for(cluster: &ReportCluster) -> DiagnosticSeverity {
     match classify(cluster) {
         ClusterKind::Identical => DiagnosticSeverity::ERROR,
-        ClusterKind::NearlyIdentical
-        | ClusterKind::LooselySimilar
-        | ClusterKind::SameBehavior => DiagnosticSeverity::WARNING,
+        ClusterKind::NearlyIdentical | ClusterKind::LooselySimilar | ClusterKind::SameBehavior => {
+            DiagnosticSeverity::WARNING
+        }
     }
 }
 

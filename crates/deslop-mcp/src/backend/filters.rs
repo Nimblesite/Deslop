@@ -4,7 +4,7 @@ use std::path::Path;
 
 use deslop_core::{
     report::{ReportCluster, ReportOccurrence},
-    OllamaModelInfo, Report, STUB_PROVIDER_ID,
+    Report,
 };
 
 /// Filters the report down to clusters whose occurrences touch
@@ -66,24 +66,4 @@ pub(super) const fn occurrence_overlaps(
 pub(super) fn paths_equal(occurrence_path: &Path, absolute_candidate: &Path, root: &Path) -> bool {
     let joined = root.join(occurrence_path);
     std::fs::canonicalize(&joined).is_ok_and(|canonical| canonical == absolute_candidate)
-}
-
-/// Trims `clusters` to the top `n` entries (already worst-first).
-pub(super) fn trim_top_n(mut clusters: Vec<ReportCluster>, top_n: usize) -> Vec<ReportCluster> {
-    if clusters.len() > top_n {
-        clusters.truncate(top_n);
-    }
-    clusters
-}
-
-/// Constructs the synthetic `OllamaModelInfo` entry for the built-in
-/// stub provider.
-pub(super) fn stub_model_info() -> OllamaModelInfo {
-    OllamaModelInfo {
-        name: STUB_PROVIDER_ID.to_owned(),
-        bare_id: STUB_PROVIDER_ID.to_owned(),
-        digest: "stub-v1".to_owned(),
-        size_bytes: 0,
-        is_embedding_model: true,
-    }
 }

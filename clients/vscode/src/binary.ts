@@ -152,15 +152,12 @@ function verifyCandidate(
 ): ResolvedBinary | undefined {
   if (!fs.existsSync(candidate.path)) return handleMissing(candidate, component);
   const probe = versionProbe(candidate.path);
-  // Version check temporarily disabled — uncomment to re-enable strict version enforcement.
-  // if (probe.name === component.id && probe.version === component.expectedVersion) {
-  //   if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
-  //   return resolvedBinary(component, candidate, probe.version);
-  // }
-  // if (!candidate.hardFailure) return undefined;
-  // throw new BinaryVerificationError(component, candidate, foundVersion(probe));
-  if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
-  return resolvedBinary(component, candidate, probe.version ?? component.expectedVersion);
+  if (probe.name === component.id && probe.version === component.expectedVersion) {
+    if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
+    return resolvedBinary(component, candidate, probe.version);
+  }
+  if (!candidate.hardFailure) return undefined;
+  throw new BinaryVerificationError(component, candidate, probeVersion(probe));
 }
 
 function handleMissing(candidate: Candidate, component?: DeploymentComponent): undefined {
@@ -309,6 +306,10 @@ function deploymentManifestPath(extensionPath: string): string {
 function throwMissing(component: DeploymentComponent, skipped?: Candidate): never {
   const suffix = skipped ? ` Last checked: ${skipped.path} from ${skipped.source}.` : "";
   throw new Error(`No matching ${component.id} ${component.expectedVersion} binary found.${suffix}`);
+}
+
+function probeVersion(probe: VersionProbe): string {
+  return probe.name && probe.version ? `${probe.name} ${probe.version}` : probe.raw || "not found";
 }
 
 function mismatchMessage(
