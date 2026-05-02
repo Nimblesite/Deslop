@@ -291,6 +291,31 @@ pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) 
     }
 }
 
+/// [LIVE-CACHE-SEED] Best-effort load of `{root}/.deslop-cache/live-report.json`.
+/// Returns `None` for a missing file (cold start) and for any parse or
+/// I/O failure (the caller falls back to running a fresh full pass).
+pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
+    let path = root
+        .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME)
+        .join(STATE_FILE_NAME);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(%error, path = %path.display(), "cached_report_read_failed");
+            }
+            return None;
+        }
+    };
+    match serde_json::from_slice::<Report>(&bytes) {
+        Ok(report) => Some(report),
+        Err(error) => {
+            tracing::warn!(%error, path = %path.display(), "cached_report_parse_failed");
+            None
+        }
+    }
+}
+
 /// Translates the Ollama tag list into [`EmbeddingModelInfo`] entries.
 pub(super) fn append_ollama_models(
     out: &mut Vec<EmbeddingModelInfo>,
