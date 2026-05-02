@@ -86,10 +86,13 @@ fn generated_template_clusters(report: &Value, scan_root: &Path) -> Result<Vec<S
         for occurrence in occurrences(cluster) {
             let path = occurrence_path(occurrence)?;
             let text = occurrence_text(scan_root, occurrence)?;
-            saw_generator_template |= path.ends_with("scripts/gen_contracts.py")
-                && text.contains("DO NOT HAND-EDIT");
+            saw_generator_template |=
+                path.ends_with("scripts/gen_contracts.py") && text.contains("DO NOT HAND-EDIT");
             saw_generated_output |= path.ends_with("schemas_generated.py");
-            texts.push(format!("{path}: {}", text.lines().next().unwrap_or_default()));
+            texts.push(format!(
+                "{path}: {}",
+                text.lines().next().unwrap_or_default()
+            ));
         }
         if saw_generator_template && saw_generated_output {
             offenders.push(format!(

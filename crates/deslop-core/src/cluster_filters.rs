@@ -22,6 +22,9 @@
 //! - **#75** — every first-party Rust language plug-in implements the
 //!   same `LanguageParser` trait surface. The adapter shape is required
 //!   by the trait contract, not extractable business logic.
+//! - **#126** — generator template literals that contain generated-file
+//!   headers can cluster with the generated output. That relationship is
+//!   provenance, not duplicate implementation logic.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -53,9 +56,74 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     };
     is_polymorphic_signature_cluster(&snippets)
         || is_rust_language_parser_adapter_cluster(&snippets)
+        || is_generated_template_output_cluster(&snippets)
         || is_literal_variation_call_cluster(&snippets)
         || is_monkeypatch_scaffolding_literal_cluster(&snippets)
         || is_python_all_exports_cluster(&snippets)
+}
+
+/// Detects **issue #126**: a hand-written generator source contains a
+/// template literal for a generated-file header, and the generated file
+/// itself carries the same `DO NOT HAND-EDIT` marker. These two ranges
+/// are intentionally related, but the generated output is not a
+/// refactor target and the template is already the source of truth.
+fn is_generated_template_output_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+        return false;
+    }
+    let mut files = BTreeSet::new();
+    for snippet in snippets {
+        let _inserted = files.insert(snippet.file_id);
+    }
+    files.len() >= 2
+        && snippets.iter().any(is_generated_header_template_snippet)
+        && snippets.iter().any(is_generated_output_source)
+}
+
+/// Returns true when the reported range itself contains a generated-file
+/// marker, but the file is not the generated output. This is the
+/// generator-template side of issue #126.
+fn is_generated_header_template_snippet(snippet: &Snippet<'_>) -> bool {
+    !is_generated_output_source(snippet)
+        && snippet_range_text(snippet).is_some_and(contains_generated_marker)
+}
+
+/// Returns true for a Python generated output file with a top-of-file
+/// docstring/comment that warns users not to edit it directly.
+fn is_generated_output_source(snippet: &Snippet<'_>) -> bool {
+    let head = source_head(snippet.source);
+    let trimmed = trim_ascii_start(head);
+    contains_generated_marker(head)
+        && (trimmed.starts_with(b"\"\"\"")
+            || trimmed.starts_with(b"'''")
+            || trimmed.starts_with(b"#"))
+}
+
+/// Generated-file marker used by first-party and dogfood fixtures.
+fn contains_generated_marker(bytes: &[u8]) -> bool {
+    bytes
+        .windows(b"DO NOT HAND-EDIT".len())
+        .any(|window| window == b"DO NOT HAND-EDIT")
+}
+
+/// Returns the bytes covered by one cluster occurrence.
+fn snippet_range_text<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
+    snippet.source.get(snippet.range.start..snippet.range.end)
+}
+
+/// Keeps generated-file detection focused on file headers.
+fn source_head(source: &[u8]) -> &[u8] {
+    let end = source.len().min(1024);
+    source.get(..end).unwrap_or(source)
+}
+
+/// Trims ASCII whitespace without allocating.
+fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
+    let first = bytes
+        .iter()
+        .position(|byte| !byte.is_ascii_whitespace())
+        .unwrap_or(bytes.len());
+    bytes.get(first..).unwrap_or_default()
 }
 
 /// Detects **issue #96**: every cluster member is a Python module-level

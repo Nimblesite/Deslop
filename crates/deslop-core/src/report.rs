@@ -156,13 +156,15 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // output; the raw analysis data remains available via the pipeline.
             let loosely_similar =
                 classify_signals(report_cluster.signals) == ClusterKind::LooselySimilar;
+            let cross_language_audit = inputs.exclusion.allows_cross_language_comparison()
+                && spans_multiple_languages(&cluster.members, inputs.file_languages);
             // Issues #69, #70, #71, #72: re-parse cluster member sources
             // and drop known noise patterns (polymorphic interface
             // implementations, test-data variation, REST endpoint shape,
             // monkeypatch.setenv scaffolding) that survive Type-2
             // normalisation but are not real duplication.
             let noise = is_noise_pattern(&cluster.members, inputs.sources, inputs.file_languages);
-            let all_hidden = loosely_similar
+            let all_hidden = (loosely_similar && !cross_language_audit)
                 || noise
                 || (!report_cluster.occurrences.is_empty()
                     && report_cluster.occurrences.iter().all(|occ| occ.hidden));
@@ -202,6 +204,20 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
     }
+}
+
+/// Returns true when a cluster contains more than one parser language id.
+fn spans_multiple_languages<S: BuildHasher>(
+    members: &[crate::fingerprint::Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> bool {
+    let mut languages = members
+        .iter()
+        .filter_map(|member| file_languages.get(&member.file_id).copied());
+    let Some(first) = languages.next() else {
+        return false;
+    };
+    languages.any(|language| language != first)
 }
 
 /// Bucket totals emitted for GH#45 classification observability.
