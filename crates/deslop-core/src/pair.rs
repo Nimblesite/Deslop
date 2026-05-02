@@ -229,10 +229,10 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
     }
 }
 
-/// Adds embedding ANN pairs. Structural scoring is unchanged; pairs
-/// gain an entry in `cosines` that [`finalise_pairs`] folds into the
-/// final [`PairScore`]. Pairs already surfaced by the structural or
-/// LSH passes still benefit from the embedding cosine being recorded.
+/// Adds embedding ANN pairs that structural hash and token LSH did not
+/// already surface. Embedding evidence is credited only when it adds
+/// unique recall, so LSH-visible Type-3 pairs do not get re-routed into
+/// the Type-4 bucket just because they were also close in embedding space.
 fn add_embedding_pairs(
     embedding_pairs: &[EmbeddingPair],
     scores: &mut HashMap<(usize, usize), f64>,
@@ -240,7 +240,10 @@ fn add_embedding_pairs(
 ) {
     for pair in embedding_pairs {
         let key = order(pair.left, pair.right);
-        let _previous_score = scores.entry(key).or_insert(0.0_f64);
+        if scores.contains_key(&key) {
+            continue;
+        }
+        let _previous_score = scores.insert(key, 0.0_f64);
         // HNSW's top-K search already produces at most one pair per
         // ordered (left, right); `or_insert` keeps the first cosine
         // rather than re-ranking duplicates we never see.

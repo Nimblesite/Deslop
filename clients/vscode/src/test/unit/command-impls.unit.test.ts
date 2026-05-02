@@ -401,14 +401,16 @@ suite("register command implementations", () => {
     assert.match(text, /stale-cluster/);
   });
 
-  test("openSchemaDoc opens a markdown editor", async () => {
+  test("openSchemaDoc prefers packaged docs over a stale snapshot", async () => {
+    const expected = fs.readFileSync(packagedSchemaDocPath(), "utf8");
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
     await openSchemaDoc(fakeCtx(), store);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "schema doc editor should be active");
     assert.equal(active.document.languageId, "markdown");
-    assert.match(active.document.getText(), /# docs/);
+    assert.equal(active.document.getText(), expected);
+    assert.doesNotMatch(active.document.getText(), /# docs/);
   });
 
   test("openSchemaDoc reads the packaged fallback when schema_doc is absent", async () => {

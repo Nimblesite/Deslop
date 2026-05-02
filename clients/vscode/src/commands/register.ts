@@ -339,16 +339,15 @@ export async function openSchemaDoc(
   store: ReportStore,
   clientOf?: ClientFactory,
 ): Promise<void> {
-  // Live wire blanks `schema_doc` to keep reportGet tiny. Prefer the
-  // dedicated `deslop/reportSchemaDoc` RPC, then whatever the snapshot
-  // happens to carry, then the packaged markdown copy for offline use.
+  // The packaged markdown is the current extension-facing reference.
+  // RPC/snapshot fallbacks are only for unusual packaging failures;
+  // persisted reports may be discarded and recreated when their shape
+  // no longer matches.
+  const packaged = await readPackagedSchemaDoc(ctx);
   const remote = await fetchSchemaDocViaRpc(clientOf);
   const fallback = store.current.report?.schema_doc;
-  const packaged = firstNonEmpty(remote, fallback)
-    ? undefined
-    : await readPackagedSchemaDoc(ctx);
   const content =
-    firstNonEmpty(remote, fallback, packaged) ?? "Schema doc unavailable.";
+    firstNonEmpty(packaged, remote, fallback) ?? "Schema doc unavailable.";
   const doc = await vscode.workspace.openTextDocument({
     language: "markdown",
     content,
