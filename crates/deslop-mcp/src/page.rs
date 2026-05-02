@@ -59,7 +59,6 @@ pub fn build_page(
     ReportPage {
         report_schema_version: report.report_schema_version,
         tool_version: report.tool_version.clone(),
-        schema_doc: report.schema_doc.clone(),
         generation,
         files_analysed: report.files_analysed,
         min_nodes: report.min_nodes,

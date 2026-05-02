@@ -177,7 +177,7 @@ export class LiveBubble implements vscode.Disposable {
       editor.setDecorations(this.ghostDecoration, [
         {
           range: editor.document.lineAt(range.end.line).range,
-          renderOptions: { after: { contentText: ghostText(best, severity) } },
+          renderOptions: { after: { contentText: ghostText(best, severity, rank) } },
         },
       ]);
     } else {
@@ -188,7 +188,7 @@ export class LiveBubble implements vscode.Disposable {
           hoverMessage: bubbleHover(best, rank),
           renderOptions: {
             after: {
-              contentText: inlineText(best, severity),
+              contentText: inlineText(best, severity, rank),
               color: SEVERITY_COLOR[severity],
               fontStyle: "normal",
               fontWeight: "600",
@@ -285,17 +285,49 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
 // The inline bubble and ghost-line decorations are pure-visual
 // surfaces (rendered only in the editor, never scraped by agents), so
 // they use `plainTitle` per [CLONE-BUCKETS-DUAL-LABEL].
-export function inlineText(cluster: ReportCluster, severity: Severity): string {
+export interface BubbleRenderParts {
+  inline: string;
+  ghost: string;
+  signalStrip: string;
+  hover: vscode.MarkdownString;
+}
+
+export function renderBubbleParts(
+  cluster: ReportCluster,
+  severity: Severity,
+  rank?: number,
+): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
   const title = bucketLabels(resolveBucket(cluster)).plainTitle;
+  const rankPrefix = rank !== undefined ? `#${rank} ` : "";
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
-  return `  ${SEVERITY_DOT[severity]} ${title} × ${count}${location}`;
+  const strip = signalStrip(cluster);
+  return {
+    inline: `  ${SEVERITY_DOT[severity]} ${rankPrefix}${title} × ${count}${location}`,
+    ghost: `  └─ ${SEVERITY_DOT[severity]} ${rankPrefix}${title}  ${strip}  × ${count}`,
+    signalStrip: strip,
+    hover: clusterHoverMarkdown(cluster, {
+      showDismiss: true,
+      ...(rank !== undefined && { rank }),
+    }),
+  };
 }
 
-export function ghostText(cluster: ReportCluster, severity: Severity): string {
-  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  return `  └─ ${SEVERITY_DOT[severity]} ${title}  ${signalStrip(cluster)}  × ${occurrenceCount(cluster)}`;
+export function inlineText(
+  cluster: ReportCluster,
+  severity: Severity,
+  rank?: number,
+): string {
+  return renderBubbleParts(cluster, severity, rank).inline;
+}
+
+export function ghostText(
+  cluster: ReportCluster,
+  severity: Severity,
+  rank?: number,
+): string {
+  return renderBubbleParts(cluster, severity, rank).ghost;
 }
 
 export function signalStrip(cluster: ReportCluster): string {
@@ -322,10 +354,7 @@ export function bubbleHover(
   cluster: ReportCluster,
   rank?: number,
 ): vscode.MarkdownString {
-  return clusterHoverMarkdown(cluster, {
-    showDismiss: true,
-    ...(rank !== undefined && { rank }),
-  });
+  return renderBubbleParts(cluster, "faint", rank).hover;
 }
 
 function utf8ByteOffset(

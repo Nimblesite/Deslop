@@ -24,6 +24,7 @@ Each tool has a JSON schema and an agent-readable description. Descriptions are 
 | `rescan` | `{ paths?, n? }` | `TopOffenders` | Ask the running LSP to execute `deslop.lsp.refreshReport`, synchronously reload the LSP-written state file, then return fresh top offenders. If the LSP socket is absent, falls back to cache reload only. Use when watcher lag or stale ranges are suspected. |
 | `report-get` | `{ offset, limit }` (both required) | `ReportPage` | Fetch one page of the current duplication report. Worst offenders first. Call at session start; follow with `cluster-by-id` to drill in. Both `offset` and `limit` are required — the agent sizes its own context window. |
 | `report-query` | `{ offset, limit, language?, bucket?, path_contains?, min_score?, min_size? }` | `ReportPage` | Filtered lookup. Use instead of `report-get` when you can describe what you're looking for. |
+| `schema-doc` | `{}` | `SchemaDocPayload` | One-shot schema markdown. Call once when learning field meanings; report pages omit `schema_doc` by default to avoid repeated context bloat. |
 | `report-for-file` | `{ path }` | `FileReport` | All clone clusters touching this file. Call before editing to see what's already duplicated here. |
 | `report-for-range` | `{ path, start_byte, end_byte }` | `[Cluster]` | Clusters overlapping the byte range you're about to edit. |
 | `cluster-by-id` | `{ id }` | `Cluster` | Fetch a cluster by its stable 16-char id. The only tool that returns full occurrence lists — `report-get` and `report-query` omit them to keep pages slim. |
@@ -79,12 +80,15 @@ The canonical report is unbounded. `report-get` returns a **slim page** and forc
 
 ```text
 {
-  report_schema_version, schema_doc, generation, metrics, files_analysed,
+  report_schema_version, generation, metrics, files_analysed,
   min_nodes, embedding_provenance, cache_stats, action_hints,
   total_clusters, page: { offset, limit, returned },
   clusters: [ClusterSummary, ...]
 }
 ```
+
+`schema_doc` is intentionally absent from `ReportPage`; agents that need the
+large markdown guide call `schema-doc` or read `deslop://schema` once.
 
 **`ClusterSummary`** (not `Cluster` — `members[]` and `occurrences[]` are omitted):
 
@@ -154,6 +158,7 @@ Descriptions are written once (the `tools/list` response) and reused in [vsix.md
 - `tools/call report-get` with a non-trivial fixture returns a `ReportPage` under the byte budget, with `total_clusters >= page.returned` and the `ClusterSummary` shape (no `members[]`, no `occurrences[]`).
 - `tools/call report-get` past the end returns empty `clusters[]`, `page.returned == 0`.
 - `tools/call report-query` honours each filter independently and in combination; echoed `filters` reflect inputs.
+- `tools/call schema-doc` returns the same markdown as `resources/read deslop://schema`; `report-get` and `report-query` omit inline `schema_doc`.
 - `tools/call cluster-by-id` returns the full `Cluster` with `occurrences[]`.
 - `tools/call report-for-file` returns the expected cluster.
 - `tools/call find-similar` with a known snippet returns the matching cluster above threshold (requires LSP running alongside the test).

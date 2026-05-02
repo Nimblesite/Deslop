@@ -288,7 +288,6 @@ type ReportPageFilters {
 type ReportPage {
   report_schema_version: Int
   tool_version: String
-  schema_doc: String
   generation: Int
   files_analysed: Int
   min_nodes: Int
@@ -301,6 +300,15 @@ type ReportPage {
   page: ReportPageInfo
   clusters: List<ClusterSummary>
   filters: Option<ReportPageFilters>
+}
+
+# ---------------------------------------------------------------------------
+# MCP `schema-doc` payload. The schema markdown is large and deliberately
+# lives behind this one-shot tool instead of every report page.
+# ---------------------------------------------------------------------------
+
+type SchemaDocPayload {
+  schema_doc: String
 }
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import {
   shortPath,
   bubbleHover,
 } from "../../bubble/live";
+import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
 import { ReportCluster } from "../../types/report";
 
@@ -163,5 +164,37 @@ suite("bubble rendering helpers", () => {
     assert.match(bubble.value, /command:deslop\.compareWithCanonical/);
     assert.match(bubble.value, /command:deslop\.openCluster/);
     assert.match(bubble.value, /command:deslop\.bubble\.dismissCluster/);
+  });
+
+  test("renderBubbleParts is the single rebuild path for ranked live bubble text (#46)", () => {
+    const c = cluster();
+    type RenderBubbleParts = (
+      cluster: ReportCluster,
+      severity: Parameters<typeof inlineText>[1],
+      rank?: number,
+    ) => {
+      inline: string;
+      ghost: string;
+      signalStrip: string;
+      hover: { value: string };
+    };
+    const renderBubbleParts = (
+      liveBubble as typeof liveBubble & {
+        renderBubbleParts?: RenderBubbleParts;
+      }
+    ).renderBubbleParts;
+    if (typeof renderBubbleParts !== "function") {
+      assert.fail(
+        "live bubble surfaces must be rebuilt through one shared render function",
+      );
+    }
+    const parts = renderBubbleParts(c, "top10", 42);
+    assert.equal(inlineText(c, "top10", 42), parts.inline);
+    assert.equal(ghostText(c, "top10", 42), parts.ghost);
+    assert.equal(signalStrip(c), parts.signalStrip);
+    assert.equal(bubbleHover(c, 42).value, parts.hover.value);
+    assert.match(parts.inline, /#42/);
+    assert.match(parts.ghost, /#42/);
+    assert.match(parts.hover.value, /^\*\*#42 /);
   });
 });

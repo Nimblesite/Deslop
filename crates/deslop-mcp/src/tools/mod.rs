@@ -15,8 +15,8 @@ mod schemas;
 
 use handlers::{
     call_cluster_by_id, call_find_similar, call_list_embedding_models, call_report_for_file,
-    call_report_for_range, call_report_get, call_report_query, call_rescan, call_session_config,
-    call_set_embedding_model, call_top_offenders,
+    call_report_for_range, call_report_get, call_report_query, call_rescan, call_schema_doc,
+    call_session_config, call_set_embedding_model, call_top_offenders,
 };
 use schemas::{
     schema_cluster_by_id, schema_empty, schema_find_similar, schema_report_for_file,
@@ -36,7 +36,7 @@ pub struct ToolDefinition {
 }
 
 /// Static tool registry. `top-offenders` is the primary entry point.
-const TOOLS: [ToolDefinition; 11] = [
+const TOOLS: [ToolDefinition; 12] = [
     ToolDefinition {
         name: "top-offenders",
         description:
@@ -59,6 +59,12 @@ const TOOLS: [ToolDefinition; 11] = [
         description:
             "Slim paginated list with AND-combined filters: language, bucket, path_contains, min_score, min_size.",
         input_schema: schema_report_query,
+    },
+    ToolDefinition {
+        name: "schema-doc",
+        description:
+            "One-shot report schema markdown. Call once for field meanings; report pages omit it by default.",
+        input_schema: schema_empty,
     },
     ToolDefinition {
         name: "report-for-file",
@@ -147,6 +153,7 @@ pub fn dispatch_tool_call(
         "rescan" => call_rescan(backend, arguments),
         "report-get" => call_report_get(backend, arguments),
         "report-query" => call_report_query(backend, arguments),
+        "schema-doc" => call_schema_doc(backend),
         "report-for-file" => call_report_for_file(backend, arguments),
         "report-for-range" => call_report_for_range(backend, arguments),
         "find-similar" => call_find_similar(backend, arguments),

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use deslop_core::{
     wire_generated::{
         EmbeddingModelList, FindSimilarResult, McpSessionConfig, RangeReport, ReportPageFilters,
-        SetEmbeddingModelResponse, TopOffendersPayload,
+        SchemaDocPayload, SetEmbeddingModelResponse, TopOffendersPayload,
     },
     Report,
 };
@@ -94,6 +94,16 @@ pub(super) fn call_report_query(
     let report = backend.report_get().map_err(backend_to_rpc)?;
     let page = build_page(&report, backend.generation(), pagination, &filters);
     Ok(to_value(&page))
+}
+
+/// `schema-doc` returns the large markdown schema out-of-band so paged
+/// report calls stay lean by default.
+pub(super) fn call_schema_doc(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
+    let report = backend.report_get().map_err(backend_to_rpc)?;
+    let payload = SchemaDocPayload {
+        schema_doc: report.schema_doc.clone(),
+    };
+    Ok(to_value(&payload))
 }
 
 /// `report-for-file` forwarder.

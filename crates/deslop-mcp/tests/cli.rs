@@ -495,12 +495,13 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_owned))
         .collect();
-    assert_eq!(names.len(), 11, "expected 11 tools, got {names:?}");
+    assert_eq!(names.len(), 12, "expected 12 tools, got {names:?}");
     for expected in [
         "top-offenders",
         "rescan",
         "report-get",
         "report-query",
+        "schema-doc",
         "report-for-file",
         "report-for-range",
         "find-similar",
@@ -645,11 +646,8 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
         "schema version must round-trip on the page"
     );
     assert!(
-        !value_get(&page, "/schema_doc")?
-            .as_str()
-            .unwrap_or("")
-            .is_empty(),
-        "schema_doc must be embedded on every page so first-call clients learn the shape"
+        page.get("schema_doc").is_none(),
+        "schema_doc must live behind schema-doc/deslop://schema, not every report page"
     );
     let total = value_get(&page, "/total_clusters")?
         .as_u64()
