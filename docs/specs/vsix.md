@@ -308,7 +308,7 @@ Every interaction has a command palette entry:
 - `Deslop: Toggle Show All Code Lenses`
 - `Deslop: Show Schema Documentation`
 
-Each entry maps 1:1 to an LSP `workspace/executeCommand` or virtual-document open. Nothing UI-only — keeps the VSIX a thin client.
+VSIX command IDs stay in the `deslop.*` namespace for command palette, menus, and URI links. Any matching LSP `workspace/executeCommand` verb uses the `deslop.lsp.*` namespace so the language client does not double-register VSIX-owned commands during activation.
 
 ### [VSIX-SETTINGS] Settings
 

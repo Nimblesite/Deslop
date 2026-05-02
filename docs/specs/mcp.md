@@ -21,7 +21,7 @@ Each tool has a JSON schema and an agent-readable description. Descriptions are 
 | Tool | Inputs | Output | Description |
 |---|---|---|---|
 | `top-offenders` | `{ n? }` | `TopOffenders` | Fetch the worst duplicate clusters with full occurrences, interpretation, signals, bucket, and score. Start here when choosing what to fix. |
-| `rescan` | `{ paths?, n? }` | `TopOffenders` | Synchronously reload the LSP-written state file after edits, then return fresh top offenders. Use when watcher lag or stale ranges are suspected. |
+| `rescan` | `{ paths?, n? }` | `TopOffenders` | Ask the running LSP to execute `deslop.lsp.refreshReport`, synchronously reload the LSP-written state file, then return fresh top offenders. If the LSP socket is absent, falls back to cache reload only. Use when watcher lag or stale ranges are suspected. |
 | `report-get` | `{ offset, limit }` (both required) | `ReportPage` | Fetch one page of the current duplication report. Worst offenders first. Call at session start; follow with `cluster-by-id` to drill in. Both `offset` and `limit` are required — the agent sizes its own context window. |
 | `report-query` | `{ offset, limit, language?, bucket?, path_contains?, min_score?, min_size? }` | `ReportPage` | Filtered lookup. Use instead of `report-get` when you can describe what you're looking for. |
 | `report-for-file` | `{ path }` | `FileReport` | All clone clusters touching this file. Call before editing to see what's already duplicated here. |
@@ -42,7 +42,7 @@ Each tool has a JSON schema and an agent-readable description. Descriptions are 
 |---|---|---|---|
 | `session-config` | `{}` | `SessionConfig` | min-nodes, active languages, embedding provenance, exclusion config path, cache root. Read from state file; live fields from LSP if reachable. |
 
-All tools are source-read-only except `set-embedding-model`; `rescan` only reloads the MCP cache and emits report-change notifications. `set-embedding-model` requires `user_initiated: true` and may only be set after a human asked for the switch.
+All tools are source-read-only except `set-embedding-model`; `rescan` never edits source, but it may trigger the LSP's full refresh command before reloading MCP's cache and emitting report-change notifications. `set-embedding-model` requires `user_initiated: true` and may only be set after a human asked for the switch.
 
 ### [MCP-EMBEDDING-CONSENT] Embedding model consent
 

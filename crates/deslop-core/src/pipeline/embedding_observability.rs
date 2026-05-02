@@ -62,6 +62,7 @@ impl EmbeddingObserver {
     /// Emits the cache phase summary event.
     pub(super) fn log_cache_phase(&self, queued_for_provider: usize) {
         tracing::info!(
+            target: "deslop_core::pipeline::embedding_pass",
             cache_hits = self.cache_hits,
             cache_misses = self.cache_misses,
             queued_for_provider,
@@ -90,6 +91,7 @@ impl EmbeddingObserver {
     pub(super) fn log_final(&self, pair_count: usize, embedded: usize, failed: usize) {
         let total_pass_ms = elapsed_millis(self.pass_started.elapsed());
         tracing::info!(
+            target: "deslop_core::pipeline::embedding_pass",
             pair_count,
             embedded,
             failed,
@@ -112,6 +114,7 @@ impl EmbeddingObserver {
         tokens: usize,
     ) -> TimedProviderBatch {
         tracing::info!(
+            target: "deslop_core::pipeline::embedding_pass",
             batch_index,
             total_batches,
             batch_size,
@@ -172,6 +175,7 @@ pub(super) fn token_count(input: &str) -> usize {
 /// Emits one provider completion event.
 fn log_provider_complete(batch: &TimedProviderBatch, elapsed_ms: u64) {
     tracing::info!(
+        target: "deslop_core::pipeline::embedding_pass",
         batch_index = batch.batch_index,
         total_batches = batch.total_batches,
         batch_size = batch.batch_size,
@@ -185,6 +189,7 @@ fn log_provider_complete(batch: &TimedProviderBatch, elapsed_ms: u64) {
 fn log_slow_provider_batch(batch: &TimedProviderBatch, elapsed_ms: u64) {
     if elapsed_ms > SLOW_PROVIDER_CALL_MS {
         tracing::warn!(
+            target: "deslop_core::pipeline::embedding_pass",
             batch_index = batch.batch_index,
             total_batches = batch.total_batches,
             batch_size = batch.batch_size,

@@ -1968,6 +1968,84 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 }
 
 #[test]
+fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> Result<()> {
+    let temp = TempDir::new()?;
+    std::fs::write(
+        temp.path().join("One.cs"),
+        include_str!("fixtures/csharp-mcp/Alpha.cs"),
+    )?;
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        include_str!("fixtures/csharp-mcp/Beta.cs"),
+    )?;
+    generate_state_file(temp.path(), 15)?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
+    let _ = init_session(&mut child)?;
+    let before_top = structured_tool_result(&call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 100 }),
+    )?)?;
+    let before_count = value_get(&before_top, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
+    assert!(before_count >= 1, "expected a cluster before mutation");
+    let before_config =
+        structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    let before_generation = value_get(&before_config, "/generation")?
+        .as_u64()
+        .unwrap_or(0);
+    assert!(before_generation >= 1, "initial generation should load state");
+    assert!(
+        value_get(&before_config, "/languages")?
+            .as_array()
+            .is_some_and(|languages| languages.iter().any(|value| value == "csharp")),
+        "session-config should report csharp before mutation: {before_config}"
+    );
+
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        "namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+    generate_state_file(temp.path(), 15)?;
+    child.notify(
+        "notifications/deslop/filesChanged",
+        &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
+    )?;
+
+    let after_top = structured_tool_result(&call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 100 }),
+    )?)?;
+    let after_count = value_get(&after_top, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
+    assert!(
+        after_count < before_count,
+        "mutation reload should remove the stale duplicate cluster"
+    );
+    let after_config =
+        structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    assert_eq!(value_get(&after_config, "/min_nodes")?.as_u64(), Some(15));
+    assert!(
+        value_get(&after_config, "/languages")?.is_array(),
+        "session-config should keep languages shaped as an array: {after_config}"
+    );
+    assert!(
+        value_get(&after_config, "/generation")?.as_u64().unwrap_or(0) > before_generation,
+        "filesChanged reload should advance the MCP generation"
+    );
+    assert_eq!(
+        value_get(&after_config, "/incremental")?.as_bool(),
+        Some(true),
+        "issue #77/#81: session-config must report live incremental mode after mutation reload"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> Result<()> {
     let workspace = copied_fixture_root()?;
     let mut child = McpChild::spawn(workspace.path(), &[])?;

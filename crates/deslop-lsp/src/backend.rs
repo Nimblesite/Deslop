@@ -1,6 +1,4 @@
 //! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
-use std::{path::PathBuf, sync::Arc};
-
 use deslop_core::{
     embedding::{
         EmbeddingMode, EmbeddingProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
@@ -11,6 +9,7 @@ use deslop_core::{
         LiveError, LiveService, ReportChangedNotification,
     },
 };
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 use tower_lsp::{
     jsonrpc::Result as LspResult,
@@ -241,7 +240,8 @@ impl LspBackend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for LspBackend {
-    async fn initialize(&self, _params: InitializeParams) -> LspResult<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        crate::parent_process::start_monitor(params.process_id);
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: SERVER_NAME.to_owned(),

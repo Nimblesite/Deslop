@@ -14,15 +14,15 @@ use tower_lsp::{
 use crate::backend::{LspBackend, ReportChangedLspNotification};
 
 /// Forces a full report refresh.
-pub const REFRESH_REPORT: &str = "deslop.refreshReport";
+pub const REFRESH_REPORT: &str = "deslop.lsp.refreshReport";
 /// Opens the current report virtual document.
-pub const OPEN_REPORT: &str = "deslop.openReport";
+pub const OPEN_REPORT: &str = "deslop.lsp.openReport";
 /// Opens a cluster virtual document by id.
-pub const OPEN_CLUSTER: &str = "deslop.openCluster";
+pub const OPEN_CLUSTER: &str = "deslop.lsp.openCluster";
 /// Returns available embedding models for a client-side picker.
-pub const PICK_EMBEDDING_MODEL: &str = "deslop.pickEmbeddingModel";
+pub const PICK_EMBEDDING_MODEL: &str = "deslop.lsp.pickEmbeddingModel";
 /// Toggles live incremental-cache behaviour.
-pub const TOGGLE_INCREMENTAL: &str = "deslop.toggleIncremental";
+pub const TOGGLE_INCREMENTAL: &str = "deslop.lsp.toggleIncremental";
 
 /// Stable command list advertised during `initialize`.
 const COMMANDS: &[&str] = &[
@@ -110,7 +110,7 @@ async fn open_cluster(backend: &LspBackend, arguments: &[Value]) -> LspResult<Op
         .first()
         .and_then(Value::as_str)
         .filter(|id| !id.is_empty() && !id.contains('/'))
-        .ok_or_else(|| invalid_params("deslop.openCluster requires a cluster id"))?;
+        .ok_or_else(|| invalid_params("deslop.lsp.openCluster requires a cluster id"))?;
     let uri = format!("deslop://cluster/{id}");
     show_uri(backend, OPEN_CLUSTER, &uri).await
 }

@@ -24,7 +24,7 @@ use deslop_core::{
     EmbeddingSpec, OllamaModelInfo, Report,
 };
 use notify::{recommended_watcher, EventHandler, RecursiveMode, Watcher as NotifyWatcher};
-use serde_json::json;
+use serde_json::{json, Value};
 use tracing::{debug, warn};
 
 use crate::{notify::push_report_changed, NotificationSender};
@@ -133,6 +133,21 @@ impl StateFileBackend {
         *guard = Some(Arc::clone(&shared));
         let _ = self.generation.fetch_add(1, Ordering::Relaxed);
         Ok(shared)
+    }
+
+    /// Asks the running LSP to execute `deslop.lsp.refreshReport`.
+    ///
+    /// Returns `Ok(false)` when the LSP socket is absent so MCP-only
+    /// fixture tests and cache-only sessions keep the previous reload
+    /// behaviour.
+    fn request_lsp_refresh(&self) -> Result<bool, BackendError> {
+        let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
+            Ok(result) => result,
+            Err(BackendError::LspNotRunning) => return Ok(false),
+            Err(err) => return Err(err),
+        };
+        validate_refresh_result(&result)?;
+        Ok(true)
     }
 
     /// Starts a background thread that watches the parent directory of
@@ -381,6 +396,7 @@ impl McpBackend for StateFileBackend {
     }
 
     fn mark_changed(&self, _paths: &[PathBuf]) -> Result<(), BackendError> {
+        let _refreshed = self.request_lsp_refresh()?;
         match self.reload_cache() {
             Ok(_) => {
                 let gen = self.generation.load(Ordering::Relaxed);
@@ -404,4 +420,14 @@ impl McpBackend for StateFileBackend {
         drop(guard);
         self.spawn_file_watcher();
     }
+}
+
+/// Validates the compact `deslop.lsp.refreshReport` IPC response.
+fn validate_refresh_result(result: &Value) -> Result<(), BackendError> {
+    if result.get("command").and_then(Value::as_str) == Some("deslop.lsp.refreshReport") {
+        return Ok(());
+    }
+    Err(BackendError::StateFileCorrupt(format!(
+        "ipc refresh returned unexpected payload: {result}"
+    )))
 }

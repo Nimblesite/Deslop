@@ -33,16 +33,16 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
     let commands = advertised_commands(&init)?;
 
     assert_eq!(commands.len(), 5, "unexpected command list: {commands:?}");
-    assert!(commands.contains(&"deslop.refreshReport".to_owned()));
-    assert!(commands.contains(&"deslop.openCluster".to_owned()));
-    assert!(commands.contains(&"deslop.openReport".to_owned()));
-    assert!(commands.contains(&"deslop.pickEmbeddingModel".to_owned()));
-    assert!(commands.contains(&"deslop.toggleIncremental".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.refreshReport".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.openCluster".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.openReport".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.pickEmbeddingModel".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.toggleIncremental".to_owned()));
 
     let (report_response, report_shows) = call_with_show_document_response(
         &mut stdin,
         &mut stdout,
-        &json!({ "command": "deslop.openReport" }),
+        &json!({ "command": "deslop.lsp.openReport" }),
     )?;
     assert_eq!(report_shows.len(), 1, "expected one showDocument request");
     let report_show = only_show_request(&report_shows)?;
@@ -59,7 +59,7 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
     let (cluster_response, cluster_shows) = call_with_show_document_response(
         &mut stdin,
         &mut stdout,
-        &json!({ "command": "deslop.openCluster", "arguments": ["abc123"] }),
+        &json!({ "command": "deslop.lsp.openCluster", "arguments": ["abc123"] }),
     )?;
     assert_eq!(cluster_shows.len(), 1, "expected one cluster document open");
     let cluster_show = only_show_request(&cluster_shows)?;
@@ -68,7 +68,7 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
         cluster_response
             .pointer("/result/command")
             .and_then(Value::as_str),
-        Some("deslop.openCluster")
+        Some("deslop.lsp.openCluster")
     );
     assert_eq!(
         cluster_response
@@ -100,12 +100,12 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         &mut stdin,
         &mut stdout,
         &json!({
-            "command": "deslop.toggleIncremental"
+            "command": "deslop.lsp.toggleIncremental"
         }),
     )?;
     assert_eq!(
         toggled.pointer("/result/command").and_then(Value::as_str),
-        Some("deslop.toggleIncremental")
+        Some("deslop.lsp.toggleIncremental")
     );
     assert_eq!(
         toggled
@@ -125,12 +125,12 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         &mut stdin,
         &mut stdout,
         &json!({
-            "command": "deslop.refreshReport"
+            "command": "deslop.lsp.refreshReport"
         }),
     )?;
     assert_eq!(
         refreshed.pointer("/result/command").and_then(Value::as_str),
-        Some("deslop.refreshReport")
+        Some("deslop.lsp.refreshReport")
     );
     assert_eq!(
         refreshed
@@ -146,12 +146,12 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         &mut stdin,
         &mut stdout,
         &json!({
-            "command": "deslop.pickEmbeddingModel"
+            "command": "deslop.lsp.pickEmbeddingModel"
         }),
     )?;
     assert_eq!(
         models.pointer("/result/command").and_then(Value::as_str),
-        Some("deslop.pickEmbeddingModel")
+        Some("deslop.lsp.pickEmbeddingModel")
     );
     let first = models
         .pointer("/result/models/0")
@@ -189,11 +189,11 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
 fn assert_advertised_commands(init: &Value) -> Result<()> {
     let commands = advertised_commands(init)?;
     assert_eq!(commands.len(), 5, "unexpected command list: {commands:?}");
-    assert!(commands.contains(&"deslop.refreshReport".to_owned()));
-    assert!(commands.contains(&"deslop.openCluster".to_owned()));
-    assert!(commands.contains(&"deslop.openReport".to_owned()));
-    assert!(commands.contains(&"deslop.pickEmbeddingModel".to_owned()));
-    assert!(commands.contains(&"deslop.toggleIncremental".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.refreshReport".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.openCluster".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.openReport".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.pickEmbeddingModel".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.toggleIncremental".to_owned()));
     Ok(())
 }
 
@@ -201,14 +201,18 @@ async fn assert_open_report_command(
     service: &mut LspService<LspBackend>,
     socket: &mut ClientSocket,
 ) -> Result<()> {
-    let (response, shows) =
-        execute_in_process(service, socket, json!({ "command": "deslop.openReport" })).await?;
+    let (response, shows) = execute_in_process(
+        service,
+        socket,
+        json!({ "command": "deslop.lsp.openReport" }),
+    )
+    .await?;
     assert_eq!(shows.len(), 1, "expected one showDocument");
     let show = only_show_request(&shows)?;
     assert_eq!(show_uri(show)?, "deslop://report");
     assert_eq!(show_take_focus(show), Some(true));
     assert_eq!(show_external(show), Some(false));
-    assert_json_str(&response, "/command", "deslop.openReport");
+    assert_json_str(&response, "/command", "deslop.lsp.openReport");
     Ok(())
 }
 
@@ -219,7 +223,7 @@ async fn assert_open_cluster_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.openCluster", "arguments": ["abc123"] }),
+        json!({ "command": "deslop.lsp.openCluster", "arguments": ["abc123"] }),
     )
     .await?;
     assert_eq!(shows.len(), 1, "expected one cluster open");
@@ -238,7 +242,7 @@ async fn assert_toggle_incremental_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.toggleIncremental" }),
+        json!({ "command": "deslop.lsp.toggleIncremental" }),
     )
     .await?;
     assert!(shows.is_empty(), "toggle must not open documents");
@@ -253,7 +257,7 @@ async fn assert_pick_embedding_model_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.pickEmbeddingModel" }),
+        json!({ "command": "deslop.lsp.pickEmbeddingModel" }),
     )
     .await?;
     assert!(shows.is_empty(), "model picker must not open documents");
@@ -269,7 +273,7 @@ async fn assert_open_cluster_invalid_id(
     let (response, requests) = execute_raw_in_process(
         service,
         socket,
-        json!({ "command": "deslop.openCluster", "arguments": ["bad/id"] }),
+        json!({ "command": "deslop.lsp.openCluster", "arguments": ["bad/id"] }),
     )
     .await?;
     assert!(
@@ -281,7 +285,7 @@ async fn assert_open_cluster_invalid_id(
     assert_eq!(
         error.data,
         Some(Value::String(
-            "deslop.openCluster requires a cluster id".to_owned()
+            "deslop.lsp.openCluster requires a cluster id".to_owned()
         ))
     );
     Ok(())
@@ -308,11 +312,11 @@ async fn assert_refresh_report_command(
     let (response, shows) = execute_in_process(
         service,
         socket,
-        json!({ "command": "deslop.refreshReport" }),
+        json!({ "command": "deslop.lsp.refreshReport" }),
     )
     .await?;
     assert!(shows.is_empty(), "refresh must not open documents");
-    assert_json_str(&response, "/command", "deslop.refreshReport");
+    assert_json_str(&response, "/command", "deslop.lsp.refreshReport");
     assert!(response.pointer("/generation").is_some());
     assert!(response.pointer("/clustersAdded").is_some());
     Ok(())

@@ -289,6 +289,91 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
     Ok(())
 }
 
+/// [MCP-IPC-CLIENT] Agent `rescan` must ask the running LSP to execute
+/// `deslop.lsp.refreshReport`, then return top offenders from the
+/// refreshed state file.
+#[test]
+fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let beta = workspace.path().join("Beta.cs");
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
+    let initial_bytes = fs::read(&state_file)?;
+
+    let mut mcp = initialized_mcp(workspace.path())?;
+    let before = mcp.request(
+        "tools/call",
+        &json!({ "name": "top-offenders", "arguments": { "n": 100 } }),
+    )?;
+    let before_structured = structured_content(&before, "top-offenders")?;
+    let before_count = before_structured
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    ensure!(
+        before_count > 0,
+        "fixture must start with at least one cluster: {before}"
+    );
+
+    fs::write(
+        &beta,
+        b"namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+
+    let response = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "rescan",
+            "arguments": {
+                "paths": [beta.to_string_lossy().into_owned()],
+                "n": 100
+            }
+        }),
+    )?;
+    let after = structured_content(&response, "rescan")?;
+    let after_count = after
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .unwrap_or(before_count);
+    ensure!(
+        after_count < before_count,
+        "rescan must trigger LSP re-analysis and drop the edited Beta.cs clone: {before_count} -> {after_count}; response {response}"
+    );
+    ensure!(
+        after.get("n").and_then(Value::as_u64) == Some(100),
+        "rescan must echo the requested top-offenders count: {response}"
+    );
+    let clusters = after
+        .get("clusters")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("rescan clusters must be an array: {response}"))?;
+    ensure!(
+        clusters.len() as u64 == after_count,
+        "with n=100, rescan clusters must match total_clusters: {response}"
+    );
+
+    let updated_bytes = fs::read(&state_file)?;
+    ensure!(
+        updated_bytes != initial_bytes,
+        "MCP rescan must cause the LSP to rewrite live-report.json"
+    );
+    let state: Value = serde_json::from_slice(&updated_bytes)?;
+    let state_count = state
+        .get("clusters")
+        .and_then(Value::as_array)
+        .map_or(0_u64, |items| items.len() as u64);
+    ensure!(
+        state_count == after_count,
+        "MCP rescan response must be loaded from the refreshed LSP state file: response {after_count}, state {state_count}"
+    );
+    Ok(())
+}
+
 fn initialized_mcp(root: &Path) -> Result<McpHandle> {
     let mut mcp = McpHandle::spawn(root)?;
     let response = mcp.request(

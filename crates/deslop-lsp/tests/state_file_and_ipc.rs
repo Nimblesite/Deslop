@@ -190,6 +190,80 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
     Ok(())
 }
 
+/// [LSP-IPC] MCP uses `deslop.lsp.refreshReport` over IPC to force a
+/// full re-analysis after an agent edit, then reloads the state file.
+#[cfg(unix)]
+#[test]
+fn ipc_socket_handles_refresh_report_request() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let beta = workspace.path().join("Beta.cs");
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+
+    let _init = handshake(&mut stdin, &mut stdout)?;
+
+    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
+    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    let state_path = workspace.path().join(STATE_FILE);
+    wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
+
+    let initial_bytes = fs::read(&state_path)?;
+    let initial: serde_json::Value = serde_json::from_slice(&initial_bytes)?;
+    let initial_count = cluster_count(&initial);
+    ensure!(initial_count > 0, "initial state must have clusters");
+
+    fs::write(
+        &beta,
+        b"public class Beta {\n    public string Name() {\n        return \"unique\";\n    }\n}\n",
+    )?;
+
+    let response = ipc_call(
+        &socket_path,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "deslop.lsp.refreshReport",
+            "params": {}
+        }),
+    )?;
+    ensure!(
+        response.get("error").is_none(),
+        "refreshReport IPC request must not return a JSON-RPC error: {response}"
+    );
+    ensure!(
+        response.pointer("/result/command") == Some(&serde_json::json!("deslop.lsp.refreshReport")),
+        "refreshReport result must echo the LSP command id: {response}"
+    );
+    ensure!(
+        response
+            .pointer("/result/generation")
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|generation| generation >= 2),
+        "refreshReport result must advance or expose a live generation: {response}"
+    );
+    ensure!(
+        response
+            .pointer("/result/clustersRemoved")
+            .and_then(serde_json::Value::as_u64)
+            .is_some_and(|removed| removed >= 1),
+        "refreshReport must report removed clusters after the Beta.cs edit: {response}"
+    );
+
+    let updated_bytes = fs::read(&state_path)?;
+    ensure!(
+        updated_bytes != initial_bytes,
+        "refreshReport must rewrite the LSP state file"
+    );
+    let updated: serde_json::Value = serde_json::from_slice(&updated_bytes)?;
+    let updated_count = cluster_count(&updated);
+    ensure!(
+        updated_count < initial_count,
+        "refreshReport must rescan edited files and reduce cluster count: {initial_count} -> {updated_count}"
+    );
+    Ok(())
+}
+
 /// [LSP-IPC] Unrecognised IPC methods must return a JSON-RPC method-not-found
 /// error rather than silently dropping the request.
 #[cfg(unix)]

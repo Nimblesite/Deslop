@@ -97,9 +97,10 @@ fn python_descend_to_assignment(node: Node<'_>) -> Node<'_> {
         return node;
     }
     let mut cursor = node.walk();
-    node.named_children(&mut cursor)
-        .find(|child| child.kind() == "assignment")
-        .unwrap_or(node)
+    let inner = node
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == "assignment");
+    inner.unwrap_or(node)
 }
 
 /// Returns true when `node`'s source byte range exactly matches `needle`.

@@ -51,6 +51,17 @@ async function closeAllDiffs(): Promise<void> {
   await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 }
 
+async function commandsEventuallyInclude(...ids: string[]): Promise<string[]> {
+  for (let i = 0; i < 30; i += 1) {
+    const commands = await vscode.commands.getCommands(true);
+    if (ids.every((id) => commands.includes(id))) return commands;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 100);
+    });
+  }
+  return await vscode.commands.getCommands(true);
+}
+
 function cluster(id: string, paths: string[]): ReportCluster {
   return {
     id,
@@ -135,6 +146,27 @@ suite("register command implementations", () => {
 
   test("openWorstCluster shows info when store is empty", () => {
     openWorstCluster(fakeCtx(), new ReportStore());
+  });
+
+  test("activation keeps VSIX commands separate from namespaced LSP commands", async () => {
+    const commands = await commandsEventuallyInclude(
+      "deslop.refreshReport",
+      "deslop.openCluster",
+      "deslop.lsp.refreshReport",
+      "deslop.lsp.openCluster",
+    );
+    assert.equal(
+      commands.filter((command) => command === "deslop.refreshReport").length,
+      1,
+    );
+    assert.equal(
+      commands.filter((command) => command === "deslop.openCluster").length,
+      1,
+    );
+    assert.ok(commands.includes("deslop.refreshReport"));
+    assert.ok(commands.includes("deslop.openCluster"));
+    assert.ok(commands.includes("deslop.lsp.refreshReport"));
+    assert.ok(commands.includes("deslop.lsp.openCluster"));
   });
 
   test("openWorstCluster opens a panel when the report has clusters", () => {

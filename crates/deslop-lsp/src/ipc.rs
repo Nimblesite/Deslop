@@ -1,8 +1,9 @@
 //! Unix-domain socket IPC server ([LSP-IPC]).
 //!
 //! The LSP exposes `.deslop-cache/deslop.sock` so the MCP server can
-//! delegate compute-heavy operations (`duplicates/findSimilar`,
-//! `embedding/listModels`) without running its own analysis pass.
+//! delegate live operations (`duplicates/findSimilar`,
+//! `embedding/listModels`, `deslop.lsp.refreshReport`) without running
+//! its own analysis pass.
 //!
 //! Protocol: line-delimited JSON-RPC 2.0 — one request per line,
 //! one response per line.
@@ -126,6 +127,7 @@ mod unix {
         match method {
             "duplicates/findSimilar" => dispatch_find_similar(params, service, handle),
             "embedding/listModels" => dispatch_list_models(service, handle),
+            crate::commands::REFRESH_REPORT => dispatch_refresh_report(service, handle),
             _ => Err(json!({"code": -32601, "message": "method not found"})),
         }
     }
@@ -151,6 +153,36 @@ mod unix {
     ) -> Result<Value, Value> {
         let models = handle.block_on(service.embedding_list_models());
         serde_json::to_value(&models).map_err(|e| json!({"code": -32603, "message": e.to_string()}))
+    }
+
+    /// Forces the same full refresh as `workspace/executeCommand`
+    /// `deslop.lsp.refreshReport`, but over the MCP-facing IPC socket.
+    fn dispatch_refresh_report(
+        service: &Arc<LiveService>,
+        handle: &tokio::runtime::Handle,
+    ) -> Result<Value, Value> {
+        handle.block_on(async {
+            let session = service.session();
+            let (previous_generation, previous_report, delta) = {
+                let mut guard = session.lock().await;
+                let previous_generation = guard.generation();
+                let previous_report = guard.report();
+                let delta = guard
+                    .refresh_full()
+                    .map_err(|error| json!({"code": -32603, "message": error.to_string()}))?;
+                (previous_generation, previous_report, delta)
+            };
+            service
+                .remember_snapshot(previous_generation, previous_report)
+                .await;
+            Ok(json!({
+                "command": crate::commands::REFRESH_REPORT,
+                "generation": delta.to_generation,
+                "clustersAdded": delta.clusters_added.len(),
+                "clustersRemoved": delta.clusters_removed.len(),
+                "clustersUpdated": delta.clusters_updated.len(),
+            }))
+        })
     }
 
     /// Wraps a `Result<Value, Value>` into a JSON-RPC 2.0 response envelope.

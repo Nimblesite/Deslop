@@ -143,6 +143,8 @@ Standard LSP does not have a "give me the live dedup report" request, so the she
 
 Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embeddingProgress`) mirror the daemon push methods. Namespacing (`deslop/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
 
+The MCP-facing Unix socket at `.deslop-cache/deslop.sock` exposes the same live service for agent-side calls that do not travel through a full LSP client. It accepts `duplicates/findSimilar`, `embedding/listModels`, and `deslop.lsp.refreshReport`; the last one runs the same full-refresh command used by `workspace/executeCommand` so agent `rescan` calls can force re-analysis before reading the LSP state file.
+
 ### [LSP-PUSH] Active push — the LSP never waits for the editor to ask
 
 **This is the most critical correctness property of the live surface.** The LSP must push `deslop/reportChanged` (and `deslop/analysisState`) the moment re-analysis completes — unconditionally, regardless of which actor caused the file change.
@@ -173,11 +175,11 @@ The LSP and MCP must converge through the same workspace embedding settings. MCP
 
 `executeCommandProvider` advertises:
 
-- `deslop.refreshReport` — force a full re-analysis (drop incremental state, re-run). Rarely needed; the scheduler is reliable.
-- `deslop.openCluster` — open `deslop://cluster/<id>` in the client.
-- `deslop.openReport` — open `deslop://report`.
-- `deslop.pickEmbeddingModel` — tell the client to prompt the user with the result of `embedding/listModels` and call `embedding/setModel` with the selection. The VSIX implements the prompt as a proper picker ([VSIX-EMBED-PICKER]); other clients fall back to a `showMessageRequest`.
-- `deslop.toggleIncremental` — flip the daemon's incremental-cache behaviour (rare; mostly for debugging cache invalidation).
+- `deslop.lsp.refreshReport` — force a full re-analysis (drop incremental state, re-run). Rarely needed; the scheduler is reliable. MCP `rescan` may call the same verb over the LSP IPC socket when an agent needs a synchronous post-edit refresh.
+- `deslop.lsp.openCluster` — open `deslop://cluster/<id>` in the client.
+- `deslop.lsp.openReport` — open `deslop://report`.
+- `deslop.lsp.pickEmbeddingModel` — tell the client to prompt the user with the result of `embedding/listModels` and call `embedding/setModel` with the selection. The VSIX implements the prompt as a proper picker ([VSIX-EMBED-PICKER]); other clients fall back to a `showMessageRequest`.
+- `deslop.lsp.toggleIncremental` — flip the daemon's incremental-cache behaviour (rare; mostly for debugging cache invalidation).
 
 No `extract-to-function` command in v1 — that's an edit action that belongs downstream of a real refactor engine. Listed here as the eventual home for it so clients know where it will live.
 

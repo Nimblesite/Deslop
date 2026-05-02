@@ -25,6 +25,8 @@ import {
 
 type ClientFactory = () => LanguageClient | undefined;
 
+const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
+
 interface CommandDeps {
   readonly context: vscode.ExtensionContext;
   readonly store: ReportStore;
@@ -78,7 +80,7 @@ export function registerCommands(
 
 function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
   return clientOf()?.sendRequest("workspace/executeCommand", {
-    command: "deslop.refreshReport",
+    command: LSP_REFRESH_REPORT_COMMAND,
     arguments: [],
   });
 }

@@ -28,6 +28,9 @@ anyhow.workspace = true
 futures.workspace = true
 async-trait.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", default-features = false, features = ["signal"] }
+
 [dev-dependencies]
 anyhow.workspace = true
 assert_cmd.workspace = true
