@@ -16,11 +16,7 @@ import {
   type ReportSignals,
 } from "../../types/report";
 
-const signals = (
-  s: number,
-  j: number,
-  e: number,
-): ReportSignals => ({
+const signals = (s: number, j: number, e: number): ReportSignals => ({
   structural: s,
   token_jaccard: j,
   embedding_cos: e,
@@ -110,9 +106,11 @@ suite("report schema helpers", () => {
   });
 
   test("resolveBucket prefers JSON wire label over recomputation", () => {
-    const bucket = resolveBucket(cluster({
-      bucket: "same_behavior",
-    }));
+    const bucket = resolveBucket(
+      cluster({
+        bucket: "same_behavior",
+      }),
+    );
     assert.equal(bucket, "same_behavior");
   });
 
@@ -132,15 +130,27 @@ suite("report schema helpers", () => {
 
   test("bucketLabels hybrid_title carries bracketed Type-N on every bucket", () => {
     assert.ok(bucketLabels("identical").hybridTitle.includes("[Type-1/2]"));
-    assert.ok(bucketLabels("nearly_identical").hybridTitle.includes("[Type-3]"));
-    assert.ok(bucketLabels("loosely_similar").hybridTitle.includes("[weak LSH]"));
+    assert.ok(
+      bucketLabels("nearly_identical").hybridTitle.includes("[Type-3]"),
+    );
+    assert.ok(
+      bucketLabels("loosely_similar").hybridTitle.includes("[weak LSH]"),
+    );
     assert.ok(bucketLabels("same_behavior").hybridTitle.includes("[Type-4"));
   });
 
   test("bucketLabels plain_title never contains Type-N", () => {
-    for (const b of ["identical", "nearly_identical", "loosely_similar", "same_behavior"] as const) {
+    for (const b of [
+      "identical",
+      "nearly_identical",
+      "loosely_similar",
+      "same_behavior",
+    ] as const) {
       const title = bucketLabels(b).plainTitle;
-      assert.ok(!/\bType-\d/.test(title), `plain_title must be jargon-free: ${title}`);
+      assert.ok(
+        !/\bType-\d/.test(title),
+        `plain_title must be jargon-free: ${title}`,
+      );
     }
   });
 

@@ -12,12 +12,14 @@ import {
 import { clusterHoverMarkdown } from "../../clusterHover";
 import { ReportCluster } from "../../types/report";
 
-function cluster(signals = {
-  structural: 1,
-  token_jaccard: 0.9,
-  embedding_cos: 0.5,
-  fused: 0.95,
-}): ReportCluster {
+function cluster(
+  signals = {
+    structural: 1,
+    token_jaccard: 0.9,
+    embedding_cos: 0.5,
+    fused: 0.95,
+  },
+): ReportCluster {
   return {
     id: "c-1",
     weight: 3,
@@ -55,7 +57,12 @@ suite("bubble rendering helpers", () => {
 
   test("signalStrip clamps inputs to the bar range", () => {
     const strip = signalStrip(
-      cluster({ structural: 2, token_jaccard: -1, embedding_cos: 0.5, fused: 1 }),
+      cluster({
+        structural: 2,
+        token_jaccard: -1,
+        embedding_cos: 0.5,
+        fused: 1,
+      }),
     );
     assert.equal(strip.length, 3);
   });
@@ -101,8 +108,16 @@ suite("bubble rendering helpers", () => {
     const c = cluster();
     const text = bubbleHover(c, 3).value;
     assert.match(text, /#3/, `rank must appear in the body: ${text}`);
-    assert.match(text, /×\s*4/, `instance count must appear in the body: ${text}`);
-    assert.match(text, /Canonical/, `canonical section must be present: ${text}`);
+    assert.match(
+      text,
+      /×\s*4/,
+      `instance count must appear in the body: ${text}`,
+    );
+    assert.match(
+      text,
+      /Canonical/,
+      `canonical section must be present: ${text}`,
+    );
     assert.match(text, /Alpha\.cs/, `canonical file must be visible: ${text}`);
     assert.doesNotMatch(
       text,
@@ -138,7 +153,11 @@ suite("bubble rendering helpers", () => {
     const c = cluster();
     const bubble = bubbleHover(c, 119);
     const shared = clusterHoverMarkdown(c, { rank: 119, showDismiss: true });
-    assert.equal(bubble.value, shared.value, "bubble must not rebuild cluster markdown separately");
+    assert.equal(
+      bubble.value,
+      shared.value,
+      "bubble must not rebuild cluster markdown separately",
+    );
     assert.match(bubble.value, /^\*\*#119 [A-Z][A-Za-z, ]+\*\* × 4/);
     assert.match(bubble.value, /Canonical: `.*Alpha\.cs`/);
     assert.match(bubble.value, /command:deslop\.compareWithCanonical/);

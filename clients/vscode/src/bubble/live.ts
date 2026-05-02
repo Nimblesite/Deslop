@@ -82,7 +82,10 @@ export class LiveBubble implements vscode.Disposable {
 
   // Idempotent registration so multiple LiveBubble instances (real + tests)
   // can co-exist without "command already exists" throws.
-  private tryRegister(id: string, handler: (...args: unknown[]) => unknown): void {
+  private tryRegister(
+    id: string,
+    handler: (...args: unknown[]) => unknown,
+  ): void {
     try {
       this.disposables.push(vscode.commands.registerCommand(id, handler));
     } catch {
@@ -147,12 +150,17 @@ export class LiveBubble implements vscode.Disposable {
   ): void {
     const report = this.store.current.report;
     if (!report) return;
-    const best = bestBubbleCluster(report.clusters, clusters, this.dismissedClusters);
+    const best = bestBubbleCluster(
+      report.clusters,
+      clusters,
+      this.dismissedClusters,
+    );
     if (!best) {
       this.clearBubble();
       return;
     }
-    if (this.active?.clusterId === best.id && this.active.range.isEqual(range)) return;
+    if (this.active?.clusterId === best.id && this.active.range.isEqual(range))
+      return;
 
     const severities = indexedSeverity(report.clusters);
     const severity = severities.get(best.id) ?? "faint";
@@ -210,7 +218,9 @@ export class LiveBubble implements vscode.Disposable {
     const report = this.store.current.report;
     const active = this.active;
     if (!active || !report) return;
-    const stillPresent = report.clusters.some((cluster) => cluster.id === active.clusterId);
+    const stillPresent = report.clusters.some(
+      (cluster) => cluster.id === active.clusterId,
+    );
     if (!stillPresent) this.clearBubble();
   }
 }
@@ -238,7 +248,12 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
     rank: number | undefined;
   } | null = null;
 
-  set(uri: vscode.Uri, range: vscode.Range, cluster: ReportCluster, rank: number | undefined): void {
+  set(
+    uri: vscode.Uri,
+    range: vscode.Range,
+    cluster: ReportCluster,
+    rank: number | undefined,
+  ): void {
     this.current = { uri, range, cluster, rank };
     this.changeEmitter.fire();
   }
@@ -248,12 +263,19 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
     this.changeEmitter.fire();
   }
 
-  provideInlayHints(document: vscode.TextDocument, range: vscode.Range): vscode.InlayHint[] {
+  provideInlayHints(
+    document: vscode.TextDocument,
+    range: vscode.Range,
+  ): vscode.InlayHint[] {
     if (!this.current) return [];
     if (document.uri.toString() !== this.current.uri.toString()) return [];
     if (!range.contains(this.current.range.start)) return [];
     const strip = signalStrip(this.current.cluster);
-    const hint = new vscode.InlayHint(this.current.range.end, strip, vscode.InlayHintKind.Type);
+    const hint = new vscode.InlayHint(
+      this.current.range.end,
+      strip,
+      vscode.InlayHintKind.Type,
+    );
     hint.paddingLeft = true;
     hint.tooltip = bubbleHover(this.current.cluster, this.current.rank);
     return [hint];
@@ -278,7 +300,10 @@ export function ghostText(cluster: ReportCluster, severity: Severity): string {
 
 export function signalStrip(cluster: ReportCluster): string {
   const bar = (v: number): string => {
-    const idx = Math.min(BARS.length - 1, Math.max(0, Math.round(v * (BARS.length - 1))));
+    const idx = Math.min(
+      BARS.length - 1,
+      Math.max(0, Math.round(v * (BARS.length - 1))),
+    );
     return BARS[idx] ?? "█";
   };
   const s = cluster.signals;
@@ -293,14 +318,22 @@ export function shortPath(p: string): string {
 }
 
 // Bubble hover: full card with rank, canonical, and dismiss link.
-export function bubbleHover(cluster: ReportCluster, rank?: number): vscode.MarkdownString {
+export function bubbleHover(
+  cluster: ReportCluster,
+  rank?: number,
+): vscode.MarkdownString {
   return clusterHoverMarkdown(cluster, {
     showDismiss: true,
     ...(rank !== undefined && { rank }),
   });
 }
 
-function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {
-  const text = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
+function utf8ByteOffset(
+  doc: vscode.TextDocument,
+  position: vscode.Position,
+): number {
+  const text = doc.getText(
+    new vscode.Range(new vscode.Position(0, 0), position),
+  );
   return Buffer.byteLength(text, "utf8");
 }

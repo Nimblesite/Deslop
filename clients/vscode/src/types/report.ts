@@ -203,7 +203,10 @@ export function classifyCluster(signals: ReportSignals): Bucket {
 // (schema v4) and falling back to re-routing from signals for older
 // v3 reports loaded via --from-report.
 export function resolveBucket(cluster: ReportCluster): Bucket {
-  if (cluster.bucket && (BUCKETS as readonly string[]).includes(cluster.bucket)) {
+  if (
+    cluster.bucket &&
+    (BUCKETS as readonly string[]).includes(cluster.bucket)
+  ) {
     return cluster.bucket as Bucket;
   }
   return classifyCluster(cluster.signals);

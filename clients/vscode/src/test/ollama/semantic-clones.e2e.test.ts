@@ -22,7 +22,11 @@ import * as assert from "node:assert/strict";
 import * as http from "node:http";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
-import type { Report, EmbeddingModelInfo, EmbeddingProvenance } from "../../types/report";
+import type {
+  Report,
+  EmbeddingModelInfo,
+  EmbeddingProvenance,
+} from "../../types/report";
 import { sleep } from "../suite/helpers";
 
 const EXT_ID = "nimblesite.deslop-vscode";
@@ -43,30 +47,40 @@ interface SetModelResponse {
 
 async function ollamaModelNames(): Promise<string[]> {
   return await new Promise<string[]>((resolveNames, reject) => {
-    const req = http.get(`${OLLAMA_ENDPOINT}/api/tags`, { timeout: 2000 }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => {
-        if (res.statusCode !== 200) {
-          reject(new Error(`Ollama /api/tags returned ${res.statusCode ?? "unknown"}`));
-          return;
-        }
-        try {
-          const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
-            models?: Array<{ name: string }>;
-          };
-          resolveNames((body.models ?? []).map((model) => model.name));
-        } catch (err) {
-          reject(err instanceof Error ? err : new Error(String(err)));
-        }
-      });
-    });
+    const req = http.get(
+      `${OLLAMA_ENDPOINT}/api/tags`,
+      { timeout: 2000 },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          if (res.statusCode !== 200) {
+            reject(
+              new Error(
+                `Ollama /api/tags returned ${res.statusCode ?? "unknown"}`,
+              ),
+            );
+            return;
+          }
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+              models?: Array<{ name: string }>;
+            };
+            resolveNames((body.models ?? []).map((model) => model.name));
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
+        });
+      },
+    );
     req.on("timeout", () => {
       req.destroy();
       reject(new Error(`Ollama not reachable at ${OLLAMA_ENDPOINT} within 2s`));
     });
     req.on("error", (err) => {
-      reject(new Error(`Ollama not reachable at ${OLLAMA_ENDPOINT}: ${err.message}`));
+      reject(
+        new Error(`Ollama not reachable at ${OLLAMA_ENDPOINT}: ${err.message}`),
+      );
     });
   });
 }
@@ -77,7 +91,9 @@ async function ollamaModelNames(): Promise<string[]> {
 /// timeout and the test dies as an opaque mocha timeout.
 async function preflightOllama(): Promise<void> {
   const names = await ollamaModelNames();
-  const haveModel = names.some((n) => n === OLLAMA_MODEL || n.startsWith(`${OLLAMA_MODEL}:`));
+  const haveModel = names.some(
+    (n) => n === OLLAMA_MODEL || n.startsWith(`${OLLAMA_MODEL}:`),
+  );
   assert.ok(
     haveModel,
     `Ollama is running but model '${OLLAMA_MODEL}' is missing. Run: ollama pull ${OLLAMA_MODEL}`,
@@ -90,10 +106,26 @@ async function preflightOllama(): Promise<void> {
 /// (which would leak across test runs and require cleanup).
 async function seedInitialConfig(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
-  await cfg.update("embedding.model", OLLAMA_MODEL, vscode.ConfigurationTarget.Global);
-  await cfg.update("embedding.endpoint", OLLAMA_ENDPOINT, vscode.ConfigurationTarget.Global);
-  await cfg.update("embedding.mode", "required", vscode.ConfigurationTarget.Global);
+  await cfg.update(
+    "embedding.provider",
+    "ollama",
+    vscode.ConfigurationTarget.Global,
+  );
+  await cfg.update(
+    "embedding.model",
+    OLLAMA_MODEL,
+    vscode.ConfigurationTarget.Global,
+  );
+  await cfg.update(
+    "embedding.endpoint",
+    OLLAMA_ENDPOINT,
+    vscode.ConfigurationTarget.Global,
+  );
+  await cfg.update(
+    "embedding.mode",
+    "required",
+    vscode.ConfigurationTarget.Global,
+  );
   await cfg.update("minNodes", 15, vscode.ConfigurationTarget.Global);
 }
 
@@ -128,11 +160,14 @@ async function setProvider(
   client: LanguageClient,
   providerId: "ollama" | "stub",
 ): Promise<SetModelResponse> {
-  return await client.sendRequest<SetModelResponse>("deslop/embeddingSetModel", {
-    provider_id: providerId,
-    model_id: providerId === "ollama" ? OLLAMA_MODEL : "stub-embedder",
-    endpoint: providerId === "ollama" ? OLLAMA_ENDPOINT : null,
-  });
+  return await client.sendRequest<SetModelResponse>(
+    "deslop/embeddingSetModel",
+    {
+      provider_id: providerId,
+      model_id: providerId === "ollama" ? OLLAMA_MODEL : "stub-embedder",
+      endpoint: providerId === "ollama" ? OLLAMA_ENDPOINT : null,
+    },
+  );
 }
 
 async function waitForReport(
@@ -154,12 +189,16 @@ async function waitForReport(
   }
   throw new Error(
     `predicate unsatisfied within ${deadlineMs}ms; last: ${
-      last ? `${last.clusters.length} clusters, ${last.files_analysed} files` : "<none>"
+      last
+        ? `${last.clusters.length} clusters, ${last.files_analysed} files`
+        : "<none>"
     }`,
   );
 }
 
-function crossFileType4Cluster(report: Report): Report["clusters"][number] | undefined {
+function crossFileType4Cluster(
+  report: Report,
+): Report["clusters"][number] | undefined {
   return report.clusters.find((cluster) => {
     const paths = cluster.occurrences.map((o) => o.path.replace(/\\/g, "/"));
     const hasIterative = paths.some((p) => p.endsWith("Iterative.cs"));
@@ -177,7 +216,10 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     await preflightOllama();
     await seedInitialConfig();
     const api = await activateExtension();
-    assert.ok(api.client, "extension must expose the LanguageClient via its API");
+    assert.ok(
+      api.client,
+      "extension must expose the LanguageClient via its API",
+    );
     client = api.client;
     // Confirm the LSP spawned against Ollama (not a stub). This is the
     // first falsifiable checkpoint: if initializationOptions weren't
@@ -187,7 +229,10 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       60_000,
       (r) => r.embedding_provenance !== null,
     );
-    assert.ok(initialReport.embedding_provenance, "LSP must have Ollama provenance after init");
+    assert.ok(
+      initialReport.embedding_provenance,
+      "LSP must have Ollama provenance after init",
+    );
     ollamaProvenance = initialReport.embedding_provenance;
     assert.equal(ollamaProvenance.provider_id, "ollama");
     assert.equal(ollamaProvenance.model_id, OLLAMA_MODEL);
@@ -231,7 +276,10 @@ suite("ollama semantic clone detection (real Ollama)", () => {
   test("[ollama-non-ci] embeddingListModels lists the real local Ollama models", async function () {
     this.timeout(90_000);
     const installedNames = await ollamaModelNames();
-    assert.ok(installedNames.length > 0, "Ollama /api/tags must return at least one real model");
+    assert.ok(
+      installedNames.length > 0,
+      "Ollama /api/tags must return at least one real model",
+    );
 
     const listed = await client.sendRequest<EmbeddingModelInfo[]>(
       "deslop/embeddingListModels",
@@ -240,7 +288,9 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     const listedOllamaIds = listed
       .filter((model) => model.provider_id === "ollama")
       .map((model) => model.model_id);
-    const installedBareIds = installedNames.map((name) => name.split(":")[0] ?? name);
+    const installedBareIds = installedNames.map(
+      (name) => name.split(":")[0] ?? name,
+    );
 
     for (const bareId of installedBareIds) {
       assert.ok(
@@ -274,7 +324,11 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     // "config write no-op" path: the LSP MUST return new provenance or
     // throw. `embedding/setModel` re-runs analysis before returning.
     const stubProvenance = await setProvider(client, "stub");
-    assert.equal(stubProvenance.provider_id, "stub", "swap response must reflect stub");
+    assert.equal(
+      stubProvenance.provider_id,
+      "stub",
+      "swap response must reflect stub",
+    );
     assert.notEqual(
       stubProvenance.model_id,
       OLLAMA_MODEL,
@@ -319,14 +373,10 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     assert.equal(restored.provider_id, "ollama");
     assert.equal(restored.model_id, OLLAMA_MODEL);
     // And the Type-4 cluster comes back.
-    const report = await waitForReport(
-      client,
-      60_000,
-      (r) => {
-        const c = crossFileType4Cluster(r);
-        return c !== undefined && c.signals.embedding_cos > COS_FLOOR;
-      },
-    );
+    const report = await waitForReport(client, 60_000, (r) => {
+      const c = crossFileType4Cluster(r);
+      return c !== undefined && c.signals.embedding_cos > COS_FLOOR;
+    });
     const cluster = crossFileType4Cluster(report);
     assert.ok(cluster, "restore-to-ollama must re-surface the Type-4 cluster");
     assert.ok(
