@@ -276,6 +276,7 @@ vsix-rebuild:
 
 ## jetbrains-build: Build the JetBrains plugin zip.
 jetbrains-build:
+	$(RM) $(JETBRAINS_DIR)/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
 

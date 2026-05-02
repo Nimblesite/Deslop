@@ -29,10 +29,10 @@ Implemented work intentionally not repeated here:
   report, HTML / CLI / VSIX bucket rendering, and AI-match badging.
 - JetBrains plugin scaffold: Gradle project, LSP support provider, descriptor,
   binary resolver, and Make targets.
-- Deployment Toolkit manifest scaffold: `deployment-toolkit.json` declares the
-  Deslop executables, VSIX, JetBrains plugin, host activation checks, and
-  release channels. Remaining migration work is tracked separately because it
-  changes release and startup guarantees, not editor UI behavior.
+- Deployment Toolkit migration: `deployment-toolkit.json` declares the Deslop
+  executables, VSIX, JetBrains plugin, host activation checks, and release
+  channels. Release gates now validate the manifest, binary version contracts,
+  VSIX contents, and JetBrains package contents.
 - Taxonomy content cleanup: every product-facing `Type-N` mention on the site
   and in `examples/**` leads with a canonical bucket label from
   [taxonomy.md [CLONE-BUCKETS-DUAL-LABEL]](../specs/taxonomy.md#clone-buckets-dual-label).
@@ -43,7 +43,6 @@ Implemented work intentionally not repeated here:
 ## Remaining Plan Files
 
 - [LSP editor surfaces](lsp-editor-surfaces-plan.md) — remaining standard LSP UX beyond diagnostics, hover, code lens, and custom report methods.
-- [Deployment Toolkit migration](deployment-toolkit-migration-plan.md) — binary version contract, manifest-backed VS Code and JetBrains startup verification, VSIX / plugin package verification, CI release gates. (Issues #37–#41.)
 - [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) — settings page, version checks, bundled binary packaging.
 - [JetBrains native UX](jetbrains-ux-plan.md) — Tool Window and embedding picker over the existing LSP custom methods.
 - [JetBrains E2E](jetbrains-e2e-plan.md) — real Rider / IntelliJ tests with the real `deslop-lsp` binary.
@@ -70,7 +69,6 @@ The MCP no longer owns an analysis pipeline. The concrete close-out evidence is 
 ### 🟡 Remaining features
 
 - [ ] Finish [LSP editor surfaces](lsp-editor-surfaces-plan.md).
-- [ ] Finish [Deployment Toolkit migration](deployment-toolkit-migration-plan.md).
 - [ ] Finish [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
@@ -80,7 +78,8 @@ The MCP no longer owns an analysis pipeline. The concrete close-out evidence is 
 
 ### ✅ Done
 
-- **VSIX reactivity** ([vsix-reactivity-plan.md](vsix-reactivity-plan.md)): `@preact/signals-core` wired to `ReportStore`; tree providers, `DecorationManager`, `StatusBar`, `LiveBubble`, and `wirePanel` refresh from signal-driven effects.
+- **VSIX reactivity**: `@preact/signals-core` wired to `ReportStore`; tree providers, `DecorationManager`, `StatusBar`, `LiveBubble`, and `wirePanel` refresh from signal-driven effects. ESLint now guards the invariant against ad-hoc `reportGet`, timer-driven report refresh, and tree providers without signal subscriptions.
+- **Deployment Toolkit migration**: binary version contracts, manifest-backed VS Code and JetBrains startup verification, VSIX package verification, JetBrains package verification, and release gate docs are implemented. `make jetbrains-package` builds the plugin, runs Gradle project/structure checks, and verifies the generated zip with `scripts/verify-jetbrains-package.mjs`.
 - **MCP architecture fix** ([mcp-architecture-fix-plan.md](mcp-architecture-fix-plan.md)): LSP writes `.deslop-cache/live-report.json`, exposes `.deslop-cache/deslop.sock`, and MCP reads/delegates through the state-file + IPC path.
 - **LSP file watcher** ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` starts `LiveWatcher` + `Scheduler`; broadcasts `deslop/reportChanged` + `deslop/analysisState` to the editor. All file changes — agent, git, CI, formatter — trigger immediate re-analysis.
 - **MCP push notifications infrastructure** ([MCP-NOTIFICATIONS]): `NotificationSender` (`Arc<Mutex<Box<dyn Write + Send>>>`) is wired through `McpBackend::set_notification_sender`; the state-file backend reloads the cache and pushes `resources/updated` + `deslop/reportChanged`.

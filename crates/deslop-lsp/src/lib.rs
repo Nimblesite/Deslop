@@ -6,6 +6,7 @@
 //! spawning the binary, but the production path is always the
 //! `deslop-lsp` binary defined in `src/main.rs`.
 
+pub mod app;
 pub mod backend;
 pub mod code_lens;
 pub mod custom_methods;

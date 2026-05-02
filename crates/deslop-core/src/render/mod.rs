@@ -9,6 +9,7 @@ pub mod ast;
 pub mod highlight;
 pub mod html;
 mod html_css;
+mod html_escape;
 mod html_footer;
 pub mod markdown;
 pub mod text;
