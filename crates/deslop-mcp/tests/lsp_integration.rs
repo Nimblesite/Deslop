@@ -230,15 +230,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
 
-    let mut mcp = McpHandle::spawn(workspace.path())?;
-    let _init = mcp.request(
-        "initialize",
-        &json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
-        }),
-    )?;
+    let mut mcp = initialized_mcp(workspace.path())?;
 
     let response = mcp.request(
         "tools/call",
@@ -252,23 +244,72 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
         }),
     )?;
 
+    let structured = structured_content(&response, "find-similar")?;
+    let clusters = structured
+        .get("clusters")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
     ensure!(
-        response.get("error").is_none(),
-        "find-similar must succeed when the LSP is live, got: {response}"
-    );
-    let result = response
-        .get("result")
-        .ok_or_else(|| anyhow!("response missing result: {response}"))?;
-    let structured = result
-        .get("structuredContent")
-        .ok_or_else(|| anyhow!("response missing structuredContent: {response}"))?;
-    ensure!(
-        structured.get("clusters").is_some(),
-        "find-similar result must contain clusters array: {response}"
+        !clusters.is_empty(),
+        "find-similar must return live LSP clusters: {response}"
     );
     ensure!(
-        structured.get("below_min_nodes").is_some(),
-        "find-similar result must contain below_min_nodes flag: {response}"
+        structured.get("below_min_nodes") == Some(&Value::Bool(false)),
+        "fixture snippet must be large enough to fingerprint: {response}"
     );
     Ok(())
+}
+
+/// [MCP-IPC-CLIENT] `list-embedding-models` is another compute tool:
+/// MCP must delegate it to the live LSP IPC socket and expose model
+/// metadata through the normal MCP tool result envelope.
+#[test]
+fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+
+    let mut mcp = initialized_mcp(workspace.path())?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": "list-embedding-models", "arguments": {} }),
+    )?;
+    let structured = structured_content(&response, "list-embedding-models")?;
+    let models = structured
+        .get("models")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    ensure!(
+        models.iter().any(|model| model.get("name") == Some(&json!("stub"))),
+        "list-embedding-models must include the built-in stub model: {response}"
+    );
+    Ok(())
+}
+
+fn initialized_mcp(root: &Path) -> Result<McpHandle> {
+    let mut mcp = McpHandle::spawn(root)?;
+    let response = mcp.request(
+        "initialize",
+        &json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
+        }),
+    )?;
+    ensure!(response.get("error").is_none(), "MCP initialize failed: {response}");
+    Ok(mcp)
+}
+
+fn structured_content(response: &Value, tool: &str) -> Result<Value> {
+    ensure!(
+        response.get("error").is_none(),
+        "{tool} must succeed when the LSP is live, got: {response}"
+    );
+    response
+        .pointer("/result/structuredContent")
+        .cloned()
+        .ok_or_else(|| anyhow!("response missing structuredContent: {response}"))
 }

@@ -337,7 +337,9 @@ impl McpBackend for StateFileBackend {
     }
 
     fn list_embedding_models(&self) -> Result<Vec<OllamaModelInfo>, BackendError> {
-        Err(BackendError::LspNotRunning)
+        let result = ipc_call(&self.ipc_socket, "embedding/listModels", &json!({}))?;
+        serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc models parse: {err}")))
     }
 
     fn set_embedding_model(

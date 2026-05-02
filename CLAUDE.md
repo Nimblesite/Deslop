@@ -43,6 +43,10 @@ fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
 fuse signals → rank → render report
 ```
 
+### IPC
+
+Processes communicate using IPC. Generate IPC model code with [typeDiagram](https://typediagram.dev/docs/language-reference.html). Do not store model code in git. Git ignore it.
+
 - **`crates/deslop-core`** — analysis library. Everything non-trivial lives here. The CLI, LSP, and MCP binaries all consume this single crate.
 - **`crates/deslop`** — thin CLI binary (<50 LOC of glue): arg parsing, tracing setup, invoke core, render output.
 - **`crates/deslop-lsp`** — LSP server surface; streams live clone warnings to any LSP-capable editor.

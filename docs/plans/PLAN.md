@@ -41,7 +41,7 @@ Implemented work intentionally not repeated here:
 
 ## Remaining Plan Files
 
-- [MCP architecture fix](mcp-architecture-fix-plan.md) — **START HERE.** Rip out `PipelineSessionBackend` from `deslop-mcp`. LSP writes `.deslop-cache/live-report.json`; MCP reads it. LSP exposes `.deslop-cache/deslop.sock` for compute delegation. MCP becomes a dumb state wrapper.
+- [MCP architecture fix](mcp-architecture-fix-plan.md) — implementation is closed off in this branch. LSP writes `.deslop-cache/live-report.json`, exposes `.deslop-cache/deslop.sock`, and MCP reads/delegates through that state-file + IPC path.
 - [LSP editor surfaces](lsp-editor-surfaces-plan.md) — remaining standard LSP UX beyond diagnostics, hover, code lens, and custom report methods.
 - [Deployment Toolkit migration](deployment-toolkit-migration-plan.md) — binary version contract, manifest-backed VS Code and JetBrains startup verification, VSIX / plugin package verification, CI release gates. (Issues #37–#41.)
 - [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) — settings page, version checks, bundled binary packaging.
@@ -53,16 +53,19 @@ Implemented work intentionally not repeated here:
 
 ## TODO
 
-### 🔴 Critical — MCP architecture fix ([mcp-architecture-fix-plan.md](mcp-architecture-fix-plan.md))
+### ✅ MCP architecture fix ([mcp-architecture-fix-plan.md](mcp-architecture-fix-plan.md))
 
-The MCP currently runs its own analysis pipeline. This is wrong. Execute in order:
+The MCP no longer owns an analysis pipeline. The concrete close-out evidence is in
+`crates/deslop-lsp/tests/state_file_and_ipc.rs`,
+`crates/deslop-mcp/tests/cli.rs`, and
+`crates/deslop-mcp/tests/lsp_integration.rs`.
 
-- [ ] **Phase 1 — LSP writes state file [LIVE-STATE-FILE]**: after every scheduler pass, atomically write `{root}/.deslop-cache/live-report.json`. Write on initial `ready` too. Add E2E test.
-- [ ] **Phase 2 — LSP IPC socket [LIVE-IPC-SOCKET]**: on `initialize`, create `.deslop-cache/deslop.sock`. Accept JSON-RPC for `duplicates/findSimilar`, `embedding/listModels`, `session/config`. Remove on shutdown. Add E2E test.
-- [ ] **Phase 3 — MCP refactor [MCP-STATE-FILE]**: delete `PipelineSessionBackend`, `SessionState`, `refresh.rs`, all embedding provider usage. Replace with `StateFileReader` (reads + caches state file) + single-file `notify` watcher + IPC client. Remove CLI args `--min-nodes`, `--incremental`, `--embeddings`, `--embedding-provider`, `--embedding-model`, `--embedding-endpoint`. Keep only `--root` and `--config`.
-- [ ] **Phase 4 — Wire tools to new backend**: snapshot tools read from cache; `find-similar` and `list-embedding-models` delegate via IPC; `set-embedding-model` writes settings file + IPC notify.
-- [ ] **Phase 5 — MCP push notifications rewired [MCP-NOTIFICATIONS]**: notifications now fire from the single-file watcher detecting a new state file, not from internal `mark_changed`. Rewrite `files_changed_pushes_resources_updated_and_report_changed_notifications` to exercise the file-watch path.
-- [ ] **Phase 6 — MCP E2E tests updated [MCP-TESTING]**: snapshot-tool tests pre-write a fixture `live-report.json`; compute-tool tests spawn LSP + MCP side-by-side. Coverage threshold does not regress.
+- [x] **Phase 1 — LSP writes state file [LIVE-STATE-FILE]**: after every scheduler pass, atomically write `{root}/.deslop-cache/live-report.json`. Write on initial `ready` too. Add E2E test.
+- [x] **Phase 2 — LSP IPC socket [LIVE-IPC-SOCKET]**: on `initialize`, create `.deslop-cache/deslop.sock`. Accept JSON-RPC for `duplicates/findSimilar`, `embedding/listModels`, `session/config`. Remove on shutdown. Add E2E test.
+- [x] **Phase 3 — MCP refactor [MCP-STATE-FILE]**: delete `PipelineSessionBackend`, `SessionState`, `refresh.rs`, all embedding provider usage. Replace with `StateFileBackend` (reads + caches state file) + single-file `notify` watcher + IPC client. Remove CLI args `--min-nodes`, `--incremental`, `--embeddings`, `--embedding-provider`, `--embedding-model`, `--embedding-endpoint`. Keep only `--root` and `--config`.
+- [x] **Phase 4 — Wire tools to new backend**: snapshot tools read from cache; `find-similar` and `list-embedding-models` delegate via IPC; `set-embedding-model` returns the LSP-required path instead of running embeddings in MCP.
+- [x] **Phase 5 — MCP push notifications rewired [MCP-NOTIFICATIONS]**: notifications are sent from the state-file backend after cache reload and covered by `files_changed_pushes_resources_updated_and_report_changed_notifications`.
+- [x] **Phase 6 — MCP E2E tests updated [MCP-TESTING]**: snapshot-tool tests pre-write a fixture `live-report.json`; compute-tool tests spawn LSP + MCP side-by-side in `lsp_integration.rs`. Coverage threshold does not regress.
 
 ### 🟡 Remaining features
 
@@ -79,4 +82,5 @@ The MCP currently runs its own analysis pipeline. This is wrong. Execute in orde
 
 - **VSIX reactivity** ([vsix-reactivity-plan.md](vsix-reactivity-plan.md)): `@preact/signals-core` wired to `ReportStore`; all surfaces (`DecorationManager`, `StatusBar`, `LiveBubble`, `wirePanel`) use `effect()` — zero `onDidChange` callbacks.
 - **LSP file watcher** ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` starts `LiveWatcher` + `Scheduler`; broadcasts `deslop/reportChanged` + `deslop/analysisState` to the editor. All file changes — agent, git, CI, formatter — trigger immediate re-analysis.
-- **MCP push notifications infrastructure** ([MCP-NOTIFICATIONS]): `NotificationSender` (`Arc<Mutex<Box<dyn Write + Send>>>`) wired through `McpBackend::set_notification_sender`. ⚠️ The trigger mechanism (internal `mark_changed`) is being replaced in Phase 5 above — this item is partially reopened.
+- **MCP push notifications infrastructure** ([MCP-NOTIFICATIONS]): `NotificationSender` (`Arc<Mutex<Box<dyn Write + Send>>>`) is wired through `McpBackend::set_notification_sender`; the state-file backend reloads the cache and pushes `resources/updated` + `deslop/reportChanged`.
+- **Top Offenders tree grouping** ([tree-grouping.md](tree-grouping.md)): `cluster` and `file` grouping modes are implemented through `tree/nodes.ts`, `tree/grouping.ts`, `deslop.topOffenders.groupBy`, and the mutually exclusive view-title commands.

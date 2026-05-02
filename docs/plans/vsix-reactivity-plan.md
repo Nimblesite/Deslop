@@ -111,13 +111,20 @@ Cover with E2E in the live module (`crates/deslop-core/src/live/*`).
 
 ## TODO
 
-- [ ] Phase 1 — root-cause analysis with structured logging from
-      [#45](https://github.com/Nimblesite/Deslop/issues/45).
-- [ ] Phase 2 — `@preact/signals-core` in the extension host;
-      `ReportStore` exposes signals + computed.
-- [ ] Phase 3 — migrate tree, decorations, bubble, status bar, session
-      panel to `effect()`; delete parallel caches.
-- [ ] Phase 4 — LSP notification predicate audited; fires on every
-      observable change (covered by live E2E).
+- [x] Phase 1 — root-cause analysis with structured logging from
+      [#45](https://github.com/Nimblesite/Deslop/issues/45). The fixed path is
+      captured in `crates/deslop-lsp/src/file_watch.rs`,
+      `clients/vscode/src/extension.ts`, and
+      `clients/vscode/src/test/suite/live-refresh.e2e.test.ts`.
+- [x] Phase 2 — `@preact/signals-core` in the extension host;
+      `ReportStore` exposes signals and a shimmed `onDidChange`.
+- [x] Phase 3 — migrate tree, decorations, bubble, status bar, session
+      panel to `effect()`; delete parallel startup-only caches.
+- [x] Phase 4 — LSP notification predicate audited; fires on every
+      observable change. Covered by live-refresh E2E and the
+      `[VSIX-REACTIVITY-TREE]` watcher regression in
+      `crates/deslop-core/tests/live.rs`.
 - [ ] Phase 5 — lint rule + cross-surface E2E asserting
-      [VSIX-REACTIVITY-INVARIANT] against the deduplication fixture.
+      [VSIX-REACTIVITY-INVARIANT] against the deduplication fixture. The
+      E2E exists for tree/report generation refresh; the dedicated lint guard
+      is still open.

@@ -16,7 +16,7 @@ name = "deslop_mcp"
 path = "src/lib.rs"
 
 [dependencies]
-deslop-core = { path = "../deslop-core" }
+deslop-core = { path = "../deslop-core", features = ["live"] }
 notify.workspace = true
 thiserror.workspace = true
 serde = { workspace = true }
