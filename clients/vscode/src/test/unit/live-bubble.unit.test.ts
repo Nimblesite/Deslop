@@ -18,6 +18,7 @@ function cluster(
     weight,
     size: occurrenceTotal ?? 2,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: {
       structural: 1,
       token_jaccard: 1,
@@ -28,6 +29,8 @@ function cluster(
       { path: "/tmp/A.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/tmp/B.cs", start_byte: 0, end_byte: 10, hidden: false },
     ],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };
@@ -52,6 +55,7 @@ function report(): Report {
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters: [cluster("c-a", 10, 0.95, 5)],
   };

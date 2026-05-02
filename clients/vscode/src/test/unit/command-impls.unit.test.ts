@@ -68,6 +68,7 @@ function cluster(id: string, paths: string[]): ReportCluster {
     weight: 10,
     size: 2,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: paths.map((p) => ({
       path: p,
@@ -75,6 +76,8 @@ function cluster(id: string, paths: string[]): ReportCluster {
       end_byte: 50,
       hidden: false,
     })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };
@@ -89,8 +92,11 @@ function clusterWithRanges(
     weight: 10,
     size: occurrences.length,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };
@@ -113,6 +119,7 @@ function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "# docs",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters,
   };

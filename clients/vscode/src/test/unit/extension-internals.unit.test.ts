@@ -230,6 +230,7 @@ suite("extension internals", () => {
           },
           schema_doc: "",
           action_hints: [],
+          boilerplate_hints: [],
           embedding_provenance: {
             provider_id: "ollama",
             model_id: "nomic-embed-text",
@@ -310,6 +311,7 @@ suite("extension internals", () => {
         },
         schema_doc: "",
         action_hints: [],
+        boilerplate_hints: [],
         embedding_provenance: null,
         clusters: [],
       },
@@ -346,6 +348,7 @@ suite("extension internals", () => {
           },
           schema_doc: "",
           action_hints: [],
+          boilerplate_hints: [],
           embedding_provenance: null,
           clusters: [],
         });
@@ -376,6 +379,7 @@ suite("extension internals", () => {
           },
           schema_doc: "",
           action_hints: [],
+          boilerplate_hints: [],
           embedding_provenance: null,
           clusters: [],
         }),

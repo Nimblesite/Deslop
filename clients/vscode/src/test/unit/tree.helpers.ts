@@ -80,6 +80,7 @@ export function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "docs",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: {
       provider_id: "ollama",
       model_id: "nomic-embed-text",

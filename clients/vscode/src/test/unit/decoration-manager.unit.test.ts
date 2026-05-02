@@ -13,8 +13,11 @@ function cluster(path: string): ReportCluster {
     weight: 10,
     size: 3,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: [{ path, start_byte: 0, end_byte: 3, hidden: false }],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };
@@ -37,6 +40,7 @@ function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters,
   };

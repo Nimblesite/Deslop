@@ -43,6 +43,7 @@ function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters,
   };
@@ -57,8 +58,11 @@ function cluster(
     weight: 10,
     size: occurrences.length,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: occurrences.map((occurrence) => ({ ...occurrence, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };

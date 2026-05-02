@@ -34,6 +34,7 @@ function reportWithEmbedding(
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: embedding,
     clusters: [],
   };
@@ -167,6 +168,9 @@ suite("extension coverage branches", () => {
         model_id: "nomic-embed-text",
         model_version: "0",
         dimensions: 768,
+        attempted_subtrees: 0,
+        indexed_subtrees: 0,
+        failed_subtrees: 0,
       }),
       0,
     );

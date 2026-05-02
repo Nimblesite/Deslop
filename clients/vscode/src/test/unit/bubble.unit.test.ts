@@ -26,11 +26,14 @@ function cluster(
     weight: 3,
     size: 4,
     canonical_node_count: 5,
+    bucket: "identical",
     signals,
     occurrences: [
       { path: "/tmp/a/b/Alpha.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/tmp/a/b/Beta.cs", start_byte: 0, end_byte: 10, hidden: false },
     ],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };

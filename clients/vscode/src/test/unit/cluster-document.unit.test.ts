@@ -63,6 +63,7 @@ function report(clusters: ReportCluster[] = [cluster()]): Report {
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters,
   };

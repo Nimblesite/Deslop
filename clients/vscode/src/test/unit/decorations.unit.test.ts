@@ -18,6 +18,8 @@ function cluster(): ReportCluster {
       { path: "/a.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/b.cs", start_byte: 0, end_byte: 10, hidden: false },
     ],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "summary",
     interpretation: "interp",
   };

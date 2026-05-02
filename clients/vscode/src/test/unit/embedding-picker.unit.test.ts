@@ -38,7 +38,15 @@ function newStore(embedding?: {
       },
       schema_doc: "",
       action_hints: [],
-      embedding_provenance: embedding ?? null,
+      boilerplate_hints: [],
+      embedding_provenance: embedding
+        ? {
+            attempted_subtrees: 0,
+            indexed_subtrees: 0,
+            failed_subtrees: 0,
+            ...embedding,
+          }
+        : null,
       clusters: [],
     },
     0,
