@@ -311,7 +311,7 @@ impl McpBackend for StateFileBackend {
         };
         let params = serde_json::to_value(&request)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialise: {err}")))?;
-        let result = ipc_call(&self.ipc_socket, "duplicates/findSimilar", params)?;
+        let result = ipc_call(&self.ipc_socket, "duplicates/findSimilar", &params)?;
         let clusters: Vec<ReportCluster> = serde_json::from_value(
             result.get("clusters").cloned().unwrap_or(json!([])),
         )

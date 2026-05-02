@@ -61,7 +61,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         signals,
     );
     let kind = report_bucket_kind(signals, &cluster.members, sources, file_languages);
-    let interpretation = interpret(kind, &cluster.members, sources);
+    let interpretation = interpret(kind);
     let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
     ReportCluster {
@@ -141,9 +141,18 @@ pub(crate) fn summarise(
     )
 }
 
-/// Routes the signal triple into the report bucket. The `Identical` bucket
-/// additionally requires matching C# value tokens so renamed identifiers still
-/// qualify while value-changing clones do not.
+/// Routes the signal triple into the report bucket and is the *single
+/// source of truth* for the [CLONE-BUCKETS-IDENTICAL] downgrade.
+///
+/// Issue #66: structural normalisation collapses identifiers and literals,
+/// so two snippets that share AST shape but differ in routes, handlers, or
+/// rate-limit policy literals still reach `structural=1.00, jaccard=1.00`.
+/// Calling them "Identical code / every copy is the same" is a lie — the
+/// raw source bytes disagree. We downgrade any such cluster to
+/// [`ClusterKind::NearlyIdentical`] regardless of language. The
+/// language-aware C# value-token check is kept as a redundant guard for
+/// reports that lose source bytes (deserialised reports, tests) but the
+/// raw-source equality check is now the primary gate.
 pub(crate) fn report_bucket_kind(
     signals: ReportSignals,
     members: &[Fingerprint],
@@ -152,7 +161,8 @@ pub(crate) fn report_bucket_kind(
 ) -> ClusterKind {
     let kind = classify_signals(signals);
     if kind == ClusterKind::Identical
-        && !value_tokens_are_identical(members, sources, file_languages)
+        && (!source_slices_are_equivalent(members, sources)
+            || !value_tokens_are_identical(members, sources, file_languages))
     {
         ClusterKind::NearlyIdentical
     } else {
@@ -161,34 +171,58 @@ pub(crate) fn report_bucket_kind(
 }
 
 /// Maps the report bucket onto a one-line interpretation for AI agents.
-pub(crate) fn interpret(
-    kind: ClusterKind,
-    members: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> String {
-    if kind == ClusterKind::Identical && !source_slices_are_identical(members, sources) {
-        return "Identical code. Same structure after identifier normalization; \
-                extract only after choosing parameters. (Type-2 renamed clone)"
-            .to_owned();
-    }
+/// `kind` is already the authoritative bucket from [`report_bucket_kind`],
+/// so an `Identical` kind here is guaranteed to reflect byte-equivalent
+/// source slices ([CLONE-BUCKETS-IDENTICAL] single-source-of-truth).
+pub(crate) fn interpret(kind: ClusterKind) -> String {
     bucket_labels(kind).agent_summary()
 }
 
-/// Returns true when every cluster member maps to the same raw source bytes.
-pub(crate) fn source_slices_are_identical(
+/// Returns true when every cluster member maps to source bytes that are
+/// equal after collapsing ASCII whitespace runs. Whitespace-insensitive so
+/// reformatted-but-identical copies still classify as `Identical`, but
+/// any difference in identifiers, literals, or punctuation prevents the
+/// `Identical` label per [CLONE-BUCKETS-IDENTICAL] (issue #66). When a
+/// member's source bytes are unavailable (deserialised reports, tests)
+/// the function returns `true` so the legacy language-aware fallback in
+/// [`value_tokens_are_identical`] still gates the bucket.
+pub(crate) fn source_slices_are_equivalent(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
 ) -> bool {
-    let Some(first) = members
-        .first()
-        .and_then(|member| source_slice(member, sources))
-    else {
-        return false;
-    };
-    members
+    let canonical_slices: Vec<Vec<u8>> = members
         .iter()
-        .skip(1)
-        .all(|member| source_slice(member, sources).is_some_and(|slice| slice == first))
+        .filter_map(|member| source_slice(member, sources).map(canonicalise_whitespace))
+        .collect();
+    if canonical_slices.len() < 2 {
+        return true;
+    }
+    canonical_slices
+        .windows(2)
+        .all(|window| window[0] == window[1])
+}
+
+/// Collapses all runs of ASCII whitespace in `bytes` to a single space and
+/// trims leading / trailing whitespace. Used to compare source slices
+/// without being fooled by formatting differences.
+fn canonicalise_whitespace(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut last_was_space = true;
+    for &byte in bytes {
+        if byte.is_ascii_whitespace() {
+            if !last_was_space {
+                out.push(b' ');
+                last_was_space = true;
+            }
+        } else {
+            out.push(byte);
+            last_was_space = false;
+        }
+    }
+    if out.last() == Some(&b' ') {
+        let _popped = out.pop();
+    }
+    out
 }
 
 /// Borrows the source bytes covered by one fingerprint range.

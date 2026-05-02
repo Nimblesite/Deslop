@@ -19,6 +19,7 @@ use crate::{
     boilerplate::BoilerplateRange,
     buckets::{classify_signals, ClusterKind},
     cluster::Cluster,
+    cluster_filters::is_noise_pattern,
     config::ExclusionConfig,
     pair::PairScore,
     report_boilerplate::{build_boilerplate_hints, ReportBoilerplateHint},
@@ -328,7 +329,14 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // output; the raw analysis data remains available via the pipeline.
             let loosely_similar =
                 classify_signals(report_cluster.signals) == ClusterKind::LooselySimilar;
+            // Issues #69, #70, #71, #72: re-parse cluster member sources
+            // and drop known noise patterns (polymorphic interface
+            // implementations, test-data variation, REST endpoint shape,
+            // monkeypatch.setenv scaffolding) that survive Type-2
+            // normalisation but are not real duplication.
+            let noise = is_noise_pattern(&cluster.members, inputs.sources, inputs.file_languages);
             let all_hidden = loosely_similar
+                || noise
                 || (!report_cluster.occurrences.is_empty()
                     && report_cluster.occurrences.iter().all(|occ| occ.hidden));
             (report_cluster, all_hidden)

@@ -87,6 +87,11 @@ pub enum LiveError {
         /// OS or `notify` diagnostic message.
         message: String,
     },
+    /// The session was constructed from a cached report but the
+    /// background pipeline pass that backs parser-driven queries has
+    /// not yet completed ([LIVE-CACHE-SEED]).
+    #[error("analysis pipeline not ready yet")]
+    AnalysisNotReady,
     /// Wraps any [`CoreError`] surfaced by the underlying pipeline.
     #[error(transparent)]
     Core(#[from] CoreError),
@@ -125,6 +130,7 @@ impl LiveError {
             Self::ProviderUnreachable { .. } => "provider_unreachable",
             Self::SchedulerBusy { .. } => "scheduler_busy",
             Self::WatcherInit { .. } => "watcher_init",
+            Self::AnalysisNotReady => "analysis_not_ready",
             Self::Core(_) => "core_error",
         }
     }

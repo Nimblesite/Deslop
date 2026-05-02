@@ -19,6 +19,7 @@ pub mod ast;
 pub mod boilerplate;
 pub mod buckets;
 pub mod cluster;
+mod cluster_filters;
 pub mod config;
 pub mod delta;
 pub mod discover;

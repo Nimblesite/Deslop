@@ -876,3 +876,75 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     );
     Ok(())
 }
+
+/// [LIVE-EMBEDDING-CONSENT] Regression: when the corpus contains
+/// duplicate snippets, the embedding pass must still report progress
+/// that reaches `total` by the time the pass ends. Previously the
+/// dedup logic counted unique vectors plus failed occurrences, so
+/// progress capped well below `total` and the editor's session panel
+/// froze at less than 100% even though the pass was finished.
+#[tokio::test(flavor = "multi_thread")]
+async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let body = b"namespace Demo { public class Tally { public int Sum(int b) { \
+        if (b < 0) { return 0; } int total = 0; \
+        for (int step = 0; step < b; step = step + 1) { total = total + step; } \
+        return total; } } }\n";
+    for index in 0..6 {
+        let path = tmp.path().join(format!("File{index}.cs"));
+        fs::write(&path, body).with_context(|| format!("write fixture {index}"))?;
+    }
+    let session_lock = make_session_lock(tmp.path())?;
+    let service = LiveService::new(session_lock);
+    let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
+        Arc::new(StdMutex::new(Vec::new()));
+    let events_clone = Arc::clone(&events);
+    let completed = Arc::new(tokio::sync::Notify::new());
+    let completed_clone = Arc::clone(&completed);
+    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
+        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
+            completed_clone.notify_waiters();
+        }
+        if let Ok(mut lock) = events_clone.lock() {
+            lock.push(event);
+        }
+    });
+    {
+        let session = service.session();
+        let mut guard = session.lock().await;
+        guard.set_embedding_progress_reporter(Some(reporter));
+    }
+    let _queued = service
+        .embedding_set_model("stub", "blake3-stub", None)
+        .await?;
+    tokio::time::timeout(Duration::from_secs(10), completed.notified())
+        .await
+        .context("embedding refresh completion")?;
+    let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
+    let running: Vec<deslop_core::live::EmbeddingProgress> = recorded
+        .iter()
+        .filter(|event| event.phase == deslop_core::live::EmbeddingPhase::Running)
+        .cloned()
+        .collect();
+    assert!(
+        !running.is_empty(),
+        "embedding pass must emit at least one Running event with duplicates present"
+    );
+    let total = running
+        .first()
+        .map(|event| event.total)
+        .ok_or_else(|| anyhow!("running events must carry total"))?;
+    assert!(total > 0, "fixture must produce at least one fingerprint");
+    let max_done = running
+        .iter()
+        .map(|event| event.done)
+        .max()
+        .unwrap_or(0);
+    assert_eq!(
+        max_done, total,
+        "Running progress must reach total ({total}); reached {max_done}. \
+         duplicate snippets must contribute to `done` so the panel does not \
+         freeze below 100%."
+    );
+    Ok(())
+}

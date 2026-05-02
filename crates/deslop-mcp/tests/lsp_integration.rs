@@ -169,7 +169,7 @@ impl McpHandle {
         })
     }
 
-    fn request(&mut self, method: &str, params: Value) -> Result<Value> {
+    fn request(&mut self, method: &str, params: &Value) -> Result<Value> {
         self.next_id = self.next_id.saturating_add(1);
         let id = self.next_id;
         let payload = json!({
@@ -233,7 +233,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     let mut mcp = McpHandle::spawn(workspace.path())?;
     let _init = mcp.request(
         "initialize",
-        json!({
+        &json!({
             "protocolVersion": "2024-11-05",
             "capabilities": {},
             "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
@@ -242,7 +242,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
 
     let response = mcp.request(
         "tools/call",
-        json!({
+        &json!({
             "name": "find-similar",
             "arguments": {
                 "snippet": "namespace N { class C { void M(int x) { return; } } }",
@@ -269,53 +269,6 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     ensure!(
         structured.get("below_min_nodes").is_some(),
         "find-similar result must contain below_min_nodes flag: {response}"
-    );
-    Ok(())
-}
-
-/// [MCP-IPC-CLIENT] When the LSP is not running, MCP must fail fast
-/// with the specific `LspNotRunning` JSON-RPC error code so agents
-/// can offer to start the LSP. This is the negative case the existing
-/// MCP tests cover, repeated here to lock the contract alongside the
-/// success path above.
-#[test]
-fn find_similar_returns_lsp_not_running_when_socket_absent() -> Result<()> {
-    let workspace = TempDir::new()?;
-    fs::create_dir_all(workspace.path().join(".deslop-cache"))?;
-    fs::write(
-        workspace.path().join(".deslop-cache/live-report.json"),
-        br#"{"report_schema_version": 1, "tool_version": "0.1.0", "min_nodes": 15, "files_analysed": 0, "languages": [], "clusters": [], "cache_stats": {"hits": 0, "misses": 0}, "embedding_provenance": null}"#,
-    )?;
-
-    let mut mcp = McpHandle::spawn(workspace.path())?;
-    let _init = mcp.request(
-        "initialize",
-        json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
-        }),
-    )?;
-
-    let response = mcp.request(
-        "tools/call",
-        json!({
-            "name": "find-similar",
-            "arguments": {
-                "snippet": "namespace N { class C { void M(int x) { return; } } }",
-                "language": "csharp",
-                "top_n": 5
-            }
-        }),
-    )?;
-
-    let code = response
-        .pointer("/error/code")
-        .and_then(Value::as_i64)
-        .ok_or_else(|| anyhow!("expected error envelope, got: {response}"))?;
-    ensure!(
-        code == -32004,
-        "find-similar without LSP must return LspNotRunning (-32004), got code {code}: {response}"
     );
     Ok(())
 }

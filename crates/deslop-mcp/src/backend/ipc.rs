@@ -27,7 +27,7 @@ use super::BackendError;
 /// transport-failure variant — IPC failures are reported the same way
 /// as a corrupt state file because both indicate the LSP and MCP have
 /// drifted out of sync.)
-pub fn ipc_call(socket_path: &Path, method: &str, params: Value) -> Result<Value, BackendError> {
+pub fn ipc_call(socket_path: &Path, method: &str, params: &Value) -> Result<Value, BackendError> {
     #[cfg(unix)]
     {
         unix::call(socket_path, method, params)
@@ -54,7 +54,7 @@ mod unix {
 
     /// Connects to `socket_path`, sends one line-delimited JSON-RPC
     /// request, reads one line back, and returns the `result` field.
-    pub fn call(socket_path: &Path, method: &str, params: Value) -> Result<Value, BackendError> {
+    pub fn call(socket_path: &Path, method: &str, params: &Value) -> Result<Value, BackendError> {
         let mut stream = UnixStream::connect(socket_path).map_err(|err| {
             if err.kind() == std::io::ErrorKind::NotFound
                 || err.kind() == std::io::ErrorKind::ConnectionRefused
@@ -91,8 +91,9 @@ mod unix {
                 "ipc rpc error: {error}"
             )));
         }
-        response.get("result").cloned().ok_or_else(|| {
-            BackendError::StateFileCorrupt("ipc response missing result".to_owned())
-        })
+        response
+            .get("result")
+            .cloned()
+            .ok_or_else(|| BackendError::StateFileCorrupt("ipc response missing result".to_owned()))
     }
 }

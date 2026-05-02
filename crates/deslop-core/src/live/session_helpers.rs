@@ -257,6 +257,65 @@ pub(super) fn stub_model_info() -> EmbeddingModelInfo {
     }
 }
 
+/// [LIVE-CACHE-SEED] Default name of the cache file the LSP writes
+/// after every analysis pass. The MCP and any cache-seed startup path
+/// read from this same file.
+pub(super) const STATE_FILE_NAME: &str = "live-report.json";
+
+/// [LIVE-STATE-FILE] Writes `bytes` to `{dir}/live-report.json` via an
+/// atomic tmp-then-rename so readers never see a partial file.
+pub(super) fn atomic_write_json(dir: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = dir.join("live-report.json.tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, dir.join(STATE_FILE_NAME))
+}
+
+/// [LIVE-STATE-FILE] Atomically writes `report` to
+/// `{root}/.deslop-cache/live-report.json`. Best-effort: failures are
+/// logged at `warn` and never propagated.
+pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) {
+    let cache_dir = root.join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+    if let Err(error) = std::fs::create_dir_all(&cache_dir) {
+        tracing::warn!(%error, "state_file_dir_create_failed");
+        return;
+    }
+    match serde_json::to_vec(report) {
+        Err(error) => tracing::warn!(%error, "state_file_serialize_failed"),
+        Ok(bytes) => {
+            if let Err(error) = atomic_write_json(&cache_dir, &bytes) {
+                tracing::warn!(%error, "state_file_atomic_write_failed");
+            } else {
+                tracing::info!(generation, "state_file_written");
+            }
+        }
+    }
+}
+
+/// [LIVE-CACHE-SEED] Best-effort load of `{root}/.deslop-cache/live-report.json`.
+/// Returns `None` for a missing file (cold start) and for any parse or
+/// I/O failure (the caller falls back to running a fresh full pass).
+pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
+    let path = root
+        .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME)
+        .join(STATE_FILE_NAME);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(%error, path = %path.display(), "cached_report_read_failed");
+            }
+            return None;
+        }
+    };
+    match serde_json::from_slice::<Report>(&bytes) {
+        Ok(report) => Some(report),
+        Err(error) => {
+            tracing::warn!(%error, path = %path.display(), "cached_report_parse_failed");
+            None
+        }
+    }
+}
+
 /// Translates the Ollama tag list into [`EmbeddingModelInfo`] entries.
 pub(super) fn append_ollama_models(
     out: &mut Vec<EmbeddingModelInfo>,
