@@ -390,7 +390,7 @@ impl McpBackend for StateFileBackend {
             min_nodes: report.min_nodes,
             languages,
             embedding_provenance: report.embedding_provenance.clone(),
-            incremental: false,
+            incremental: true,
             cumulative_cache_stats: report.cache_stats,
         })
     }

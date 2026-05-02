@@ -1995,7 +1995,10 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     let before_generation = value_get(&before_config, "/generation")?
         .as_u64()
         .unwrap_or(0);
-    assert!(before_generation >= 1, "initial generation should load state");
+    assert!(
+        before_generation >= 1,
+        "initial generation should load state"
+    );
     assert!(
         value_get(&before_config, "/languages")?
             .as_array()
@@ -2033,7 +2036,10 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
         "session-config should keep languages shaped as an array: {after_config}"
     );
     assert!(
-        value_get(&after_config, "/generation")?.as_u64().unwrap_or(0) > before_generation,
+        value_get(&after_config, "/generation")?
+            .as_u64()
+            .unwrap_or(0)
+            > before_generation,
         "filesChanged reload should advance the MCP generation"
     );
     assert_eq!(
