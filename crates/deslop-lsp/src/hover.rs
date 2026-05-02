@@ -329,14 +329,16 @@ mod tests {
     }
 
     #[test]
-    fn human_hover_omits_occurrence_list() {
+    fn human_hover_omits_occurrence_list() -> Result<()> {
         // [LSP-HOVER] Human audience: compact summary only — the giant
         // occurrence list belongs in agent-facing markdown, not in the
         // card a human sees while coding.
         let cluster = make_cluster();
         let hover = build_for_cluster(&cluster);
         let HoverContents::Markup(markup) = hover.contents else {
-            panic!("expected markup content");
+            return Err(anyhow!(
+                "expected HoverContents::Markup, got a different variant"
+            ));
         };
         assert!(
             !markup.value.contains("Occurrences:"),
@@ -354,6 +356,7 @@ mod tests {
             "human hover must still state the total count: {}",
             markup.value
         );
+        Ok(())
     }
 
     #[test]

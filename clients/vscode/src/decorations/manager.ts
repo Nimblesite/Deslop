@@ -7,11 +7,11 @@ import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
 import {
   bucketLabels,
-  occurrenceCount,
   ReportCluster,
   ReportOccurrence,
   resolveBucket,
   Severity,
+  visibleOccurrenceCount,
 } from "../types/report";
 
 const SEVERITIES: Severity[] = ["worst", "top10", "mid", "faint"];
@@ -89,7 +89,7 @@ export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   const labels = bucketLabels(resolveBucket(cluster));
-  const count = occurrenceCount(cluster);
+  const count = visibleOccurrenceCount(cluster);
   const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   md.appendMarkdown(`**${labels.plainTitle}** × ${count} — ${labels.actionSentence}\n\n`);
   md.appendMarkdown(

@@ -93,6 +93,15 @@ export function occurrenceCount(cluster: ReportCluster): number {
   return Math.max(total, cluster.occurrences.length);
 }
 
+/** Count to display in compact surfaces (hover, decoration). Uses the
+ * authoritative total when present; falls back to the visible slice length
+ * so we never show a count higher than the occurrences the caller can act on. */
+export function visibleOccurrenceCount(cluster: ReportCluster): number {
+  return cluster.occurrences_total && cluster.occurrences_total > 0
+    ? cluster.occurrences_total
+    : cluster.occurrences.length;
+}
+
 export interface ActionHint {
   pattern: string;
   recommendation: string;

@@ -161,34 +161,26 @@ fn byte_range_to_lsp(start_byte: usize, end_byte: usize, source_bytes: &str) -> 
     }
 }
 
-/// Builds `relatedInformation` links for the cluster's other occurrences.
+/// Returns a single `relatedInformation` item pointing to the canonical
+/// (first) occurrence of the cluster that is not in `path`. Showing
+/// only the canonical keeps the diagnostic hover minimal — the full
+/// occurrence list belongs in the tree and the cluster document, not
+/// in the tooltip a human sees while coding.
 fn related_info_for(
     cluster: &ReportCluster,
     path: &Path,
     workspace_root: &Path,
     cache: &mut HashMap<PathBuf, String>,
 ) -> Option<Vec<DiagnosticRelatedInformation>> {
-    let total = cluster.occurrences.len();
-    let mut items: Vec<DiagnosticRelatedInformation> = Vec::new();
-    for (index, occurrence) in cluster.occurrences.iter().enumerate() {
-        if occurrence_matches_path(occurrence, path) {
-            continue;
-        }
-        if let Some(info) = related_item(index, total, occurrence, workspace_root, cache) {
-            items.push(info);
-        }
-    }
-    if items.is_empty() {
-        None
-    } else {
-        Some(items)
-    }
+    let canonical = cluster
+        .occurrences
+        .iter()
+        .find(|occ| !occurrence_matches_path(occ, path))?;
+    canonical_item(canonical, workspace_root, cache).map(|item| vec![item])
 }
 
-/// Constructs one `DiagnosticRelatedInformation` entry.
-fn related_item(
-    index: usize,
-    total: usize,
+/// Constructs the canonical `DiagnosticRelatedInformation` entry.
+fn canonical_item(
     occurrence: &ReportOccurrence,
     workspace_root: &Path,
     cache: &mut HashMap<PathBuf, String>,
@@ -197,18 +189,10 @@ fn related_item(
     let uri = Url::from_file_path(&absolute).ok()?;
     let source = load_cached_source(&absolute, cache);
     let range = byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, &source);
-    let label = occurrence_label(index, total);
     Some(DiagnosticRelatedInformation {
         location: Location { uri, range },
-        message: label,
+        message: "Canonical".to_owned(),
     })
-}
-
-/// Formats the "occurrence N of M" label. Uses 1-based indexing for
-/// user-facing strings.
-fn occurrence_label(index: usize, total: usize) -> String {
-    let one_based = index.saturating_add(1);
-    format!("occurrence {one_based} of {total}")
 }
 
 /// Public helper for callers that need direct access to the range

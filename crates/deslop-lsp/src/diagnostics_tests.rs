@@ -143,22 +143,8 @@ fn byte_range_to_lsp_spans_newlines_and_utf16() {
     assert_eq!(at.character, 0);
 }
 
-#[test]
-fn occurrence_label_uses_one_based_indexing() {
-    assert_eq!(occurrence_label(0, 3), "occurrence 1 of 3");
-    assert_eq!(occurrence_label(1, 3), "occurrence 2 of 3");
-    assert_eq!(occurrence_label(4, 5), "occurrence 5 of 5");
-    // saturating_add on usize::MAX clamps rather than panicking.
-    let saturated = occurrence_label(usize::MAX, 1);
-    assert!(
-        saturated.ends_with(" of 1"),
-        "total still trails after saturation: {saturated}"
-    );
-    assert!(
-        saturated.starts_with("occurrence "),
-        "label prefix preserved even under saturation: {saturated}"
-    );
-}
+// occurrence_label removed — diagnostics now show a single "Canonical"
+// link rather than an indexed list of all occurrences.
 
 #[test]
 fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
@@ -178,11 +164,11 @@ fn diagnostic_data_stores_cluster_id_for_machine_readers() -> Result<()> {
 }
 
 #[test]
-fn diagnostic_message_uses_plain_title_and_action_sentence() {
+fn diagnostic_message_shows_category_count_and_action() {
     let cluster = sample_cluster(
         "c",
         100.0,
-        vec![occurrence("a.cs", 0, 1)],
+        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
         "nearly_identical",
     );
     let message = diagnostic_message(&cluster);
@@ -192,12 +178,12 @@ fn diagnostic_message_uses_plain_title_and_action_sentence() {
         "diagnostic message must use human label: {message}"
     );
     assert!(
-        !message.contains("Type-"),
-        "diagnostic message must not expose clone taxonomy labels: {message}"
+        message.contains("× 2"),
+        "diagnostic message must include instance count: {message}"
     );
     assert!(
-        !message.is_empty(),
-        "non-empty diagnostic message: {message}"
+        !message.contains("Type-"),
+        "diagnostic message must not expose clone taxonomy labels: {message}"
     );
 }
 
@@ -248,12 +234,16 @@ fn build_for_file_emits_diagnostic_with_relatedinfo_and_severity() -> Result<()>
         .related_information
         .as_ref()
         .ok_or_else(|| anyhow!("related info for Beta.cs"))?;
-    assert_eq!(related.len(), 1, "only Beta.cs surfaces as related");
-    let related_first = related.first().ok_or_else(|| anyhow!("first related"))?;
-    assert!(
-        related_first.message.contains("occurrence 2 of 2"),
-        "label uses 1-based index: {}",
-        related_first.message
+    assert_eq!(
+        related.len(),
+        1,
+        "exactly one canonical link — not a full occurrence dump"
+    );
+    let canonical = related.first().ok_or_else(|| anyhow!("canonical entry"))?;
+    assert_eq!(
+        canonical.message, "Canonical",
+        "related label must be 'Canonical', not an indexed occurrence string: {}",
+        canonical.message
     );
     assert_eq!(
         diagnostic.range.start.line, 0,
@@ -308,6 +298,48 @@ fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
     assert!(
         diagnostic.related_information.is_none(),
         "no other occurrences → related_information is None"
+    );
+    Ok(())
+}
+
+#[test]
+fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
+    // The diagnostic hover must never dump a full occurrence list.
+    // 38 occurrences → still exactly 1 "Canonical" related-info link.
+    let workspace = TempDir::new()?;
+    let primary_source = "fn a() {}\n";
+    let _primary = write_source(workspace.path(), "Main.cs", primary_source)?;
+    let other_source = "fn b() {}\n";
+    let _other = write_source(workspace.path(), "Other.cs", other_source)?;
+    let mut occs = vec![occurrence("Main.cs", 0, 5)];
+    for _ in 0..37 {
+        occs.push(occurrence("Other.cs", 0, 3));
+    }
+    let cluster = sample_cluster("big", 100.0, occs, "identical");
+    let file_report = FileReport {
+        path: PathBuf::from("Main.cs"),
+        clusters: vec![cluster],
+    };
+    let weights = vec![1.0_f64, 100.0];
+    let diagnostics = build_for_file(&file_report, &weights, workspace.path());
+    let diagnostic = diagnostics.first().ok_or_else(|| anyhow!("diagnostic"))?;
+    let related = diagnostic
+        .related_information
+        .as_ref()
+        .ok_or_else(|| anyhow!("related info must be present"))?;
+    assert_eq!(
+        related.len(),
+        1,
+        "38 occurrences must yield exactly 1 canonical link, not {}: {related:?}",
+        related.len()
+    );
+    let canonical = related
+        .first()
+        .ok_or_else(|| anyhow!("related must have first entry (len asserted above)"))?;
+    assert_eq!(
+        canonical.message, "Canonical",
+        "related label must be 'Canonical': {}",
+        canonical.message
     );
     Ok(())
 }

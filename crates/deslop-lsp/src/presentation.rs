@@ -19,11 +19,15 @@ pub fn cluster_summary(cluster: &ReportCluster, rank: Option<usize>) -> String {
     )
 }
 
-/// Formats the diagnostic message without exposing the stable hash.
+/// Formats the diagnostic message: category × count — action sentence.
 #[must_use]
 pub fn diagnostic_message(cluster: &ReportCluster) -> String {
     let labels = bucket_labels(classify(cluster));
-    format!("{} — {}", labels.plain_title, labels.action_sentence)
+    let count = occurrence_count(cluster);
+    format!(
+        "{} × {} — {}",
+        labels.plain_title, count, labels.action_sentence
+    )
 }
 
 /// Stores machine-facing cluster identity outside visible diagnostic text.
