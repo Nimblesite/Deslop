@@ -29,12 +29,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 use tree_sitter::Node;
 
-use crate::{
-    ast::ByteRange,
-    fingerprint::Fingerprint,
-    lang::shared::parse_source,
-    state::FileId,
-};
+use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId};
 
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns `true` when the cluster should be
@@ -50,8 +45,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     let Some(snippets) = collect_snippets(members, sources, language) else {
         return false;
     };
-    is_polymorphic_signature_cluster(&snippets)
-        || is_literal_variation_call_cluster(&snippets)
+    is_polymorphic_signature_cluster(&snippets) || is_literal_variation_call_cluster(&snippets)
 }
 
 /// One re-parsed cluster member: language, raw bytes, the byte range
@@ -160,9 +154,15 @@ fn enclosing_function_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
 /// for C#) that contains `snippet.range`, when one exists.
 fn enclosing_function_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
     let tree = parse_for(snippet)?;
-    let function = enclosing_kind(tree.root_node(), snippet.range, function_kinds(snippet.language))?;
+    let function = enclosing_kind(
+        tree.root_node(),
+        snippet.range,
+        function_kinds(snippet.language),
+    )?;
     let name_node = function.child_by_field_name("name")?;
-    snippet.source.get(name_node.start_byte()..name_node.end_byte())
+    snippet
+        .source
+        .get(name_node.start_byte()..name_node.end_byte())
 }
 
 /// Returns the set of tree-sitter node kinds that count as function
@@ -223,7 +223,11 @@ enum ArgShape {
 /// `snippet.range`. Returns `None` when no call is present.
 fn call_shape(snippet: &Snippet<'_>) -> Option<CallShape> {
     let tree = parse_for(snippet)?;
-    let call = enclosing_kind(tree.root_node(), snippet.range, call_kinds(snippet.language))?;
+    let call = enclosing_kind(
+        tree.root_node(),
+        snippet.range,
+        call_kinds(snippet.language),
+    )?;
     let callee_node = call.child_by_field_name("function")?;
     let callee = snippet
         .source

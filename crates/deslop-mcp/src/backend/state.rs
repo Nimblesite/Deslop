@@ -16,7 +16,10 @@ use std::{
 };
 
 use deslop_core::{
-    live::wire::{FindSimilarInput as WireFindSimilarInput, FindSimilarRequest},
+    live::wire::{
+        EmbeddingModelInfo as WireEmbeddingModelInfo, FindSimilarInput as WireFindSimilarInput,
+        FindSimilarRequest,
+    },
     report::ReportCluster,
     EmbeddingSpec, OllamaModelInfo, Report,
 };
@@ -172,6 +175,18 @@ fn extension_to_language(path: &Path) -> Option<&'static str> {
         "rs" => Some("rust"),
         "py" => Some("python"),
         _ => None,
+    }
+}
+
+/// Maps the LSP IPC model shape into the MCP tool renderer's legacy
+/// model row shape.
+fn model_info_from_wire(model: WireEmbeddingModelInfo) -> OllamaModelInfo {
+    OllamaModelInfo {
+        name: model.model_id.clone(),
+        bare_id: model.model_id,
+        digest: model.model_version.unwrap_or_default(),
+        size_bytes: 0,
+        is_embedding_model: model.reachable && model.recommended,
     }
 }
 
@@ -338,8 +353,9 @@ impl McpBackend for StateFileBackend {
 
     fn list_embedding_models(&self) -> Result<Vec<OllamaModelInfo>, BackendError> {
         let result = ipc_call(&self.ipc_socket, "embedding/listModels", &json!({}))?;
-        serde_json::from_value(result)
-            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc models parse: {err}")))
+        let models = serde_json::from_value::<Vec<WireEmbeddingModelInfo>>(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc models parse: {err}")))?;
+        Ok(models.into_iter().map(model_info_from_wire).collect())
     }
 
     fn set_embedding_model(

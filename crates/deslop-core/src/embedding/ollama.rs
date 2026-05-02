@@ -385,7 +385,9 @@ fn entry_matches(entry: &TagEntry, model: &str) -> bool {
 /// Summary of one locally-installed Ollama model, suitable for the
 /// VSIX embedding-model picker ([VSIX-EMBED-PICKER]) and the daemon's
 /// `embedding/listModels` query ([LIVE-QUERY-API]).
-#[derive(Debug, Clone)]
+///
+/// Wire shape: `OllamaModelInfo` in `docs/models/live-ipc.td`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OllamaModelInfo {
     /// Full model tag as installed (e.g. `nomic-embed-text:latest`).
     pub name: String,

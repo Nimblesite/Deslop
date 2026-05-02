@@ -237,7 +237,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
         &json!({
             "name": "find-similar",
             "arguments": {
-                "snippet": "namespace N { class C { void M(int x) { return; } } }",
+                "snippet": include_str!("fixtures/csharp-mcp/Alpha.cs"),
                 "language": "csharp",
                 "top_n": 5
             }
@@ -283,7 +283,9 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
     ensure!(
-        models.iter().any(|model| model.get("name") == Some(&json!("stub"))),
+        models
+            .iter()
+            .any(|model| model.get("name") == Some(&json!("blake3-stub"))),
         "list-embedding-models must include the built-in stub model: {response}"
     );
     Ok(())
@@ -299,7 +301,10 @@ fn initialized_mcp(root: &Path) -> Result<McpHandle> {
             "clientInfo": { "name": "phase5-e2e", "version": "0.1.0" }
         }),
     )?;
-    ensure!(response.get("error").is_none(), "MCP initialize failed: {response}");
+    ensure!(
+        response.get("error").is_none(),
+        "MCP initialize failed: {response}"
+    );
     Ok(mcp)
 }
 

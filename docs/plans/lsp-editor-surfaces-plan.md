@@ -27,8 +27,9 @@ VSIX, and JetBrains-specific native UI stays in the JetBrains plans.
       canonical occurrence for that cluster.
 - [ ] Add deterministic cycling semantics for code-lens "jump to next" if the
       current command path still depends on client-only behavior.
-- [ ] Add `documentLinkProvider` capability if the hover or virtual document
-      content exposes navigable occurrence links.
+- [x] Do not add `documentLinkProvider` yet: current LSP hover and
+      `deslop://` virtual documents do not expose markdown/file links that need
+      a standard document-link resolver.
 - [x] Implement `deslop://cluster/<id>` virtual document rendering from
       `LiveApi::cluster_by_id`, including snippets and line numbers.
 - [x] Implement `deslop://report` virtual document rendering from the canonical
@@ -39,5 +40,7 @@ VSIX, and JetBrains-specific native UI stays in the JetBrains plans.
       `deslop.openCluster`, `deslop.openReport`, `deslop.pickEmbeddingModel`,
       and `deslop.toggleIncremental`.
 - [ ] Implement command handling without adding edit-producing refactor actions.
-- [ ] Add E2E coverage for initialize capabilities, definition lookup, virtual
-      document content, command dispatch, and malformed parameter errors.
+- [x] Add E2E coverage for initialize capabilities, definition lookup, virtual
+      document content, and malformed virtual-document parameter errors.
+- [ ] Add E2E coverage for command dispatch after `executeCommandProvider`
+      lands.

@@ -41,7 +41,6 @@ Implemented work intentionally not repeated here:
 
 ## Remaining Plan Files
 
-- [MCP architecture fix](mcp-architecture-fix-plan.md) — implementation is closed off in this branch. LSP writes `.deslop-cache/live-report.json`, exposes `.deslop-cache/deslop.sock`, and MCP reads/delegates through that state-file + IPC path.
 - [LSP editor surfaces](lsp-editor-surfaces-plan.md) — remaining standard LSP UX beyond diagnostics, hover, code lens, and custom report methods.
 - [Deployment Toolkit migration](deployment-toolkit-migration-plan.md) — binary version contract, manifest-backed VS Code and JetBrains startup verification, VSIX / plugin package verification, CI release gates. (Issues #37–#41.)
 - [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) — settings page, version checks, bundled binary packaging.
@@ -80,7 +79,8 @@ The MCP no longer owns an analysis pipeline. The concrete close-out evidence is 
 
 ### ✅ Done
 
-- **VSIX reactivity** ([vsix-reactivity-plan.md](vsix-reactivity-plan.md)): `@preact/signals-core` wired to `ReportStore`; all surfaces (`DecorationManager`, `StatusBar`, `LiveBubble`, `wirePanel`) use `effect()` — zero `onDidChange` callbacks.
+- **VSIX reactivity** ([vsix-reactivity-plan.md](vsix-reactivity-plan.md)): `@preact/signals-core` wired to `ReportStore`; tree providers, `DecorationManager`, `StatusBar`, `LiveBubble`, and `wirePanel` refresh from signal-driven effects.
+- **MCP architecture fix** ([mcp-architecture-fix-plan.md](mcp-architecture-fix-plan.md)): LSP writes `.deslop-cache/live-report.json`, exposes `.deslop-cache/deslop.sock`, and MCP reads/delegates through the state-file + IPC path.
 - **LSP file watcher** ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` starts `LiveWatcher` + `Scheduler`; broadcasts `deslop/reportChanged` + `deslop/analysisState` to the editor. All file changes — agent, git, CI, formatter — trigger immediate re-analysis.
 - **MCP push notifications infrastructure** ([MCP-NOTIFICATIONS]): `NotificationSender` (`Arc<Mutex<Box<dyn Write + Send>>>`) is wired through `McpBackend::set_notification_sender`; the state-file backend reloads the cache and pushes `resources/updated` + `deslop/reportChanged`.
 - **Top Offenders tree grouping** ([tree-grouping.md](tree-grouping.md)): `cluster` and `file` grouping modes are implemented through `tree/nodes.ts`, `tree/grouping.ts`, `deslop.topOffenders.groupBy`, and the mutually exclusive view-title commands.

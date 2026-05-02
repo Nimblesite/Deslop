@@ -84,19 +84,19 @@ Each split test file stays under 500 lines.
 
 ## TODO
 
-- [ ] Update [vsix.md](../specs/vsix.md): replace `[VSIX-TOP-OFFENDERS-FILE-GROUPS]` with `[VSIX-TOP-OFFENDERS-GROUPING]`, `[VSIX-TOP-OFFENDERS-CLUSTER-MODE]`, `[VSIX-TOP-OFFENDERS-FILE-MODE]`, `[VSIX-TOP-OFFENDERS-RANK-GLOBAL]`. (✓ already done in this branch)
-- [ ] Split [providers.ts](../../clients/vscode/src/tree/providers.ts) → `tree/nodes.ts` + `tree/grouping.ts` + slim `providers.ts` with re-exports. Verify `register.ts` and `treeMenus.ts` imports still resolve.
-- [ ] Add `FileNode` and `BucketGroupNode` to `tree/nodes.ts`, promoting `representativePath` / `displayPath` / `categoryIcon` / `CATEGORY_STYLE` to exports.
-- [ ] Extract `clusterRowLabel({ rank, severity, bucket, file? })` free function; update `ClusterNode` to call it; verify tooltip stays mode-invariant.
-- [ ] Implement `buildClusterMode(clusters, severities)` in `tree/grouping.ts`. Spec ID comment: `[VSIX-TOP-OFFENDERS-CLUSTER-MODE]`.
-- [ ] Implement `buildFileMode(clusters, severities)` in `tree/grouping.ts` with the max-weight / sum-weight / `localeCompare` sort tuple. Spec ID comment: `[VSIX-TOP-OFFENDERS-FILE-MODE]`.
-- [ ] Wire `TopOffendersProvider.getChildren()` to dispatch on the `deslop.topOffenders.groupBy` setting with a `cluster` fallback. Spec ID comment: `[VSIX-TOP-OFFENDERS-GROUPING]`.
-- [ ] Add `deslop.topOffenders.groupBy` configuration property in `package.json`.
-- [ ] Add `deslop.toggleTopOffendersGrouping` command (with codicon) and two `view/title` menu entries gated by mutually exclusive `when` clauses on `deslop.topOffendersGroupBy`.
-- [ ] Register the toggle command in [register.ts](../../clients/vscode/src/commands/register.ts) — copy the `toggleShowAllLenses` pattern.
-- [ ] Add the synchronous `setContext` bridge in [extension.ts](../../clients/vscode/src/extension.ts) `activate()`, before tree registration. Add the `onDidChangeConfiguration` listener that updates the context key and fires the `TopOffendersProvider` change emitter.
-- [ ] Split [tree.unit.test.ts](../../clients/vscode/src/test/unit/tree.unit.test.ts) into `tree.helpers.ts` + `tree.topOffenders.unit.test.ts` + `tree.focusedFile.unit.test.ts` + `tree.session.unit.test.ts`. Confirm Mocha glob still loads them.
-- [ ] Add tests 1–9 listed above. Each test references the spec ID it covers.
+- [x] Update [vsix.md](../specs/vsix.md): replace `[VSIX-TOP-OFFENDERS-FILE-GROUPS]` with `[VSIX-TOP-OFFENDERS-GROUPING]`, `[VSIX-TOP-OFFENDERS-CLUSTER-MODE]`, `[VSIX-TOP-OFFENDERS-FILE-MODE]`, `[VSIX-TOP-OFFENDERS-RANK-GLOBAL]`.
+- [x] Split [providers.ts](../../clients/vscode/src/tree/providers.ts) → `tree/nodes.ts` + `tree/grouping.ts` + slim `providers.ts` with re-exports. Verify `register.ts` and `treeMenus.ts` imports still resolve.
+- [x] Add `FileNode` and `BucketGroupNode` to `tree/nodes.ts`, promoting `representativePath` / `displayPath` / `categoryIcon` / `CATEGORY_STYLE` to exports.
+- [x] Extract `clusterRowLabel({ rank, severity, bucket, file? })` free function; update `ClusterNode` to call it; verify tooltip stays mode-invariant.
+- [x] Implement `buildClusterMode(clusters, severities)` in `tree/grouping.ts`. Spec ID comment: `[VSIX-TOP-OFFENDERS-CLUSTER-MODE]`.
+- [x] Implement `buildFileMode(clusters, severities)` in `tree/grouping.ts` with the max-weight / sum-weight / `localeCompare` sort tuple. Spec ID comment: `[VSIX-TOP-OFFENDERS-FILE-MODE]`.
+- [x] Wire `TopOffendersProvider.getChildren()` to dispatch on the `deslop.topOffenders.groupBy` setting with a `cluster` fallback. Spec ID comment: `[VSIX-TOP-OFFENDERS-GROUPING]`.
+- [x] Add `deslop.topOffenders.groupBy` configuration property in `package.json`.
+- [x] Add grouping commands with codicons and two `view/title` menu entries gated by mutually exclusive `when` clauses on `deslop.topOffendersGroupBy`. The implementation uses explicit `showByCluster` / `showByFile` commands instead of one ambiguous toggle.
+- [x] Register the grouping commands in [register.ts](../../clients/vscode/src/commands/register.ts).
+- [x] Add the synchronous `setContext` bridge in [extension.ts](../../clients/vscode/src/extension.ts) `activate()`, before tree registration. Add the `onDidChangeConfiguration` listener that updates the context key and fires the `TopOffendersProvider` change emitter.
+- [x] Split [tree.unit.test.ts](../../clients/vscode/src/test/unit/tree.unit.test.ts) into `tree.helpers.ts` + `tree.topOffenders.unit.test.ts` + `tree.focusedFile.unit.test.ts` + `tree.session.unit.test.ts`. Confirm Mocha glob still loads them.
+- [x] Add tests 1–9 listed above. Each test references the spec ID it covers.
 - [ ] `cd clients/vscode && npm run typecheck && npm run lint && npm test` — green.
 - [ ] `make ci` — green.
 - [ ] Manual e2e in a real VS Code window: cold start in cluster mode, toggle to file mode, reload, confirm `.vscode/settings.json` contains the override, confirm user-level fallback when no workspace value is set.

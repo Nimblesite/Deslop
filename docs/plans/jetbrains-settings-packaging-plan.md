@@ -27,12 +27,13 @@ launch choices with user settings and makes the plugin package self-contained.
 - [ ] Update `DeslopLspServerDescriptor` to pass settings-derived LSP launch
       arguments instead of hard-coded values.
 - [ ] Add validation for invalid `minNodes`, provider ids, and endpoint values.
-- [ ] Add `deslop-lsp --version` support if it is still missing when version
+- [x] Add `deslop-lsp --version` support if it is still missing when version
       checks are implemented.
-- [ ] Enforce exact binary/plugin version matching for `PATH` binaries before
-      Marketplace publication.
-- [ ] Stage platform binaries into `clients/jetbrains/bin/<platform>/` during
-      release packaging.
-- [ ] Add release workflow packaging for `deslop-jetbrains-<version>.zip`.
-- [ ] Document local development and packaged install paths in
+- [x] Enforce exact binary/plugin version matching before startup. The
+      manifest-backed resolver probes candidates with `--version` and refuses
+      mismatched binaries.
+- [x] Stage platform binaries into `clients/jetbrains/bin/<platform>/` during
+      Gradle packaging.
+- [x] Add CI packaging gate for `deslop-jetbrains-<version>.zip`.
+- [x] Document local development and packaged install paths in
       `clients/jetbrains/README.md`.

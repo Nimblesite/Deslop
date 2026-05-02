@@ -935,11 +935,7 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
         .map(|event| event.total)
         .ok_or_else(|| anyhow!("running events must carry total"))?;
     assert!(total > 0, "fixture must produce at least one fingerprint");
-    let max_done = running
-        .iter()
-        .map(|event| event.done)
-        .max()
-        .unwrap_or(0);
+    let max_done = running.iter().map(|event| event.done).max().unwrap_or(0);
     assert_eq!(
         max_done, total,
         "Running progress must reach total ({total}); reached {max_done}. \
