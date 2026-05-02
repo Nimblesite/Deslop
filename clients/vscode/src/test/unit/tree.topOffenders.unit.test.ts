@@ -543,4 +543,22 @@ suite("TopOffendersProvider", () => {
     assert.ok(errorNode, "top offenders must show a failed-lifecycle banner");
     assert.match(labelText(errorNode), /Stopped: crash/);
   });
+
+  test("retains existing clusters during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("c1", 100, "/repo/A.cs"),
+        cluster("c2", 80, "/repo/B.cs"),
+      ]),
+      0,
+    );
+    store.setLifecycle({ kind: "analysing" });
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const nodes = provider.getChildren();
+    assert.ok(nodes.length >= 2, "cluster rows must remain visible during re-analysis");
+    const labels = nodes.map(labelText);
+    assert.ok(labels.some((l) => /A\.cs/i.test(l) || /c1/i.test(l)), "A.cs cluster must stay visible");
+    assert.ok(labels.some((l) => /B\.cs/i.test(l) || /c2/i.test(l)), "B.cs cluster must stay visible");
+  });
 });

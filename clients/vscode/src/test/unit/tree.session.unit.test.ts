@@ -105,4 +105,16 @@ suite("SessionProvider", () => {
     assert.match(labelText(errorNode), /Stopped: binary missing/);
     assert.equal(errorNode.command?.command, "deslop.revealLog");
   });
+
+  test("retains session data during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
+    store.setLifecycle({ kind: "analysing" });
+    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
+    const nodes = provider.getChildren();
+    assert.equal(nodes.length, 5, "session rows must remain visible during re-analysis");
+    const labels = nodes.map((n) => (typeof n.label === "string" ? n.label : ""));
+    assert.ok(labels.includes("Embedding model"), "Embedding model row must stay visible");
+    assert.ok(labels.includes("State"), "State row must stay visible");
+  });
 });

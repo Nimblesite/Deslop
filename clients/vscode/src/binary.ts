@@ -311,10 +311,6 @@ function throwMissing(component: DeploymentComponent, skipped?: Candidate): neve
   throw new Error(`No matching ${component.id} ${component.expectedVersion} binary found.${suffix}`);
 }
 
-function foundVersion(probe: VersionProbe): string {
-  return probe.name && probe.version ? `${probe.name} ${probe.version}` : probe.raw || "not found";
-}
-
 function mismatchMessage(
   component: DeploymentComponent,
   candidate: Candidate,

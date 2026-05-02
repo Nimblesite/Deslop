@@ -125,8 +125,8 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 
   private needsAnimation(): boolean {
-    const phase = this.store.current.lifecycle.kind;
-    return phase === "starting" || phase === "analysing";
+    const { lifecycle, report } = this.store.current;
+    return (lifecycle.kind === "starting" || lifecycle.kind === "analysing") && !report;
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
@@ -168,8 +168,12 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     }
     if (node) return [];
     const { report, lifecycle } = this.store.current;
-    const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
-    if (status) return [status];
+    // Show spinner only before first report arrives, or on error. During
+    // re-analysis the existing report stays visible — stale > blank.
+    if (lifecycle.kind === "failed" || !report) {
+      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
+      if (status) return [status];
+    }
     if (!report || report.clusters.length === 0) {
       return [new StatusNode("No duplication detected", "info")];
     }
@@ -230,8 +234,12 @@ export class SessionProvider extends LifecycleAwareProvider {
     if (node) return [];
     const { report, lifecycle, pendingEmbeddingModel, embeddingProgress } =
       this.store.current;
-    const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
-    if (status) return [status];
+    // Show spinner only before first report arrives, or on error. During
+    // re-analysis the existing session data stays visible — stale > blank.
+    if (lifecycle.kind === "failed" || !report) {
+      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
+      if (status) return [status];
+    }
     if (!report) return [new StatusNode("No session yet", "info")];
     const activeModel =
       report.embedding_provenance?.model_id ?? "Select model to enable AI matches";

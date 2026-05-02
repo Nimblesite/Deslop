@@ -61,6 +61,14 @@ pub struct AnalysisSession {
     embedding_refresh_revision: u64,
 }
 
+/// [LIVE-STATE-FILE] Writes `bytes` to `{dir}/live-report.json` via an
+/// atomic tmp-then-rename so readers never see a partial file.
+fn atomic_write_json(dir: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = dir.join("live-report.json.tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, dir.join("live-report.json"))
+}
+
 impl std::fmt::Debug for AnalysisSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AnalysisSession").finish_non_exhaustive()
@@ -119,14 +127,16 @@ impl AnalysisSession {
             mode,
             embedding_provider.as_ref(),
         )?;
-        Ok(Self::finalise(
+        let session = Self::finalise(
             pipeline,
             report,
             embedding_provider,
             mode,
             incremental,
             config_path,
-        ))
+        );
+        session.write_state_file();
+        Ok(session)
     }
 
     /// Assembles the session struct from the initialised pipeline.
@@ -191,6 +201,7 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.latest_report = Arc::clone(&next_arc);
+        self.write_state_file();
         Ok(ReportDelta::between(
             Some((prev_generation, &previous)),
             self.generation,
