@@ -81,10 +81,16 @@ suite("bubble rendering helpers", () => {
     c.signals = { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
     const text = bubbleHover(c, 1).value;
     const firstLine = text.split("\n")[0] ?? "";
+    // Format: **#N Category** × count — rank is inside the bold run.
     assert.match(
       firstLine,
-      /\*\*Identical code\*\*/,
+      /\*\*(?:#\d+\s+)?Identical code\*\*/,
       `human title must contain the plain bucket label; got first line: ${firstLine}`,
+    );
+    assert.doesNotMatch(
+      firstLine,
+      /Type-\d/,
+      `human title must not expose taxonomy Type-N label: ${firstLine}`,
     );
   });
 

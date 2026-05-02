@@ -112,12 +112,22 @@ fn connect_ollama_or_fallback(embedding: &LspEmbeddingConfig) -> Arc<dyn Embeddi
 }
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
+///
+/// The backend owns the [`LiveWatcher`] and [`Scheduler`] so that they
+/// stay alive for the entire server session. Dropping either stops the
+/// watcher loop and terminates background analysis.
 #[derive(Debug)]
 pub struct LspBackend {
     /// LSP client handle for sending notifications back to the editor.
     client: Client,
     /// Shared live service.
     service: Arc<LiveService>,
+    /// Filesystem watcher kept alive here — dropping it stops the OS
+    /// watch ([LIVE-WATCHER]).
+    _watcher: deslop_core::live::LiveWatcher,
+    /// Scheduler kept alive so its broadcast channels remain open
+    /// ([LIVE-SCHEDULER]).
+    _scheduler: deslop_core::live::Scheduler,
 }
 
 impl LspBackend {
@@ -162,8 +172,13 @@ impl LspBackend {
             )?
         };
         session.set_embedding_progress_reporter(Some(progress_reporter(&client)));
-        let service = Arc::new(LiveService::new(Arc::new(Mutex::new(session))));
-        Ok(Self { client, service })
+        // Capture the root before moving the session into the Arc.
+        let root = session.root().to_path_buf();
+        let session = Arc::new(Mutex::new(session));
+        let service = Arc::new(LiveService::new(Arc::clone(&session)));
+        let (_watcher, _scheduler) =
+            crate::file_watch::start(&root, session, client.clone())?;
+        Ok(Self { client, service, _watcher, _scheduler })
     }
 
     /// Returns the LSP client handle. Exposed so request handlers can
@@ -452,4 +467,23 @@ pub enum ReportChangedLspNotification {}
 impl tower_lsp::lsp_types::notification::Notification for ReportChangedLspNotification {
     type Params = ReportChangedNotification;
     const METHOD: &'static str = REPORT_CHANGED;
+}
+
+/// Method name for `deslop/analysisState` pushed by the scheduler
+/// whenever a watcher-driven pass starts, finishes, or errors.
+pub const ANALYSIS_STATE: &str = "deslop/analysisState";
+
+/// Type-only marker so `tower_lsp::Client::send_notification` can
+/// dispatch `deslop/analysisState`.
+///
+/// The payload is a plain JSON string (`"idle"`, `"running"`,
+/// `"errored"`) matching the TypeScript `AnalysisState` union type in
+/// the VSIX so the extension can do `state === "running"` directly.
+#[derive(Debug)]
+pub enum AnalysisStateLspNotification {}
+
+impl tower_lsp::lsp_types::notification::Notification for AnalysisStateLspNotification {
+    /// Plain string — VSIX checks `state === "running"` etc.
+    type Params = String;
+    const METHOD: &'static str = ANALYSIS_STATE;
 }

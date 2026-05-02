@@ -205,10 +205,12 @@ export class LiveBubble implements vscode.Disposable {
   }
 
   private clearRemovedActiveCluster(): void {
-    const active = this.active;
-    if (!active) return;
+    // Read the signal unconditionally so the effect always tracks it,
+    // even when there is no active bubble yet.
     const report = this.store.current.report;
-    const stillPresent = report?.clusters.some((cluster) => cluster.id === active.clusterId);
+    const active = this.active;
+    if (!active || !report) return;
+    const stillPresent = report.clusters.some((cluster) => cluster.id === active.clusterId);
     if (!stillPresent) this.clearBubble();
   }
 }

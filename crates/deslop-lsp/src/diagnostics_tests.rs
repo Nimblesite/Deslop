@@ -44,53 +44,35 @@ fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
     }
 }
 
+// [LSP-SEVERITY-BUCKET] Bucket → severity mapping.
 #[test]
-fn percentile_for_orders_below_equal_and_above_correctly() {
-    let weights = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-    assert!(
-        (percentile_for(5.0, &weights) - 0.8).abs() < f64::EPSILON,
-        "max lands at (n-1)/n"
+fn severity_for_maps_bucket_to_lsp_level() {
+    let identical = sample_cluster("a", 1.0, vec![occurrence("a.cs", 0, 1)], "identical");
+    assert_eq!(
+        severity_for(&identical),
+        DiagnosticSeverity::ERROR,
+        "Identical code → Error (no justification for bit-for-bit duplicates)"
     );
-    assert!(
-        (percentile_for(1.0, &weights)).abs() < f64::EPSILON,
-        "min lands at 0"
-    );
-    assert!(
-        (percentile_for(3.0, &weights) - 0.4).abs() < f64::EPSILON,
-        "median-ish lands at 0.4"
-    );
-    assert!(
-        (percentile_for(10.0, &weights) - 1.0).abs() < f64::EPSILON,
-        "above max lands at 1.0"
-    );
-    assert!(
-        (percentile_for(7.0, &[])).abs() < f64::EPSILON,
-        "empty weights clamps to 0"
-    );
-}
 
-#[test]
-fn severity_for_maps_percentiles_to_lsp_buckets() {
-    let weights: Vec<f64> = (1..=100).map(f64::from).collect();
+    let nearly = sample_cluster("b", 1.0, vec![occurrence("b.cs", 0, 1)], "nearly_identical");
     assert_eq!(
-        severity_for(100.0, &weights),
-        Some(DiagnosticSeverity::WARNING),
-        "top 1% → WARNING"
+        severity_for(&nearly),
+        DiagnosticSeverity::WARNING,
+        "NearlyIdentical → Warning"
     );
+
+    let loose = sample_cluster("c", 1.0, vec![occurrence("c.cs", 0, 1)], "loosely_similar");
     assert_eq!(
-        severity_for(95.0, &weights),
-        Some(DiagnosticSeverity::INFORMATION),
-        "top 10% → INFORMATION"
+        severity_for(&loose),
+        DiagnosticSeverity::WARNING,
+        "LooselySimilar → Warning"
     );
+
+    let behavior = sample_cluster("d", 1.0, vec![occurrence("d.cs", 0, 1)], "same_behavior");
     assert_eq!(
-        severity_for(60.0, &weights),
-        Some(DiagnosticSeverity::HINT),
-        "top 50% → HINT"
-    );
-    assert_eq!(
-        severity_for(10.0, &weights),
-        None,
-        "bottom half → suppressed"
+        severity_for(&behavior),
+        DiagnosticSeverity::WARNING,
+        "SameBehavior → Warning"
     );
 }
 
@@ -187,8 +169,9 @@ fn diagnostic_message_shows_category_count_and_action() {
     );
 }
 
+// [LSP-SEVERITY-BUCKET] Identical code → Error; canonical link present.
 #[test]
-fn build_for_file_emits_diagnostic_with_relatedinfo_and_severity() -> Result<()> {
+fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Result<()> {
     let workspace = TempDir::new()?;
     let primary_source = "alpha\nbeta\ngamma\n";
     let secondary_source = "a\nbb\nccc\ndddd\n";
@@ -200,24 +183,16 @@ fn build_for_file_emits_diagnostic_with_relatedinfo_and_severity() -> Result<()>
         path: PathBuf::from("Alpha.cs"),
         clusters: vec![cluster],
     };
-    // 99 weights all strictly below 100.0, plus the cluster weight
-    // itself: lesser = 99, total = 100, percentile = 0.99 → WARNING.
-    let mut weights_with_primary: Vec<f64> = (1..=99).map(f64::from).collect();
-    weights_with_primary.push(100.0);
-    let diagnostics = build_for_file(&file_report, &weights_with_primary, workspace.path());
-    assert_eq!(
-        diagnostics.len(),
-        1,
-        "one diagnostic for the Alpha.cs occurrence"
-    );
+    let diagnostics = build_for_file(&file_report, workspace.path());
+    assert_eq!(diagnostics.len(), 1, "one diagnostic for the Alpha.cs occurrence");
     let diagnostic = diagnostics
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
     assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
     assert_eq!(
         diagnostic.severity,
-        Some(DiagnosticSeverity::WARNING),
-        "top percentile → WARNING"
+        Some(DiagnosticSeverity::ERROR),
+        "Identical bucket → Error per [LSP-SEVERITY-BUCKET]"
     );
     assert!(
         diagnostic.code.is_none(),
@@ -245,33 +220,44 @@ fn build_for_file_emits_diagnostic_with_relatedinfo_and_severity() -> Result<()>
         "related label must be 'Canonical', not an indexed occurrence string: {}",
         canonical.message
     );
-    assert_eq!(
-        diagnostic.range.start.line, 0,
-        "start on first line of Alpha.cs"
-    );
+    assert_eq!(diagnostic.range.start.line, 0, "start on first line of Alpha.cs");
     Ok(())
 }
 
+// [LSP-SEVERITY-BUCKET] All buckets publish diagnostics — none are suppressed by default.
 #[test]
-fn build_for_file_drops_clusters_with_suppressed_severity() -> Result<()> {
+fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
     let workspace = TempDir::new()?;
-    let _primary = write_source(workspace.path(), "Alpha.cs", "abc\n")?;
-    let cluster = sample_cluster(
-        "cluster-low",
-        1.0,
-        vec![occurrence("Alpha.cs", 0, 2)],
-        "loosely_similar",
-    );
-    let file_report = FileReport {
-        path: PathBuf::from("Alpha.cs"),
-        clusters: vec![cluster],
-    };
-    let weights: Vec<f64> = (50..=100).map(f64::from).collect();
-    let diagnostics = build_for_file(&file_report, &weights, workspace.path());
-    assert!(
-        diagnostics.is_empty(),
-        "weight below 50th percentile → dropped: {diagnostics:?}"
-    );
+    let _primary = write_source(workspace.path(), "A.cs", "abc\n")?;
+    let buckets = [
+        ("identical", DiagnosticSeverity::ERROR),
+        ("nearly_identical", DiagnosticSeverity::WARNING),
+        ("loosely_similar", DiagnosticSeverity::WARNING),
+        ("same_behavior", DiagnosticSeverity::WARNING),
+    ];
+    for (bucket, expected_severity) in buckets {
+        let cluster = sample_cluster(
+            "c",
+            1.0,
+            vec![occurrence("A.cs", 0, 2)],
+            bucket,
+        );
+        let file_report = FileReport {
+            path: PathBuf::from("A.cs"),
+            clusters: vec![cluster],
+        };
+        let diagnostics = build_for_file(&file_report, workspace.path());
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "bucket '{bucket}' must always produce a diagnostic (no weight-percentile suppression)"
+        );
+        assert_eq!(
+            diagnostics[0].severity,
+            Some(expected_severity),
+            "bucket '{bucket}' → {expected_severity:?}"
+        );
+    }
     Ok(())
 }
 
@@ -289,8 +275,7 @@ fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
         path: PathBuf::from("Alpha.cs"),
         clusters: vec![cluster],
     };
-    let weights = vec![1.0_f64, 2.0, 100.0];
-    let diagnostics = build_for_file(&file_report, &weights, workspace.path());
+    let diagnostics = build_for_file(&file_report, workspace.path());
     assert_eq!(diagnostics.len(), 1);
     let diagnostic = diagnostics
         .first()
@@ -320,8 +305,7 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
         path: PathBuf::from("Main.cs"),
         clusters: vec![cluster],
     };
-    let weights = vec![1.0_f64, 100.0];
-    let diagnostics = build_for_file(&file_report, &weights, workspace.path());
+    let diagnostics = build_for_file(&file_report, workspace.path());
     let diagnostic = diagnostics.first().ok_or_else(|| anyhow!("diagnostic"))?;
     let related = diagnostic
         .related_information

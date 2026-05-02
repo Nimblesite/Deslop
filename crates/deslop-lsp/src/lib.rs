@@ -10,6 +10,7 @@ pub mod backend;
 pub mod code_lens;
 pub mod custom_methods;
 pub mod diagnostics;
+pub mod file_watch;
 pub mod hover;
 pub mod position;
 pub mod presentation;

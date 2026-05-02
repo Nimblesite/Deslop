@@ -80,6 +80,13 @@ pub enum LiveError {
         /// Diagnostic context.
         message: String,
     },
+    /// The filesystem watcher could not be started — e.g. OS-level
+    /// permission denied on the workspace root ([LIVE-WATCHER]).
+    #[error("filesystem watcher failed to start: {message}")]
+    WatcherInit {
+        /// OS or `notify` diagnostic message.
+        message: String,
+    },
     /// Wraps any [`CoreError`] surfaced by the underlying pipeline.
     #[error(transparent)]
     Core(#[from] CoreError),
@@ -117,6 +124,7 @@ impl LiveError {
             Self::UnknownCluster { .. } => "unknown_cluster",
             Self::ProviderUnreachable { .. } => "provider_unreachable",
             Self::SchedulerBusy { .. } => "scheduler_busy",
+            Self::WatcherInit { .. } => "watcher_init",
             Self::Core(_) => "core_error",
         }
     }

@@ -88,6 +88,12 @@ Implemented work intentionally not repeated here:
       `LiveBubble`, and `wirePanel` all use `effect()` directly — zero `onDidChange`
       callbacks on reactive surfaces. `StatusBar._analysing` is now a signal so the
       "analysing…" suffix also tracks reactively.
+- [x] **DONE** — Live filesystem watching ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` now starts
+      `LiveWatcher` + `Scheduler` at construction; a background tokio task forwards scheduler
+      broadcasts (`ReportChangedNotification`, `AnalysisState`) to the editor as
+      `deslop/reportChanged` + `deslop/analysisState`. Changes from AI agents, git, CI, terminals,
+      other editors all trigger immediate re-analysis and push — no polling. `file_watch.rs` is
+      the single home for all watcher/scheduler wiring.
 - [x] **DONE** — MCP push notifications ([MCP-NOTIFICATIONS]): `NotificationSender`
       (`Arc<Mutex<Box<dyn Write + Send>>>`) wired through `McpBackend::set_notification_sender`;
       `mark_changed` pushes `notifications/resources/updated` + `notifications/deslop/reportChanged`

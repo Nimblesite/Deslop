@@ -123,11 +123,17 @@ All mutable state is reachable from `AnalysisSession`. Nothing in `deslop-core` 
 
 ### [LIVE-WATCHER] File watcher
 
-Use the `notify` crate (cross-platform, already on the v2 roadmap per [PRINCIPLES-LONG-RUNNING-DAEMON]). Watch the workspace root recursively, filtered by the same extension set registered via the `LanguageParser` trait.
+**Non-negotiable.** The watcher runs in every live binary (LSP, MCP) from the moment the session is ready. It is the primary mechanism for detecting file changes — not the editor, not the agent.
+
+**Why the editor cannot be the sole source of file-change events:** AI coding agents, CI pipelines, `git` operations, formatters, and other tools all modify files without the editor ever sending `textDocument/didChange`. A live surface that only reacts to editor events goes stale the moment any of these actors run. The watcher ensures re-analysis fires for *any* mutation to a watched file, from *any* source, without polling.
+
+**Implementation:** Use the `notify` crate (cross-platform, zero C deps). Watch the workspace root recursively, filtered by the extension set registered via `LanguageParser::file_extensions()`.
 
 Events are debounced and coalesced: a burst of saves from a formatter or refactor tool must collapse into one re-analysis pass. Debounce window is **250 ms** of quiet after the last event, capped at **2 s** of total accumulation so a stream of edits doesn't starve the scheduler.
 
 Events that cross `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debounce — the session never re-parses an excluded file.
+
+The LSP supplements the watcher with `textDocument/didChange` and `workspace/didChangeWatchedFiles` from the editor — belt-and-suspenders for in-buffer edits where the OS watcher may lag. Both paths converge on the same `AnalysisSession`.
 
 ### [LIVE-SCHEDULER] Re-analysis scheduler
 
