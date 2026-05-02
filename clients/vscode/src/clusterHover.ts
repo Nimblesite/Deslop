@@ -1,37 +1,39 @@
 // Shared hover card renderer — [VSIX-HOVER-SHARED].
 // Every surface that shows a cluster hover calls this.
-// Layout follows docs/designs/vsix/hover_bubble/:
-//   **#N Category** × count
-//   Canonical: `relative/path/file.cs`
-//   [Compare with canonical] · [View cluster] · [Dismiss?]
+// Two layouts:
+//   Full (bubble):    **#N Category** × count  /  Canonical: `path`  /  links
+//   Compact (squiggle hover): **#N** × count  /  Canonical: `path`  /  links
+//   The compact form omits the category label — the diagnostic already shows it.
 
 import * as vscode from "vscode";
 
 import { bucketLabels, occurrenceCount, ReportCluster, resolveBucket } from "./types/report";
 
-/// Options that differ per surface.
 export interface ClusterHoverOptions {
-  /// Global rank from the current report. Shown when provided.
   readonly rank?: number;
-  /// Include a Dismiss link (bubble only, not the decoration hover).
   readonly showDismiss?: boolean;
-  /// Override the displayed occurrence count. When absent, defaults to
-  /// `occurrenceCount(cluster)` which uses the authoritative total.
   readonly count?: number;
+  /// When false, the category label is omitted — use this when the VS Code
+  /// diagnostic already shows the category in the squiggle popup.
+  readonly showCategory?: boolean;
 }
 
-/// Builds the VS Code MarkdownString hover card.
 export function clusterHoverMarkdown(
   cluster: ReportCluster,
   options: ClusterHoverOptions = {},
 ): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
-  const labels = bucketLabels(resolveBucket(cluster));
   const count = options.count ?? occurrenceCount(cluster);
   const rankPrefix = options.rank !== undefined ? `#${options.rank} ` : "";
+  const showCategory = options.showCategory ?? true;
 
-  md.appendMarkdown(`**${rankPrefix}${labels.plainTitle}** × ${count}\n\n`);
+  if (showCategory) {
+    const labels = bucketLabels(resolveBucket(cluster));
+    md.appendMarkdown(`**${rankPrefix}${labels.plainTitle}** × ${count}\n\n`);
+  } else {
+    md.appendMarkdown(`**${rankPrefix}**× ${count}\n\n`);
+  }
 
   const canonical = cluster.occurrences[0];
   if (canonical) {

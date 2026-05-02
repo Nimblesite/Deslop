@@ -20,28 +20,53 @@ Declared in the `initialize` response:
 | `hoverProvider` | On hover over a clone range: show cluster id, signal breakdown, interpretation, and a "jump to occurrence N" list. |
 | `definitionProvider` (overloaded) | "Go to definition" from inside a clone range jumps to the canonical occurrence of that cluster. Users keep the muscle memory. |
 | `executeCommandProvider` | Commands for: toggle daemon, refresh report, open full report, pick embedding model, extract-to-shared-function (future). |
-| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as `Information` / `Hint` diagnostics. Severity scales with cluster weight ([LSP-SEVERITY]). |
+| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. Severity is determined by clone bucket ([LSP-SEVERITY]) and is fully user-configurable. |
 | `workspace/didChangeWatchedFiles` | Register for writes outside the editor (build output, generated files, `git checkout`). |
 | Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS]. |
 
-### [LSP-SEVERITY] Mapping cluster weight → diagnostic severity
+### [LSP-SEVERITY] Diagnostic severity — two axes
 
-Cluster weights (`count × (size−1) × log2(1 + spanned_loc)`) are unbounded, so they're bucketed:
+Severity is determined by **two independent axes**, applied in order:
 
-| Weight percentile in current report | Severity | UX |
+#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket
+
+The clone bucket is the primary determinant. Identical code has no legitimate reason to exist in a codebase; it is treated as an error. Defaults:
+
+| Bucket | Default severity | Rationale |
 |---|---|---|
-| Top 1% (the worst offenders) | `Warning` | Yellow squiggle, surfaces in Problems panel. |
-| 1 – 10% | `Information` | Info dot, Problems panel. |
-| 10 – 50% | `Hint` | Faded underline, Problems panel only if filter allows. |
-| Bottom 50% | Not published as a diagnostic | Still visible via code lens + hover. |
+| `Identical` | `Error` | Bit-for-bit duplicates offer no justification — extract or delete. |
+| `NearlyIdentical` | `Warning` | Near-misses need human review; may or may not warrant a fix. |
+| `LooselySimilar` | `Information` | Loose overlap — worth knowing, not worth blocking. |
+| `SameBehavior` | `Hint` | AI-detected semantic similarity — advisory only. |
 
-**Percentile is computed across the whole report, not per file.** A cluster's severity is its weight's percentile against the weights of every cluster in the live report. A cluster that is the worst offender in a sleepy file but mid-tier overall must rank mid-tier in the Problems panel — otherwise a quiet file with three trivial near-misses would publish a `Warning` while the actual hot files compete for the same bucket. This matches the "worst offenders first" rank order surfaced everywhere else (CLI text report, VSIX top-offenders tree, HTML report).
+**All four severities are user-configurable** via VS Code settings and the LSP initialization options. Each bucket accepts `"error" | "warning" | "information" | "hint" | "none"`. Setting a bucket to `"none"` suppresses its diagnostics entirely; the cluster remains visible via code lens, hover, and the VSIX tree but does not appear in the Problems panel.
+
+```jsonc
+// .vscode/settings.json — example overrides
+"deslop.severity.identical":       "warning",   // loosen from default Error
+"deslop.severity.nearlyIdentical": "warning",   // keep default
+"deslop.severity.looselySimilar":  "none",      // suppress
+"deslop.severity.sameBehavior":    "none"        // suppress
+```
+
+#### [LSP-SEVERITY-PERCENTILE] Secondary axis: weight-percentile thresholds
+
+Within each bucket, a cluster is only published as a diagnostic if its weight percentile (across the whole live report) meets the configured floor. This prevents noise from trivial clusters of the same type drowning out the worst offenders.
+
+| Percentile threshold setting | Default | Effect |
+|---|---|---|
+| `deslop.severity.errorPercentileFloor` | `0` (all) | Only clusters at or above this percentile floor publish as `Error`. |
+| `deslop.severity.warningPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Warning`. |
+| `deslop.severity.informationPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Information`. |
+| `deslop.severity.hintPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Hint`. |
+
+**Percentile is computed across the whole report, not per file.** The defaults (`0`) publish every cluster in its bucket. Teams who want only the worst 10% of identical-code clusters to raise errors set `deslop.severity.errorPercentileFloor = 90`.
 
 Because severity depends on the global weight set, the diagnostic provider declares `inter_file_dependencies: true` ([LSP-CAPABILITIES]); editing one file shifts every other file's percentile, and the client must refresh the corresponding diagnostics.
 
-Severity is **never** `Error` — duplication isn't a compile error, and polluting the error stream breaks existing developer workflows (CI red on clone count is a future opt-in, not the default). Percentile thresholds are fixed; the user doesn't tune severity, they tune `min-nodes` and exclusion patterns instead.
+Clusters below their bucket's percentile floor remain visible via code lens, hover, and the VSIX tree — they are not published as diagnostics but are not hidden.
 
-Severity bucketing lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
+**Severity resolution is stateless per cluster**: `bucket → configured_severity → percentile_check → publish or suppress`. Severity bucketing lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 

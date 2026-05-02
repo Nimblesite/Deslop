@@ -25,7 +25,7 @@ After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX i
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
 
-- **Severity dot** — the same colour ramp as [LSP-SEVERITY] (red for top 1% weight, amber for 1–10%, blue for 10–50%, faint grey never shown as a bubble).
+- **Severity dot** — colour mapped to the cluster's resolved severity per [LSP-SEVERITY]: red (`Error` / `Identical`), amber (`Warning` / `NearlyIdentical`), blue (`Information` / `LooselySimilar`), faint grey (`Hint` / `SameBehavior`). Clusters whose bucket is configured to `"none"` are never shown as a bubble.
 - **Short verdict** — one of: `DUPLICATE` (structural = 1.0), `NEAR-MISS` (token jaccard ≥ 0.90, structural < 1.0), `SEMANTIC MATCH` (embedding cos ≥ 0.90). One word, uppercase, so the user sees it without reading.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
 - **Signal strip** — three 8-pixel bars for structural / jaccard / embedding. Bright = high, dim = low. Lets the user distinguish "identical copy" from "semantic near-miss" at a glance.
@@ -169,7 +169,7 @@ Each lens has three actions in its command array:
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
 - **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
 
-The lens is suppressed for clusters below the 50th weight percentile (consistent with [LSP-SEVERITY]). Users can toggle via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action).
+The lens is suppressed for clusters whose bucket is configured to `"none"` severity ([LSP-SEVERITY-BUCKET]) or that fall below the configured percentile floor ([LSP-SEVERITY-PERCENTILE]). Users can toggle via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action).
 
 ### [VSIX-DECORATIONS] Editor decorations
 
