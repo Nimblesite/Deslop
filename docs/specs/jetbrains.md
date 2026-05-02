@@ -31,7 +31,9 @@ The plugin descriptor depends on `com.intellij.modules.lsp` and `com.intellij.mo
 The descriptor launches:
 
 ```text
-deslop-lsp <workspace-root> --min-nodes <n> --embeddings off
+deslop-lsp <workspace-root> --min-nodes <n> --embeddings <mode>
+  --embedding-provider <provider> --embedding-model <model>
+  --embedding-endpoint <endpoint>
 ```
 
 Initial scope:
@@ -70,7 +72,9 @@ Release packaging must stage:
 
 ### [JETBRAINS-SETTINGS] Settings contract
 
-The first scaffold hard-codes `min_nodes = 30` and `embeddings = off`. The user-facing settings page must later mirror the VSIX settings names so workspace state stays portable:
+The plugin persists project-level Deslop settings through `DeslopSettings` and
+validates them before building the `deslop-lsp` launch command. The stored
+contract mirrors the VSIX setting names so workspace state stays portable:
 
 - `deslop.minNodes`
 - `deslop.embedding.provider`
@@ -78,6 +82,11 @@ The first scaffold hard-codes `min_nodes = 30` and `embeddings = off`. The user-
 - `deslop.embedding.endpoint`
 - `deslop.embedding.mode`
 - `deslop.incremental`
+
+Fresh installs keep `deslop.embedding.mode = off`; the model picker or a future
+settings UI must be the user action that flips it to `auto` or `required`.
+Invalid `minNodes`, provider ids, endpoint URLs, blank model ids, and embedding
+modes must block startup before the LSP process is launched.
 
 When the plugin adds model selection, it must persist the same workspace embedding settings described in [LSP-EMBEDDING-CONSENT]. The LSP and MCP must still converge through one setting contract.
 

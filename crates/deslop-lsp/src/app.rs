@@ -97,9 +97,22 @@ where
 ///
 /// Returns Tokio runtime construction or LSP server startup errors.
 pub fn run_stdio_process(startup: LspStartup) -> Result<()> {
+    run_startup_with(startup, crate::run_stdio)
+}
+
+/// Runs parsed startup using an injected async server function.
+///
+/// # Errors
+///
+/// Returns Tokio runtime construction or injected server errors.
+pub fn run_startup_with<F, Fut>(startup: LspStartup, server: F) -> Result<()>
+where
+    F: FnOnce(PathBuf, u32, LspEmbeddingConfig) -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
     init_tracing();
     log_startup(&startup);
-    build_runtime(startup.worker_threads)?.block_on(crate::run_stdio(
+    build_runtime(startup.worker_threads)?.block_on(server(
         startup.workspace_root,
         startup.min_nodes,
         startup.embedding,

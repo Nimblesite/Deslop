@@ -8,7 +8,9 @@ use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
 use deslop_core::embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL};
-use deslop_lsp::app::{action_from_args, run_process, run_process_result, LspAction, LspStartup};
+use deslop_lsp::app::{
+    action_from_args, run_process, run_process_result, run_startup_with, LspAction, LspStartup,
+};
 use serde_json::Value;
 
 /// Plain `--version` prints the exact Deployment Toolkit contract and
@@ -135,7 +137,7 @@ fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
 /// Process-level exit conversion remains above the tested app behavior
 /// and reflects the injected runner result.
 #[test]
-fn process_exit_code_reflects_runner_result() -> Result<()> {
+fn process_exit_code_reflects_runner_result() {
     let success = run_process(["deslop-lsp", "/tmp/deslop-ok"], Vec::<u8>::new(), |_| {
         Ok(())
     });
@@ -145,6 +147,63 @@ fn process_exit_code_reflects_runner_result() -> Result<()> {
         Err(anyhow!("server exploded"))
     });
     assert_eq!(failure, ExitCode::from(1));
+}
+
+/// Startup dispatch builds the runtime layer, initializes diagnostics,
+/// and forwards exactly the parsed config to the async server function.
+#[test]
+fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
+    let startup = LspStartup {
+        workspace_root: PathBuf::from("/tmp/deslop-async"),
+        min_nodes: 11,
+        worker_threads: 1,
+        embedding: serve_startup(action_from_args([
+            "deslop-lsp",
+            "/tmp/ignored",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "stub",
+            "--embedding-model",
+            "async-model",
+            "--embedding-endpoint",
+            "http://127.0.0.1:1234",
+        ])?)?
+        .embedding,
+    };
+    let mut observed: Option<LspStartup> = None;
+
+    run_startup_with(startup, |workspace_root, min_nodes, embedding| {
+        observed = Some(LspStartup {
+            workspace_root,
+            min_nodes,
+            worker_threads: 0,
+            embedding,
+        });
+        std::future::ready(Ok(()))
+    })?;
+
+    let observed = observed.ok_or_else(|| anyhow!("async server runner was not called"))?;
+    assert_eq!(observed.workspace_root, PathBuf::from("/tmp/deslop-async"));
+    assert_eq!(observed.min_nodes, 11);
+    assert_eq!(observed.embedding.mode, EmbeddingMode::Required);
+    assert_eq!(observed.embedding.provider_id, "stub");
+    assert_eq!(observed.embedding.model_id, "async-model");
+    assert_eq!(observed.embedding.endpoint, "http://127.0.0.1:1234");
+    Ok(())
+}
+
+/// Async startup errors propagate back to the process adapter instead
+/// of being swallowed inside the runtime layer.
+#[test]
+fn startup_dispatch_propagates_async_server_error() -> Result<()> {
+    let startup = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-error"])?)?;
+    let error = run_startup_with(startup, |_workspace_root, _min_nodes, _embedding| {
+        std::future::ready(Err(anyhow!("async server failed")))
+    })
+    .err()
+    .ok_or_else(|| anyhow!("startup dispatch should have returned an error"))?;
+    assert!(format!("{error:#}").contains("async server failed"));
     Ok(())
 }
 
@@ -176,7 +235,7 @@ fn invalid_arguments_return_user_facing_errors() -> Result<()> {
 fn version_output(action: LspAction) -> Result<String> {
     match action {
         LspAction::Version { output } => Ok(output),
-        other => Err(anyhow!("expected version action, got {other:?}")),
+        other @ LspAction::Serve(_) => Err(anyhow!("expected version action, got {other:?}")),
     }
 }
 
@@ -184,7 +243,7 @@ fn version_output(action: LspAction) -> Result<String> {
 fn serve_startup(action: LspAction) -> Result<LspStartup> {
     match action {
         LspAction::Serve(startup) => Ok(startup),
-        other => Err(anyhow!("expected serve action, got {other:?}")),
+        other @ LspAction::Version { .. } => Err(anyhow!("expected serve action, got {other:?}")),
     }
 }
 
