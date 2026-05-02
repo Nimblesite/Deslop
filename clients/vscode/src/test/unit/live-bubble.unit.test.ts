@@ -168,6 +168,8 @@ suite("LiveBubble render", () => {
   });
 
   test("store delta removing the active cluster clears the bubble", async () => {
+    // [VSIX-LIVE-BUBBLE] A removed cluster must clear its bubble immediately
+    // on the delta — the bubble must never outlive the cluster in the report.
     const store = new ReportStore();
     store.setSnapshot(report(), 1);
     const cfg = vscode.workspace.getConfiguration("deslop");

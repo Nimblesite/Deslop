@@ -3217,29 +3217,21 @@ fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
         .and_then(|v| v.as_array())
         .ok_or_else(|| anyhow::anyhow!("clusters missing from report"))?;
     for (index_a, cluster_a) in clusters.iter().enumerate() {
-        let occs_a = cluster_a
+        let occs_a: &[serde_json::Value] = cluster_a
             .get("occurrences")
             .and_then(|v| v.as_array())
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
+            .map_or(&[], Vec::as_slice);
         for (index_b, cluster_b) in clusters.iter().enumerate() {
             if index_a == index_b {
                 continue;
             }
-            let occs_b = cluster_b
+            let occs_b: &[serde_json::Value] = cluster_b
                 .get("occurrences")
                 .and_then(|v| v.as_array())
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
+                .map_or(&[], Vec::as_slice);
             if all_occurrences_json_contained(occs_b, occs_a) {
-                let id_a = cluster_a
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("?");
-                let id_b = cluster_b
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("?");
+                let id_a = cluster_a.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+                let id_b = cluster_b.get("id").and_then(|v| v.as_str()).unwrap_or("?");
                 anyhow::bail!(
                     "cluster {id_b} is a strict occurrence-subset of cluster {id_a} — \
                      cross-cluster overlap collapse must prevent this redundancy; \
@@ -3261,13 +3253,13 @@ fn all_occurrences_json_contained(
 ) -> bool {
     !inner.is_empty()
         && inner.iter().all(|oi| {
-            let path = oi.get("path").and_then(|v| v.as_str()).unwrap_or("");
-            let start = oi.get("start_byte").and_then(|v| v.as_u64()).unwrap_or(0);
-            let end = oi.get("end_byte").and_then(|v| v.as_u64()).unwrap_or(0);
+            let path = oi.get("path").and_then(Value::as_str).unwrap_or("");
+            let start = oi.get("start_byte").and_then(Value::as_u64).unwrap_or(0);
+            let end = oi.get("end_byte").and_then(Value::as_u64).unwrap_or(0);
             outer.iter().any(|oo| {
-                oo.get("path").and_then(|v| v.as_str()).unwrap_or("") == path
-                    && oo.get("start_byte").and_then(|v| v.as_u64()).unwrap_or(0) <= start
-                    && end <= oo.get("end_byte").and_then(|v| v.as_u64()).unwrap_or(0)
+                oo.get("path").and_then(Value::as_str).unwrap_or("") == path
+                    && oo.get("start_byte").and_then(Value::as_u64).unwrap_or(0) <= start
+                    && end <= oo.get("end_byte").and_then(Value::as_u64).unwrap_or(0)
             })
         })
 }

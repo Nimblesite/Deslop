@@ -186,9 +186,9 @@ fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
     Ok(())
 }
 
-// Issue #64: assertion blocks with different literal values currently
-// normalise to the same C# AST shape and get labelled as `Identical code`.
-// A user-facing identical bucket must only contain byte-identical slices.
+// [CLONE-BUCKETS] Issue #64: assertion blocks with different literal values
+// currently normalise to the same C# AST shape and get labelled as `Identical
+// code`. A user-facing identical bucket must only contain byte-identical slices.
 #[test]
 fn csharp_assertion_blocks_with_different_literals_are_not_identical() -> Result<()> {
     let tmp = tempfile::tempdir()?;

@@ -234,6 +234,16 @@ fn drop_cluster(dropped: &mut [bool], index: usize) {
     }
 }
 
+/// Decision produced by [`evaluate_pair`] for one `(outer, inner)` cluster pair.
+enum PairDecision {
+    /// Discard the inner cluster; the outer subsumes it.
+    DropInner,
+    /// Discard the outer cluster; the inner subsumes it.
+    DropOuter,
+    /// Retain both clusters.
+    Keep,
+}
+
 /// Collapses redundant nested clusters produced by the same physical
 /// code being fingerprinted at multiple AST subtree depths.
 ///
@@ -260,37 +270,8 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     let len = clusters.len();
     let mut dropped = vec![false; len];
     for outer in 0..len {
-        if cluster_dropped(&dropped, outer) {
-            continue;
-        }
-        for inner in (outer.saturating_add(1))..len {
-            if cluster_dropped(&dropped, inner) {
-                continue;
-            }
-            let Some(outer_cluster) = clusters.get(outer) else {
-                continue;
-            };
-            let Some(inner_cluster) = clusters.get(inner) else {
-                continue;
-            };
-            let outer_structural = outer_cluster.signals.structural;
-            let inner_members = &inner_cluster.members;
-            let outer_members = &outer_cluster.members;
-            if all_occurrences_contained_in_some(inner_members, outer_members) {
-                // Inner's occurrences all nest inside outer's — outer dominates.
-                if outer_structural >= inner_cluster.signals.structural {
-                    drop_cluster(&mut dropped, inner);
-                } else if outer_files_covered_by_inner(inner_members, outer_members) {
-                    drop_cluster(&mut dropped, outer);
-                    break;
-                }
-            } else if all_occurrences_contained_in_some(outer_members, inner_members) {
-                // Outer's occurrences all nest inside inner's — inner dominates.
-                // Drop the outer (higher-weight but narrower) cluster regardless of
-                // structural signal: inner covers every file outer covers and more.
-                drop_cluster(&mut dropped, outer);
-                break;
-            }
+        if !cluster_dropped(&dropped, outer) {
+            scan_inner_pairs(&clusters, &mut dropped, outer, len);
         }
     }
     clusters
@@ -298,6 +279,50 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
         .enumerate()
         .filter_map(|(index, cluster)| (!cluster_dropped(&dropped, index)).then_some(cluster))
         .collect()
+}
+
+/// Evaluates every `(outer, inner)` pair for the given `outer` index and
+/// updates `dropped` accordingly. Breaks early when `outer` itself is dropped.
+fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) {
+    for inner in (outer.saturating_add(1))..len {
+        if cluster_dropped(dropped, inner) {
+            continue;
+        }
+        let Some(outer_cluster) = clusters.get(outer) else {
+            continue;
+        };
+        let Some(inner_cluster) = clusters.get(inner) else {
+            continue;
+        };
+        match evaluate_pair(outer_cluster, inner_cluster) {
+            PairDecision::DropInner => drop_cluster(dropped, inner),
+            PairDecision::DropOuter => {
+                drop_cluster(dropped, outer);
+                break;
+            }
+            PairDecision::Keep => {}
+        }
+    }
+}
+
+/// Decides which cluster to drop when their occurrence byte ranges nest.
+/// Returns [`PairDecision::Keep`] when neither cluster dominates the other.
+fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
+    if all_occurrences_contained_in_some(&inner.members, &outer.members) {
+        // Inner's occurrences all nest inside outer's — outer dominates.
+        if outer.signals.structural >= inner.signals.structural {
+            PairDecision::DropInner
+        } else if outer_files_covered_by_inner(&inner.members, &outer.members) {
+            PairDecision::DropOuter
+        } else {
+            PairDecision::Keep
+        }
+    } else if all_occurrences_contained_in_some(&outer.members, &inner.members) {
+        // Outer's occurrences all nest inside inner's — inner dominates.
+        PairDecision::DropOuter
+    } else {
+        PairDecision::Keep
+    }
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.

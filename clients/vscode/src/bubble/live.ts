@@ -16,7 +16,6 @@ import {
   ReportCluster,
   Severity,
   bucketLabels,
-  clusterInterpretation,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -156,6 +155,8 @@ export class LiveBubble implements vscode.Disposable {
     const mode = vscode.workspace
       .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
+    const rankIndex = report.clusters.findIndex((c) => c.id === best.id);
+    const rank = rankIndex >= 0 ? rankIndex + 1 : undefined;
     const lineEnd = editor.document.lineAt(range.end.line).range.end;
     const anchor = new vscode.Range(lineEnd, lineEnd);
 
@@ -172,7 +173,7 @@ export class LiveBubble implements vscode.Disposable {
       editor.setDecorations(this.bubbleDecoration, [
         {
           range: anchor,
-          hoverMessage: bubbleHover(best),
+          hoverMessage: bubbleHover(best, rank),
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
@@ -185,7 +186,7 @@ export class LiveBubble implements vscode.Disposable {
       ]);
     }
 
-    this.inlayProvider.set(editor.document.uri, range, best);
+    this.inlayProvider.set(editor.document.uri, range, best, rank);
     this.active = { editor, clusterId: best.id, range };
   }
 
@@ -224,10 +225,15 @@ function bestBubbleCluster(
 class BubbleInlayProvider implements vscode.InlayHintsProvider {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeInlayHints = this.changeEmitter.event;
-  private current: { uri: vscode.Uri; range: vscode.Range; cluster: ReportCluster } | null = null;
+  private current: {
+    uri: vscode.Uri;
+    range: vscode.Range;
+    cluster: ReportCluster;
+    rank: number | undefined;
+  } | null = null;
 
-  set(uri: vscode.Uri, range: vscode.Range, cluster: ReportCluster): void {
-    this.current = { uri, range, cluster };
+  set(uri: vscode.Uri, range: vscode.Range, cluster: ReportCluster, rank: number | undefined): void {
+    this.current = { uri, range, cluster, rank };
     this.changeEmitter.fire();
   }
 
@@ -243,7 +249,7 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
     const strip = signalStrip(this.current.cluster);
     const hint = new vscode.InlayHint(this.current.range.end, strip, vscode.InlayHintKind.Type);
     hint.paddingLeft = true;
-    hint.tooltip = bubbleHover(this.current.cluster);
+    hint.tooltip = bubbleHover(this.current.cluster, this.current.rank);
     return [hint];
   }
 }
@@ -280,28 +286,22 @@ export function shortPath(p: string): string {
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
-// The bubble hover sits above the LSP hover in VS Code's stacked
-// markdown. The LSP card already carries the bucket title, action
-// sentence, and occurrences list — so the bubble is just a compact
-// header (plain bucket label) plus action links. Raw signal scores
-// and clone-taxonomy tags belong on agent surfaces (diagnostic
-// `data`, Copy-for-AI), not on the human tooltip.
-export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
+// Compact bubble hover: rank + category + count, then action links.
+// The LSP hover owns the interpretation prose; we stay minimal here
+// so the two stacked cards complement rather than repeat each other.
+export function bubbleHover(cluster: ReportCluster, rank?: number): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
-  md.supportHtml = true;
   const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  // Title owns its own line so the bold bucket label is the first
-  // thing the human reads; the action sentence follows on the next
-  // line in the same paragraph. Markdown renders this as one prose
-  // block, separate from the action links below.
-  md.appendMarkdown(`**${title}**\n${clusterInterpretation(cluster)}\n\n`);
+  const count = occurrenceCount(cluster);
+  const rankPrefix = rank !== undefined ? `#${rank} ` : "";
+  md.appendMarkdown(`**${rankPrefix}${title}** × ${count}\n\n`);
   const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   const dismissArgs = encodeURIComponent(JSON.stringify([cluster.id]));
   md.appendMarkdown(
     `[Open cluster](command:deslop.openCluster?${openArgs}) · ` +
-      `[Compare](command:deslop.compareWithCanonical?${openArgs}) · ` +
-      `[Dismiss for session](command:deslop.bubble.dismissCluster?${dismissArgs})`,
+      `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs}) · ` +
+      `[Dismiss](command:deslop.bubble.dismissCluster?${dismissArgs})`,
   );
   return md;
 }

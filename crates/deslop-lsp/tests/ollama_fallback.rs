@@ -89,10 +89,10 @@ fn lsp_survives_when_configured_ollama_endpoint_is_unreachable() -> Result<()> {
     Ok(())
 }
 
-/// Audience: HUMAN. Issue #35. Even when the user explicitly opted in
-/// with `--embeddings required`, an unreachable Ollama endpoint must
-/// not crash the LSP. The process must stay alive and serve the LSP
-/// protocol in a degraded (no-embedding) state rather than crash-looping
+/// [LSP-EMBEDDING-CONSENT] Audience: HUMAN. Issue #35. Even when the user
+/// explicitly opted in with `--embeddings required`, an unreachable Ollama
+/// endpoint must not crash the LSP. The process must stay alive and serve the
+/// LSP protocol in a degraded (no-embedding) state rather than crash-looping
 /// VS Code. Positive invariant: child still running after the liveness window.
 #[test]
 fn lsp_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {

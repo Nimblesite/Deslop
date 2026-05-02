@@ -13,5 +13,7 @@ pub mod diagnostics;
 pub mod hover;
 pub mod position;
 pub mod presentation;
+pub mod server;
 
-pub use backend::{run_stdio, LspBackend};
+pub use backend::LspBackend;
+pub use server::run_stdio;

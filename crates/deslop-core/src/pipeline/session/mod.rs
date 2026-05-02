@@ -8,36 +8,29 @@
 //! optional-embedding clustering pipeline. The embedding + fingerprint
 //! caches on disk are shared with the batch path ([PIPELINE-INCREMENTAL]).
 
+mod change;
+mod render;
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
 
 use crate::{
-    ast::NormalizedNode,
-    boilerplate::{collect_import_boilerplate_ranges, BoilerplateRange},
-    cluster::build_ranked_fused_clusters,
+    boilerplate::BoilerplateRange,
     config::ExclusionConfig,
     discover::{discover_files, DiscoveryResult},
     error::CoreError,
-    fingerprint::Fingerprint,
     fpcache::CachedFile,
     lang::LanguageParser,
-    lsh::band_collisions,
-    pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
-    report::{render_report, CacheStats, Report, ReportInputs},
+    report::{CacheStats, Report},
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
 };
 
 use super::{
     config::{EmbeddingSettings, PipelineConfig},
-    corpus::{
-        build_extension_map, default_parsers, fingerprint_corpus, parse_one_file,
-        parser_for_language,
-    },
-    embedding_pass::run_embedding_pass,
-    signatures::build_signatures_with_languages,
+    corpus::{build_extension_map, default_parsers, fingerprint_corpus},
 };
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
@@ -49,53 +42,53 @@ use super::{
 #[derive(Debug)]
 pub struct PipelineSession {
     /// Workspace root pinned at [`PipelineSession::initialise`].
-    root: PathBuf,
+    pub(super) root: PathBuf,
     /// Subtree-size floor used throughout the session.
-    min_nodes: u32,
+    pub(super) min_nodes: u32,
     /// Whether to consult the on-disk fingerprint cache.
-    incremental: bool,
+    pub(super) incremental: bool,
     /// Optional override pointing at a `.deslop.toml` outside the
     /// workspace root. `None` = discover inside `root`.
-    config_path: Option<PathBuf>,
+    pub(super) config_path: Option<PathBuf>,
     /// Materialised registered parsers kept for the session lifetime
     /// so repeated `update_files` calls don't reload grammars.
-    parsers: Vec<Box<dyn LanguageParser>>,
+    pub(super) parsers: Vec<Box<dyn LanguageParser>>,
     /// Cached extension → language-id lookup built from `parsers`.
-    extension_to_language: HashMap<String, &'static str>,
+    pub(super) extension_to_language: HashMap<String, &'static str>,
     /// Exclusion config loaded at [`PipelineSession::initialise`] and
     /// re-loaded by [`PipelineSession::reload_exclusion`] when the
     /// daemon detects a config change.
-    exclusion: ExclusionConfig,
+    pub(super) exclusion: ExclusionConfig,
     /// File registry shared across the whole session. New files
     /// register on their first `update_files` sighting; removed files
     /// keep their [`FileId`] slot (nothing ever gets unregistered) so
     /// old diagnostics retain stable handles.
-    registry: FileRegistry,
+    pub(super) registry: FileRegistry,
     /// Per-`FileId` cached tree + fingerprints. Keys here are the
     /// single source of truth for "which files are currently part of
     /// the corpus."
-    per_file: HashMap<FileId, CachedFile>,
+    pub(super) per_file: HashMap<FileId, CachedFile>,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
-    sources: HashMap<FileId, Vec<u8>>,
+    pub(super) sources: HashMap<FileId, Vec<u8>>,
     /// Per-`FileId` absolute path. Kept separately from the registry
     /// because the registry is append-only — we also need to know
     /// which ids are *currently* part of the corpus.
-    live_paths: HashMap<FileId, PathBuf>,
+    pub(super) live_paths: HashMap<FileId, PathBuf>,
     /// Per-`FileId` language id, mirrored into render inputs.
-    file_languages: HashMap<FileId, &'static str>,
+    pub(super) file_languages: HashMap<FileId, &'static str>,
     /// Running cache-hit telemetry. Accumulates across updates so
     /// subscribers can track long-term cache utility.
-    cumulative_stats: CacheStats,
+    pub(super) cumulative_stats: CacheStats,
     /// Per-file analysed-line counts. Updated in place on each
     /// [`Self::update_files`] call so [METRICS-REPO] never re-reads
     /// sources from disk.
-    analysed_lines: AnalysedLines,
+    pub(super) analysed_lines: AnalysedLines,
     /// Import/prologue ranges suppressed from clone ranking.
-    boilerplate_ranges: Vec<BoilerplateRange>,
+    pub(super) boilerplate_ranges: Vec<BoilerplateRange>,
     /// Files analysed in the most recent generation.
-    files_analysed: usize,
+    pub(super) files_analysed: usize,
 }
 
 impl PipelineSession {
@@ -286,206 +279,6 @@ impl PipelineSession {
     pub fn reload_exclusion(&mut self) -> Result<(), CoreError> {
         self.exclusion = load_exclusion(&self.root, self.config_path.as_deref())?;
         Ok(())
-    }
-
-    /// Applies one changed path: delete, update, or add.
-    fn apply_one_change(
-        &mut self,
-        path: &Path,
-        stats: &mut CacheStats,
-        embedding: &EmbeddingSettings<'_>,
-    ) -> Result<(), CoreError> {
-        let absolute = self.canonicalise_reference(path);
-        if !absolute.exists() {
-            self.drop_path(&absolute);
-            return Ok(());
-        }
-        let Some(language) = self.language_for(&absolute) else {
-            return Ok(());
-        };
-        if self.exclusion.is_excluded(&absolute, Some(language)) {
-            self.drop_path(&absolute);
-            return Ok(());
-        }
-        let Some(parser) = parser_for_language(&self.parsers, language) else {
-            return Ok(());
-        };
-        let file_id = self
-            .file_id_for(&absolute)
-            .unwrap_or_else(|| self.registry.register(absolute.clone()));
-        let config = self.pipeline_config_with_mode(embedding);
-        let (cached, source, lines) = parse_one_file(file_id, &absolute, parser, &config, stats)?;
-        let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
-        self.replace_boilerplate_ranges(file_id, ranges);
-        let _prev_lines = self.analysed_lines.insert(file_id, lines);
-        let _prev = self.per_file.insert(file_id, cached);
-        let _prev_source = self.sources.insert(file_id, source);
-        let _prev_path = self.live_paths.insert(file_id, absolute);
-        let _prev_lang = self.file_languages.insert(file_id, language);
-        self.files_analysed = self.live_paths.len();
-        Ok(())
-    }
-
-    /// Removes a path from every in-memory map if present.
-    fn drop_path(&mut self, absolute: &Path) {
-        let Some((file_id, _)) = self
-            .live_paths
-            .iter()
-            .find(|(_, registered)| registered.as_path() == absolute)
-            .map(|(id, path)| (*id, path.clone()))
-        else {
-            return;
-        };
-        let _removed_path = self.live_paths.remove(&file_id);
-        let _removed_cache = self.per_file.remove(&file_id);
-        let _removed_source = self.sources.remove(&file_id);
-        let _removed_lang = self.file_languages.remove(&file_id);
-        let _removed_lines = self.analysed_lines.remove(&file_id);
-        self.boilerplate_ranges
-            .retain(|range| range.file_id != file_id);
-        self.files_analysed = self.live_paths.len();
-    }
-
-    /// Replaces all remembered boilerplate ranges for one live file.
-    fn replace_boilerplate_ranges(&mut self, file_id: FileId, ranges: Vec<BoilerplateRange>) {
-        self.boilerplate_ranges
-            .retain(|range| range.file_id != file_id);
-        self.boilerplate_ranges.extend(ranges);
-    }
-
-    /// Returns the registered language id that claims `path`, if any.
-    fn language_for(&self, path: &Path) -> Option<&'static str> {
-        let extension = path
-            .extension()
-            .and_then(std::ffi::OsStr::to_str)
-            .map(str::to_lowercase)?;
-        self.extension_to_language.get(&extension).copied()
-    }
-
-    /// Resolves `path` against the workspace root so relative paths
-    /// from a watcher are handled identically to absolute paths.
-    fn canonicalise_reference(&self, path: &Path) -> PathBuf {
-        if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.root.join(path)
-        }
-    }
-
-    /// Builds a [`PipelineConfig`] snapshot for a pass that does not
-    /// need the embedding provider — the parse-only cache-consulting
-    /// path in [`parse_one_file`].
-    fn pipeline_config_with_mode<'a>(
-        &self,
-        embedding: &EmbeddingSettings<'a>,
-    ) -> PipelineConfig<'a> {
-        PipelineConfig {
-            root: self.root.clone(),
-            min_nodes: self.min_nodes,
-            config_path: self.config_path.clone(),
-            embedding: EmbeddingSettings {
-                mode: embedding.mode,
-                provider: embedding.provider,
-                batch_yield: embedding.batch_yield,
-                progress: embedding.progress,
-            },
-            incremental: self.incremental,
-        }
-    }
-
-    /// Builds a [`PipelineConfig`] that owns the provider reference
-    /// and is suitable for [`run_embedding_pass`].
-    fn pipeline_config<'a>(&self, embedding: EmbeddingSettings<'a>) -> PipelineConfig<'a> {
-        PipelineConfig {
-            root: self.root.clone(),
-            min_nodes: self.min_nodes,
-            config_path: self.config_path.clone(),
-            embedding,
-            incremental: self.incremental,
-        }
-    }
-
-    /// Runs clustering + ranking + rendering over the current
-    /// in-memory corpus. Returns a freshly rendered [`Report`].
-    fn render(
-        &mut self,
-        config: &PipelineConfig<'_>,
-        last_pass_stats: CacheStats,
-    ) -> Result<Report, CoreError> {
-        let corpus = self.snapshot_corpus();
-        tracing::debug!(
-            fingerprints = corpus.fingerprints.len(),
-            "building signatures"
-        );
-        let signatures = build_signatures_with_languages(
-            &corpus.fingerprints,
-            &corpus.trees,
-            &self.file_languages,
-        );
-        tracing::debug!(signatures = signatures.len(), "running LSH band collisions");
-        let lsh_pairs = band_collisions(&signatures);
-        tracing::debug!(lsh_pairs = lsh_pairs.len(), "running embedding pass");
-        let embedding_outcome = run_embedding_pass(config, &corpus)?;
-        tracing::debug!(
-            embedding_pairs = embedding_outcome.pairs.len(),
-            "collecting candidate pairs"
-        );
-        let pairs = candidate_pairs_for_language_policy(
-            &corpus.fingerprints,
-            &signatures,
-            &lsh_pairs,
-            &embedding_outcome.pairs,
-            &self.file_languages,
-            self.exclusion.allows_cross_language_comparison(),
-        );
-        tracing::debug!(
-            candidate_pairs = pairs.len(),
-            "clustering by transitive closure"
-        );
-        let fused_clusters = cluster_by_transitive_closure(&pairs);
-        tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
-        let clusters = build_ranked_fused_clusters(&corpus.fingerprints, &fused_clusters);
-        tracing::info!(
-            ranked_clusters = clusters.len(),
-            fingerprints = corpus.fingerprints.len(),
-            "render complete"
-        );
-        Ok(render_report(ReportInputs {
-            clusters: &clusters,
-            registry: &self.registry,
-            file_languages: &self.file_languages,
-            files_analysed: self.files_analysed,
-            min_nodes: self.min_nodes,
-            scan_root: &self.root,
-            exclusion: &self.exclusion,
-            embedding_provenance: embedding_outcome.provenance,
-            cache_stats: last_pass_stats,
-            sources: &corpus.sources,
-            analysed_lines: &self.analysed_lines,
-            boilerplate_ranges: &corpus.boilerplate_ranges,
-        }))
-    }
-
-    /// Flattens the per-file state into a [`super::corpus::FingerprintCorpus`]
-    /// suitable for the downstream LSH / embedding / clustering stages.
-    /// `per_file` is left empty because the session already owns the
-    /// authoritative map — the snapshot is consumed transiently.
-    fn snapshot_corpus(&self) -> super::corpus::FingerprintCorpus {
-        let mut fingerprints: Vec<Fingerprint> = Vec::new();
-        let mut trees: Vec<NormalizedNode> = Vec::with_capacity(self.per_file.len());
-        for cached in self.per_file.values() {
-            fingerprints.extend(cached.fingerprints.clone());
-            trees.push(cached.tree.clone());
-        }
-        super::corpus::FingerprintCorpus {
-            fingerprints,
-            trees,
-            sources: self.sources.clone(),
-            per_file: HashMap::new(),
-            cache_stats: CacheStats::default(),
-            analysed_lines: AnalysedLines::new(),
-            boilerplate_ranges: self.boilerplate_ranges.clone(),
-        }
     }
 }
 

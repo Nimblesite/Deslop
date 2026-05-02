@@ -72,12 +72,10 @@ suite("TopOffendersProvider", () => {
     assert.match(labels[1] ?? "", /Alpha\.cs/);
     assert.match(labels[2] ?? "", /Alpha\.cs/);
     assert.match(labels[3] ?? "", /Gamma\.cs/);
-    assert.deepEqual(descriptions, [
-      "rank-1-beta",
-      "rank-2-alpha",
-      "rank-3-alpha",
-      "rank-4-gamma",
-    ]);
+    assert.ok(
+      descriptions.every((d) => /^\d+ copies$/.test(d)),
+      `cluster descriptions must show copy count, not cluster id; got: ${JSON.stringify(descriptions)}`,
+    );
     const first = nodes[0];
     assert.ok(first, "first row must exist");
     assert.equal(first.command?.command, "deslop.openCluster");
@@ -404,6 +402,23 @@ suite("TopOffendersProvider", () => {
     assert.equal(kids.length, c.occurrences.length);
   });
 
+  test("occurrence node tooltip shows parent cluster rank, category, and position (#47)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster("a", 10, "/f1")]), 0);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [root] = provider.getChildren();
+    assert.ok(root, "cluster root must exist");
+    const [first, second] = provider.getChildren(root);
+    assert.ok(first, "first occurrence node must exist");
+    assert.ok(second, "second occurrence node must exist");
+    const tip1 = tooltipText(first);
+    const tip2 = tooltipText(second);
+    assert.match(tip1, /#1/, "tooltip must show the parent cluster rank");
+    assert.match(tip1, /Identical code/, "tooltip must name the category");
+    assert.match(tip1, /occurrence 1 of 2/, "tooltip must show position in cluster");
+    assert.match(tip2, /occurrence 2 of 2/, "second occurrence tooltip must reflect its index");
+  });
+
   test("occurrence row reports and opens the exact file, line, and column", async () => {
     // [VSIX-ACTIVITY-BAR] Issue #8: tree occurrence rows must show
     // path:line:column, not machine-oriented start_byte..end_byte.
@@ -488,7 +503,11 @@ suite("TopOffendersProvider", () => {
     try {
       store.setSnapshot(report([cluster("stale", 1, "/stale.cs")]), 1);
       assert.equal(treeRefreshes, 1, "snapshot must refresh the tree");
-      assert.equal(String(provider.getChildren()[0]?.description ?? ""), "stale");
+      assert.match(
+        String(provider.getChildren()[0]?.description ?? ""),
+        /^\d+ copies$/,
+        "description must show copy count after snapshot",
+      );
 
       store.applyDelta({
         from_generation: 1,
@@ -501,7 +520,11 @@ suite("TopOffendersProvider", () => {
       });
 
       assert.equal(treeRefreshes, 2, "delta must refresh the tree");
-      assert.equal(String(provider.getChildren()[0]?.description ?? ""), "fresh");
+      assert.match(
+        String(provider.getChildren()[0]?.description ?? ""),
+        /^\d+ copies$/,
+        "description must show copy count after delta",
+      );
     } finally {
       sub.dispose();
       provider.dispose();

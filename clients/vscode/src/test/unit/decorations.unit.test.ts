@@ -24,17 +24,19 @@ function cluster(): ReportCluster {
 }
 
 suite("decorations helpers", () => {
-  test("hoverFor renders human copy plus a command link without raw AI data", () => {
+  test("hoverFor renders human copy plus command links without raw AI data", () => {
     const md = hoverFor(cluster());
     const text = md.value;
     assert.match(text, /Same behavior, different code/);
     assert.match(text, /read both before merging/i);
+    assert.match(text, /×\s*2/, "instance count must be visible");
     assert.doesNotMatch(text, /Type-/);
     assert.doesNotMatch(text, /structural/i);
     assert.doesNotMatch(text, /jaccard/i);
     assert.doesNotMatch(text, /embedding/i);
     assert.doesNotMatch(text, /fused/i);
     assert.match(text, /command:deslop.openCluster/);
+    assert.match(text, /command:deslop.compareWithCanonical/);
   });
 
   test("byteRangeToRange returns null when range exceeds the document", async () => {

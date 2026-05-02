@@ -160,7 +160,9 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     if (node instanceof FileNode) return getFileNodeChildren(node);
     if (node instanceof BucketGroupNode) return getBucketGroupChildren(node);
     if (node instanceof ClusterNode) {
-      return node.cluster.occurrences.map((o) => new OccurrenceNode(o));
+      return node.cluster.occurrences.map((o, i) =>
+        new OccurrenceNode(o, node.cluster, node.rank, i),
+      );
     }
     if (node) return [];
     const { report, lifecycle } = this.store.current;
@@ -186,7 +188,9 @@ export class FocusedFileProvider extends LifecycleAwareProvider {
 
   getChildren(node?: Node): Node[] {
     if (node instanceof ClusterNode) {
-      return node.cluster.occurrences.map((o) => new OccurrenceNode(o));
+      return node.cluster.occurrences.map((o, i) =>
+        new OccurrenceNode(o, node.cluster, node.rank, i),
+      );
     }
     if (node) return [];
     const { report, lifecycle } = this.store.current;

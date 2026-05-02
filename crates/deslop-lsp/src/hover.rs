@@ -130,8 +130,8 @@ fn write_cluster_block(
     let _ = writeln!(out, "- **{}**", cluster_summary(cluster, rank));
     if audience == Audience::Agent {
         let _ = writeln!(out, "  - {}", signal_sentence(cluster));
+        write_occurrences(out, cluster, workspace_root, cache);
     }
-    write_occurrences(out, cluster, workspace_root, cache);
     let _ = writeln!(out);
 }
 
@@ -326,6 +326,34 @@ mod tests {
             "hover range must stay None so the client highlights the full cursor range"
         );
         Ok(())
+    }
+
+    #[test]
+    fn human_hover_omits_occurrence_list() {
+        // [LSP-HOVER] Human audience: compact summary only — the giant
+        // occurrence list belongs in agent-facing markdown, not in the
+        // card a human sees while coding.
+        let cluster = make_cluster();
+        let hover = build_for_cluster(&cluster);
+        let HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected markup content");
+        };
+        assert!(
+            !markup.value.contains("Occurrences:"),
+            "human hover must not dump the occurrence list: {}",
+            markup.value
+        );
+        assert!(
+            !markup.value.contains("Alpha.cs"),
+            "human hover must not list individual occurrence paths: {}",
+            markup.value
+        );
+        // Summary still carries the count phrase.
+        assert!(
+            markup.value.contains("occurrences"),
+            "human hover must still state the total count: {}",
+            markup.value
+        );
     }
 
     #[test]

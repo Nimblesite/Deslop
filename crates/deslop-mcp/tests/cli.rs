@@ -1707,10 +1707,10 @@ fn binary_starts_with_ollama_auto_falls_back_to_stub() -> Result<()> {
     Ok(())
 }
 
-/// Audience: HUMAN. Issue #35. Even with `--embeddings required`, an
-/// unreachable Ollama must not crash the MCP binary — the server stays
-/// alive with stub embeddings. Positive invariant: `session-config`
-/// returns stub provenance (not null, not a crash).
+/// [LSP-EMBEDDING-CONSENT] Audience: HUMAN. Issue #35. Even with
+/// `--embeddings required`, an unreachable Ollama must not crash the MCP
+/// binary — the server stays alive with stub embeddings. Positive invariant:
+/// `session-config` returns stub provenance (not null, not a crash).
 #[test]
 fn binary_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
     let mut child = McpChild::spawn(

@@ -1,0 +1,308 @@
+//! Handler functions for each MCP tool call.
+
+use std::path::{Path, PathBuf};
+
+use serde_json::{json, Value};
+
+use crate::{
+    backend::{FindSimilarInput, McpBackend},
+    page::{build_page, Pagination, QueryFilters},
+    protocol::{ErrorCode, JsonRpcError},
+};
+
+use super::backend_to_rpc;
+
+/// `report-get` forwarder. Renders a slim paginated `ReportPage`
+/// ([MCP-TOOL-REPORT-PAGINATION]).
+pub(super) fn call_report_get(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let pagination = extract_pagination(args)?;
+    let report = backend.report_get().map_err(backend_to_rpc)?;
+    Ok(build_page(
+        &report,
+        backend.generation(),
+        pagination,
+        &QueryFilters::default(),
+    ))
+}
+
+/// `report-query` forwarder. Same `ReportPage` shape as `report-get`
+/// plus AND-combined filters ([MCP-TOOL-REPORT-QUERY]).
+pub(super) fn call_report_query(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let pagination = extract_pagination(args)?;
+    let filters = extract_filters(args);
+    let report = backend.report_get().map_err(backend_to_rpc)?;
+    Ok(build_page(
+        &report,
+        backend.generation(),
+        pagination,
+        &filters,
+    ))
+}
+
+/// `report-for-file` forwarder.
+pub(super) fn call_report_for_file(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let path = extract_string(args, "path")?;
+    let clusters = backend
+        .report_for_file(Path::new(&path))
+        .map_err(backend_to_rpc)?;
+    Ok(json!({ "path": path, "clusters": clusters }))
+}
+
+/// `report-for-range` forwarder.
+pub(super) fn call_report_for_range(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let path = extract_string(args, "path")?;
+    let start_byte = extract_u64(args, "start_byte")?;
+    let end_byte = extract_u64(args, "end_byte")?;
+    reject_inverted_range(start_byte, end_byte)?;
+    let clusters = backend
+        .report_for_range(
+            Path::new(&path),
+            usize::try_from(start_byte).unwrap_or(usize::MAX),
+            usize::try_from(end_byte).unwrap_or(usize::MAX),
+        )
+        .map_err(backend_to_rpc)?;
+    Ok(json!({
+        "path": path,
+        "start_byte": start_byte,
+        "end_byte": end_byte,
+        "clusters": clusters,
+    }))
+}
+
+/// `find-similar` forwarder. Selects between the range and snippet
+/// variants based on which fields were supplied.
+pub(super) fn call_find_similar(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let has_range = args.get("path").is_some()
+        && args.get("start_byte").is_some()
+        && args.get("end_byte").is_some();
+    let has_snippet = args.get("snippet").is_some() && args.get("language").is_some();
+    if has_range == has_snippet {
+        return Err(JsonRpcError::new(
+            ErrorCode::InvalidParams,
+            "find-similar requires exactly one of (path + start_byte + end_byte) or (snippet + language)",
+        ));
+    }
+    let top_n = args
+        .get("top_n")
+        .and_then(Value::as_u64)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(5);
+    let output = if has_range {
+        call_find_similar_range(backend, args, top_n)?
+    } else {
+        call_find_similar_snippet(backend, args, top_n)?
+    };
+    Ok(json!({
+        "clusters": output.clusters,
+        "below_min_nodes": output.below_min_nodes,
+    }))
+}
+
+/// Range variant of `find-similar`.
+fn call_find_similar_range(
+    backend: &dyn McpBackend,
+    args: &Value,
+    top_n: usize,
+) -> Result<crate::backend::FindSimilarOutput, JsonRpcError> {
+    let path = extract_string(args, "path")?;
+    let start_byte = extract_u64(args, "start_byte")?;
+    let end_byte = extract_u64(args, "end_byte")?;
+    reject_inverted_range(start_byte, end_byte)?;
+    let path_buf = PathBuf::from(&path);
+    backend
+        .find_similar(
+            FindSimilarInput::Range {
+                path: &path_buf,
+                start_byte: usize::try_from(start_byte).unwrap_or(usize::MAX),
+                end_byte: usize::try_from(end_byte).unwrap_or(usize::MAX),
+            },
+            top_n,
+        )
+        .map_err(backend_to_rpc)
+}
+
+/// Snippet variant of `find-similar`.
+fn call_find_similar_snippet(
+    backend: &dyn McpBackend,
+    args: &Value,
+    top_n: usize,
+) -> Result<crate::backend::FindSimilarOutput, JsonRpcError> {
+    let snippet = extract_string(args, "snippet")?;
+    let language = extract_string(args, "language")?;
+    backend
+        .find_similar(
+            FindSimilarInput::Snippet {
+                snippet: &snippet,
+                language: &language,
+            },
+            top_n,
+        )
+        .map_err(backend_to_rpc)
+}
+
+/// `cluster-by-id` forwarder.
+pub(super) fn call_cluster_by_id(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let id = extract_string(args, "id")?;
+    let cluster = backend.cluster_by_id(&id).map_err(backend_to_rpc)?;
+    Ok(serde_json::to_value(cluster).unwrap_or(Value::Null))
+}
+
+/// `list-embedding-models` forwarder.
+pub(super) fn call_list_embedding_models(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
+    let models = backend.list_embedding_models().map_err(backend_to_rpc)?;
+    let rendered: Vec<Value> = models
+        .into_iter()
+        .map(|info| {
+            json!({
+                "name": info.name,
+                "bare_id": info.bare_id,
+                "digest": info.digest,
+                "size_bytes": info.size_bytes,
+                "is_embedding_model": info.is_embedding_model,
+            })
+        })
+        .collect();
+    Ok(json!({ "models": rendered }))
+}
+
+/// `set-embedding-model` forwarder.
+pub(super) fn call_set_embedding_model(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    require_user_initiated(args)?;
+    let provider_id = extract_string(args, "provider_id")?;
+    let model_id = extract_string(args, "model_id")?;
+    let endpoint = args
+        .get("endpoint")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let spec = backend
+        .set_embedding_model(&provider_id, &model_id, endpoint.as_deref())
+        .map_err(backend_to_rpc)?;
+    Ok(json!({
+        "provider_id": spec.provider_id,
+        "model_id": spec.model_id,
+        "model_version": spec.model_version,
+        "dimensions": spec.dimensions,
+    }))
+}
+
+/// `session-config` forwarder.
+pub(super) fn call_session_config(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
+    let snapshot = backend.session_config().map_err(backend_to_rpc)?;
+    Ok(json!({
+        "root": snapshot.root,
+        "min_nodes": snapshot.min_nodes,
+        "languages": snapshot.languages,
+        "incremental": snapshot.incremental,
+        "embedding_provenance": snapshot.embedding_provenance,
+        "cache_stats": {
+            "hits": snapshot.cumulative_cache_stats.hits,
+            "misses": snapshot.cumulative_cache_stats.misses,
+        },
+        "generation": backend.generation(),
+    }))
+}
+
+/// Requires explicit user consent for model-changing tool calls.
+pub(super) fn require_user_initiated(args: &Value) -> Result<(), JsonRpcError> {
+    if args
+        .get("user_initiated")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+    Err(JsonRpcError::new(
+        ErrorCode::InvalidParams,
+        "set-embedding-model requires explicit user_initiated=true",
+    ))
+}
+
+/// Extracts the required `offset` + `limit` pagination knobs.
+pub(super) fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcError> {
+    let offset = extract_u64(args, "offset")?;
+    let limit = extract_u64(args, "limit")?;
+    Ok(Pagination {
+        offset: usize::try_from(offset).unwrap_or(usize::MAX),
+        limit: usize::try_from(limit).unwrap_or(usize::MAX),
+    })
+}
+
+/// Extracts the optional `report-query` filter knobs. Unknown / wrong-typed
+/// fields are quietly ignored — the JSON schema layer rejects them up
+/// front when a strict client is in use.
+pub(super) fn extract_filters(args: &Value) -> QueryFilters {
+    QueryFilters {
+        language: args
+            .get("language")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        bucket: args
+            .get("bucket")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        path_contains: args
+            .get("path_contains")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+        min_score: args.get("min_score").and_then(Value::as_f64),
+        min_size: args
+            .get("min_size")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok()),
+    }
+}
+
+/// Extracts a required string field from `args`.
+pub(super) fn extract_string(args: &Value, field: &str) -> Result<String, JsonRpcError> {
+    args.get(field)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            JsonRpcError::new(
+                ErrorCode::InvalidParams,
+                format!("missing or non-string parameter {field:?}"),
+            )
+        })
+}
+
+/// Extracts a required non-negative integer field from `args`.
+pub(super) fn extract_u64(args: &Value, field: &str) -> Result<u64, JsonRpcError> {
+    args.get(field).and_then(Value::as_u64).ok_or_else(|| {
+        JsonRpcError::new(
+            ErrorCode::InvalidParams,
+            format!("missing or non-integer parameter {field:?}"),
+        )
+    })
+}
+
+/// Rejects byte ranges with `end < start`.
+pub(super) fn reject_inverted_range(start: u64, end: u64) -> Result<(), JsonRpcError> {
+    if end < start {
+        return Err(JsonRpcError::new(
+            ErrorCode::InvalidParams,
+            format!("end_byte ({end}) must be >= start_byte ({start})"),
+        ));
+    }
+    Ok(())
+}
