@@ -8,7 +8,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore } from "../reportStore";
 import { openClusterPanel, openReportPanel } from "../webview/panels";
 import { pickEmbeddingModel } from "./embeddingPicker";
-import { ReportCluster, ReportOccurrence } from "../types/report";
+import { Report, ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import {
@@ -45,7 +45,7 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.refreshReport", run: ({ clientOf }) => refreshReport(clientOf) },
   { id: "deslop.toggleShowAllLenses", run: toggleShowAllLenses },
   { id: "deslop.showSchemaDoc", run: ({ context, store, clientOf }) => openSchemaDoc(context, store, clientOf) },
-  { id: "deslop.jumpToNextOccurrence", run: ({ store }) => jumpToNextOccurrence(store) },
+  { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
   { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
@@ -183,10 +183,22 @@ function isReportOccurrence(target: unknown): target is ReportOccurrence {
   );
 }
 
-export function jumpToNextOccurrence(store: ReportStore): void {
-  const editor = vscode.window.activeTextEditor;
+export async function jumpToNextOccurrence(
+  store: ReportStore,
+  clusterId?: unknown,
+  occurrenceIndex?: unknown,
+): Promise<void> {
   const report = store.current.report;
-  if (!editor || !report) return;
+  if (!report) return;
+  const commandTarget = occurrenceAfterCommandIndex(report, clusterId, occurrenceIndex);
+  if (commandTarget) {
+    await openOccurrence(commandTarget).catch(() => undefined);
+    return;
+  }
+  if (clusterId !== undefined || occurrenceIndex !== undefined) return;
+
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
   const here = editor.selection.active;
   const activePath = editor.document.uri.fsPath;
   const cluster = findClusterContaining(report.clusters, activePath, editor.document, here);
@@ -197,7 +209,25 @@ export function jumpToNextOccurrence(store: ReportStore): void {
   const others = cluster.occurrences.filter((o) => !sameFile(o.path, activePath));
   const next = others[0] ?? cluster.occurrences[0];
   if (!next) return;
-  openOccurrence(next).catch(() => undefined);
+  await openOccurrence(next).catch(() => undefined);
+}
+
+function occurrenceAfterCommandIndex(
+  report: Report,
+  clusterId: unknown,
+  occurrenceIndex: unknown,
+): ReportOccurrence | undefined {
+  if (
+    typeof clusterId !== "string" ||
+    typeof occurrenceIndex !== "number" ||
+    !Number.isInteger(occurrenceIndex) ||
+    occurrenceIndex < 0
+  ) {
+    return undefined;
+  }
+  const cluster = report.clusters.find((candidate) => candidate.id === clusterId);
+  if (!cluster?.occurrences.length) return undefined;
+  return cluster.occurrences[(occurrenceIndex + 1) % cluster.occurrences.length];
 }
 
 export async function compareWithCanonicalTarget(

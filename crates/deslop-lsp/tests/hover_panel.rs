@@ -80,18 +80,22 @@ fn hover_body_is_compact_title_only_for_humans() -> Result<()> {
 /// of the same duplication.
 #[test]
 fn hover_surfaces_one_card_even_when_multiple_clusters_overlap_the_cursor() -> Result<()> {
-    let workspace = copy_fixture("csharp-type3")?;
-    let epsilon = workspace.path().join("Epsilon.cs");
-    // `min_nodes = 5` exposes sibling-window fingerprints that sit
-    // inside larger method-body fingerprints, reliably producing
-    // overlapping clusters on csharp-type3.
+    let workspace = copy_fixture("csharp-type4")?;
+    let iterative = workspace.path().join("Iterative.cs");
+    // csharp-type4 is large enough to expose a broad cross-file clone
+    // plus narrower same-file clones under the documented min_nodes=30
+    // default, so the test does not rely on removed startup config.
     let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    open_fixture_files(&mut stdin, workspace.path(), &["Delta.cs", "Epsilon.cs"])?;
+    open_fixture_files(
+        &mut stdin,
+        workspace.path(),
+        &["Iterative.cs", "Recursive.cs"],
+    )?;
 
     let (cursor, overlap_count) =
-        cursor_inside_overlapping_clusters(&mut stdin, &mut stdout, &epsilon)?;
+        cursor_inside_overlapping_clusters(&mut stdin, &mut stdout, &iterative)?;
     assert!(
         overlap_count >= 2,
         "fixture must reproduce the overlapping-cluster case so the test is meaningful; got overlap={overlap_count}"
@@ -102,7 +106,7 @@ fn hover_surfaces_one_card_even_when_multiple_clusters_overlap_the_cursor() -> R
         &mut stdout,
         HOVER,
         &json!({
-            "textDocument": { "uri": file_uri(&epsilon)? },
+            "textDocument": { "uri": file_uri(&iterative)? },
             "position": cursor,
         }),
     )?;

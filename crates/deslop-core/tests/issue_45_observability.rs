@@ -1,13 +1,13 @@
 //! Regression coverage for GH#45 pipeline observability.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use deslop_core::{
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     EmbeddingMode,
@@ -22,29 +22,42 @@ use tracing::{
 fn issue_45_pipeline_emits_stage_observability_events() -> Result<()> {
     let captured = CapturedEvents::default();
     let subscriber = CaptureSubscriber::new(captured.clone());
-    tracing::subscriber::with_default(subscriber, || run_pipeline())?;
+    tracing::subscriber::with_default(subscriber, run_pipeline)?;
 
     assert!(
-        captured.contains_fields(&[
+        captured.len() >= 3,
+        "GH#45: expected at least three pipeline observability events: {captured:?}",
+    );
+
+    let pair = captured.event("pair survival outcome")?;
+    assert_eq!(pair.target, "deslop_core::pair");
+    assert_has_fields(
+        &pair,
+        &[
             "survived",
             "dropped_below_fused",
             "dropped_lsh_only_jaccard",
             "dropped_lsh_only_node_count",
-        ]),
-        "GH#45: pair survival stage must log structured outcome counts: {captured:?}",
+        ],
     );
-    assert!(
-        captured.contains_fields(&["total", "dropped_below_min_members", "largest_weight"]),
-        "GH#45: cluster distribution stage must log structured rank/build counts: {captured:?}",
+
+    let cluster = captured.event("ranked clusters built")?;
+    assert_eq!(cluster.target, "deslop_core::cluster");
+    assert_has_fields(
+        &cluster,
+        &["total", "dropped_below_min_members", "largest_weight"],
     );
-    assert!(
-        captured.contains_fields(&[
+
+    let bucket = captured.event("bucket distribution")?;
+    assert_eq!(bucket.target, "deslop_core::report");
+    assert_has_fields(
+        &bucket,
+        &[
             "identical",
             "nearly_identical",
             "loosely_similar",
             "same_behavior",
-        ]),
-        "GH#45: bucket classification stage must log structured bucket counts: {captured:?}",
+        ],
     );
     Ok(())
 }
@@ -79,6 +92,14 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+fn assert_has_fields(event: &CapturedEvent, required: &[&str]) {
+    assert!(
+        event.has_fields(required),
+        "GH#45: event {:?} missing required fields {required:?}",
+        event.message(),
+    );
+}
+
 #[derive(Clone, Debug, Default)]
 struct CapturedEvents {
     events: Arc<Mutex<Vec<CapturedEvent>>>,
@@ -91,20 +112,35 @@ impl CapturedEvents {
         }
     }
 
-    fn contains_fields(&self, required: &[&str]) -> bool {
-        let Ok(events) = self.events.lock() else {
-            return false;
-        };
-        events.iter().any(|event| event.has_fields(required))
+    fn len(&self) -> usize {
+        self.events.lock().map_or(0, |events| events.len())
+    }
+
+    fn event(&self, message: &str) -> Result<CapturedEvent> {
+        let events = self
+            .events
+            .lock()
+            .map_err(|_| anyhow!("captured events mutex poisoned"))?;
+        events
+            .iter()
+            .find(|event| event.message() == Some(message))
+            .cloned()
+            .ok_or_else(|| anyhow!("missing event {message:?}; captured: {events:?}"))
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct CapturedEvent {
+    target: String,
     fields: BTreeSet<String>,
+    values: BTreeMap<String, String>,
 }
 
 impl CapturedEvent {
+    fn message(&self) -> Option<&str> {
+        self.values.get("message").map(String::as_str)
+    }
+
     fn has_fields(&self, required: &[&str]) -> bool {
         required.iter().all(|field| self.fields.contains(*field))
     }
@@ -138,7 +174,9 @@ impl Subscriber for CaptureSubscriber {
         let mut visitor = FieldCollector::default();
         event.record(&mut visitor);
         self.captured.push(CapturedEvent {
+            target: event.metadata().target().to_owned(),
             fields: visitor.fields,
+            values: visitor.values,
         });
     }
 
@@ -150,10 +188,41 @@ impl Subscriber for CaptureSubscriber {
 #[derive(Default)]
 struct FieldCollector {
     fields: BTreeSet<String>,
+    values: BTreeMap<String, String>,
+}
+
+impl FieldCollector {
+    fn record_value(&mut self, field: &Field, value: String) {
+        let name = field.name().to_owned();
+        let _inserted = self.fields.insert(name.clone());
+        let _previous = self.values.insert(name, value);
+    }
 }
 
 impl Visit for FieldCollector {
-    fn record_debug(&mut self, field: &Field, _value: &dyn fmt::Debug) {
-        let _inserted = self.fields.insert(field.name().to_owned());
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        let raw = format!("{value:?}");
+        let normalized = raw
+            .strip_prefix('"')
+            .and_then(|inner| inner.strip_suffix('"'))
+            .unwrap_or(&raw)
+            .to_owned();
+        self.record_value(field, normalized);
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.record_value(field, value.to_owned());
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        self.record_value(field, value.to_string());
+    }
+
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.record_value(field, value.to_string());
+    }
+
+    fn record_bool(&mut self, field: &Field, value: bool) {
+        self.record_value(field, value.to_string());
     }
 }

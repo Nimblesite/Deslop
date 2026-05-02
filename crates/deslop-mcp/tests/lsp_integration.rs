@@ -64,8 +64,6 @@ fn spawn_lsp_and_initialize(root: &Path) -> Result<Child> {
     let bin = cargo_bin("deslop-lsp");
     let mut child = Command::new(bin)
         .arg(root)
-        .arg("--min-nodes")
-        .arg("15")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

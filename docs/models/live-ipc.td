@@ -136,9 +136,64 @@ type ReportBoilerplateHint {
   occurrences: List<ReportBoilerplateOccurrence>
 }
 
-# `ReportDelta` references `CacheStats` and `ReportCluster` which are
-# still defined in `crate::report` (pending migration). The generator
-# resolves them via the EXTERNAL_TYPES map.
+type CacheStats {
+  hits: Int
+  misses: Int
+}
+
+type EmbeddingProvenance {
+  provider_id: String
+  model_id: String
+  model_version: String
+  dimensions: Int
+  attempted_subtrees: Int
+  indexed_subtrees: Int
+  failed_subtrees: Int
+}
+
+type ReportSignals {
+  structural: Float
+  token_jaccard: Float
+  embedding_cos: Float
+  fused: Float
+}
+
+type ReportOccurrence {
+  path: String
+  start_byte: Int
+  end_byte: Int
+  hidden: Bool
+}
+
+type ReportCluster {
+  id: String
+  weight: Float
+  size: Int
+  canonical_node_count: Int
+  signals: ReportSignals
+  bucket: String
+  occurrences: List<ReportOccurrence>
+  occurrences_total: Int
+  occurrences_truncated: Bool
+  summary: String
+  interpretation: String
+}
+
+type Report {
+  report_schema_version: Int
+  tool_version: String
+  min_nodes: Int
+  files_analysed: Int
+  clusters_hidden: Int
+  cache_stats: CacheStats
+  metrics: RepoMetrics
+  schema_doc: String
+  action_hints: List<ActionHint>
+  boilerplate_hints: List<ReportBoilerplateHint>
+  embedding_provenance: Option<EmbeddingProvenance>
+  clusters: List<ReportCluster>
+}
+
 type ReportDelta {
   from_generation: Int
   to_generation: Int
@@ -149,8 +204,5 @@ type ReportDelta {
   tool_version: String
 }
 
-# External references resolved by the generator's IMPORTS map (only when
-# not yet defined in this file):
-#   ReportCluster        -> crate::report::ReportCluster
-#   EmbeddingProvenance  -> crate::report::EmbeddingProvenance
-#   CacheStats           -> crate::report::CacheStats
+# All types referenced by name are now defined here. EXTERNAL_TYPES in
+# the generator can stay populated as a safety net for legacy callers.

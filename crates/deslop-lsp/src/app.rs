@@ -176,8 +176,8 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            "--worker-threads" => index += 2,
-            "--debug" | "--stdio" => index += 1,
+            "--worker-threads" => index = index.saturating_add(2),
+            "--debug" | "--stdio" => index = index.saturating_add(1),
             flag if LEGACY_STARTUP_FLAGS.contains(&flag) => {
                 return Err(anyhow!(
                     "unsupported LSP startup flag {flag}; configure Deslop through settings"
@@ -186,12 +186,13 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
             flag if flag.starts_with('-') => {
                 return Err(anyhow!("unsupported LSP startup flag {flag}"));
             }
-            _ => index += 1,
+            _ => index = index.saturating_add(1),
         }
     }
     Ok(())
 }
 
+/// Startup flags removed from the LSP command line by issue #83.
 const LEGACY_STARTUP_FLAGS: &[&str] = &[
     "--min-nodes",
     "--embeddings",

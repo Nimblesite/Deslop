@@ -1,81 +1,40 @@
 // Mirrors deslop-core::report at REPORT_SCHEMA_VERSION = 1.
-// Keep in sync with crates/deslop-core/src/report.rs,
-// crates/deslop-core/src/buckets.rs, and
-// crates/deslop-core/src/report_metrics.rs.
+// Every wire shape has a typeDiagram .td entry and is re-exported from
+// `./wire-generated`. UI-only augmentation (`displayLocation`) lives as
+// an intersection so the wire shape stays the source of truth.
 
-export interface Report {
-  report_schema_version: number;
-  tool_version: string;
-  min_nodes: number;
-  files_analysed: number;
-  clusters_hidden: number;
-  cache_stats: CacheStats;
-  metrics: RepoMetrics;
-  schema_doc: string;
-  action_hints: ActionHint[];
-  boilerplate_hints?: BoilerplateHint[];
-  embedding_provenance: EmbeddingProvenance | null;
-  clusters: ReportCluster[];
-}
+import type {
+  Report as WireReport,
+  ReportCluster as WireReportCluster,
+  ReportOccurrence as WireReportOccurrence,
+  ReportSignals,
+} from "./wire-generated";
 
-export interface CacheStats {
-  hits: number;
-  misses: number;
-}
+export type {
+  CacheStats,
+  EmbeddingProvenance,
+  ReportSignals,
+} from "./wire-generated";
 
-export interface EmbeddingProvenance {
-  provider_id: string;
-  model_id: string;
-  model_version: string;
-  dimensions: number;
-  attempted_subtrees?: number;
-  indexed_subtrees?: number;
-  failed_subtrees?: number;
-}
-
-export interface ReportCluster {
-  id: string;
-  weight: number;
-  size: number;
-  canonical_node_count: number;
-  signals: ReportSignals;
-  // Canonical bucket wire label (schema v4+). One of Bucket values.
-  // Optional so we can still read v3 reports; use classifyCluster() as
-  // a fallback when missing.
-  bucket?: Bucket;
-  // On the live wire this is capped at LIVE_WIRE_OCCURRENCE_CAP; use
-  // `occurrences_total` / `occurrences_truncated` to tell if the caller
-  // needs to page via `deslop/clusterById`.
-  occurrences: ReportOccurrence[];
-  // Pre-cap occurrence count. Defaults to `size` on reports loaded
-  // from a `--from-report` CLI dump that pre-dates the field.
-  occurrences_total?: number;
-  // True when `occurrences` was truncated for the wire. Always false
-  // on `deslop/clusterById` responses.
-  occurrences_truncated?: boolean;
-  // Blanked on the live wire; re-derive from `bucket` via bucketLabels.
-  summary: string;
-  // Blanked on the live wire; re-derive from `bucket` via bucketLabels.
-  interpretation: string;
-}
-
-export interface ReportSignals {
-  structural: number;
-  token_jaccard: number;
-  embedding_cos: number;
-  fused: number;
-}
-
-export interface ReportOccurrence {
-  path: string;
-  start_byte: number;
-  end_byte: number;
-  hidden: boolean;
-  // VSIX-only display projection. Not part of the canonical report
-  // schema; the extension host derives it from start_byte before
-  // posting a report into webviews.
+// Wire `ReportOccurrence` plus the VSIX-only display projection the
+// extension host stamps onto each occurrence before posting reports
+// into webviews. The display field is not part of the canonical wire
+// schema and never crosses the LSP boundary, so we layer it onto the
+// generated wire type instead of polluting the .td source.
+export type ReportOccurrence = WireReportOccurrence & {
   displayLocation?: OccurrenceDisplayLocation;
-}
+};
+
+// Override the wire `ReportCluster.occurrences` and `Report.clusters`
+// fields so the augmented `displayLocation` propagates end-to-end into
+// every UI surface that reads the report.
+export type ReportCluster = Omit<WireReportCluster, "occurrences"> & {
+  occurrences: ReportOccurrence[];
+};
+
+export type Report = Omit<WireReport, "clusters"> & {
+  clusters: ReportCluster[];
+};
 
 export interface OccurrenceDisplayLocation {
   line: number;
@@ -102,66 +61,33 @@ export function visibleOccurrenceCount(cluster: ReportCluster): number {
     : cluster.occurrences.length;
 }
 
-export interface ActionHint {
-  pattern: string;
-  recommendation: string;
-}
-
-export interface BoilerplateHint {
-  kind: string;
-  language: string;
-  severity: "info";
-  recommendation: string;
-  occurrences: BoilerplateHintOccurrence[];
-}
-
-export interface BoilerplateHintOccurrence {
-  path: string;
-  start_byte: number;
-  end_byte: number;
-}
-
-export interface RepoMetrics {
-  analysed_loc: number;
-  duplicated_loc: number;
-  duplication_percent: number;
-  clusters_total: number;
-  duplicated_files: number;
-  threshold: ThresholdSummary;
-}
-
-export interface ThresholdSummary {
-  percent: number;
-  breached: boolean;
-  source: ThresholdSource;
-}
-
-export type ThresholdSource = "none" | "cli" | "config";
-
-// ReportDelta (deslop_core::delta) — live updates.
-export interface ReportDelta {
-  from_generation: number;
-  to_generation: number;
-  clusters_added: ReportCluster[];
-  clusters_removed: string[];
-  clusters_updated: ReportCluster[];
-  cache_stats: CacheStats;
-  tool_version: string;
-}
-
 // Wire-format models generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram-gen.mjs`. Re-exported here so the historical
 // `clients/vscode/src/types/report` import path keeps resolving for
 // every consumer. The generated source is gitignored; `make
 // typediagram-gen` (chained into `make vsix-build`) regenerates it.
 export type {
+  ActionHint,
   AnalysisState,
   ChangeSummary,
   EmbeddingModelInfo,
   EmbeddingPhase,
   EmbeddingProgress,
   ReportChangedNotification,
+  ReportDelta,
+  RepoMetrics,
   SessionConfig,
+  ThresholdSource,
+  ThresholdSummary,
+} from "./wire-generated";
+
+// Historical TS spelling preserved via aliasing — Rust calls the wire
+// types `ReportBoilerplate*` to mirror their report-namespaced module,
+// the VSIX has always called them `Boilerplate*`. Single .td source
+// keeps both conventions resolving to the same generated shape.
+export type {
+  ReportBoilerplateHint as BoilerplateHint,
+  ReportBoilerplateOccurrence as BoilerplateHintOccurrence,
 } from "./wire-generated";
 
 // Severity bucketing per [LSP-SEVERITY]. Orthogonal to Bucket:
@@ -278,7 +204,7 @@ export function classifyCluster(signals: ReportSignals): Bucket {
 // v3 reports loaded via --from-report.
 export function resolveBucket(cluster: ReportCluster): Bucket {
   if (cluster.bucket && (BUCKETS as readonly string[]).includes(cluster.bucket)) {
-    return cluster.bucket;
+    return cluster.bucket as Bucket;
   }
   return classifyCluster(cluster.signals);
 }

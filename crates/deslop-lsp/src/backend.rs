@@ -1,10 +1,4 @@
-//! `tower-lsp` backend wiring `Deslop` live analysis into the
-//! Language Server Protocol ([LSP-CAPABILITIES]).
-//!
-//! Keeps the protocol surface narrow: `initialize`, `initialized`,
-//! `shutdown`, `textDocument/didChange`, `textDocument/diagnostic`,
-//! and the custom `deslop/*` namespace ([LSP-CUSTOM-METHODS]).
-
+//! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
 use std::{path::PathBuf, sync::Arc};
 
 use deslop_core::{
@@ -24,7 +18,7 @@ use tower_lsp::{
         CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
         DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
-        DocumentDiagnosticReport, DocumentDiagnosticReportResult, FileEvent,
+        DocumentDiagnosticReport, DocumentDiagnosticReportResult, ExecuteCommandParams, FileEvent,
         FullDocumentDiagnosticReport, GotoDefinitionParams, GotoDefinitionResponse, Hover,
         HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
         InitializedParams, Location, MessageType, OneOf, Range,
@@ -34,22 +28,18 @@ use tower_lsp::{
     Client, LanguageServer,
 };
 
-use crate::{code_lens, diagnostics, hover, position};
+use crate::{code_lens, commands, diagnostics, hover, position};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "deslop-lsp";
 
-/// Diagnostic `source` + provider `identifier` surfaced to the client.
-/// Must match the `source` field stamped by
-/// [`crate::diagnostics::build_for_file`] so clients can filter by it.
+/// Diagnostic `source` + provider `identifier` surfaced to clients.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
 
-/// Method name for the `deslop/embeddingProgress` custom notification
-/// pushed around a model swap ([VSIX-SESSION-PROGRESS]).
+/// Method name for model-swap progress ([VSIX-SESSION-PROGRESS]).
 pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
 
-/// Method name for the `deslop/reportChanged` custom notification
-/// pushed after an analysis generation changes.
+/// Method name for generation-change notifications.
 pub const REPORT_CHANGED: &str = "deslop/reportChanged";
 
 /// [LSP-EMBEDDING-CONSENT] Embedding startup settings supplied by the client after the user
@@ -274,6 +264,7 @@ impl LanguageServer for LspBackend {
                     resolve_provider: Some(false),
                 }),
                 definition_provider: Some(OneOf::Left(true)),
+                execute_command_provider: Some(commands::provider()),
                 ..ServerCapabilities::default()
             },
         })
@@ -399,6 +390,13 @@ impl LanguageServer for LspBackend {
             uri,
             range: Range { start, end },
         })))
+    }
+
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> LspResult<Option<serde_json::Value>> {
+        commands::execute(self, params).await
     }
 }
 

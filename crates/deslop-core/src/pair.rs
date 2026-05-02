@@ -328,7 +328,7 @@ struct SurvivalStats {
 
 impl SurvivalStats {
     /// Classifies every pair and returns the surviving subset.
-    fn collect<'a>(pairs: &'a [CandidatePair]) -> (Self, Vec<&'a CandidatePair>) {
+    fn collect(pairs: &[CandidatePair]) -> (Self, Vec<&CandidatePair>) {
         let mut stats = Self::default();
         let mut surviving: Vec<&CandidatePair> = Vec::new();
         for pair in pairs {

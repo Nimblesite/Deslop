@@ -197,6 +197,11 @@ impl PipelineSession {
         self.min_nodes
     }
 
+    /// Updates whether future change passes consult the fingerprint cache.
+    pub fn set_incremental(&mut self, enabled: bool) {
+        self.incremental = enabled;
+    }
+
     /// Returns the total fingerprint count across every live file.
     /// Callers use this to size embedding-progress notifications
     /// before re-running the pass.

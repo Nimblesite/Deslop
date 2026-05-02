@@ -34,6 +34,7 @@ pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Valu
     Ok(top_offenders_payload(&report, n))
 }
 
+/// Builds the shared top-offenders JSON payload for `top-offenders` and `rescan`.
 fn top_offenders_payload(report: &Report, n: usize) -> Value {
     let total = report.clusters.len();
     let clusters: Vec<_> = report.clusters.iter().take(n).collect();
@@ -44,6 +45,7 @@ fn top_offenders_payload(report: &Report, n: usize) -> Value {
     })
 }
 
+/// Extracts a positive `n` value from MCP tool arguments, defaulting to five.
 fn extract_top_n(args: &Value) -> usize {
     args.get("n")
         .and_then(Value::as_u64)

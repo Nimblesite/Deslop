@@ -284,6 +284,123 @@ const TYPE_CONFIG = {
       tool_version: "Producer version stamped on the later snapshot.",
     },
   },
+  CacheStats: {
+    docs: "Per-run incremental-cache telemetry.",
+    derives: ["Debug", "Clone", "Copy", "Default", "Serialize", "Deserialize"],
+    fieldOverrides: { hits: "usize", misses: "usize" },
+    fieldDocs: {
+      hits: "Files resolved from the on-disk fingerprint cache.",
+      misses: "Files parsed from scratch.",
+    },
+  },
+  EmbeddingProvenance: {
+    docs: "Provenance of the `(provider, model, version)` triple used by the embedding pass.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      dimensions: "usize",
+      attempted_subtrees: "usize",
+      indexed_subtrees: "usize",
+      failed_subtrees: "usize",
+    },
+    fieldSerdeAttrs: {
+      attempted_subtrees: ["default"],
+      indexed_subtrees: ["default"],
+      failed_subtrees: ["default"],
+    },
+    tsOptional: ["attempted_subtrees", "indexed_subtrees", "failed_subtrees"],
+    fieldDocs: {
+      provider_id: "Registry key of the provider (`ollama`).",
+      model_id: "Human-readable model identifier.",
+      model_version: "Opaque model version / digest reported by the provider.",
+      dimensions: "Embedding dimensionality the provider returned.",
+      attempted_subtrees: "Number of subtree embeddings requested or served from cache.",
+      indexed_subtrees: "Number of unique successful subtree embeddings fed into ANN.",
+      failed_subtrees: "Number of subtree embeddings rejected by the provider.",
+    },
+  },
+  ReportSignals: {
+    docs: "Per-cluster signal breakdown so consumers can tell why the cluster was flagged.",
+    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    fieldDocs: {
+      structural: "Mean structural signal across cluster pairs.",
+      token_jaccard: "Mean token Jaccard estimate across cluster pairs.",
+      embedding_cos: "Mean embedding cosine similarity across cluster pairs.",
+      fused: "Unit-bounded fused confidence from the three components.",
+    },
+  },
+  ReportOccurrence: {
+    docs: "A single clone occurrence — a specific `(file, byte_range)`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+    },
+    fieldDocs: {
+      path: "Source path, relative to the scan root when possible.",
+      start_byte: "Inclusive byte offset of the clone within the file.",
+      end_byte: "Exclusive byte offset of the end of the clone.",
+      hidden: "True when the file matches a `report_hide` pattern.",
+    },
+  },
+  ReportCluster: {
+    docs: "One cluster as it appears in the rendered report.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      size: "usize",
+      canonical_node_count: "usize",
+      occurrences_total: "usize",
+    },
+    fieldSerdeAttrs: {
+      bucket: ["default"],
+      occurrences_total: ["default"],
+      occurrences_truncated: ["default"],
+    },
+    tsOptional: ["bucket", "occurrences_total", "occurrences_truncated"],
+    fieldDocs: {
+      id: "Stable short id for cross-referencing.",
+      weight: "Ranking weight (higher = worse).",
+      size: "Count of cloned occurrences in the cluster.",
+      canonical_node_count: "AST node count of one canonical member.",
+      signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
+      bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
+      occurrences: "Cluster members; live wire caps this list.",
+      occurrences_total: "Total occurrences before wire truncation.",
+      occurrences_truncated: "True when `occurrences` was truncated for the wire.",
+      summary: "Agent-oriented synthesis (blanked on the live wire).",
+      interpretation: "Derived one-line interpretation (blanked on the live wire).",
+    },
+  },
+  Report: {
+    docs: "A complete analysis report.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      report_schema_version: "u32",
+      min_nodes: "u32",
+      files_analysed: "usize",
+      clusters_hidden: "usize",
+    },
+    fieldSerdeAttrs: {
+      cache_stats: ["default"],
+      metrics: ["default"],
+      boilerplate_hints: ["default"],
+    },
+    tsOptional: ["boilerplate_hints"],
+    fieldDocs: {
+      report_schema_version: "Stable schema version so agent consumers can parse defensively.",
+      tool_version: "Binary / library version that produced the report.",
+      min_nodes: "Minimum subtree node count used for clustering.",
+      files_analysed: "Number of files analysed.",
+      clusters_hidden: "Clusters hidden because every member matched a `report_hide` pattern.",
+      cache_stats: "Incremental-cache hit / miss counters for this run.",
+      metrics: "Repo-wide duplication totals.",
+      schema_doc: "Markdown schema explanation.",
+      action_hints: "Short agent-oriented playbook.",
+      boilerplate_hints: "Optional import/prologue hygiene hints.",
+      embedding_provenance: "Provider/model/version that produced the embedding signals, if any.",
+      clusters: "Ordered clusters, worst offenders first.",
+    },
+  },
 };
 
 // Maps an external type name (referenced from the .td but not defined
@@ -543,15 +660,72 @@ function hasSnakeCaseRename(config) {
   );
 }
 
+// Returns a fn that applies the configured serde `rename_all` strategy
+// to a variant identifier (`OpenRange` -> `open_range` for snake_case,
+// `cli` for lowercase). Returns null when no rename is configured.
+function variantCaseFn(config) {
+  if (!config?.serdeAttrs) return null;
+  for (const attr of config.serdeAttrs) {
+    const match = attr.match(/^rename_all\s*=\s*"(\w+)"$/u);
+    if (!match) continue;
+    switch (match[1]) {
+      case "snake_case": return toSnakeCase;
+      case "lowercase": return (name) => name.toLowerCase();
+      case "UPPERCASE": return (name) => name.toUpperCase();
+      default: return null;
+    }
+  }
+  return null;
+}
+
 // Post-processes typediagram's TypeScript output: fixes the broken
 // `undefined<T>` syntax, rewrites discriminator field names + variant
-// values to match what serde emits on the Rust side, and collapses
-// unit-only enums into wire-accurate string literal unions.
+// values to match what serde emits on the Rust side, collapses
+// unit-only enums into wire-accurate string literal unions, and marks
+// fields with serde `default` as optional `?:` so older payloads (and
+// hand-written TS fixtures) that omit them keep type-checking.
 function postprocessTs(ts) {
   let out = ts;
   out = out.replace(/undefined<([^>]+)>/gu, "$1 | null");
   out = rewriteUnions(out);
+  out = markOptionalFields(out);
   return out;
+}
+
+// Walks each `export interface X { ... }` block and rewrites
+// `field: Type;` to `field?: Type;` when the matching TYPE_CONFIG entry
+// lists the field in `tsOptional`. Mirrors the historical VSIX shape
+// for fields that older payloads or hand-written fixtures may omit.
+function markOptionalFields(ts) {
+  const lines = ts.split("\n");
+  const out = [];
+  let blockName = null;
+  for (const line of lines) {
+    const start = line.match(/^export interface (\w+)\s*\{/u);
+    if (start) {
+      blockName = start[1];
+      out.push(line);
+      continue;
+    }
+    if (blockName && line.trim() === "}") {
+      blockName = null;
+      out.push(line);
+      continue;
+    }
+    if (blockName) {
+      const config = TYPE_CONFIG[blockName];
+      const optional = config?.tsOptional ?? [];
+      const fieldMatch = optional.length > 0 &&
+        line.match(/^(\s*)(\w+):\s*(.+);\s*$/u);
+      if (fieldMatch && optional.includes(fieldMatch[2])) {
+        const [, indent, fieldName, fieldType] = fieldMatch;
+        out.push(`${indent}${fieldName}?: ${fieldType};`);
+        continue;
+      }
+    }
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 // Rewrites each `export type X = ...` discriminated-union block based on
@@ -588,23 +762,24 @@ function rewriteUnionBlock(name, blockLines) {
   const config = TYPE_CONFIG[name];
   if (!config) return blockLines.join("\n");
   const tag = tagNameOf(config) ?? "kind";
-  const snake = hasSnakeCaseRename(config);
+  const renameFn = variantCaseFn(config);
   const variants = blockLines
     .slice(1)
     .map((line) => line.match(/\|\s*\{\s*kind:\s*"(\w+)"([^}]*)\}/u))
     .filter(Boolean);
   if (variants.length === 0) return blockLines.join("\n");
   const isUnitOnly = variants.every((m) => m[2].trim() === "");
-  if (isUnitOnly && tag === "kind" && snake) {
-    const literals = variants
-      .map((m) => `"${snake ? toSnakeCase(m[1]) : m[1]}"`)
-      .join(" | ");
+  // Unit-only enums without a discriminator tag serialise on the wire
+  // as a bare string (Rust's serde behaviour for unit variants), so the
+  // matching TS shape is a literal string union.
+  if (isUnitOnly && tag === "kind" && renameFn) {
+    const literals = variants.map((m) => `"${renameFn(m[1])}"`).join(" | ");
     return `export type ${name} = ${literals};`;
   }
   const rewritten = [`export type ${name} =`];
   for (const match of variants) {
     const [, variant, payload] = match;
-    const tagValue = snake ? toSnakeCase(variant) : variant;
+    const tagValue = renameFn ? renameFn(variant) : variant;
     rewritten.push(`  | { ${tag}: "${tagValue}"${payload}}`);
   }
   return `${rewritten.join("\n")};`;

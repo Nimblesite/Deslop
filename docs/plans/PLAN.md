@@ -48,7 +48,6 @@ Implemented work intentionally not repeated here:
 
 ## Remaining Plan Files
 
-- [LSP editor surfaces](lsp-editor-surfaces-plan.md) — remaining standard LSP UX beyond diagnostics, hover, code lens, and custom report methods.
 - [JetBrains native UX](jetbrains-ux-plan.md) — Tool Window and embedding picker over the existing LSP custom methods.
 - [JetBrains E2E](jetbrains-e2e-plan.md) — real Rider / IntelliJ tests with the real `deslop-lsp` binary.
 - [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) — LSP `refactor.extract` code action. Blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42) (Type-1 / Type-2 bucket split).
@@ -59,7 +58,6 @@ Implemented work intentionally not repeated here:
 
 ### 🟡 Remaining features
 
-- [ ] Finish [LSP editor surfaces](lsp-editor-surfaces-plan.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
 - [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
@@ -72,5 +70,6 @@ Implemented work intentionally not repeated here:
 - **Deployment Toolkit migration**: binary version contracts, manifest-backed VS Code and JetBrains startup verification, VSIX package verification, JetBrains package verification, and release gate docs are implemented. `make jetbrains-package` builds the plugin, runs Gradle project/structure checks, and verifies the generated zip with `scripts/verify-jetbrains-package.mjs`.
 - **JetBrains settings and packaging**: persistent project settings, validation, settings-derived LSP launch arguments, binary version checks, bundled binary staging, package verification, and local development docs are implemented.
 - **LSP file watcher** ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` starts `LiveWatcher` + `Scheduler`; broadcasts `deslop/reportChanged` + `deslop/analysisState` to the editor. All file changes — agent, git, CI, formatter — trigger immediate re-analysis.
+- **LSP editor surfaces**: `textDocument/definition`, deterministic code-lens cycling, `deslop://` virtual documents, and `workspace/executeCommand` dispatch for `deslop.refreshReport`, `deslop.openCluster`, `deslop.openReport`, `deslop.pickEmbeddingModel`, and `deslop.toggleIncremental` are implemented with stdio E2E coverage.
 - **MCP push notifications infrastructure** ([MCP-NOTIFICATIONS]): `NotificationSender` (`Arc<Mutex<Box<dyn Write + Send>>>`) is wired through `McpBackend::set_notification_sender`; the state-file backend reloads the cache and pushes `resources/updated` + `deslop/reportChanged`.
 - **Top Offenders tree grouping** ([tree-grouping.md](tree-grouping.md)): `cluster` and `file` grouping modes are implemented through `tree/nodes.ts`, `tree/grouping.ts`, `deslop.topOffenders.groupBy`, and the mutually exclusive view-title commands.

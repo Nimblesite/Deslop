@@ -77,6 +77,56 @@ fn default_run_hides_alembic_migration_only_clusters() -> Result<()> {
 }
 
 #[test]
+fn default_run_hides_python_generated_suffix_clusters() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("repo");
+    fs::create_dir_all(root.join("src/agent_backend/api"))?;
+    fs::write(
+        root.join("src/agent_backend/api/schemas_generated.py"),
+        PYTHON_SCHEMAS_GENERATED,
+    )?;
+    fs::write(
+        root.join("src/agent_backend/api/handlers.py"),
+        PYTHON_HAND_WRITTEN_HANDLER,
+    )?;
+
+    let report = run_report(&root, tmp.path(), 8)?;
+    let visible_clusters = clusters(&report)?;
+
+    assert!(
+        field(&report, "clusters_hidden")
+            .as_u64()
+            .is_some_and(|count| count > 0),
+        "generated-only Python clusters must be counted as hidden: {report}",
+    );
+    assert!(
+        visible_clusters
+            .iter()
+            .any(has_hidden_and_visible_occurrences),
+        "mixed generated/hand-written Python clusters must remain visible: {report}",
+    );
+    assert!(
+        visible_clusters
+            .iter()
+            .all(|cluster| !all_occurrences_hidden(cluster)),
+        "visible clusters must not be generated-only: {report}",
+    );
+    assert!(
+        visible_clusters
+            .iter()
+            .flat_map(cluster_occurrences)
+            .any(is_hidden_generated_python_occurrence),
+        "mixed cluster must flag the generated Python occurrence as hidden: {report}",
+    );
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(2),
+        "both generated and hand-written Python files must still be analysed: {report}",
+    );
+    Ok(())
+}
+
+#[test]
 fn default_run_does_not_cluster_distinct_fastapi_route_decorators() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let root = tmp.path().join("repo");
@@ -123,6 +173,42 @@ fn metrics_field<'a>(report: &'a Value, key: &str) -> &'a Value {
 
 fn field<'a>(value: &'a Value, key: &str) -> &'a Value {
     value.get(key).unwrap_or(&Value::Null)
+}
+
+fn cluster_occurrences(cluster: &Value) -> impl Iterator<Item = &Value> {
+    cluster
+        .get("occurrences")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+}
+
+fn has_hidden_and_visible_occurrences(cluster: &Value) -> bool {
+    let mut hidden = false;
+    let mut visible = false;
+    for occurrence in cluster_occurrences(cluster) {
+        match field(occurrence, "hidden").as_bool() {
+            Some(true) => hidden = true,
+            Some(false) => visible = true,
+            None => {}
+        }
+    }
+    hidden && visible
+}
+
+fn all_occurrences_hidden(cluster: &Value) -> bool {
+    let mut seen = false;
+    let mut all_hidden = true;
+    for occurrence in cluster_occurrences(cluster) {
+        seen = true;
+        all_hidden &= field(occurrence, "hidden").as_bool() == Some(true);
+    }
+    seen && all_hidden
+}
+
+fn is_hidden_generated_python_occurrence(occurrence: &Value) -> bool {
+    let path = field(occurrence, "path").as_str().unwrap_or_default();
+    path.ends_with("schemas_generated.py") && field(occurrence, "hidden").as_bool() == Some(true)
 }
 
 fn with_ext(base: &Path, ext: &str) -> PathBuf {
@@ -273,6 +359,57 @@ def downgrade() -> None:
     op.drop_table("conversations")
     op.drop_table("agent_configs")
     op.drop_table("tenants")
+"#;
+
+const PYTHON_SCHEMAS_GENERATED: &str = r#"
+"""Generated API schema. DO NOT HAND-EDIT.
+
+Regenerate with scripts/generate_api_schema.py.
+"""
+
+from __future__ import annotations
+
+
+def generated_alpha(payload: dict[str, str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    result["id"] = payload.get("id", "")
+    result["tenant_id"] = payload.get("tenant_id", "")
+    result["display_name"] = payload.get("display_name", "")
+    result["description"] = payload.get("description", "")
+    result["created_at"] = payload.get("created_at", "")
+    result["updated_at"] = payload.get("updated_at", "")
+    return result
+
+
+def generated_beta(payload: dict[str, str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    result["id"] = payload.get("id", "")
+    result["tenant_id"] = payload.get("tenant_id", "")
+    result["display_name"] = payload.get("display_name", "")
+    result["description"] = payload.get("description", "")
+    result["created_at"] = payload.get("created_at", "")
+    result["updated_at"] = payload.get("updated_at", "")
+    return result
+
+
+def generated_lookup(row: dict[str, str]) -> str:
+    name = row.get("name", "")
+    tenant = row.get("tenant", "")
+    if tenant:
+        return f"{tenant}:{name}"
+    return name
+"#;
+
+const PYTHON_HAND_WRITTEN_HANDLER: &str = r#"
+from __future__ import annotations
+
+
+def manual_lookup(row: dict[str, str]) -> str:
+    name = row.get("name", "")
+    tenant = row.get("tenant", "")
+    if tenant:
+        return f"{tenant}:{name}"
+    return name
 "#;
 
 const FASTAPI_ROUTES: &str = r#"

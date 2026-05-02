@@ -183,7 +183,43 @@ suite("register command implementations", () => {
       report([cluster("c-1", [doc.uri.fsPath, "/tmp/cdd-sibling.cs"])]),
       0,
     );
-    jumpToNextOccurrence(store);
+    await jumpToNextOccurrence(store);
+  });
+
+  test("jumpToNextOccurrence uses code-lens cluster id and occurrence index deterministically", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-lens-jump-"));
+    const fileA = path.join(dir, "A.cs");
+    const fileB = path.join(dir, "B.cs");
+    const fileC = path.join(dir, "C.cs");
+    fs.writeFileSync(fileA, "public class A { int x = 1; }\n", "utf8");
+    fs.writeFileSync(fileB, "public class B { int y = 2; }\n", "utf8");
+    fs.writeFileSync(fileC, "public class C { int z = 3; }\n", "utf8");
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        clusterWithRanges("c-cycle", [
+          { path: fileA, start_byte: 0, end_byte: 16 },
+          { path: fileB, start_byte: 0, end_byte: 16 },
+          { path: fileC, start_byte: 0, end_byte: 16 },
+        ]),
+      ]),
+      0,
+    );
+
+    await jumpToNextOccurrence(store, "c-cycle", 0);
+    let editor = vscode.window.activeTextEditor;
+    assert.equal(editor?.document.uri.fsPath, fileB);
+    assert.match(editor?.document.getText() ?? "", /public class B/);
+    assert.equal(editor?.selection.start.line, 0);
+    assert.equal(editor?.selection.start.character, 0);
+    assert.equal(editor?.selection.end.character, 16);
+
+    await jumpToNextOccurrence(store, "c-cycle", 2);
+    editor = vscode.window.activeTextEditor;
+    assert.equal(editor?.document.uri.fsPath, fileA);
+    assert.match(editor?.document.getText() ?? "", /public class A/);
+    assert.equal(editor?.selection.end.character, 16);
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   test("jumpToNextOccurrence shows the info message when no cluster overlaps", async () => {
@@ -194,14 +230,14 @@ suite("register command implementations", () => {
     await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report([cluster("c", ["/other"])]), 0);
-    jumpToNextOccurrence(store);
+    await jumpToNextOccurrence(store);
   });
 
   test("jumpToNextOccurrence bails when there is no active editor", async () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     const store = new ReportStore();
     store.setSnapshot(report([cluster("c", ["/p"])]), 0);
-    jumpToNextOccurrence(store);
+    await jumpToNextOccurrence(store);
   });
 
   test("compareWithCanonical opens a diff whose two sides are distinct resources with the matching occurrence bytes", async () => {

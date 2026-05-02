@@ -54,6 +54,8 @@ const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
     ".designer.cs",
     ".pb.cs",
     ".openapi.cs",
+    ".generated.py",
+    "_generated.py",
 ];
 
 /// Import/prologue boilerplate reporting mode.

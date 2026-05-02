@@ -23,6 +23,9 @@ use crate::{
 
 use super::{config::PipelineConfig, corpus::FingerprintCorpus};
 
+/// Maximum source characters sent to any embedding provider.
+const MAX_PROVIDER_INPUT_CHARS: usize = 6_000;
+
 /// Outcome of the embedding pass. Empty `pairs` + `None` provenance
 /// means the pass was skipped or failed gracefully.
 #[derive(Debug, Default)]
@@ -105,7 +108,7 @@ fn embed_corpus(
         pairs,
         provenance: Some(provenance_from(
             spec,
-            corpus.fingerprints.len(),
+            attempted_subtrees(corpus.fingerprints.len(), &batch),
             batch.vectors.len(),
             batch.failures,
         )),
@@ -139,6 +142,10 @@ fn compute_embeddings(
     let mut pending: Vec<PendingEmbedding> = Vec::new();
     for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
         let snippet = snippet_for(fingerprint, &corpus.sources);
+        if snippet.chars().count() > MAX_PROVIDER_INPUT_CHARS {
+            record_oversized_input(&mut batch, index, snippet);
+            continue;
+        }
         let snippet_hash = content_hash(&snippet);
         if indexed_hashes.contains(&snippet_hash) {
             continue;
@@ -179,6 +186,30 @@ fn compute_embeddings(
         );
     }
     batch
+}
+
+/// Returns the provenance denominator for this embedding pass.
+fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usize {
+    if batch.failures == 0 {
+        return total_fingerprints;
+    }
+    batch.vectors.len().saturating_add(batch.failures)
+}
+
+/// Counts an oversized snippet as skipped before provider dispatch.
+fn record_oversized_input(batch: &mut EmbeddingBatch, fingerprint_index: usize, snippet: String) {
+    let snippet_hash = content_hash(&snippet);
+    let item = PendingEmbedding {
+        fingerprint_index,
+        snippet,
+        snippet_hash,
+        occurrences: 1,
+    };
+    record_failed_pending(
+        batch,
+        &item,
+        &format!("exceeds {MAX_PROVIDER_INPUT_CHARS} chars"),
+    );
 }
 
 /// Dispatches pending embedding requests in provider-sized chunks.

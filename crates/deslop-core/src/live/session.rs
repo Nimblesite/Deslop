@@ -216,6 +216,39 @@ impl AnalysisSession {
         Ok(previous_report)
     }
 
+    /// Forces a fresh full-workspace analysis pass for editor command
+    /// dispatch ([LSP-COMMANDS]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError`] when pipeline initialisation fails.
+    pub fn refresh_full(&mut self) -> Result<ReportDelta, LiveError> {
+        let previous_generation = self.generation;
+        let (pipeline, report) = initialise_pipeline(
+            self.root.clone(),
+            self.min_nodes,
+            self.incremental,
+            self.config_path.clone(),
+            self.embedding_mode,
+            self.embedding_provider.as_ref(),
+        )?;
+        let previous = self.install_pipeline(pipeline, report)?;
+        Ok(ReportDelta::between(
+            Some((previous_generation, &previous)),
+            self.generation,
+            &self.latest_report,
+        ))
+    }
+
+    /// Flips live incremental-cache use and returns the updated config.
+    pub fn toggle_incremental(&mut self) -> SessionConfig {
+        self.incremental = !self.incremental;
+        if let Some(pipeline) = &mut self.pipeline {
+            pipeline.set_incremental(self.incremental);
+        }
+        self.session_config()
+    }
+
     /// Assembles the session struct.
     fn finalise(init: SessionInit) -> Self {
         Self {
