@@ -60,7 +60,7 @@ pub use embedding::{
 };
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
-pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
+pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs};
 pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 pub use report_metrics::{
     compute_repo_metrics, count_analysed_lines, validate_threshold_percent, AnalysedLines,

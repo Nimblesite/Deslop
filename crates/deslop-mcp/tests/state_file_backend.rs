@@ -84,6 +84,87 @@ fn issue_90_report_get_reloads_state_file_between_plain_calls() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn current_state_file_persists_after_successful_load() -> Result<()> {
+    let workspace = copied_fixture_root()?;
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    let before = fs::read(&state_file)?;
+    let backend = backend_for(workspace.path())?;
+
+    let report = backend.report_get()?;
+
+    assert!(
+        state_file.exists(),
+        "valid current state must remain on disk after load"
+    );
+    assert_eq!(
+        fs::read(&state_file)?,
+        before,
+        "valid current state must not be rewritten during a read"
+    );
+    assert!(
+        !report.clusters.is_empty(),
+        "fixture current state should load duplicate clusters"
+    );
+    assert!(
+        backend.generation() >= 1,
+        "successful state load should advance generation"
+    );
+    assert!(
+        report.tool_version.starts_with('0'),
+        "fixture current state should expose the current report shape"
+    );
+    Ok(())
+}
+
+#[test]
+fn issue_118_incompatible_state_file_is_deleted_instead_of_migrated() -> Result<()> {
+    let workspace = copied_fixture_root()?;
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    fs::write(&state_file, br#"{"tool_version":"stale","clusters":[]}"#)?;
+    let backend = backend_for(workspace.path())?;
+
+    let Err(err) = backend.report_get() else {
+        anyhow::bail!("incompatible state file must not load successfully");
+    };
+    let message = err.to_string();
+    assert!(
+        message.contains("LSP is not running"),
+        "deleted incompatible state should behave like absent current state, got {message}"
+    );
+    assert!(
+        !state_file.exists(),
+        "incompatible persisted state must be deleted so LSP can recreate it"
+    );
+    assert_eq!(
+        backend.generation(),
+        0,
+        "failed state loads must not advance generation"
+    );
+    assert!(
+        state_file.parent().is_some_and(Path::exists),
+        "cache directory should remain available for the recreated state file"
+    );
+
+    let fixture_state = fixture_root().join(".deslop-cache/live-report.json");
+    let _bytes = fs::copy(&fixture_state, &state_file)?;
+    let recreated = backend.report_get()?;
+
+    assert!(
+        state_file.exists(),
+        "current state must be recreated at the same path"
+    );
+    assert!(
+        !recreated.clusters.is_empty(),
+        "recreated current state must load duplicate clusters"
+    );
+    assert!(
+        backend.generation() >= 1,
+        "loading recreated state should advance generation"
+    );
+    Ok(())
+}
+
 fn remove_all_clusters(state_file: &PathBuf) -> Result<()> {
     let mut state: Value = serde_json::from_slice(&fs::read(state_file)?)?;
     let clusters = state

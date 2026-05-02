@@ -152,7 +152,7 @@ This is not a LOC formula. LOC is used for repository metrics, but rank weight c
 
 ### 10. Report rendering
 
-The canonical report is `Report` in `crates/deslop-core/src/report.rs`. The current `REPORT_SCHEMA_VERSION` constant is `1`. `render_report` applies `report_hide`, computes repository metrics, includes embedded schema documentation from `docs/specs/REPORTING-CONTEXT.md`, and attaches action hints and embedding provenance.
+The canonical report is `Report` in `crates/deslop-core/src/report.rs`. `render_report` applies `report_hide`, computes repository metrics, includes embedded schema documentation from `docs/specs/REPORTING-CONTEXT.md`, and attaches action hints and embedding provenance.
 
 Repository-wide metrics are computed in `crates/deslop-core/src/report_metrics.rs`. `duplicated_loc` is derived from non-hidden clone occurrence line ranges and deduplicated per file so overlapping sibling-window ranges do not inflate the numerator.
 
@@ -190,7 +190,6 @@ One current MCP limitation is worth auditing carefully: `crates/deslop-mcp/src/b
 | Embedding neighbours are filtered by HNSW cosine threshold. | `crates/deslop-core/src/embedding/pairs.rs` | `cargo test -p deslop-core --test embedding_pairs` |
 | Fused score is bounded. | `crates/deslop-core/src/pair.rs::PairScore::fused` | `cargo test -p deslop --test fused_score_bounds` |
 | Cross-language comparison is disabled unless configured. | `crates/deslop-core/src/config.rs`, `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` | `cargo test -p deslop --test cross_language` |
-| Report schema version is currently `1`. | `crates/deslop-core/src/report.rs::REPORT_SCHEMA_VERSION` | `cargo test -p deslop-core --test report_api` |
 | Live/LSP paths use `LiveService` over `PipelineSession`. | `crates/deslop-core/src/live/`, `crates/deslop-lsp/src/backend.rs` | `cargo test -p deslop-lsp --test notifications` |
 | MCP tools are stdio JSON-RPC wrappers with root safety checks. | `crates/deslop-mcp/src/server.rs`, `crates/deslop-mcp/src/tools.rs`, `crates/deslop-mcp/src/safety.rs` | `cargo test -p deslop-mcp --test cli` |
 
@@ -204,7 +203,7 @@ For a targeted code review, these searches show the core algorithm path:
 
 ```bash
 rg -n "fn render|candidate_pairs_for_language_policy|cluster_by_transitive_closure|build_ranked_fused_clusters|render_report" crates/deslop-core/src
-rg -n "REPORT_SCHEMA_VERSION|default_parsers|EmbeddingMode::Off|DEFAULT_OLLAMA_MODEL|rank_weight" crates/deslop-core/src crates/deslop/src
+rg -n "default_parsers|EmbeddingMode::Off|DEFAULT_OLLAMA_MODEL|rank_weight" crates/deslop-core/src crates/deslop/src
 rg -n "find_similar_snippet|find_similar_for_snippet|resolve_within_root" crates/deslop-mcp/src crates/deslop-core/src/live
 ```
 

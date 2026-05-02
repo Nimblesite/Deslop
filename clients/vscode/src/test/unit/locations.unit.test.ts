@@ -107,7 +107,6 @@ function cluster(file: string, startByte: number): ReportCluster {
 
 function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "test",
     min_nodes: 1,
     files_analysed: 1,

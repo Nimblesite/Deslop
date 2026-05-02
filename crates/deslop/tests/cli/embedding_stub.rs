@@ -249,16 +249,3 @@ fn unknown_embedding_provider_is_rejected() -> Result<()> {
         .stderr(contains("unknown embedding provider"));
     Ok(())
 }
-
-// ===========================================================================
-// OLLAMA-LIVE TESTS — require a running local Ollama daemon on
-// 127.0.0.1:11434 with the `nomic-embed-text` model pulled.
-// The `ollama_` name prefix is the marker: `make ci` filters them
-// out via `cargo test ... -- --skip ollama_`; `make ci-ollama` runs
-// them via `cargo test ollama_`. Every test below pins
-// `--embedding-model nomic-embed-text` so assertions against
-// `model_id` stay honest even if a developer's shell exports a
-// different default. Reports are parsed via `serde_json` so the
-// assertions are schema-aware rather than substring-guessing.
-// ===========================================================================
-

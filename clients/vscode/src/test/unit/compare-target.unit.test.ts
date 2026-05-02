@@ -28,7 +28,6 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
 
 function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 1,

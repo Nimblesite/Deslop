@@ -80,7 +80,7 @@ The canonical report is unbounded. `report-get` returns a **slim page** and forc
 
 ```text
 {
-  report_schema_version, generation, metrics, files_analysed,
+  generation, metrics, files_analysed,
   min_nodes, embedding_provenance, cache_stats, action_hints,
   total_clusters, page: { offset, limit, returned },
   clusters: [ClusterSummary, ...]

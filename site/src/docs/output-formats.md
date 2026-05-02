@@ -17,7 +17,6 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ```json
 {
-  "report_schema_version": "1.0",
   "generator": { "name": "deslop", "version": "1.0.0" },
   "schema_doc": "…",
   "summary": {
@@ -33,7 +32,6 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ### Guarantees
 
-- `report_schema_version` is semver. Major bumps are breaking.
 - Fields marked `optional` in the schema may be absent. Fields marked `required` are always present.
 - Clusters are sorted by `score` descending. `clusters[0]` is always the worst offender.
 - UTF-8. No BOM. LF line endings.

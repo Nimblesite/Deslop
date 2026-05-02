@@ -180,7 +180,6 @@ type ReportCluster {
 }
 
 type Report {
-  report_schema_version: Int
   tool_version: String
   min_nodes: Int
   files_analysed: Int
@@ -360,7 +359,6 @@ type ReportPageFilters {
 }
 
 type ReportPage {
-  report_schema_version: Int
   tool_version: String
   generation: Int
   files_analysed: Int

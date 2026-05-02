@@ -86,7 +86,7 @@ Bigger fragments count more. More copies count more. More lines on screen count 
 
 Three renderers read the same materialized view:
 
-- **JSON** — canonical, versioned (`report_schema_version`), strictly-typed.
+- **JSON** — canonical and strictly typed.
 - **TXT** — ASCII, line-oriented, no ANSI.
 - **HTML** — standalone, inlined CSS, zero network dependencies.
 

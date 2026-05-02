@@ -215,7 +215,6 @@ suite("extension internals", () => {
       sendRequest: (name: string) => {
         requests.push(name);
         return Promise.resolve({
-          report_schema_version: 1,
           tool_version: "v",
           min_nodes: 30,
           files_analysed: 7,
@@ -296,7 +295,6 @@ suite("extension internals", () => {
     const store = new ReportStore();
     store.setSnapshot(
       {
-        report_schema_version: 1,
         tool_version: "v0",
         min_nodes: 30,
         files_analysed: 0,
@@ -333,7 +331,6 @@ suite("extension internals", () => {
         requests.push(name);
         if (name === "deslop/reportDelta") return Promise.resolve(null);
         return Promise.resolve({
-          report_schema_version: 1,
           tool_version: "x",
           min_nodes: 30,
           files_analysed: 0,
@@ -364,7 +361,6 @@ suite("extension internals", () => {
     const client = {
       sendRequest: () =>
         Promise.resolve({
-          report_schema_version: 1,
           tool_version: "v",
           min_nodes: 30,
           files_analysed: 2,

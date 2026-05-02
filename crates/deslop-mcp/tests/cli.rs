@@ -638,12 +638,9 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
         &json!({ "offset": 0, "limit": 10 }),
     )?;
     let page = structured_tool_result(&result)?;
-    assert_eq!(
-        value_get(&page, "/report_schema_version")?
-            .as_u64()
-            .unwrap_or(0),
-        1,
-        "schema version must round-trip on the page"
+    assert!(
+        page.get("report_schema_version").is_none(),
+        "report pages must not expose a schema version"
     );
     assert!(
         page.get("schema_doc").is_none(),

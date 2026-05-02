@@ -37,7 +37,6 @@ function cluster(
 
 function report(): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 2,

@@ -32,12 +32,6 @@ export const REPORT_TYPE_CONFIG = {
       canonical_node_count: "usize",
       occurrences_total: "usize",
     },
-    fieldSerdeAttrs: {
-      bucket: ["default"],
-      occurrences_total: ["default"],
-      occurrences_truncated: ["default"],
-    },
-    tsOptional: ["bucket", "occurrences_total", "occurrences_truncated"],
     fieldDocs: {
       id: "Stable short id for cross-referencing.",
       weight: "Ranking weight (higher = worse).",
@@ -171,7 +165,6 @@ export const REPORT_TYPE_CONFIG = {
     docs: "Paginated `report-get` / `report-query` response. Carries headline metrics plus a slim slice of `ClusterSummary` rows.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: {
-      report_schema_version: "u32",
       generation: "u64",
       files_analysed: "usize",
       min_nodes: "u32",
@@ -182,7 +175,6 @@ export const REPORT_TYPE_CONFIG = {
       filters: ['skip_serializing_if = "Option::is_none"'],
     },
     fieldDocs: {
-      report_schema_version: "Stable schema version so agent consumers can parse defensively.",
       tool_version: "Binary / library version that produced the report.",
       schema_doc: "Markdown schema explanation.",
       generation: "Generation counter at the time the page was rendered.",
@@ -256,19 +248,11 @@ export const REPORT_TYPE_CONFIG = {
     docs: "A complete analysis report.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: {
-      report_schema_version: "u32",
       min_nodes: "u32",
       files_analysed: "usize",
       clusters_hidden: "usize",
     },
-    fieldSerdeAttrs: {
-      cache_stats: ["default"],
-      metrics: ["default"],
-      boilerplate_hints: ["default"],
-    },
-    tsOptional: ["boilerplate_hints"],
     fieldDocs: {
-      report_schema_version: "Stable schema version so agent consumers can parse defensively.",
       tool_version: "Binary / library version that produced the report.",
       min_nodes: "Minimum subtree node count used for clustering.",
       files_analysed: "Number of files analysed.",

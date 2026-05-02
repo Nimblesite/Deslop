@@ -43,8 +43,8 @@ fn state_file_exists_after_initialize() -> Result<()> {
     let report: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|error| anyhow!("state file is not valid JSON: {error}"))?;
     ensure!(
-        report.get("report_schema_version").is_some(),
-        "state file must contain report_schema_version: {report}"
+        report.get("tool_version").is_some(),
+        "state file must contain the current report shape: {report}"
     );
     let count = cluster_count(&report);
     ensure!(
@@ -443,7 +443,6 @@ fn seed_cached_report(path: &Path) -> Result<()> {
 
 fn cached_report() -> serde_json::Value {
     serde_json::json!({
-        "report_schema_version": 1,
         "tool_version": "test-cache",
         "min_nodes": 4,
         "files_analysed": 73,

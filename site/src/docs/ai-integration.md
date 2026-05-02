@@ -32,7 +32,6 @@ Every report begins with an embedded `schema_doc` explaining the shape to the ag
 
 ```json
 {
-  "report_schema_version": "1.0",
   "schema_doc": "…inline description of every field…",
   "summary": { "clusters_total": 142, "above_threshold": 17, "scan_time_ms": 27110 },
   "clusters": [
@@ -60,10 +59,6 @@ Deslop's source of truth is `[byte_start, byte_end)`. Line numbers are derived a
 ## Stable IDs
 
 Cluster IDs are ULIDs generated from the cluster's content fingerprint plus the report timestamp. Feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
-
-## Schema versioning
-
-`report_schema_version` is semver. Breaking changes bump the major. Additive changes — new fields, new signals — bump the minor. Agents should pin the major version they were written against.
 
 ## MCP and LSP (v2)
 

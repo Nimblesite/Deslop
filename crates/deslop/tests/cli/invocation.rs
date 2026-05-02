@@ -81,7 +81,7 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 }
 
 // Implements [OUTPUT-FORMAT-DERIVED]: the default run emits JSON, text,
-// and HTML side by side. All three must carry the v2 schema fields.
+// and HTML side by side. All three must carry the current report fields.
 #[test]
 fn default_run_emits_all_three_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -96,10 +96,6 @@ fn default_run_emits_all_three_formats() -> Result<()> {
         .assert()
         .success();
     let json = fs::read_to_string(&out.json)?;
-    assert!(
-        json.contains("\"report_schema_version\": 1"),
-        "schema version missing: {json}"
-    );
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
     assert!(json.contains("\"action_hints\""), "action_hints missing");
     assert!(

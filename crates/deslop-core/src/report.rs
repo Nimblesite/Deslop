@@ -38,16 +38,6 @@ pub use crate::wire_generated::{
 /// via `cluster/byId` on the non-live transport.
 pub const LIVE_WIRE_OCCURRENCE_CAP: usize = 100;
 
-/// Current report schema version.
-///
-/// Pinned at `1` for the life of the pre-stable development period.
-/// The report shape is still in flux and MAY change between releases
-/// while the tool is in its early stages; consumers should treat any
-/// pre-1.0 report as best-effort. Once the tool stabilises this will
-/// adopt semantic versioning and start bumping on breaking changes.
-/// Until then: do **not** bump this constant.
-pub const REPORT_SCHEMA_VERSION: u32 = 1;
-
 /// Markdown explaining the report schema. Embedded via `include_str!`
 /// from the single source of truth in `docs/specs/REPORTING-CONTEXT.md`
 /// so the JSON can never drift from the human-readable description.
@@ -200,7 +190,6 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         inputs.exclusion,
     );
     Report {
-        report_schema_version: REPORT_SCHEMA_VERSION,
         tool_version: crate::version().to_owned(),
         min_nodes: inputs.min_nodes,
         files_analysed: inputs.files_analysed,

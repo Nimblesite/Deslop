@@ -15,8 +15,6 @@ function runTypediagram(target) {
   return stdout;
 }
 
-// Splits the bare typediagram output into top-level items. typediagram
-
 function generateTs() {
   const raw = runTypediagram("typescript");
   const body = postprocessTs(raw);

@@ -3,17 +3,16 @@ use crate::support::*;
 #[test]
 fn from_report_keeps_missing_bucket_unupgraded_issue_85() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    // Minimal report missing `metrics` and `cluster.bucket`.
-    // `#[serde(default)]` keeps older reports round-tripping, but the CLI
-    // must not mutate their semantic bucket classification while rendering.
-    let v2 = "{\n\
-              \"report_schema_version\": 1,\n\
-              \"tool_version\": \"legacy\",\n\
+    let current_report = "{\n\
+              \"tool_version\": \"current\",\n\
               \"min_nodes\": 30,\n\
               \"files_analysed\": 0,\n\
               \"clusters_hidden\": 0,\n\
+              \"cache_stats\": {\"hits\": 0, \"misses\": 0},\n\
+              \"metrics\": {\"analysed_loc\": 0, \"duplicated_loc\": 0, \"duplication_percent\": 0.0, \"clusters_total\": 0, \"duplicated_files\": 0, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}},\n\
               \"schema_doc\": \"\",\n\
               \"action_hints\": [],\n\
+              \"boilerplate_hints\": [],\n\
               \"embedding_provenance\": null,\n\
               \"clusters\": [{\n\
                 \"id\": \"abc123\",\n\
@@ -21,20 +20,23 @@ fn from_report_keeps_missing_bucket_unupgraded_issue_85() -> Result<()> {
                 \"size\": 2,\n\
                 \"canonical_node_count\": 8,\n\
                 \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0},\n\
+                \"bucket\": \"\",\n\
                 \"occurrences\": [],\n\
-                \"summary\": \"legacy\",\n\
-                \"interpretation\": \"legacy\"\n\
+                \"occurrences_total\": 0,\n\
+                \"occurrences_truncated\": false,\n\
+                \"summary\": \"current\",\n\
+                \"interpretation\": \"current\"\n\
               }]\n\
               }\n";
-    let legacy_path = tmp.path().join("legacy.json");
-    fs::write(&legacy_path, v2)?;
+    let report_path = tmp.path().join("current.json");
+    fs::write(&report_path, current_report)?;
     let output_prefix = tmp.path().join("report");
     let out = outputs_under(tmp.path());
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
         .arg(tmp.path())
         .arg("--from-report")
-        .arg(&legacy_path)
+        .arg(&report_path)
         .arg("--no-color")
         .arg("--output")
         .arg(&output_prefix)
@@ -48,18 +50,18 @@ fn from_report_keeps_missing_bucket_unupgraded_issue_85() -> Result<()> {
         .get("clusters")
         .and_then(serde_json::Value::as_array)
         .and_then(|clusters| clusters.first())
-        .context("legacy report cluster should survive --from-report")?;
+        .context("current report cluster should survive --from-report")?;
     let bucket = cluster.get("bucket").and_then(serde_json::Value::as_str);
     assert_eq!(bucket, Some(""));
     assert_eq!(
         cluster.get("summary").and_then(serde_json::Value::as_str),
-        Some("legacy")
+        Some("current")
     );
     assert_eq!(
         cluster
             .get("interpretation")
             .and_then(serde_json::Value::as_str),
-        Some("legacy")
+        Some("current")
     );
     Ok(())
 }
@@ -70,13 +72,15 @@ fn from_report_keeps_missing_bucket_unupgraded_issue_85() -> Result<()> {
 fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let report = "{\n\
-                  \"report_schema_version\": 1,\n\
                   \"tool_version\": \"synthetic\",\n\
                   \"min_nodes\": 30,\n\
                   \"files_analysed\": 1,\n\
                   \"clusters_hidden\": 0,\n\
+                  \"cache_stats\": {\"hits\": 0, \"misses\": 0},\n\
+                  \"metrics\": {\"analysed_loc\": 0, \"duplicated_loc\": 0, \"duplication_percent\": 0.0, \"clusters_total\": 0, \"duplicated_files\": 0, \"threshold\": {\"percent\": 0.0, \"breached\": false, \"source\": \"none\"}},\n\
                   \"schema_doc\": \"\",\n\
                   \"action_hints\": [],\n\
+                  \"boilerplate_hints\": [],\n\
                   \"embedding_provenance\": null,\n\
                   \"clusters\": [{\n\
                     \"id\": \"same-behavior\",\n\
@@ -86,6 +90,8 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
                     \"signals\": {\"structural\": 0.0, \"token_jaccard\": 0.0, \"embedding_cos\": 0.9, \"fused\": 0.9},\n\
                     \"bucket\": \"same_behavior\",\n\
                     \"occurrences\": [{\"path\": \"missing.unknown\", \"start_byte\": 0, \"end_byte\": 0, \"hidden\": false}],\n\
+                    \"occurrences_total\": 0,\n\
+                    \"occurrences_truncated\": false,\n\
                     \"summary\": \"synthetic semantic clone\",\n\
                     \"interpretation\": \"semantic clone\"\n\
                   }]\n\

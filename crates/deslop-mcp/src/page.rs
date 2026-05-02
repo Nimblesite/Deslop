@@ -57,7 +57,6 @@ pub fn build_page(
         .collect();
     let returned = summaries.len();
     ReportPage {
-        report_schema_version: report.report_schema_version,
         tool_version: report.tool_version.clone(),
         generation,
         files_analysed: report.files_analysed,

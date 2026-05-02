@@ -1,4 +1,4 @@
-// Mirrors deslop-core::report at REPORT_SCHEMA_VERSION = 1.
+// Mirrors deslop-core::report.
 // Every wire shape has a typeDiagram .td entry and is re-exported from
 // `./wire-generated`. UI-only augmentation (`displayLocation`) lives as
 // an intersection so the wire shape stays the source of truth.
@@ -108,8 +108,8 @@ export function severityOf(weightPercentile: number): Severity {
 // extension per docs/specs/taxonomy.md [CLONE-BUCKETS-DUAL-LABEL].
 // ---------------------------------------------------------------------------
 
-// Wire label used in JSON `cluster.bucket` (schema v4). Stable contract;
-// never rename without bumping the schema version.
+// Wire label used in JSON `cluster.bucket`. Stable contract for the
+// current report shape.
 export type Bucket =
   | "identical"
   | "nearly_identical"

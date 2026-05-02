@@ -223,7 +223,27 @@ fn state_file_stamp(state_file: &Path) -> Result<StateFileStamp, BackendError> {
 /// Reads the LSP-written state file and parses it into a [`Report`].
 fn read_state_report(state_file: &Path) -> Result<Report, BackendError> {
     let bytes = fs::read(state_file).map_err(|err| map_state_file_io_error(&err))?;
-    serde_json::from_slice(&bytes).map_err(|err| BackendError::StateFileCorrupt(err.to_string()))
+    match serde_json::from_slice(&bytes) {
+        Ok(report) => Ok(report),
+        Err(err) => {
+            delete_incompatible_state_file(state_file, &err)?;
+            Err(BackendError::LspNotRunning)
+        }
+    }
+}
+
+fn delete_incompatible_state_file(
+    state_file: &Path,
+    parse_error: &serde_json::Error,
+) -> Result<(), BackendError> {
+    match fs::remove_file(state_file) {
+        Ok(()) => {
+            warn!(reason = %parse_error, "mcp_state_file_incompatible_deleted");
+            Ok(())
+        }
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(BackendError::StateFileCorrupt(err.to_string())),
+    }
 }
 
 /// Lifts a state-file I/O error into a [`BackendError`], distinguishing
