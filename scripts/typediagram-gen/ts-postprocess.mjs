@@ -15,24 +15,31 @@ export function postprocessTs(ts) {
 // Drops `export type|interface X` blocks whose TYPE_CONFIG entry sets
 // `skipTs: true`. Used for wire types with no TS consumer (e.g. the
 // JSON-RPC envelope, only consumed by the Rust MCP server).
+// `mode` tracks what the dropped block looks like so we don't flip off
+// on an interior field line: `interface` bodies end on a bare `}`,
+// multi-line `type` unions end on a line whose trim ends with `;` and
+// has zero pending opener depth.
 // TODO(typeDiagram#27): drop this once per-target gating (`@targets(rust)`)
 // is a first-class language attribute upstream.
 function dropSkippedTsBlocks(ts) {
   const lines = ts.split("\n");
   const out = [];
-  let dropping = false;
+  let mode = null;
   for (const line of lines) {
-    if (dropping) {
+    if (mode) {
       const trimmed = line.trim();
-      if (trimmed.endsWith(";") || trimmed === "}") dropping = false;
+      if (mode === "interface" && trimmed === "}") mode = null;
+      else if (mode === "type" && trimmed.endsWith(";")) mode = null;
       continue;
     }
-    const start =
-      line.match(/^export type (\w+)\s*=/u) ??
-      line.match(/^export interface (\w+)\s*\{/u);
-    if (start && TYPE_CONFIG[start[1]]?.skipTs) {
-      const trimmed = line.trim();
-      if (!trimmed.endsWith(";") && !trimmed.endsWith("}")) dropping = true;
+    const interfaceStart = line.match(/^export interface (\w+)\s*\{/u);
+    if (interfaceStart && TYPE_CONFIG[interfaceStart[1]]?.skipTs) {
+      mode = line.trim().endsWith("}") ? null : "interface";
+      continue;
+    }
+    const typeStart = line.match(/^export type (\w+)\s*=/u);
+    if (typeStart && TYPE_CONFIG[typeStart[1]]?.skipTs) {
+      mode = line.trim().endsWith(";") ? null : "type";
       continue;
     }
     out.push(line);

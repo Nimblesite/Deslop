@@ -15,7 +15,7 @@ suite("SessionProvider", () => {
     assert.equal(provider.getChildren(nodes[0]).length, 0);
   });
 
-  test("omits schema version from the human session panel (#118)", () => {
+  test("omits internal report format fields from the human session panel (#118)", () => {
     const store = new ReportStore();
     store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);

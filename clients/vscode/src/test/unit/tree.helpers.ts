@@ -85,6 +85,9 @@ export function report(clusters: ReportCluster[]): Report {
       model_id: "nomic-embed-text",
       model_version: "1",
       dimensions: 768,
+      attempted_subtrees: 0,
+      indexed_subtrees: 0,
+      failed_subtrees: 0,
     },
     clusters,
   };

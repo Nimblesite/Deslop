@@ -1,7 +1,7 @@
 use crate::support::*;
 
 #[test]
-fn from_report_keeps_missing_bucket_unupgraded_issue_85() -> Result<()> {
+fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let current_report = "{\n\
               \"tool_version\": \"current\",\n\

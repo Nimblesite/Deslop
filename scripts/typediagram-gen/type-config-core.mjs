@@ -260,12 +260,6 @@ export const CORE_TYPE_CONFIG = {
       indexed_subtrees: "usize",
       failed_subtrees: "usize",
     },
-    fieldSerdeAttrs: {
-      attempted_subtrees: ["default"],
-      indexed_subtrees: ["default"],
-      failed_subtrees: ["default"],
-    },
-    tsOptional: ["attempted_subtrees", "indexed_subtrees", "failed_subtrees"],
     fieldDocs: {
       provider_id: "Registry key of the provider (`ollama`).",
       model_id: "Human-readable model identifier.",

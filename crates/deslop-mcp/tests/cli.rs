@@ -640,7 +640,7 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
     let page = structured_tool_result(&result)?;
     assert!(
         page.get("report_schema_version").is_none(),
-        "report pages must not expose a schema version"
+        "report pages must not expose internal report-format revisions"
     );
     assert!(
         page.get("schema_doc").is_none(),
@@ -721,7 +721,8 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
         "schema-doc must return the full report schema markdown, got {} chars",
         schema_doc.len()
     );
-    let resource_response = child.request("resources/read", &json!({ "uri": "deslop://schema" }))?;
+    let resource_response =
+        child.request("resources/read", &json!({ "uri": "deslop://schema" }))?;
     let resource_doc_value = value_get(&resource_response, "/result/contents/0/text")?;
     let resource_doc = resource_doc_value
         .as_str()

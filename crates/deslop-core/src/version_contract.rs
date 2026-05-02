@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-/// Deployment Toolkit version-output schema version.
+/// Deployment Toolkit manifest revision.
 const MANIFEST_VERSION: u32 = 1;
 /// Product id shared by every Deslop executable component.
 const PRODUCT_ID: &str = "deslop";
