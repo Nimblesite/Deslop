@@ -2,6 +2,7 @@
 // No background fill, no emoji, no border boxes.
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
@@ -17,7 +18,9 @@ export class DecorationManager implements vscode.Disposable {
   constructor(private readonly store: ReportStore) {
     this.byKind = new Map(SEVERITIES.map((kind) => [kind, createDecoration(kind)]));
     this.disposables.push(
-      store.onDidChange(() => this.redrawAll()),
+      // effect() tracks store.report via the redraw() read — rerenders only
+      // when the report signal changes, not on every store mutation.
+      { dispose: effect(() => this.redrawAll()) },
       vscode.window.onDidChangeVisibleTextEditors(() => this.redrawAll()),
       vscode.workspace.onDidChangeTextDocument(() => this.redrawAll()),
     );

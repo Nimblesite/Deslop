@@ -290,9 +290,8 @@ impl LanguageServer for LspBackend {
     ) -> LspResult<DocumentDiagnosticReportResult> {
         let path = url_to_path(&params.text_document.uri).unwrap_or_default();
         let file_report = self.service.report_for_file(&path).await;
-        let global_weights = self.service.all_cluster_weights().await;
         let workspace_root = self.service.session_config().await.workspace_root;
-        let items = diagnostics::build_for_file(&file_report, &global_weights, &workspace_root);
+        let items = diagnostics::build_for_file(&file_report, &workspace_root);
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                 related_documents: None,

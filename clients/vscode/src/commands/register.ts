@@ -12,6 +12,7 @@ import { ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import {
+  aiPayloadForCluster,
   canonicalOccurrenceForCluster,
   clusterIdForTreeNode,
   copyClusterLocations,
@@ -90,6 +91,19 @@ export function registerCommands(
     vscode.commands.registerCommand(
       "deslop.copyContextForAI",
       (node: ClusterNode | OccurrenceNode) => copyContextForAI(node, store),
+    ),
+    // Called from hover card markdown links — receives a cluster ID string,
+    // looks up the cluster in the store, and copies the AI payload.
+    vscode.commands.registerCommand(
+      "deslop.copyClusterContextById",
+      async (id: unknown) => {
+        const clusterId = typeof id === "string" ? id : String(id);
+        const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
+        if (!cluster) return;
+        const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
+        await vscode.env.clipboard.writeText(aiPayloadForCluster(cluster, rank));
+        void vscode.window.showInformationMessage("Copied AI context to clipboard");
+      },
     ),
     vscode.commands.registerCommand(
       "deslop.copyHumanLocation",

@@ -4,6 +4,7 @@
 
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { effect } from "@preact/signals-core";
 
 import { COLOR } from "../design";
 import { reportWithDisplayLocations } from "../locations";
@@ -102,8 +103,9 @@ function wirePanel(
       report: reportWithDisplayLocations(report),
     });
   };
-  push(store.current.report);
-  const sub = store.onDidChange((state) => push(state.report));
+  // effect() runs immediately (initial snapshot) and again whenever
+  // store.report changes — replaces the old two-step push + subscribe.
+  const sub = { dispose: effect(() => push(store.report.value)) };
   if (onReady) {
     // delay until the webview has mounted and acknowledged via `ready`
     const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {

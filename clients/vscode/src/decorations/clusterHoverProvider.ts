@@ -24,7 +24,9 @@ export class ClusterHoverProvider implements vscode.HoverProvider {
         if (!sameFile(occurrence.path, activePath)) continue;
         const range = byteRangeToRange(document, occurrence);
         if (range?.contains(position)) {
-          return new vscode.Hover(clusterHoverMarkdown(cluster, { rank: index + 1 }));
+          return new vscode.Hover(
+            clusterHoverMarkdown(cluster, { rank: index + 1, showCategory: false }),
+          );
         }
       }
     }

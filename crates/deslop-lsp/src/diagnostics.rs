@@ -1,26 +1,21 @@
 //! LSP diagnostic builder ([LSP-DIAGNOSTICS], [LSP-SEVERITY]).
 //!
-//! Translates a [`FileReport`] into the LSP `Diagnostic` shape, mapping
-//! per-cluster weights onto the four severity buckets specified in
-//! [LSP-SEVERITY]. Severity bucketing uses the percentile of the
-//! cluster's weight against the **whole live report**, not just the
-//! current file: a cluster that is the worst in a sleepy file but
-//! mid-tier overall must rank mid-tier in the Problems panel —
-//! agreeing with the top-offenders tree, the CLI text report, and the
-//! HTML report. Callers obtain the global distribution through
-//! [`deslop_core::live::LiveApi::all_cluster_weights`].
+//! Translates a [`FileReport`] into the LSP `Diagnostic` shape.
+//! Severity is determined by clone bucket per [LSP-SEVERITY-BUCKET]:
+//!   `Identical` → `Error`, all others → `Warning` by default.
+//! Configurable per-bucket via `deslop.severity.*` settings; future
+//! percentile-floor support is specced in [LSP-SEVERITY-PERCENTILE].
 //!
 //! Occurrence paths in the report are workspace-relative; this module
 //! resolves them against the session's workspace root before
 //! constructing `file://` URLs so `relatedInformation` jumps land on
-//! real files.
-//!
-//! Byte offsets are translated to `(line, character)` LSP positions by
-//! reading the source text and counting UTF-16 code units per LSP spec.
+//! real files. Byte offsets are translated to `(line, character)` LSP
+//! positions by reading the source text and counting UTF-16 code units.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use deslop_core::buckets::{classify, ClusterKind};
 use deslop_core::live::FileReport;
 use deslop_core::report::{ReportCluster, ReportOccurrence};
 use tower_lsp::lsp_types::{
@@ -32,17 +27,11 @@ use crate::presentation::{diagnostic_data, diagnostic_message};
 
 /// Builds the diagnostics for one file report ([LSP-DIAGNOSTICS]).
 ///
-/// `global_weights` carries the weight of every cluster in the live
-/// report and drives the per-report percentile bucketing in
-/// [LSP-SEVERITY]. `workspace_root` is the absolute path the session
-/// was rooted at; relative occurrence paths are resolved against it so
+/// `workspace_root` is the absolute path the session was rooted at;
+/// relative occurrence paths are resolved against it so
 /// `relatedInformation` URLs are valid.
 #[must_use]
-pub fn build_for_file(
-    report: &FileReport,
-    global_weights: &[f64],
-    workspace_root: &Path,
-) -> Vec<Diagnostic> {
+pub fn build_for_file(report: &FileReport, workspace_root: &Path) -> Vec<Diagnostic> {
     let primary_path = absolute_path(&report.path, workspace_root);
     let primary_source = std::fs::read_to_string(&primary_path).unwrap_or_default();
     let mut source_cache: HashMap<PathBuf, String> = HashMap::new();
@@ -50,20 +39,12 @@ pub fn build_for_file(
         .clusters
         .iter()
         .flat_map(|cluster| {
-            build_for_cluster(
-                cluster,
-                global_weights,
-                &report.path,
-                workspace_root,
-                &primary_source,
-                &mut source_cache,
-            )
+            build_for_cluster(cluster, &report.path, workspace_root, &primary_source, &mut source_cache)
         })
         .collect()
 }
 
-/// Resolves `path` against `workspace_root` when it is relative,
-/// returning the path unchanged when it is already absolute.
+/// Resolves `path` against `workspace_root` when it is relative.
 fn absolute_path(path: &Path, workspace_root: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
@@ -85,27 +66,22 @@ fn load_cached_source(path: &Path, cache: &mut HashMap<PathBuf, String>) -> Stri
     content
 }
 
-/// Builds the per-cluster diagnostic — one entry per occurrence in
-/// `path`.
+/// Builds the per-cluster diagnostic — one entry per occurrence in `path`.
 fn build_for_cluster(
     cluster: &ReportCluster,
-    global_weights: &[f64],
     path: &Path,
     workspace_root: &Path,
     source_bytes: &str,
     cache: &mut HashMap<PathBuf, String>,
 ) -> Vec<Diagnostic> {
-    let severity = severity_for(cluster.weight, global_weights);
-    if severity.is_none() {
-        return Vec::new();
-    }
+    let severity = severity_for(cluster);
     cluster
         .occurrences
         .iter()
         .filter(|occ| occurrence_matches_path(occ, path))
         .map(|occurrence| Diagnostic {
             range: byte_range_to_lsp(occurrence.start_byte, occurrence.end_byte, source_bytes),
-            severity,
+            severity: Some(severity),
             code: None,
             code_description: None,
             source: Some("deslop".to_owned()),
@@ -117,43 +93,24 @@ fn build_for_cluster(
         .collect()
 }
 
-/// Returns `true` when the occurrence matches the file the report
-/// applies to. Handles the common relative/absolute skew.
+/// Returns `true` when the occurrence matches the file the report applies to.
 fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
     occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
 }
 
-/// Maps the cluster weight onto an LSP severity using the bucketing
-/// in [LSP-SEVERITY]. `None` means "below the visible threshold" —
-/// callers drop those.
-fn severity_for(weight: f64, weights: &[f64]) -> Option<DiagnosticSeverity> {
-    let percentile = percentile_for(weight, weights);
-    if percentile >= 0.99 {
-        Some(DiagnosticSeverity::WARNING)
-    } else if percentile >= 0.90 {
-        Some(DiagnosticSeverity::INFORMATION)
-    } else if percentile >= 0.50 {
-        Some(DiagnosticSeverity::HINT)
-    } else {
-        None
+/// Maps cluster bucket → LSP severity per [LSP-SEVERITY-BUCKET].
+/// Defaults: `Identical` → `Error`, all others → `Warning`.
+/// Future: configurable per bucket via `deslop.severity.*` settings.
+fn severity_for(cluster: &ReportCluster) -> DiagnosticSeverity {
+    match classify(cluster) {
+        ClusterKind::Identical => DiagnosticSeverity::ERROR,
+        ClusterKind::NearlyIdentical
+        | ClusterKind::LooselySimilar
+        | ClusterKind::SameBehavior => DiagnosticSeverity::WARNING,
     }
 }
 
-/// Returns the fraction of `weights` strictly less than `weight`. A
-/// cluster equal to the maximum lands at `1.0`.
-fn percentile_for(weight: f64, weights: &[f64]) -> f64 {
-    if weights.is_empty() {
-        return 0.0;
-    }
-    let lesser = weights.iter().filter(|other| **other < weight).count();
-    let total = weights.len();
-    let lesser_f = u32::try_from(lesser).map_or(f64::from(u32::MAX), f64::from);
-    let total_f = u32::try_from(total).map_or(f64::from(u32::MAX), f64::from);
-    lesser_f / total_f
-}
-
-/// Translates a byte range in `source_bytes` into a zero-indexed
-/// `Range` per the LSP spec.
+/// Translates a byte range into a zero-indexed LSP `Range`.
 fn byte_range_to_lsp(start_byte: usize, end_byte: usize, source_bytes: &str) -> Range {
     Range {
         start: position_for_byte(source_bytes, start_byte),
@@ -161,11 +118,9 @@ fn byte_range_to_lsp(start_byte: usize, end_byte: usize, source_bytes: &str) -> 
     }
 }
 
-/// Returns a single `relatedInformation` item pointing to the canonical
-/// (first) occurrence of the cluster that is not in `path`. Showing
-/// only the canonical keeps the diagnostic hover minimal — the full
-/// occurrence list belongs in the tree and the cluster document, not
-/// in the tooltip a human sees while coding.
+/// Returns a single `relatedInformation` entry pointing to the canonical
+/// occurrence — the first occurrence of the cluster not in `path`.
+/// Showing only the canonical keeps the diagnostic hover minimal.
 fn related_info_for(
     cluster: &ReportCluster,
     path: &Path,
@@ -195,8 +150,7 @@ fn canonical_item(
     })
 }
 
-/// Public helper for callers that need direct access to the range
-/// converter (e.g. code-lens layer).
+/// Public helper for the code-lens layer.
 #[must_use]
 pub fn byte_range(start_byte: usize, end_byte: usize, source: &str) -> Range {
     byte_range_to_lsp(start_byte, end_byte, source)

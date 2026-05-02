@@ -352,6 +352,7 @@
     "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs && npm run verify:package"
   },
   "dependencies": {
+    "@preact/signals-core": "^1.14.1",
     "pino": "^10.3.1",
     "vscode-languageclient": "^9.0.1"
   },

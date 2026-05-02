@@ -1,8 +1,9 @@
 // Shared hover card renderer — [VSIX-HOVER-SHARED].
-// Every surface that shows a cluster hover calls this.
-// Two layouts:
-//   Full (bubble):    **#N Category** × count  /  Canonical: `path`  /  links
-//   Compact (squiggle hover): **#N** × count  /  Canonical: `path`  /  links
+// Two layouts controlled by `showCategory`:
+//   Full (bubble, no adjacent diagnostic):
+//     **#N Category** × count  /  Canonical: `path`  /  links + Dismiss
+//   Compact (squiggle hover, alongside diagnostic):
+//     **#N** × count  /  Canonical: `path`  /  links + Copy for AI
 //   The compact form omits the category label — the diagnostic already shows it.
 
 import * as vscode from "vscode";
@@ -13,8 +14,7 @@ export interface ClusterHoverOptions {
   readonly rank?: number;
   readonly showDismiss?: boolean;
   readonly count?: number;
-  /// When false, the category label is omitted — use this when the VS Code
-  /// diagnostic already shows the category in the squiggle popup.
+  /// When false, the category label is omitted (use alongside a diagnostic).
   readonly showCategory?: boolean;
 }
 
@@ -46,6 +46,9 @@ export function clusterHoverMarkdown(
     `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs})`,
     `[View cluster](command:deslop.openCluster?${openArgs})`,
   ];
+  if (!showCategory) {
+    links.push(`[Copy for AI](command:deslop.copyClusterContextById?${openArgs})`);
+  }
   if (options.showDismiss) {
     const dismissArgs = encodeURIComponent(JSON.stringify([cluster.id]));
     links.push(`[Dismiss](command:deslop.bubble.dismissCluster?${dismissArgs})`);

@@ -4,6 +4,7 @@
 // file mode per [VSIX-TOP-OFFENDERS-GROUPING].
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
@@ -105,11 +106,12 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
     protected readonly store: ReportStore,
     protected readonly ticker: StatusTicker,
   ) {
-    this.disposables.push(store.onDidChange(() => this.onLifecycleMaybeChanged()));
+    // effect() tracks store.lifecycle (read inside onLifecycleMaybeChanged).
+    // Runs immediately for the initial state, then on every lifecycle change.
+    this.disposables.push({ dispose: effect(() => this.onLifecycleMaybeChanged()) });
     this.disposables.push(ticker.onTick(() => {
       if (this.needsAnimation()) this.emitter.fire();
     }));
-    this.onLifecycleMaybeChanged();
   }
 
   private onLifecycleMaybeChanged(): void {

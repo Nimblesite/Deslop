@@ -30,23 +30,30 @@ Severity is determined by **two independent axes**, applied in order:
 
 #### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket
 
-The clone bucket is the primary determinant. Identical code has no legitimate reason to exist in a codebase; it is treated as an error. Defaults:
+The clone bucket is the primary determinant. All four buckets default to `Warning` or higher — duplication is always actionable and should never be silent by default. `Identical` code defaults to `Error` because there is no legitimate reason for bit-for-bit duplicates to exist in a codebase.
 
-| Bucket | Default severity | Rationale |
+| Bucket | Default severity | Can be configured to |
 |---|---|---|
-| `Identical` | `Error` | Bit-for-bit duplicates offer no justification — extract or delete. |
-| `NearlyIdentical` | `Warning` | Near-misses need human review; may or may not warrant a fix. |
-| `LooselySimilar` | `Information` | Loose overlap — worth knowing, not worth blocking. |
-| `SameBehavior` | `Hint` | AI-detected semantic similarity — advisory only. |
+| `Identical` | `Error` | `"warning"` · `"information"` · `"hint"` · `"none"` |
+| `NearlyIdentical` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
+| `LooselySimilar` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
+| `SameBehavior` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
 
-**All four severities are user-configurable** via VS Code settings and the LSP initialization options. Each bucket accepts `"error" | "warning" | "information" | "hint" | "none"`. Setting a bucket to `"none"` suppresses its diagnostics entirely; the cluster remains visible via code lens, hover, and the VSIX tree but does not appear in the Problems panel.
+**Every severity is user-configurable** per bucket via VS Code settings. Valid values: `"error" | "warning" | "information" | "hint" | "none"`. Setting `"none"` suppresses diagnostics for that bucket entirely — the cluster stays visible in the tree, code lens, and hover but does not appear in the Problems panel or the squiggle gutter.
 
 ```jsonc
-// .vscode/settings.json — example overrides
-"deslop.severity.identical":       "warning",   // loosen from default Error
-"deslop.severity.nearlyIdentical": "warning",   // keep default
-"deslop.severity.looselySimilar":  "none",      // suppress
-"deslop.severity.sameBehavior":    "none"        // suppress
+// .vscode/settings.json
+// Loosen: treat all duplication as warning-only, suppress AI matches.
+"deslop.severity.identical":       "warning",
+"deslop.severity.nearlyIdentical": "warning",
+"deslop.severity.looselySimilar":  "information",
+"deslop.severity.sameBehavior":    "none"
+
+// Strict: everything is an error, no exceptions.
+"deslop.severity.identical":       "error",
+"deslop.severity.nearlyIdentical": "error",
+"deslop.severity.looselySimilar":  "error",
+"deslop.severity.sameBehavior":    "error"
 ```
 
 #### [LSP-SEVERITY-PERCENTILE] Secondary axis: weight-percentile thresholds

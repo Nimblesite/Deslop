@@ -6,6 +6,7 @@
 // Ghost-line mode uses a CodeLens on a phantom line.
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { clusterHoverMarkdown } from "../clusterHover";
@@ -66,7 +67,9 @@ export class LiveBubble implements vscode.Disposable {
         [{ language: "csharp" }, { language: "rust" }, { language: "python" }],
         this.inlayProvider,
       ),
-      this.store.onDidChange(() => this.clearRemovedActiveCluster()),
+      // effect() tracks store.report (read inside clearRemovedActiveCluster).
+      // Clears the bubble automatically when the active cluster disappears.
+      { dispose: effect(() => this.clearRemovedActiveCluster()) },
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
     );

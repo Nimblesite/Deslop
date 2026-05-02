@@ -1,13 +1,17 @@
 // [VSIX-STATUS-BAR] — `dedup · N · #1=File.cs:230 · embed=<model>`.
+// Fully signal-driven: the effect() in the constructor tracks every
+// signal read inside render(), so the bar updates automatically on
+// any relevant store change ([VSIX-REACTIVITY]).
 
 import * as vscode from "vscode";
+import { signal, effect } from "@preact/signals-core";
 
 import { ReportStore } from "../reportStore";
 
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
-  private analysing = false;
+  private readonly _analysing = signal(false);
 
   constructor(private readonly store: ReportStore) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
@@ -15,16 +19,16 @@ export class StatusBar implements vscode.Disposable {
     this.item.command = "deslop.openWorstCluster";
     this.disposables.push(
       this.item,
-      store.onDidChange(() => this.render()),
+      // Tracks store.report and _analysing signals. Runs immediately
+      // (initial render) and again on every relevant change.
+      { dispose: effect(() => this.render()) },
       vscode.window.onDidChangeActiveTextEditor(() => this.render()),
     );
-    this.render();
     this.item.show();
   }
 
   setAnalysing(on: boolean): void {
-    this.analysing = on;
-    this.render();
+    this._analysing.value = on;
   }
 
   dispose(): void {
@@ -33,6 +37,7 @@ export class StatusBar implements vscode.Disposable {
 
   private render(): void {
     const report = this.store.current.report;
+    const analysing = this._analysing.value;
     if (!report) {
       this.item.text = "$(sync~spin) dedup analysing";
       this.item.tooltip = "Deslop is warming up";
@@ -48,8 +53,8 @@ export class StatusBar implements vscode.Disposable {
       ? ` · #1=${shortPath(worst.occurrences[0]?.path ?? "?")}`
       : "";
     const embed = report.embedding_provenance?.model_id ?? "off";
-    const analysing = this.analysing ? " (analysing…)" : "";
-    this.item.text = `dedup · ${n}${worstLabel} · embed=${embed}${analysing}`;
+    const analysingSuffix = analysing ? " (analysing…)" : "";
+    this.item.text = `dedup · ${n}${worstLabel} · embed=${embed}${analysingSuffix}`;
     this.item.tooltip = new vscode.MarkdownString(
       `**Deslop**\n\n` +
         `${report.clusters.length} clusters total, ${n} in this file\n\n` +

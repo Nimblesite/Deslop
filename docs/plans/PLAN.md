@@ -82,4 +82,14 @@ Implemented work intentionally not repeated here:
       (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
 - [ ] Finish [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md)
       (blocked on the Type-1 path landing).
-- [ ] Finish [VSIX reactivity](vsix-reactivity-plan.md).
+- [x] **DONE** — [VSIX reactivity](vsix-reactivity-plan.md): `@preact/signals-core` added to
+      extension host; `ReportStore` now uses `signal<T>` internally with `batch()` on
+      multi-field updates; `DecorationManager`, `StatusBar`, `LifecycleAwareProvider`,
+      `LiveBubble`, and `wirePanel` all use `effect()` directly — zero `onDidChange`
+      callbacks on reactive surfaces. `StatusBar._analysing` is now a signal so the
+      "analysing…" suffix also tracks reactively.
+- [x] **DONE** — MCP push notifications ([MCP-NOTIFICATIONS]): `NotificationSender`
+      (`Arc<Mutex<Box<dyn Write + Send>>>`) wired through `McpBackend::set_notification_sender`;
+      `mark_changed` pushes `notifications/resources/updated` + `notifications/deslop/reportChanged`
+      synchronously; embedding refresh thread pushes the same pair on completion. E2E test
+      `files_changed_pushes_resources_updated_and_report_changed_notifications` covers both frames.
