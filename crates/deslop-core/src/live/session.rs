@@ -24,7 +24,8 @@ use super::{
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
         cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
-        initialise_pipeline, live_batch_yield, parse_and_hash_snippet, stub_model_info, truncate,
+        initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
+        stub_model_info, truncate,
     },
     wire::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
@@ -59,14 +60,6 @@ pub struct AnalysisSession {
     embedding_progress_reporter: Option<EmbeddingProgressReporter>,
     /// Monotonic id for queued embedding refreshes.
     embedding_refresh_revision: u64,
-}
-
-/// [LIVE-STATE-FILE] Writes `bytes` to `{dir}/live-report.json` via an
-/// atomic tmp-then-rename so readers never see a partial file.
-fn atomic_write_json(dir: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
-    let tmp = dir.join("live-report.json.tmp");
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, dir.join("live-report.json"))
 }
 
 impl std::fmt::Debug for AnalysisSession {
@@ -455,24 +448,11 @@ impl AnalysisSession {
     /// `{cache_dir}/live-report.json`. Best-effort: failures are logged
     /// at `warn` level and never propagated to callers.
     fn write_state_file(&self) {
-        let cache_dir = self
-            .pipeline
-            .root()
-            .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
-        if let Err(error) = std::fs::create_dir_all(&cache_dir) {
-            tracing::warn!(%error, "state_file_dir_create_failed");
-            return;
-        }
-        match serde_json::to_vec(self.latest_report.as_ref()) {
-            Err(error) => tracing::warn!(%error, "state_file_serialize_failed"),
-            Ok(bytes) => {
-                if let Err(error) = atomic_write_json(&cache_dir, &bytes) {
-                    tracing::warn!(%error, "state_file_atomic_write_failed");
-                } else {
-                    tracing::info!(generation = self.generation, "state_file_written");
-                }
-            }
-        }
+        persist_state_file(
+            self.pipeline.root(),
+            self.latest_report.as_ref(),
+            self.generation,
+        );
     }
 
     /// Asserts `path` is under the workspace root.
