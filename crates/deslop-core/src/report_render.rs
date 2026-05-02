@@ -11,6 +11,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use tree_sitter::{Node, Parser};
+
 use crate::{
     ast::ByteRange,
     buckets::{bucket_labels, classify_signals, ClusterKind},
@@ -155,13 +157,14 @@ pub(crate) fn report_bucket_kind(
     signals: ReportSignals,
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
-    _file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+    file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
 ) -> ClusterKind {
     let kind = classify_signals(signals);
-    if kind == ClusterKind::Identical && !source_slices_are_equivalent(members, sources) {
-        ClusterKind::NearlyIdentical
-    } else {
-        kind
+    let equivalent = source_slices_are_equivalent_for_language(members, sources, file_languages);
+    match (kind, equivalent, signals.structural >= 0.99) {
+        (ClusterKind::Identical, false, _) => ClusterKind::NearlyIdentical,
+        (ClusterKind::NearlyIdentical, true, true) => ClusterKind::Identical,
+        _ => kind,
     }
 }
 
@@ -197,6 +200,108 @@ pub(crate) fn source_slices_are_equivalent(
     canonical_slices
         .windows(2)
         .all(|window| matches!(window, [left, right] if left == right))
+}
+
+/// Returns true when source slices are equivalent for the member language.
+fn source_slices_are_equivalent_for_language(
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+) -> bool {
+    source_slices_are_equivalent(members, sources)
+        || csharp_method_declarations_are_equivalent(members, sources, file_languages)
+}
+
+/// Compares contained C# methods when the clone range includes wrappers.
+fn csharp_method_declarations_are_equivalent(
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+) -> bool {
+    if !members
+        .iter()
+        .all(|member| language_is(file_languages, member, "csharp"))
+    {
+        return false;
+    }
+    let mut method_sets = Vec::with_capacity(members.len());
+    for member in members {
+        let Some(source) = sources.get(&member.file_id) else {
+            return false;
+        };
+        method_sets.push(csharp_methods_in_range(source, member.byte_range));
+    }
+    equivalent_method_sets(&method_sets)
+}
+
+/// Returns true when a member belongs to `language`.
+fn language_is(
+    file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+    member: &Fingerprint,
+    language: &str,
+) -> bool {
+    file_languages.get(&member.file_id).copied() == Some(language)
+}
+
+/// Extracts canonical C# method declarations contained by `range`.
+fn csharp_methods_in_range(source: &[u8], range: ByteRange) -> Vec<Vec<u8>> {
+    let mut parser = Parser::new();
+    let language = tree_sitter_c_sharp::LANGUAGE.into();
+    if parser.set_language(&language).is_err() {
+        return Vec::new();
+    }
+    parser.parse(source, None).map_or_else(Vec::new, |tree| {
+        let mut out = Vec::new();
+        collect_csharp_methods(tree.root_node(), range, source, &mut out);
+        out
+    })
+}
+
+/// Collects method declarations fully contained in `range`.
+fn collect_csharp_methods(node: Node<'_>, range: ByteRange, source: &[u8], out: &mut Vec<Vec<u8>>) {
+    if outside_range(node, range) {
+        return;
+    }
+    if contained_method(node, range) {
+        if let Some(method) = source.get(node.start_byte()..node.end_byte()) {
+            out.push(canonicalise_whitespace(method));
+        }
+        return;
+    }
+    collect_csharp_method_children(node, range, source, out);
+}
+
+/// Recurses over a node's children.
+fn collect_csharp_method_children(
+    node: Node<'_>,
+    range: ByteRange,
+    source: &[u8],
+    out: &mut Vec<Vec<u8>>,
+) {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        collect_csharp_methods(child, range, source, out);
+    }
+}
+
+/// Returns true when `node` has no overlap with `range`.
+fn outside_range(node: Node<'_>, range: ByteRange) -> bool {
+    node.end_byte() <= range.start || node.start_byte() >= range.end
+}
+
+/// Returns true when `node` is a method fully contained by `range`.
+fn contained_method(node: Node<'_>, range: ByteRange) -> bool {
+    node.kind() == "method_declaration"
+        && range.start <= node.start_byte()
+        && node.end_byte() <= range.end
+}
+
+/// Returns true when all non-empty method sets are byte-equivalent.
+fn equivalent_method_sets(method_sets: &[Vec<Vec<u8>>]) -> bool {
+    method_sets.iter().all(|methods| !methods.is_empty())
+        && method_sets
+            .windows(2)
+            .all(|window| matches!(window, [left, right] if left == right))
 }
 
 /// Collapses all runs of ASCII whitespace in `bytes` to a single space and

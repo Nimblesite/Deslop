@@ -132,8 +132,9 @@ fn collapsed_members(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<
 fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
+    let rank_nodes = refactor_potential_node_count(smallest_nodes, signals);
     let spanned_bytes = spanned_byte_count(&members);
-    let weight = rank_weight(smallest_nodes, size, spanned_bytes);
+    let weight = rank_weight(rank_nodes, size, spanned_bytes);
     let id_source = cluster_id_source(&members);
     Cluster {
         id: encode_short_id(id_source),
@@ -158,6 +159,26 @@ fn spanned_byte_count(members: &[Fingerprint]) -> u64 {
         .iter()
         .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
         .fold(0_u64, u64::saturating_add)
+}
+
+/// Returns the node count used for ranking.
+///
+/// Low-structural Type-4 clusters often span a large interface-shaped AST
+/// region while only a small body fragment is actually refactorable. Keep the
+/// rendered `canonical_node_count` unchanged, but rank those clusters by a
+/// conservative refactor-potential fraction so exact duplicates stay ahead.
+fn refactor_potential_node_count(clone_node_count: usize, signals: PairScore) -> usize {
+    if signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
+        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
+    {
+        clone_node_count
+            .saturating_mul(LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR)
+            .checked_div(LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR)
+            .unwrap_or(clone_node_count)
+            .max(1)
+    } else {
+        clone_node_count
+    }
 }
 
 /// Selects the deterministic hash source for the public cluster id.
@@ -400,6 +421,14 @@ const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 /// 2^32 as an `f64`. Used by [`lossless_f64_from_u64`] to reassemble 64-bit
 /// values without a direct `u64 as f64` cast.
 const F64_TWO_POW_32: f64 = 4_294_967_296.0;
+/// Structural ceiling below which Type-4 span size is treated as low-signal.
+const LOW_STRUCTURAL_TYPE4_CEILING: f64 = 0.10;
+/// Semantic confidence floor for Type-4 ranking dampening.
+const TYPE4_EMBEDDING_FLOOR: f64 = 0.90;
+/// Rank low-structural Type-4 clusters at 10% of their AST node span.
+const LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR: usize = 1;
+/// Denominator for the low-structural Type-4 ranking fraction.
+const LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR: usize = 10;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]

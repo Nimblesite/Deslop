@@ -51,7 +51,7 @@ pub const LSH_ONLY_MIN_NODE_COUNT: usize = 40;
 /// lower than the default LSH-only floor because cross-language AST
 /// vocabularies differ, and the mode is opt-in for ports/generated
 /// clients rather than normal same-language refactoring.
-pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.70;
+pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
 
 /// Per-pair score breakdown in `[0, 1]`. See
 /// [FUSION-STRATEGY-MAX-SUM] for the semantics. Three slots are reserved
@@ -154,12 +154,18 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
     signatures: &[Signature],
     lsh_pairs: &[(usize, usize)],
     embedding_pairs: &[EmbeddingPair],
+    cross_language_signatures: Option<&[Signature]>,
     file_languages: &HashMap<FileId, &'static str, S>,
     allow_cross_language: bool,
 ) -> Vec<CandidatePair> {
     let mut pairs = candidate_pairs(fingerprints, signatures, lsh_pairs, embedding_pairs);
     if allow_cross_language {
-        add_cross_language_signature_pairs(&mut pairs, fingerprints, signatures, file_languages);
+        add_cross_language_signature_pairs(
+            &mut pairs,
+            fingerprints,
+            cross_language_signatures.unwrap_or(signatures),
+            file_languages,
+        );
         pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
         return pairs
             .into_iter()

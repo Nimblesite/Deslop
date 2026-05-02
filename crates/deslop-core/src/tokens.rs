@@ -68,6 +68,23 @@ pub fn token_stream_for_fingerprint_with_language(
     Some(out)
 }
 
+/// Like [`token_stream_for_fingerprint_with_language`], but folds common
+/// control-flow and declaration node kinds into cross-language aliases.
+/// Used only when the user explicitly opts into cross-language audits.
+#[must_use]
+pub fn cross_language_token_stream_for_fingerprint(
+    root: &NormalizedNode,
+    fingerprint: &Fingerprint,
+    language: &str,
+) -> Option<Vec<&'static str>> {
+    token_stream_for_fingerprint_with_language(root, fingerprint, language).map(|tokens| {
+        tokens
+            .into_iter()
+            .map(cross_language_token)
+            .collect::<Vec<_>>()
+    })
+}
+
 /// Computes the set of contiguous k-grams from `tokens`. Returns an empty
 /// vector when `tokens.len() < k` — callers treat that as "no similarity
 /// signal from this subtree."
@@ -95,6 +112,30 @@ fn walk(node: &NormalizedNode, out: &mut Vec<&'static str>) {
     out.push(node.kind);
     for child in &node.children {
         walk(child, out);
+    }
+}
+
+/// Maps language-specific grammar names onto shared audit tokens.
+fn cross_language_token(token: &'static str) -> &'static str {
+    match token {
+        "method_declaration" | "function_item" | "function_definition" => "__fn__",
+        "parameter_list" | "parameters" => "__params__",
+        "if_statement" | "if_expression" => "__if__",
+        "for_statement" | "for_expression" => "__for__",
+        "return_statement" | "return_expression" => "__return__",
+        "binary_expression" | "binary_operator" | "comparison_operator" => "__binary__",
+        "assignment_expression"
+        | "assignment"
+        | "let_declaration"
+        | "local_declaration_statement"
+        | "variable_declaration"
+        | "variable_declarator" => "__assign__",
+        "call" | "invocation_expression" => "__call__",
+        "argument_list" => "__args__",
+        "range_expression" => "__range__",
+        "expression_statement" => "__expr__",
+        "modifier" | "visibility_modifier" | "mutable_specifier" => "__modifier__",
+        other => other,
     }
 }
 

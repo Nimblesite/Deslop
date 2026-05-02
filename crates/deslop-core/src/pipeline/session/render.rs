@@ -21,7 +21,7 @@ use crate::{
 use super::{
     super::{
         config::PipelineConfig, corpus::FingerprintCorpus, embedding_pass::run_embedding_pass,
-        signatures::build_signatures_with_languages,
+        signatures::build_cross_language_signatures, signatures::build_signatures_with_languages,
     },
     PipelineSession,
 };
@@ -46,6 +46,14 @@ impl PipelineSession {
         );
         tracing::debug!(signatures = signatures.len(), "running LSH band collisions");
         let lsh_pairs = band_collisions(&signatures);
+        let cross_language_signatures =
+            self.exclusion.allows_cross_language_comparison().then(|| {
+                build_cross_language_signatures(
+                    &corpus.fingerprints,
+                    &corpus.trees,
+                    &self.file_languages,
+                )
+            });
         tracing::debug!(lsh_pairs = lsh_pairs.len(), "running embedding pass");
         let embedding_outcome = run_embedding_pass(config, &corpus)?;
         tracing::debug!(
@@ -57,6 +65,7 @@ impl PipelineSession {
             &signatures,
             &lsh_pairs,
             &embedding_outcome.pairs,
+            cross_language_signatures.as_deref(),
             &self.file_languages,
             self.exclusion.allows_cross_language_comparison(),
         );

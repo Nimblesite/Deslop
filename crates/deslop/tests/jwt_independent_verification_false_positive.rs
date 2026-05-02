@@ -92,10 +92,16 @@ fn jwt_verifier_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>
             if text.contains("hmac.new") && text.contains("hashlib.sha256") {
                 crypto_snippets = crypto_snippets.saturating_add(1);
             }
-            snippets.push(format!("{path}: {}", text.lines().next().unwrap_or_default()));
+            snippets.push(format!(
+                "{path}: {}",
+                text.lines().next().unwrap_or_default()
+            ));
         }
         let has_production = paths.iter().any(|path| path.ends_with("jwt_minter.py"));
-        let test_count = paths.iter().filter(|path| path.starts_with("tests/")).count();
+        let test_count = paths
+            .iter()
+            .filter(|path| path.starts_with("tests/"))
+            .count();
         if has_production && test_count >= 1 && crypto_snippets >= 2 {
             offenders.push(format!(
                 "bucket={:?}, paths={paths:?}, snippets={snippets:?}",
@@ -112,8 +118,14 @@ fn independent_hs256_test_verifiers_do_not_surface_as_duplicate_logic() -> Resul
     let production = scan_root.join("src/agent_backend/agent_workspace/jwt_minter.py");
     let coverage_test = scan_root.join("tests/test_agent_workspace_coverage.py");
     let fly_test = scan_root.join("tests/test_fly_host.py");
-    assert!(production.is_file(), "production JWT minter fixture must exist");
-    assert!(coverage_test.is_file(), "coverage verifier fixture must exist");
+    assert!(
+        production.is_file(),
+        "production JWT minter fixture must exist"
+    );
+    assert!(
+        coverage_test.is_file(),
+        "coverage verifier fixture must exist"
+    );
     assert!(fly_test.is_file(), "fly-host verifier fixture must exist");
     assert!(
         fs::read_to_string(&production)?.contains("hmac.new"),

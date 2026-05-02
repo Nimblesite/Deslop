@@ -22,6 +22,9 @@
 //! - **#75** — every first-party Rust language plug-in implements the
 //!   same `LanguageParser` trait surface. The adapter shape is required
 //!   by the trait contract, not extractable business logic.
+//! - **#114** — tests can independently re-implement HS256/JWT signing
+//!   to verify a production minter as a black box. Sharing the helper
+//!   would make the test check its own implementation.
 //! - **#126** — generator template literals that contain generated-file
 //!   headers can cluster with the generated output. That relationship is
 //!   provenance, not duplicate implementation logic.
@@ -57,9 +60,71 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     is_polymorphic_signature_cluster(&snippets)
         || is_rust_language_parser_adapter_cluster(&snippets)
         || is_generated_template_output_cluster(&snippets)
+        || is_jwt_hmac_independent_verifier_cluster(&snippets)
         || is_literal_variation_call_cluster(&snippets)
         || is_monkeypatch_scaffolding_literal_cluster(&snippets)
         || is_python_all_exports_cluster(&snippets)
+}
+
+/// Detects **issue #114**: production HS256/JWT signing code and tests
+/// that re-implement the same HMAC calculation independently. The
+/// test-side duplication is intentional black-box verification; if the
+/// test called the production minter/helper, it would stop proving the
+/// signing implementation.
+fn is_jwt_hmac_independent_verifier_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+        return false;
+    }
+    let shapes: Option<Vec<JwtHmacShape>> = snippets.iter().map(jwt_hmac_shape).collect();
+    let Some(shapes) = shapes else { return false };
+    let mut files = BTreeSet::new();
+    for shape in &shapes {
+        let _inserted = files.insert(shape.file_id);
+    }
+    files.len() >= 2
+        && shapes.iter().all(|shape| shape.is_hs256_body)
+        && shapes.iter().any(|shape| shape.is_test_source)
+        && shapes.iter().any(|shape| !shape.is_test_source)
+}
+
+/// Distilled source-level shape for one HS256 signing occurrence.
+struct JwtHmacShape {
+    /// Registry id of the source file containing this member.
+    file_id: FileId,
+    /// True when the full source file looks like a test module.
+    is_test_source: bool,
+    /// True when the enclosing function body implements the HS256
+    /// HMAC/base64url signing pattern.
+    is_hs256_body: bool,
+}
+
+/// Extracts HS256 signing shape from the enclosing Python function.
+fn jwt_hmac_shape(snippet: &Snippet<'_>) -> Option<JwtHmacShape> {
+    let tree = parse_for(snippet)?;
+    let function = enclosing_kind(tree.root_node(), snippet.range, &["function_definition"])?;
+    let body = function.child_by_field_name("body")?;
+    let body_source = snippet.source.get(body.start_byte()..body.end_byte())?;
+    Some(JwtHmacShape {
+        file_id: snippet.file_id,
+        is_test_source: python_source_looks_like_test(snippet.source),
+        is_hs256_body: python_body_looks_like_hs256(body_source),
+    })
+}
+
+/// Returns true for Python test modules without relying on filesystem
+/// paths, which the cluster filter does not receive.
+fn python_source_looks_like_test(source: &[u8]) -> bool {
+    contains_bytes(source, b"def test_") || contains_bytes(source, b"expected_hs256")
+}
+
+/// Returns true for the stdlib HS256 signing shape:
+/// `hmac.new(..., hashlib.sha256).digest()` followed by base64url
+/// encoding. Requiring all three calls keeps the filter tighter than a
+/// generic "uses hmac" suppression.
+fn python_body_looks_like_hs256(body_source: &[u8]) -> bool {
+    contains_bytes(body_source, b"hmac.new")
+        && contains_bytes(body_source, b"hashlib.sha256")
+        && contains_bytes(body_source, b"urlsafe_b64encode")
 }
 
 /// Detects **issue #126**: a hand-written generator source contains a
@@ -101,9 +166,12 @@ fn is_generated_output_source(snippet: &Snippet<'_>) -> bool {
 
 /// Generated-file marker used by first-party and dogfood fixtures.
 fn contains_generated_marker(bytes: &[u8]) -> bool {
-    bytes
-        .windows(b"DO NOT HAND-EDIT".len())
-        .any(|window| window == b"DO NOT HAND-EDIT")
+    contains_bytes(bytes, b"DO NOT HAND-EDIT")
+}
+
+/// Returns true when `needle` occurs in `bytes`.
+fn contains_bytes(bytes: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty() && bytes.windows(needle.len()).any(|window| window == needle)
 }
 
 /// Returns the bytes covered by one cluster occurrence.

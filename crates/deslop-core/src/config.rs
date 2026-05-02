@@ -44,8 +44,12 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
 /// Directory components that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
 
-/// Generated migration path components hidden from summaries.
-const BUILTIN_REPORT_HIDE_COMPONENT_PAIRS: &[(&str, &str)] = &[("alembic", "versions")];
+/// Non-actionable path component pairs hidden from summaries.
+const BUILTIN_REPORT_HIDE_COMPONENT_PAIRS: &[(&str, &str)] = &[
+    ("alembic", "versions"),
+    ("test", "fixtures"),
+    ("tests", "fixtures"),
+];
 
 /// File suffixes that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[

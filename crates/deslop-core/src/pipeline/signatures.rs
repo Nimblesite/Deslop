@@ -12,8 +12,8 @@ use crate::{
     lsh::{minhash_signature, Signature, SIGNATURE_LEN},
     state::FileId,
     tokens::{
-        kgrams, token_stream_for_fingerprint, token_stream_for_fingerprint_with_language,
-        KGRAM_WIDTH,
+        cross_language_token_stream_for_fingerprint, kgrams, token_stream_for_fingerprint,
+        token_stream_for_fingerprint_with_language, KGRAM_WIDTH,
     },
 };
 
@@ -59,6 +59,42 @@ pub fn build_signatures_with_languages<S: BuildHasher>(
         signatures.push(signature);
     }
     signatures
+}
+
+/// Builds aliases-only signatures for explicit cross-language audits.
+#[must_use]
+pub fn build_cross_language_signatures<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    trees: &[NormalizedNode],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> Vec<Signature> {
+    let tree_index = build_tree_index(trees);
+    fingerprints
+        .iter()
+        .map(|fingerprint| {
+            let language = file_languages.get(&fingerprint.file_id).copied();
+            cross_language_signature(fingerprint, &tree_index, language)
+        })
+        .collect()
+}
+
+/// Builds one cross-language signature, falling back to fingerprint scope.
+fn cross_language_signature(
+    fingerprint: &Fingerprint,
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    language: Option<&str>,
+) -> Signature {
+    let Some(language) = language else {
+        return empty_signature(fingerprint, None);
+    };
+    let Some(root) = tree_index.get(&fingerprint.file_id).copied() else {
+        return empty_signature(fingerprint, Some(language));
+    };
+    let tokens = cross_language_token_stream_for_fingerprint(root, fingerprint, language);
+    tokens.map_or_else(
+        || empty_signature(fingerprint, Some(language)),
+        |tokens| signature_for_tokens(&tokens, fingerprint, Some(language)),
+    )
 }
 
 /// Returns true when an exact fingerprint range contains prologue syntax.
