@@ -129,8 +129,7 @@ Wire the release path so deployment drift fails before publish:
   `deslop-mcp`.
 - LSP and MCP initialize metadata verification.
 - VSIX package contents verification.
-- JetBrains package contents verification (implemented but temporarily
-  deferred to GitHub #55 pending the Gradle validation work in GitHub #56).
+- JetBrains package contents verification through `make jetbrains-package`.
 
 Use shared `deploy-toolkit` commands when available. Until they are published,
 add product-local tests that prove the same behavior.
@@ -237,9 +236,11 @@ author must update this section with a dated rationale.
       and notification/Event Log behavior.
 - [x] Add CI gates for manifest validation and built binary version checks.
 - [x] Add CI gates for VSIX package verification.
-- [ ] Re-enable JetBrains package archive verification in `make
+- [x] Re-enable JetBrains package archive verification in `make
       jetbrains-package` (GitHub #55).
-- [ ] Restore a reliable local JetBrains Gradle validation path (GitHub #56).
+- [x] Restore a reliable local JetBrains Gradle validation path (GitHub #56).
+      `GRADLE` still overrides, and Unix hosts without `gradle` on `PATH` use a
+      cached Gradle 9.0.0 distribution from `~/.gradle/wrapper/dists`.
 - [x] Inspect private Deployment Toolkit fixtures and Deslop migration docs;
       no product manifest drift required.
 - [x] Update release/publish docs with private Deployment Toolkit access

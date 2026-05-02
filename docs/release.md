@@ -16,10 +16,15 @@ Test entry points remove cargo-installed `deslop`, `deslop-lsp`, and
 inside `clients/vscode/bin/<platform>/` and clear resolver override
 environment variables so activation proves the extension bundle, not PATH.
 
-`make jetbrains-package` currently builds the JetBrains plugin zip without the
-product-local archive verifier. Re-enable `scripts/verify-jetbrains-package.mjs`
-through GitHub #55 after the local JetBrains Gradle validation path in GitHub
-#56 is reliable.
+`make jetbrains-package` builds the JetBrains plugin zip, runs Gradle project
+configuration and plugin structure verification, then runs
+`scripts/verify-jetbrains-package.mjs` against the generated archive. The
+archive verifier checks the root `deployment-toolkit.json`, the manifest-listed
+host `deslop-lsp` binary, executable mode on Unix platforms, `--version`
+identity, and undeclared native files under the shipped `bin/<platform>/`
+directory. On Unix hosts the Makefile uses `gradle` from `PATH` when available,
+then falls back to a cached Gradle 9.0.0 distribution under
+`~/.gradle/wrapper/dists`; set `GRADLE=/path/to/gradle` to override it.
 
 The shared Deployment Toolkit repository is private:
 `MelbourneDeveloper/deployment_toolkit`. Agents working from Deployment Toolkit

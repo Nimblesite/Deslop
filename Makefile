@@ -7,7 +7,7 @@
 
 .PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
 
-GRADLE ?= gradle
+GRADLE_VERSION ?= 9.0.0
 JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
@@ -19,9 +19,11 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
+  GRADLE ?= gradle
 else
   RM = rm -rf
   MKDIR = mkdir -p
+  GRADLE ?= $(shell _gradle=$$(command -v gradle 2>/dev/null); if [ -z "$$_gradle" ]; then _gradle=$$(find "$(HOME)/.gradle/wrapper/dists" -path "*/gradle-$(GRADLE_VERSION)/bin/gradle" -type f 2>/dev/null | sort | tail -n 1); fi; printf '%s' "$${_gradle:-gradle}")
 endif
 
 # ---------------------------------------------------------------------------
@@ -273,8 +275,6 @@ vsix-rebuild:
 	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
 ## jetbrains-build: Build the JetBrains plugin zip.
-##                 JetBrains archive verification is deferred to GitHub #55
-##                 while the local Gradle validation path is tracked in #56.
 jetbrains-build:
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
@@ -283,8 +283,10 @@ jetbrains-build:
 jetbrains-verify:
 	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
 
-## jetbrains-package: Alias for the JetBrains plugin package artifact.
+## jetbrains-package: Build and verify the JetBrains plugin package artifact.
 jetbrains-package: jetbrains-build
+	@$(MAKE) jetbrains-verify
+	node scripts/verify-jetbrains-package.mjs
 
 ## help: List all available targets
 help:
@@ -312,4 +314,4 @@ help:
 	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"
 	@echo "  jetbrains-build - Build the JetBrains plugin zip"
 	@echo "  jetbrains-verify - Verify JetBrains plugin configuration and structure"
-	@echo "  jetbrains-package - Alias for jetbrains-build"
+	@echo "  jetbrains-package - Build and verify the JetBrains plugin zip"
