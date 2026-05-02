@@ -15,6 +15,9 @@ export interface ClusterHoverOptions {
   readonly rank?: number;
   /// Include a Dismiss link (bubble only, not the decoration hover).
   readonly showDismiss?: boolean;
+  /// Override the displayed occurrence count. When absent, defaults to
+  /// `occurrenceCount(cluster)` which uses the authoritative total.
+  readonly count?: number;
 }
 
 /// Builds the VS Code MarkdownString hover card.
@@ -25,7 +28,7 @@ export function clusterHoverMarkdown(
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   const labels = bucketLabels(resolveBucket(cluster));
-  const count = occurrenceCount(cluster);
+  const count = options.count ?? occurrenceCount(cluster);
   const rankPrefix = options.rank !== undefined ? `#${options.rank} ` : "";
 
   md.appendMarkdown(`**${rankPrefix}${labels.plainTitle}** × ${count}\n\n`);

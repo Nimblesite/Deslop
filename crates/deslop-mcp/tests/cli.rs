@@ -305,7 +305,7 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
 }
 
 #[test]
-fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
+fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
     let mut child = McpChild::spawn(&fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("tools/list", &json!({}))?;
@@ -316,8 +316,9 @@ fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_owned))
         .collect();
-    assert_eq!(names.len(), 9, "expected 9 tools, got {names:?}");
+    assert_eq!(names.len(), 10, "expected 10 tools, got {names:?}");
     for expected in [
+        "top-offenders",
         "report-get",
         "report-query",
         "report-for-file",
@@ -333,6 +334,11 @@ fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
             "missing tool: {expected}"
         );
     }
+    assert_eq!(
+        names.first().map(String::as_str),
+        Some("top-offenders"),
+        "top-offenders must be listed first as the primary tool"
+    );
     for tool in tools.as_array().unwrap_or(&Vec::new()) {
         let description = tool
             .get("description")
@@ -344,6 +350,96 @@ fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
             "tool missing inputSchema: {tool}"
         );
     }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({ "n": 3 }))?;
+    let payload = structured_tool_result(&result)?;
+    let total = value_get(&payload, "/total_clusters")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_clusters must be present"))?;
+    assert!(total >= 1, "fixture must have at least one cluster");
+    assert_eq!(
+        value_get(&payload, "/n")?.as_u64(),
+        Some(3),
+        "n must echo the requested value"
+    );
+    let clusters = value_get(&payload, "/clusters")?;
+    let clusters_arr = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?;
+    assert!(
+        clusters_arr.len() <= 3,
+        "returned {} clusters but requested max 3",
+        clusters_arr.len()
+    );
+    let first = clusters_arr
+        .first()
+        .ok_or_else(|| anyhow!("at least one cluster expected"))?;
+    assert!(
+        first.get("occurrences").is_some_and(Value::is_array),
+        "top-offenders must return full occurrences array: {first}"
+    );
+    assert!(
+        first
+            .get("interpretation")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty()),
+        "top-offenders must return interpretation text: {first}"
+    );
+    assert!(
+        first
+            .get("bucket")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty()),
+        "top-offenders must return bucket: {first}"
+    );
+    assert!(
+        first
+            .get("weight")
+            .and_then(Value::as_f64)
+            .is_some_and(|w| w > 0.0),
+        "top-offenders must return positive weight: {first}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
+    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({}))?;
+    let payload = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&payload, "/n")?.as_u64(),
+        Some(5),
+        "omitting n must default to 5"
+    );
+    let clusters = value_get(&payload, "/clusters")?;
+    let clusters_arr = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?;
+    assert!(
+        clusters_arr.len() <= 5,
+        "default n=5 must not return more than 5 clusters"
+    );
+    let weights: Vec<f64> = clusters_arr
+        .iter()
+        .filter_map(|c| c.get("weight").and_then(Value::as_f64))
+        .collect();
+    assert_eq!(
+        weights.len(),
+        clusters_arr.len(),
+        "every cluster must have a weight"
+    );
+    let sorted = weights.windows(2).all(|w| w[0] >= w[1]);
+    assert!(sorted, "clusters must be worst-first by weight: {weights:?}");
     let _ = child.finish();
     Ok(())
 }
@@ -1828,6 +1924,75 @@ fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
     // Server must remain responsive after a no-op notification.
     let response = child.request("tools/list", &json!({}))?;
     assert!(value_get(&response, "/result/tools")?.is_array());
+    let _ = child.finish();
+    Ok(())
+}
+
+/// [MCP-NOTIFICATIONS] After `notifications/deslop/filesChanged` the
+/// server must push `notifications/resources/updated` and
+/// `notifications/deslop/reportChanged` before waiting for the next
+/// client frame.
+#[test]
+fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> Result<()> {
+    let temp = TempDir::new()?;
+    std::fs::write(
+        temp.path().join("One.cs"),
+        include_str!("fixtures/csharp-mcp/Alpha.cs"),
+    )?;
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        include_str!("fixtures/csharp-mcp/Beta.cs"),
+    )?;
+    let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    let _ = init_session(&mut child)?;
+
+    // Modify a file then notify the server.
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        "namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+    child.notify(
+        "notifications/deslop/filesChanged",
+        &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
+    )?;
+
+    // Server pushes two notification frames synchronously before it
+    // returns to its read loop — read them both right away.
+    let frame1 = child.read_frame()?;
+    assert_eq!(
+        frame1.get("method").and_then(Value::as_str),
+        Some("notifications/resources/updated"),
+        "first pushed frame must be resources/updated: {frame1}"
+    );
+    assert!(
+        frame1.get("id").is_none(),
+        "notification must not carry an id: {frame1}"
+    );
+    assert_eq!(
+        frame1.pointer("/params/uri").and_then(Value::as_str),
+        Some("deslop://report"),
+        "resources/updated must name deslop://report: {frame1}"
+    );
+
+    let frame2 = child.read_frame()?;
+    assert_eq!(
+        frame2.get("method").and_then(Value::as_str),
+        Some("notifications/deslop/reportChanged"),
+        "second pushed frame must be deslop/reportChanged: {frame2}"
+    );
+    assert!(
+        frame2.get("id").is_none(),
+        "notification must not carry an id: {frame2}"
+    );
+    assert!(
+        frame2.pointer("/params/generation").and_then(Value::as_u64).is_some(),
+        "reportChanged must include a numeric generation: {frame2}"
+    );
+
+    // Server stays alive and responsive after pushing notifications.
+    let response = child.request("tools/list", &json!({}))?;
+    assert!(value_get(&response, "/result/tools")?.is_array());
+
     let _ = child.finish();
     Ok(())
 }

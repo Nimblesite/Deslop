@@ -8,6 +8,8 @@ use deslop_core::{
 };
 use tracing::{info, warn};
 
+use crate::{notify::push_report_changed, NotificationSender};
+
 use super::{live_batch_yield, pipeline::SessionState, BackendError, SessionBackendConfig};
 
 /// Resolves the configured provider using the `embedding_mode` /
@@ -32,27 +34,34 @@ pub(super) fn select_provider(
 }
 
 /// Starts a detached MCP embedding refresh after a model change.
+///
+/// `sender` is forwarded so the worker thread can push
+/// `notifications/resources/updated` once the new embeddings land
+/// ([MCP-NOTIFICATIONS]).
 pub(super) fn spawn_mcp_embedding_refresh(
     config: SessionBackendConfig,
     state: Arc<Mutex<SessionState>>,
     provider: Arc<dyn EmbeddingProvider>,
     revision: u64,
+    sender: Option<NotificationSender>,
 ) {
     let _join = std::thread::spawn(move || {
         if let Err(error) =
-            run_mcp_embedding_refresh(&config, state.as_ref(), provider.as_ref(), revision)
+            run_mcp_embedding_refresh(&config, state.as_ref(), provider.as_ref(), revision, &sender)
         {
             warn!(reason = %error, "mcp_embedding_model_refresh_failed");
         }
     });
 }
 
-/// Rebuilds the backend session with the selected embedding provider.
+/// Rebuilds the backend session with the selected embedding provider,
+/// then pushes report-changed notifications through `sender` (if set).
 pub(super) fn run_mcp_embedding_refresh(
     config: &SessionBackendConfig,
     state: &Mutex<SessionState>,
     provider: &dyn EmbeddingProvider,
     revision: u64,
+    sender: &Option<NotificationSender>,
 ) -> Result<(), BackendError> {
     let (session, report) = PipelineSession::initialise(
         config.root.clone(),
@@ -66,12 +75,19 @@ pub(super) fn run_mcp_embedding_refresh(
             progress: None,
         },
     )?;
-    let mut guard = super::pipeline::lock_state(state)?;
-    if guard.embedding_revision == revision {
+    let generation = {
+        let mut guard = super::pipeline::lock_state(state)?;
+        if guard.embedding_revision != revision {
+            return Ok(());
+        }
         guard.session = session;
         guard.report = Arc::new(report);
         guard.generation = guard.generation.saturating_add(1);
         info!(root = %config.root.display(), "mcp_embedding_model_refresh_complete");
+        guard.generation
+    };
+    if let Some(s) = sender {
+        push_report_changed(s, generation);
     }
     Ok(())
 }

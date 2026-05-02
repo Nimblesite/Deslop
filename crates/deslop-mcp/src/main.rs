@@ -99,8 +99,10 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let backend = Arc::new(PipelineSessionBackend::initialise(config)?);
     let server = McpServer::new(backend);
     let stdin = io::stdin();
-    let stdout = io::stdout();
-    server.run(stdin.lock(), stdout.lock())?;
+    // io::Stdout is Write + Send + 'static; StdoutLock<'_> is not Send,
+    // so we pass the unlocked handle so background threads can push
+    // notifications through the shared NotificationSender.
+    server.run(stdin.lock(), io::stdout())?;
     Ok(())
 }
 

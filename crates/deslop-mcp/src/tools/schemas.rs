@@ -90,6 +90,17 @@ pub(super) fn schema_find_similar() -> Value {
     })
 }
 
+/// Schema for `top-offenders`.
+pub(super) fn schema_top_offenders() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "n": { "type": "integer", "minimum": 1, "default": 5, "description": "Max clusters to return." }
+        },
+        "additionalProperties": false,
+    })
+}
+
 /// Schema for `cluster-by-id`.
 pub(super) fn schema_cluster_by_id() -> Value {
     json!({

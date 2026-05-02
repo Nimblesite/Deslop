@@ -25,6 +25,7 @@
 //!   LLM planner, not a human reader.
 
 pub mod backend;
+pub mod notify;
 pub mod page;
 pub mod protocol;
 pub mod resources;
@@ -33,6 +34,7 @@ pub mod server;
 pub mod tools;
 
 pub use backend::{McpBackend, PipelineSessionBackend, SessionBackendConfig};
+pub use notify::NotificationSender;
 pub use protocol::{ErrorCode, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId};
 pub use safety::{resolve_within_root, PathResolutionError};
 pub use server::{McpServer, ServerError};

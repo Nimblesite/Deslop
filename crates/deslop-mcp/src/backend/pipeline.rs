@@ -14,7 +14,7 @@ use deslop_core::{
 };
 use tracing::info;
 
-use crate::safety::resolve_within_root;
+use crate::{notify::push_report_changed, safety::resolve_within_root, NotificationSender};
 
 use super::{
     filters, live_batch_yield, persistence, refresh, BackendError, FindSimilarInput,
@@ -42,13 +42,25 @@ pub(super) struct SessionState {
 /// `McpBackend` implementation backed by a [`PipelineSession`] guarded
 /// by a shared [`Mutex`]. Foreground tool calls stay short; selected
 /// embedding refreshes run on a detached low-priority worker.
-#[derive(Debug)]
 pub struct PipelineSessionBackend {
     /// Shared session configuration.
     config: SessionBackendConfig,
     /// Mutable state behind a single mutex so concurrent tool calls
     /// serialise cleanly.
     state: Arc<Mutex<SessionState>>,
+    /// Shared writer for pushing server → client notifications
+    /// ([MCP-NOTIFICATIONS]). Set by [`McpServer::run`] before the
+    /// read loop starts; `None` until then.
+    sender: Mutex<Option<NotificationSender>>,
+}
+
+impl std::fmt::Debug for PipelineSessionBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PipelineSessionBackend")
+            .field("config", &self.config)
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
 }
 
 impl PipelineSessionBackend {
@@ -94,6 +106,7 @@ impl PipelineSessionBackend {
                 embedding_mode,
                 embedding_revision: 0,
             })),
+            sender: Mutex::new(None),
         })
     }
 
@@ -271,11 +284,17 @@ impl McpBackend for PipelineSessionBackend {
             state.embedding_revision = state.embedding_revision.saturating_add(1);
             state.embedding_revision
         };
+        let notification_sender = self
+            .sender
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone());
         refresh::spawn_mcp_embedding_refresh(
             self.config.clone(),
             Arc::clone(&self.state),
             new_provider,
             revision,
+            notification_sender,
         );
         info!(
             provider_id = spec.provider_id,
@@ -301,26 +320,46 @@ impl McpBackend for PipelineSessionBackend {
     }
 
     fn mark_changed(&self, paths: &[PathBuf]) -> Result<(), BackendError> {
-        let mut state = lock_state(&self.state)?;
-        let SessionState {
-            session,
-            provider,
-            report,
-            generation,
-            embedding_mode,
-            ..
-        } = &mut *state;
-        let settings = EmbeddingSettings {
-            mode: *embedding_mode,
-            provider: provider.as_deref(),
-            batch_yield: live_batch_yield(*embedding_mode),
-            progress: None,
+        let generation = {
+            let mut state = lock_state(&self.state)?;
+            let SessionState {
+                session,
+                provider,
+                report,
+                generation,
+                embedding_mode,
+                ..
+            } = &mut *state;
+            let settings = EmbeddingSettings {
+                mode: *embedding_mode,
+                provider: provider.as_deref(),
+                batch_yield: live_batch_yield(*embedding_mode),
+                progress: None,
+            };
+            let new_report = session.update_files(paths, settings)?;
+            *report = Arc::new(new_report);
+            *generation = generation.saturating_add(1);
+            *generation
         };
-        let new_report = session.update_files(paths, settings)?;
-        *report = Arc::new(new_report);
-        *generation = generation.saturating_add(1);
-        drop(state);
+        push_changed_via(&self.sender, generation);
         Ok(())
+    }
+
+    fn set_notification_sender(&self, sender: NotificationSender) {
+        if let Ok(mut guard) = self.sender.lock() {
+            *guard = Some(sender);
+        }
+    }
+}
+
+/// Pushes report-changed notifications through the stored sender (if
+/// set). Fire-and-forget — lock failures are silently ignored so the
+/// notification path never crashes the analysis thread.
+fn push_changed_via(sender_slot: &Mutex<Option<NotificationSender>>, generation: u64) {
+    if let Ok(guard) = sender_slot.lock() {
+        if let Some(sender) = guard.as_ref() {
+            push_report_changed(sender, generation);
+        }
     }
 }
 

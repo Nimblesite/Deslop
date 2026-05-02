@@ -148,12 +148,21 @@ Resources are listed via `resources/list`. Their content refreshes every time `r
 
 ### [MCP-NOTIFICATIONS] Notifications (server → client)
 
-The MCP spec supports server-initiated notifications. We use two:
+The MCP spec supports server-initiated notifications. Two are pushed unconditionally whenever the analysis report changes:
 
-- `notifications/resources/updated` — fired against `deslop://report` after every scheduler pass. Clients that subscribed to the resource re-read it.
-- `notifications/deslop/reportChanged` — custom namespace, carries a `{ generation, summary }` payload mirroring the LSP `report/changed`. Agents that keep a cursor on the report generation consume this directly.
+- `notifications/resources/updated` — standard MCP notification; payload `{ uri: "deslop://report" }`. Clients subscribed to the resource re-read it on receipt.
+- `notifications/deslop/reportChanged` — custom namespace; payload `{ generation: <u64> }`. Mirrors the LSP `deslop/reportChanged` notification. Agents that reconcile against a generation cursor consume this directly without polling tool calls.
 
-Notifications are not ordered relative to tool calls; an agent issuing a tool call mid-re-analysis gets a snapshot that's either pre- or post-pass, never partial. The `generation` field on the response lets the agent reconcile.
+**Both notifications are pushed in the same write under one mutex lock**, so they always arrive consecutively on the wire with no interleaving.
+
+**Two trigger points** — notifications fire from both paths:
+
+1. **`notifications/deslop/filesChanged` handler** — after `mark_changed` updates the session state, the server pushes both frames *synchronously* before returning to the read loop. The client can call `read_frame()` twice immediately after sending the notification.
+2. **Embedding refresh thread** — when a background model-swap completes, the worker thread pushes the same two frames through the shared `NotificationSender` without waiting for the next client message.
+
+**`NotificationSender` is the shared write handle** — `Arc<Mutex<Box<dyn Write + Send>>>`. `McpServer::run` constructs it from the writer, wires it into the backend via `McpBackend::set_notification_sender`, then both the synchronous request loop and background threads use it under the same mutex so frames never interleave.
+
+Notifications are not ordered relative to tool calls; an agent issuing a tool call mid-re-analysis gets a snapshot that's either pre- or post-pass, never partial. The `generation` field on the notification and response lets the agent reconcile.
 
 ### [MCP-AGENT-PROMPT-GUIDANCE] Tool descriptions are prompt engineering
 
@@ -192,5 +201,6 @@ Because the canonical JSON report already embeds `interpretation`, `action_hints
 - `tools/call find-similar` with unparseable input returns `UnparseableInputError`.
 - `tools/call set-embedding-model` followed by `tools/call session-config` shows the new provenance.
 - `resources/read deslop://report` returns valid canonical JSON; a follow-up edit triggers `notifications/resources/updated`.
+- `notifications/deslop/filesChanged` on a real path change **immediately** pushes `notifications/resources/updated` then `notifications/deslop/reportChanged` before the server returns to its read loop. The test calls `read_frame()` twice right after `notify()` and asserts both frames arrive without waiting for a subsequent request.
 
 No mocking of the MCP framing — test frames are raw JSON-RPC over a pipe.

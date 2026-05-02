@@ -12,6 +12,29 @@ use crate::{
 
 use super::backend_to_rpc;
 
+/// `top-offenders` forwarder. Returns up to `n` full [`ReportCluster`]
+/// records — occurrences, interpretation, signals, bucket — everything
+/// the agent needs to act without a follow-up `cluster-by-id` call.
+pub(super) fn call_top_offenders(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let n = args
+        .get("n")
+        .and_then(Value::as_u64)
+        .and_then(|v| usize::try_from(v).ok())
+        .unwrap_or(5)
+        .max(1);
+    let report = backend.report_get().map_err(backend_to_rpc)?;
+    let total = report.clusters.len();
+    let clusters: Vec<_> = report.clusters.iter().take(n).collect();
+    Ok(json!({
+        "total_clusters": total,
+        "n": n,
+        "clusters": clusters,
+    }))
+}
+
 /// `report-get` forwarder. Renders a slim paginated `ReportPage`
 /// ([MCP-TOOL-REPORT-PAGINATION]).
 pub(super) fn call_report_get(

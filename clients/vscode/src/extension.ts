@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
+  Middleware,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
@@ -30,6 +31,7 @@ import {
   SessionProvider,
   StatusTicker,
 } from "./tree/providers";
+import { ClusterHoverProvider } from "./decorations/clusterHoverProvider";
 import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
@@ -125,6 +127,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   const decorations = new DecorationManager(reportStore);
   context.subscriptions.push(decorations);
 
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      [
+        { language: "csharp", scheme: "file" },
+        { language: "rust", scheme: "file" },
+        { language: "python", scheme: "file" },
+      ],
+      new ClusterHoverProvider(reportStore),
+    ),
+  );
+
   const bubble = new LiveBubble(reportStore, () => client);
   context.subscriptions.push(bubble);
 
@@ -218,6 +231,11 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     },
     outputChannel: initOutputChannel(),
     initializationOptions: currentInitializationOptions(),
+    // The TypeScript ClusterHoverProvider owns the editor hover card.
+    // Suppress the LSP textDocument/hover so they don't stack in the popup.
+    middleware: {
+      provideHover: () => null,
+    } as Middleware,
   };
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }

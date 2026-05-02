@@ -16,11 +16,12 @@ mod schemas;
 use handlers::{
     call_cluster_by_id, call_find_similar, call_list_embedding_models, call_report_for_file,
     call_report_for_range, call_report_get, call_report_query, call_session_config,
-    call_set_embedding_model,
+    call_set_embedding_model, call_top_offenders,
 };
 use schemas::{
     schema_cluster_by_id, schema_empty, schema_find_similar, schema_report_for_file,
     schema_report_for_range, schema_report_get, schema_report_query, schema_set_embedding_model,
+    schema_top_offenders,
 };
 
 /// Static definition of one MCP tool.
@@ -34,60 +35,59 @@ pub struct ToolDefinition {
     pub input_schema: fn() -> Value,
 }
 
-/// Static tool registry.
-const TOOLS: [ToolDefinition; 9] = [
+/// Static tool registry. `top-offenders` is the primary entry point.
+const TOOLS: [ToolDefinition; 10] = [
+    ToolDefinition {
+        name: "top-offenders",
+        description:
+            "Top N duplicate clusters with full data (occurrences, interpretation, signals, bucket, score). Default n=5. Start here — one call gives everything needed to fix duplication.",
+        input_schema: schema_top_offenders,
+    },
     ToolDefinition {
         name: "report-get",
-        description:
-            "Fetch one page of the current duplication report. Worst offenders first. Returns headline metrics + a slim cluster summary slice (no member list, no full occurrences[]). Call this at session start; follow up with cluster-by-id for any cluster you want to drill into. Both `offset` and `limit` are required — the agent must size its own context window.",
+        description: "Paginated slim cluster list, worst-first. Use top-offenders for full data.",
         input_schema: schema_report_get,
     },
     ToolDefinition {
         name: "report-query",
         description:
-            "Targeted, filterable lookup over the duplication report. Same slim ReportPage shape as report-get, plus optional `language`, `bucket`, `path_contains`, `min_score`, `min_size` filters that combine with logical AND. Use this whenever you can describe what you're looking for instead of dumping the whole report. `offset` + `limit` required.",
+            "Slim paginated list with AND-combined filters: language, bucket, path_contains, min_score, min_size.",
         input_schema: schema_report_query,
     },
     ToolDefinition {
         name: "report-for-file",
-        description:
-            "All clone clusters whose occurrences touch this file. Call before editing to see what's already a duplicate here.",
+        description: "All clusters whose occurrences touch this file.",
         input_schema: schema_report_for_file,
     },
     ToolDefinition {
         name: "report-for-range",
-        description:
-            "Clusters overlapping the byte range you're about to edit. Call before a refactor — tells you if the range is part of a larger clone family.",
+        description: "Clusters overlapping a byte range. Call before refactoring a specific block.",
         input_schema: schema_report_for_range,
     },
     ToolDefinition {
         name: "find-similar",
         description:
-            "Before you write a new block, call this. Give either a byte range on an open file or a snippet + language. Returns existing clusters similar to the input via the full structural + LSH + embedding passes. Prevents you from introducing new clones.",
+            "Find clusters similar to a byte range or snippet. Call before writing to avoid introducing new clones.",
         input_schema: schema_find_similar,
     },
     ToolDefinition {
         name: "cluster-by-id",
-        description:
-            "Fetch a cluster by its stable 16-char id (the one shown in report text and LSP diagnostics).",
+        description: "Full cluster record by stable id (shown in report text and LSP diagnostics).",
         input_schema: schema_cluster_by_id,
     },
     ToolDefinition {
         name: "list-embedding-models",
-        description:
-            "Enumerate Ollama models installed on the host plus the built-in stub provider. Use before switching models.",
+        description: "Enumerate available embedding models.",
         input_schema: schema_empty,
     },
     ToolDefinition {
         name: "set-embedding-model",
-        description:
-            "Switch the live embedding model only after explicit user initiation. Persists the shared VSIX/LSP embedding settings; structural + LSH caches stay warm.",
+        description: "Switch the embedding model. Requires user_initiated=true.",
         input_schema: schema_set_embedding_model,
     },
     ToolDefinition {
         name: "session-config",
-        description:
-            "Min-nodes, active languages, embedding provenance, exclusion config path, cache root.",
+        description: "Session metadata: root, min-nodes, languages, generation counter.",
         input_schema: schema_empty,
     },
 ];
@@ -137,6 +137,7 @@ pub fn dispatch_tool_call(
     arguments: &Value,
 ) -> Result<Value, JsonRpcError> {
     match name {
+        "top-offenders" => call_top_offenders(backend, arguments),
         "report-get" => call_report_get(backend, arguments),
         "report-query" => call_report_query(backend, arguments),
         "report-for-file" => call_report_for_file(backend, arguments),

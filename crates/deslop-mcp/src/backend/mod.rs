@@ -15,6 +15,8 @@ use std::{
     time::Duration,
 };
 
+use crate::NotificationSender;
+
 use deslop_core::{
     report::{CacheStats, ReportCluster},
     CoreError, EmbeddingMode, EmbeddingProvenance, EmbeddingSpec, OllamaModelInfo, ProviderError,
@@ -187,12 +189,20 @@ pub trait McpBackend: Send + Sync {
 
     /// Signals to the backend that one or more watched files have
     /// changed. Implementations that track a `PipelineSession` will
-    /// re-run analysis and bump [`Self::generation`].
+    /// re-run analysis, bump [`Self::generation`], and push
+    /// `notifications/resources/updated` + `notifications/deslop/reportChanged`
+    /// through the stored sender ([MCP-NOTIFICATIONS]).
     ///
     /// # Errors
     ///
     /// Propagates [`BackendError::Core`] on analysis failure.
     fn mark_changed(&self, paths: &[PathBuf]) -> Result<(), BackendError>;
+
+    /// Wires the shared writer so the backend can push server →
+    /// client notifications from any thread ([MCP-NOTIFICATIONS]).
+    ///
+    /// Called once by [`McpServer::run`] before the read loop starts.
+    fn set_notification_sender(&self, sender: NotificationSender);
 }
 
 /// Input variants accepted by [`McpBackend::find_similar`].

@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
-import { ReportCluster, ReportOccurrence, Severity } from "../types/report";
+import { ReportCluster, ReportOccurrence, Severity, visibleOccurrenceCount } from "../types/report";
 
 const SEVERITIES: Severity[] = ["worst", "top10", "mid", "faint"];
 
@@ -49,10 +49,7 @@ export class DecorationManager implements vscode.Disposable {
         if (!sameFile(occurrence.path, activePath)) continue;
         const range = byteRangeToRange(editor.document, occurrence);
         if (!range) continue;
-        buckets.get(severity)?.push({
-          range,
-          hoverMessage: hoverFor(cluster),
-        });
+        buckets.get(severity)?.push({ range });
       }
     }
     for (const [kind, decoration] of this.byKind) {
@@ -76,9 +73,10 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
   });
 }
 
-// Decoration hover: same card as bubble but without rank or dismiss link.
+// Kept for test harness — ClusterHoverProvider uses clusterHoverMarkdown directly with rank.
+// Uses visibleOccurrenceCount so the count reflects what the user can act on.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
-  return clusterHoverMarkdown(cluster);
+  return clusterHoverMarkdown(cluster, { count: visibleOccurrenceCount(cluster) });
 }
 
 export function byteRangeToRange(
@@ -95,7 +93,7 @@ export function byteRangeToRange(
   return new vscode.Range(start, end);
 }
 
-function sameFile(reportPath: string, editorPath: string): boolean {
+export function sameFile(reportPath: string, editorPath: string): boolean {
   if (reportPath === editorPath) return true;
   return editorPath.endsWith(reportPath) || reportPath.endsWith(editorPath);
 }
