@@ -8,10 +8,7 @@
 use std::{io::Write, path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
-use deslop_core::{
-    embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID},
-    version_contract_output, ComponentKind,
-};
+use deslop_core::{version_contract_output, ComponentKind};
 use tokio::runtime::{Builder, Runtime};
 use tracing_subscriber::EnvFilter;
 
@@ -136,11 +133,12 @@ fn requests_version(args: &[String]) -> bool {
 
 /// Parses non-version argv into server startup configuration.
 fn startup_from_args(args: &[String]) -> Result<LspStartup> {
+    reject_unsupported_startup_flags(args)?;
     Ok(LspStartup {
         workspace_root: parse_workspace_root(args)?,
-        min_nodes: parse_min_nodes(args)?,
+        min_nodes: 30,
         worker_threads: parse_worker_threads(args)?,
-        embedding: parse_embedding_config(args)?,
+        embedding: LspEmbeddingConfig::default(),
     })
 }
 
@@ -148,17 +146,7 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
 fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
     args.get(1)
         .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("usage: deslop-lsp <workspace-root> [--min-nodes N]"))
-}
-
-/// Reads the optional `--min-nodes` value, defaulting to 30.
-fn parse_min_nodes(args: &[String]) -> Result<u32> {
-    for (index, arg) in args.iter().enumerate() {
-        if arg == "--min-nodes" {
-            return parse_required_u32(args, index, "--min-nodes");
-        }
-    }
-    Ok(30)
+        .ok_or_else(|| anyhow!("usage: deslop-lsp <workspace-root>"))
 }
 
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.
@@ -169,11 +157,6 @@ fn parse_worker_threads(args: &[String]) -> Result<usize> {
         }
     }
     Ok(0)
-}
-
-/// Parses a required unsigned 32-bit flag value after `flag`.
-fn parse_required_u32(args: &[String], index: usize, flag: &str) -> Result<u32> {
-    Ok(required_flag_value(args, index, flag)?.parse::<u32>()?)
 }
 
 /// Parses a required usize flag value after `flag`.
@@ -188,32 +171,34 @@ fn required_flag_value<'a>(args: &'a [String], index: usize, flag: &str) -> Resu
         .ok_or_else(|| anyhow!("{flag} requires a value"))
 }
 
-/// Parses embedding startup flags into the LSP backend config.
-fn parse_embedding_config(args: &[String]) -> Result<LspEmbeddingConfig> {
-    let mode = parse_flag_value(args, "--embeddings")
-        .unwrap_or("off")
-        .parse()?;
-    Ok(LspEmbeddingConfig {
-        mode,
-        provider_id: parse_flag_value(args, "--embedding-provider")
-            .unwrap_or(DEFAULT_PROVIDER_ID)
-            .to_owned(),
-        model_id: parse_flag_value(args, "--embedding-model")
-            .unwrap_or(DEFAULT_OLLAMA_MODEL)
-            .to_owned(),
-        endpoint: parse_flag_value(args, "--embedding-endpoint")
-            .unwrap_or(DEFAULT_OLLAMA_ENDPOINT)
-            .to_owned(),
-    })
+/// Rejects removed startup flags before they can silently change state.
+fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
+    let mut index = 2;
+    while let Some(arg) = args.get(index) {
+        match arg.as_str() {
+            "--worker-threads" => index += 2,
+            "--debug" | "--stdio" => index += 1,
+            flag if LEGACY_STARTUP_FLAGS.contains(&flag) => {
+                return Err(anyhow!(
+                    "unsupported LSP startup flag {flag}; configure Deslop through settings"
+                ));
+            }
+            flag if flag.starts_with('-') => {
+                return Err(anyhow!("unsupported LSP startup flag {flag}"));
+            }
+            _ => index += 1,
+        }
+    }
+    Ok(())
 }
 
-/// Returns the string value immediately following `flag`.
-fn parse_flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
-    args.windows(2).find_map(|pair| match pair {
-        [candidate, value] if candidate == flag => Some(value.as_str()),
-        _ => None,
-    })
-}
+const LEGACY_STARTUP_FLAGS: &[&str] = &[
+    "--min-nodes",
+    "--embeddings",
+    "--embedding-provider",
+    "--embedding-model",
+    "--embedding-endpoint",
+];
 
 /// Builds the Tokio runtime for the app layer.
 fn build_runtime(worker_threads: usize) -> Result<Runtime> {

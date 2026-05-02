@@ -314,12 +314,12 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   });
   c.onNotification("deslop/analysisState", (state: AnalysisState) => {
     log("analysis state", { state });
-    if (state === "running") store.setLifecycle({ kind: "analysing" });
-    else if (state === "idle") store.setLifecycle({ kind: "ready" });
-    else if (state === "errored") {
+    if (state.state === "running") store.setLifecycle({ kind: "analysing" });
+    else if (state.state === "idle") store.setLifecycle({ kind: "ready" });
+    else if (state.state === "errored") {
       store.setLifecycle({
         kind: "failed",
-        message: "Analysis failed — see the Deslop log for details.",
+        message: state.message,
       });
     }
   });

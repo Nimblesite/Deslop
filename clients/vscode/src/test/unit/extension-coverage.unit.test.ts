@@ -126,10 +126,10 @@ suite("extension coverage branches", () => {
     const store = new ReportStore();
 
     wireNotifications(client, store);
-    stateCb?.("idle");
+    stateCb?.({ state: "idle" });
     assert.equal(store.current.lifecycle.kind, "ready");
 
-    stateCb?.("errored");
+    stateCb?.({ state: "errored", message: "Analysis failed: bad fixture" });
     const failedLifecycle = store.current.lifecycle;
     assert.equal(failedLifecycle.kind, "failed");
     assert.ok("message" in failedLifecycle);

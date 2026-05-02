@@ -103,8 +103,8 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
       const activeMark = isActive(active, m) ? "  ✓ active" : "";
       const descParts = [
         `${m.dimensions ?? "?"}-dim`,
-        m.is_embedding_model ? "embedding" : "may not embed",
-        m.size_bytes ? formatSize(m.size_bytes) : null,
+        m.recommended ? "recommended" : null,
+        m.reachable ? null : "offline",
       ].filter(Boolean);
       items.push({
         entryKind: "model",
@@ -126,8 +126,8 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
       model_id: "stub",
       model_version: "0",
       dimensions: 64,
-      size_bytes: null,
-      is_embedding_model: true,
+      recommended: false,
+      reachable: true,
     },
   });
 
@@ -208,15 +208,4 @@ export function isActive(
 ): boolean {
   if (!active || !model) return false;
   return active.provider_id === model.provider_id && active.model_id === model.model_id;
-}
-
-export function formatSize(bytes: number): string {
-  const units = ["B", "KiB", "MiB", "GiB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(1)} ${units[unit] ?? "B"}`;
 }

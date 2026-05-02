@@ -149,43 +149,20 @@ export interface ReportDelta {
   tool_version: string;
 }
 
-// Push notification payloads (typeDiagram-generated wire shapes).
-// Re-exported from `wire-generated.ts` so this file stays the single
-// import path consumers reach for. The generated source of truth is
-// `docs/models/live-ipc.td`.
+// Wire-format models generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. Re-exported here so the historical
+// `clients/vscode/src/types/report` import path keeps resolving for
+// every consumer. The generated source is gitignored; `make
+// typediagram-gen` (chained into `make vsix-build`) regenerates it.
 export type {
+  AnalysisState,
   ChangeSummary,
+  EmbeddingModelInfo,
   EmbeddingPhase,
   EmbeddingProgress,
   ReportChangedNotification,
+  SessionConfig,
 } from "./wire-generated";
-
-// `AnalysisState` is intentionally NOT yet sourced from wire-generated:
-// the historical TS shape is a literal string union but the wire frame
-// from Rust is `{ state: "idle" | "running" | "errored", ... }` with a
-// payload on `running`/`errored`. Migrating this requires healing
-// extension.ts + extension-coverage.unit.test.ts. Tracked as the next
-// follow-on for the typeDiagram TS migration.
-export type AnalysisState = "idle" | "running" | "errored";
-
-// embedding/listModels result.
-export interface EmbeddingModelInfo {
-  provider_id: string;
-  model_id: string;
-  model_version: string;
-  dimensions: number | null;
-  size_bytes: number | null;
-  is_embedding_model: boolean;
-}
-
-// session/config.
-export interface SessionConfig {
-  min_nodes: number;
-  languages: string[];
-  embedding_provenance: EmbeddingProvenance | null;
-  exclusion_config_path: string | null;
-  cache_dir: string;
-}
 
 // Severity bucketing per [LSP-SEVERITY]. Orthogonal to Bucket:
 // severity = "how bad is this cluster in the ranking?", bucket =
