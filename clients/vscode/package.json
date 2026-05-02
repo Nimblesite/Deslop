@@ -347,7 +347,8 @@
     "test": "vscode-test",
     "pretest:ollama": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
-    "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs && npm run verify:package"
   },

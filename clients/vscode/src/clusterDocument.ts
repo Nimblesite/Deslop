@@ -13,20 +13,8 @@ export function registerClusterDocumentProvider(
   context: vscode.ExtensionContext,
   store: ReportStore,
 ): void {
-  context.subscriptions.push(
-    vscode.workspace.registerTextDocumentContentProvider(
-      CLUSTER_DOCUMENT_SCHEME,
-      new ClusterDocumentProvider(store),
-    ),
-  );
-}
-
-class ClusterDocumentProvider implements vscode.TextDocumentContentProvider {
-  constructor(private readonly store: ReportStore) {}
-
-  provideTextDocumentContent(uri: vscode.Uri): string {
-    return clusterDocumentContent(uri, this.store.current.report);
-  }
+  const provider = { provideTextDocumentContent: (uri: vscode.Uri) => clusterDocumentContent(uri, store.current.report) };
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(CLUSTER_DOCUMENT_SCHEME, provider));
 }
 
 export function clusterDocumentContent(uri: vscode.Uri, report: Report | null): string {

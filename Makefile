@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package typediagram-gen
 
 GRADLE_VERSION ?= 9.0.0
 JETBRAINS_DIR := clients/jetbrains
@@ -40,6 +40,16 @@ _COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 build:
 	@echo "==> Building..."
 	cargo build --release --workspace
+
+## typediagram-gen: Regenerate wire-format Rust IPC models from
+##                  `docs/models/*.td` via the typediagram CLI. The
+##                  generated file is gitignored; cargo's build.rs
+##                  invokes this same script automatically, so manual
+##                  invocation is only needed when iterating on the
+##                  .td spec or the generator script itself.
+typediagram-gen:
+	@echo "==> typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
+	node scripts/typediagram-gen.mjs
 
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
@@ -178,8 +188,10 @@ vsix-install:
 
 ## vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 ##             Depends on `vsix-install` so a cold CI checkout has the
-##             webview-ui + extension Node deps needed for esbuild bundling.
-vsix-build: vsix-install
+##             webview-ui + extension Node deps needed for esbuild bundling,
+##             and on `typediagram-gen` so the gitignored wire-generated.ts
+##             exists before tsc runs.
+vsix-build: vsix-install typediagram-gen
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build

@@ -139,35 +139,7 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
 }
 
 export async function setModel(client: LanguageClient, model: EmbeddingModelInfo): Promise<void> {
-  try {
-    if (model.provider_id === "stub") {
-      const confirm = await vscode.window.showWarningMessage(
-        "The stub provider is deterministic but not semantically meaningful. \"Same behavior, different code\" (AI) recall is disabled.",
-        { modal: true },
-        "Use stub anyway",
-      );
-      if (confirm !== "Use stub anyway") return;
-    }
-    await client.sendRequest("deslop/embeddingSetModel", {
-      provider_id: model.provider_id,
-      model_id: model.model_id,
-    });
-    await vscode.workspace
-      .getConfiguration("deslop")
-      .update("embedding.provider", model.provider_id, vscode.ConfigurationTarget.Workspace);
-    await vscode.workspace
-      .getConfiguration("deslop")
-      .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
-    await vscode.workspace
-      .getConfiguration("deslop")
-      .update("embedding.mode", "auto", vscode.ConfigurationTarget.Workspace);
-    vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
-  } catch (err) {
-    logError(err, "embedding/setModel");
-    const message = err instanceof Error ? err.message : String(err);
-    vscode.window.showErrorMessage(`Failed to switch embedding model: ${message}`);
-    log("keeping previous model active");
-  }
+  await switchModel(client, model);
 }
 
 // Marks the store's pending embedding model so the Session panel reflects
@@ -178,32 +150,22 @@ export async function setModelFromPicker(
   store: ReportStore,
   model: EmbeddingModelInfo,
 ): Promise<void> {
-  if (model.provider_id === "stub") {
-    const confirm = await vscode.window.showWarningMessage(
-      "The stub provider is deterministic but not semantically meaningful. \"Same behavior, different code\" (AI) recall is disabled.",
-      { modal: true },
-      "Use stub anyway",
-    );
-    if (confirm !== "Use stub anyway") return;
-  }
-  store.setPendingEmbeddingModel(model.model_id);
+  await switchModel(client, model, store);
+}
+
+async function switchModel(
+  client: LanguageClient,
+  model: EmbeddingModelInfo,
+  store?: ReportStore,
+): Promise<void> {
   try {
-    await client.sendRequest("deslop/embeddingSetModel", {
-      provider_id: model.provider_id,
-      model_id: model.model_id,
-    });
-    await vscode.workspace
-      .getConfiguration("deslop")
-      .update("embedding.provider", model.provider_id, vscode.ConfigurationTarget.Workspace);
-    await vscode.workspace
-      .getConfiguration("deslop")
-      .update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
-    await vscode.workspace
-      .getConfiguration("deslop")
-      .update("embedding.mode", "auto", vscode.ConfigurationTarget.Workspace);
+    if (!(await confirmStubModel(model))) return;
+    store?.setPendingEmbeddingModel(model.model_id);
+    await requestModelSwitch(client, model);
+    await persistModelConfig(model);
     vscode.window.showInformationMessage(`Embedding model switched to ${model.model_id}.`);
   } catch (err) {
-    store.setPendingEmbeddingModel(null);
+    store?.setPendingEmbeddingModel(null);
     logError(err, "embedding/setModel");
     const message = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`Failed to switch embedding model: ${message}`);
@@ -211,6 +173,34 @@ export async function setModelFromPicker(
   }
 }
 
+async function confirmStubModel(model: EmbeddingModelInfo): Promise<boolean> {
+  if (model.provider_id === "stub") {
+    const confirm = await vscode.window.showWarningMessage(
+      "The stub provider is deterministic but not semantically meaningful. \"Same behavior, different code\" (AI) recall is disabled.",
+      { modal: true },
+      "Use stub anyway",
+    );
+    return confirm === "Use stub anyway";
+  }
+  return true;
+}
+
+function requestModelSwitch(
+  client: LanguageClient,
+  model: EmbeddingModelInfo,
+): Promise<unknown> {
+  return client.sendRequest("deslop/embeddingSetModel", {
+    provider_id: model.provider_id,
+    model_id: model.model_id,
+  });
+}
+
+async function persistModelConfig(model: EmbeddingModelInfo): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  await cfg.update("embedding.provider", model.provider_id, vscode.ConfigurationTarget.Workspace);
+  await cfg.update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
+  await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Workspace);
+}
 
 export function isActive(
   active: { provider_id: string; model_id: string } | null | undefined,

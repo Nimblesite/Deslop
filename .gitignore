@@ -83,6 +83,13 @@ clients/vscode/out/
 
 .deslop-cache/
 
+# typeDiagram-generated IPC model code (source of truth: docs/models/*.td).
+# Per CLAUDE.md the generated wire types must NOT be committed; they are
+# regenerated on every cargo build by `crates/deslop-core/build.rs` and
+# on every `make vsix-build` via the `typediagram-gen` Makefile target.
+crates/deslop-core/src/wire_generated.rs
+clients/vscode/src/types/wire-generated.ts
+
 
 
 /*.png

@@ -149,6 +149,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 200,
+      message: null,
     });
     assert.equal(fired, 1);
     assert.deepEqual(store.current.embeddingProgress, {
@@ -157,6 +158,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 200,
+      message: null,
     });
   });
 
@@ -168,6 +170,7 @@ suite("ReportStore", () => {
       model_id: "blake3-stub",
       done: 64,
       total: 64,
+      message: null,
     });
     store.setEmbeddingProgress(null);
     assert.equal(store.current.embeddingProgress, null);

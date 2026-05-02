@@ -23,10 +23,7 @@ export interface CompareCoordinates {
 }
 
 export function registerCompareProvider(context: vscode.ExtensionContext): void {
-  const provider = new CompareContentProvider();
-  context.subscriptions.push(
-    vscode.workspace.registerTextDocumentContentProvider(COMPARE_SCHEME, provider),
-  );
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(COMPARE_SCHEME, new CompareContentProvider()));
 }
 
 // Builds a distinct URI per (cluster, side). All coordinates live in the

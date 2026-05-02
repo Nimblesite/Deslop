@@ -50,6 +50,14 @@ let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
 let activeReportStore: ReportStore | undefined;
 
+const ANALYSED_DOCUMENTS = [
+  { language: "csharp", scheme: "file" },
+  { language: "rust", scheme: "file" },
+  { language: "python", scheme: "file" },
+];
+
+const HOVER_SUPPRESSING_MIDDLEWARE = { provideHover: () => null } satisfies Middleware;
+
 /// Public API returned by `activate()`. Lets tests reach the live
 /// LanguageClient without parallel activation or command-surface hacks.
 export interface ExtensionApi {
@@ -132,14 +140,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   context.subscriptions.push(decorations);
 
   context.subscriptions.push(
-    vscode.languages.registerHoverProvider(
-      [
-        { language: "csharp", scheme: "file" },
-        { language: "rust", scheme: "file" },
-        { language: "python", scheme: "file" },
-      ],
-      new ClusterHoverProvider(reportStore),
-    ),
+    vscode.languages.registerHoverProvider(ANALYSED_DOCUMENTS, new ClusterHoverProvider(reportStore)),
   );
 
   const bubble = new LiveBubble(reportStore, () => client);
@@ -225,11 +226,7 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     debug: { command: lsp.path, transport: TransportKind.stdio, args: debugArgs },
   };
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [
-      { language: "csharp", scheme: "file" },
-      { language: "rust", scheme: "file" },
-      { language: "python", scheme: "file" },
-    ],
+    documentSelector: ANALYSED_DOCUMENTS,
     synchronize: {
       configurationSection: "deslop",
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{cs,rs,py}"),
@@ -238,9 +235,7 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     initializationOptions: currentInitializationOptions(),
     // The TypeScript ClusterHoverProvider owns the editor hover card.
     // Suppress the LSP textDocument/hover so they don't stack in the popup.
-    middleware: {
-      provideHover: () => null,
-    } satisfies Middleware,
+    middleware: HOVER_SUPPRESSING_MIDDLEWARE,
   };
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }
@@ -393,10 +388,7 @@ export function tryResolveOptional(
 
 function currentBinarySettings(): BinarySettings {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  return {
-    lspPath: cfg.get<string>("lspPath", ""),
-    mcpPath: cfg.get<string>("mcpPath", ""),
-  };
+  return { lspPath: cfg.get<string>("lspPath", ""), mcpPath: cfg.get<string>("mcpPath", "") };
 }
 
 function requireResolved(

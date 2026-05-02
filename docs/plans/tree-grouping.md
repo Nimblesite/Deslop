@@ -98,5 +98,5 @@ Each split test file stays under 500 lines.
 - [x] Split [tree.unit.test.ts](../../clients/vscode/src/test/unit/tree.unit.test.ts) into `tree.helpers.ts` + `tree.topOffenders.unit.test.ts` + `tree.focusedFile.unit.test.ts` + `tree.session.unit.test.ts`. Confirm Mocha glob still loads them.
 - [x] Add tests 1–9 listed above. Each test references the spec ID it covers.
 - [x] `cd clients/vscode && npm run typecheck && npm run lint && npm test` — green. Verified locally: typecheck ✅, lint ✅, `npm test` 290 passing ✅.
-- [ ] `make ci` — green.
+- [x] `make ci` — green.
 - [ ] Manual e2e in a real VS Code window: cold start in cluster mode, toggle to file mode, reload, confirm `.vscode/settings.json` contains the override, confirm user-level fallback when no workspace value is set.

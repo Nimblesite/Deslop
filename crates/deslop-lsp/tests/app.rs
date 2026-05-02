@@ -231,6 +231,38 @@ fn invalid_arguments_return_user_facing_errors() -> Result<()> {
     Ok(())
 }
 
+/// Issue #83: VSIX settings must travel through initialize/configuration,
+/// not through legacy process argv flags.
+#[test]
+fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--min-nodes", "30"],
+        "unsupported LSP startup flag",
+    )?;
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--embeddings", "auto"],
+        "unsupported LSP startup flag",
+    )?;
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--embedding-provider", "stub"],
+        "unsupported LSP startup flag",
+    )?;
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--embedding-model", "unit-model"],
+        "unsupported LSP startup flag",
+    )?;
+    assert_error_contains(
+        [
+            "deslop-lsp",
+            "/tmp/ws",
+            "--embedding-endpoint",
+            "http://127.0.0.1:9999",
+        ],
+        "unsupported LSP startup flag",
+    )?;
+    Ok(())
+}
+
 /// Extracts version output from a parsed action.
 fn version_output(action: LspAction) -> Result<String> {
     match action {

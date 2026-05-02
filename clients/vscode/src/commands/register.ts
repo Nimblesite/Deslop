@@ -25,124 +25,93 @@ import {
 
 type ClientFactory = () => LanguageClient | undefined;
 
+interface CommandDeps {
+  readonly context: vscode.ExtensionContext;
+  readonly store: ReportStore;
+  readonly clientOf: ClientFactory;
+}
+
+interface CommandBinding {
+  readonly id: string;
+  readonly run: (deps: CommandDeps, ...args: unknown[]) => unknown;
+}
+
+const COMMAND_BINDINGS: readonly CommandBinding[] = [
+  { id: "deslop.openReport", run: ({ context, store }) => openReportPanel(context, store) },
+  { id: "deslop.openWorstCluster", run: ({ context, store }) => openWorstCluster(context, store) },
+  { id: "deslop.openCluster", run: ({ context, store }, id) => openClusterPanel(context, store, id as string) },
+  { id: "deslop.openOccurrence", run: (_deps, target) => openOccurrenceTarget(target) },
+  { id: "deslop.pickEmbeddingModel", run: ({ store, clientOf }) => pickEmbeddingModel(store, clientOf) },
+  { id: "deslop.refreshReport", run: ({ clientOf }) => refreshReport(clientOf) },
+  { id: "deslop.toggleShowAllLenses", run: toggleShowAllLenses },
+  { id: "deslop.showSchemaDoc", run: ({ context, store, clientOf }) => openSchemaDoc(context, store, clientOf) },
+  { id: "deslop.jumpToNextOccurrence", run: ({ store }) => jumpToNextOccurrence(store) },
+  { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
+  { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
+  { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
+  { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
+  { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
+  { id: "deslop.copyContextForAI", run: ({ store }, node) => copyContextForAI(node as ClusterNode | OccurrenceNode, store) },
+  { id: "deslop.copyClusterContextById", run: ({ store }, id) => copyClusterContextById(store, id) },
+  { id: "deslop.copyHumanLocation", run: (_deps, node) => copyHumanLocation(node as OccurrenceNode) },
+  { id: "deslop.copyClusterLocations", run: (_deps, node) => copyClusterLocations(node as ClusterNode) },
+  { id: "deslop.copySourceSnippet", run: (_deps, node) => copySourceSnippet(node as OccurrenceNode) },
+  { id: "deslop.revealOccurrenceInExplorer", run: (_deps, node) => revealOccurrenceInExplorer(node as OccurrenceNode) },
+];
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   store: ReportStore,
   clientOf: ClientFactory,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand("deslop.openReport", () => openReportPanel(context, store)),
-    vscode.commands.registerCommand("deslop.openWorstCluster", () =>
-      openWorstCluster(context, store),
-    ),
-    vscode.commands.registerCommand("deslop.openCluster", (id: string) =>
-      openClusterPanel(context, store, id),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openOccurrence",
-      async (target: unknown) => {
-        const occurrence = occurrenceFromCommandTarget(target);
-        if (!occurrence) {
-          void vscode.window.showInformationMessage(
-            "Deslop: no occurrence resolved for this command.",
-          );
-          return;
-        }
-        await openOccurrence(occurrence);
-      },
-    ),
-    vscode.commands.registerCommand("deslop.jumpToNextOccurrence", () =>
-      jumpToNextOccurrence(store),
-    ),
-    vscode.commands.registerCommand("deslop.compareWithCanonical", (target: unknown) =>
-      compareWithCanonicalTarget(store, target),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.compareOccurrenceWithCanonical",
-      (target: unknown) => compareWithCanonicalTarget(store, target),
-    ),
-    vscode.commands.registerCommand("deslop.pickEmbeddingModel", () =>
-      pickEmbeddingModel(store, clientOf),
-    ),
-    vscode.commands.registerCommand("deslop.refreshReport", () =>
-      clientOf()?.sendRequest("workspace/executeCommand", {
-        command: "deslop.refreshReport",
-        arguments: [],
-      }),
-    ),
-    vscode.commands.registerCommand("deslop.toggleShowAllLenses", async () => {
-      const cfg = vscode.workspace.getConfiguration("deslop");
-      const next = !cfg.get<boolean>("showAllLenses", false);
-      await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
-    }),
-    // [VSIX-TOP-OFFENDERS-GROUPING] Mode-set commands write to the
-    // workspace target so the choice persists per-repo. Two distinct
-    // commands (rather than a toggle) keep the title-bar button text
-    // honest: each button reads "switch to <next>", not "toggle".
-    vscode.commands.registerCommand("deslop.topOffenders.showByCluster", () =>
-      setTopOffendersGroupBy("cluster"),
-    ),
-    vscode.commands.registerCommand("deslop.topOffenders.showByFile", () =>
-      setTopOffendersGroupBy("file"),
-    ),
-    vscode.commands.registerCommand("deslop.showSchemaDoc", () =>
-      openSchemaDoc(context, store, clientOf),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copyContextForAI",
-      (node: ClusterNode | OccurrenceNode) => copyContextForAI(node, store),
-    ),
-    // Called from hover card markdown links — receives a cluster ID string,
-    // looks up the cluster in the store, and copies the AI payload.
-    vscode.commands.registerCommand(
-      "deslop.copyClusterContextById",
-      async (id: unknown) => {
-        const clusterId = typeof id === "string" ? id : String(id);
-        const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
-        if (!cluster) return;
-        const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
-        await vscode.env.clipboard.writeText(aiPayloadForCluster(cluster, rank));
-        void vscode.window.showInformationMessage("Copied AI context to clipboard");
-      },
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copyHumanLocation",
-      (node: OccurrenceNode) => copyHumanLocation(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copyClusterLocations",
-      (node: ClusterNode) => copyClusterLocations(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copySourceSnippet",
-      (node: OccurrenceNode) => copySourceSnippet(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.revealOccurrenceInExplorer",
-      (node: OccurrenceNode) => revealOccurrenceInExplorer(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openAllOccurrences",
-      (node: ClusterNode) => openAllOccurrences(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openCanonicalFile",
-      (node: ClusterNode) => openCanonicalOccurrence(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openClusterDetails",
-      (node: ClusterNode | OccurrenceNode) => {
-        const id = clusterIdForTreeNode(node, store);
-        if (!id) {
-          void vscode.window.showInformationMessage(
-            "Deslop: no cluster resolved for this tree row.",
-          );
-          return;
-        }
-        openClusterPanel(context, store, id);
-      },
-    ),
-  );
+  const deps = { context, store, clientOf };
+  for (const binding of COMMAND_BINDINGS) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(binding.id, (...args: unknown[]) =>
+        binding.run(deps, ...args),
+      ),
+    );
+  }
+}
+
+function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
+  return clientOf()?.sendRequest("workspace/executeCommand", {
+    command: "deslop.refreshReport",
+    arguments: [],
+  });
+}
+
+async function toggleShowAllLenses(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const next = !cfg.get<boolean>("showAllLenses", false);
+  await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
+}
+
+async function openOccurrenceTarget(target: unknown): Promise<void> {
+  const occurrence = occurrenceFromCommandTarget(target);
+  if (occurrence) await openOccurrence(occurrence);
+  else void vscode.window.showInformationMessage("Deslop: no occurrence resolved for this command.");
+}
+
+async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
+  const clusterId = typeof id === "string" ? id : String(id);
+  const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
+  if (!cluster) return;
+  const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
+  await vscode.env.clipboard.writeText(aiPayloadForCluster(cluster, rank));
+  void vscode.window.showInformationMessage("Copied AI context to clipboard");
+}
+
+function openClusterDetails(
+  context: vscode.ExtensionContext,
+  store: ReportStore,
+  node: ClusterNode | OccurrenceNode,
+): void {
+  const id = clusterIdForTreeNode(node, store);
+  if (id) openClusterPanel(context, store, id);
+  else void vscode.window.showInformationMessage("Deslop: no cluster resolved for this tree row.");
 }
 
 async function setTopOffendersGroupBy(value: "cluster" | "file"): Promise<void> {

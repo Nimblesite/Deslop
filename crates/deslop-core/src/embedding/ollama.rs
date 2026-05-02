@@ -11,6 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::embedding::provider::{EmbeddingProvider, EmbeddingSpec, ProviderError};
 
+// `OllamaModelInfo` is generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. Per CLAUDE.md the IPC model code is
+// not stored in git; the binding lives in `crate::wire_generated`.
+pub use crate::wire_generated::OllamaModelInfo;
+
 /// Default Ollama endpoint for local runs.
 pub const DEFAULT_OLLAMA_ENDPOINT: &str = "http://127.0.0.1:11434";
 /// Default embedding model. Chosen because it is a small (137 M
@@ -380,31 +385,6 @@ fn entry_matches(entry: &TagEntry, model: &str) -> bool {
         Some((bare, _tag)) => bare == model,
         None => false,
     }
-}
-
-/// Summary of one locally-installed Ollama model, suitable for the
-/// VSIX embedding-model picker ([VSIX-EMBED-PICKER]) and the daemon's
-/// `embedding/listModels` query ([LIVE-QUERY-API]).
-///
-/// Wire shape: `OllamaModelInfo` in `docs/models/live-ipc.td`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OllamaModelInfo {
-    /// Full model tag as installed (e.g. `nomic-embed-text:latest`).
-    pub name: String,
-    /// Bare model id with the tag stripped. This is the value
-    /// callers should feed into `--embedding-model` or
-    /// [`OllamaProvider::connect`].
-    pub bare_id: String,
-    /// Shortened content digest (12 hex chars), same truncation as
-    /// the on-disk cache-key path segment.
-    pub digest: String,
-    /// Packaged model size in bytes.
-    pub size_bytes: u64,
-    /// `true` when the model answered the dimension probe with a
-    /// non-empty vector at listing time. `false` means the model
-    /// exists but does not produce embeddings (chat-only model); the
-    /// picker should still show it but tag it as non-embedding.
-    pub is_embedding_model: bool,
 }
 
 /// Enumerates models currently installed on the Ollama host at

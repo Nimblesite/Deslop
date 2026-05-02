@@ -12,23 +12,16 @@ import { byteRangeToRange, sameFile } from "./manager";
 export class ClusterHoverProvider implements vscode.HoverProvider {
   constructor(private readonly store: ReportStore) {}
 
-  provideHover(
-    document: vscode.TextDocument,
-    position: vscode.Position,
-  ): vscode.Hover | null {
-    const report = this.store.current.report;
-    if (!report) return null;
+  provideHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | null {
     const activePath = document.uri.fsPath;
-    for (const [index, cluster] of report.clusters.entries()) {
-      for (const occurrence of cluster.occurrences) {
-        if (!sameFile(occurrence.path, activePath)) continue;
-        const range = byteRangeToRange(document, occurrence);
-        if (range?.contains(position)) {
-          return new vscode.Hover(
-            clusterHoverMarkdown(cluster, { rank: index + 1, showCategory: false }),
-          );
-        }
-      }
+    for (const [index, cluster] of this.store.current.report?.clusters.entries() ?? []) {
+      const occurrence = cluster.occurrences.find((item) =>
+        sameFile(item.path, activePath) &&
+        byteRangeToRange(document, item)?.contains(position),
+      );
+      if (occurrence) return new vscode.Hover(
+        clusterHoverMarkdown(cluster, { rank: index + 1, showCategory: false }),
+      );
     }
     return null;
   }

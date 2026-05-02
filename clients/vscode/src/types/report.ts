@@ -149,33 +149,24 @@ export interface ReportDelta {
   tool_version: string;
 }
 
-// Push notification payloads.
-export interface ChangeSummary {
-  clusters_added: number;
-  clusters_removed: number;
-  clusters_updated: number;
-  worst_weight: number;
-}
+// Push notification payloads (typeDiagram-generated wire shapes).
+// Re-exported from `wire-generated.ts` so this file stays the single
+// import path consumers reach for. The generated source of truth is
+// `docs/models/live-ipc.td`.
+export type {
+  ChangeSummary,
+  EmbeddingPhase,
+  EmbeddingProgress,
+  ReportChangedNotification,
+} from "./wire-generated";
 
-export interface ReportChangedNotification {
-  generation: number;
-  summary: ChangeSummary;
-}
-
+// `AnalysisState` is intentionally NOT yet sourced from wire-generated:
+// the historical TS shape is a literal string union but the wire frame
+// from Rust is `{ state: "idle" | "running" | "errored", ... }` with a
+// payload on `running`/`errored`. Migrating this requires healing
+// extension.ts + extension-coverage.unit.test.ts. Tracked as the next
+// follow-on for the typeDiagram TS migration.
 export type AnalysisState = "idle" | "running" | "errored";
-
-// Wire payload for the `deslop/embeddingProgress` notification.
-// Mirrors deslop-core::live::wire::EmbeddingProgress.
-export type EmbeddingPhase = "queued" | "starting" | "running" | "complete" | "failed";
-
-export interface EmbeddingProgress {
-  phase: EmbeddingPhase;
-  provider_id: string;
-  model_id: string;
-  done: number;
-  total: number;
-  message?: string | null;
-}
 
 // embedding/listModels result.
 export interface EmbeddingModelInfo {

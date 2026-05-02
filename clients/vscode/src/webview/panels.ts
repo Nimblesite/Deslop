@@ -28,19 +28,12 @@ export function openClusterPanel(
 ): void {
   const key = `cluster:${clusterId}`;
   const existing = activePanels.get(key);
-  if (existing) {
-    existing.panel.reveal(vscode.ViewColumn.Active);
-    return;
-  }
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
   const unsub = wirePanel(panel, store, "cluster", (webview) => {
     void webview.postMessage({ kind: "select/cluster", id: clusterId });
   });
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    handleMessage(store, msg).catch((err: unknown) => {
-      console.error("handleMessage failed", err);
-    });
-  });
+  wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
@@ -51,17 +44,10 @@ export function openClusterPanel(
 export function openReportPanel(context: vscode.ExtensionContext, store: ReportStore): void {
   const key = "report";
   const existing = activePanels.get(key);
-  if (existing) {
-    existing.panel.reveal(vscode.ViewColumn.Active);
-    return;
-  }
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const panel = createPanel(context, "report", "Deslop: report");
   const unsub = wirePanel(panel, store, "report");
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    handleMessage(store, msg).catch((err: unknown) => {
-      console.error("handleMessage failed", err);
-    });
-  });
+  wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
@@ -87,6 +73,12 @@ function createPanel(
   );
   panel.webview.html = buildHtml(panel.webview, context, kind);
   return panel;
+}
+
+function wireMessages(panel: vscode.WebviewPanel, store: ReportStore): void {
+  panel.webview.onDidReceiveMessage((msg: unknown) => {
+    handleMessage(store, msg).catch((err: unknown) => console.error("handleMessage failed", err));
+  });
 }
 
 function wirePanel(
