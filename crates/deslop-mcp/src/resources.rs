@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 use crate::{
     backend::McpBackend,
-    protocol::{ErrorCode, JsonRpcError},
+    protocol::{jsonrpc_error, ErrorCode, JsonRpcError},
     tools::backend_to_rpc,
 };
 
@@ -79,7 +79,7 @@ pub fn read_resource(backend: &dyn McpBackend, uri: &str) -> Result<Value, JsonR
                 }]
             }))
         }
-        other => Err(JsonRpcError::new(
+        other => Err(jsonrpc_error(
             ErrorCode::InvalidParams,
             format!("unknown resource uri {other:?}"),
         )),

@@ -12,6 +12,11 @@ export function postprocessTs(ts) {
   return out;
 }
 
+// Drops `export type|interface X` blocks whose TYPE_CONFIG entry sets
+// `skipTs: true`. Used for wire types with no TS consumer (e.g. the
+// JSON-RPC envelope, only consumed by the Rust MCP server).
+// TODO(typeDiagram#27): drop this once per-target gating (`@targets(rust)`)
+// is a first-class language attribute upstream.
 function dropSkippedTsBlocks(ts) {
   const lines = ts.split("\n");
   const out = [];

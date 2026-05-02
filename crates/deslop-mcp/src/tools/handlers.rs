@@ -14,7 +14,7 @@ use serde_json::Value;
 use crate::{
     backend::{FindSimilarInput, McpBackend},
     page::{build_page, Pagination},
-    protocol::{ErrorCode, JsonRpcError},
+    protocol::{jsonrpc_error, ErrorCode, JsonRpcError},
 };
 
 use super::backend_to_rpc;
@@ -156,7 +156,7 @@ pub(super) fn call_find_similar(
         && args.get("end_byte").is_some();
     let has_snippet = args.get("snippet").is_some() && args.get("language").is_some();
     if has_range == has_snippet {
-        return Err(JsonRpcError::new(
+        return Err(jsonrpc_error(
             ErrorCode::InvalidParams,
             "find-similar requires exactly one of (path + start_byte + end_byte) or (snippet + language)",
         ));
@@ -285,7 +285,7 @@ pub(super) fn require_user_initiated(args: &Value) -> Result<(), JsonRpcError> {
     {
         return Ok(());
     }
-    Err(JsonRpcError::new(
+    Err(jsonrpc_error(
         ErrorCode::InvalidParams,
         "set-embedding-model requires explicit user_initiated=true",
     ))
@@ -332,7 +332,7 @@ pub(super) fn extract_string(args: &Value, field: &str) -> Result<String, JsonRp
         .and_then(Value::as_str)
         .map(str::to_owned)
         .ok_or_else(|| {
-            JsonRpcError::new(
+            jsonrpc_error(
                 ErrorCode::InvalidParams,
                 format!("missing or non-string parameter {field:?}"),
             )
@@ -348,7 +348,7 @@ pub(super) fn extract_optional_paths(
         return Ok(Vec::new());
     };
     let Some(items) = value.as_array() else {
-        return Err(JsonRpcError::new(
+        return Err(jsonrpc_error(
             ErrorCode::InvalidParams,
             format!("parameter {field:?} must be an array of strings"),
         ));
@@ -357,7 +357,7 @@ pub(super) fn extract_optional_paths(
         .iter()
         .map(|item| {
             item.as_str().map(PathBuf::from).ok_or_else(|| {
-                JsonRpcError::new(
+                jsonrpc_error(
                     ErrorCode::InvalidParams,
                     format!("parameter {field:?} must be an array of strings"),
                 )
@@ -369,7 +369,7 @@ pub(super) fn extract_optional_paths(
 /// Extracts a required non-negative integer field from `args`.
 pub(super) fn extract_u64(args: &Value, field: &str) -> Result<u64, JsonRpcError> {
     args.get(field).and_then(Value::as_u64).ok_or_else(|| {
-        JsonRpcError::new(
+        jsonrpc_error(
             ErrorCode::InvalidParams,
             format!("missing or non-integer parameter {field:?}"),
         )
@@ -379,7 +379,7 @@ pub(super) fn extract_u64(args: &Value, field: &str) -> Result<u64, JsonRpcError
 /// Rejects byte ranges with `end < start`.
 pub(super) fn reject_inverted_range(start: u64, end: u64) -> Result<(), JsonRpcError> {
     if end < start {
-        return Err(JsonRpcError::new(
+        return Err(jsonrpc_error(
             ErrorCode::InvalidParams,
             format!("end_byte ({end}) must be >= start_byte ({start})"),
         ));

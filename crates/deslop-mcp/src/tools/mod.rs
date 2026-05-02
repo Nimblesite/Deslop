@@ -8,7 +8,7 @@
 use serde_json::{json, Value};
 
 use crate::backend::McpBackend;
-use crate::protocol::JsonRpcError;
+use crate::protocol::{jsonrpc_error, JsonRpcError};
 
 mod handlers;
 mod schemas;
@@ -161,7 +161,7 @@ pub fn dispatch_tool_call(
         "list-embedding-models" => call_list_embedding_models(backend),
         "set-embedding-model" => call_set_embedding_model(backend, arguments),
         "session-config" => call_session_config(backend),
-        other => Err(JsonRpcError::new(
+        other => Err(jsonrpc_error(
             crate::protocol::ErrorCode::MethodNotFound,
             format!("no tool named {other:?}"),
         )),
@@ -175,19 +175,19 @@ pub fn backend_to_rpc(err: crate::backend::BackendError) -> JsonRpcError {
     use crate::protocol::ErrorCode;
     match err {
         BackendError::UnparseableInput(message) => {
-            JsonRpcError::new(ErrorCode::UnparseableInput, message)
+            jsonrpc_error(ErrorCode::UnparseableInput, message)
         }
-        BackendError::UnsupportedLanguage(lang) => JsonRpcError::new(
+        BackendError::UnsupportedLanguage(lang) => jsonrpc_error(
             ErrorCode::UnsupportedLanguage,
             format!("language {lang:?} is not registered"),
         ),
         BackendError::Path(inner) => {
-            JsonRpcError::new(ErrorCode::PathOutsideRoot, inner.to_string())
+            jsonrpc_error(ErrorCode::PathOutsideRoot, inner.to_string())
         }
-        BackendError::UnknownCluster(id) => JsonRpcError::new(
+        BackendError::UnknownCluster(id) => jsonrpc_error(
             ErrorCode::InvalidParams,
             format!("no cluster with id {id:?}"),
         ),
-        other => JsonRpcError::new(ErrorCode::BackendError, other.to_string()),
+        other => jsonrpc_error(ErrorCode::BackendError, other.to_string()),
     }
 }

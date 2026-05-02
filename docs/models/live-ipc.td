@@ -272,6 +272,46 @@ union ErrorCode {
   BackendError
 }
 
+# JSON-RPC 2.0 error object. `data` carries an arbitrary structured
+# payload (tree-sitter error ranges, list of supported languages, etc.)
+# — declared here as `String` so the generator can override to
+# `Option<serde_json::Value>` on the Rust side; `skip_serializing_if`
+# omits the key entirely when None per the JSON-RPC spec.
+type JsonRpcError {
+  code: Int
+  message: String
+  data: Option<String>
+}
+
+# JSON-RPC 2.0 incoming frame (request or notification). `params` is
+# arbitrary JSON; declared as `String` for the .td placeholder and
+# overridden to `Option<serde_json::Value>` in TYPE_CONFIG. A frame
+# without `id` is a notification (no reply).
+type JsonRpcRequest {
+  jsonrpc: String
+  method: String
+  params: Option<String>
+  id: Option<RequestId>
+}
+
+# JSON-RPC 2.0 successful response frame. `result` is arbitrary JSON
+# (declared as `String` placeholder, overridden in TYPE_CONFIG).
+type JsonRpcResponse {
+  jsonrpc: String
+  id: RequestId
+  result: String
+}
+
+# JSON-RPC 2.0 error response frame. Distinct from JsonRpcResponse
+# because the wire shape carries `error` instead of `result` (no
+# `result` key emitted on error). `id` is `Option<RequestId>` because
+# the request id may be unknown if the request was unparseable.
+type JsonRpcErrorResponse {
+  jsonrpc: String
+  id: Option<RequestId>
+  error: JsonRpcError
+}
+
 # ---------------------------------------------------------------------------
 # `LiveError` wire shape ([LIVE-PACKAGING]). Carried as `data` on JSON-RPC
 # error frames so transports never lose the structured fault context.

@@ -277,6 +277,10 @@ export const CORE_TYPE_CONFIG = {
     },
   },
   RequestId: {
+    // TODO(typeDiagram#24, #26, #27): drop `tupleVariants`,
+    // `serdeAttrs: ['untagged']`, and `skipTs` once typeDiagram supports
+    // tuple-variant syntax, untagged unions, and per-target gating
+    // natively.
     docs: "JSON-RPC request/notification identifier ([MCP-JSONRPC]). Untagged enum so the wire shape is the bare value (number or string).",
     derives: ["Debug", "Clone", "PartialEq", "Eq", "Serialize", "Deserialize"],
     serdeAttrs: ["untagged"],
@@ -287,7 +291,82 @@ export const CORE_TYPE_CONFIG = {
       String: "String identifier.",
     },
   },
+  JsonRpcErrorResponse: {
+    // TODO(typeDiagram#27): drop `skipTs` once typeDiagram supports
+    // per-target gating natively.
+    docs: "JSON-RPC 2.0 error response frame ([MCP-JSONRPC]). Distinct struct (not a `Result` variant) so the wire emits `{ jsonrpc, id, error }` with no `result` key.",
+    derives: ["Debug", "Clone", "Serialize"],
+    skipTs: true,
+    fieldDocs: {
+      jsonrpc: "Must equal `JSONRPC_VERSION`.",
+      id: "Echo of the request's `id`, or `None` when the request was unparseable.",
+      error: "Structured error payload.",
+    },
+  },
+  JsonRpcResponse: {
+    // TODO(typeDiagram#27, #28): drop `skipTs` and the `String`
+    // placeholder for `result` once typeDiagram supports per-target
+    // gating and an `Any`/`Json` field type natively.
+    docs: "JSON-RPC 2.0 successful response frame ([MCP-JSONRPC]).",
+    derives: ["Debug", "Clone", "Serialize"],
+    skipTs: true,
+    fieldOverrides: {
+      result: "serde_json::Value",
+    },
+    fieldDocs: {
+      jsonrpc: "Must equal `JSONRPC_VERSION`.",
+      id: "Echo of the request's `id`.",
+      result: "Method-specific result payload.",
+    },
+  },
+  JsonRpcRequest: {
+    // TODO(typeDiagram#27, #28): drop `skipTs` and the `String`
+    // placeholder for `params` once typeDiagram supports per-target
+    // gating and an `Any`/`Json` field type natively.
+    docs: "JSON-RPC 2.0 incoming frame (request or notification). A frame without `id` is a notification ([MCP-JSONRPC]).",
+    derives: ["Debug", "Clone", "Deserialize"],
+    skipTs: true,
+    fieldOverrides: {
+      params: "Option<serde_json::Value>",
+    },
+    fieldSerdeAttrs: {
+      params: ["default"],
+      id: ["default"],
+    },
+    fieldDocs: {
+      jsonrpc: "Must equal `JSONRPC_VERSION`.",
+      method: "Method name, e.g. `\"tools/list\"`.",
+      params: "Optional parameters payload.",
+      id: "Request identifier. Absent for notifications.",
+    },
+  },
+  JsonRpcError: {
+    // TODO(typeDiagram#27, #28, #29): drop `skipTs`, the `String`
+    // placeholder for `data`, and the raw `skip_serializing_if`
+    // attribute once typeDiagram supports per-target gating, an
+    // `Any`/`Json` field type, and an "omit-when-absent" optional
+    // field type natively.
+    docs: "JSON-RPC 2.0 error object ([MCP-JSONRPC]). `data` carries an arbitrary structured payload (tree-sitter error ranges, list of supported languages, ...).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    skipTs: true,
+    fieldOverrides: {
+      code: "i32",
+      data: "Option<serde_json::Value>",
+    },
+    fieldSerdeAttrs: {
+      data: ['skip_serializing_if = "Option::is_none"'],
+    },
+    fieldDocs: {
+      code: "Numeric error code — see `ErrorCode` for the canonical set.",
+      message: "Short human-readable message.",
+      data: "Optional structured payload; omitted from the wire when `None`.",
+    },
+  },
   ErrorCode: {
+    // TODO(typeDiagram#25, #27, #30): drop `variantDiscriminants`,
+    // `skipTs`, and the auto-injected `#[repr(i32)]` (in
+    // `decorateItem`) once typeDiagram supports explicit numeric
+    // discriminants, per-target gating, and `@repr(i32)` natively.
     docs: "Canonical JSON-RPC / MCP error codes ([MCP-JSONRPC]). `-32700..=-32600` are JSON-RPC 2.0 reserved; `-32000..=-32099` are reserved for server-defined errors and host MCP-specific codes.",
     derives: ["Debug", "Clone", "Copy"],
     skipTs: true,

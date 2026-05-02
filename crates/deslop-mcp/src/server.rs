@@ -23,8 +23,8 @@ use crate::{
     backend::McpBackend,
     notify::NotificationSender,
     protocol::{
-        ErrorCode, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, RequestId,
-        JSONRPC_VERSION,
+        jsonrpc_error, jsonrpc_error_response, jsonrpc_response_ok, ErrorCode, JsonRpcError,
+        JsonRpcRequest, RequestId, JSONRPC_VERSION,
     },
     resources::{read_resource, resources_list_payload},
     tools::{dispatch_tool_call, tools_list_payload, wrap_tool_result},
@@ -99,17 +99,17 @@ impl<B: McpBackend> McpServer<B> {
             Ok(parsed) => parsed,
             Err(parse_err) => {
                 error!(reason = %parse_err, "mcp_parse_error");
-                let error = JsonRpcErrorResponse::new(
+                let error = jsonrpc_error_response(
                     None,
-                    JsonRpcError::new(ErrorCode::ParseError, parse_err.to_string()),
+                    jsonrpc_error(ErrorCode::ParseError, parse_err.to_string()),
                 );
                 return write_json(sender, &error);
             }
         };
         if request.jsonrpc != JSONRPC_VERSION {
-            let error = JsonRpcErrorResponse::new(
+            let error = jsonrpc_error_response(
                 request.id.clone(),
-                JsonRpcError::new(
+                jsonrpc_error(
                     ErrorCode::InvalidRequest,
                     format!("unsupported jsonrpc version {:?}", request.jsonrpc),
                 ),
@@ -143,14 +143,14 @@ impl<B: McpBackend> McpServer<B> {
             "tools/call" => self.handle_tool_call(&params),
             "resources/list" => Ok(resources_list_payload()),
             "resources/read" => self.handle_resource_read(&params),
-            other => Err(JsonRpcError::new(
+            other => Err(jsonrpc_error(
                 ErrorCode::MethodNotFound,
                 format!("method {other:?} is not implemented"),
             )),
         };
         match outcome {
-            Ok(result) => write_json(sender, &JsonRpcResponse::ok(id, result)),
-            Err(error) => write_json(sender, &JsonRpcErrorResponse::new(Some(id), error)),
+            Ok(result) => write_json(sender, &jsonrpc_response_ok(id, result)),
+            Err(error) => write_json(sender, &jsonrpc_error_response(Some(id), error)),
         }
     }
 
@@ -206,7 +206,7 @@ impl<B: McpBackend> McpServer<B> {
     /// forwards to [`dispatch_tool_call`].
     fn handle_tool_call(&self, params: &Value) -> Result<Value, JsonRpcError> {
         let name = params.get("name").and_then(Value::as_str).ok_or_else(|| {
-            JsonRpcError::new(ErrorCode::InvalidParams, "tools/call requires a 'name'")
+            jsonrpc_error(ErrorCode::InvalidParams, "tools/call requires a 'name'")
         })?;
         let arguments = params
             .get("arguments")
@@ -220,7 +220,7 @@ impl<B: McpBackend> McpServer<B> {
     /// [`read_resource`].
     fn handle_resource_read(&self, params: &Value) -> Result<Value, JsonRpcError> {
         let uri = params.get("uri").and_then(Value::as_str).ok_or_else(|| {
-            JsonRpcError::new(ErrorCode::InvalidParams, "resources/read requires a 'uri'")
+            jsonrpc_error(ErrorCode::InvalidParams, "resources/read requires a 'uri'")
         })?;
         read_resource(self.backend.as_ref(), uri)
     }

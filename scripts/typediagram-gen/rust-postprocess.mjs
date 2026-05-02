@@ -159,6 +159,9 @@ function applyTupleVariants(item, tupleVariants) {
 // no-op when no entry is provided. Lets us declare numeric error codes
 // (JSON-RPC -32_700, etc.) on a typeDiagram-defined enum without
 // hand-rolling the Rust source.
+//
+// TODO(typeDiagram#25): drop this once explicit discriminant syntax
+// lands upstream (`union ErrorCode { ParseError = -32700, ... }`).
 function applyVariantDiscriminants(item, variantDiscriminants) {
   if (!variantDiscriminants) return item;
   return item
@@ -183,6 +186,8 @@ function decorateItem(item, config) {
   // Enums declaring numeric discriminants must pin a fixed layout so
   // `as i32` casts (used in JsonRpcError::new for ErrorCode) are
   // well-defined. Default to i32 — JSON-RPC error codes fit easily.
+  // TODO(typeDiagram#30): drop this auto-injection once `@repr(i32)` is
+  // a first-class language attribute upstream.
   if (config.variantDiscriminants) {
     before.push(`#[repr(${config.repr ?? "i32"})]`);
   }
