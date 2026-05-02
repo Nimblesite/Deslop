@@ -687,8 +687,7 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
         report_get
             .get("schema_doc")
             .and_then(Value::as_str)
-            .map(str::len)
-            .unwrap_or(0)
+            .map_or(0, str::len)
     );
     let report_query = structured_tool_result(&call_tool(
         &mut child,
@@ -701,8 +700,7 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
         report_query
             .get("schema_doc")
             .and_then(Value::as_str)
-            .map(str::len)
-            .unwrap_or(0)
+            .map_or(0, str::len)
     );
     let tools_response = child.request("tools/list", &json!({}))?;
     let tools_value = value_get(&tools_response, "/result/tools")?;

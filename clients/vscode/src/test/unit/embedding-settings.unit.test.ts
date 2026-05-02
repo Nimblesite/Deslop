@@ -48,6 +48,41 @@ function embeddingOptions(): Record<string, unknown> {
   return embedding as Record<string, unknown>;
 }
 
+function installDeslopConfig(values: Record<string, unknown>): {
+  restore(): void;
+  updateCount(): number;
+} {
+  let updates = 0;
+  const workspace = vscode.workspace as unknown as {
+    getConfiguration: typeof vscode.workspace.getConfiguration;
+  };
+  const original = workspace.getConfiguration;
+  const fakeConfig = {
+    get<T>(section: string, defaultValue?: T): T {
+      if (Object.prototype.hasOwnProperty.call(values, section)) {
+        return values[section] as T;
+      }
+      return defaultValue as T;
+    },
+    update() {
+      updates += 1;
+      return Promise.resolve();
+    },
+  } as unknown as vscode.WorkspaceConfiguration;
+  workspace.getConfiguration = ((section?: string, resource?: vscode.Uri) => {
+    if (section === "deslop") return fakeConfig;
+    return original.call(vscode.workspace, section, resource);
+  }) as typeof vscode.workspace.getConfiguration;
+  return {
+    restore() {
+      workspace.getConfiguration = original;
+    },
+    updateCount() {
+      return updates;
+    },
+  };
+}
+
 async function setEmbeddingConfig(values: {
   mode: string;
   provider: string;
@@ -99,32 +134,36 @@ suite("embedding settings", () => {
     );
   });
 
-  test("issue #88 stale legacy provider config is ignored during initialization", async () => {
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await setEmbeddingConfig({
-      mode: "auto",
-      provider: legacyProviderId(),
-      model: legacyModelId(),
+  test("issue #88 stale legacy provider config is ignored during initialization", () => {
+    const fake = installDeslopConfig({
+      "embedding.mode": "auto",
+      "embedding.provider": legacyProviderId(),
+      "embedding.model": legacyModelId(),
+      "embedding.endpoint": "http://127.0.0.1:11434",
     });
+    try {
+      const embedding = embeddingOptions();
 
-    const embedding = embeddingOptions();
-
-    assert.equal(cfg.get<string>("embedding.provider"), legacyProviderId());
-    assert.equal(embedding["provider"], "ollama");
-    assert.equal(embedding["model"], "nomic-embed-text");
-    assert.equal(embedding["mode"], "off");
-    assert.equal(
-      cfg.get<string>("embedding.provider"),
-      legacyProviderId(),
-      "startup must not silently migrate stale workspace settings",
-    );
+      assert.equal(embedding["provider"], "ollama");
+      assert.equal(embedding["model"], "nomic-embed-text");
+      assert.equal(embedding["mode"], "off");
+      assert.equal(embedding["endpoint"], "http://127.0.0.1:11434");
+      assert.equal(
+        fake.updateCount(),
+        0,
+        "startup must not silently migrate stale workspace settings",
+      );
+    } finally {
+      fake.restore();
+    }
   });
 
   test("issue #88 stale legacy provider config does not send set-model RPC", async () => {
-    await setEmbeddingConfig({
-      mode: "auto",
-      provider: legacyProviderId(),
-      model: legacyModelId(),
+    const fake = installDeslopConfig({
+      "embedding.mode": "auto",
+      "embedding.provider": legacyProviderId(),
+      "embedding.model": legacyModelId(),
+      "embedding.endpoint": "http://127.0.0.1:11434",
     });
     const calls: Array<{ method: string; params: unknown }> = [];
     const client = {
@@ -135,17 +174,18 @@ suite("embedding settings", () => {
     } as unknown as LanguageClient;
     const store = new ReportStore();
 
-    await syncEmbeddingSettingsToLsp(store, () => client);
+    try {
+      await syncEmbeddingSettingsToLsp(store, () => client);
 
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    assert.deepEqual(calls, []);
-    assert.equal(store.current.pendingEmbeddingModel, null);
-    assert.equal(cfg.get<string>("embedding.provider"), legacyProviderId());
-    assert.equal(cfg.get<string>("embedding.model"), legacyModelId());
-    assert.equal(
-      cfg.get<string>("embedding.mode"),
-      "auto",
-      "sync must ignore stale settings without rewriting them as a migration",
-    );
+      assert.deepEqual(calls, []);
+      assert.equal(store.current.pendingEmbeddingModel, null);
+      assert.equal(
+        fake.updateCount(),
+        0,
+        "sync must ignore stale settings without rewriting them as a migration",
+      );
+    } finally {
+      fake.restore();
+    }
   });
 });
