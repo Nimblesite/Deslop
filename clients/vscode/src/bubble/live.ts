@@ -8,6 +8,7 @@
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
+import { clusterHoverMarkdown } from "../clusterHover";
 import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity } from "../severity";
@@ -286,24 +287,12 @@ export function shortPath(p: string): string {
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
-// Compact bubble hover: rank + category + count, then action links.
-// The LSP hover owns the interpretation prose; we stay minimal here
-// so the two stacked cards complement rather than repeat each other.
+// Bubble hover: full card with rank, canonical, and dismiss link.
 export function bubbleHover(cluster: ReportCluster, rank?: number): vscode.MarkdownString {
-  const md = new vscode.MarkdownString();
-  md.isTrusted = true;
-  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  const count = occurrenceCount(cluster);
-  const rankPrefix = rank !== undefined ? `#${rank} ` : "";
-  md.appendMarkdown(`**${rankPrefix}${title}** × ${count}\n\n`);
-  const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
-  const dismissArgs = encodeURIComponent(JSON.stringify([cluster.id]));
-  md.appendMarkdown(
-    `[Open cluster](command:deslop.openCluster?${openArgs}) · ` +
-      `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs}) · ` +
-      `[Dismiss](command:deslop.bubble.dismissCluster?${dismissArgs})`,
-  );
-  return md;
+  return clusterHoverMarkdown(cluster, {
+    showDismiss: true,
+    ...(rank !== undefined && { rank }),
+  });
 }
 
 function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {

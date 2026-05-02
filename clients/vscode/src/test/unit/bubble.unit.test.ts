@@ -88,15 +88,15 @@ suite("bubble rendering helpers", () => {
     );
   });
 
-  // Audience: HUMAN. Issues #31/#32. The bubble is compact: rank +
-  // category + instance count on one line, then action links. The LSP
-  // hover owns the interpretation prose — the bubble must not repeat
-  // it. Two paragraphs total: label+count, then links.
-  test("bubbleHover body shows rank, count, and three action links (#31/#32)", () => {
+  // Audience: HUMAN. Issues #31/#32. Card layout matches the design:
+  // (1) rank + category + count, (2) canonical path, (3) action links.
+  test("bubbleHover body shows rank, canonical, count, and three action links (#31/#32)", () => {
     const c = cluster();
     const text = bubbleHover(c, 3).value;
     assert.match(text, /#3/, `rank must appear in the body: ${text}`);
     assert.match(text, /×\s*4/, `instance count must appear in the body: ${text}`);
+    assert.match(text, /Canonical/, `canonical section must be present: ${text}`);
+    assert.match(text, /Alpha\.cs/, `canonical file must be visible: ${text}`);
     assert.doesNotMatch(
       text,
       /Safe to extract|interpretation/i,
@@ -108,8 +108,8 @@ suite("bubble rendering helpers", () => {
       .filter((p) => p.length > 0);
     assert.equal(
       paragraphs.length,
-      2,
-      `body must be exactly two paragraphs (label+count, then links); got ${paragraphs.length} in: ${text}`,
+      3,
+      `body must be three paragraphs (header, canonical, links); got ${paragraphs.length} in: ${text}`,
     );
   });
 

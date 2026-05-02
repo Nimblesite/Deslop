@@ -3,16 +3,10 @@
 
 import * as vscode from "vscode";
 
+import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
-import {
-  bucketLabels,
-  ReportCluster,
-  ReportOccurrence,
-  resolveBucket,
-  Severity,
-  visibleOccurrenceCount,
-} from "../types/report";
+import { ReportCluster, ReportOccurrence, Severity } from "../types/report";
 
 const SEVERITIES: Severity[] = ["worst", "top10", "mid", "faint"];
 
@@ -82,21 +76,9 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
   });
 }
 
-// Decoration hover is visible in the editor, so keep it human-first.
-// Taxonomy labels and numeric signal details stay in diagnostic data
-// and Copy Context For AI, not in this tooltip.
+// Decoration hover: same card as bubble but without rank or dismiss link.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
-  const md = new vscode.MarkdownString();
-  md.isTrusted = true;
-  const labels = bucketLabels(resolveBucket(cluster));
-  const count = visibleOccurrenceCount(cluster);
-  const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
-  md.appendMarkdown(`**${labels.plainTitle}** × ${count} — ${labels.actionSentence}\n\n`);
-  md.appendMarkdown(
-    `[Open cluster](command:deslop.openCluster?${openArgs}) · ` +
-      `[Compare with canonical](command:deslop.compareWithCanonical?${openArgs})`,
-  );
-  return md;
+  return clusterHoverMarkdown(cluster);
 }
 
 export function byteRangeToRange(
