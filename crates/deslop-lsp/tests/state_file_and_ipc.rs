@@ -62,8 +62,7 @@ fn state_file_exists_after_initialize() -> Result<()> {
     let live_count = live
         .pointer("/result/clusters")
         .and_then(serde_json::Value::as_array)
-        .map(Vec::len)
-        .unwrap_or(0);
+        .map_or(0, Vec::len);
     ensure!(
         live_count == count,
         "state file cluster count ({count}) must match live reportGet count ({live_count})"
@@ -237,10 +236,13 @@ impl Drop for KillOnDrop<'_> {
 
 /// Polls until `path` exists or `timeout` elapses.
 fn wait_for_file(path: &Path, timeout: Duration) -> Result<()> {
-    let deadline = Instant::now() + timeout;
-    while Instant::now() < deadline {
+    let start = Instant::now();
+    loop {
         if path.exists() {
             return Ok(());
+        }
+        if start.elapsed() >= timeout {
+            break;
         }
         std::thread::sleep(POLL_INTERVAL);
     }
@@ -249,12 +251,15 @@ fn wait_for_file(path: &Path, timeout: Duration) -> Result<()> {
 
 /// Polls until `path` contains bytes different from `previous` or `timeout` elapses.
 fn wait_for_state_file_change(path: &Path, previous: &[u8], timeout: Duration) -> Result<()> {
-    let deadline = Instant::now() + timeout;
-    while Instant::now() < deadline {
+    let start = Instant::now();
+    loop {
         if let Ok(bytes) = fs::read(path) {
             if bytes != previous {
                 return Ok(());
             }
+        }
+        if start.elapsed() >= timeout {
+            break;
         }
         std::thread::sleep(POLL_INTERVAL);
     }
@@ -288,8 +293,7 @@ fn cluster_count(report: &serde_json::Value) -> usize {
     report
         .get("clusters")
         .and_then(serde_json::Value::as_array)
-        .map(Vec::len)
-        .unwrap_or(0)
+        .map_or(0, Vec::len)
 }
 
 fn watched_file_changed(path: &Path) -> Result<String> {

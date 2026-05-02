@@ -19,10 +19,10 @@ use deslop_core::{
     embedding::{EmbeddingMode, StubProvider},
     live::{
         AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest, LiveApi,
-        LiveError, LiveService,
+        LiveError, LiveService, LiveWatcher,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
-    EmbeddingProvider, EmbeddingSpec, ProviderError,
+    EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
 /// Returns the absolute fixture path used by the CLI tests.
@@ -250,6 +250,89 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
         "flush resets the timing windows"
     );
     Ok(())
+}
+
+/// [LIVE-WATCHER] Repeated edits to the same path must each surface
+/// as a watcher event so the scheduler keeps re-analysing on every
+/// save, not just the first one. Without this guarantee the VSIX tree
+/// freezes after the first save in a session ([VSIX-REACTIVITY-TREE]).
+#[tokio::test(flavor = "multi_thread")]
+async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    // FSEvents on macOS reports paths under the canonicalised root
+    // (`/private/var/...` instead of `/var/...`). Canonicalise here so
+    // event paths and the target path share a prefix the test can match.
+    let root = tmp.path().canonicalize().context("canonicalise root")?;
+    let target = root.join("Sample.cs");
+    fs::write(&target, b"class A {}\n").context("seed file")?;
+
+    let extensions = vec!["cs".to_owned()];
+    let exclusion = Arc::new(ExclusionConfig::empty());
+    let (_watcher_keep_alive, mut rx) = LiveWatcher::start(&root, extensions, exclusion)
+        .map_err(|err| anyhow!("watcher start: {err}"))?;
+    // FSEvents (macOS) and inotify (Linux) both need a beat to attach
+    // before the first event is reported.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    fs::write(&target, b"class A { int x; }\n").context("first edit")?;
+    let first = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
+    assert_eq!(
+        first.file_name(),
+        target.file_name(),
+        "first edit must reach the channel",
+    );
+
+    fs::write(&target, b"class A { int x; int y; }\n").context("second edit")?;
+    let second = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
+    assert_eq!(
+        second.file_name(),
+        target.file_name(),
+        "second edit on the same path must also reach the channel — \
+         the dedup guard only applies within one notify callback batch",
+    );
+
+    fs::write(&target, b"class A { int x; int y; int z; }\n").context("third edit")?;
+    let third = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
+    assert_eq!(
+        third.file_name(),
+        target.file_name(),
+        "third edit on the same path must also reach the channel",
+    );
+    Ok(())
+}
+
+/// Drains the watcher channel until either the matching path arrives
+/// or the deadline elapses. Skips unrelated paths (sibling files,
+/// directory entries) that may slip through on noisy filesystems.
+async fn wait_for_event(
+    rx: &mut tokio::sync::mpsc::Receiver<PathBuf>,
+    target: &Path,
+    timeout: Duration,
+) -> Result<PathBuf> {
+    let started = tokio::time::Instant::now();
+    let target_name = target
+        .file_name()
+        .ok_or_else(|| anyhow!("target has no file name"))?;
+    loop {
+        let remaining = timeout.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            bail!(
+                "timed out waiting for watcher event on {}",
+                target.display()
+            );
+        }
+        match tokio::time::timeout(remaining, rx.recv()).await {
+            // Match by file name — macOS reports paths under /private/var
+            // while tempfile creates them under /var, so equality fails.
+            Ok(Some(path)) if path.file_name() == Some(target_name) => return Ok(path),
+            Ok(Some(_other)) => {}
+            Ok(None) => bail!("watcher channel closed before {} arrived", target.display()),
+            Err(_) => bail!(
+                "timed out waiting for watcher event on {}",
+                target.display()
+            ),
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

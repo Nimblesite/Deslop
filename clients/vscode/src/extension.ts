@@ -48,6 +48,7 @@ import {
 let client: LanguageClient | undefined;
 let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
+let activeReportStore: ReportStore | undefined;
 
 /// Public API returned by `activate()`. Lets tests reach the live
 /// LanguageClient without parallel activation or command-surface hacks.
@@ -55,6 +56,7 @@ export interface ExtensionApi {
   readonly client: LanguageClient | undefined;
   readonly resolvedLsp: ResolvedBinary | undefined;
   readonly resolvedMcp: ResolvedBinary | undefined;
+  readonly reportStore: ReportStore | undefined;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<ExtensionApi> {
@@ -67,7 +69,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   });
 
   const reportStore = new ReportStore();
+  activeReportStore = reportStore;
   context.subscriptions.push(reportStore);
+  context.subscriptions.push({ dispose: () => { activeReportStore = undefined; } });
   registerClusterDocumentProvider(context, reportStore);
 
   const ticker = new StatusTicker();
@@ -184,6 +188,7 @@ function currentApi(): ExtensionApi {
     get client() { return client; },
     get resolvedLsp() { return resolvedLsp; },
     get resolvedMcp() { return resolvedMcp; },
+    get reportStore() { return activeReportStore; },
   };
 }
 
@@ -235,7 +240,7 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     // Suppress the LSP textDocument/hover so they don't stack in the popup.
     middleware: {
       provideHover: () => null,
-    } as Middleware,
+    } satisfies Middleware,
   };
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }
@@ -289,7 +294,10 @@ async function refreshAfterChange(
   payload: ReportChangedNotification,
 ): Promise<void> {
   const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
-  if (delta) {
+  // applyDelta silently bails when no current report exists, which would
+  // strand the notification during the startup window before
+  // seedInitialReport completes. Fall back to the full snapshot in that case.
+  if (delta && store.current.report) {
     store.applyDelta(delta);
     return;
   }

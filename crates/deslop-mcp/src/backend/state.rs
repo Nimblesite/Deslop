@@ -15,15 +15,20 @@ use std::{
     },
 };
 
-use deslop_core::{report::ReportCluster, EmbeddingSpec, OllamaModelInfo, Report};
+use deslop_core::{
+    live::wire::{FindSimilarInput as WireFindSimilarInput, FindSimilarRequest},
+    report::ReportCluster,
+    EmbeddingSpec, OllamaModelInfo, Report,
+};
 use notify::{recommended_watcher, EventHandler, RecursiveMode, Watcher as NotifyWatcher};
+use serde_json::json;
 use tracing::{debug, warn};
 
 use crate::{notify::push_report_changed, NotificationSender};
 
 use super::{
-    filters, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend, SessionBackendConfig,
-    SessionConfigSnapshot,
+    filters, ipc::ipc_call, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend,
+    SessionBackendConfig, SessionConfigSnapshot,
 };
 
 /// `McpBackend` implementation that reads the LSP-written state file.
@@ -36,6 +41,10 @@ pub struct StateFileBackend {
     root: PathBuf,
     /// Absolute path to the LSP-written state file.
     state_file: PathBuf,
+    /// Absolute path to the LSP IPC socket. Used to delegate
+    /// `find-similar` and `list-embedding-models` to the running LSP
+    /// when the state file alone is not enough ([MCP-IPC-CLIENT]).
+    ipc_socket: PathBuf,
     /// Monotonic generation counter, bumped on every reload.
     generation: Arc<AtomicU64>,
     /// Most-recently-loaded report. `None` until first successful load.
@@ -63,10 +72,13 @@ impl StateFileBackend {
     /// Returns [`BackendError::StateFileCorrupt`] only if the config
     /// path cannot be canonicalised; never on a missing LSP state file.
     pub fn initialise(config: SessionBackendConfig) -> Result<Self, BackendError> {
-        let state_file = config.root.join(".deslop-cache").join("live-report.json");
+        let cache_dir = config.root.join(".deslop-cache");
+        let state_file = cache_dir.join("live-report.json");
+        let ipc_socket = cache_dir.join("deslop.sock");
         Ok(Self {
             root: config.root,
             state_file,
+            ipc_socket,
             generation: Arc::new(AtomicU64::new(0)),
             cached: Arc::new(RwLock::new(None)),
             sender: Arc::new(Mutex::new(None)),
@@ -272,10 +284,46 @@ impl McpBackend for StateFileBackend {
 
     fn find_similar(
         &self,
-        _input: FindSimilarInput<'_>,
-        _top_n: usize,
+        input: FindSimilarInput<'_>,
+        top_n: usize,
     ) -> Result<FindSimilarOutput, BackendError> {
-        Err(BackendError::LspNotRunning)
+        let wire_input = match input {
+            FindSimilarInput::Range {
+                path,
+                start_byte,
+                end_byte,
+            } => {
+                let resolved = crate::safety::resolve_within_root(&self.root, path)?;
+                WireFindSimilarInput::OpenRange {
+                    path: resolved,
+                    start_byte,
+                    end_byte,
+                }
+            }
+            FindSimilarInput::Snippet { snippet, language } => WireFindSimilarInput::Snippet {
+                snippet: snippet.to_owned(),
+                language: language.to_owned(),
+            },
+        };
+        let request = FindSimilarRequest {
+            input: wire_input,
+            max_results: Some(top_n),
+        };
+        let params = serde_json::to_value(&request)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialise: {err}")))?;
+        let result = ipc_call(&self.ipc_socket, "duplicates/findSimilar", params)?;
+        let clusters: Vec<ReportCluster> = serde_json::from_value(
+            result.get("clusters").cloned().unwrap_or(json!([])),
+        )
+        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc clusters parse: {err}")))?;
+        let below_min_nodes = result
+            .get("below_min_nodes")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
+        Ok(FindSimilarOutput {
+            clusters,
+            below_min_nodes,
+        })
     }
 
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError> {
@@ -315,13 +363,19 @@ impl McpBackend for StateFileBackend {
     }
 
     fn mark_changed(&self, _paths: &[PathBuf]) -> Result<(), BackendError> {
-        self.reload_cache().map(|_| ()).or_else(|err| {
-            if matches!(err, BackendError::LspNotRunning) {
+        match self.reload_cache() {
+            Ok(_) => {
+                let gen = self.generation.load(Ordering::Relaxed);
+                if let Ok(guard) = self.sender.lock() {
+                    if let Some(s) = guard.as_ref() {
+                        push_report_changed(s, gen);
+                    }
+                }
                 Ok(())
-            } else {
-                Err(err)
             }
-        })
+            Err(BackendError::LspNotRunning) => Ok(()),
+            Err(err) => Err(err),
+        }
     }
 
     fn set_notification_sender(&self, sender: NotificationSender) {

@@ -22,6 +22,7 @@ use thiserror::Error;
 use crate::safety::PathResolutionError;
 
 mod filters;
+mod ipc;
 mod state;
 
 pub use state::StateFileBackend;

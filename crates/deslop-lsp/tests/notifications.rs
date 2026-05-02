@@ -90,6 +90,60 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     Ok(())
 }
 
+/// [LIVE-WATCHER] Pure-fs edits — without any LSP `didChangeWatchedFiles`
+/// notification — must each push a `deslop/reportChanged` so AI agents
+/// editing files outside the editor still drive the VSIX tree update
+/// ([VSIX-REACTIVITY-TREE]). Two consecutive saves of the same path
+/// must both surface as separate notifications; the watcher's batch
+/// dedup guard must not silently swallow the second save.
+#[test]
+fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let beta = workspace.path().join("Beta.cs");
+    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+    let frames = spawn_frame_reader(stdout);
+
+    let (init_id, init) = initialize_request()?;
+    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
+    let initial = request_response(
+        &mut stdin,
+        &frames,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    ensure!(
+        cluster_count(&initial) > 0,
+        "fixture must start with duplicate clusters"
+    );
+
+    // First external save: rewrite Beta.cs to break the duplication.
+    fs::write(&beta, unrelated_csharp())?;
+    let first = recv_method(&frames, "deslop/reportChanged", Duration::from_secs(10))?;
+    let first_generation = json_u64(&first, "/params/generation")?;
+
+    // Second external save of the same path: rewrite again to introduce a
+    // different unique body. The watcher's dedup guard previously dropped
+    // every event after the first one for any given path, so the LSP would
+    // never push reportChanged again — exactly the "tree freezes" symptom
+    // the user reported.
+    fs::write(&beta, second_unrelated_csharp())?;
+    let second = recv_method(&frames, "deslop/reportChanged", Duration::from_secs(10))?;
+    let second_generation = json_u64(&second, "/params/generation")?;
+    ensure!(
+        second_generation > first_generation,
+        "second save on the same path must yield a strictly newer generation \
+         (first={first_generation}, second={second_generation})",
+    );
+    Ok(())
+}
+
+/// Second replacement body for the back-to-back saves test above.
+fn second_unrelated_csharp() -> &'static str {
+    "public class Beta {\n    public string Description() {\n        return \"distinct\";\n    }\n}\n"
+}
+
 struct KillOnDrop<'a>(&'a mut Child);
 
 impl Drop for KillOnDrop<'_> {
