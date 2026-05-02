@@ -112,6 +112,11 @@ pub async fn report_schema_doc(
     backend: &LspBackend,
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
+    schema_doc_value(backend).await
+}
+
+/// Returns the live schema markdown as a JSON string value.
+async fn schema_doc_value(backend: &LspBackend) -> LspResult<serde_json::Value> {
     let report = backend.service().report_get().await;
     Ok(serde_json::Value::String(report.schema_doc.clone()))
 }
@@ -316,10 +321,7 @@ pub async fn virtual_document(
     params: VirtualDocumentParams,
 ) -> LspResult<serde_json::Value> {
     match parse_virtual_uri(&params.uri) {
-        Some(VirtualDocument::Schema) => {
-            let report = backend.service().report_get().await;
-            Ok(serde_json::Value::String(report.schema_doc.clone()))
-        }
+        Some(VirtualDocument::Schema) => schema_doc_value(backend).await,
         Some(VirtualDocument::Report) => {
             let report = backend.service().report_get().await;
             Ok(serde_json::Value::String(render_text(&report)))

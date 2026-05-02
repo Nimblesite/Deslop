@@ -100,7 +100,7 @@ fn build_for_cluster(
 }
 
 /// Returns `true` when the occurrence matches the file the report applies to.
-fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
+pub(crate) fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
     occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
 }
 

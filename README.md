@@ -10,7 +10,7 @@ This is not a batch scanner that prints a report and exits. It is a long-running
 
 Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no regex, no line diffing, no false positives from reformatting.
 
-- **MCP server (`deslop-mcp`)** — tools an AI agent can call mid-generation: *"before I write this block, is something like it already in the repo?"* Feeds Claude / Cursor / Codex / Continue a live duplicate-awareness channel that predates the copy-paste.
+- **MCP server (`deslop-mcp`)** — tools an AI agent can call mid-generation: *"before I write this block, is something like it already in the repo?"* Feeds Claude / Cursor / Codex / Continue a live duplicate-awareness channel that predates the copy-paste. The keystone tool is **`find-similar`** — agents are expected to call it **before authoring new code**, not after the fact. **Prevention beats cure.** See [docs/snippets/agents-md-recipe.md](docs/snippets/agents-md-recipe.md) for the paste-ready `AGENTS.md` / `CLAUDE.md` snippet that teaches this to your own AI agents.
 - **LSP server (`deslop-lsp`)** — live inline warnings and bubbles in VS Code (and any LSP-capable editor) the moment a duplicate is typed.
 - **VS Code extension** — the reference LSP client; inline warnings, cluster explorer, worst-offender view.
 - **CLI (`deslop`)** — the cold-cache fallback. One binary, runs on your repo, emits `.json` / `.txt` / `.html` reports. Same engine as the server; use it for CI gates, bulk audits, or one-shot investigations.

@@ -260,3 +260,18 @@ fn malformed_config_file_reports_error() -> Result<()> {
 // directory. We run the command with `current_dir(tempdir)` so the
 // artefacts don't leak into the repo.
 #[test]
+fn default_output_written_to_current_directory() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .current_dir(tmp.path())
+        .arg(fixture("csharp-small"))
+        .arg("--min-nodes")
+        .arg("8")
+        .assert()
+        .success();
+    assert!(tmp.path().join("deslop-report.json").exists());
+    assert!(tmp.path().join("deslop-report.txt").exists());
+    assert!(tmp.path().join("deslop-report.html").exists());
+    Ok(())
+}

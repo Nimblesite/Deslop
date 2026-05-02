@@ -262,8 +262,3 @@ fn unknown_embedding_provider_is_rejected() -> Result<()> {
 // assertions are schema-aware rather than substring-guessing.
 // ===========================================================================
 
-/// Walks every cluster in `json` and returns the first whose
-/// occurrences cover every file name in `required`. Used to pick
-/// out the cross-file Type-4 cluster (Recursive.cs + Iterative.cs)
-/// from the many within-file sibling-window clusters the fixture
-/// also produces.

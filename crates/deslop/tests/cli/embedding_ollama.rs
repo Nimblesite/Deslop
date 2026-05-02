@@ -382,3 +382,10 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         .get("signals")
         .and_then(|s| s.get("embedding_cos"))
         .and_then(serde_json::Value::as_f64)
+        .ok_or_else(|| anyhow::anyhow!("cached cluster missing embedding_cos"))?;
+    assert!(
+        embedding_cos > 0.3,
+        "second run must preserve embedding signal: got {embedding_cos}",
+    );
+    Ok(())
+}

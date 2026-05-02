@@ -12,6 +12,8 @@ exclude = [
   "**/obj/**",
   "**/out/**",
   "**/target/**",
+  "**/test/fixtures/**",
+  "**/tests/fixtures/**",
   "**/*.designer.cs",
   "**/*.g.cs",
   "**/*.generated.cs",

@@ -8,9 +8,11 @@
 use std::path::Path;
 
 use deslop_core::live::FileReport;
-use deslop_core::report::{ReportCluster, ReportOccurrence};
+use deslop_core::report::ReportCluster;
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
+
+use crate::diagnostics::occurrence_matches_path;
 
 /// Command id forwarded back to the client for "jump to next occurrence".
 pub const JUMP_COMMAND: &str = "deslop.jumpToNextOccurrence";
@@ -35,12 +37,6 @@ fn lenses_for_cluster(cluster: &ReportCluster, path: &Path) -> Vec<CodeLens> {
         .filter(|(_, occurrence)| occurrence_matches_path(occurrence, path))
         .map(|(index, _occurrence)| lens_for_occurrence(cluster, index))
         .collect()
-}
-
-/// Matches occurrence paths against the report path with the usual
-/// relative/absolute skew tolerance.
-fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
-    occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
 }
 
 /// Builds a code lens at column zero of the cluster's first line for

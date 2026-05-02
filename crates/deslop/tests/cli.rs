@@ -2,6 +2,7 @@
 //! test the project ships: they drive the binary as a black box against
 //! fixture input and assert on rendered outputs and exit codes.
 
+#[path = "cli/support.rs"]
 mod support;
 
 #[path = "cli/cache_and_debug.rs"]

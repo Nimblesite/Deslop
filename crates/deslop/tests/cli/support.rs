@@ -33,7 +33,7 @@ pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
 }
 
 /// Appends `.<ext>` to `base` by cloning and replacing the file name.
-fn with_ext(base: &Path, ext: &str) -> PathBuf {
+pub(crate) fn with_ext(base: &Path, ext: &str) -> PathBuf {
     let mut path = base.to_path_buf();
     let mut name = path
         .file_name()

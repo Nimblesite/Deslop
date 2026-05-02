@@ -310,3 +310,12 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
         .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--no-color")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .code(1);
+    Ok(())
+}

@@ -376,3 +376,7 @@ fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
     assert!(
         !stderr.contains("Worst offender"),
+        "empty scan must not print a worst-offender line: {stderr}"
+    );
+    Ok(())
+}

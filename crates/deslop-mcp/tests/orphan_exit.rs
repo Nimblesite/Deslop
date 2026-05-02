@@ -1,3 +1,6 @@
+//! Verifies the MCP server exits cleanly when its parent process dies
+//! (orphan-exit safety net mirroring the LSP `parent_process` monitor).
+
 #![cfg(unix)]
 
 use std::{

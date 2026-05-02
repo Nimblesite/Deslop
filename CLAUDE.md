@@ -16,6 +16,20 @@ https://typediagram.dev/docs/language-reference.html ⚠️
 
 **Deslop** (a.k.a. Deslop Live) is a **live duplicate-code analysis server** for AI coding agents and the humans driving them. The shipping surfaces are `deslop-lsp` (LSP server feeding live clone warnings to any LSP-capable editor) and `deslop-mcp` (MCP server letting Claude Code / Cursor / Copilot / Continue / Codex query the running analysis mid-generation, *before* a copy-paste happens). The `deslop` CLI is the cold-cache fallback for CI gates and one-shot audits. All three binaries are thin shells over one `deslop-core` library — the LSP and MCP sit in the agent's inner loop, the CLI re-uses the same engine for batch runs. Ranking is **worst offenders first** (highest weighted duplication impact at the top). Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap. Languages start with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
 
+## ⚡ PREVENTION beats CURE — `find-similar` is the keystone tool
+
+**The point of Deslop is to PREVENT duplication, not just scrub it afterwards.** Post-hoc deduplication is what every static analyzer already does. Deslop's edge is being **live in the agent's inner loop** so a duplicate never lands in the first place.
+
+**LAW for AI agents (Claude Code, Cursor, Copilot, Codex, Continue):**
+
+> **Before writing any new function, class, helper, or test setup, call the `find-similar` MCP tool first.** If the proposed pattern already exists with high similarity, reuse the canonical instead of authoring a new copy.
+
+This applies during **code authoring**. When fixing existing duplicates use `top-offenders` and `cluster-by-id`; when writing fresh code use `find-similar`. Both modes use the same live server — the call you make encodes the intent.
+
+The MCP tool description leads with PREVENTION ("Call BEFORE writing new code…"). Reports surface `find-similar` as the prevention path in their `action_hints`. This document and the user-facing `AGENTS.md` recipe teach this so agents pick it up without re-reading docstrings.
+
+Paste-ready snippet for users adding Deslop to their own project's `AGENTS.md` / `CLAUDE.md`: see [docs/snippets/agents-md-recipe.md](docs/snippets/agents-md-recipe.md).
+
 Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 - ALL SPEC SECTIONS HAVE NON-NUMERIC HIERARCHICALLY STRUCTURED SECTIONS. ALL TESTS REFER TO SPEC IDs. ALL CODE REFERS TO SPEC IDS.
 

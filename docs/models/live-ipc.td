@@ -239,6 +239,40 @@ type SetModelParams {
 }
 
 # ---------------------------------------------------------------------------
+# JSON-RPC 2.0 envelope ([MCP-JSONRPC]). Rides the MCP stdio transport.
+# Generator emits these with `skipTs: true` because the VSIX uses VS Code's
+# built-in LSP machinery and never sees raw JSON-RPC frames; emitting TS
+# placeholder shapes for `params`/`result`/`data` (which carry arbitrary
+# JSON) would actively misrepresent the runtime payload.
+# ---------------------------------------------------------------------------
+
+# Request or notification identifier. JSON-RPC permits strings or integers
+# (and `null` via `Option<RequestId>` in containing structs). Modelled as
+# an untagged enum where each variant is the bare wire value — see the
+# `tupleVariants` + `serdeAttrs: ['untagged']` config that collapses the
+# struct-form variants typeDiagram emits into tuple variants serde can
+# round-trip transparently.
+union RequestId {
+  Number { value: Int }
+  String { value: String }
+}
+
+# Canonical JSON-RPC / MCP error codes ([MCP-JSONRPC]). Numeric
+# discriminants pinned via TYPE_CONFIG.variantDiscriminants because the
+# wire contract depends on the exact integer value (-32_700 .. -32_001).
+union ErrorCode {
+  ParseError
+  InvalidRequest
+  MethodNotFound
+  InvalidParams
+  InternalError
+  UnparseableInput
+  UnsupportedLanguage
+  PathOutsideRoot
+  BackendError
+}
+
+# ---------------------------------------------------------------------------
 # `LiveError` wire shape ([LIVE-PACKAGING]). Carried as `data` on JSON-RPC
 # error frames so transports never lose the structured fault context.
 # ---------------------------------------------------------------------------

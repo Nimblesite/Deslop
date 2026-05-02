@@ -113,7 +113,7 @@ function applyVariantDocs(item, variantDocs) {
   const lines = item.split("\n");
   const out = [];
   for (const line of lines) {
-    const variantMatch = line.match(/^(\s*)(\w+)\s*(\{|,|$)/u);
+    const variantMatch = line.match(/^(\s*)(\w+)\s*(\{|\(|=|,|$)/u);
     if (
       variantMatch &&
       variantMatch[1].length > 0 &&
@@ -124,6 +124,34 @@ function applyVariantDocs(item, variantDocs) {
     out.push(line);
   }
   return out.join("\n");
+}
+
+// Collapses single-field struct-form variants `Variant { value: T }`
+// (in either inline or expanded multi-line form) into tuple variants
+// `Variant(T)` when `tupleVariants` lists the variant name. Required
+// for `#[serde(untagged)]` enums where each variant must serialise as
+// the bare payload (e.g. JSON-RPC `RequestId` round-tripping bare
+// numbers and bare strings). typeDiagram has no native tuple-variant
+// syntax so we declare struct-form in the .td and collapse here.
+//
+// TODO(typeDiagram#24): drop this once tuple-variant syntax lands
+// upstream (`union RequestId { Number(Int) String(String) }`).
+function applyTupleVariants(item, tupleVariants) {
+  if (!tupleVariants) return item;
+  const inline = item.replace(
+    /^(\s+)(\w+)\s*\{\s*\w+:\s*([^},]+),?\s*\}\s*,?\s*$/gmu,
+    (line, indent, variantName, fieldType) =>
+      tupleVariants.includes(variantName)
+        ? `${indent}${variantName}(${fieldType.trim()}),`
+        : line,
+  );
+  return inline.replace(
+    /^(\s+)(\w+)\s*\{\n\s+(?:\/\/\/[^\n]*\n\s+)?\w+:\s*([^,\n]+),\n\s+\},?$/gmu,
+    (line, indent, variantName, fieldType) =>
+      tupleVariants.includes(variantName)
+        ? `${indent}${variantName}(${fieldType.trim()}),`
+        : line,
+  );
 }
 
 // Rewrites unit enum variants `Foo,` to `Foo = <discriminant>,` when
@@ -186,6 +214,7 @@ export function postprocess(rust) {
       config.fieldDocs,
       config.fieldSerdeAttrs,
     );
+    item = applyTupleVariants(item, config.tupleVariants);
     item = applyVariantDiscriminants(item, config.variantDiscriminants);
     item = applyVariantDocs(item, config.variantDocs);
     item = decorateItem(item, config);

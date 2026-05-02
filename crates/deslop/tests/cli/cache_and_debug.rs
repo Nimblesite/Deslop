@@ -457,3 +457,5 @@ fn help_text_documents_debug_ast_flag() -> Result<()> {
         .assert()
         .success()
         .stdout(contains("--debug-ast"));
+    Ok(())
+}

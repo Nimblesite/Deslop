@@ -28,17 +28,7 @@ use serde_json::Value;
 /// Fixed JSON-RPC version string. The MCP spec mandates `"2.0"`.
 pub const JSONRPC_VERSION: &str = "2.0";
 
-/// Request or notification identifier. MCP permits strings, integers,
-/// or `null`; we model the three via an untagged enum so the wire
-/// representation round-trips without a custom (de)serialiser.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum RequestId {
-    /// Numeric identifier (most JSON-RPC clients).
-    Number(i64),
-    /// String identifier.
-    String(String),
-}
+pub use deslop_core::wire_generated::RequestId;
 
 /// Incoming JSON-RPC request frame (request or notification).
 ///
