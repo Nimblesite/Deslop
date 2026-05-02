@@ -1,25 +1,19 @@
 //! Cache-seeded LSP startup for GH #73.
 
-use std::{
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use deslop_core::{
     embedding::{EmbeddingMode, EmbeddingProvider},
-    live::{
-        AnalysisSession, ChangeSummary, LiveError, LiveService, ReportChangedNotification,
-    },
+    live::{AnalysisSession, ChangeSummary, LiveError, LiveService, ReportChangedNotification},
     EmbeddingSettings, PipelineSession, ReportDelta,
 };
 use tokio::sync::Mutex;
 use tower_lsp::Client;
 
-use crate::backend::{
-    AnalysisStateLspNotification, ReportChangedLspNotification,
-};
+use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
 
+/// Yield delay between embedding batches during the cold refresh.
+/// Keeps the live editor responsive while the deferred pass runs.
 const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
 
 /// Opens a live session, preferring `.deslop-cache/live-report.json`
@@ -80,6 +74,9 @@ pub(crate) struct RefreshTask {
     pub(crate) mode: EmbeddingMode,
 }
 
+/// Runs `PipelineSession::initialise` on a blocking thread so the
+/// cache-seeded session can keep serving queries while the cold pass
+/// catches up.
 async fn initialise_in_background(
     task: &RefreshTask,
 ) -> Result<(PipelineSession, deslop_core::Report), LiveError> {
@@ -110,26 +107,31 @@ async fn initialise_in_background(
     })?
 }
 
-async fn commit_refresh(
-    task: RefreshTask,
-    pipeline: PipelineSession,
-    report: deslop_core::Report,
-) {
-    let (previous_generation, previous_report, generation, delta) = {
+/// Installs the freshly-built pipeline on the session, computes the
+/// delta, retains the previous snapshot, and pushes the report-changed
+/// + state notifications.
+async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: deslop_core::Report) {
+    let installed = {
         let mut guard = task.session.lock().await;
         let previous_generation = guard.generation();
         let previous_report = guard.report();
-        if let Err(error) = guard.install_pipeline(pipeline, report) {
+        guard.install_pipeline(pipeline, report).map(|_previous| {
+            let generation = guard.generation();
+            let current = guard.report();
+            let delta = ReportDelta::between(
+                Some((previous_generation, previous_report.as_ref())),
+                generation,
+                current.as_ref(),
+            );
+            (previous_generation, previous_report, generation, delta)
+        })
+    };
+    let (previous_generation, previous_report, generation, delta) = match installed {
+        Ok(installed) => installed,
+        Err(error) => {
             report_refresh_error(&task.client, &error).await;
             return;
         }
-        let current = guard.report();
-        let delta = ReportDelta::between(
-            Some((previous_generation, previous_report.as_ref())),
-            guard.generation(),
-            current.as_ref(),
-        );
-        (previous_generation, previous_report, guard.generation(), delta)
     };
     task.service
         .remember_snapshot(previous_generation, previous_report)
@@ -143,17 +145,23 @@ async fn commit_refresh(
     push_state(&task.client, "idle").await;
 }
 
+/// Logs the refresh failure and pushes an `errored` analysis-state
+/// notification so the editor surfaces the failure.
 async fn report_refresh_error(client: &Client, error: &LiveError) {
     tracing::error!(%error, "cache_seed_refresh_failed");
     push_state(client, "errored").await;
 }
 
+/// Pushes a `deslop/analysisState` notification carrying `state`
+/// (`running`, `idle`, `errored`).
 async fn push_state(client: &Client, state: &str) {
     client
         .send_notification::<AnalysisStateLspNotification>(state.to_owned())
         .await;
 }
 
+/// Returns the per-batch sleep yield for the embedding pipeline. `None`
+/// when embeddings are off; `Some(LIVE_EMBEDDING_BATCH_SLEEP)` otherwise.
 fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
     if matches!(mode, EmbeddingMode::Off) {
         None

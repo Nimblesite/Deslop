@@ -27,6 +27,7 @@ use tower_lsp::{
     Client, LanguageServer,
 };
 
+use crate::notifications::{EmbeddingProgressNotification, ReportChangedLspNotification};
 use crate::{code_lens, commands, diagnostics, hover, position};
 
 /// User-visible server name advertised in `initialize`.
@@ -34,12 +35,6 @@ pub const SERVER_NAME: &str = "deslop-lsp";
 
 /// Diagnostic `source` + provider `identifier` surfaced to clients.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
-
-/// Method name for model-swap progress ([VSIX-SESSION-PROGRESS]).
-pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
-
-/// Method name for generation-change notifications.
-pub const REPORT_CHANGED: &str = "deslop/reportChanged";
 
 /// [LSP-EMBEDDING-CONSENT] Embedding startup settings supplied by the client after the user
 /// has explicitly selected a model. `Off` means no startup embedding
@@ -467,43 +462,4 @@ fn progress_reporter(client: &Client) -> EmbeddingProgressReporter {
                 .await;
         });
     })
-}
-
-/// Type-only marker so `tower_lsp::Client::send_notification` can
-/// dispatch our custom method.
-#[derive(Debug)]
-pub enum EmbeddingProgressNotification {}
-
-impl tower_lsp::lsp_types::notification::Notification for EmbeddingProgressNotification {
-    type Params = EmbeddingProgress;
-    const METHOD: &'static str = EMBEDDING_PROGRESS;
-}
-
-/// Type-only marker so `tower_lsp::Client::send_notification` can
-/// dispatch `deslop/reportChanged`.
-#[derive(Debug)]
-pub enum ReportChangedLspNotification {}
-
-impl tower_lsp::lsp_types::notification::Notification for ReportChangedLspNotification {
-    type Params = ReportChangedNotification;
-    const METHOD: &'static str = REPORT_CHANGED;
-}
-
-/// Method name for `deslop/analysisState` pushed by the scheduler
-/// whenever a watcher-driven pass starts, finishes, or errors.
-pub const ANALYSIS_STATE: &str = "deslop/analysisState";
-
-/// Type-only marker so `tower_lsp::Client::send_notification` can
-/// dispatch `deslop/analysisState`.
-///
-/// The payload is a plain JSON string (`"idle"`, `"running"`,
-/// `"errored"`) matching the TypeScript `AnalysisState` union type in
-/// the VSIX so the extension can do `state === "running"` directly.
-#[derive(Debug)]
-pub enum AnalysisStateLspNotification {}
-
-impl tower_lsp::lsp_types::notification::Notification for AnalysisStateLspNotification {
-    /// Plain string — VSIX checks `state === "running"` etc.
-    type Params = String;
-    const METHOD: &'static str = ANALYSIS_STATE;
 }

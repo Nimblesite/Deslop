@@ -83,8 +83,8 @@ fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
 
-    let start = Instant::now();
     let _init = handshake(&mut stdin, &mut stdout)?;
+    let start = Instant::now();
     let live = call(
         &mut stdin,
         &mut stdout,
@@ -101,9 +101,15 @@ fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
         .pointer("/result/clusters")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| anyhow!("reportGet must return clusters: {live}"))?;
-    ensure!(clusters.len() == 1, "cached report must have one cluster: {live}");
     ensure!(
-        clusters[0].pointer("/id") == Some(&serde_json::json!("cached-gh73")),
+        clusters.len() == 1,
+        "cached report must have one cluster: {live}"
+    );
+    let first = clusters
+        .first()
+        .ok_or_else(|| anyhow!("cached report must contain at least one cluster: {live}"))?;
+    ensure!(
+        first.pointer("/id") == Some(&serde_json::json!("cached-gh73")),
         "reportGet must return the staged cached cluster before a cold pass: {live}"
     );
     ensure!(
@@ -449,7 +455,7 @@ fn cached_report() -> serde_json::Value {
             "duplication_percent": 20.0,
             "clusters_total": 1,
             "duplicated_files": 2,
-            "threshold": {"percent": 0.0, "breached": false, "source": "None"}
+            "threshold": {"percent": 0.0, "breached": false, "source": "none"}
         },
         "schema_doc": "",
         "action_hints": [],

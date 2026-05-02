@@ -126,6 +126,15 @@ impl McpChild {
                     .unwrap_or_else(|_| std::process::ExitStatus::default())
             })
     }
+
+    fn close_stdin_and_wait(mut self, duration: Duration) -> Result<std::process::ExitStatus> {
+        drop(self.stdin);
+        self.child.wait_timeout(duration)?.ok_or_else(|| {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            anyhow!("deslop-mcp did not exit within {duration:?} after stdin closed")
+        })
+    }
 }
 
 trait WaitTimeout {
@@ -218,6 +227,97 @@ fn init_session(child: &mut McpChild) -> Result<Value> {
     )
 }
 
+#[cfg(unix)]
+fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpChild, u32)> {
+    let script = r#"exec 3<&0; "$1" --root "$2" <&3 2>/dev/null & mcp_pid=$!; printf '%s\n' "$mcp_pid" >&2; wait "$mcp_pid""#;
+    let mut child = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .arg("deslop-mcp-parent")
+        .arg(env!("CARGO_BIN_EXE_deslop-mcp"))
+        .arg(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("spawn killable deslop-mcp parent shell")?;
+    let mcp_pid = read_mcp_pid(&mut child)?;
+    let stdin = child.stdin.take().context("parent stdin")?;
+    let stdout = child.stdout.take().context("parent stdout")?;
+    Ok((
+        McpChild {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+            next_id: 0,
+        },
+        mcp_pid,
+    ))
+}
+
+#[cfg(unix)]
+fn read_mcp_pid(child: &mut Child) -> Result<u32> {
+    let stderr = child.stderr.take().context("parent stderr")?;
+    let mut stderr = BufReader::new(stderr);
+    let mut pid_line = String::new();
+    let bytes = stderr.read_line(&mut pid_line)?;
+    anyhow::ensure!(bytes > 0, "parent shell did not report mcp pid");
+    pid_line
+        .trim()
+        .parse::<u32>()
+        .context("parse mcp pid from parent shell")
+}
+
+#[cfg(unix)]
+fn wait_for_pid_exit(pid: u32, duration: Duration) -> Result<bool> {
+    let started = std::time::Instant::now();
+    while started.elapsed() < duration {
+        if !pid_exists(pid)? {
+            return Ok(true);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Ok(false)
+}
+
+#[cfg(unix)]
+fn pid_exists(pid: u32) -> Result<bool> {
+    let status = Command::new("kill")
+        .arg("-0")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("probe process existence with kill -0")?;
+    Ok(status.success())
+}
+
+#[cfg(unix)]
+fn terminate_pid(pid: u32) -> Result<()> {
+    if !pid_exists(pid)? {
+        return Ok(());
+    }
+    let _term_status = Command::new("kill")
+        .arg("-TERM")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("terminate orphaned mcp pid")?;
+    if wait_for_pid_exit(pid, Duration::from_secs(1))? {
+        return Ok(());
+    }
+    let _kill_status = Command::new("kill")
+        .arg("-KILL")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("kill orphaned mcp pid")?;
+    let _exited = wait_for_pid_exit(pid, Duration::from_secs(1))?;
+    Ok(())
+}
+
 #[test]
 fn prints_exact_version_contract() -> Result<()> {
     let binary = env!("CARGO_BIN_EXE_deslop-mcp");
@@ -308,6 +408,78 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
         "resources capability missing: {response}"
     );
     let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn exits_within_five_seconds_after_stdio_stdin_closes() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    assert!(child.child.id() > 0, "mcp pid must be observable");
+    assert!(
+        child.child.try_wait()?.is_none(),
+        "mcp must stay alive before stdin is closed"
+    );
+    let response = init_session(&mut child)?;
+    assert_eq!(
+        value_get(&response, "/result/serverInfo/name")?,
+        json!("deslop-mcp")
+    );
+    assert!(
+        value_get(&response, "/result/capabilities/resources")?.is_object(),
+        "resources capability missing: {response}"
+    );
+    let started = std::time::Instant::now();
+    let status = child.close_stdin_and_wait(Duration::from_secs(5))?;
+    assert!(status.success(), "stdin EOF should exit cleanly: {status}");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "stdin EOF must stop deslop-mcp within five seconds"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
+    let (mut child, mcp_pid) = spawn_mcp_with_killable_parent(fixture_root())?;
+    assert_ne!(
+        mcp_pid,
+        child.child.id(),
+        "test must observe the mcp child separately from its shell parent"
+    );
+    assert!(pid_exists(mcp_pid)?, "mcp pid must exist before initialize");
+    assert!(
+        child.child.try_wait()?.is_none(),
+        "launcher parent must stay alive until killed by the test"
+    );
+    let response = init_session(&mut child)?;
+    assert_eq!(
+        value_get(&response, "/result/serverInfo/name")?,
+        json!("deslop-mcp")
+    );
+    assert_eq!(
+        value_get(&response, "/result/protocolVersion")?,
+        json!("2024-11-05")
+    );
+
+    child.child.kill()?;
+    let parent_status = child.child.wait()?;
+    assert!(
+        !parent_status.success(),
+        "launcher parent should be killed during orphan-exit test"
+    );
+    assert!(
+        pid_exists(mcp_pid)?,
+        "mcp must still be observable after parent kill"
+    );
+    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(5))?;
+    if !exited {
+        terminate_pid(mcp_pid)?;
+    }
+    assert!(
+        exited,
+        "deslop-mcp must exit within 5s when its launching parent disappears"
+    );
     Ok(())
 }
 

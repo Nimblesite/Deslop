@@ -30,7 +30,9 @@ use deslop_core::{
 use tokio::sync::{broadcast::Receiver, Mutex};
 use tower_lsp::Client;
 
-use crate::backend::{AnalysisStateLspNotification, ReportChangedLspNotification, ANALYSIS_STATE};
+use crate::notifications::{
+    AnalysisStateLspNotification, ReportChangedLspNotification, ANALYSIS_STATE,
+};
 
 /// File extensions the watcher monitors — one entry per supported language.
 const WATCHED_EXTENSIONS: &[&str] = &["cs", "rs", "py"];

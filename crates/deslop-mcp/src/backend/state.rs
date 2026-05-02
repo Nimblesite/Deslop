@@ -8,11 +8,14 @@
 
 use std::{
     collections::BTreeSet,
+    fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex, RwLock,
     },
+    time::SystemTime,
 };
 
 use deslop_core::{
@@ -52,8 +55,21 @@ pub struct StateFileBackend {
     generation: Arc<AtomicU64>,
     /// Most-recently-loaded report. `None` until first successful load.
     cached: Arc<RwLock<Option<Arc<Report>>>>,
+    /// State-file fingerprint loaded with `cached`.
+    cached_stamp: Arc<RwLock<Option<StateFileStamp>>>,
     /// Shared notification sender wired by [`McpServer::run`].
     sender: Arc<Mutex<Option<NotificationSender>>>,
+}
+
+/// Fingerprint of the LSP-written state file, used by the watcher to
+/// skip re-reads when neither the modification time nor the length
+/// changed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct StateFileStamp {
+    /// Last-modified time of the state file at load time.
+    modified: SystemTime,
+    /// Byte length of the state file at load time.
+    len: u64,
 }
 
 impl std::fmt::Debug for StateFileBackend {
@@ -84,27 +100,37 @@ impl StateFileBackend {
             ipc_socket,
             generation: Arc::new(AtomicU64::new(0)),
             cached: Arc::new(RwLock::new(None)),
+            cached_stamp: Arc::new(RwLock::new(None)),
             sender: Arc::new(Mutex::new(None)),
         })
     }
 
-    /// Returns the cached report, reloading from disk if the cache is
-    /// empty.
+    /// Returns the cached report, reloading from disk when the state
+    /// file changed since the cache was loaded.
     ///
     /// # Errors
     ///
     /// See [`Self::reload_cache`].
     fn cached_report(&self) -> Result<Arc<Report>, BackendError> {
+        let stamp = state_file_stamp(&self.state_file)?;
         {
-            let guard = self
+            let report_guard = self
                 .cached
                 .read()
                 .map_err(|_| BackendError::MutexPoisoned)?;
-            if let Some(report) = guard.as_ref() {
-                return Ok(Arc::clone(report));
+            let stamp_guard = self
+                .cached_stamp
+                .read()
+                .map_err(|_| BackendError::MutexPoisoned)?;
+            if let (Some(report), Some(cached_stamp)) =
+                (report_guard.as_ref(), stamp_guard.as_ref())
+            {
+                if cached_stamp == &stamp {
+                    return Ok(Arc::clone(report));
+                }
             }
         }
-        self.reload_cache()
+        self.reload_cache_with_stamp(stamp)
     }
 
     /// Reads and parses the LSP state file, updates the in-memory cache,
@@ -116,21 +142,26 @@ impl StateFileBackend {
     /// exist, and [`BackendError::StateFileCorrupt`] for all other I/O
     /// or parse failures.
     fn reload_cache(&self) -> Result<Arc<Report>, BackendError> {
-        let bytes = std::fs::read(&self.state_file).map_err(|err| {
-            if err.kind() == std::io::ErrorKind::NotFound {
-                BackendError::LspNotRunning
-            } else {
-                BackendError::StateFileCorrupt(err.to_string())
-            }
-        })?;
-        let report: Report = serde_json::from_slice(&bytes)
-            .map_err(|err| BackendError::StateFileCorrupt(err.to_string()))?;
+        let stamp = state_file_stamp(&self.state_file)?;
+        self.reload_cache_with_stamp(stamp)
+    }
+
+    /// Variant of [`Self::reload_cache`] that takes a pre-computed
+    /// [`StateFileStamp`] so the file watcher does not stat the file
+    /// twice (once to detect the change, once to read it).
+    fn reload_cache_with_stamp(&self, stamp: StateFileStamp) -> Result<Arc<Report>, BackendError> {
+        let report = read_state_report(&self.state_file)?;
         let shared = Arc::new(report);
         let mut guard = self
             .cached
             .write()
             .map_err(|_| BackendError::MutexPoisoned)?;
         *guard = Some(Arc::clone(&shared));
+        let mut stamp_guard = self
+            .cached_stamp
+            .write()
+            .map_err(|_| BackendError::MutexPoisoned)?;
+        *stamp_guard = Some(stamp);
         let _ = self.generation.fetch_add(1, Ordering::Relaxed);
         Ok(shared)
     }
@@ -161,11 +192,47 @@ impl StateFileBackend {
         };
         let state_file = self.state_file.clone();
         let cached = Arc::clone(&self.cached);
+        let cached_stamp = Arc::clone(&self.cached_stamp);
         let generation = Arc::clone(&self.generation);
         let sender = Arc::clone(&self.sender);
         let _thread = std::thread::spawn(move || {
-            run_watcher(&watch_dir, &state_file, &cached, &generation, &sender);
+            run_watcher(
+                &watch_dir,
+                &state_file,
+                &cached,
+                &cached_stamp,
+                &generation,
+                &sender,
+            );
         });
+    }
+}
+
+/// Returns the (mtime, length) stamp used to detect state-file changes.
+fn state_file_stamp(state_file: &Path) -> Result<StateFileStamp, BackendError> {
+    let metadata = fs::metadata(state_file).map_err(|err| map_state_file_io_error(&err))?;
+    let modified = metadata
+        .modified()
+        .map_err(|err| BackendError::StateFileCorrupt(err.to_string()))?;
+    Ok(StateFileStamp {
+        modified,
+        len: metadata.len(),
+    })
+}
+
+/// Reads the LSP-written state file and parses it into a [`Report`].
+fn read_state_report(state_file: &Path) -> Result<Report, BackendError> {
+    let bytes = fs::read(state_file).map_err(|err| map_state_file_io_error(&err))?;
+    serde_json::from_slice(&bytes).map_err(|err| BackendError::StateFileCorrupt(err.to_string()))
+}
+
+/// Lifts a state-file I/O error into a [`BackendError`], distinguishing
+/// "LSP is not running" (file not found) from corruption.
+fn map_state_file_io_error(err: &std::io::Error) -> BackendError {
+    if err.kind() == ErrorKind::NotFound {
+        BackendError::LspNotRunning
+    } else {
+        BackendError::StateFileCorrupt(err.to_string())
     }
 }
 
@@ -210,6 +277,7 @@ fn run_watcher(
     watch_dir: &Path,
     state_file: &Path,
     cached: &Arc<RwLock<Option<Arc<Report>>>>,
+    cached_stamp: &Arc<RwLock<Option<StateFileStamp>>>,
     generation: &Arc<AtomicU64>,
     sender: &Arc<Mutex<Option<NotificationSender>>>,
 ) {
@@ -227,7 +295,7 @@ fn run_watcher(
         return;
     }
     for _event in rx {
-        reload_and_notify(state_file, cached, generation, sender);
+        reload_and_notify(state_file, cached, cached_stamp, generation, sender);
     }
 }
 
@@ -235,17 +303,18 @@ fn run_watcher(
 fn reload_and_notify(
     state_file: &Path,
     cached: &RwLock<Option<Arc<Report>>>,
+    cached_stamp: &RwLock<Option<StateFileStamp>>,
     generation: &AtomicU64,
     sender: &Mutex<Option<NotificationSender>>,
 ) {
-    let bytes = match std::fs::read(state_file) {
-        Ok(b) => b,
+    let stamp = match state_file_stamp(state_file) {
+        Ok(stamp) => stamp,
         Err(err) => {
             debug!(reason = %err, "mcp_state_file_reload_failed");
             return;
         }
     };
-    let Ok(report) = serde_json::from_slice::<Report>(&bytes) else {
+    let Ok(report) = read_state_report(state_file) else {
         warn!("mcp_state_file_parse_failed");
         return;
     };
@@ -254,6 +323,11 @@ fn reload_and_notify(
         return;
     };
     *guard = Some(shared);
+    drop(guard);
+    let Ok(mut stamp_guard) = cached_stamp.write() else {
+        return;
+    };
+    *stamp_guard = Some(stamp);
     let gen = generation.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
     let Ok(lock) = sender.lock() else {
         return;

@@ -11,7 +11,7 @@ use tower_lsp::{
     },
 };
 
-use crate::backend::{LspBackend, ReportChangedLspNotification};
+use crate::{backend::LspBackend, notifications::ReportChangedLspNotification};
 
 /// Forces a full report refresh.
 pub const REFRESH_REPORT: &str = "deslop.lsp.refreshReport";

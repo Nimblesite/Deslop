@@ -2,16 +2,29 @@
 
 use std::path::{Path, PathBuf};
 
-use deslop_core::Report;
-use serde_json::{json, Value};
+use deslop_core::{
+    wire_generated::{
+        EmbeddingModelList, FindSimilarResult, McpSessionConfig, RangeReport, ReportPageFilters,
+        SetEmbeddingModelResponse, TopOffendersPayload,
+    },
+    Report,
+};
+use serde_json::Value;
 
 use crate::{
     backend::{FindSimilarInput, McpBackend},
-    page::{build_page, Pagination, QueryFilters},
+    page::{build_page, Pagination},
     protocol::{ErrorCode, JsonRpcError},
 };
 
 use super::backend_to_rpc;
+
+/// Serialises a typed wire payload, falling back to JSON `null` only if
+/// serde fails (which it cannot for the wire types here — they all derive
+/// `Serialize`). Centralised so the handlers stay terse.
+fn to_value<T: serde::Serialize>(value: &T) -> Value {
+    serde_json::to_value(value).unwrap_or(Value::Null)
+}
 
 /// `top-offenders` forwarder. Returns up to `n` full [`ReportCluster`]
 /// records — occurrences, interpretation, signals, bucket — everything
@@ -36,13 +49,12 @@ pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Valu
 
 /// Builds the shared top-offenders JSON payload for `top-offenders` and `rescan`.
 fn top_offenders_payload(report: &Report, n: usize) -> Value {
-    let total = report.clusters.len();
-    let clusters: Vec<_> = report.clusters.iter().take(n).collect();
-    json!({
-        "total_clusters": total,
-        "n": n,
-        "clusters": clusters,
-    })
+    let payload = TopOffendersPayload {
+        total_clusters: report.clusters.len(),
+        n,
+        clusters: report.clusters.iter().take(n).cloned().collect(),
+    };
+    to_value(&payload)
 }
 
 /// Extracts a positive `n` value from MCP tool arguments, defaulting to five.
@@ -62,12 +74,13 @@ pub(super) fn call_report_get(
 ) -> Result<Value, JsonRpcError> {
     let pagination = extract_pagination(args)?;
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    Ok(build_page(
+    let page = build_page(
         &report,
         backend.generation(),
         pagination,
-        &QueryFilters::default(),
-    ))
+        &ReportPageFilters::default(),
+    );
+    Ok(to_value(&page))
 }
 
 /// `report-query` forwarder. Same `ReportPage` shape as `report-get`
@@ -79,12 +92,8 @@ pub(super) fn call_report_query(
     let pagination = extract_pagination(args)?;
     let filters = extract_filters(args);
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    Ok(build_page(
-        &report,
-        backend.generation(),
-        pagination,
-        &filters,
-    ))
+    let page = build_page(&report, backend.generation(), pagination, &filters);
+    Ok(to_value(&page))
 }
 
 /// `report-for-file` forwarder.
@@ -96,7 +105,11 @@ pub(super) fn call_report_for_file(
     let clusters = backend
         .report_for_file(Path::new(&path))
         .map_err(backend_to_rpc)?;
-    Ok(json!({ "path": path, "clusters": clusters }))
+    let payload = deslop_core::wire_generated::FileReport {
+        path: PathBuf::from(path),
+        clusters,
+    };
+    Ok(to_value(&payload))
 }
 
 /// `report-for-range` forwarder.
@@ -108,19 +121,18 @@ pub(super) fn call_report_for_range(
     let start_byte = extract_u64(args, "start_byte")?;
     let end_byte = extract_u64(args, "end_byte")?;
     reject_inverted_range(start_byte, end_byte)?;
+    let start_byte_usize = usize::try_from(start_byte).unwrap_or(usize::MAX);
+    let end_byte_usize = usize::try_from(end_byte).unwrap_or(usize::MAX);
     let clusters = backend
-        .report_for_range(
-            Path::new(&path),
-            usize::try_from(start_byte).unwrap_or(usize::MAX),
-            usize::try_from(end_byte).unwrap_or(usize::MAX),
-        )
+        .report_for_range(Path::new(&path), start_byte_usize, end_byte_usize)
         .map_err(backend_to_rpc)?;
-    Ok(json!({
-        "path": path,
-        "start_byte": start_byte,
-        "end_byte": end_byte,
-        "clusters": clusters,
-    }))
+    let payload = RangeReport {
+        path: PathBuf::from(path),
+        start_byte: start_byte_usize,
+        end_byte: end_byte_usize,
+        clusters,
+    };
+    Ok(to_value(&payload))
 }
 
 /// `find-similar` forwarder. Selects between the range and snippet
@@ -149,10 +161,11 @@ pub(super) fn call_find_similar(
     } else {
         call_find_similar_snippet(backend, args, top_n)?
     };
-    Ok(json!({
-        "clusters": output.clusters,
-        "below_min_nodes": output.below_min_nodes,
-    }))
+    let payload = FindSimilarResult {
+        clusters: output.clusters,
+        below_min_nodes: output.below_min_nodes,
+    };
+    Ok(to_value(&payload))
 }
 
 /// Range variant of `find-similar`.
@@ -204,25 +217,14 @@ pub(super) fn call_cluster_by_id(
 ) -> Result<Value, JsonRpcError> {
     let id = extract_string(args, "id")?;
     let cluster = backend.cluster_by_id(&id).map_err(backend_to_rpc)?;
-    Ok(serde_json::to_value(cluster).unwrap_or(Value::Null))
+    Ok(to_value(&cluster))
 }
 
 /// `list-embedding-models` forwarder.
 pub(super) fn call_list_embedding_models(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
     let models = backend.list_embedding_models().map_err(backend_to_rpc)?;
-    let rendered: Vec<Value> = models
-        .into_iter()
-        .map(|info| {
-            json!({
-                "name": info.name,
-                "bare_id": info.bare_id,
-                "digest": info.digest,
-                "size_bytes": info.size_bytes,
-                "is_embedding_model": info.is_embedding_model,
-            })
-        })
-        .collect();
-    Ok(json!({ "models": rendered }))
+    let payload = EmbeddingModelList { models };
+    Ok(to_value(&payload))
 }
 
 /// `set-embedding-model` forwarder.
@@ -240,29 +242,28 @@ pub(super) fn call_set_embedding_model(
     let spec = backend
         .set_embedding_model(&provider_id, &model_id, endpoint.as_deref())
         .map_err(backend_to_rpc)?;
-    Ok(json!({
-        "provider_id": spec.provider_id,
-        "model_id": spec.model_id,
-        "model_version": spec.model_version,
-        "dimensions": spec.dimensions,
-    }))
+    let payload = SetEmbeddingModelResponse {
+        provider_id: spec.provider_id,
+        model_id: spec.model_id,
+        model_version: spec.model_version,
+        dimensions: spec.dimensions,
+    };
+    Ok(to_value(&payload))
 }
 
 /// `session-config` forwarder.
 pub(super) fn call_session_config(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
     let snapshot = backend.session_config().map_err(backend_to_rpc)?;
-    Ok(json!({
-        "root": snapshot.root,
-        "min_nodes": snapshot.min_nodes,
-        "languages": snapshot.languages,
-        "incremental": snapshot.incremental,
-        "embedding_provenance": snapshot.embedding_provenance,
-        "cache_stats": {
-            "hits": snapshot.cumulative_cache_stats.hits,
-            "misses": snapshot.cumulative_cache_stats.misses,
-        },
-        "generation": backend.generation(),
-    }))
+    let payload = McpSessionConfig {
+        root: snapshot.root,
+        min_nodes: snapshot.min_nodes,
+        languages: snapshot.languages,
+        incremental: snapshot.incremental,
+        embedding_provenance: snapshot.embedding_provenance,
+        cache_stats: snapshot.cumulative_cache_stats,
+        generation: backend.generation(),
+    };
+    Ok(to_value(&payload))
 }
 
 /// Requires explicit user consent for model-changing tool calls.
@@ -293,8 +294,8 @@ pub(super) fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcErro
 /// Extracts the optional `report-query` filter knobs. Unknown / wrong-typed
 /// fields are quietly ignored — the JSON schema layer rejects them up
 /// front when a strict client is in use.
-pub(super) fn extract_filters(args: &Value) -> QueryFilters {
-    QueryFilters {
+pub(super) fn extract_filters(args: &Value) -> ReportPageFilters {
+    ReportPageFilters {
         language: args
             .get("language")
             .and_then(Value::as_str)

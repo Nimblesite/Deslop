@@ -3,12 +3,15 @@
 //! Mirrors the JSON-RPC fault model the LSP / MCP transports expose.
 //! Each variant carries enough structured context that a transport
 //! adapter can lift it into a JSON-RPC error without losing fields.
-//! [`LiveErrorWire`] is the serialisable shape consumed by transports.
+//! [`LiveErrorWire`] is the serialisable shape consumed by transports;
+//! its definition lives in `docs/models/live-ipc.td` and is re-exported
+//! here so callers keep the single import path they already use.
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use crate::wire_generated::LiveErrorWire;
 
 use crate::error::CoreError;
 
@@ -95,17 +98,6 @@ pub enum LiveError {
     /// Wraps any [`CoreError`] surfaced by the underlying pipeline.
     #[error(transparent)]
     Core(#[from] CoreError),
-}
-
-/// Serialisable wire shape for [`LiveError`]. Transports lift
-/// `LiveError` into this struct before encoding so the JSON-RPC error
-/// payload is stable.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LiveErrorWire {
-    /// Short machine-readable identifier (e.g. `"unparseable_input"`).
-    pub code: String,
-    /// Human-readable rendering, equivalent to `format!("{err}")`.
-    pub message: String,
 }
 
 impl LiveError {

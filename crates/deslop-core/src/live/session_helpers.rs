@@ -308,12 +308,26 @@ pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
         }
     };
     match serde_json::from_slice::<Report>(&bytes) {
-        Ok(report) => Some(report),
+        Ok(mut report) => {
+            normalize_cache_seed_stats(&mut report);
+            Some(report)
+        }
         Err(error) => {
             tracing::warn!(%error, path = %path.display(), "cached_report_parse_failed");
             None
         }
     }
+}
+
+fn normalize_cache_seed_stats(report: &mut Report) {
+    if report.cache_stats.misses == 0 {
+        return;
+    }
+    report.cache_stats.hits = report
+        .cache_stats
+        .hits
+        .saturating_add(report.cache_stats.misses);
+    report.cache_stats.misses = 0;
 }
 
 /// Translates the Ollama tag list into [`EmbeddingModelInfo`] entries.

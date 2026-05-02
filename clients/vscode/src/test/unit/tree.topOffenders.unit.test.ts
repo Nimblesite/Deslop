@@ -17,7 +17,7 @@ import {
 } from "../../tree/providers";
 import { openOccurrence } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
-import { ReportOccurrence } from "../../types/report";
+import { ReportCluster, ReportOccurrence } from "../../types/report";
 import {
   cluster,
   iconColorId,
@@ -27,6 +27,22 @@ import {
   withGroupBy,
 } from "./tree.helpers";
 import { CATEGORY_STYLE } from "../../tree/nodes";
+
+function reportOccurrence(occurrencePath: string, startByte = 0, endByte = 20): ReportOccurrence {
+  return { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false };
+}
+
+function withOccurrences(
+  base: ReportCluster,
+  occurrences: ReportOccurrence[],
+): ReportCluster {
+  return {
+    ...base,
+    size: occurrences.length,
+    occurrences_total: occurrences.length,
+    occurrences,
+  };
+}
 
 suite("TopOffendersProvider", () => {
   test("renders an Analysing… placeholder before the first report arrives", () => {
@@ -591,6 +607,55 @@ suite("TopOffendersProvider", () => {
     assert.ok(labels.some((label) => /Next\.cs/.test(label)), "next offender must remain visible");
     assert.ok(labels.some((label) => /Still\.cs/.test(label)), "remaining offender must remain visible");
     assert.doesNotMatch(labels.join("\n"), /Fixed\.cs/, "fixed cluster must leave the offender list");
+  });
+
+  test("dirty file edits prune stale offsets from top offenders immediately (#78)", () => {
+    const dirtyOnly = withOccurrences(
+      cluster("dirty-only", 100, "/repo/Dirty.cs"),
+      [reportOccurrence("/repo/Dirty.cs", 10, 20)],
+    );
+    const mixed = withOccurrences(
+      cluster("mixed", 90, "/repo/Dirty.cs"),
+      [
+        reportOccurrence("/repo/Dirty.cs", 30, 40),
+        reportOccurrence("/repo/Clean.cs", 50, 60),
+      ],
+    );
+    const clean = withOccurrences(
+      cluster("clean", 80, "/repo/Other.cs"),
+      [reportOccurrence("/repo/Other.cs", 70, 80)],
+    );
+    const store = new ReportStore();
+    store.setSnapshot(report([dirtyOnly, mixed, clean]), 9);
+    const ticker = new StatusTicker();
+    const provider = new TopOffendersProvider(store, ticker);
+    let treeRefreshes = 0;
+    const sub = provider.onDidChangeTreeData(() => {
+      treeRefreshes += 1;
+    });
+
+    try {
+      const before = provider.getChildren();
+      assert.equal(before.length, 3, "fixture starts with three top-offender rows");
+      assert.match(before.map(labelText).join("\n"), /Dirty\.cs/, "fixture must expose dirty offsets");
+
+      store.markFileDirty("/repo/Dirty.cs");
+
+      const after = provider.getChildren();
+      const labels = after.map(labelText);
+      const mixedNode = after.find((node) => labelText(node).includes("Clean.cs"));
+
+      assert.equal(treeRefreshes, 1, "dirty pruning must refresh the tree once");
+      assert.equal(after.length, 2, "dirty-only cluster must disappear from top offenders");
+      assert.doesNotMatch(labels.join("\n"), /Dirty\.cs/, "stale dirty-file offsets must be hidden");
+      assert.ok(mixedNode, "mixed cluster must remain via its clean occurrence");
+      assert.match(labelText(mixedNode), /#1\b/, "surviving cluster is re-ranked after pruning");
+      assert.equal(provider.getChildren(mixedNode).length, 1, "only the clean occurrence remains expandable");
+    } finally {
+      sub.dispose();
+      provider.dispose();
+      ticker.dispose();
+    }
   });
 
   test("surfaces a failed lifecycle as an error status row", () => {
