@@ -105,21 +105,55 @@ fn collect_snippets<'a>(
 /// (signature or whole `def`) whose declared name is the same identifier
 /// and the members span at least two distinct files. That is the
 /// abstract/interface implementation pattern — the contract forces
-/// identity, no extraction is possible.
+/// identity, no extraction is possible. We additionally require that
+/// the enclosing function bodies are not byte-equivalent so a genuine
+/// copy-pasted helper that happens to share a name (e.g. private
+/// `_helper` reused in two modules) still fires as a cluster.
 fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
     let names: Option<Vec<&[u8]>> = snippets.iter().map(enclosing_function_name).collect();
     let Some(names) = names else { return false };
-    let Some(first) = names.first() else {
+    let Some(first_name) = names.first() else {
         return false;
     };
-    if !names.iter().all(|name| name == first) {
+    if !names.iter().all(|name| name == first_name) {
         return false;
     }
     let mut files = std::collections::BTreeSet::new();
     for snippet in snippets {
         let _inserted = files.insert(snippet.file_id);
     }
-    files.len() >= 2
+    if files.len() < 2 {
+        return false;
+    }
+    enclosing_function_bodies_differ(snippets)
+}
+
+/// Returns true when at least two cluster members' enclosing function
+/// bodies differ in raw source bytes — distinguishes polymorphism
+/// (different implementations of one signature) from genuinely
+/// duplicated helper functions that share a name.
+fn enclosing_function_bodies_differ(snippets: &[Snippet<'_>]) -> bool {
+    let bodies: Option<Vec<Vec<u8>>> = snippets
+        .iter()
+        .map(|snippet| {
+            let tree = parse_for(snippet)?;
+            let function = enclosing_kind(
+                tree.root_node(),
+                snippet.range,
+                function_kinds(snippet.language),
+            )?;
+            let body = function.child_by_field_name("body")?;
+            snippet
+                .source
+                .get(body.start_byte()..body.end_byte())
+                .map(<[u8]>::to_vec)
+        })
+        .collect();
+    let Some(bodies) = bodies else { return false };
+    let Some(first) = bodies.first() else {
+        return false;
+    };
+    bodies.iter().any(|body| body != first)
 }
 
 /// Returns the name of the `function_definition` (or `method_declaration`
