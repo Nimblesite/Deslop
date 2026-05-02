@@ -254,8 +254,11 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
             1,
             "bucket '{bucket}' must always produce a diagnostic (no weight-percentile suppression)"
         );
+        let diag = diagnostics
+            .first()
+            .ok_or_else(|| anyhow!("no diagnostic for bucket '{bucket}'"))?;
         assert_eq!(
-            diagnostics[0].severity,
+            diag.severity,
             Some(expected_severity),
             "bucket '{bucket}' → {expected_severity:?}"
         );

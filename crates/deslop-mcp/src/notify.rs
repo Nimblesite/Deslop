@@ -61,6 +61,7 @@ pub(crate) fn push_report_changed(sender: &NotificationSender, generation: u64) 
     write_frame(&mut **writer, &report_changed);
 }
 
+/// Serialises `value` as a newline-terminated JSON frame and flushes `writer`.
 fn write_frame(writer: &mut dyn Write, value: &Value) {
     let Ok(bytes) = serde_json::to_vec(value) else {
         return;

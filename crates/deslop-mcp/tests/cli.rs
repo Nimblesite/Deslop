@@ -438,7 +438,7 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
         clusters_arr.len(),
         "every cluster must have a weight"
     );
-    let sorted = weights.windows(2).all(|w| w[0] >= w[1]);
+    let sorted = weights.windows(2).all(|w| matches!(w, [a, b] if a >= b));
     assert!(
         sorted,
         "clusters must be worst-first by weight: {weights:?}"

@@ -8,6 +8,7 @@
 //! one response per line.
 
 #[cfg(unix)]
+/// Unix-domain socket IPC server implementation.
 mod unix {
     use std::{
         io::{BufRead, BufReader, Write},
@@ -24,6 +25,7 @@ mod unix {
     /// Dropping this value removes the socket file from the filesystem.
     #[derive(Debug)]
     pub struct IpcServer {
+        /// Absolute path to the Unix domain socket file. Removed on drop.
         socket_path: PathBuf,
     }
 
@@ -71,19 +73,19 @@ mod unix {
 
     /// Spawns a thread to handle a single client connection.
     fn spawn_connection(stream: UnixStream, service: Arc<LiveService>) {
-        let _thread = std::thread::spawn(move || handle_connection(stream, service));
+        let _thread = std::thread::spawn(move || handle_connection(&stream, &service));
     }
 
     /// Reads one JSON-RPC line, dispatches it, writes the response, then
     /// closes the connection. Short-lived by design.
-    fn handle_connection(stream: UnixStream, service: Arc<LiveService>) {
+    fn handle_connection(stream: &UnixStream, service: &Arc<LiveService>) {
         let peer = stream.try_clone();
-        let mut reader = BufReader::new(&stream);
+        let mut reader = BufReader::new(stream);
         let mut line = String::new();
         if reader.read_line(&mut line).is_err() {
             return;
         }
-        let response = handle_line(line.trim(), &service);
+        let response = handle_line(line.trim(), service);
         let mut writer = match peer {
             Ok(w) => w,
             Err(error) => {
@@ -106,14 +108,13 @@ mod unix {
         let method = request.get("method").and_then(Value::as_str).unwrap_or("");
         let params = request.get("params").cloned().unwrap_or(Value::Null);
         let result = dispatch(method, params, service);
-        json_rpc_response(id, result)
+        json_rpc_response(&id, result)
     }
 
     /// Routes a JSON-RPC method to the appropriate [`LiveService`] call.
     fn dispatch(method: &str, params: Value, service: &Arc<LiveService>) -> Result<Value, Value> {
-        let handle = match tokio::runtime::Handle::try_current() {
-            Ok(h) => h,
-            Err(_) => return Err(json!({"code": -32603, "message": "no tokio runtime"})),
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return Err(json!({"code": -32603, "message": "no tokio runtime"}));
         };
         match method {
             "duplicates/findSimilar" => dispatch_find_similar(params, service, &handle),
@@ -146,7 +147,7 @@ mod unix {
     }
 
     /// Wraps a `Result<Value, Value>` into a JSON-RPC 2.0 response envelope.
-    fn json_rpc_response(id: Value, result: Result<Value, Value>) -> Value {
+    fn json_rpc_response(id: &Value, result: Result<Value, Value>) -> Value {
         match result {
             Ok(value) => json!({"jsonrpc": "2.0", "id": id, "result": value}),
             Err(error) => json!({"jsonrpc": "2.0", "id": id, "error": error}),

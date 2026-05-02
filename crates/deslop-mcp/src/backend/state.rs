@@ -134,7 +134,7 @@ impl StateFileBackend {
         let generation = Arc::clone(&self.generation);
         let sender = Arc::clone(&self.sender);
         let _thread = std::thread::spawn(move || {
-            run_watcher(watch_dir, state_file, cached, generation, sender);
+            run_watcher(&watch_dir, &state_file, &cached, &generation, &sender);
         });
     }
 }
@@ -165,11 +165,11 @@ fn extension_to_language(path: &Path) -> Option<&'static str> {
 
 /// Entry point for the background watcher thread.
 fn run_watcher(
-    watch_dir: PathBuf,
-    state_file: PathBuf,
-    cached: Arc<RwLock<Option<Arc<Report>>>>,
-    generation: Arc<AtomicU64>,
-    sender: Arc<Mutex<Option<NotificationSender>>>,
+    watch_dir: &Path,
+    state_file: &Path,
+    cached: &Arc<RwLock<Option<Arc<Report>>>>,
+    generation: &Arc<AtomicU64>,
+    sender: &Arc<Mutex<Option<NotificationSender>>>,
 ) {
     let (tx, rx) = std::sync::mpsc::channel();
     let handler = ChannelHandler { tx };
@@ -178,14 +178,14 @@ fn run_watcher(
         return;
     };
     if watcher
-        .watch(&watch_dir, RecursiveMode::NonRecursive)
+        .watch(watch_dir, RecursiveMode::NonRecursive)
         .is_err()
     {
         warn!(dir = %watch_dir.display(), "mcp_state_file_watch_failed");
         return;
     }
     for _event in rx {
-        reload_and_notify(&state_file, &cached, &generation, &sender);
+        reload_and_notify(state_file, cached, generation, sender);
     }
 }
 
@@ -212,7 +212,7 @@ fn reload_and_notify(
         return;
     };
     *guard = Some(shared);
-    let gen = generation.fetch_add(1, Ordering::Relaxed) + 1;
+    let gen = generation.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
     let Ok(lock) = sender.lock() else {
         return;
     };
@@ -224,6 +224,7 @@ fn reload_and_notify(
 /// Bridges `notify` events into a std channel so the watcher thread
 /// can block on `rx.recv()` without requiring an async runtime.
 struct ChannelHandler {
+    /// Channel sender used to signal incoming filesystem events.
     tx: std::sync::mpsc::Sender<()>,
 }
 

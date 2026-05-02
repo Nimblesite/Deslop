@@ -180,16 +180,16 @@ impl LspBackend {
         let root = session.root().to_path_buf();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
-        let (_watcher, _scheduler) = crate::file_watch::start(&root, session, client.clone())?;
-        let _ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service))
+        let (watcher, scheduler) = crate::file_watch::start(&root, session, client.clone())?;
+        let ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service))
             .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
             .ok();
         Ok(Self {
             client,
             service,
-            _watcher,
-            _scheduler,
-            _ipc,
+            _watcher: watcher,
+            _scheduler: scheduler,
+            _ipc: ipc,
         })
     }
 
