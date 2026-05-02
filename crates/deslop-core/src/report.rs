@@ -347,6 +347,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
+    log_bucket_distribution(&visible_clusters, clusters_hidden);
     let metrics = compute_repo_metrics(&MetricsInputs {
         clusters: inputs.clusters,
         sources: inputs.sources,
@@ -375,4 +376,60 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
     }
+}
+
+/// Bucket totals emitted for GH#45 classification observability.
+#[derive(Default)]
+struct BucketDistribution {
+    /// Visible identical-code clusters.
+    identical: usize,
+    /// Visible nearly-identical clusters.
+    nearly_identical: usize,
+    /// Visible loosely-similar clusters.
+    loosely_similar: usize,
+    /// Visible same-behavior clusters.
+    same_behavior: usize,
+}
+
+impl BucketDistribution {
+    /// Counts visible report clusters by canonical bucket.
+    fn from_clusters(clusters: &[ReportCluster]) -> Self {
+        let mut distribution = Self::default();
+        for cluster in clusters {
+            distribution.add(classify_signals(cluster.signals));
+        }
+        distribution
+    }
+
+    /// Increments one bucket.
+    fn add(&mut self, kind: ClusterKind) {
+        match kind {
+            ClusterKind::Identical => self.identical = self.identical.saturating_add(1),
+            ClusterKind::NearlyIdentical => {
+                self.nearly_identical = self.nearly_identical.saturating_add(1);
+            }
+            ClusterKind::LooselySimilar => {
+                self.loosely_similar = self.loosely_similar.saturating_add(1);
+            }
+            ClusterKind::SameBehavior => self.same_behavior = self.same_behavior.saturating_add(1),
+        }
+    }
+
+    /// Emits the structured classification distribution.
+    fn log(self, visible: usize, hidden: usize) {
+        tracing::info!(
+            visible,
+            hidden,
+            identical = self.identical,
+            nearly_identical = self.nearly_identical,
+            loosely_similar = self.loosely_similar,
+            same_behavior = self.same_behavior,
+            "bucket distribution",
+        );
+    }
+}
+
+/// Logs the visible cluster bucket distribution after classification.
+fn log_bucket_distribution(clusters: &[ReportCluster], hidden: usize) {
+    BucketDistribution::from_clusters(clusters).log(clusters.len(), hidden);
 }

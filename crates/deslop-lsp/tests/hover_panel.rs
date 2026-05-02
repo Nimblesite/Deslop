@@ -33,7 +33,7 @@ const REPORT_GET: &str = "deslop/reportGet";
 fn hover_body_is_compact_title_only_for_humans() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path(), &["Alpha.cs", "Beta.cs"])?;
@@ -85,7 +85,7 @@ fn hover_surfaces_one_card_even_when_multiple_clusters_overlap_the_cursor() -> R
     // `min_nodes = 5` exposes sibling-window fingerprints that sit
     // inside larger method-body fingerprints, reliably producing
     // overlapping clusters on csharp-type3.
-    let mut child = spawn_lsp(workspace.path(), 5)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path(), &["Delta.cs", "Epsilon.cs"])?;

@@ -90,6 +90,67 @@ union AnalysisState {
   Errored { message: String }
 }
 
-# External references resolved by the generator's IMPORTS map:
+# ---------------------------------------------------------------------------
+# Domain wire types — also travel on the live wire, also the JSON the CLI
+# writes to disk. Extracted from `crates/deslop-core/src/{report,delta,
+# report_metrics,report_boilerplate,report_hints}.rs`.
+# ---------------------------------------------------------------------------
+
+type ActionHint {
+  pattern: String
+  recommendation: String
+}
+
+union ThresholdSource {
+  Cli
+  Config
+  None
+}
+
+type ThresholdSummary {
+  percent: Float
+  breached: Bool
+  source: ThresholdSource
+}
+
+type RepoMetrics {
+  analysed_loc: Int
+  duplicated_loc: Int
+  duplication_percent: Float
+  clusters_total: Int
+  duplicated_files: Int
+  threshold: ThresholdSummary
+}
+
+type ReportBoilerplateOccurrence {
+  path: String
+  start_byte: Int
+  end_byte: Int
+}
+
+type ReportBoilerplateHint {
+  kind: String
+  language: String
+  severity: String
+  recommendation: String
+  occurrences: List<ReportBoilerplateOccurrence>
+}
+
+# `ReportDelta` references `CacheStats` and `ReportCluster` which are
+# still defined in `crate::report` (pending migration). The generator
+# resolves them via the EXTERNAL_TYPES map.
+type ReportDelta {
+  from_generation: Int
+  to_generation: Int
+  clusters_added: List<ReportCluster>
+  clusters_removed: List<String>
+  clusters_updated: List<ReportCluster>
+  cache_stats: CacheStats
+  tool_version: String
+}
+
+# External references resolved by the generator's IMPORTS map (only when
+# not yet defined in this file):
 #   ReportCluster        -> crate::report::ReportCluster
 #   EmbeddingProvenance  -> crate::report::EmbeddingProvenance
+#   CacheStats           -> crate::report::CacheStats

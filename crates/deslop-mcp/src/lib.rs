@@ -8,7 +8,7 @@
 //!
 //! Implements:
 //! - [MCP-CAPABILITIES] — tools + resources + notifications surface.
-//! - [MCP-TOOLS] — nine agent-facing tools with JSON schemas.
+//! - [MCP-TOOLS] — eleven agent-facing tools with JSON schemas.
 //! - [MCP-TOOL-FINDSIMILAR] — keystone `find-similar` tool with two
 //!   input variants and explicit error paths.
 //! - [MCP-TOOL-REPORT-PAGINATION] — `report-get` returns slim

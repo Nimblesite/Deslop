@@ -323,9 +323,10 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_owned))
         .collect();
-    assert_eq!(names.len(), 10, "expected 10 tools, got {names:?}");
+    assert_eq!(names.len(), 11, "expected 11 tools, got {names:?}");
     for expected in [
         "top-offenders",
+        "rescan",
         "report-get",
         "report-query",
         "report-for-file",
@@ -1977,7 +1978,10 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
         &json!({ "n": 100 }),
     )?)?;
     let before_count = value_get(&before, "/total_clusters")?.as_u64().unwrap_or(0);
-    assert!(before_count >= 1, "expected at least one cluster before edit");
+    assert!(
+        before_count >= 1,
+        "expected at least one cluster before edit"
+    );
 
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     let mut state: Value = serde_json::from_slice(&std::fs::read(&state_file)?)?;

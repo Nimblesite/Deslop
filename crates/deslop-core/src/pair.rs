@@ -81,7 +81,7 @@ impl PairScore {
 
 /// A candidate clone pair identified by fingerprint indices into the
 /// flattened fingerprint list, plus its score and the node counts of
-/// both endpoints (needed by [`is_surviving`] to reject low-information
+/// both endpoints (needed by `survival_decision` to reject low-information
 /// LSH-only matches).
 #[derive(Debug, Clone, Copy)]
 pub struct CandidatePair {
@@ -301,23 +301,88 @@ fn order(a: usize, b: usize) -> (usize, usize) {
     (a.min(b), a.max(b))
 }
 
+/// Reason one candidate pair did or did not enter transitive closure.
+enum PairSurvival {
+    /// Pair entered the fused cluster graph.
+    Survived,
+    /// Pair failed the global fused-confidence threshold.
+    DroppedBelowFused,
+    /// LSH-only pair failed the token-Jaccard floor.
+    DroppedLshOnlyJaccard,
+    /// LSH-only pair failed the endpoint node-count floor.
+    DroppedLshOnlyNodeCount,
+}
+
+/// Counts GH#45 pair survival outcomes for structured observability.
+#[derive(Default)]
+struct SurvivalStats {
+    /// Candidate pairs admitted to transitive closure.
+    survived: usize,
+    /// Candidate pairs dropped below [`FUSED_THRESHOLD`].
+    dropped_below_fused: usize,
+    /// LSH-only pairs dropped below [`LSH_ONLY_MIN_JACCARD`].
+    dropped_lsh_only_jaccard: usize,
+    /// LSH-only pairs dropped below [`LSH_ONLY_MIN_NODE_COUNT`].
+    dropped_lsh_only_node_count: usize,
+}
+
+impl SurvivalStats {
+    /// Classifies every pair and returns the surviving subset.
+    fn collect<'a>(pairs: &'a [CandidatePair]) -> (Self, Vec<&'a CandidatePair>) {
+        let mut stats = Self::default();
+        let mut surviving: Vec<&CandidatePair> = Vec::new();
+        for pair in pairs {
+            stats.push(pair, &mut surviving);
+        }
+        (stats, surviving)
+    }
+
+    /// Records one pair's outcome.
+    fn push<'a>(&mut self, pair: &'a CandidatePair, surviving: &mut Vec<&'a CandidatePair>) {
+        match survival_decision(pair) {
+            PairSurvival::Survived => {
+                self.survived = self.survived.saturating_add(1);
+                surviving.push(pair);
+            }
+            PairSurvival::DroppedBelowFused => {
+                self.dropped_below_fused = self.dropped_below_fused.saturating_add(1);
+            }
+            PairSurvival::DroppedLshOnlyJaccard => {
+                self.dropped_lsh_only_jaccard = self.dropped_lsh_only_jaccard.saturating_add(1);
+            }
+            PairSurvival::DroppedLshOnlyNodeCount => {
+                self.dropped_lsh_only_node_count =
+                    self.dropped_lsh_only_node_count.saturating_add(1);
+            }
+        }
+    }
+
+    /// Emits the structured GH#45 pair-survival summary.
+    fn log(self, total: usize) {
+        tracing::info!(
+            total,
+            survived = self.survived,
+            dropped_below_fused = self.dropped_below_fused,
+            dropped_lsh_only_jaccard = self.dropped_lsh_only_jaccard,
+            dropped_lsh_only_node_count = self.dropped_lsh_only_node_count,
+            "pair survival outcome",
+        );
+    }
+}
+
 /// Applies the compound "survives clustering?" decision to a single pair.
-/// Exact structural pairs (`structural == 1.0`) always survive when they
-/// clear [`FUSED_THRESHOLD`]. LSH-only pairs additionally have to clear
-/// [`LSH_ONLY_MIN_JACCARD`] so tiny sibling-window collisions do not
-/// merge thousands of unrelated fingerprints via transitive closure.
-fn is_surviving(pair: &CandidatePair) -> bool {
+fn survival_decision(pair: &CandidatePair) -> PairSurvival {
     if pair.score.fused() < FUSED_THRESHOLD {
-        return false;
+        return PairSurvival::DroppedBelowFused;
     }
     let lsh_only = pair.score.structural <= 0.0;
     if lsh_only && pair.score.token_jaccard < LSH_ONLY_MIN_JACCARD {
-        return false;
+        return PairSurvival::DroppedLshOnlyJaccard;
     }
     if lsh_only && pair.min_node_count < LSH_ONLY_MIN_NODE_COUNT {
-        return false;
+        return PairSurvival::DroppedLshOnlyNodeCount;
     }
-    true
+    PairSurvival::Survived
 }
 
 /// Filters `pairs` by the fused threshold and returns the connected
@@ -325,7 +390,8 @@ fn is_surviving(pair: &CandidatePair) -> bool {
 /// ascending so the final output is deterministic.
 #[must_use]
 pub fn cluster_by_transitive_closure(pairs: &[CandidatePair]) -> Vec<FusedCluster> {
-    let surviving: Vec<&CandidatePair> = pairs.iter().filter(|pair| is_surviving(pair)).collect();
+    let (stats, surviving) = SurvivalStats::collect(pairs);
+    stats.log(pairs.len());
     if surviving.is_empty() {
         return Vec::new();
     }

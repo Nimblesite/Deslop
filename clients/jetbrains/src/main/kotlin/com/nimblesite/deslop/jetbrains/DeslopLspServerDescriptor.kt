@@ -33,19 +33,7 @@ internal class DeslopLspServerDescriptor(
 
 internal fun buildLspParameters(
     workspaceRoot: Path,
-    settings: DeslopLaunchSettings,
+    @Suppress("UNUSED_PARAMETER") settings: DeslopLaunchSettings,
 ): List<String> {
-    return listOf(
-        workspaceRoot.toString(),
-        "--min-nodes",
-        settings.minNodes.toString(),
-        "--embeddings",
-        settings.embeddingMode,
-        "--embedding-provider",
-        settings.embeddingProvider,
-        "--embedding-model",
-        settings.embeddingModel,
-        "--embedding-endpoint",
-        settings.embeddingEndpoint,
-    )
+    return listOf(workspaceRoot.toString())
 }

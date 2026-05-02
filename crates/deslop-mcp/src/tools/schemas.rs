@@ -101,6 +101,22 @@ pub(super) fn schema_top_offenders() -> Value {
     })
 }
 
+/// Schema for `rescan`.
+pub(super) fn schema_rescan() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "paths": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "description": "Optional absolute or workspace-relative paths changed by the caller."
+            },
+            "n": { "type": "integer", "minimum": 1, "default": 5, "description": "Max clusters to return after reload." }
+        },
+        "additionalProperties": false,
+    })
+}
+
 /// Schema for `cluster-by-id`.
 pub(super) fn schema_cluster_by_id() -> Value {
     json!({

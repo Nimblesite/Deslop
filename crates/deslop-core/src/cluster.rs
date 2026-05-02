@@ -54,10 +54,8 @@ pub fn build_ranked_fused_clusters(
     fingerprints: &[Fingerprint],
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
-    let mut clusters: Vec<Cluster> = fused_clusters
-        .iter()
-        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
-        .collect();
+    let mut clusters = reportable_clusters(fingerprints, fused_clusters);
+    let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
             .weight
@@ -65,7 +63,46 @@ pub fn build_ranked_fused_clusters(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
-    collapse_cross_cluster_overlap(clusters)
+    let collapsed = collapse_cross_cluster_overlap(clusters);
+    log_ranked_cluster_distribution(&collapsed, fused_clusters.len(), dropped_below_min_members);
+    collapsed
+}
+
+/// Materialises every fused cluster that remains reportable.
+fn reportable_clusters(
+    fingerprints: &[Fingerprint],
+    fused_clusters: &[FusedCluster],
+) -> Vec<Cluster> {
+    fused_clusters
+        .iter()
+        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
+        .collect()
+}
+
+/// Emits the structured GH#45 ranked-cluster distribution summary.
+fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize, dropped: usize) {
+    let (largest_weight, mean_weight) = weight_summary(clusters);
+    tracing::info!(
+        total = clusters.len(),
+        input_total,
+        dropped_below_min_members = dropped,
+        largest_weight,
+        mean_weight,
+        "ranked clusters built",
+    );
+}
+
+/// Returns `(largest_weight, mean_weight)` for a ranked cluster slice.
+fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
+    let largest = clusters.first().map_or(0.0, |cluster| cluster.weight);
+    let total = clusters.iter().map(|cluster| cluster.weight).sum::<f64>();
+    let divisor = u32::try_from(clusters.len()).map_or(f64::from(u32::MAX), f64::from);
+    let mean = if clusters.is_empty() {
+        0.0
+    } else {
+        total / divisor
+    };
+    (largest, mean)
 }
 
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].

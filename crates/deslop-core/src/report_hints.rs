@@ -1,19 +1,11 @@
 //! Agent action-hint playbook for reports.
 
-use serde::{Deserialize, Serialize};
-
 use crate::buckets::{bucket_labels, ClusterKind};
 
-/// Short playbook entry surfaced at the top of every report so agents
-/// can decide how to act before walking the cluster list.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActionHint {
-    /// Matches one of the taxonomy rows in the report context
-    /// (`type-1-2`, `type-3`, `fused-family`, `lsh-only-weak`).
-    pub pattern: String,
-    /// One-line recommendation written for an agent reader.
-    pub recommendation: String,
-}
+// `ActionHint` is generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. The data shape lives in
+// `crate::wire_generated`; the playbook constructor below stays here.
+pub use crate::wire_generated::ActionHint;
 
 /// Playbook shown to agents. One entry per bucket in [CLONE-BUCKETS].
 #[must_use]

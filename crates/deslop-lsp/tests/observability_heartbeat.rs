@@ -31,8 +31,6 @@ fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
         .arg(workspace.path())
-        .arg("--min-nodes")
-        .arg("15")
         .env("RUST_LOG", "info")
         .env("NO_COLOR", "1")
         .stdin(Stdio::piped())

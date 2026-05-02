@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use deslop_core::Report;
 use serde_json::{json, Value};
 
 use crate::{
@@ -19,20 +20,36 @@ pub(super) fn call_top_offenders(
     backend: &dyn McpBackend,
     args: &Value,
 ) -> Result<Value, JsonRpcError> {
-    let n = args
-        .get("n")
-        .and_then(Value::as_u64)
-        .and_then(|v| usize::try_from(v).ok())
-        .unwrap_or(5)
-        .max(1);
+    let n = extract_top_n(args);
     let report = backend.report_get().map_err(backend_to_rpc)?;
+    Ok(top_offenders_payload(&report, n))
+}
+
+/// `rescan` reloads the LSP-written state file and returns fresh top offenders.
+pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
+    let paths = extract_optional_paths(args, "paths")?;
+    backend.mark_changed(&paths).map_err(backend_to_rpc)?;
+    let n = extract_top_n(args);
+    let report = backend.report_get().map_err(backend_to_rpc)?;
+    Ok(top_offenders_payload(&report, n))
+}
+
+fn top_offenders_payload(report: &Report, n: usize) -> Value {
     let total = report.clusters.len();
     let clusters: Vec<_> = report.clusters.iter().take(n).collect();
-    Ok(json!({
+    json!({
         "total_clusters": total,
         "n": n,
         "clusters": clusters,
-    }))
+    })
+}
+
+fn extract_top_n(args: &Value) -> usize {
+    args.get("n")
+        .and_then(Value::as_u64)
+        .and_then(|v| usize::try_from(v).ok())
+        .unwrap_or(5)
+        .max(1)
 }
 
 /// `report-get` forwarder. Renders a slim paginated `ReportPage`
@@ -307,6 +324,33 @@ pub(super) fn extract_string(args: &Value, field: &str) -> Result<String, JsonRp
                 format!("missing or non-string parameter {field:?}"),
             )
         })
+}
+
+/// Extracts an optional string path array from `args`.
+pub(super) fn extract_optional_paths(
+    args: &Value,
+    field: &str,
+) -> Result<Vec<PathBuf>, JsonRpcError> {
+    let Some(value) = args.get(field) else {
+        return Ok(Vec::new());
+    };
+    let Some(items) = value.as_array() else {
+        return Err(JsonRpcError::new(
+            ErrorCode::InvalidParams,
+            format!("parameter {field:?} must be an array of strings"),
+        ));
+    };
+    items
+        .iter()
+        .map(|item| {
+            item.as_str().map(PathBuf::from).ok_or_else(|| {
+                JsonRpcError::new(
+                    ErrorCode::InvalidParams,
+                    format!("parameter {field:?} must be an array of strings"),
+                )
+            })
+        })
+        .collect()
 }
 
 /// Extracts a required non-negative integer field from `args`.

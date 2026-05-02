@@ -26,8 +26,6 @@ fn lsp_startup_log_records_the_worker_threads_knob() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
         .arg(workspace.path())
-        .arg("--min-nodes")
-        .arg("15")
         .arg("--worker-threads")
         .arg("2")
         .env("RUST_LOG", "info")

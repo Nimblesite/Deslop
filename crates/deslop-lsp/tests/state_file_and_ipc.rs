@@ -30,7 +30,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 #[test]
 fn state_file_exists_after_initialize() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
 
@@ -76,7 +76,7 @@ fn state_file_exists_after_initialize() -> Result<()> {
 fn state_file_updated_after_file_change() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
 
@@ -115,7 +115,7 @@ fn state_file_updated_after_file_change() -> Result<()> {
 #[test]
 fn ipc_socket_handles_find_similar_request() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
 
@@ -157,7 +157,7 @@ fn ipc_socket_handles_find_similar_request() -> Result<()> {
 #[test]
 fn ipc_socket_handles_list_models_request() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
 
@@ -196,7 +196,7 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
 #[test]
 fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
 

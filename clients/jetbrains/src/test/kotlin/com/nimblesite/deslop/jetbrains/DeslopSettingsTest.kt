@@ -8,6 +8,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 internal class DeslopSettingsTest {
+    private val legacyLspStartupFlags = listOf(
+        "--min-nodes",
+        "--embeddings",
+        "--embedding-provider",
+        "--embedding-model",
+        "--embedding-endpoint",
+    )
+
     @Test
     fun defaultsKeepFreshInstallEmbeddingsOff() {
         val settings = DeslopSettingsValidator.snapshot(DeslopSettingsState())
@@ -42,7 +50,7 @@ internal class DeslopSettingsTest {
     }
 
     @Test
-    fun descriptorArgumentsComeFromSettings() {
+    fun descriptorArgumentsKeepIssue83LegacyStartupFlagsOut() {
         val args = buildLspParameters(
             Path.of("/workspace"),
             DeslopLaunchSettings(
@@ -55,18 +63,9 @@ internal class DeslopSettingsTest {
             ),
         )
 
-        assertEquals("/workspace", args[0])
-        assertEquals("42", valueAfter(args, "--min-nodes"))
-        assertEquals("auto", valueAfter(args, "--embeddings"))
-        assertEquals("stub", valueAfter(args, "--embedding-provider"))
-        assertEquals("blake3-stub", valueAfter(args, "--embedding-model"))
-        assertEquals("https://ollama.example.test", valueAfter(args, "--embedding-endpoint"))
-        assertFalse(args.contains("30"), "hard-coded minNodes must not survive")
-    }
-
-    private fun valueAfter(args: List<String>, key: String): String {
-        val index = args.indexOf(key)
-        require(index >= 0 && index + 1 < args.size) { "missing $key in $args" }
-        return args[index + 1]
+        assertEquals(listOf("/workspace"), args)
+        for (flag in legacyLspStartupFlags) {
+            assertFalse(args.contains(flag), "issue #83: JetBrains must not pass legacy $flag in $args")
+        }
     }
 }

@@ -44,7 +44,7 @@ fn prints_json_version_contract() -> Result<()> {
 #[test]
 fn initialize_reports_server_info_version() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let init = handshake(&mut stdin, &mut stdout)?;
     assert_eq!(pointer(&init, "/result/serverInfo/name")?, "deslop-lsp");
@@ -83,7 +83,7 @@ fn reload_uses_fingerprint_cache_for_unchanged_workspace() -> Result<()> {
 }
 
 fn report_after_start(workspace: &Path) -> Result<Value> {
-    let mut child = spawn_lsp(workspace, 15)?;
+    let mut child = spawn_lsp(workspace)?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     let response = call(&mut stdin, &mut stdout, "deslop/reportGet", &Value::Null)?;

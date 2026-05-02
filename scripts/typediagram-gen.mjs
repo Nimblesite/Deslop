@@ -28,10 +28,12 @@ const OUT_TS = resolve(
   "clients/vscode/src/types/wire-generated.ts",
 );
 // External TypeScript types (defined in clients/vscode/src/types/report.ts)
-// re-imported by the generated TS file when referenced.
+// re-imported by the generated TS file when referenced. Skipped
+// automatically when the type is defined here (TYPE_CONFIG entry exists).
 const EXTERNAL_TS_TYPES = {
   ReportCluster: "./report",
   EmbeddingProvenance: "./report",
+  CacheStats: "./report",
 };
 
 // Per-type generation hints. Drives the post-processor: every entry maps
@@ -195,15 +197,104 @@ const TYPE_CONFIG = {
       message: "Human-readable diagnostic.",
     },
   },
+  ActionHint: {
+    docs: "Short agent-oriented playbook entry surfaced at the top of every report.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      pattern: "Matches one of the taxonomy rows (`type-1-2`, `type-3`, ...).",
+      recommendation: "One-line recommendation written for an agent reader.",
+    },
+  },
+  ThresholdSource: {
+    docs: "Origin of the active fail-over threshold.",
+    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize", "PartialEq", "Eq"],
+    serdeAttrs: ['rename_all = "lowercase"'],
+    variantDocs: {
+      Cli: "Threshold passed via `--fail-over`.",
+      Config: "Threshold loaded from `[threshold] max_duplication_percent`.",
+      None: "No threshold configured (or explicitly cleared via `--no-fail-over`).",
+    },
+  },
+  ThresholdSummary: {
+    docs: "Threshold verdict carried on `RepoMetrics`.",
+    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    fieldDocs: {
+      percent: "Active threshold as a percentage; `0.0` when source is `none`.",
+      breached: "True when measured duplication exceeded `percent`.",
+      source: "Provenance of the threshold value.",
+    },
+  },
+  RepoMetrics: {
+    docs: "Repo-wide duplication metrics, embedded at `Report.metrics`.",
+    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      analysed_loc: "u64",
+      duplicated_loc: "u64",
+      clusters_total: "usize",
+      duplicated_files: "usize",
+    },
+    fieldDocs: {
+      analysed_loc: "Physical lines across every analysed file.",
+      duplicated_loc: "Lines covered by `>= 2` non-hidden clone occurrences.",
+      duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc`.",
+      clusters_total: "Count of clusters contributing to `duplicated_loc`.",
+      duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
+      threshold: "Resolved fail-over threshold.",
+    },
+  },
+  ReportBoilerplateOccurrence: {
+    docs: "One suppressed import/prologue range surfaced in the report.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+    },
+    fieldDocs: {
+      path: "Source path, relative to the scan root when possible.",
+      start_byte: "Inclusive start byte of the suppressed range.",
+      end_byte: "Exclusive end byte of the suppressed range.",
+    },
+  },
+  ReportBoilerplateHint: {
+    docs: "Low-severity hygiene hint for import/prologue boilerplate.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      kind: "Hint category. Currently `imports`.",
+      language: "Language id the hint applies to.",
+      severity: "Always `info` for boilerplate hints.",
+      recommendation: "Gentle remediation guidance.",
+      occurrences: "Suppressed byte ranges that justify the hint.",
+    },
+  },
+  ReportDelta: {
+    docs: "Diff between two report generations.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      from_generation: "u64",
+      to_generation: "u64",
+    },
+    fieldDocs: {
+      from_generation: "Generation of the earlier report.",
+      to_generation: "Generation of the later report.",
+      clusters_added: "Clusters present in `to` but not in `from`, worst-first.",
+      clusters_removed: "Cluster ids present in `from` but not in `to`.",
+      clusters_updated: "Clusters present in both whose payload changed.",
+      cache_stats: "Cache telemetry for the generation-producing run.",
+      tool_version: "Producer version stamped on the later snapshot.",
+    },
+  },
 };
 
 // Maps an external type name (referenced from the .td but not defined
 // in it) to the `use` path the post-processor must inject. Imports are
 // emitted only when the generated code actually references the type so
-// `unused_imports` warnings stay quiet.
+// `unused_imports` warnings stay quiet. Types with a TYPE_CONFIG entry
+// are skipped automatically (they are defined here, not imported).
 const EXTERNAL_TYPES = {
   ReportCluster: "crate::report::ReportCluster",
   EmbeddingProvenance: "crate::report::EmbeddingProvenance",
+  CacheStats: "crate::report::CacheStats",
 };
 
 const HEADER_PRELUDE = `//! Generated wire-format models for the Deslop live IPC surface.
@@ -257,9 +348,11 @@ function typeNameOf(item) {
 // Rewrites field types both in `pub field: T,` struct lines and inline
 // enum variant fields like `Variant { field: T, field: T },`. Inline
 // variants are split onto their own lines so per-field doc comments
-// satisfy the workspace `missing_docs` lint.
-function applyFieldOverrides(item, overrides, fieldDocs) {
-  if (!overrides && !fieldDocs) return item;
+// satisfy the workspace `missing_docs` lint. Also injects per-field
+// `#[serde(...)]` attrs (e.g. `default`, `skip_serializing_if`) when the
+// TYPE_CONFIG entry's `fieldSerdeAttrs` declares them.
+function applyFieldOverrides(item, overrides, fieldDocs, fieldSerdeAttrs) {
+  if (!overrides && !fieldDocs && !fieldSerdeAttrs) return item;
   const lines = item.split("\n");
   const out = [];
   for (const line of lines) {
@@ -269,6 +362,10 @@ function applyFieldOverrides(item, overrides, fieldDocs) {
       const newType = overrideType(overrides, fieldName, originalType);
       if (fieldDocs && fieldDocs[fieldName]) {
         out.push(`${indent}/// ${fieldDocs[fieldName]}`);
+      }
+      const serdeAttrs = fieldSerdeAttrs && fieldSerdeAttrs[fieldName];
+      if (serdeAttrs && serdeAttrs.length > 0) {
+        out.push(`${indent}#[serde(${serdeAttrs.join(", ")})]`);
       }
       out.push(`${indent}pub ${fieldName}: ${newType},`);
       continue;
@@ -375,7 +472,12 @@ function postprocess(rust) {
     }
     seen.add(name);
     let item = rawItem;
-    item = applyFieldOverrides(item, config.fieldOverrides, config.fieldDocs);
+    item = applyFieldOverrides(
+      item,
+      config.fieldOverrides,
+      config.fieldDocs,
+      config.fieldSerdeAttrs,
+    );
     item = applyVariantDocs(item, config.variantDocs);
     item = decorateItem(item, config);
     decorated.push(item);
@@ -398,11 +500,14 @@ function postprocess(rust) {
 
 // Scans the post-processed body for whole-word references to each
 // external type and returns the matching `use` lines (sorted, no dups).
-// Keeps the generated file's import block free of `unused_imports`
-// warnings without forcing the caller to declare imports up front.
+// Skips types that are themselves defined in this same generated file
+// (TYPE_CONFIG keys) so an in-spec type never collides with a stale
+// `crate::report::*` import. Keeps the import block free of
+// `unused_imports` warnings without forcing the caller to declare them.
 function collectExternalImports(body) {
   const imports = new Set();
   for (const [type, path] of Object.entries(EXTERNAL_TYPES)) {
+    if (TYPE_CONFIG[type]) continue;
     const word = new RegExp(`\\b${type}\\b`, "u");
     if (word.test(body)) {
       imports.add(`use ${path};`);
@@ -515,6 +620,7 @@ function tsImports(body) {
   const imports = [];
   const grouped = new Map();
   for (const [type, mod] of Object.entries(EXTERNAL_TS_TYPES)) {
+    if (TYPE_CONFIG[type]) continue;
     const word = new RegExp(`\\b${type}\\b`, "u");
     if (word.test(body)) {
       if (!grouped.has(mod)) grouped.set(mod, new Set());

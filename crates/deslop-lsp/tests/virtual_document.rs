@@ -20,7 +20,7 @@ const REPORT_GET: &str = "deslop/reportGet";
 #[test]
 fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
@@ -45,7 +45,7 @@ fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
 #[test]
 fn virtual_document_report_returns_canonical_text() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;
@@ -69,7 +69,7 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
 #[test]
 fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;
@@ -98,7 +98,7 @@ fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
 #[test]
 fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
@@ -124,7 +124,7 @@ fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
 #[test]
 fn virtual_document_rejects_unknown_cluster_id() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 

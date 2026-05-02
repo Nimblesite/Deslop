@@ -1,6 +1,11 @@
 //! Regression coverage for GH#45 pipeline observability.
 
-use std::{collections::BTreeSet, fmt, path::{Path, PathBuf}, sync::{Arc, Mutex}};
+use std::{
+    collections::BTreeSet,
+    fmt,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{Context, Result};
 use deslop_core::{

@@ -1,4 +1,4 @@
-//! MCP `tools/list` + `tools/call` for the eight [MCP-TOOLS] tools.
+//! MCP `tools/list` + `tools/call` for the [MCP-TOOLS] tools.
 //!
 //! Each entry binds a [`ToolDefinition`] — schema + agent-facing
 //! description — to a dispatch function that forwards to the active
@@ -15,13 +15,13 @@ mod schemas;
 
 use handlers::{
     call_cluster_by_id, call_find_similar, call_list_embedding_models, call_report_for_file,
-    call_report_for_range, call_report_get, call_report_query, call_session_config,
+    call_report_for_range, call_report_get, call_report_query, call_rescan, call_session_config,
     call_set_embedding_model, call_top_offenders,
 };
 use schemas::{
     schema_cluster_by_id, schema_empty, schema_find_similar, schema_report_for_file,
-    schema_report_for_range, schema_report_get, schema_report_query, schema_set_embedding_model,
-    schema_top_offenders,
+    schema_report_for_range, schema_report_get, schema_report_query, schema_rescan,
+    schema_set_embedding_model, schema_top_offenders,
 };
 
 /// Static definition of one MCP tool.
@@ -36,12 +36,18 @@ pub struct ToolDefinition {
 }
 
 /// Static tool registry. `top-offenders` is the primary entry point.
-const TOOLS: [ToolDefinition; 10] = [
+const TOOLS: [ToolDefinition; 11] = [
     ToolDefinition {
         name: "top-offenders",
         description:
             "Top N duplicate clusters with full data (occurrences, interpretation, signals, bucket, score). Default n=5. Start here — one call gives everything needed to fix duplication.",
         input_schema: schema_top_offenders,
+    },
+    ToolDefinition {
+        name: "rescan",
+        description:
+            "Synchronously reload the latest LSP state after edits, then return fresh top offenders. Use when watcher lag or stale ranges are suspected.",
+        input_schema: schema_rescan,
     },
     ToolDefinition {
         name: "report-get",
@@ -138,6 +144,7 @@ pub fn dispatch_tool_call(
 ) -> Result<Value, JsonRpcError> {
     match name {
         "top-offenders" => call_top_offenders(backend, arguments),
+        "rescan" => call_rescan(backend, arguments),
         "report-get" => call_report_get(backend, arguments),
         "report-query" => call_report_query(backend, arguments),
         "report-for-file" => call_report_for_file(backend, arguments),

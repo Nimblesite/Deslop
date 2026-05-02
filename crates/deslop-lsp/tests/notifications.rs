@@ -29,7 +29,7 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
 fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, stderr) = take_io(&mut child)?;
 
     let (init_id, init) = initialize_request()?;
@@ -54,7 +54,7 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
 fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
     let frames = spawn_frame_reader(stdout);
@@ -100,7 +100,7 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
 fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
     let _guard = KillOnDrop(&mut child);
     let frames = spawn_frame_reader(stdout);
@@ -177,12 +177,10 @@ fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
 }
 
 /// Spawns the LSP binary against `workspace_root`.
-fn spawn_lsp(workspace_root: &Path, min_nodes: u32) -> Result<Child> {
+fn spawn_lsp(workspace_root: &Path) -> Result<Child> {
     let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
     Ok(Command::new(bin)
         .arg(workspace_root)
-        .arg("--min-nodes")
-        .arg(min_nodes.to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

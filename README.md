@@ -93,7 +93,7 @@ Full flag reference: `deslop --help`.
 
 ## Use Deslop from an AI agent (MCP)
 
-Deslop ships an MCP server — `deslop-mcp` — that exposes live clone analysis as tools any MCP-compatible agent can call: `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
+Deslop ships an MCP server — `deslop-mcp` — that exposes live clone analysis as tools any MCP-compatible agent can call: `top-offenders`, `rescan`, `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
 
 The VS Code extension bundles `deslop-mcp` alongside the LSP. If you installed the CLI standalone, `brew install nimblesite/tap/deslop` and `scoop install deslop` both ship the MCP binary too.
 
