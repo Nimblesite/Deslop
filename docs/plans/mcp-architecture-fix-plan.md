@@ -119,7 +119,8 @@ The existing `mark_changed` → internal `NotificationSender` path is deleted. N
 - **IPC tokio handle bug fixed**: `Handle::try_current()` always failed on plain OS threads. Fixed by capturing `Handle::current()` in `IpcServer::start()` (tokio context) and threading it through to `dispatch()`.
 - **Stale doc fixed**: `mark_changed` doc in `mod.rs` no longer references deleted `PipelineSession`.
 - **Fixture state file installed**: `crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/live-report.json` generated from CLI and committed.
-- **`make fmt`**: passes.
+- **Phase 5 — LSP+MCP side-by-side integration test**: `crates/deslop-mcp/tests/lsp_integration.rs` spawns the real LSP binary, waits for `.deslop-cache/deslop.sock` and `live-report.json`, spawns MCP against the same root, and proves MCP `find-similar` returns live clusters instead of `LspNotRunning`. The same test file also verifies `list-embedding-models` delegates through the LSP IPC socket. Focused run: `cargo test -p deslop-mcp --test lsp_integration -- --nocapture` — 2/2 passing.
+- **Live IPC model source**: `docs/models/live-ipc.td` defines the `FindSimilar*`, `EmbeddingModelInfo`, and `OllamaModelInfo` wire shapes in typeDiagram markup per the repository model-code rule.
 
 ### ✅ Blocking — all fixed
 
@@ -131,8 +132,9 @@ The existing `mark_changed` → internal `NotificationSender` path is deleted. N
 - [x] **VSIX live tree update E2E**: `clients/vscode/src/test/suite/live-refresh.e2e.test.ts` exposes `reportStore` on `ExtensionApi` and asserts `store.current.generation` advances after both an `fs.writeFileSync` (file-watch path) and an editor edit (`textDocument/didChange` path). Added a multi-save regression test that walks three sequential saves to the same file and asserts each one bumps the generation — guards `[VSIX-REACTIVITY-TREE]` so a future watcher dedup regression cannot freeze the tree after the first edit.
 - [x] **`LiveWatcher` per-batch dedup fix [VSIX-REACTIVITY-TREE]**: the `WatcherHandler::seen` `HashSet` was constructed once at start-up and shared across every `notify` callback, so the first save inserted the path and every subsequent save short-circuited as a "duplicate". Replaced with a stack-local `seen_in_batch` set inside `handle_event` so dedup is correctly scoped to a single callback. Regression test `watcher_emits_event_for_every_modification_of_the_same_path` in `crates/deslop-core/tests/live.rs` asserts three sequential edits each surface as their own watcher event.
 - [x] **Startup race in `refreshAfterChange` fixed**: `wireNotifications` runs before `seedInitialReport`, so a `deslop/reportChanged` arriving in that window would call `applyDelta` while `_report.value` was still `null` and silently bail. `refreshAfterChange` now falls back to the full snapshot when no current report is set.
+- [x] **`make lint` clean**: fixed current clippy failures in `cluster_filters.rs` and `report_render.rs`; `make lint` now passes.
 
 ### 🟡 Follow-on (next session)
 
-- [ ] **Phase 5 — LSP+MCP side-by-side integration test**: spawn the real LSP binary, wait for `.deslop-cache/deslop.sock`, spawn MCP against the same root, call `find-similar` via MCP. Asserting a non-`LspNotRunning` result will cover the success paths in `tools/handlers.rs` so it can come back out of the coverage ignore list.
+- [ ] **`make fmt CHECK=1` clean**: currently blocked by rustfmt drift in `crates/deslop-core/src/live/session.rs`, which is owned by `DeslopCacheSeed` in TMC. Required rustfmt changes are only line wrapping in `run_pipeline` and `parser_for_language`.
 - [ ] **`make ci` clean**: run the full sequence (fmt → lint → test → build → deployment-verify) on Linux CI before merge — local macOS hits llvm-cov SIGKILL under memory pressure.

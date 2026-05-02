@@ -2453,7 +2453,7 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 
 // Implements [UX-TECHNICAL-BREAKDOWN]: `--technical` prints the
 // researcher breakdown row with Type-1/2/3 labels. Plain mode uses
-// friendly wording; this test guards the `Type-1/2` string the
+// friendly wording; this test guards the taxonomy string the
 // technical branch emits.
 #[test]
 fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
@@ -2471,8 +2471,12 @@ fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
     assert!(
-        stderr.contains("Type-1/2"),
+        stderr.contains("1 × Nearly identical code [Type-3]"),
         "--technical must print the Type-taxonomy breakdown: {stderr}"
+    );
+    assert!(
+        stderr.contains("#1  ● Nearly identical code [Type-3]"),
+        "--technical must print Type taxonomy in the ranked row: {stderr}"
     );
     Ok(())
 }

@@ -466,10 +466,7 @@ impl AnalysisSession {
     /// Runs the underlying pipeline. Caller guarantees `pipeline` is
     /// `Some` — [`Self::apply_changes`] short-circuits otherwise.
     fn run_pipeline(&mut self, changed: &[PathBuf]) -> Result<Report, LiveError> {
-        let pipeline = self
-            .pipeline
-            .as_mut()
-            .ok_or(LiveError::AnalysisNotReady)?;
+        let pipeline = self.pipeline.as_mut().ok_or(LiveError::AnalysisNotReady)?;
         let embedding = EmbeddingSettings {
             mode: self.embedding_mode,
             provider: Some(self.embedding_provider.as_ref()),
@@ -532,10 +529,7 @@ impl AnalysisSession {
     /// Returns the registered parser for `language`. Returns
     /// [`LiveError::AnalysisNotReady`] in the cache-seed window.
     fn parser_for_language(&self, language: &str) -> Result<&dyn LanguageParser, LiveError> {
-        let pipeline = self
-            .pipeline
-            .as_ref()
-            .ok_or(LiveError::AnalysisNotReady)?;
+        let pipeline = self.pipeline.as_ref().ok_or(LiveError::AnalysisNotReady)?;
         let parsers = pipeline.parsers();
         if let Some(found) = parsers.iter().find(|parser| parser.id() == language) {
             return Ok(found.as_ref());

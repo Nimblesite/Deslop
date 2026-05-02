@@ -12,8 +12,9 @@ Implemented work intentionally not repeated here:
   embeddings, exclusion config, metrics, fail-over, incremental cache, and
   human-readable HTML reports.
 - P-LANG-0 tree-sitter runtime upgrade to 0.26.8, including modern
-  `LanguageFn` grammar pins and Rust / Python AST-golden coverage
-  ([TS-UPGRADE.md](TS-UPGRADE.md)).
+  `LanguageFn` grammar pins and Rust / Python AST-golden coverage. The
+  completed checklist was deleted; the durable baseline lives in
+  [LANG-ROADMAP.md §LANG-ROADMAP-RUNTIME-UPGRADE](LANG-ROADMAP.md#lang-roadmap-runtime-upgrade).
 - Live analysis core, LSP diagnostics, LSP hover, LSP code lens, LSP custom
   `deslop/*` methods, MCP server, and VS Code extension v0.1.
 - VS Code schema docs: `deslop.showSchemaDoc` now prefers the LSP RPC/live

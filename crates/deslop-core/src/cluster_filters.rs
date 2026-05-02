@@ -53,9 +53,13 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
 /// [`FileId`] so cross-file uniqueness checks do not depend on
 /// pointer identity.
 struct Snippet<'a> {
+    /// Language id used to select the tree-sitter grammar.
     language: &'static str,
+    /// Full file source bytes for the member.
     source: &'a [u8],
+    /// Byte range covered by the member fingerprint.
     range: ByteRange,
+    /// Registry id of the source file containing this member.
     file_id: FileId,
 }
 
@@ -183,6 +187,15 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
 /// shape — extraction would erase intentional variation.
 fn is_literal_variation_call_cluster(snippets: &[Snippet<'_>]) -> bool {
     let calls: Option<Vec<CallShape>> = snippets.iter().map(call_shape).collect();
+    if is_literal_variation_call_set(calls) {
+        return true;
+    }
+    is_literal_variation_call_sequence(snippets)
+}
+
+/// Applies the literal-variation rule to one comparable call per
+/// cluster member.
+fn is_literal_variation_call_set(calls: Option<Vec<CallShape>>) -> bool {
     let Some(calls) = calls else { return false };
     let Some(first) = calls.first() else {
         return false;
@@ -197,6 +210,7 @@ fn is_literal_variation_call_cluster(snippets: &[Snippet<'_>]) -> bool {
 }
 
 /// Distilled view of a call expression used to compare cluster members.
+#[derive(Clone)]
 struct CallShape {
     /// Concrete callee string (e.g. `"client.delete"`,
     /// `"monkeypatch.setenv"`). Captured from the raw source so it
@@ -228,17 +242,92 @@ fn call_shape(snippet: &Snippet<'_>) -> Option<CallShape> {
         snippet.range,
         call_kinds(snippet.language),
     )?;
+    call_shape_from_node(call, snippet.source)
+}
+
+/// Extracts a [`CallShape`] from a concrete call node.
+fn call_shape_from_node(call: Node<'_>, source: &[u8]) -> Option<CallShape> {
     let callee_node = call.child_by_field_name("function")?;
-    let callee = snippet
-        .source
+    let callee = source
         .get(callee_node.start_byte()..callee_node.end_byte())?
         .to_vec();
-    let arguments = collect_argument_shapes(call, snippet.source);
+    let arguments = collect_argument_shapes(call, source);
     Some(CallShape {
         arity: arguments.len(),
         callee,
         arguments,
     })
+}
+
+/// Detects body-range clusters whose contained call sequence has the
+/// same callees but intentionally different literal test data.
+fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
+    let sequences: Option<Vec<Vec<CallShape>>> =
+        snippets.iter().map(call_shapes_in_range).collect();
+    let Some(sequences) = sequences else { return false };
+    let Some(first) = sequences.first() else {
+        return false;
+    };
+    if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
+        return false;
+    }
+    (0..first.len()).any(|index| sequence_position_differs(&sequences, index))
+}
+
+/// Returns every call fully contained in `snippet.range`, preserving
+/// source order.
+fn call_shapes_in_range(snippet: &Snippet<'_>) -> Option<Vec<CallShape>> {
+    let tree = parse_for(snippet)?;
+    let mut shapes = Vec::new();
+    collect_call_shapes(
+        tree.root_node(),
+        snippet.range,
+        call_kinds(snippet.language),
+        snippet.source,
+        &mut shapes,
+    );
+    Some(shapes)
+}
+
+/// Recursively collects call nodes within `range`.
+fn collect_call_shapes(
+    node: Node<'_>,
+    range: ByteRange,
+    kinds: &[&str],
+    source: &[u8],
+    out: &mut Vec<CallShape>,
+) {
+    if node.end_byte() < range.start || node.start_byte() > range.end {
+        return;
+    }
+    if node.start_byte() >= range.start && node.end_byte() <= range.end && kinds.contains(&node.kind()) {
+        if let Some(shape) = call_shape_from_node(node, source) {
+            out.push(shape);
+        }
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_call_shapes(child, range, kinds, source, out);
+    }
+}
+
+/// Compares call sequence shape, ignoring literal payloads.
+fn same_call_headers(calls: &[CallShape], expected: &[CallShape]) -> bool {
+    calls.len() == expected.len()
+        && calls
+            .iter()
+            .zip(expected)
+            .all(|(call, base)| call.callee == base.callee && call.arity == base.arity)
+}
+
+/// Returns true when `index` has intentional literal variation across
+/// all call sequences.
+fn sequence_position_differs(sequences: &[Vec<CallShape>], index: usize) -> bool {
+    let calls: Vec<CallShape> = sequences
+        .iter()
+        .filter_map(|sequence| sequence.get(index).cloned())
+        .collect();
+    calls.len() == sequences.len() && has_differing_string_literals(&calls)
 }
 
 /// Returns the set of tree-sitter node kinds that count as call
@@ -296,7 +385,7 @@ fn unwrap_argument(node: Node<'_>) -> Node<'_> {
 /// Covers Python plain `string`, f-string, and C# `string_literal` /
 /// `interpolated_string_expression` so f-string template differences in
 /// issue #71 are captured.
-fn string_literal_bytes<'a>(node: Node<'_>, source: &'a [u8]) -> Option<Vec<u8>> {
+fn string_literal_bytes(node: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
     let kind = node.kind();
     let is_string = matches!(
         kind,
@@ -325,9 +414,8 @@ fn has_differing_string_literals(calls: &[CallShape]) -> bool {
     let mut saw_difference = false;
     let mut saw_string_arg = false;
     for index in 0..first.arguments.len() {
-        let baseline = match first.arguments.get(index) {
-            Some(ArgShape::StringLiteral(bytes)) => bytes,
-            _ => continue,
+        let Some(ArgShape::StringLiteral(baseline)) = first.arguments.get(index) else {
+            continue;
         };
         saw_string_arg = true;
         for call in calls.iter().skip(1) {

@@ -47,8 +47,8 @@ for its own tests) loads cleanly against the **0.26.8 runtime now
 targeted by Deslop**.
 
 Latest stable runtime as of 2026-04-23: **`tree-sitter = 0.26.8`**
-(released 2026-03-31, eight patch releases past 0.26.0). Upgrade
-plan: [TS-UPGRADE.md](TS-UPGRADE.md).
+(released 2026-03-31, eight patch releases past 0.26.0). The upgrade
+plan is complete; this roadmap keeps the durable baseline.
 
 | Grammar                      | Latest version | Shim       | Loads on 0.26.8 |
 |------------------------------|----------------|------------|-----------------|

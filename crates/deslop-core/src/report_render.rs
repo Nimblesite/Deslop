@@ -199,7 +199,7 @@ pub(crate) fn source_slices_are_equivalent(
     }
     canonical_slices
         .windows(2)
-        .all(|window| window[0] == window[1])
+        .all(|window| matches!(window, [left, right] if left == right))
 }
 
 /// Collapses all runs of ASCII whitespace in `bytes` to a single space and
