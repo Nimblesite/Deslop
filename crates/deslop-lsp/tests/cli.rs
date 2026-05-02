@@ -2,13 +2,21 @@
 
 mod common;
 
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    process::{Child, Command as StdCommand, ExitStatus, Stdio},
+    thread,
+    time::{Duration, Instant},
+};
 
 use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::Value;
 
-use crate::common::{call, copy_fixture, handshake, spawn_lsp, take_io};
+use crate::common::{
+    call, copy_fixture, handshake, notification, request, send_and_recv, spawn_lsp, take_io,
+    write_frame,
+};
 
 // Implements the deployment-toolkit binary contract: every IDE-launched
 // executable must expose a stable plain text version line.
@@ -51,6 +59,39 @@ fn initialize_reports_server_info_version() -> Result<()> {
     assert_eq!(pointer(&init, "/result/serverInfo/version")?, "0.1.0");
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
     let _ = child.kill();
+    Ok(())
+}
+
+#[test]
+fn exits_when_initialized_parent_process_disappears() -> Result<()> {
+    let parent_workspace = copy_fixture("csharp-small")?;
+    let mut parent = spawn_fake_parent(parent_workspace.path())?;
+    assert!(
+        parent.try_wait()?.is_none(),
+        "fake parent must stay alive until the LSP records its process id"
+    );
+
+    let workspace = copy_fixture("csharp-small")?;
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let init = initialize_with_process_id(&mut stdin, &mut stdout, parent.id())?;
+    assert_eq!(pointer(&init, "/result/serverInfo/name")?, "deslop-lsp");
+
+    parent.kill()?;
+    let parent_status = parent.wait()?;
+    assert!(
+        !parent_status.success(),
+        "fake parent should be killed during orphan-exit test"
+    );
+    let exit = wait_for_exit(&mut child, Duration::from_secs(5))?;
+    if exit.is_none() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    assert!(
+        exit.is_some(),
+        "deslop-lsp must exit within 5s after initialize.processId disappears"
+    );
     Ok(())
 }
 
@@ -100,6 +141,45 @@ fn cache_stat(report: &Value, field: &str) -> Result<u64> {
         .pointer(&format!("/cache_stats/{field}"))
         .and_then(Value::as_u64)
         .ok_or_else(|| anyhow!("missing cache_stats.{field}: {report}"))
+}
+
+fn initialize_with_process_id(
+    stdin: &mut std::process::ChildStdin,
+    stdout: &mut std::io::BufReader<std::process::ChildStdout>,
+    process_id: u32,
+) -> Result<Value> {
+    let (init_id, init) = request(
+        "initialize",
+        &serde_json::json!({
+            "processId": process_id,
+            "rootUri": null,
+            "capabilities": {}
+        }),
+    )?;
+    let response = send_and_recv(stdin, stdout, init_id, &init)?;
+    write_frame(stdin, &notification("initialized", &serde_json::json!({}))?)?;
+    Ok(response)
+}
+
+fn spawn_fake_parent(workspace: &Path) -> Result<Child> {
+    let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
+    Ok(StdCommand::new(bin)
+        .arg(workspace)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?)
+}
+
+fn wait_for_exit(child: &mut Child, timeout: Duration) -> Result<Option<ExitStatus>> {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    child.try_wait().map_err(Into::into)
 }
 
 fn pointer<'a>(value: &'a Value, path: &str) -> Result<&'a str> {

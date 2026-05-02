@@ -371,6 +371,60 @@ const TYPE_CONFIG = {
       interpretation: "Derived one-line interpretation (blanked on the live wire).",
     },
   },
+  PathParams: {
+    docs: "Wire payload for `deslop/reportForFile` and `deslop/clusterById` (file-scoped lookups).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { path: "PathBuf" },
+    fieldDocs: {
+      path: "Workspace-relative or absolute path scoping the request.",
+    },
+  },
+  ReportDeltaParams: {
+    docs: "Wire payload for `deslop/reportDelta`.",
+    derives: ["Debug", "Clone", "Default", "Serialize", "Deserialize"],
+    fieldOverrides: { since_generation: "Option<u64>" },
+    fieldDocs: {
+      since_generation:
+        "Generation the client already has. Missing means \"previous generation.\"",
+    },
+  },
+  RangeParams: {
+    docs: "Wire payload for `deslop/reportForRange`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+    },
+    fieldDocs: {
+      path: "Path scoping the range.",
+      start_byte: "Inclusive start byte.",
+      end_byte: "Exclusive end byte.",
+    },
+  },
+  ClusterIdParams: {
+    docs: "Wire payload for `deslop/clusterById`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      id: "Stable cluster id.",
+    },
+  },
+  VirtualDocumentParams: {
+    docs: "Wire payload for `deslop/virtualDocument` ([LSP-EDITOR-SURFACES]).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      uri: "`deslop://{schema|report|cluster/<id>}` URI.",
+    },
+  },
+  SetModelParams: {
+    docs: "Wire payload for `deslop/embeddingSetModel`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      provider_id: "Provider registry key.",
+      model_id: "Model identifier.",
+      endpoint: "Optional endpoint override.",
+    },
+  },
   Report: {
     docs: "A complete analysis report.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],

@@ -2,12 +2,16 @@
 //! ([LSP-CUSTOM-METHODS]). Each method is a thin async forwarder onto
 //! the [`deslop_core::live::LiveApi`] surface.
 
-use std::{path::PathBuf, time::Instant};
+use std::time::Instant;
 
 use deslop_core::{
     live::{FindSimilarRequest, LiveApi},
     render::{render_cluster_markdown, render_text},
     report::{occurrence_count, Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
+    wire_generated::{
+        ClusterIdParams, PathParams, RangeParams, ReportDeltaParams, SetModelParams,
+        VirtualDocumentParams,
+    },
 };
 use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::Result as LspResult;
@@ -60,55 +64,12 @@ pub const SESSION_CONFIG: &str = "deslop/sessionConfig";
 /// ([LSP-EDITOR-SURFACES]).
 pub const VIRTUAL_DOCUMENT: &str = "deslop/virtualDocument";
 
-/// Parameters for the file/range/cluster lookups.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PathParams {
-    /// Workspace-relative or absolute path.
-    pub path: PathBuf,
-}
-
-/// Parameters for `report/delta`.
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct ReportDeltaParams {
-    /// Generation the client already has. Missing means "previous generation."
-    pub since_generation: Option<u64>,
-}
-
-/// Parameters for `report/forRange`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct RangeParams {
-    /// Path scoping the range.
-    pub path: PathBuf,
-    /// Inclusive start byte.
-    pub start_byte: usize,
-    /// Exclusive end byte.
-    pub end_byte: usize,
-}
-
-/// Parameters for `cluster/byId`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ClusterIdParams {
-    /// Stable cluster id.
-    pub id: String,
-}
-
-/// Parameters for [`VIRTUAL_DOCUMENT`].
-#[derive(Debug, Deserialize, Serialize)]
-pub struct VirtualDocumentParams {
-    /// `deslop://{schema|report|cluster/<id>}` URI.
-    pub uri: String,
-}
-
-/// Parameters for `embedding/setModel`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SetModelParams {
-    /// Provider registry key.
-    pub provider_id: String,
-    /// Model identifier.
-    pub model_id: String,
-    /// Optional endpoint override.
-    pub endpoint: Option<String>,
-}
+// `PathParams`, `ReportDeltaParams`, `RangeParams`, `ClusterIdParams`,
+// `VirtualDocumentParams`, and `SetModelParams` live in
+// `deslop_core::wire_generated`, generated from
+// `docs/models/live-ipc.td` so the VSIX and the LSP share one wire
+// definition. They're re-exported into the module's `use` block at the
+// top of the file.
 
 /// Forwards `report/get`. Accepts and ignores any params the client
 /// happens to send (tower-lsp rejects `params: {}` unless the handler

@@ -9,6 +9,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import { indexedSeverity } from "../severity";
+import type { ChangeSummary } from "../types/report";
 import {
   BucketGroupNode,
   ClusterNode,
@@ -57,6 +58,20 @@ function renderLifecycle(
   const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "";
   const label = lifecycle.kind === "starting" ? "Starting" : idleLabel;
   return new StatusNode(`${spinner} ${label}…`, "busy");
+}
+
+function renderRemovedClusterSummary(
+  summary: ChangeSummary,
+  remaining: number,
+  generation: number,
+): StatusNode | null {
+  if (summary.clusters_removed <= 0) return null;
+  const fixedNoun = summary.clusters_removed === 1 ? "cluster" : "clusters";
+  return new StatusNode(
+    `${summary.clusters_removed.toLocaleString()} ${fixedNoun} fixed - ` +
+      `${remaining.toLocaleString()} remaining - generation ${generation.toLocaleString()}`,
+    "info",
+  );
 }
 
 export class StatusTicker implements vscode.Disposable {
@@ -158,6 +173,18 @@ function readGroupBy(): GroupBy {
 }
 
 export class TopOffendersProvider extends LifecycleAwareProvider {
+  private lastSummary: ChangeSummary | undefined;
+
+  constructor(store: ReportStore, ticker: StatusTicker) {
+    super(store, ticker);
+    this.disposables.push(
+      store.onDidChangeSummary((summary) => {
+        this.lastSummary = summary.clusters_removed > 0 ? summary : undefined;
+        this.emitter.fire();
+      }),
+    );
+  }
+
   getChildren(node?: Node): Node[] {
     if (node instanceof FileNode) return getFileNodeChildren(node);
     if (node instanceof BucketGroupNode) return getBucketGroupChildren(node);
@@ -178,9 +205,17 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       return [new StatusNode("No duplication detected", "info")];
     }
     const severities = indexedSeverity(report.clusters);
-    return readGroupBy() === "file"
+    const rows = readGroupBy() === "file"
       ? buildFileMode(report.clusters, severities)
       : buildClusterMode(report.clusters, severities);
+    const summaryRow = this.lastSummary
+      ? renderRemovedClusterSummary(
+        this.lastSummary,
+        report.clusters.length,
+        this.store.current.generation,
+      )
+      : null;
+    return summaryRow ? [summaryRow, ...rows] : rows;
   }
 }
 

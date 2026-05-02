@@ -48,6 +48,63 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     is_polymorphic_signature_cluster(&snippets)
         || is_literal_variation_call_cluster(&snippets)
         || is_monkeypatch_scaffolding_literal_cluster(&snippets)
+        || is_python_all_exports_cluster(&snippets)
+}
+
+/// Detects **issue #96**: every cluster member is a Python module-level
+/// `__all__ = [...]` assignment. The export list shape is identical
+/// across modules by convention, but the listed names always differ —
+/// after Type-2 normalisation they look identical, yet the package
+/// surface is not duplicate logic and cannot be extracted.
+fn is_python_all_exports_cluster(snippets: &[Snippet<'_>]) -> bool {
+    snippets.iter().all(is_python_all_exports_snippet)
+}
+
+/// Returns true when `snippet` covers a Python `__all__ = [...]`
+/// module-level assignment (or its enclosing list literal).
+fn is_python_all_exports_snippet(snippet: &Snippet<'_>) -> bool {
+    if snippet.language != "python" {
+        return false;
+    }
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    enclosing_kind(tree.root_node(), snippet.range, &["expression_statement"])
+        .or_else(|| enclosing_kind(tree.root_node(), snippet.range, &["assignment"]))
+        .is_some_and(|node| python_node_assigns_all_exports(node, snippet.source))
+}
+
+/// Returns true when `node` (an `expression_statement` or `assignment`)
+/// binds the identifier `__all__` to a list/tuple literal.
+fn python_node_assigns_all_exports(node: Node<'_>, source: &[u8]) -> bool {
+    let assignment = python_descend_to_assignment(node);
+    let Some(left) = assignment.child_by_field_name("left") else {
+        return false;
+    };
+    if !python_node_text_equals(left, source, b"__all__") {
+        return false;
+    }
+    let Some(right) = assignment.child_by_field_name("right") else {
+        return false;
+    };
+    matches!(right.kind(), "list" | "tuple")
+}
+
+/// If `node` is an `expression_statement`, descend to its inner
+/// `assignment` child; otherwise return `node` unchanged.
+fn python_descend_to_assignment(node: Node<'_>) -> Node<'_> {
+    if node.kind() != "expression_statement" {
+        return node;
+    }
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor)
+        .find(|child| child.kind() == "assignment")
+        .unwrap_or(node)
+}
+
+/// Returns true when `node`'s source byte range exactly matches `needle`.
+fn python_node_text_equals(node: Node<'_>, source: &[u8], needle: &[u8]) -> bool {
+    source.get(node.start_byte()..node.end_byte()) == Some(needle)
 }
 
 /// One re-parsed cluster member: language, raw bytes, the byte range

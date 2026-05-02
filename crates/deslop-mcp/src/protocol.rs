@@ -4,6 +4,23 @@
 //! notifications / errors directly instead of pulling in a dedicated
 //! JSON-RPC crate so every byte crossing the stdio boundary stays
 //! under our review.
+//!
+//! # typeDiagram exception
+//!
+//! Every Deslop *application* wire payload (reports, deltas, request
+//! params) is generated from `docs/models/live-ipc.td`. The structs in
+//! this file are deliberately **not** generated: the JSON-RPC 2.0
+//! envelope is an external standard, not a Deslop-defined shape, and
+//! its wire grammar uses constructs typeDiagram cannot express:
+//!
+//! * `RequestId` is `serde(untagged)` (string OR number OR null).
+//! * `JsonRpcError.data` uses `serde(skip_serializing_if = "Option::is_none")`.
+//! * `ErrorCode` carries explicit JSON-RPC numeric discriminants
+//!   (`-32700..=-32099`) that `enum X { Foo = -32_700 }` encodes
+//!   directly.
+//!
+//! Keeping this transport envelope hand-written preserves byte-exact
+//! conformance with the JSON-RPC 2.0 specification.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -204,5 +204,39 @@ type ReportDelta {
   tool_version: String
 }
 
+# ---------------------------------------------------------------------------
+# `deslop/*` LSP custom-method request param shapes ([LSP-CUSTOM-METHODS]).
+# These ride directly on the JSON-RPC `params` slot and travel from the
+# VSIX (and other LSP clients) to deslop-lsp.
+# ---------------------------------------------------------------------------
+
+type PathParams {
+  path: String
+}
+
+type ReportDeltaParams {
+  since_generation: Option<Int>
+}
+
+type RangeParams {
+  path: String
+  start_byte: Int
+  end_byte: Int
+}
+
+type ClusterIdParams {
+  id: String
+}
+
+type VirtualDocumentParams {
+  uri: String
+}
+
+type SetModelParams {
+  provider_id: String
+  model_id: String
+  endpoint: Option<String>
+}
+
 # All types referenced by name are now defined here. EXTERNAL_TYPES in
 # the generator can stay populated as a safety net for legacy callers.

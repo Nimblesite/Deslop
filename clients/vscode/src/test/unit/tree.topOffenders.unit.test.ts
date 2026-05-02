@@ -554,6 +554,45 @@ suite("TopOffendersProvider", () => {
     }
   });
 
+  test("surfaces removed-cluster progress before unchanged top offenders (#80)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("fixed", 100, "/repo/Fixed.cs"),
+        cluster("next", 95, "/repo/Next.cs"),
+        cluster("still", 80, "/repo/Still.cs"),
+      ]),
+      1,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+
+    store.notifyChange({
+      clusters_added: 0,
+      clusters_removed: 1,
+      clusters_updated: 0,
+      worst_weight: 95,
+    });
+    store.applyDelta({
+      from_generation: 1,
+      to_generation: 2,
+      clusters_added: [],
+      clusters_removed: ["fixed"],
+      clusters_updated: [],
+      cache_stats: { hits: 2, misses: 0 },
+      tool_version: "v2",
+    });
+
+    const nodes = provider.getChildren();
+    const labels = nodes.map(labelText);
+
+    assert.match(labels[0] ?? "", /1 cluster fixed/i);
+    assert.match(labels[0] ?? "", /2 remaining/i);
+    assert.match(labels[0] ?? "", /generation 2/i);
+    assert.ok(labels.some((label) => /Next\.cs/.test(label)), "next offender must remain visible");
+    assert.ok(labels.some((label) => /Still\.cs/.test(label)), "remaining offender must remain visible");
+    assert.doesNotMatch(labels.join("\n"), /Fixed\.cs/, "fixed cluster must leave the offender list");
+  });
+
   test("surfaces a failed lifecycle as an error status row", () => {
     const store = new ReportStore();
     store.setLifecycle({ kind: "failed", message: "crash" });
