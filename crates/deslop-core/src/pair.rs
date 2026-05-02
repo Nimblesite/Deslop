@@ -375,7 +375,7 @@ fn survival_decision(pair: &CandidatePair) -> PairSurvival {
     if pair.score.fused() < FUSED_THRESHOLD {
         return PairSurvival::DroppedBelowFused;
     }
-    let lsh_only = pair.score.structural <= 0.0;
+    let lsh_only = pair.score.structural <= 0.0 && pair.score.embedding_cos <= 0.0;
     if lsh_only && pair.score.token_jaccard < LSH_ONLY_MIN_JACCARD {
         return PairSurvival::DroppedLshOnlyJaccard;
     }

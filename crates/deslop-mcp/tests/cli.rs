@@ -673,6 +673,75 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
 }
 
 #[test]
+fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let report_get = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 2 }),
+    )?)?;
+    assert!(
+        report_get.get("schema_doc").is_none(),
+        "issue #110/#111: report-get must not inline repeated schema_doc; got {} chars",
+        report_get
+            .get("schema_doc")
+            .and_then(Value::as_str)
+            .map(str::len)
+            .unwrap_or(0)
+    );
+    let report_query = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 2, "bucket": "identical" }),
+    )?)?;
+    assert!(
+        report_query.get("schema_doc").is_none(),
+        "issue #110/#111: report-query must not inline repeated schema_doc; got {} chars",
+        report_query
+            .get("schema_doc")
+            .and_then(Value::as_str)
+            .map(str::len)
+            .unwrap_or(0)
+    );
+    let tools_response = child.request("tools/list", &json!({}))?;
+    let tools_value = value_get(&tools_response, "/result/tools")?;
+    let tools = tools_value
+        .as_array()
+        .ok_or_else(|| anyhow!("tools/list must return an array"))?;
+    let schema_tool = tools
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("schema-doc"))
+        .ok_or_else(|| anyhow!("schema-doc must be listed as the one-shot schema tool"))?;
+    assert_eq!(
+        schema_tool.pointer("/inputSchema/properties"),
+        Some(&json!({})),
+        "schema-doc must take no arguments: {schema_tool}"
+    );
+    let schema_payload = structured_tool_result(&call_tool(&mut child, "schema-doc", &json!({}))?)?;
+    let schema_doc_value = value_get(&schema_payload, "/schema_doc")?;
+    let schema_doc = schema_doc_value
+        .as_str()
+        .ok_or_else(|| anyhow!("schema-doc payload must include schema_doc text"))?;
+    assert!(
+        schema_doc.len() > 1_000,
+        "schema-doc must return the full report schema markdown, got {} chars",
+        schema_doc.len()
+    );
+    let resource_response = child.request("resources/read", &json!({ "uri": "deslop://schema" }))?;
+    let resource_doc_value = value_get(&resource_response, "/result/contents/0/text")?;
+    let resource_doc = resource_doc_value
+        .as_str()
+        .ok_or_else(|| anyhow!("deslop://schema resource must return text"))?;
+    assert_eq!(
+        schema_doc, resource_doc,
+        "schema-doc tool and deslop://schema resource must serve the same markdown"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn report_get_requires_offset_argument() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;

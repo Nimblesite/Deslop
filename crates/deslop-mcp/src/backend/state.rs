@@ -24,7 +24,7 @@ use deslop_core::{
         FindSimilarRequest,
     },
     report::ReportCluster,
-    EmbeddingSpec, OllamaModelInfo, Report,
+    EmbeddingSpec, Report,
 };
 use notify::{recommended_watcher, EventHandler, RecursiveMode, Watcher as NotifyWatcher};
 use serde_json::{json, Value};
@@ -260,18 +260,6 @@ fn extension_to_language(path: &Path) -> Option<&'static str> {
     }
 }
 
-/// Maps the LSP IPC model shape into the MCP tool renderer's legacy
-/// model row shape.
-fn model_info_from_wire(model: WireEmbeddingModelInfo) -> OllamaModelInfo {
-    OllamaModelInfo {
-        name: model.model_id.clone(),
-        bare_id: model.model_id,
-        digest: model.model_version.unwrap_or_default(),
-        size_bytes: 0,
-        is_embedding_model: model.reachable && model.recommended,
-    }
-}
-
 /// Entry point for the background watcher thread.
 fn run_watcher(
     watch_dir: &Path,
@@ -440,11 +428,11 @@ impl McpBackend for StateFileBackend {
             .ok_or_else(|| BackendError::UnknownCluster(id.to_owned()))
     }
 
-    fn list_embedding_models(&self) -> Result<Vec<OllamaModelInfo>, BackendError> {
+    fn list_embedding_models(&self) -> Result<Vec<WireEmbeddingModelInfo>, BackendError> {
         let result = ipc_call(&self.ipc_socket, "embedding/listModels", &json!({}))?;
         let models = serde_json::from_value::<Vec<WireEmbeddingModelInfo>>(result)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc models parse: {err}")))?;
-        Ok(models.into_iter().map(model_info_from_wire).collect())
+        Ok(models)
     }
 
     fn set_embedding_model(

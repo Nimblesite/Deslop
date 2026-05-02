@@ -128,8 +128,8 @@ suite("extension internals", () => {
   test("buildServerArgs keeps issue #83 legacy flags out of debug VSIX sessions", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "stub", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "blake3-stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
     await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
     const args = buildServerArgs("/tmp/deslop-workspace", true);
     assert.deepEqual(args, ["/tmp/deslop-workspace", "--debug"]);
@@ -151,8 +151,8 @@ suite("extension internals", () => {
   test("syncEmbeddingSettingsToLsp forwards shared workspace settings", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "stub", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "blake3-stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
     const calls: Array<{ method: string; params: unknown }> = [];
     const client = {
       sendRequest: (method: string, params: unknown) => {
@@ -166,13 +166,13 @@ suite("extension internals", () => {
       {
         method: "deslop/embeddingSetModel",
         params: {
-          provider_id: "stub",
-          model_id: "blake3-stub",
+          provider_id: "ollama",
+          model_id: "nomic-embed-text",
           endpoint: "http://127.0.0.1:11434",
         },
       },
     ]);
-    assert.equal(store.current.pendingEmbeddingModel, "blake3-stub");
+    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
   });
 
   test("wireNotifications embeddingProgress handler pushes the payload into the store", () => {

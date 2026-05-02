@@ -319,6 +319,10 @@ pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
     }
 }
 
+/// Folds any cache misses recorded during the cold pass into the hits
+/// counter when seeding from a cached report. Cache-seeded sessions
+/// surface as "all hits" to the editor — the misses were paid by the
+/// CLI run that wrote the cache, not by this session.
 fn normalize_cache_seed_stats(report: &mut Report) {
     if report.cache_stats.misses == 0 {
         return;

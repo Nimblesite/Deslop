@@ -354,7 +354,7 @@ suite("ollama semantic clone detection (real Ollama)", () => {
     // Both prove that swapping to stub genuinely disabled the
     // Ollama-produced similarity.
     if (afterCluster === undefined) {
-      // Outcome 1: cluster gone. Verdict: stub couldn't match Type-4.
+      // Outcome 1: cluster gone; stub could not match Type-4.
       return;
     }
     assert.ok(

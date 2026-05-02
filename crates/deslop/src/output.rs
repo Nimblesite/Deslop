@@ -3,7 +3,7 @@
 use std::{env, fs, io::Write as _, path::PathBuf};
 
 use anyhow::{bail, Context, Result};
-use deslop_core::{classify_signals, render::render_html, render::render_text, Report};
+use deslop_core::{render::render_html, render::render_text, Report};
 
 use crate::Cli;
 
@@ -184,19 +184,6 @@ pub(crate) fn write_file(path: &std::path::Path, payload: &[u8]) -> Result<()> {
 pub(crate) fn load_report(path: &std::path::Path) -> Result<Report> {
     let source =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
-    let mut report = serde_json::from_str::<Report>(&source)
-        .with_context(|| format!("parse report {}", path.display()))?;
-    fill_legacy_bucket_labels(&mut report);
-    Ok(report)
-}
-
-/// Backfills bucket labels in old reports.
-fn fill_legacy_bucket_labels(report: &mut Report) {
-    for cluster in &mut report.clusters {
-        if cluster.bucket.is_empty() {
-            classify_signals(cluster.signals)
-                .wire_label()
-                .clone_into(&mut cluster.bucket);
-        }
-    }
+    serde_json::from_str::<Report>(&source)
+        .with_context(|| format!("parse report {}", path.display()))
 }

@@ -15,7 +15,7 @@
 
 use std::{fmt::Write as _, fs, path::Path, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use assert_cmd::Command;
 use predicates::str::contains;
 use serde_json::Value;
@@ -3088,15 +3088,14 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
     Ok(())
 }
 
-// Implements [METRICS-REPO]: `RepoMetrics::default()` and `empty()`
-// deserialise as zero metrics through `--from-report` when reading an
-// older (v2) report that pre-dates the field.
+// Implements GH#85: `--from-report` must not silently upgrade older
+// reports by backfilling a missing cluster bucket from signal scores.
 #[test]
-fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
+fn from_report_keeps_missing_bucket_unupgraded_issue_85() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     // Minimal report missing `metrics` and `cluster.bucket`.
-    // `#[serde(default)]` keeps older reports round-tripping while
-    // `--from-report` rehydrates the bucket from the signal triple.
+    // `#[serde(default)]` keeps older reports round-tripping, but the CLI
+    // must not mutate their semantic bucket classification while rendering.
     let v2 = "{\n\
               \"report_schema_version\": 1,\n\
               \"tool_version\": \"legacy\",\n\
@@ -3133,14 +3132,25 @@ fn from_report_rehydrates_missing_metrics_as_zero() -> Result<()> {
         .success();
     let json = read_json_report(&out.json)?;
     assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
+    assert_eq!(metric_field(&json, "duplicated_loc").as_u64(), Some(0));
     assert_eq!(threshold_field(&json, "source").as_str(), Some("none"));
-    let bucket = json
+    let cluster = json
         .get("clusters")
         .and_then(serde_json::Value::as_array)
         .and_then(|clusters| clusters.first())
-        .and_then(|cluster| cluster.get("bucket"))
-        .and_then(serde_json::Value::as_str);
-    assert_eq!(bucket, Some("identical"));
+        .context("legacy report cluster should survive --from-report")?;
+    let bucket = cluster.get("bucket").and_then(serde_json::Value::as_str);
+    assert_eq!(bucket, Some(""));
+    assert_eq!(
+        cluster.get("summary").and_then(serde_json::Value::as_str),
+        Some("legacy")
+    );
+    assert_eq!(
+        cluster
+            .get("interpretation")
+            .and_then(serde_json::Value::as_str),
+        Some("legacy")
+    );
     Ok(())
 }
 

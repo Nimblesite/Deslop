@@ -280,12 +280,42 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
         .get("models")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    let stub = models
+        .iter()
+        .find(|model| model.get("provider_id") == Some(&json!("stub")))
+        .ok_or_else(|| anyhow!("list-embedding-models must include stub provider: {response}"))?;
     ensure!(
-        models
-            .iter()
-            .any(|model| model.get("name") == Some(&json!("blake3-stub"))),
-        "list-embedding-models must include the built-in stub model: {response}"
+        stub.get("model_id") == Some(&json!("blake3-stub")),
+        "issue #87: stub row must use generated model_id field: {stub}"
     );
+    ensure!(
+        stub.get("model_version") == Some(&json!("v1")),
+        "issue #87: stub row must carry generated model_version field: {stub}"
+    );
+    ensure!(
+        stub.get("dimensions").and_then(Value::as_u64).is_some(),
+        "issue #87: stub row must carry generated dimensions field: {stub}"
+    );
+    ensure!(
+        stub.get("recommended").and_then(Value::as_bool) == Some(false),
+        "issue #87: stub row must carry generated recommended field: {stub}"
+    );
+    ensure!(
+        stub.get("reachable").and_then(Value::as_bool) == Some(true),
+        "issue #87: stub row must carry generated reachable field: {stub}"
+    );
+    for legacy_key in [
+        "name",
+        "bare_id",
+        "digest",
+        "size_bytes",
+        "is_embedding_model",
+    ] {
+        ensure!(
+            stub.get(legacy_key).is_none(),
+            "issue #87: generated model row must not expose legacy key {legacy_key}: {stub}"
+        );
+    }
     Ok(())
 }
 

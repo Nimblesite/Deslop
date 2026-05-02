@@ -18,7 +18,6 @@ use crate::{
     config::ExclusionConfig,
     fingerprint::Fingerprint,
     report::{ReportCluster, ReportOccurrence, ReportSignals},
-    report_literals::value_tokens_are_identical,
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
 };
@@ -149,21 +148,17 @@ pub(crate) fn summarise(
 /// rate-limit policy literals still reach `structural=1.00, jaccard=1.00`.
 /// Calling them "Identical code / every copy is the same" is a lie — the
 /// raw source bytes disagree. We downgrade any such cluster to
-/// [`ClusterKind::NearlyIdentical`] regardless of language. The
-/// language-aware C# value-token check is kept as a redundant guard for
-/// reports that lose source bytes (deserialised reports, tests) but the
-/// raw-source equality check is now the primary gate.
+/// [`ClusterKind::NearlyIdentical`] regardless of language. Reports that
+/// cannot supply source bytes also cannot prove byte-equivalence, so they
+/// take the same downgrade instead of using a compatibility fallback.
 pub(crate) fn report_bucket_kind(
     signals: ReportSignals,
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
-    file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+    _file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
 ) -> ClusterKind {
     let kind = classify_signals(signals);
-    if kind == ClusterKind::Identical
-        && (!source_slices_are_equivalent(members, sources)
-            || !value_tokens_are_identical(members, sources, file_languages))
-    {
+    if kind == ClusterKind::Identical && !source_slices_are_equivalent(members, sources) {
         ClusterKind::NearlyIdentical
     } else {
         kind
@@ -183,19 +178,21 @@ pub(crate) fn interpret(kind: ClusterKind) -> String {
 /// reformatted-but-identical copies still classify as `Identical`, but
 /// any difference in identifiers, literals, or punctuation prevents the
 /// `Identical` label per [CLONE-BUCKETS-IDENTICAL] (issue #66). When a
-/// member's source bytes are unavailable (deserialised reports, tests)
-/// the function returns `true` so the legacy language-aware fallback in
-/// [`value_tokens_are_identical`] still gates the bucket.
+/// member's source bytes are unavailable, the function returns `false`
+/// because the renderer cannot prove byte-equivalence.
 pub(crate) fn source_slices_are_equivalent(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
 ) -> bool {
-    let canonical_slices: Vec<Vec<u8>> = members
-        .iter()
-        .filter_map(|member| source_slice(member, sources).map(canonicalise_whitespace))
-        .collect();
-    if canonical_slices.len() < 2 {
+    if members.len() < 2 {
         return true;
+    }
+    let mut canonical_slices = Vec::with_capacity(members.len());
+    for member in members {
+        let Some(slice) = source_slice(member, sources) else {
+            return false;
+        };
+        canonical_slices.push(canonicalise_whitespace(slice));
     }
     canonical_slices
         .windows(2)
@@ -243,4 +240,52 @@ pub(crate) fn source_location(
 ) -> String {
     let source = sources.get(&file_id).map(Vec::as_slice);
     format_occurrence(&occurrence.path, occurrence.start_byte, source)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, path::PathBuf};
+
+    use crate::{
+        ast::ByteRange,
+        fingerprint::Fingerprint,
+        report::ReportSignals,
+        state::{FileId, FileRegistry},
+    };
+
+    use super::*;
+
+    #[test]
+    fn missing_source_bytes_do_not_use_legacy_language_fallback_issue_85() {
+        let mut registry = FileRegistry::new();
+        let left = registry.register(PathBuf::from("Left.cs"));
+        let right = registry.register(PathBuf::from("Right.cs"));
+        let members = [fingerprint(left), fingerprint(right)];
+        let sources = HashMap::<FileId, Vec<u8>>::new();
+        let file_languages = HashMap::from([(left, "csharp"), (right, "csharp")]);
+
+        assert!(!source_slices_are_equivalent(&members, &sources));
+        assert_eq!(
+            report_bucket_kind(identical_signals(), &members, &sources, &file_languages),
+            ClusterKind::NearlyIdentical
+        );
+    }
+
+    fn fingerprint(file_id: FileId) -> Fingerprint {
+        Fingerprint {
+            hash: [0; 32],
+            file_id,
+            byte_range: ByteRange { start: 0, end: 12 },
+            node_count: 8,
+        }
+    }
+
+    fn identical_signals() -> ReportSignals {
+        ReportSignals {
+            structural: 1.0,
+            token_jaccard: 1.0,
+            embedding_cos: 0.0,
+            fused: 1.0,
+        }
+    }
 }

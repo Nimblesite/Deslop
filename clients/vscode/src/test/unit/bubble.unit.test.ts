@@ -36,7 +36,7 @@ function cluster(
 }
 
 suite("bubble rendering helpers", () => {
-  test("inlineText includes the severity dot, verdict, authoritative count, and filename", () => {
+  test("inlineText includes the severity dot, bucket label, authoritative count, and filename", () => {
     const text = inlineText(cluster(), "worst");
     assert.match(text, /×\s*4/);
     assert.match(text, /Alpha\.cs/);

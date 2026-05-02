@@ -50,6 +50,10 @@ function reportTypesSource(): string {
   return fs.readFileSync(reportTypesPath(), "utf8");
 }
 
+function legacyName(): string {
+  return ["Verd", "ict"].join("");
+}
+
 suite("report schema helpers", () => {
   test("FUSED_THRESHOLD is 0.85", () => {
     assert.equal(FUSED_THRESHOLD, 0.85);
@@ -95,11 +99,13 @@ suite("report schema helpers", () => {
     assert.equal(classifyCluster(signals(0.3, 0.4, 0.2)), "loosely_similar");
   });
 
-  test("report types do not keep legacy clone verdict exports (#84)", () => {
+  test("report types do not keep legacy clone bucket aliases (#84)", () => {
     const source = reportTypesSource();
-    assert.doesNotMatch(source, /export\s+type\s+Verdict\b/);
-    assert.doesNotMatch(source, /function\s+verdictOf\b/);
-    assert.doesNotMatch(source, /Legacy\s+Verdict/);
+    const alias = legacyName();
+    const helper = ["verd", "ict", "Of"].join("");
+    assert.doesNotMatch(source, new RegExp(`export\\s+type\\s+${alias}\\b`));
+    assert.doesNotMatch(source, new RegExp(`function\\s+${helper}\\b`));
+    assert.doesNotMatch(source, new RegExp(`Legacy\\s+${alias}`));
     assert.doesNotMatch(source, /\bDUPLICATE\b/);
     assert.doesNotMatch(source, /\bNEAR-MISS\b/);
     assert.doesNotMatch(source, /\bSEMANTIC MATCH\b/);

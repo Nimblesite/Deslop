@@ -14,8 +14,9 @@ use std::path::{Path, PathBuf};
 use crate::NotificationSender;
 
 use deslop_core::{
+    live::wire::EmbeddingModelInfo,
     report::{CacheStats, ReportCluster},
-    CoreError, EmbeddingProvenance, EmbeddingSpec, OllamaModelInfo, Report,
+    CoreError, EmbeddingProvenance, EmbeddingSpec, Report,
 };
 use thiserror::Error;
 
@@ -140,7 +141,7 @@ pub trait McpBackend: Send + Sync {
     ///
     /// Returns [`BackendError::Provider`] for provider errors other
     /// than `Unreachable`, which degrades gracefully.
-    fn list_embedding_models(&self) -> Result<Vec<OllamaModelInfo>, BackendError>;
+    fn list_embedding_models(&self) -> Result<Vec<EmbeddingModelInfo>, BackendError>;
 
     /// Swaps the active embedding provider / model.
     ///

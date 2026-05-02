@@ -330,7 +330,7 @@ type RangeReport {
 # ---------------------------------------------------------------------------
 
 type EmbeddingModelList {
-  models: List<OllamaModelInfo>
+  models: List<EmbeddingModelInfo>
 }
 
 # ---------------------------------------------------------------------------

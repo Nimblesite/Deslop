@@ -457,6 +457,29 @@ suite("TopOffendersProvider", () => {
     assert.match(tip2, /occurrence 2 of 2/, "second occurrence tooltip must reflect its index");
   });
 
+  test("compare with canonical context values hide non-actionable rows (#14)", () => {
+    const store = new ReportStore();
+    const singleOccurrence = withOccurrences(cluster("single", 5, "/single"), [
+      reportOccurrence("/single"),
+    ]);
+    store.setSnapshot(
+      report([cluster("multi", 10, "/f1"), singleOccurrence]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [multi, single] = provider.getChildren();
+    assert.ok(multi, "multi-occurrence cluster root must exist");
+    assert.ok(single, "single-occurrence cluster root must exist");
+    assert.equal(multi.contextValue, "deslop.clusterComparable");
+    assert.equal(single.contextValue, "deslop.clusterSingle");
+
+    const [canonical, comparable] = provider.getChildren(multi);
+    assert.ok(canonical, "canonical occurrence row must exist");
+    assert.ok(comparable, "comparable occurrence row must exist");
+    assert.equal(canonical.contextValue, "deslop.occurrenceCanonical");
+    assert.equal(comparable.contextValue, "deslop.occurrence");
+  });
+
   test("occurrence row reports and opens the exact file, line, and column", async () => {
     // [VSIX-ACTIVITY-BAR] Issue #8: tree occurrence rows must show
     // path:line:column, not machine-oriented start_byte..end_byte.

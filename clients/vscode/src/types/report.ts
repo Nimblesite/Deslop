@@ -223,28 +223,4 @@ export function clusterInterpretation(cluster: ReportCluster): string {
     : bucketLabels(resolveBucket(cluster)).actionSentence;
 }
 
-// ---------------------------------------------------------------------------
-// Legacy Verdict alias for [VSIX-LIVE-BUBBLE] call sites — prefer
-// `resolveBucket` + `bucketLabels` on new code. Kept for transition.
-// ---------------------------------------------------------------------------
-
-export type Verdict =
-  | "DUPLICATE"
-  | "NEAR-MISS"
-  | "SEMANTIC MATCH"
-  | "LOOSELY SIMILAR";
-
-export function verdictOf(signals: ReportSignals): Verdict {
-  switch (classifyCluster(signals)) {
-    case "identical":
-      return "DUPLICATE";
-    case "nearly_identical":
-      return "NEAR-MISS";
-    case "same_behavior":
-      return "SEMANTIC MATCH";
-    case "loosely_similar":
-      return "LOOSELY SIMILAR";
-  }
-}
-
 export const FUSED_THRESHOLD = 0.85;

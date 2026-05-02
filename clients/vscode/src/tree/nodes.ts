@@ -85,7 +85,8 @@ export class ClusterNode extends vscode.TreeItem {
       : { rank, severity, bucket };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
     this.description = `${occurrenceCount(cluster)} copies`;
-    this.contextValue = "deslop.cluster";
+    this.contextValue =
+      occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
     this.iconPath = categoryIcon(bucket);
     this.accessibilityInformation = {
       label: `#${rank} ${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}`,
@@ -117,7 +118,10 @@ export class OccurrenceNode extends vscode.TreeItem {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
     if (location) this.description = location.description;
-    this.contextValue = "deslop.occurrence";
+    this.contextValue =
+      parentCluster !== undefined && occurrenceIndex === 0
+        ? "deslop.occurrenceCanonical"
+        : "deslop.occurrence";
     if (parentCluster !== undefined && occurrenceIndex !== undefined) {
       const labels = bucketLabels(resolveBucket(parentCluster));
       const total = occurrenceCount(parentCluster);

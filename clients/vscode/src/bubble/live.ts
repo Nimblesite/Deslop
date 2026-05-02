@@ -1,7 +1,7 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
 // on the most-recently-touched range; if fused >= 0.85, renders:
-//   primary: after-text decoration (severity dot + verdict + count + canonical)
+//   primary: after-text decoration (severity dot + bucket label + count + canonical)
 //   secondary: inlay hint with a 3-bar signal strip
 // Ghost-line mode uses a CodeLens on a phantom line.
 

@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use anyhow::{Context, Result};
 use deslop_core::{
     ast::ByteRange,
     embedding::EmbeddingPair,
@@ -12,7 +13,7 @@ use deslop_core::{
 };
 
 #[test]
-fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() {
+fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
     let (fingerprints, signatures) = low_jaccard_fixture();
     let lsh_pairs = Vec::new();
     let embedding_pairs = vec![EmbeddingPair {
@@ -23,13 +24,16 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() {
 
     let candidates = candidate_pairs(&fingerprints, &signatures, &lsh_pairs, &embedding_pairs);
     assert_eq!(candidates.len(), 1, "expected one fused candidate pair");
-    let candidate = candidates[0];
+    let candidate = *candidates.first().context("one candidate pair expected")?;
     assert_eq!((candidate.left, candidate.right), (0, 1));
     assert!(
         lsh_pairs.is_empty(),
         "fixture must prove a unique embedding-only cluster"
     );
-    assert_eq!(candidate.score.structural, 0.0);
+    assert!(
+        candidate.score.structural.abs() < f64::EPSILON,
+        "structural signal must be exactly zero in this fixture"
+    );
     assert!(
         candidate.score.token_jaccard < LSH_ONLY_MIN_JACCARD,
         "fixture must exercise a match that LSH/token scoring missed"
@@ -49,8 +53,10 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() {
         1,
         "issue #91: high-confidence embedding-only evidence must produce a cluster"
     );
-    assert_eq!(clusters[0].members, vec![0, 1]);
-    assert!(clusters[0].mean_score.embedding_cos > 0.98);
+    let cluster = clusters.first().context("one cluster expected")?;
+    assert_eq!(cluster.members, vec![0, 1]);
+    assert!(cluster.mean_score.embedding_cos > 0.98);
+    Ok(())
 }
 
 fn low_jaccard_fixture() -> (Vec<Fingerprint>, Vec<Signature>) {
