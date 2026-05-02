@@ -136,6 +136,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     return currentApi();
   }
 
+  context.subscriptions.push(wireDirtyDocuments(reportStore));
+
   const decorations = new DecorationManager(reportStore);
   context.subscriptions.push(decorations);
 
@@ -321,6 +323,12 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
     } else {
       store.setEmbeddingProgress(progress);
     }
+  });
+}
+
+export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
+  return vscode.workspace.onDidChangeTextDocument((event) => {
+    store.markFileDirty(event.document.uri.fsPath);
   });
 }
 

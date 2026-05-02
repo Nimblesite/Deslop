@@ -238,5 +238,128 @@ type SetModelParams {
   endpoint: Option<String>
 }
 
+# ---------------------------------------------------------------------------
+# `LiveError` wire shape ([LIVE-PACKAGING]). Carried as `data` on JSON-RPC
+# error frames so transports never lose the structured fault context.
+# ---------------------------------------------------------------------------
+
+type LiveErrorWire {
+  code: String
+  message: String
+}
+
+# ---------------------------------------------------------------------------
+# MCP `report-get` / `report-query` paginated page payload
+# ([MCP-TOOL-REPORT-PAGINATION], [MCP-TOOL-REPORT-QUERY]). The full
+# `ReportCluster` lives behind `cluster-by-id`; pages carry only slim
+# `ClusterSummary` rows so a single page survives a real workspace.
+# ---------------------------------------------------------------------------
+
+type OccurrenceSummary {
+  path: String
+  start_byte: Int
+  end_byte: Int
+}
+
+type ClusterSummary {
+  id: String
+  bucket: String
+  score: Float
+  size_nodes: Int
+  occurrence_count: Int
+  language: String
+  first_occurrence: Option<OccurrenceSummary>
+}
+
+type ReportPageInfo {
+  offset: Int
+  limit: Int
+  returned: Int
+}
+
+type ReportPageFilters {
+  language: Option<String>
+  bucket: Option<String>
+  path_contains: Option<String>
+  min_score: Option<Float>
+  min_size: Option<Int>
+}
+
+type ReportPage {
+  report_schema_version: Int
+  tool_version: String
+  schema_doc: String
+  generation: Int
+  files_analysed: Int
+  min_nodes: Int
+  clusters_hidden: Int
+  embedding_provenance: Option<EmbeddingProvenance>
+  cache_stats: CacheStats
+  metrics: RepoMetrics
+  action_hints: List<ActionHint>
+  total_clusters: Int
+  page: ReportPageInfo
+  clusters: List<ClusterSummary>
+  filters: Option<ReportPageFilters>
+}
+
+# ---------------------------------------------------------------------------
+# MCP `top-offenders` / `rescan` payload ([MCP-TOOL-TOP-OFFENDERS]).
+# ---------------------------------------------------------------------------
+
+type TopOffendersPayload {
+  total_clusters: Int
+  n: Int
+  clusters: List<ReportCluster>
+}
+
+# ---------------------------------------------------------------------------
+# MCP `report-for-range` payload. Echoes the request range so the agent
+# can correlate without rebuilding the call.
+# ---------------------------------------------------------------------------
+
+type RangeReport {
+  path: String
+  start_byte: Int
+  end_byte: Int
+  clusters: List<ReportCluster>
+}
+
+# ---------------------------------------------------------------------------
+# MCP `list-embedding-models` payload.
+# ---------------------------------------------------------------------------
+
+type EmbeddingModelList {
+  models: List<OllamaModelInfo>
+}
+
+# ---------------------------------------------------------------------------
+# MCP `set-embedding-model` response. Mirrors `EmbeddingSpec` plus the
+# `dimensions` field so the agent does not need a follow-up call.
+# ---------------------------------------------------------------------------
+
+type SetEmbeddingModelResponse {
+  provider_id: String
+  model_id: String
+  model_version: String
+  dimensions: Int
+}
+
+# ---------------------------------------------------------------------------
+# MCP `session-config` tool payload. Distinct from the LSP `SessionConfig`
+# above (richer, MCP-specific keys: `root` (not `workspace_root`),
+# `cache_stats`, `generation`).
+# ---------------------------------------------------------------------------
+
+type McpSessionConfig {
+  root: String
+  min_nodes: Int
+  languages: List<String>
+  incremental: Bool
+  embedding_provenance: Option<EmbeddingProvenance>
+  cache_stats: CacheStats
+  generation: Int
+}
+
 # All types referenced by name are now defined here. EXTERNAL_TYPES in
 # the generator can stay populated as a safety net for legacy callers.

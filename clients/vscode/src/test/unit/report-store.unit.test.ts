@@ -29,14 +29,23 @@ function emptyReport(overrides: Partial<Report> = {}): Report {
   };
 }
 
-function cluster(id: string, weight: number): ReportCluster {
+function occurrence(path: string, startByte = 0, endByte = 10) {
+  return { path, start_byte: startByte, end_byte: endByte, hidden: false };
+}
+
+function cluster(
+  id: string,
+  weight: number,
+  occurrences: ReportCluster["occurrences"] = [],
+): ReportCluster {
   return {
     id,
     weight,
-    size: 1,
+    size: Math.max(1, occurrences.length),
     canonical_node_count: 0,
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
-    occurrences: [],
+    occurrences,
+    occurrences_total: occurrences.length,
     summary: "",
     interpretation: "",
   };
@@ -97,6 +106,47 @@ suite("ReportStore", () => {
     assert.equal(out.cache_stats.hits, 3);
     assert.equal(out.tool_version, "v2");
     assert.equal(store.current.generation, 2);
+  });
+
+  test("markFileDirty removes stale offsets for an edited file (#78)", () => {
+    const store = new ReportStore();
+    let fired = 0;
+    store.onDidChange(() => {
+      fired += 1;
+    });
+    store.setSnapshot(
+      emptyReport({
+        clusters: [
+          cluster("only-dirty", 30, [occurrence("/repo/Dirty.cs", 10, 20)]),
+          cluster("mixed", 20, [
+            occurrence("/repo/Dirty.cs", 30, 40),
+            occurrence("/repo/Clean.cs", 50, 60),
+          ]),
+          cluster("untouched", 10, [occurrence("/repo/Other.cs", 70, 80)]),
+        ],
+      }),
+      7,
+    );
+
+    store.markFileDirty("/repo/Dirty.cs");
+
+    const out = store.current.report;
+    assert.ok(out, "report must remain available after local dirty pruning");
+    assert.equal(store.current.generation, 7, "dirty pruning must not fake a fresh LSP generation");
+    assert.deepEqual(
+      out.clusters.map((c) => c.id),
+      ["mixed", "untouched"],
+      "clusters with only stale occurrences are removed, others keep rank order",
+    );
+    assert.deepEqual(
+      out.clusters[0]?.occurrences.map((o) => o.path),
+      ["/repo/Clean.cs"],
+      "mixed cluster keeps only occurrences outside the edited file",
+    );
+    assert.equal(out.clusters[0]?.size, 1, "visible count is reduced after pruning stale offsets");
+    assert.equal(out.clusters[0]?.occurrences_total, 1, "wire total is reduced with visible count");
+    assert.equal(out.metrics.clusters_total, 2, "metrics reflect the locally visible cluster count");
+    assert.equal(fired, 2, "setSnapshot and markFileDirty both notify subscribers");
   });
 
   test("notifyChange fan-outs via onDidChangeSummary", () => {

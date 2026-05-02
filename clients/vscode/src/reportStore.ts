@@ -114,6 +114,40 @@ export class ReportStore implements vscode.Disposable {
     });
   }
 
+  markFileDirty(path: string): void {
+    const current = this._report.value;
+    if (!current) return;
+    let changed = false;
+    const clusters: ReportCluster[] = [];
+    for (const cluster of current.clusters) {
+      const kept = cluster.occurrences.filter((occurrence) => !sameReportFile(occurrence.path, path));
+      const removed = cluster.occurrences.length - kept.length;
+      if (removed === 0) {
+        clusters.push(cluster);
+        continue;
+      }
+      changed = true;
+      if (kept.length === 0) continue;
+      const oldTotal = occurrenceTotal(cluster);
+      const nextTotal = Math.max(kept.length, oldTotal - removed);
+      clusters.push({
+        ...cluster,
+        size: nextTotal,
+        occurrences: kept,
+        ...(cluster.occurrences_total !== undefined && { occurrences_total: nextTotal }),
+      });
+    }
+    if (!changed) return;
+    this._report.value = {
+      ...current,
+      metrics: {
+        ...current.metrics,
+        clusters_total: clusters.length,
+      },
+      clusters,
+    };
+  }
+
   setLifecycle(lifecycle: LifecyclePhase): void {
     this._lifecycle.value = lifecycle;
   }
@@ -133,4 +167,26 @@ export class ReportStore implements vscode.Disposable {
   dispose(): void {
     this.summaryEmitter.dispose();
   }
+}
+
+function occurrenceTotal(cluster: ReportCluster): number {
+  const total =
+    cluster.occurrences_total && cluster.occurrences_total > 0
+      ? cluster.occurrences_total
+      : cluster.size;
+  return Math.max(total, cluster.occurrences.length);
+}
+
+function sameReportFile(reportPath: string, changedPath: string): boolean {
+  const left = normalisePath(reportPath);
+  const right = normalisePath(changedPath);
+  return samePathOrSuffix(left, right) || samePathOrSuffix(right, left);
+}
+
+function samePathOrSuffix(left: string, right: string): boolean {
+  return left === right || right.endsWith(`/${left}`);
+}
+
+function normalisePath(value: string): string {
+  return value.replace(/\\/g, "/");
 }

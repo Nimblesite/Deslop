@@ -9,6 +9,7 @@ import {
   shortPath,
   bubbleHover,
 } from "../../bubble/live";
+import { clusterHoverMarkdown } from "../../clusterHover";
 import { ReportCluster } from "../../types/report";
 
 function cluster(signals = {
@@ -131,5 +132,17 @@ suite("bubble rendering helpers", () => {
       /\*\*#\d+ [A-Z][A-Za-z ]+\*\* ×/,
       `first line must be rank + bold label + count; got: ${firstLine}`,
     );
+  });
+
+  test("bubbleHover uses the shared renderer with rank and dismiss options (#46)", () => {
+    const c = cluster();
+    const bubble = bubbleHover(c, 119);
+    const shared = clusterHoverMarkdown(c, { rank: 119, showDismiss: true });
+    assert.equal(bubble.value, shared.value, "bubble must not rebuild cluster markdown separately");
+    assert.match(bubble.value, /^\*\*#119 [A-Z][A-Za-z, ]+\*\* × 4/);
+    assert.match(bubble.value, /Canonical: `.*Alpha\.cs`/);
+    assert.match(bubble.value, /command:deslop\.compareWithCanonical/);
+    assert.match(bubble.value, /command:deslop\.openCluster/);
+    assert.match(bubble.value, /command:deslop\.bubble\.dismissCluster/);
   });
 });

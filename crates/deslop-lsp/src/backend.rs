@@ -5,8 +5,8 @@ use deslop_core::{
         DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
     },
     live::{
-        AnalysisSession, ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi,
-        LiveError, LiveService, ReportChangedNotification,
+        ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveError,
+        LiveService, ReportChangedNotification,
     },
 };
 use std::{path::PathBuf, sync::Arc};
@@ -152,27 +152,37 @@ impl LspBackend {
         embedding: &LspEmbeddingConfig,
     ) -> Result<Self, deslop_core::live::LiveError> {
         let provider = build_startup_provider(embedding)?;
-        let mut session = if matches!(embedding.mode, EmbeddingMode::Off) {
-            AnalysisSession::new(workspace_root, min_nodes, true, None, provider)?
-        } else {
-            AnalysisSession::new_with_mode(
-                workspace_root,
-                min_nodes,
-                true,
-                None,
-                provider,
-                embedding.mode,
-            )?
-        };
+        let (mut session, seeded_from_cache) = crate::cache_seed::open_session(
+            workspace_root,
+            min_nodes,
+            true,
+            None,
+            Arc::clone(&provider),
+            embedding.mode,
+        )?;
         session.set_embedding_progress_reporter(Some(progress_reporter(&client)));
         // Capture the root before moving the session into the Arc.
         let root = session.root().to_path_buf();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
-        let (watcher, scheduler) = crate::file_watch::start(&root, session, client.clone())?;
+        let (watcher, scheduler) =
+            crate::file_watch::start(&root, Arc::clone(&session), client.clone())?;
         let ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service))
             .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
             .ok();
+        if seeded_from_cache {
+            crate::cache_seed::spawn_refresh(crate::cache_seed::RefreshTask {
+                session: Arc::clone(&session),
+                service: Arc::clone(&service),
+                client: client.clone(),
+                root: root.clone(),
+                min_nodes,
+                incremental: true,
+                config_path: None,
+                provider,
+                mode: embedding.mode,
+            });
+        }
         Ok(Self {
             client,
             service,

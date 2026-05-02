@@ -70,6 +70,53 @@ fn state_file_exists_after_initialize() -> Result<()> {
     Ok(())
 }
 
+/// [LIVE-CACHE-SEED] GH #73: when a valid state file already exists,
+/// the LSP must answer `reportGet` from that cache instead of blocking
+/// startup on a cold full pass.
+#[test]
+fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let state_path = workspace.path().join(STATE_FILE);
+    seed_cached_report(&state_path)?;
+
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+
+    let start = Instant::now();
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let live = call(
+        &mut stdin,
+        &mut stdout,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    let elapsed = start.elapsed();
+
+    ensure!(
+        elapsed < Duration::from_millis(500),
+        "cached startup reportGet must complete under 500ms, took {elapsed:?}"
+    );
+    let clusters = live
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| anyhow!("reportGet must return clusters: {live}"))?;
+    ensure!(clusters.len() == 1, "cached report must have one cluster: {live}");
+    ensure!(
+        clusters[0].pointer("/id") == Some(&serde_json::json!("cached-gh73")),
+        "reportGet must return the staged cached cluster before a cold pass: {live}"
+    );
+    ensure!(
+        live.pointer("/result/files_analysed") == Some(&serde_json::json!(73)),
+        "reportGet must preserve cached report metadata: {live}"
+    );
+    ensure!(
+        live.pointer("/result/cache_stats/hits") == Some(&serde_json::json!(7)),
+        "reportGet must preserve cached cache stats: {live}"
+    );
+    Ok(())
+}
+
 /// [LIVE-STATE-FILE] After a file edit triggers re-analysis, the state
 /// file must be overwritten with a report reflecting the change.
 #[test]
@@ -377,4 +424,52 @@ fn watched_file_changed(path: &Path) -> Result<String> {
         "workspace/didChangeWatchedFiles",
         &serde_json::json!({"changes": [{"uri": uri.as_str(), "type": 2}]}),
     )
+}
+
+fn seed_cached_report(path: &Path) -> Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow!("state path must have parent: {}", path.display()))?;
+    fs::create_dir_all(parent)?;
+    fs::write(path, serde_json::to_vec(&cached_report())?)?;
+    Ok(())
+}
+
+fn cached_report() -> serde_json::Value {
+    serde_json::json!({
+        "report_schema_version": 1,
+        "tool_version": "test-cache",
+        "min_nodes": 4,
+        "files_analysed": 73,
+        "clusters_hidden": 0,
+        "cache_stats": {"hits": 7, "misses": 0},
+        "metrics": {
+            "analysed_loc": 10,
+            "duplicated_loc": 2,
+            "duplication_percent": 20.0,
+            "clusters_total": 1,
+            "duplicated_files": 2,
+            "threshold": {"percent": 0.0, "breached": false, "source": "None"}
+        },
+        "schema_doc": "",
+        "action_hints": [],
+        "boilerplate_hints": [],
+        "embedding_provenance": null,
+        "clusters": [{
+            "id": "cached-gh73",
+            "weight": 9.0,
+            "size": 2,
+            "canonical_node_count": 6,
+            "signals": {"structural": 1.0, "token_jaccard": 1.0, "embedding_cos": 0.0, "fused": 1.0},
+            "bucket": "identical",
+            "occurrences": [
+                {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "hidden": false},
+                {"path": "Beta.cs", "start_byte": 0, "end_byte": 10, "hidden": false}
+            ],
+            "occurrences_total": 2,
+            "occurrences_truncated": false,
+            "summary": "",
+            "interpretation": ""
+        }]
+    })
 }
