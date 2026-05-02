@@ -151,7 +151,7 @@ fn compute_embeddings(
         }
         if let Some(cached) = cache.get(&snippet) {
             let _inserted = indexed_hashes.insert(snippet_hash);
-            batch.push(index, cached);
+            batch.push(index, cached, 1);
             continue;
         }
         let _previous = pending_positions.insert(snippet_hash.clone(), pending.len());
@@ -302,7 +302,7 @@ fn push_fresh_embedding(
     if let Err(error) = cache.store(&item.snippet, &vector) {
         tracing::warn!(%error, content_hash = %item.snippet_hash, "embedding cache write failed");
     }
-    batch.push(item.fingerprint_index, vector);
+    batch.push(item.fingerprint_index, vector, item.occurrences);
 }
 
 /// Records every pending item in a failed provider batch.
@@ -337,6 +337,8 @@ fn record_failed_pending<E: std::fmt::Display>(
 struct EmbeddingBatch {
     /// Successful vectors keyed by original fingerprint index.
     vectors: Vec<IndexedEmbedding>,
+    /// Logical occurrences represented by successful vectors.
+    successes: usize,
     /// Logical occurrences skipped because the provider rejected them.
     failures: usize,
 }
@@ -346,21 +348,23 @@ impl EmbeddingBatch {
     fn with_capacity(capacity: usize) -> Self {
         Self {
             vectors: Vec::with_capacity(capacity),
+            successes: 0,
             failures: 0,
         }
     }
 
     /// Adds one successful embedding vector.
-    fn push(&mut self, fingerprint_index: usize, vector: Vec<f32>) {
+    fn push(&mut self, fingerprint_index: usize, vector: Vec<f32>, occurrences: usize) {
         self.vectors.push(IndexedEmbedding {
             fingerprint_index,
             vector,
         });
+        self.successes = self.successes.saturating_add(occurrences);
     }
 
     /// Returns successful vectors plus rejected occurrences.
     fn processed(&self) -> usize {
-        self.vectors.len().saturating_add(self.failures)
+        self.successes.saturating_add(self.failures)
     }
 }
 

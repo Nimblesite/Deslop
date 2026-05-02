@@ -45,7 +45,9 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     let Some(snippets) = collect_snippets(members, sources, language) else {
         return false;
     };
-    is_polymorphic_signature_cluster(&snippets) || is_literal_variation_call_cluster(&snippets)
+    is_polymorphic_signature_cluster(&snippets)
+        || is_literal_variation_call_cluster(&snippets)
+        || is_monkeypatch_scaffolding_literal_cluster(&snippets)
 }
 
 /// One re-parsed cluster member: language, raw bytes, the byte range
@@ -264,7 +266,9 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8]) -> Option<CallShape> {
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
     let sequences: Option<Vec<Vec<CallShape>>> =
         snippets.iter().map(call_shapes_in_range).collect();
-    let Some(sequences) = sequences else { return false };
+    let Some(sequences) = sequences else {
+        return false;
+    };
     let Some(first) = sequences.first() else {
         return false;
     };
@@ -300,7 +304,10 @@ fn collect_call_shapes(
     if node.end_byte() < range.start || node.start_byte() > range.end {
         return;
     }
-    if node.start_byte() >= range.start && node.end_byte() <= range.end && kinds.contains(&node.kind()) {
+    if node.start_byte() >= range.start
+        && node.end_byte() <= range.end
+        && kinds.contains(&node.kind())
+    {
         if let Some(shape) = call_shape_from_node(node, source) {
             out.push(shape);
         }
@@ -328,6 +335,49 @@ fn sequence_position_differs(sequences: &[Vec<CallShape>], index: usize) -> bool
         .filter_map(|sequence| sequence.get(index).cloned())
         .collect();
     calls.len() == sequences.len() && has_differing_string_literals(&calls)
+}
+
+/// Suppresses tiny string literal clusters inside pytest monkeypatch
+/// setup tests. Issue #72 covers this exact scaffold: literals differ
+/// intentionally because they are environment keys and values.
+fn is_monkeypatch_scaffolding_literal_cluster(snippets: &[Snippet<'_>]) -> bool {
+    snippets.iter().all(is_monkeypatch_scaffolding_literal)
+}
+
+/// Returns true for a string literal inside a Python function that
+/// declares the `monkeypatch` fixture parameter.
+fn is_monkeypatch_scaffolding_literal(snippet: &Snippet<'_>) -> bool {
+    if snippet.language != "python" {
+        return false;
+    }
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let root = tree.root_node();
+    let is_string = enclosing_kind(root, snippet.range, &["string"]).is_some();
+    let function = enclosing_kind(root, snippet.range, &["function_definition"]);
+    is_string && function.is_some_and(|node| function_has_parameter(node, snippet.source))
+}
+
+/// Checks a Python function definition for a `monkeypatch` parameter.
+fn function_has_parameter(function: Node<'_>, source: &[u8]) -> bool {
+    let Some(parameters) = function.child_by_field_name("parameters") else {
+        return false;
+    };
+    node_contains_identifier(parameters, source, b"monkeypatch")
+}
+
+/// Walks `node` looking for an identifier with the requested bytes.
+fn node_contains_identifier(node: Node<'_>, source: &[u8], needle: &[u8]) -> bool {
+    if node.kind() == "identifier" && source.get(node.start_byte()..node.end_byte()) == Some(needle)
+    {
+        return true;
+    }
+    let mut cursor = node.walk();
+    let found = node
+        .named_children(&mut cursor)
+        .any(|child| node_contains_identifier(child, source, needle));
+    found
 }
 
 /// Returns the set of tree-sitter node kinds that count as call
