@@ -48,8 +48,15 @@ function componentForEntry(entry, components) {
 }
 
 function assertVersion(binaryPath, component) {
-  const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 1500 });
-  if (result.status !== 0) throw new Error(`${binaryPath} --version failed`);
+  // macOS security scanning of freshly compiled binaries can take ~500 ms under load;
+  // 10 s is generous enough to survive a heavy parallel build without false failures.
+  const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 10_000 });
+  if (result.status !== 0 || result.signal != null) {
+    const detail = result.signal != null
+      ? `killed by signal ${result.signal}`
+      : `exit ${result.status}`;
+    throw new Error(`${binaryPath} --version failed (${detail})\nstderr: ${result.stderr}`);
+  }
   const first = firstLine(String(result.stdout));
   const expected = `${component.id} ${component.expectedVersion}`;
   if (first !== expected) throw new Error(`${binaryPath} reported ${first}; expected ${expected}`);

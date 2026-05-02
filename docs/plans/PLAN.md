@@ -41,61 +41,42 @@ Implemented work intentionally not repeated here:
 
 ## Remaining Plan Files
 
-- [LSP editor surfaces](lsp-editor-surfaces-plan.md) - remaining standard LSP
-  UX beyond diagnostics, hover, code lens, and custom report methods.
-- [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) -
-  settings page, version checks, and bundled binary packaging.
-- [Deployment Toolkit migration](deployment-toolkit-migration-plan.md) -
-  GitHub issues #37-#41: binary version contract, manifest-backed VS Code and
-  JetBrains startup verification, VSIX / plugin package verification, and CI
-  release gates.
-- [JetBrains native UX](jetbrains-ux-plan.md) - Tool Window and embedding
-  picker over the existing LSP custom methods.
-- [JetBrains E2E](jetbrains-e2e-plan.md) - real Rider / IntelliJ tests with the
-  real `deslop-lsp` binary.
-- [Interactive TUI](interactive-tui-plan.md) - deliberately deferred terminal
-  UI work.
-- [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) - LSP
-  `refactor.extract` code action for true Type-1 clusters. Blocked on
-  [#42](https://github.com/Nimblesite/Deslop/issues/42) splitting Type-1 from
-  Type-2 in the bucket.
-- [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md)
-  \- two new MCP tools (`extract-method-plan`, `extract-method-apply`) that
-  combine a mechanical AST-derived scaffold with an AI-filled name slot. AI
-  never writes code; it picks one method name and one canonical name per
-  parameter slot. Blocked on the Type-1 path landing.
-- [VSIX reactivity](vsix-reactivity-plan.md) - Preact Signals across every
-  VSIX surface so `deslop/reportChanged` updates the tree, decorations, and
-  bubble in lock-step. Closes the staleness bug where deleted duplicates
-  remain visible in the tree until the LSP is restarted.
+- [MCP architecture fix](mcp-architecture-fix-plan.md) — **START HERE.** Rip out `PipelineSessionBackend` from `deslop-mcp`. LSP writes `.deslop-cache/live-report.json`; MCP reads it. LSP exposes `.deslop-cache/deslop.sock` for compute delegation. MCP becomes a dumb state wrapper.
+- [LSP editor surfaces](lsp-editor-surfaces-plan.md) — remaining standard LSP UX beyond diagnostics, hover, code lens, and custom report methods.
+- [Deployment Toolkit migration](deployment-toolkit-migration-plan.md) — binary version contract, manifest-backed VS Code and JetBrains startup verification, VSIX / plugin package verification, CI release gates. (Issues #37–#41.)
+- [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md) — settings page, version checks, bundled binary packaging.
+- [JetBrains native UX](jetbrains-ux-plan.md) — Tool Window and embedding picker over the existing LSP custom methods.
+- [JetBrains E2E](jetbrains-e2e-plan.md) — real Rider / IntelliJ tests with the real `deslop-lsp` binary.
+- [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) — LSP `refactor.extract` code action. Blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42) (Type-1 / Type-2 bucket split).
+- [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md) — `extract-method-plan` + `extract-method-apply` MCP tools. Blocked on Type-1 path landing.
+- [Interactive TUI](interactive-tui-plan.md) — deferred. Revisit after real CLI operator feedback.
 
 ## TODO
 
+### 🔴 Critical — MCP architecture fix ([mcp-architecture-fix-plan.md](mcp-architecture-fix-plan.md))
+
+The MCP currently runs its own analysis pipeline. This is wrong. Execute in order:
+
+- [ ] **Phase 1 — LSP writes state file [LIVE-STATE-FILE]**: after every scheduler pass, atomically write `{root}/.deslop-cache/live-report.json`. Write on initial `ready` too. Add E2E test.
+- [ ] **Phase 2 — LSP IPC socket [LIVE-IPC-SOCKET]**: on `initialize`, create `.deslop-cache/deslop.sock`. Accept JSON-RPC for `duplicates/findSimilar`, `embedding/listModels`, `session/config`. Remove on shutdown. Add E2E test.
+- [ ] **Phase 3 — MCP refactor [MCP-STATE-FILE]**: delete `PipelineSessionBackend`, `SessionState`, `refresh.rs`, all embedding provider usage. Replace with `StateFileReader` (reads + caches state file) + single-file `notify` watcher + IPC client. Remove CLI args `--min-nodes`, `--incremental`, `--embeddings`, `--embedding-provider`, `--embedding-model`, `--embedding-endpoint`. Keep only `--root` and `--config`.
+- [ ] **Phase 4 — Wire tools to new backend**: snapshot tools read from cache; `find-similar` and `list-embedding-models` delegate via IPC; `set-embedding-model` writes settings file + IPC notify.
+- [ ] **Phase 5 — MCP push notifications rewired [MCP-NOTIFICATIONS]**: notifications now fire from the single-file watcher detecting a new state file, not from internal `mark_changed`. Rewrite `files_changed_pushes_resources_updated_and_report_changed_notifications` to exercise the file-watch path.
+- [ ] **Phase 6 — MCP E2E tests updated [MCP-TESTING]**: snapshot-tool tests pre-write a fixture `live-report.json`; compute-tool tests spawn LSP + MCP side-by-side. Coverage threshold does not regress.
+
+### 🟡 Remaining features
+
 - [ ] Finish [LSP editor surfaces](lsp-editor-surfaces-plan.md).
-- [ ] Finish [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md).
 - [ ] Finish [Deployment Toolkit migration](deployment-toolkit-migration-plan.md).
+- [ ] Finish [JetBrains settings and packaging](jetbrains-settings-packaging-plan.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
-- [ ] Revisit [Interactive TUI](interactive-tui-plan.md) after more real CLI
-      operator feedback.
-- [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md)
-      (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
-- [ ] Finish [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md)
-      (blocked on the Type-1 path landing).
-- [x] **DONE** — [VSIX reactivity](vsix-reactivity-plan.md): `@preact/signals-core` added to
-      extension host; `ReportStore` now uses `signal<T>` internally with `batch()` on
-      multi-field updates; `DecorationManager`, `StatusBar`, `LifecycleAwareProvider`,
-      `LiveBubble`, and `wirePanel` all use `effect()` directly — zero `onDidChange`
-      callbacks on reactive surfaces. `StatusBar._analysing` is now a signal so the
-      "analysing…" suffix also tracks reactively.
-- [x] **DONE** — Live filesystem watching ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` now starts
-      `LiveWatcher` + `Scheduler` at construction; a background tokio task forwards scheduler
-      broadcasts (`ReportChangedNotification`, `AnalysisState`) to the editor as
-      `deslop/reportChanged` + `deslop/analysisState`. Changes from AI agents, git, CI, terminals,
-      other editors all trigger immediate re-analysis and push — no polling. `file_watch.rs` is
-      the single home for all watcher/scheduler wiring.
-- [x] **DONE** — MCP push notifications ([MCP-NOTIFICATIONS]): `NotificationSender`
-      (`Arc<Mutex<Box<dyn Write + Send>>>`) wired through `McpBackend::set_notification_sender`;
-      `mark_changed` pushes `notifications/resources/updated` + `notifications/deslop/reportChanged`
-      synchronously; embedding refresh thread pushes the same pair on completion. E2E test
-      `files_changed_pushes_resources_updated_and_report_changed_notifications` covers both frames.
+- [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
+- [ ] Finish [Autofix — AI-assisted Extract](autofix-extract-ai-plan.md) (blocked on Type-1 landing).
+- [ ] Revisit [Interactive TUI](interactive-tui-plan.md) after operator feedback.
+
+### ✅ Done
+
+- **VSIX reactivity** ([vsix-reactivity-plan.md](vsix-reactivity-plan.md)): `@preact/signals-core` wired to `ReportStore`; all surfaces (`DecorationManager`, `StatusBar`, `LiveBubble`, `wirePanel`) use `effect()` — zero `onDidChange` callbacks.
+- **LSP file watcher** ([LIVE-WATCHER], [LSP-PUSH]): `LspBackend` starts `LiveWatcher` + `Scheduler`; broadcasts `deslop/reportChanged` + `deslop/analysisState` to the editor. All file changes — agent, git, CI, formatter — trigger immediate re-analysis.
+- **MCP push notifications infrastructure** ([MCP-NOTIFICATIONS]): `NotificationSender` (`Arc<Mutex<Box<dyn Write + Send>>>`) wired through `McpBackend::set_notification_sender`. ⚠️ The trigger mechanism (internal `mark_changed`) is being replaced in Phase 5 above — this item is partially reopened.
