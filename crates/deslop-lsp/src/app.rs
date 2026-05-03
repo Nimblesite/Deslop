@@ -99,6 +99,7 @@ where
     Fut: std::future::Future<Output = Result<()>>,
 {
     init_tracing();
+    let _profile_guard = crate::profiling::LspProfileGuard::from_env();
     log_startup(&startup);
     build_runtime(startup.worker_threads)?.block_on(server(
         startup.workspace_root,

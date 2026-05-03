@@ -80,6 +80,15 @@ One `AnalysisSession` per workspace root, owned by `deslop-lsp`. On `initialize`
 
 Shutdown: stop accepting new edits, finish the current pass, flush caches, remove the IPC socket, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
 
+### [LIVE-PROFILING] CPU repro evidence
+
+When `deslop-lsp` appears pegged at 100% CPU, capture both diagnosis channels:
+
+1. Run the VS Code command `Deslop: Reveal CPU Report` and attach the markdown output.
+2. Restart the extension host with `DESLOP_PROFILE_DIR=~/Desktop`, reproduce the spike, then zip and attach the generated `deslop-lsp-*-firefox-profile.json` file.
+
+The profile path is compiled behind the `deslop-lsp` `profiling` cargo feature and is active only when `DESLOP_PROFILE_DIR` is set. The file is Firefox processed-profile JSON and can be opened at `https://profiler.firefox.com/` for stack inspection.
+
 ### [LIVE-EMBEDDING-CONSENT] Explicit live embedding consent
 
 A fresh live session starts with structural + token/LSH signals only. The embedding pass is opt-in at the model boundary. The user selects a model from `embedding/listModels`; `embedding/setModel` is the consent boundary: the selected provider/model is recorded, the embedding cache is invalidated, and embedding work is queued immediately. Agent surfaces must not call this boundary autonomously or infer a preferred model.

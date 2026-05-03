@@ -153,9 +153,94 @@ fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
     Ok(())
 }
 
+/// Audience: HUMAN. Issue #29. A maintainer must be able to ask a user
+/// to set `DESLOP_PROFILE_DIR`, reproduce the CPU spike, and attach the
+/// resulting Firefox-profiler JSON file.
+#[cfg(all(feature = "profiling", unix))]
+#[test]
+fn profile_dir_writes_non_empty_firefox_profile_on_shutdown() -> Result<()> {
+    let workspace = tempfile::tempdir()?;
+    let profile_dir = tempfile::tempdir()?;
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
+        .arg(workspace.path())
+        .env("DESLOP_PROFILE_DIR", profile_dir.path())
+        .env("RUST_LOG", "info")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("child stdin missing"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("child stdout missing"))?;
+    let mut stdin = stdin;
+    let mut reader = BufReader::new(stdout);
+
+    let _init = handshake(&mut stdin, &mut reader)?;
+    let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
+    thread::sleep(Duration::from_millis(300));
+    let shutdown_response = shutdown(&mut stdin, &mut reader)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown should complete cleanly before profile flush: {shutdown_response}"
+    );
+    drop(stdin);
+
+    let output = child.wait_with_output()?;
+    assert!(
+        output.status.success(),
+        "deslop-lsp should exit cleanly after shutdown; stderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries =
+        std::fs::read_dir(profile_dir.path())?.collect::<Result<Vec<_>, std::io::Error>>()?;
+    assert_eq!(
+        entries.len(),
+        1,
+        "profiling should write exactly one profile into {}",
+        profile_dir.path().display()
+    );
+    let profile_path = entries
+        .first()
+        .ok_or_else(|| anyhow!("profile file missing"))?
+        .path();
+    assert!(
+        profile_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("-firefox-profile.json")),
+        "profile filename should identify the Firefox profiler format: {}",
+        profile_path.display()
+    );
+    assert!(
+        std::fs::metadata(&profile_path)?.len() > 0,
+        "profile file should be non-empty: {}",
+        profile_path.display()
+    );
+    let profile_json = std::fs::read_to_string(&profile_path)?;
+    assert!(
+        profile_json.contains("deslop-lsp"),
+        "profile JSON should identify deslop-lsp: {profile_json}"
+    );
+    Ok(())
+}
+
 fn request(method: &str, params: &Value) -> Result<(i64, String)> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let payload = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+    Ok((id, serde_json::to_string(&payload)?))
+}
+
+#[cfg(all(feature = "profiling", unix))]
+fn request_without_params(method: &str) -> Result<(i64, String)> {
+    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
+    let payload = json!({"jsonrpc":"2.0","id":id,"method":method});
     Ok((id, serde_json::to_string(&payload)?))
 }
 
@@ -216,6 +301,14 @@ fn handshake(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Res
     )?;
     let response = send_and_recv(stdin, reader, id, &payload)?;
     write_frame(stdin, &notification("initialized", &json!({}))?)?;
+    Ok(response)
+}
+
+#[cfg(all(feature = "profiling", unix))]
+fn shutdown(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
+    let (id, payload) = request_without_params("shutdown")?;
+    let response = send_and_recv(stdin, reader, id, &payload)?;
+    write_frame(stdin, &notification("exit", &json!({}))?)?;
     Ok(response)
 }
 
