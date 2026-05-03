@@ -15,6 +15,24 @@ Languages: **C#**, **Rust**, **Python**. Parsing is always tree-sitter — no re
 - **VS Code extension** — the reference LSP client; inline warnings, cluster explorer, worst-offender view.
 - **CLI (`deslop`)** — the cold-cache fallback. One binary, runs on your repo, emits `.json` / `.txt` / `.html` reports. Same engine as the server; use it for CI gates, bulk audits, or one-shot investigations.
 
+## What's actually implemented
+
+Deslop draws on a small set of clone-detection research lines. Each one is a real file, not a future plan:
+
+| Research line | What it implements | Code |
+| --- | --- | --- |
+| Tree-sitter parsing (Baxter 1998) | C# / Rust / Python AST per language | [`crates/deslop-core/src/lang/`](crates/deslop-core/src/lang/) |
+| AST normalization | Type-2 collapse: `__ident__` / `__literal__` + comment/trivia drop | [`lang/shared.rs`](crates/deslop-core/src/lang/shared.rs) |
+| Merkle subtree fingerprints (Chilowicz 2009) | Bottom-up BLAKE3 over normalized AST | [`fingerprint.rs`](crates/deslop-core/src/fingerprint.rs) |
+| Sibling-window extension | Type-3 recall over widths 2–8 | [`sibling.rs`](crates/deslop-core/src/sibling.rs) |
+| MinHash + LSH (Broder 1997 / Indyk-Motwani 1998 / SourcererCC 2016) | 128-value MinHash, 32 × 4 banding over normalized k-grams | [`tokens.rs`](crates/deslop-core/src/tokens.rs), [`lsh.rs`](crates/deslop-core/src/lsh.rs) |
+| HNSW ANN over local embeddings (SSCD 2024) | `instant-distance` HNSW, deterministic seed, top-k cosine | [`embedding/pairs.rs`](crates/deslop-core/src/embedding/pairs.rs) |
+| Max/sum fusion (ensemble-LLM 2025) | `clamp(structural + token_jaccard + embedding_cos, 0, 1)`, threshold 0.85 | [`pair.rs`](crates/deslop-core/src/pair.rs) |
+| Worst-offenders ranking | `clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)` | [`cluster.rs`](crates/deslop-core/src/cluster.rs) |
+| Live + reactive (LSP watcher → state file → MCP) | 250 ms debounce, 2 s cap, atomic state-file rewrite, IPC socket | [`live/`](crates/deslop-core/src/live/), [`deslop-lsp/`](crates/deslop-lsp/), [`deslop-mcp/`](crates/deslop-mcp/) |
+
+Full research → code map: [docs/specs/SPEC.md §Algorithm implementation status](docs/specs/SPEC.md#algorithm-implementation-status). Site-facing version: [Research Background](https://deslop.live/docs/research-background/).
+
 ---
 
 ## Install (preferred) — VS Code extension

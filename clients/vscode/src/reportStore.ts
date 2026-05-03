@@ -9,7 +9,6 @@ import * as vscode from "vscode";
 import { signal, batch, effect, ReadonlySignal } from "@preact/signals-core";
 
 import {
-  ChangeSummary,
   EmbeddingProgress,
   ReportCluster,
   Report,
@@ -36,7 +35,6 @@ export class ReportStore implements vscode.Disposable {
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
-  private readonly summaryEmitter = new vscode.EventEmitter<ChangeSummary>();
 
   /** Signal for direct use in effect() — re-renders only when the report changes. */
   readonly report: ReadonlySignal<Report | null> = this._report;
@@ -46,9 +44,6 @@ export class ReportStore implements vscode.Disposable {
   readonly pendingEmbeddingModel: ReadonlySignal<string | null> = this._pendingEmbeddingModel;
   /** Signal for direct use in effect() — re-renders when embedding progress changes. */
   readonly embeddingProgress: ReadonlySignal<EmbeddingProgress | null> = this._embeddingProgress;
-
-  /** One-shot summary events (not reactive state — use onDidChangeSummary for these). */
-  readonly onDidChangeSummary = this.summaryEmitter.event;
 
   /** Snapshot of all signals. Reading inside an effect() tracks every field. */
   get current(): ReportState {
@@ -160,12 +155,7 @@ export class ReportStore implements vscode.Disposable {
     this._embeddingProgress.value = progress;
   }
 
-  notifyChange(summary: ChangeSummary): void {
-    this.summaryEmitter.fire(summary);
-  }
-
   dispose(): void {
-    this.summaryEmitter.dispose();
   }
 }
 

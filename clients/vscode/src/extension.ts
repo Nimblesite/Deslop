@@ -372,7 +372,6 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
   c.onNotification(
     "deslop/reportChanged",
     (payload: ReportChangedNotification) => {
-      store.notifyChange(payload.summary);
       refreshAfterChange(c, store, payload).catch((err: unknown) =>
         logError(err, "refresh report after change"),
       );

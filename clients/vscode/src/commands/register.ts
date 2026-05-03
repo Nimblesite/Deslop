@@ -49,8 +49,8 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.showSchemaDoc", run: ({ context, store, clientOf }) => openSchemaDoc(context, store, clientOf) },
   { id: "deslop.revealCpuReport", run: ({ clientOf }) => openCpuReport(clientOf) },
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
-  { id: "deslop.compareWithCanonical", run: ({ store, clientOf }, target) => compareWithCanonicalTarget(store, target, clientOf) },
-  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store, clientOf }, target) => compareWithCanonicalTarget(store, target, clientOf) },
+  { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
   { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
   { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
@@ -236,7 +236,6 @@ function occurrenceAfterCommandIndex(
 export async function compareWithCanonicalTarget(
   store: ReportStore,
   target: unknown,
-  clientOf?: ClientFactory,
 ): Promise<void> {
   if (isOccurrenceNode(target)) {
     const selection = selectedOccurrenceCompare(store, target.occurrence);
@@ -246,7 +245,7 @@ export async function compareWithCanonicalTarget(
   }
   const clusterId = clusterIdFromCompareTarget(store, target);
   if (!clusterId) return;
-  await compareWithCanonical(store, clusterId, clientOf);
+  await compareWithCanonical(store, clusterId);
 }
 
 interface OccurrenceCompareSelection {
@@ -315,26 +314,19 @@ function isClusterNode(target: unknown): target is ClusterNode {
 export async function compareWithCanonical(
   store: ReportStore,
   clusterId: string,
-  clientOf?: ClientFactory,
 ): Promise<void> {
-  const cluster = await compareCluster(store, clusterId, clientOf);
+  const cluster = compareCluster(store, clusterId);
   if (!cluster || cluster.occurrences.length < 2) return;
   const [a, b] = cluster.occurrences;
   if (!a || !b) return;
   await openCompareDiff(cluster.id, a, b);
 }
 
-async function compareCluster(
+function compareCluster(
   store: ReportStore,
   clusterId: string,
-  clientOf?: ClientFactory,
-): Promise<ReportCluster | undefined> {
-  const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
-  if (cluster || !clientOf) return cluster;
-  const snapshot = await clientOf()?.sendRequest<Report>("deslop/reportGet");
-  if (!snapshot) return undefined;
-  store.setSnapshot(snapshot, store.current.generation + 1);
-  return snapshot.clusters.find((c) => c.id === clusterId);
+): ReportCluster | undefined {
+  return store.current.report?.clusters.find((c) => c.id === clusterId);
 }
 
 async function openCompareDiff(

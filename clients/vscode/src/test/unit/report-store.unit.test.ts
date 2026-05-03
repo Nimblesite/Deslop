@@ -163,21 +163,6 @@ suite("ReportStore", () => {
     assert.equal(fired, 2, "setSnapshot and markFileDirty both notify subscribers");
   });
 
-  test("notifyChange fan-outs via onDidChangeSummary", () => {
-    const store = new ReportStore();
-    let seen: unknown = null;
-    store.onDidChangeSummary((s) => {
-      seen = s;
-    });
-    store.notifyChange({
-      clusters_added: 1,
-      clusters_removed: 0,
-      clusters_updated: 2,
-      worst_weight: 42,
-    });
-    assert.ok(seen);
-  });
-
   test("dispose tears down emitters without throwing", () => {
     const store = new ReportStore();
     store.dispose();

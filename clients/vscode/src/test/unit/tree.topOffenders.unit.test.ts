@@ -593,7 +593,7 @@ suite("TopOffendersProvider", () => {
     }
   });
 
-  test("surfaces removed-cluster progress without fixed-cluster wording (#80, #128)", () => {
+  test("does not surface removed-cluster progress or historical counts (#128)", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
@@ -605,12 +605,6 @@ suite("TopOffendersProvider", () => {
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
-    store.notifyChange({
-      clusters_added: 0,
-      clusters_removed: 1,
-      clusters_updated: 0,
-      worst_weight: 95,
-    });
     store.applyDelta({
       from_generation: 1,
       to_generation: 2,
@@ -623,14 +617,16 @@ suite("TopOffendersProvider", () => {
 
     const nodes = provider.getChildren();
     const labels = nodes.map(labelText);
+    const joined = labels.join("\n");
 
-    assert.match(labels[0] ?? "", /1 cluster no longer reported/i);
-    assert.doesNotMatch(labels[0] ?? "", /\bfixed\b/i);
-    assert.match(labels[0] ?? "", /2 remaining/i);
-    assert.match(labels[0] ?? "", /generation 2/i);
+    assert.equal(nodes.length, 2, "top offenders must only show current report clusters");
+    assert.match(labels[0] ?? "", /Next\.cs/, "highest remaining offender must be first");
     assert.ok(labels.some((label) => /Next\.cs/.test(label)), "next offender must remain visible");
     assert.ok(labels.some((label) => /Still\.cs/.test(label)), "remaining offender must remain visible");
-    assert.doesNotMatch(labels.join("\n"), /Fixed\.cs/, "fixed cluster must leave the offender list");
+    assert.doesNotMatch(joined, /no longer reported/i, "removed-cluster history is not product state");
+    assert.doesNotMatch(joined, /\bremaining\b/i, "top offenders must not show historical counters");
+    assert.doesNotMatch(joined, /generation\s+\d+/i, "top offenders must not expose generation summaries");
+    assert.doesNotMatch(joined, /Fixed\.cs/, "removed cluster must leave the offender list");
   });
 
   test("dirty file edits prune stale offsets from top offenders immediately (#78)", () => {
