@@ -76,6 +76,10 @@
         "title": "Deslop: Show Schema Documentation"
       },
       {
+        "command": "deslop.revealCpuReport",
+        "title": "Deslop: Reveal CPU Report"
+      },
+      {
         "command": "deslop.openCluster",
         "title": "Deslop: Open Cluster"
       },

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::Result as LspResult;
 
 use crate::backend::LspBackend;
+use crate::observability::CpuPhase;
 
 /// Method name for `deslop/reportSchemaDoc`. Serves the markdown
 /// `schema_doc` that used to ride every `deslop/reportGet` response;
@@ -57,6 +58,8 @@ pub const LIST_MODELS: &str = "deslop/embeddingListModels";
 pub const SET_MODEL: &str = "deslop/embeddingSetModel";
 /// Method name for `deslop/sessionConfig`.
 pub const SESSION_CONFIG: &str = "deslop/sessionConfig";
+/// Method name for `deslop/cpuReport`.
+pub const CPU_REPORT: &str = "deslop/cpuReport";
 
 /// Method name for `deslop/virtualDocument`. Resolves `deslop://schema`,
 /// `deslop://report`, and `deslop://cluster/<id>` URIs into markdown so
@@ -83,7 +86,11 @@ pub async fn report_get(
     backend: &LspBackend,
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
+    backend.observability().record_handler(REPORT_GET);
     let started = Instant::now();
+    let _phase = backend
+        .observability()
+        .start_phase(CpuPhase::ReportRendering, Vec::new());
     let report = backend.service().report_get().await;
     let slim: Report = (*report)
         .clone()
@@ -97,6 +104,20 @@ pub async fn report_get(
         "deslop/reportGet handler complete"
     );
     Ok(serde_json::to_value(&slim).unwrap_or(serde_json::Value::Null))
+}
+
+/// Returns the current CPU/work observability snapshot.
+///
+/// # Errors
+///
+/// Never errors today — kept fallible to match the JSON-RPC method
+/// signature.
+pub async fn cpu_report(
+    backend: &LspBackend,
+    _params: IgnoredParams,
+) -> LspResult<serde_json::Value> {
+    backend.observability().record_handler(CPU_REPORT);
+    Ok(serde_json::to_value(backend.observability().snapshot()).unwrap_or(serde_json::Value::Null))
 }
 
 /// Forwards `report/schemaDoc`. Returns the markdown that used to ride

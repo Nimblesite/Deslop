@@ -2,8 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt,
-    path::{Path, PathBuf},
+    fmt, fs,
     sync::{Arc, Mutex},
 };
 
@@ -63,8 +62,14 @@ fn issue_45_pipeline_emits_stage_observability_events() -> Result<()> {
 }
 
 fn run_pipeline() -> Result<()> {
+    let root = tempfile::tempdir().context("tempdir")?;
+    let src = root.path().join("src");
+    fs::create_dir_all(&src).context("create fixture src dir")?;
+    fs::write(src.join("Alpha.cs"), OBSERVABILITY_ALPHA).context("write Alpha.cs")?;
+    fs::write(src.join("Beta.cs"), OBSERVABILITY_BETA).context("write Beta.cs")?;
+
     let report = run(&PipelineConfig {
-        root: fixture("csharp-small"),
+        root: root.path().to_path_buf(),
         min_nodes: 15,
         config_path: None,
         embedding: EmbeddingSettings {
@@ -81,15 +86,6 @@ fn run_pipeline() -> Result<()> {
         "fixture must produce clusters so stage logging is meaningful",
     );
     Ok(())
-}
-
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("deslop")
-        .join("tests")
-        .join("fixtures")
-        .join(name)
 }
 
 fn assert_has_fields(event: &CapturedEvent, required: &[&str]) {
@@ -128,6 +124,36 @@ impl CapturedEvents {
             .ok_or_else(|| anyhow!("missing event {message:?}; captured: {events:?}"))
     }
 }
+
+const OBSERVABILITY_ALPHA: &str = r"
+namespace Observability;
+
+public sealed class AlphaPipelineProbe
+{
+    public int Compute(int input)
+    {
+        if (input < 0) { return 0; }
+        int total = 0;
+        for (int i = 0; i < input; i = i + 1) { total = total + i; }
+        return total;
+    }
+}
+";
+
+const OBSERVABILITY_BETA: &str = r"
+namespace Observability;
+
+public sealed class BetaPipelineProbe
+{
+    public int Run(int limit)
+    {
+        if (limit < 0) { return 0; }
+        int acc = 0;
+        for (int j = 0; j < limit; j = j + 1) { acc = acc + j; }
+        return acc;
+    }
+}
+";
 
 #[derive(Clone, Debug)]
 struct CapturedEvent {

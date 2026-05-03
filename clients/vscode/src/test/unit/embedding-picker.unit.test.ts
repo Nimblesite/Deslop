@@ -137,10 +137,51 @@ suite("embeddingPicker helpers", () => {
   test("buildItems surfaces the 'Ollama not detected' hint when the list is empty", () => {
     const items = buildItems([], newStore());
     assert.ok(items.some((i) => i.label === "Ollama not detected"));
-    // There's still the stub entry + 'Pull new' + 'Refresh list'.
-    assert.ok(items.some((i) => i.label?.includes("stub")));
+    assert.ok(items.some((i) => i.label?.includes("Embeddings off")));
     assert.ok(items.some((i) => i.label?.includes("Pull a new model")));
     assert.ok(items.some((i) => i.label?.includes("Refresh list")));
+    assert.equal(
+      items.some((i) => i.label?.includes("stub")),
+      false,
+      "normal picker must not expose the deterministic test stub",
+    );
+  });
+
+  test("GH#127 normal picker can disable embeddings and hides deterministic stub", () => {
+    const items = buildItems(
+      [
+        model("ollama", "nomic-embed-text", { recommended: true }),
+        model("stub", "stub", { dimensions: 64 }),
+      ],
+      newStore({
+        provider_id: "ollama",
+        model_id: "nomic-embed-text",
+        model_version: "0",
+        dimensions: 768,
+      }),
+    );
+    const text = items.map((item) =>
+      `${item.label ?? ""} ${item.description ?? ""} ${item.detail ?? ""}`,
+    );
+    const offItem = items.find((item) =>
+      /turn embeddings off|disable embeddings/i.test(
+        `${item.label ?? ""} ${item.description ?? ""} ${item.detail ?? ""}`,
+      ),
+    );
+
+    assert.deepEqual(
+      {
+        hasOffItem: Boolean(offItem),
+        offItemIsPickable: Boolean(offItem && offItem.entryKind !== "none"),
+        hidesStub: !text.some((value) => /\bstub\b|deterministic|CI-friendly/i.test(value)),
+      },
+      {
+        hasOffItem: true,
+        offItemIsPickable: true,
+        hidesStub: true,
+      },
+      `normal picker items must expose off and hide test-only stub: ${JSON.stringify(text)}`,
+    );
   });
 
   test("setModel short-circuits when the request throws (covers error branch)", async () => {
@@ -341,7 +382,7 @@ suite("embeddingPicker helpers", () => {
     }
   });
 
-  test("buildItems marks the deterministic stub entry active", () => {
+  test("buildItems marks the deterministic stub entry active in test builds", () => {
     const items = buildItems(
       [model("stub", "stub", { dimensions: 64 })],
       newStore({
@@ -350,6 +391,7 @@ suite("embeddingPicker helpers", () => {
         model_version: "0",
         dimensions: 64,
       }),
+      { includeTestStub: true },
     );
     const stub = items.find((i) => i.label?.includes("stub"));
     assert.ok(stub, "stub entry should exist");

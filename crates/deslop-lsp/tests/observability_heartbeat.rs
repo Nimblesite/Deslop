@@ -65,6 +65,94 @@ fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     Ok(())
 }
 
+/// Audience: HUMAN. Issue #29. The operator-facing CPU report must
+/// be available as a custom LSP method so a user can attach the
+/// current phase, recent phase history, handler counters, and in-flight
+/// work snapshot without tailing stderr.
+#[test]
+fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
+    let workspace = tempfile::tempdir()?;
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
+        .arg(workspace.path())
+        .env("RUST_LOG", "info")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("child stdin missing"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("child stdout missing"))?;
+    let mut stdin = stdin;
+    let mut reader = BufReader::new(stdout);
+
+    let _init = handshake(&mut stdin, &mut reader)?;
+    let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
+    let response = call(&mut stdin, &mut reader, "deslop/cpuReport", &json!({}))?;
+    let result = response
+        .get("result")
+        .ok_or_else(|| anyhow!("cpu report missing result: {response}"))?;
+
+    assert_eq!(
+        result.get("current_phase").and_then(Value::as_str),
+        Some("idle"),
+        "cpu report should settle back to idle after reportGet: {result}"
+    );
+    let phases = result
+        .get("last_100_phases")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("cpu report missing last_100_phases: {result}"))?;
+    assert!(
+        phases
+            .iter()
+            .any(|phase| phase.get("phase").and_then(Value::as_str) == Some("report_rendering")),
+        "cpu report must include the recent report_rendering phase: {result}"
+    );
+    assert!(
+        phases.iter().all(|phase| {
+            phase.get("duration_ms").and_then(Value::as_u64).is_some()
+                && phase.get("started_at_ms").and_then(Value::as_u64).is_some()
+        }),
+        "every recorded phase must include started_at_ms and duration_ms: {result}"
+    );
+    let handlers = result
+        .get("handler_counts")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("cpu report missing handler_counts: {result}"))?;
+    assert!(
+        handlers
+            .get("deslop/reportGet")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1),
+        "handler_counts must include deslop/reportGet: {result}"
+    );
+    assert!(
+        handlers
+            .get("deslop/cpuReport")
+            .and_then(Value::as_u64)
+            .is_some_and(|count| count >= 1),
+        "handler_counts must include deslop/cpuReport itself: {result}"
+    );
+    assert!(
+        result
+            .get("in_flight")
+            .and_then(|value| value.get("pending_watcher_events"))
+            .and_then(Value::as_u64)
+            .is_some(),
+        "cpu report must expose pending watcher work even when it is zero: {result}"
+    );
+
+    let _ = child.kill();
+    let _output = child.wait_with_output()?;
+    Ok(())
+}
+
 fn request(method: &str, params: &Value) -> Result<(i64, String)> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let payload = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});

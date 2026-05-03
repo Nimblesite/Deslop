@@ -1,12 +1,12 @@
 // [VSIX-EMBED-PICKER] — first-class QuickPick with Kinetic Manuscript hints.
-// Lists every model returned by embedding/listModels, plus stub + "Pull new" action.
+// Lists every production model returned by embedding/listModels plus actions.
 
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { log, logError } from "../logging";
 import { ReportStore } from "../reportStore";
-import { EmbeddingModelInfo } from "../types/report";
+import { EmbeddingModelInfo, ReportDelta } from "../types/report";
 
 const RECOMMENDED: Record<string, string> = {
   "nomic-embed-code": "Recommended for code clone detection.",
@@ -14,10 +14,16 @@ const RECOMMENDED: Record<string, string> = {
   unixcoder: "Alternative; strong on cross-language.",
   codet5p: "Large model, strong on semantic matches.",
 };
+const OFF_PROVIDER_ID = "off";
+const OFF_MODEL_ID = "off";
 
 interface Entry extends vscode.QuickPickItem {
-  entryKind: "model" | "pull" | "refresh" | "none";
+  entryKind: "model" | "off" | "pull" | "refresh" | "none";
   model?: EmbeddingModelInfo;
+}
+
+interface BuildItemsOptions {
+  includeTestStub?: boolean;
 }
 
 export async function pickEmbeddingModel(
@@ -51,6 +57,8 @@ export async function pickEmbeddingModel(
         await vscode.env.openExternal(vscode.Uri.parse("https://ollama.com/library"));
       } else if (picked.entryKind === "refresh") {
         await pickEmbeddingModel(store, clientOf);
+      } else if (picked.entryKind === "off") {
+        await turnEmbeddingsOff(client, store);
       } else if (picked.entryKind === "model" && picked.model) {
         await setModelFromPicker(client, store, picked.model);
       }
@@ -68,12 +76,25 @@ export async function pickEmbeddingModel(
   }
   if (disposed) return;
   quickPick.busy = false;
-  quickPick.items = buildItems(models, store);
+  quickPick.items = buildItems(models, store, { includeTestStub: isTestBuild() });
 }
 
-export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): Entry[] {
+export function buildItems(
+  models: EmbeddingModelInfo[],
+  store: ReportStore,
+  options: BuildItemsOptions = {},
+): Entry[] {
   const active = store.current.report?.embedding_provenance;
   const items: Entry[] = [];
+
+  items.push({
+    entryKind: "off",
+    label: active
+      ? "$(circle-slash) Turn embeddings off"
+      : "$(circle-slash) Embeddings off",
+    description: active ? "Stop live embedding analysis" : "Currently disabled",
+    detail: "Keeps identical, nearly identical, and loosely similar detection.",
+  });
 
   items.push({
     entryKind: "none",
@@ -90,7 +111,7 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
       entryKind: "none",
       label: "Ollama not detected",
       description: "Install from ollama.com to use local embedding models.",
-      detail: "Only the deterministic stub provider is available below.",
+      detail: "Embedding analysis can stay off until a local model is available.",
     });
   } else {
     items.push({
@@ -116,20 +137,22 @@ export function buildItems(models: EmbeddingModelInfo[], store: ReportStore): En
     }
   }
 
-  items.push({
-    entryKind: "model",
-    label: `$(circuit-board) stub${isActive(active, stub) ? "  ✓ active" : ""}`,
-    description: "deterministic · 64-dim · CI-friendly",
-    detail: "Turns off semantic recall. Keeps identical, nearly identical, and loosely similar detection.",
-    model: stub ?? {
-      provider_id: "stub",
-      model_id: "stub",
-      model_version: "0",
-      dimensions: 64,
-      recommended: false,
-      reachable: true,
-    },
-  });
+  if (options.includeTestStub) {
+    items.push({
+      entryKind: "model",
+      label: `$(circuit-board) stub${isActive(active, stub) ? "  ✓ active" : ""}`,
+      description: "deterministic · 64-dim · CI-friendly",
+      detail: "Turns off semantic recall. Keeps identical, nearly identical, and loosely similar detection.",
+      model: stub ?? {
+        provider_id: "stub",
+        model_id: "stub",
+        model_version: "0",
+        dimensions: 64,
+        recommended: false,
+        reachable: true,
+      },
+    });
+  }
 
   items.push(
     { entryKind: "pull", label: "$(cloud-download) Pull a new model…", description: "ollama.com/library" },
@@ -173,6 +196,28 @@ async function switchModel(
   }
 }
 
+async function turnEmbeddingsOff(client: LanguageClient, store: ReportStore): Promise<void> {
+  try {
+    store.setPendingEmbeddingModel(OFF_MODEL_ID);
+    await client.sendRequest("deslop/embeddingSetModel", {
+      provider_id: OFF_PROVIDER_ID,
+      model_id: OFF_MODEL_ID,
+    });
+    await persistOffConfig();
+    const delta = await client.sendRequest<ReportDelta | null>("deslop/reportDelta", {
+      since_generation: store.current.generation,
+    });
+    if (delta) store.applyDelta(delta);
+    else store.setPendingEmbeddingModel(null);
+    vscode.window.showInformationMessage("Embedding analysis turned off.");
+  } catch (err) {
+    store.setPendingEmbeddingModel(null);
+    logError(err, "embedding/off");
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`Failed to turn embeddings off: ${message}`);
+  }
+}
+
 async function confirmStubModel(model: EmbeddingModelInfo): Promise<boolean> {
   if (model.provider_id === "stub") {
     const confirm = await vscode.window.showWarningMessage(
@@ -200,6 +245,15 @@ async function persistModelConfig(model: EmbeddingModelInfo): Promise<void> {
   await cfg.update("embedding.provider", model.provider_id, vscode.ConfigurationTarget.Workspace);
   await cfg.update("embedding.model", model.model_id, vscode.ConfigurationTarget.Workspace);
   await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Workspace);
+}
+
+async function persistOffConfig(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  await cfg.update("embedding.mode", "off", vscode.ConfigurationTarget.Workspace);
+}
+
+function isTestBuild(): boolean {
+  return process.env["DESLOP_TEST_FIXTURE"] !== undefined;
 }
 
 export function isActive(

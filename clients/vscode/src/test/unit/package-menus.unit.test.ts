@@ -96,4 +96,12 @@ suite("package menu contributions", () => {
       "canonical occurrence rows must not expose compare with canonical",
     );
   });
+
+  test("CPU report command is contributed for issue #29 diagnostics", () => {
+    const pkg = extensionPackage();
+    assert.equal(
+      commandTitle(pkg, "deslop.revealCpuReport"),
+      "Deslop: Reveal CPU Report",
+    );
+  });
 });

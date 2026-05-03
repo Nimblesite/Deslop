@@ -240,6 +240,18 @@ impl AnalysisSession {
         ))
     }
 
+    /// Disables live embedding analysis and refreshes the report
+    /// without semantic clusters.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError`] when the no-embedding refresh fails.
+    pub fn disable_embeddings(&mut self) -> Result<ReportDelta, LiveError> {
+        self.embedding_mode = EmbeddingMode::Off;
+        self.embedding_refresh_revision = self.embedding_refresh_revision.saturating_add(1);
+        self.refresh_full()
+    }
+
     /// Flips live incremental-cache use and returns the updated config.
     pub fn toggle_incremental(&mut self) -> SessionConfig {
         self.incremental = !self.incremental;

@@ -28,6 +28,7 @@ use tower_lsp::{
 };
 
 use crate::notifications::{EmbeddingProgressNotification, ReportChangedLspNotification};
+use crate::observability::Observability;
 use crate::{code_lens, commands, diagnostics, hover, position};
 
 /// User-visible server name advertised in `initialize`.
@@ -116,6 +117,8 @@ pub struct LspBackend {
     /// `embedding/listModels` to the MCP server ([LSP-IPC]).
     /// `None` when the socket could not be bound (non-fatal).
     _ipc: Option<crate::ipc::IpcServer>,
+    /// CPU/work observability recorder for `deslop/cpuReport`.
+    observability: Observability,
 }
 
 impl LspBackend {
@@ -147,6 +150,7 @@ impl LspBackend {
         embedding: &LspEmbeddingConfig,
     ) -> Result<Self, deslop_core::live::LiveError> {
         let provider = build_startup_provider(embedding)?;
+        let observability = Observability::default();
         let (mut session, seeded_from_cache) = crate::cache_seed::open_session(
             workspace_root,
             min_nodes,
@@ -184,6 +188,7 @@ impl LspBackend {
             _watcher: watcher,
             _scheduler: scheduler,
             _ipc: ipc,
+            observability,
         })
     }
 
@@ -198,6 +203,12 @@ impl LspBackend {
     #[must_use]
     pub fn service(&self) -> Arc<LiveService> {
         Arc::clone(&self.service)
+    }
+
+    /// Returns the CPU/work observability recorder.
+    #[must_use]
+    pub fn observability(&self) -> &Observability {
+        &self.observability
     }
 
     /// Re-runs analysis for changed paths when VS Code sends file
@@ -288,11 +299,14 @@ impl LanguageServer for LspBackend {
     async fn did_change_configuration(&self, _params: DidChangeConfigurationParams) {}
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        self.observability
+            .record_handler("did_change_watched_files");
         let paths = paths_from_file_events(&params.changes);
         self.apply_changed_paths(&paths).await;
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        self.observability.record_handler("did_open");
         if let Some(path) = url_to_path(&params.text_document.uri) {
             self.apply_changed_paths(&[path]).await;
         }
@@ -301,6 +315,7 @@ impl LanguageServer for LspBackend {
     async fn did_close(&self, _params: DidCloseTextDocumentParams) {}
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        self.observability.record_handler("did_change");
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return;
         };
@@ -311,6 +326,7 @@ impl LanguageServer for LspBackend {
         &self,
         params: DocumentDiagnosticParams,
     ) -> LspResult<DocumentDiagnosticReportResult> {
+        self.observability.record_handler("diagnostic");
         let path = url_to_path(&params.text_document.uri).unwrap_or_default();
         let file_report = self.service.report_for_file(&path).await;
         let workspace_root = self.service.session_config().await.workspace_root;
@@ -327,6 +343,7 @@ impl LanguageServer for LspBackend {
     }
 
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+        self.observability.record_handler("hover");
         let Some(path) = url_to_path(&params.text_document_position_params.text_document.uri)
         else {
             return Ok(None);
@@ -364,6 +381,7 @@ impl LanguageServer for LspBackend {
         &self,
         params: GotoDefinitionParams,
     ) -> LspResult<Option<GotoDefinitionResponse>> {
+        self.observability.record_handler("definition");
         let td_params = params.text_document_position_params;
         let Some(path) = url_to_path(&td_params.text_document.uri) else {
             return Ok(None);

@@ -47,6 +47,7 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.refreshReport", run: ({ clientOf }) => refreshReport(clientOf) },
   { id: "deslop.toggleShowAllLenses", run: toggleShowAllLenses },
   { id: "deslop.showSchemaDoc", run: ({ context, store, clientOf }) => openSchemaDoc(context, store, clientOf) },
+  { id: "deslop.revealCpuReport", run: ({ clientOf }) => openCpuReport(clientOf) },
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
   { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
@@ -382,6 +383,71 @@ async function readPackagedSchemaDoc(
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   return values.find((v) => typeof v === "string" && v.length > 0);
+}
+
+interface CpuPhaseRecord {
+  readonly phase?: string;
+  readonly started_at_ms?: number;
+  readonly duration_ms?: number;
+  readonly cpu_ms?: number;
+  readonly files_touched?: readonly string[];
+}
+
+interface CpuReport {
+  readonly current_phase?: string;
+  readonly last_100_phases?: readonly CpuPhaseRecord[];
+  readonly handler_counts?: Readonly<Record<string, number>>;
+  readonly in_flight?: {
+    readonly pending_watcher_events?: number;
+    readonly pending_embed_requests?: number;
+    readonly in_progress_parse_batch?: number | null;
+  };
+}
+
+export async function openCpuReport(clientOf: ClientFactory): Promise<void> {
+  const client = clientOf();
+  if (!client) {
+    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
+    return;
+  }
+  const report = await client.sendRequest<CpuReport>("deslop/cpuReport");
+  const doc = await vscode.workspace.openTextDocument({
+    language: "markdown",
+    content: renderCpuReport(report),
+  });
+  await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+export function renderCpuReport(report: CpuReport): string {
+  const inFlight = report.in_flight ?? {};
+  const handlers = Object.entries(report.handler_counts ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const phases = report.last_100_phases ?? [];
+  const lines = [
+    "# Deslop CPU Report",
+    "",
+    `- Current phase: ${report.current_phase ?? "unknown"}`,
+    `- Pending watcher events: ${inFlight.pending_watcher_events ?? 0}`,
+    `- Pending embedding requests: ${inFlight.pending_embed_requests ?? 0}`,
+    `- In-progress parse batch: ${inFlight.in_progress_parse_batch ?? 0}`,
+    "",
+    "## Handler Counts",
+    "",
+    "| Handler | Count |",
+    "|---|---:|",
+    ...handlers.map(([name, count]) => `| \`${name}\` | ${count} |`),
+    "",
+    "## Last 100 Phases",
+    "",
+    "| Phase | Started ms | Wall ms | CPU ms | Files |",
+    "|---|---:|---:|---:|---|",
+    ...phases.map((phase) => {
+      const files = (phase.files_touched ?? []).join(", ");
+      return `| ${phase.phase ?? "unknown"} | ${phase.started_at_ms ?? 0} | ${phase.duration_ms ?? 0} | ${phase.cpu_ms ?? 0} | ${files || "-"} |`;
+    }),
+  ];
+  return lines.join("\n");
 }
 
 export function findClusterContaining(

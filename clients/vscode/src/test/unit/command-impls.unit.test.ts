@@ -7,12 +7,15 @@ import * as vscode from "vscode";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import type { LanguageClient } from "vscode-languageclient/node";
 import {
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
   compareWithCanonical,
   openSchemaDoc,
+  openCpuReport,
+  renderCpuReport,
 } from "../../commands/register";
 import {
   aiPayloadForCluster,
@@ -420,6 +423,56 @@ suite("register command implementations", () => {
     assert.ok(active, "packaged schema doc editor should be active");
     assert.equal(active.document.languageId, "markdown");
     assert.equal(active.document.getText(), expected);
+  });
+
+  test("openCpuReport fetches the LSP CPU report and opens markdown", async () => {
+    await openCpuReport(() => ({
+      sendRequest: (method: string) => {
+        assert.equal(method, "deslop/cpuReport");
+        return Promise.resolve({
+          current_phase: "idle",
+          handler_counts: { "deslop/reportGet": 2, hover: 1 },
+          in_flight: {
+            pending_watcher_events: 0,
+            pending_embed_requests: 0,
+            in_progress_parse_batch: null,
+          },
+          last_100_phases: [
+            {
+              phase: "report_rendering",
+              started_at_ms: 10,
+              duration_ms: 3,
+              cpu_ms: 3,
+              files_touched: ["src/Alpha.cs"],
+            },
+          ],
+        });
+      },
+    }) as unknown as LanguageClient);
+    const active = vscode.window.activeTextEditor;
+    assert.ok(active, "CPU report editor should be active");
+    assert.equal(active.document.languageId, "markdown");
+    const text = active.document.getText();
+    assert.match(text, /# Deslop CPU Report/);
+    assert.match(text, /Current phase: idle/);
+    assert.match(text, /`deslop\/reportGet` \| 2/);
+    assert.match(text, /report_rendering/);
+  });
+
+  test("renderCpuReport keeps zero-valued in-flight fields visible", () => {
+    const text = renderCpuReport({
+      current_phase: "idle",
+      handler_counts: {},
+      in_flight: {
+        pending_watcher_events: 0,
+        pending_embed_requests: 0,
+        in_progress_parse_batch: null,
+      },
+      last_100_phases: [],
+    });
+    assert.match(text, /Pending watcher events: 0/);
+    assert.match(text, /Pending embedding requests: 0/);
+    assert.match(text, /In-progress parse batch: 0/);
   });
 });
 

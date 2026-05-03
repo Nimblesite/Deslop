@@ -30,6 +30,7 @@ const NO_PARAM_METHODS: &[&str] = &[
     custom_methods::LIST_MODELS,
     custom_methods::SESSION_CONFIG,
     custom_methods::REPORT_SCHEMA_DOC,
+    custom_methods::CPU_REPORT,
 ];
 
 /// Service adapter that injects an empty-object `params` value on
@@ -149,6 +150,7 @@ pub async fn run_stdio(
         custom_methods::REPORT_SCHEMA_DOC,
         custom_methods::report_schema_doc,
     )
+    .custom_method(custom_methods::CPU_REPORT, custom_methods::cpu_report)
     .custom_method(
         custom_methods::VIRTUAL_DOCUMENT,
         custom_methods::virtual_document,

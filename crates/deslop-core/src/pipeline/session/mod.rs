@@ -291,7 +291,7 @@ impl PipelineSession {
 /// falling back to the workspace default.
 fn load_exclusion(root: &Path, override_path: Option<&Path>) -> Result<ExclusionConfig, CoreError> {
     if let Some(explicit) = override_path {
-        return ExclusionConfig::load(explicit);
+        return ExclusionConfig::load_for_root(explicit, root);
     }
     ExclusionConfig::discover(root)
 }
