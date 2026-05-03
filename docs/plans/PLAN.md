@@ -61,6 +61,7 @@ Implemented work intentionally not repeated here:
 ### 🟡 Remaining features
 
 - [ ] Continue [Language roadmap](LANG-ROADMAP.md) with TypeScript/TSX.
+- [ ] Add `deslop.diagnostics.scope` (`"open-files"` | `"workspace"`) so Problems can mirror the Top Offenders tree even with no tabs open. Spec: [lsp.md §LSP-DIAGNOSTICS-SCOPE](../specs/lsp.md#lsp-diagnostics-scope) + [vsix.md §VSIX-SETTINGS](../specs/vsix.md#vsix-settings). Issue: [#129](https://github.com/Nimblesite/Deslop/issues/129).
 - [ ] Finish [Remove stub provider from production VSIX](remove-stub-provider-from-production-vsix.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).

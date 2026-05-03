@@ -90,6 +90,23 @@ Each published diagnostic carries:
 
 Diagnostics refresh on every `report/changed` notification from the daemon. Pull-based (LSP 3.17) because push-based diagnostics can interleave badly with buffer edits; `tower-lsp` gives us pull for free.
 
+### [LSP-DIAGNOSTICS-SCOPE] Open-file vs. workspace publication
+
+Pull-based diagnostics only travel to the editor for files the client actively pulls — in practice, files the user has open. With no tab open the Problems panel is empty even when the workspace contains thousands of offenders, which contradicts the Top Offenders tree (always full) and surprises users who expect Problems to mirror the tree. The fix is a single workspace setting that selects the publication scope. Tracked by [#129](https://github.com/Nimblesite/Deslop/issues/129).
+
+| Setting | Type | Default | Effect |
+|---|---|---|---|
+| `deslop.diagnostics.scope` | `"open-files" \| "workspace"` | `"open-files"` | `open-files` keeps the LSP 3.17 pull contract: only files the editor pulls for receive diagnostics. `workspace` actively pushes `textDocument/publishDiagnostics` for **every** file with at least one occurrence after each pipeline pass, so Problems stays populated regardless of which tabs are open. |
+
+**`workspace` mode publication contract:**
+
+- After every `report/changed`, the LSP iterates the cluster set, groups occurrences by file, and pushes one `publishDiagnostics` per offender file with the full per-file diagnostic list (same payload `diagnostic()` would have produced for a pull).
+- Files that drop out of the offender set in a later pass receive an empty `publishDiagnostics` so the editor clears their stale entries — this is non-negotiable per [LSP-PUSH] reactivity.
+- Severity, percentile gating, and message content are identical to pull mode — `[LSP-SEVERITY]` is the single source of truth.
+- Pull (`textDocument/diagnostic`) keeps working in both modes; `workspace` mode is additive, never replacing the pull path.
+
+`open-files` is the default because pushing thousands of diagnostics on first open of a large workspace is noisy and slows the editor's Problems panel; users who want full coverage opt in. The setting is workspace-scoped (`scope: "window"` in the VSIX) and forwarded to the LSP at `initialize` and on `workspace/didChangeConfiguration`.
+
 ### [LSP-CODE-LENS] Code lens
 
 At the first line of every clone occurrence, a code lens reading:
