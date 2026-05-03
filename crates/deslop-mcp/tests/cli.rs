@@ -873,10 +873,19 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
             );
         }
         let first_occ = value_get(cluster, "/first_occurrence")?;
-        for occ_field in ["path", "start_byte", "end_byte"] {
+        for occ_field in ["path", "start_byte", "end_byte", "start_line", "end_line"] {
             assert!(
                 first_occ.get(occ_field).is_some(),
                 "first_occurrence missing {occ_field:?}: {first_occ}"
+            );
+        }
+        for line_field in ["start_line", "end_line"] {
+            let line = value_get(&first_occ, &format!("/{line_field}"))?
+                .as_i64()
+                .ok_or_else(|| anyhow!("first_occurrence {line_field} must be an integer"))?;
+            assert!(
+                line >= 1,
+                "first_occurrence {line_field} must be one-based: {first_occ}"
             );
         }
     }
@@ -1267,7 +1276,7 @@ fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
     let page = structured_tool_result(&call_tool(
         &mut child,
         "report-query",
-        &json!({ "offset": 0, "limit": 50, "bucket": "identical" }),
+        &json!({ "offset": 0, "limit": 50, "bucket": "nearly_identical" }),
     )?)?;
     let clusters = value_get(&page, "/clusters")?
         .as_array()
@@ -1275,12 +1284,12 @@ fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
         .ok_or_else(|| anyhow!("clusters not array"))?;
     assert!(
         !clusters.is_empty(),
-        "fixture has at least one identical cluster"
+        "fixture has at least one nearly-identical cluster"
     );
     for cluster in &clusters {
         assert_eq!(
             cluster.get("bucket").and_then(Value::as_str),
-            Some("identical")
+            Some("nearly_identical")
         );
     }
     let _ = child.finish();

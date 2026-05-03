@@ -59,8 +59,17 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
     let body = result_string(&response)?;
     assert!(!body.is_empty(), "report text must not be empty");
     assert!(
-        body.contains("deslop") && body.contains("schema"),
-        "expected render_text header line; got: {body}"
+        body.lines().next().is_some_and(|line| {
+            line.starts_with("deslop ")
+                && line.contains(" file(s), ")
+                && line.contains(" cluster(s), ")
+                && line.contains(" hidden")
+        }),
+        "expected render_text summary header; got: {body}"
+    );
+    assert!(
+        body.contains("\nrepo: ") && body.contains("\n-- action hints --\n"),
+        "expected canonical report sections from render_text; got: {body}"
     );
     let _ = child.kill();
     Ok(())

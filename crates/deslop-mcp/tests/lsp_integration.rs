@@ -345,6 +345,7 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
         .get("total_clusters")
         .and_then(Value::as_u64)
         .unwrap_or(0);
+    let stale_cluster_id = beta_cluster_id(&before, &before_structured)?;
     ensure!(
         before_count > 0,
         "fixture must start with at least one cluster: {before}"
@@ -374,18 +375,13 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
         after_count < before_count,
         "rescan must trigger LSP re-analysis and drop the edited Beta.cs clone: {before_count} -> {after_count}; response {response}"
     );
-    ensure!(
-        after.get("n").and_then(Value::as_u64) == Some(100),
-        "rescan must echo the requested top-offenders count: {response}"
-    );
-    let clusters = after
-        .get("clusters")
-        .and_then(Value::as_array)
-        .ok_or_else(|| anyhow!("rescan clusters must be an array: {response}"))?;
+    assert_rescan_progress(&after, &response)?;
+    let clusters = rescan_clusters(&after, &response)?;
     ensure!(
         clusters.len() as u64 == after_count,
         "with n=100, rescan clusters must match total_clusters: {response}"
     );
+    assert_stale_cluster_absent(clusters, &stale_cluster_id, &response)?;
 
     let updated_bytes = fs::read(&state_file)?;
     ensure!(
@@ -402,6 +398,79 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
         "MCP rescan response must be loaded from the refreshed LSP state file: response {after_count}, state {state_count}"
     );
     Ok(())
+}
+
+fn beta_cluster_id(response: &Value, structured: &Value) -> Result<String> {
+    structured
+        .get("clusters")
+        .and_then(Value::as_array)
+        .and_then(|clusters| {
+            clusters
+                .iter()
+                .find(|cluster| cluster_touches_beta(cluster))
+        })
+        .and_then(|cluster| cluster.get("id"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("fixture must report a Beta.cs cluster before edit: {response}"))
+}
+
+fn assert_rescan_progress(after: &Value, response: &Value) -> Result<()> {
+    let summary = after
+        .get("summary")
+        .ok_or_else(|| anyhow!("rescan must expose refresh progress summary: {response}"))?;
+    ensure!(
+        summary
+            .get("clusters_removed")
+            .and_then(Value::as_u64)
+            .is_some_and(|removed| removed >= 1),
+        "rescan summary must show removed stale clusters: {response}"
+    );
+    ensure!(
+        after.get("generation").and_then(Value::as_u64).is_some(),
+        "rescan must expose the refreshed generation: {response}"
+    );
+    ensure!(
+        after.get("n").and_then(Value::as_u64) == Some(100),
+        "rescan must echo the requested top-offenders count: {response}"
+    );
+    Ok(())
+}
+
+fn rescan_clusters<'a>(after: &'a Value, response: &Value) -> Result<&'a [Value]> {
+    after
+        .get("clusters")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .ok_or_else(|| anyhow!("rescan clusters must be an array: {response}"))
+}
+
+fn assert_stale_cluster_absent(
+    clusters: &[Value],
+    stale_cluster_id: &str,
+    response: &Value,
+) -> Result<()> {
+    ensure!(
+        clusters.iter().all(|cluster| {
+            cluster.get("id").and_then(Value::as_str) != Some(stale_cluster_id)
+        }),
+        "rescan(paths) must not return the stale edited-path cluster id {stale_cluster_id}: {response}"
+    );
+    Ok(())
+}
+
+fn cluster_touches_beta(cluster: &Value) -> bool {
+    cluster
+        .get("occurrences")
+        .and_then(Value::as_array)
+        .is_some_and(|occurrences| {
+            occurrences.iter().any(|occurrence| {
+                occurrence
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .is_some_and(|path| path.ends_with("Beta.cs"))
+            })
+        })
 }
 
 fn initialized_mcp(root: &Path) -> Result<McpHandle> {

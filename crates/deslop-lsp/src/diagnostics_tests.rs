@@ -40,6 +40,8 @@ fn occurrence(path: &str, start: usize, end: usize) -> ReportOccurrence {
         path: PathBuf::from(path),
         start_byte: start,
         end_byte: end,
+        start_line: 1,
+        end_line: 1,
         hidden: false,
     }
 }

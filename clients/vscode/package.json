@@ -308,6 +308,21 @@
           "default": "",
           "description": "Optional absolute path to deslop-lsp. The binary must match deployment-toolkit.json before activation."
         },
+        "deslop.lsp.workerThreads": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "scope": "window",
+          "description": "Tokio worker threads for deslop-lsp. Use 0 for Tokio's CPU-count default; lower values background analysis on large workspaces."
+        },
+        "deslop.lsp.nice": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -20,
+          "maximum": 19,
+          "scope": "window",
+          "description": "macOS/Linux nice value for deslop-lsp. Use positive values to lower analyser CPU priority; 0 leaves priority unchanged."
+        },
         "deslop.mcpPath": {
           "type": "string",
           "default": "",

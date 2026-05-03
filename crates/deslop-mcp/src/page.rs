@@ -137,6 +137,8 @@ fn cluster_summary_from(cluster: &ReportCluster) -> ClusterSummary {
         path: occ.path.to_string_lossy().into_owned(),
         start_byte: occ.start_byte,
         end_byte: occ.end_byte,
+        start_line: occ.start_line,
+        end_line: occ.end_line,
     });
     let language = cluster
         .occurrences

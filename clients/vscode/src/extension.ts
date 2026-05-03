@@ -285,6 +285,15 @@ export function buildServerArgs(
 ): string[] {
   if (!workspaceRoot) return debug ? ["--debug"] : [];
   const args = [workspaceRoot];
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const workerThreads = cfg.get<number>("lsp.workerThreads", 0);
+  if (Number.isInteger(workerThreads) && workerThreads > 0) {
+    args.push("--worker-threads", String(workerThreads));
+  }
+  const nice = cfg.get<number>("lsp.nice", 0);
+  if (Number.isInteger(nice) && nice !== 0) {
+    args.push("--nice", String(Math.max(-20, Math.min(19, nice))));
+  }
   if (debug) args.push("--debug");
   return args;
 }

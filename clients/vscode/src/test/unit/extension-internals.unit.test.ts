@@ -136,6 +136,26 @@ suite("extension internals", () => {
     assertNoLegacyLspFlags(args);
   });
 
+  test("buildServerArgs forwards issue #28 LSP throttle settings", async () => {
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("lsp.workerThreads", 2, vscode.ConfigurationTarget.Global);
+    await cfg.update("lsp.nice", 5, vscode.ConfigurationTarget.Global);
+    try {
+      const args = buildServerArgs("/tmp/deslop-workspace", false);
+      assert.deepEqual(args, [
+        "/tmp/deslop-workspace",
+        "--worker-threads",
+        "2",
+        "--nice",
+        "5",
+      ]);
+      assertNoLegacyLspFlags(args);
+    } finally {
+      await cfg.update("lsp.workerThreads", 0, vscode.ConfigurationTarget.Global);
+      await cfg.update("lsp.nice", 0, vscode.ConfigurationTarget.Global);
+    }
+  });
+
   test("wireNotifications registers handlers without throwing", () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const client = {

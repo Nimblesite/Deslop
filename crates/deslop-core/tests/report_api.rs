@@ -123,6 +123,8 @@ fn sample_occurrences() -> Vec<ReportOccurrence> {
                 path: PathBuf::from(format!("file-{index}.cs")),
                 start_byte,
                 end_byte: start_byte.saturating_add(5),
+                start_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
+                end_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 hidden: false,
             }
         })

@@ -23,6 +23,8 @@ pub struct LspStartup {
     pub min_nodes: u32,
     /// Tokio worker-thread cap. Zero means Tokio default.
     pub worker_threads: usize,
+    /// Unix nice value applied at startup. Zero leaves priority unchanged.
+    pub nice: i32,
     /// Embedding startup configuration.
     pub embedding: LspEmbeddingConfig,
 }
@@ -100,6 +102,7 @@ where
 {
     init_tracing();
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
+    apply_process_nice(startup.nice)?;
     log_startup(&startup);
     build_runtime(startup.worker_threads)?.block_on(server(
         startup.workspace_root,
@@ -139,6 +142,7 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
         workspace_root: parse_workspace_root(args)?,
         min_nodes: 30,
         worker_threads: parse_worker_threads(args)?,
+        nice: parse_nice(args)?,
         embedding: LspEmbeddingConfig::default(),
     })
 }
@@ -160,9 +164,28 @@ fn parse_worker_threads(args: &[String]) -> Result<usize> {
     Ok(0)
 }
 
+/// Reads the optional `--nice` value, defaulting to no priority change.
+fn parse_nice(args: &[String]) -> Result<i32> {
+    for (index, arg) in args.iter().enumerate() {
+        if arg == "--nice" {
+            let nice = parse_required_i32(args, index, "--nice")?;
+            if !(-20..=19).contains(&nice) {
+                return Err(anyhow!("--nice must be in the range -20..=19"));
+            }
+            return Ok(nice);
+        }
+    }
+    Ok(0)
+}
+
 /// Parses a required usize flag value after `flag`.
 fn parse_required_usize(args: &[String], index: usize, flag: &str) -> Result<usize> {
     Ok(required_flag_value(args, index, flag)?.parse::<usize>()?)
+}
+
+/// Parses a required i32 flag value after `flag`.
+fn parse_required_i32(args: &[String], index: usize, flag: &str) -> Result<i32> {
+    Ok(required_flag_value(args, index, flag)?.parse::<i32>()?)
 }
 
 /// Returns the string value immediately following a required flag.
@@ -177,7 +200,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            "--worker-threads" => index = index.saturating_add(2),
+            "--worker-threads" | "--nice" => index = index.saturating_add(2),
             "--debug" | "--stdio" => index = index.saturating_add(1),
             flag if LEGACY_STARTUP_FLAGS.contains(&flag) => {
                 return Err(anyhow!(
@@ -211,6 +234,29 @@ fn build_runtime(worker_threads: usize) -> Result<Runtime> {
     Ok(builder.enable_all().build()?)
 }
 
+/// Applies the user-requested process nice value when configured.
+fn apply_process_nice(nice: i32) -> Result<()> {
+    if nice == 0 {
+        return Ok(());
+    }
+    apply_process_nice_impl(nice)
+}
+
+/// Applies Unix process priority through `setpriority(PRIO_PROCESS)`.
+#[cfg(unix)]
+fn apply_process_nice_impl(nice: i32) -> Result<()> {
+    rustix::process::setpriority_process(None, nice)
+        .map_err(|error| anyhow!("failed to apply --nice {nice}: {error}"))?;
+    Ok(())
+}
+
+/// Ignores `--nice` on non-Unix targets where POSIX priorities do not exist.
+#[cfg(not(unix))]
+fn apply_process_nice_impl(nice: i32) -> Result<()> {
+    tracing::warn!(nice, "--nice is only supported on macOS/Linux");
+    Ok(())
+}
+
 /// Initialises tracing diagnostics against `RUST_LOG`.
 fn init_tracing() {
     let _result = tracing_subscriber::fmt()
@@ -233,6 +279,7 @@ fn log_startup(startup: &LspStartup) {
         workspace_root = %startup.workspace_root.display(),
         min_nodes = startup.min_nodes,
         worker_threads = startup.worker_threads,
+        nice = startup.nice,
         embedding_mode = startup.embedding.mode.as_str(),
         embedding_provider = %startup.embedding.provider_id,
         embedding_model = %startup.embedding.model_id,

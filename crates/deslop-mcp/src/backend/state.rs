@@ -20,8 +20,8 @@ use std::{
 
 use deslop_core::{
     live::wire::{
-        EmbeddingModelInfo as WireEmbeddingModelInfo, FindSimilarInput as WireFindSimilarInput,
-        FindSimilarRequest,
+        ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
+        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest,
     },
     report::ReportCluster,
     EmbeddingSpec, Report,
@@ -34,7 +34,7 @@ use crate::{notify::push_report_changed, NotificationSender};
 
 use super::{
     filters, ipc::ipc_call, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend,
-    SessionBackendConfig, SessionConfigSnapshot,
+    RescanProgress, SessionBackendConfig, SessionConfigSnapshot,
 };
 
 /// `McpBackend` implementation that reads the LSP-written state file.
@@ -168,17 +168,16 @@ impl StateFileBackend {
 
     /// Asks the running LSP to execute `deslop.lsp.refreshReport`.
     ///
-    /// Returns `Ok(false)` when the LSP socket is absent so MCP-only
+    /// Returns `Ok(None)` when the LSP socket is absent so MCP-only
     /// fixture tests and cache-only sessions keep the previous reload
-    /// behaviour.
-    fn request_lsp_refresh(&self) -> Result<bool, BackendError> {
+    /// behaviour with an empty progress summary.
+    fn request_lsp_refresh(&self) -> Result<Option<RescanProgress>, BackendError> {
         let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
             Ok(result) => result,
-            Err(BackendError::LspNotRunning) => return Ok(false),
+            Err(BackendError::LspNotRunning) => return Ok(None),
             Err(err) => return Err(err),
         };
-        validate_refresh_result(&result)?;
-        Ok(true)
+        Ok(Some(refresh_progress_from_result(&result)?))
     }
 
     /// Starts a background thread that watches the parent directory of
@@ -478,8 +477,8 @@ impl McpBackend for StateFileBackend {
         })
     }
 
-    fn mark_changed(&self, _paths: &[PathBuf]) -> Result<(), BackendError> {
-        let _refreshed = self.request_lsp_refresh()?;
+    fn mark_changed(&self, _paths: &[PathBuf]) -> Result<RescanProgress, BackendError> {
+        let refresh_progress = self.request_lsp_refresh()?;
         match self.reload_cache() {
             Ok(_) => {
                 let gen = self.generation.load(Ordering::Relaxed);
@@ -488,9 +487,11 @@ impl McpBackend for StateFileBackend {
                         push_report_changed(s, gen);
                     }
                 }
-                Ok(())
+                Ok(refresh_progress.unwrap_or_else(|| empty_rescan_progress(gen)))
             }
-            Err(BackendError::LspNotRunning) => Ok(()),
+            Err(BackendError::LspNotRunning) => Ok(empty_rescan_progress(
+                self.generation.load(Ordering::Relaxed),
+            )),
             Err(err) => Err(err),
         }
     }
@@ -505,12 +506,46 @@ impl McpBackend for StateFileBackend {
     }
 }
 
-/// Validates the compact `deslop.lsp.refreshReport` IPC response.
-fn validate_refresh_result(result: &Value) -> Result<(), BackendError> {
-    if result.get("command").and_then(Value::as_str) == Some("deslop.lsp.refreshReport") {
-        return Ok(());
+/// Converts the compact `deslop.lsp.refreshReport` IPC response into
+/// the progress fields exposed by MCP `rescan`.
+fn refresh_progress_from_result(result: &Value) -> Result<RescanProgress, BackendError> {
+    if result.get("command").and_then(Value::as_str) != Some("deslop.lsp.refreshReport") {
+        return Err(BackendError::StateFileCorrupt(format!(
+            "ipc refresh returned unexpected payload: {result}"
+        )));
     }
-    Err(BackendError::StateFileCorrupt(format!(
-        "ipc refresh returned unexpected payload: {result}"
-    )))
+    Ok(RescanProgress {
+        generation: required_u64(result, "generation")?,
+        summary: ChangeSummary {
+            clusters_added: required_usize(result, "clustersAdded")?,
+            clusters_removed: required_usize(result, "clustersRemoved")?,
+            clusters_updated: required_usize(result, "clustersUpdated")?,
+            worst_weight: 0.0,
+        },
+    })
+}
+
+/// Reads a required unsigned IPC field and converts it to `usize`.
+fn required_usize(result: &Value, field: &str) -> Result<usize, BackendError> {
+    let value = required_u64(result, field)?;
+    usize::try_from(value).map_err(|_| {
+        BackendError::StateFileCorrupt(format!("ipc refresh field {field} overflows usize"))
+    })
+}
+
+/// Reads a required unsigned IPC field as `u64`.
+fn required_u64(result: &Value, field: &str) -> Result<u64, BackendError> {
+    result.get(field).and_then(Value::as_u64).ok_or_else(|| {
+        BackendError::StateFileCorrupt(format!(
+            "ipc refresh missing unsigned integer field {field}: {result}"
+        ))
+    })
+}
+
+/// Builds a zero-summary fallback for cache-only rescans.
+fn empty_rescan_progress(generation: u64) -> RescanProgress {
+    RescanProgress {
+        generation,
+        summary: ChangeSummary::default(),
+    }
 }

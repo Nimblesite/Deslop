@@ -5,14 +5,14 @@ use std::path::{Path, PathBuf};
 use deslop_core::{
     wire_generated::{
         EmbeddingModelList, FindSimilarResult, McpSessionConfig, RangeReport, ReportPageFilters,
-        SchemaDocPayload, SetEmbeddingModelResponse, TopOffendersPayload,
+        RescanPayload, SchemaDocPayload, SetEmbeddingModelResponse, TopOffendersPayload,
     },
     Report,
 };
 use serde_json::Value;
 
 use crate::{
-    backend::{FindSimilarInput, McpBackend},
+    backend::{FindSimilarInput, McpBackend, RescanProgress},
     page::{build_page, Pagination},
     protocol::{jsonrpc_error, ErrorCode, JsonRpcError},
 };
@@ -41,18 +41,30 @@ pub(super) fn call_top_offenders(
 /// `rescan` reloads the LSP-written state file and returns fresh top offenders.
 pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Value, JsonRpcError> {
     let paths = extract_optional_paths(args, "paths")?;
-    backend.mark_changed(&paths).map_err(backend_to_rpc)?;
+    let progress = backend.mark_changed(&paths).map_err(backend_to_rpc)?;
     let n = extract_top_n(args);
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    Ok(top_offenders_payload(&report, n))
+    Ok(rescan_payload(&report, n, progress))
 }
 
-/// Builds the shared top-offenders JSON payload for `top-offenders` and `rescan`.
+/// Builds the top-offenders JSON payload.
 fn top_offenders_payload(report: &Report, n: usize) -> Value {
     let payload = TopOffendersPayload {
         total_clusters: report.clusters.len(),
         n,
         clusters: report.clusters.iter().take(n).cloned().collect(),
+    };
+    to_value(&payload)
+}
+
+/// Builds the `rescan` JSON payload from the refreshed report and progress.
+fn rescan_payload(report: &Report, n: usize, progress: RescanProgress) -> Value {
+    let payload = RescanPayload {
+        total_clusters: report.clusters.len(),
+        n,
+        clusters: report.clusters.iter().take(n).cloned().collect(),
+        generation: progress.generation,
+        summary: progress.summary,
     };
     to_value(&payload)
 }

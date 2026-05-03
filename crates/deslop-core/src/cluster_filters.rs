@@ -28,6 +28,10 @@
 //! - **#126** — generator template literals that contain generated-file
 //!   headers can cluster with the generated output. That relationship is
 //!   provenance, not duplicate implementation logic.
+//! - **#99** — pure Python assertion blocks in tests share AST shape and
+//!   token alphabet while intentionally checking different concrete values.
+//! - **#121** — async `SQLAlchemy` row-building pytest fixtures repeat the
+//!   same add/commit/refresh/return setup idiom by design.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -64,6 +68,178 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         || is_literal_variation_call_cluster(&snippets)
         || is_monkeypatch_scaffolding_literal_cluster(&snippets)
         || is_python_all_exports_cluster(&snippets)
+        || is_python_assertion_only_cluster(&snippets)
+        || is_pytest_fixture_boilerplate_cluster(&snippets)
+}
+
+/// Detects **issue #121**: pytest fixture functions that create ORM rows
+/// all repeat the same session setup shape. The fixture is already the
+/// test abstraction, so surfacing those bodies as refactor targets adds
+/// noise instead of useful duplication.
+fn is_pytest_fixture_boilerplate_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+        return false;
+    }
+    let mut files = BTreeSet::new();
+    for snippet in snippets {
+        let _inserted = files.insert(snippet.file_id);
+    }
+    files.len() >= 2 && snippets.iter().all(is_pytest_fixture_snippet)
+}
+
+/// Returns true when the snippet belongs to a Python function decorated
+/// with `@fixture` or any dotted fixture decorator such as
+/// `@pytest.fixture` / `@pytest_asyncio.fixture`.
+fn is_pytest_fixture_snippet(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let Some(range) = trimmed_snippet_range(snippet) else {
+        return false;
+    };
+    let Some(function) = enclosing_python_function(tree.root_node(), range) else {
+        return false;
+    };
+    python_function_has_fixture_decorator(function, snippet.source)
+}
+
+/// Finds the Python function containing a reported range, including the
+/// common case where the range starts at the decorator and therefore
+/// encloses the `function_definition` rather than sitting inside it.
+fn enclosing_python_function(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
+    enclosing_kind(root, range, &["function_definition"]).or_else(|| {
+        let decorated = enclosing_kind(root, range, &["decorated_definition"])?;
+        let mut cursor = decorated.walk();
+        let function = decorated
+            .named_children(&mut cursor)
+            .find(|child| child.kind() == "function_definition");
+        function
+    })
+}
+
+/// Checks the decorator block immediately above a Python function.
+fn python_function_has_fixture_decorator(function: Node<'_>, source: &[u8]) -> bool {
+    let Some(prefix) = source
+        .get(..function.start_byte())
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
+    else {
+        return false;
+    };
+    for line in prefix.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.starts_with('@') {
+            return false;
+        }
+        if decorator_line_has_fixture_callee(trimmed) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns true for `@fixture(...)` and dotted variants ending in
+/// `.fixture(...)`.
+fn decorator_line_has_fixture_callee(line: &str) -> bool {
+    let Some(decorator) = line.strip_prefix('@') else {
+        return false;
+    };
+    let callee = decorator
+        .split(|ch: char| ch == '(' || ch.is_whitespace())
+        .next()
+        .unwrap_or_default();
+    callee.rsplit('.').next() == Some("fixture")
+}
+
+/// Detects **issue #99**: blocks consisting only of Python `assert`
+/// statements across test files. Their AST/token shape is intentionally
+/// repetitive, but the concrete asserted paths and values differ.
+fn is_python_assertion_only_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+        return false;
+    }
+    let mut files = BTreeSet::new();
+    for snippet in snippets {
+        let _inserted = files.insert(snippet.file_id);
+    }
+    files.len() >= 2
+        && raw_snippet_texts_differ(snippets)
+        && snippets.iter().all(is_python_assertion_only_snippet)
+}
+
+/// Returns true when one snippet's enclosing Python function body contains
+/// only assertion statements within the reported range and no calls/control
+/// flow setup.
+fn is_python_assertion_only_snippet(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let Some(range) = trimmed_snippet_range(snippet) else {
+        return false;
+    };
+    let Some(function) = enclosing_kind(tree.root_node(), range, function_kinds(snippet.language))
+    else {
+        return false;
+    };
+    let Some(body) = function.child_by_field_name("body") else {
+        return false;
+    };
+    let mut cursor = body.walk();
+    let mut saw_assert = false;
+    for child in body.named_children(&mut cursor) {
+        if !node_intersects_range(child, range) {
+            continue;
+        }
+        if !is_python_assert_statement(child) || node_contains_kind(child, "call") {
+            return false;
+        }
+        saw_assert = true;
+    }
+    saw_assert
+}
+
+/// Returns true for a Python assert statement node.
+fn is_python_assert_statement(node: Node<'_>) -> bool {
+    node.kind() == "assert_statement"
+}
+
+/// Trims surrounding ASCII whitespace from a reported snippet range so
+/// parser lookups are not defeated by trailing newlines outside the AST
+/// node that produced the fingerprint.
+fn trimmed_snippet_range(snippet: &Snippet<'_>) -> Option<ByteRange> {
+    let bytes = snippet_range_text(snippet)?;
+    let leading = bytes.iter().position(|byte| !byte.is_ascii_whitespace())?;
+    let trailing = bytes.iter().rposition(|byte| !byte.is_ascii_whitespace())?;
+    let start = snippet.range.start.checked_add(leading)?;
+    let end = snippet.range.start.checked_add(trailing)?.checked_add(1)?;
+    Some(ByteRange { start, end })
+}
+
+/// Returns true when `node` overlaps `range`.
+fn node_intersects_range(node: Node<'_>, range: ByteRange) -> bool {
+    node.start_byte() < range.end && node.end_byte() > range.start
+}
+
+/// Returns true when at least two raw reported snippet ranges differ.
+fn raw_snippet_texts_differ(snippets: &[Snippet<'_>]) -> bool {
+    let Some(first) = snippets.first().and_then(snippet_range_text) else {
+        return false;
+    };
+    snippets
+        .iter()
+        .filter_map(snippet_range_text)
+        .any(|text| text != first)
+}
+
+/// Walks `node` looking for a named descendant of `kind`.
+fn node_contains_kind(node: Node<'_>, kind: &str) -> bool {
+    if node.kind() == kind {
+        return true;
+    }
+    let mut cursor = node.walk();
+    let found = node
+        .named_children(&mut cursor)
+        .any(|child| node_contains_kind(child, kind));
+    found
 }
 
 /// Detects **issue #114**: production HS256/JWT signing code and tests

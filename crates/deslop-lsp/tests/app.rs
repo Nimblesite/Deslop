@@ -65,6 +65,8 @@ fn serve_action_carries_supported_startup_configuration() -> Result<()> {
         "/tmp/deslop-workspace",
         "--worker-threads",
         "3",
+        "--nice",
+        "5",
         "--stdio",
     ])?)?;
 
@@ -74,6 +76,7 @@ fn serve_action_carries_supported_startup_configuration() -> Result<()> {
     );
     assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 3);
+    assert_eq!(startup.nice, 5);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
     assert_eq!(startup.embedding.mode.as_str(), "off");
     assert_eq!(startup.embedding.provider_id, "ollama");
@@ -93,6 +96,7 @@ fn serve_action_applies_documented_defaults() -> Result<()> {
     );
     assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 0);
+    assert_eq!(startup.nice, 0);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
     assert_eq!(startup.embedding.mode.as_str(), "off");
     assert_eq!(startup.embedding.provider_id, "ollama");
@@ -121,6 +125,7 @@ fn process_result_dispatches_serve_action_to_runner() -> Result<()> {
     assert_eq!(startup.workspace_root, PathBuf::from("/tmp/deslop-runner"));
     assert_eq!(startup.min_nodes, 30);
     assert_eq!(startup.worker_threads, 2);
+    assert_eq!(startup.nice, 0);
     assert_eq!(startup.embedding.mode, EmbeddingMode::Off);
     Ok(())
 }
@@ -148,6 +153,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
         workspace_root: PathBuf::from("/tmp/deslop-async"),
         min_nodes: 11,
         worker_threads: 1,
+        nice: 0,
         embedding: LspEmbeddingConfig {
             mode: EmbeddingMode::Required,
             provider_id: "stub".to_owned(),
@@ -162,6 +168,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
             workspace_root,
             min_nodes,
             worker_threads: 0,
+            nice: 0,
             embedding,
         });
         std::future::ready(Ok(()))
@@ -199,6 +206,11 @@ fn invalid_arguments_return_user_facing_errors() -> Result<()> {
     assert_error_contains(
         ["deslop-lsp", "/tmp/ws", "--worker-threads"],
         "--worker-threads requires",
+    )?;
+    assert_error_contains(["deslop-lsp", "/tmp/ws", "--nice"], "--nice requires")?;
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--nice", "20"],
+        "--nice must be in the range",
     )?;
     assert_error_contains(
         ["deslop-lsp", "/tmp/ws", "--unknown"],

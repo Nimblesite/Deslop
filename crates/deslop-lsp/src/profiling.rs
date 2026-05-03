@@ -60,7 +60,8 @@ impl LspProfileGuard {
         let Some(profile_dir) = env::var_os(PROFILE_DIR_ENV) else {
             return Self { active: None };
         };
-        match ActiveProfile::start(PathBuf::from(profile_dir)) {
+        let profile_dir = PathBuf::from(profile_dir);
+        match ActiveProfile::start(&profile_dir) {
             Ok(active) => Self {
                 active: Some(active),
             },
@@ -97,8 +98,8 @@ impl fmt::Debug for ActiveProfile {
 #[cfg(all(feature = "profiling", unix))]
 impl ActiveProfile {
     /// Creates the output directory and starts the signal profiler.
-    fn start(profile_dir: PathBuf) -> Result<Self> {
-        fs::create_dir_all(&profile_dir)?;
+    fn start(profile_dir: &Path) -> Result<Self> {
+        fs::create_dir_all(profile_dir)?;
         let output_path =
             profile_dir.join(format!("deslop-lsp-{}-firefox-profile.json", process::id()));
         let guard = pprof::ProfilerGuardBuilder::default()
@@ -147,10 +148,10 @@ fn write_firefox_profile(
     started_at: SystemTime,
     output_path: &Path,
 ) -> Result<()> {
-    let mut profile = profile_from_report(report, started_at);
+    let profile = profile_from_report(report, started_at);
     let output = File::create(output_path)?;
     let writer = BufWriter::new(output);
-    serde_json::to_writer(writer, &mut profile)?;
+    serde_json::to_writer(writer, &profile)?;
     Ok(())
 }
 

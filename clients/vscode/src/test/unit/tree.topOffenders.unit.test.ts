@@ -593,7 +593,7 @@ suite("TopOffendersProvider", () => {
     }
   });
 
-  test("surfaces removed-cluster progress before unchanged top offenders (#80)", () => {
+  test("surfaces removed-cluster progress without fixed-cluster wording (#80, #128)", () => {
     const store = new ReportStore();
     store.setSnapshot(
       report([
@@ -624,7 +624,8 @@ suite("TopOffendersProvider", () => {
     const nodes = provider.getChildren();
     const labels = nodes.map(labelText);
 
-    assert.match(labels[0] ?? "", /1 cluster fixed/i);
+    assert.match(labels[0] ?? "", /1 cluster no longer reported/i);
+    assert.doesNotMatch(labels[0] ?? "", /\bfixed\b/i);
     assert.match(labels[0] ?? "", /2 remaining/i);
     assert.match(labels[0] ?? "", /generation 2/i);
     assert.ok(labels.some((label) => /Next\.cs/.test(label)), "next offender must remain visible");

@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use crate::NotificationSender;
 
 use deslop_core::{
+    live::wire::ChangeSummary,
     live::wire::EmbeddingModelInfo,
     report::{CacheStats, ReportCluster},
     CoreError, EmbeddingProvenance, EmbeddingSpec, Report,
@@ -173,7 +174,7 @@ pub trait McpBackend: Send + Sync {
     /// # Errors
     ///
     /// Propagates [`BackendError::Core`] on analysis failure.
-    fn mark_changed(&self, paths: &[PathBuf]) -> Result<(), BackendError>;
+    fn mark_changed(&self, paths: &[PathBuf]) -> Result<RescanProgress, BackendError>;
 
     /// Wires the shared writer so the backend can push server →
     /// client notifications from any thread ([MCP-NOTIFICATIONS]).
@@ -229,6 +230,15 @@ pub struct SessionConfigSnapshot {
     pub incremental: bool,
     /// Cache-hit totals since session start.
     pub cumulative_cache_stats: CacheStats,
+}
+
+/// Progress returned by a synchronous `rescan` pass.
+#[derive(Debug, Clone, Default)]
+pub struct RescanProgress {
+    /// Generation exposed by the refreshed live report.
+    pub generation: u64,
+    /// Compact add/remove/update counts for the refresh.
+    pub summary: ChangeSummary,
 }
 
 /// Knobs for constructing a [`StateFileBackend`].

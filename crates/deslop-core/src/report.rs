@@ -11,7 +11,7 @@ use std::{collections::HashMap, hash::BuildHasher, path::Path};
 
 use crate::{
     boilerplate::BoilerplateRange,
-    buckets::{classify_signals, ClusterKind},
+    buckets::{classify, ClusterKind},
     cluster::Cluster,
     cluster_filters::is_noise_pattern,
     config::ExclusionConfig,
@@ -154,8 +154,13 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // causing these to rank as #1 offenders despite containing no
             // actionable duplication. Exclude them from the human-facing ranked
             // output; the raw analysis data remains available via the pipeline.
-            let loosely_similar =
-                classify_signals(report_cluster.signals) == ClusterKind::LooselySimilar;
+            let loosely_similar = classify(&report_cluster) == ClusterKind::LooselySimilar;
+            // GH #120/#122: embedding can pull broad, module-level same-topic
+            // regions into one giant Type-4 component. Near-zero structure,
+            // high semantic score, large size, and a large canonical span is
+            // the observed signature of those report-dominating false positives.
+            let low_structure_embedding_mega_cluster =
+                is_low_structure_embedding_mega_cluster(&report_cluster);
             let cross_language_audit = inputs.exclusion.allows_cross_language_comparison()
                 && spans_multiple_languages(&cluster.members, inputs.file_languages);
             // Issues #69, #70, #71, #72: re-parse cluster member sources
@@ -164,7 +169,8 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // monkeypatch.setenv scaffolding) that survive Type-2
             // normalisation but are not real duplication.
             let noise = is_noise_pattern(&cluster.members, inputs.sources, inputs.file_languages);
-            let all_hidden = (loosely_similar && !cross_language_audit)
+            let all_hidden = ((loosely_similar || low_structure_embedding_mega_cluster)
+                && !cross_language_audit)
                 || noise
                 || (!report_cluster.occurrences.is_empty()
                     && report_cluster.occurrences.iter().all(|occ| occ.hidden));
@@ -206,6 +212,16 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     }
 }
 
+/// Returns true for embedding-dominant mega-clusters that are too broad
+/// to be actionable. Keeps small Type-4 pairs available while suppressing
+/// the real-world "all pytest modules are related" closure failure.
+fn is_low_structure_embedding_mega_cluster(cluster: &ReportCluster) -> bool {
+    cluster.signals.structural < 0.10
+        && cluster.signals.embedding_cos >= 0.80
+        && cluster.size > 10
+        && cluster.canonical_node_count > 500
+}
+
 /// Returns true when a cluster contains more than one parser language id.
 fn spans_multiple_languages<S: BuildHasher>(
     members: &[crate::fingerprint::Fingerprint],
@@ -238,7 +254,7 @@ impl BucketDistribution {
     fn from_clusters(clusters: &[ReportCluster]) -> Self {
         let mut distribution = Self::default();
         for cluster in clusters {
-            distribution.add(classify_signals(cluster.signals));
+            distribution.add(classify(cluster));
         }
         distribution
     }

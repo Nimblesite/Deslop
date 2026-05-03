@@ -162,6 +162,8 @@ type ReportOccurrence {
   path: String
   start_byte: Int
   end_byte: Int
+  start_line: Int
+  end_line: Int
   hidden: Bool
 }
 
@@ -332,6 +334,8 @@ type OccurrenceSummary {
   path: String
   start_byte: Int
   end_byte: Int
+  start_line: Int
+  end_line: Int
 }
 
 type ClusterSummary {
@@ -384,13 +388,26 @@ type SchemaDocPayload {
 }
 
 # ---------------------------------------------------------------------------
-# MCP `top-offenders` / `rescan` payload ([MCP-TOOL-TOP-OFFENDERS]).
+# MCP `top-offenders` payload ([MCP-TOOL-TOP-OFFENDERS]).
 # ---------------------------------------------------------------------------
 
 type TopOffendersPayload {
   total_clusters: Int
   n: Int
   clusters: List<ReportCluster>
+}
+
+# ---------------------------------------------------------------------------
+# MCP `rescan` payload ([MCP-TOOL-RESCAN]). Mirrors top offenders and exposes
+# refresh progress so agents can tell whether edited-path clusters changed.
+# ---------------------------------------------------------------------------
+
+type RescanPayload {
+  total_clusters: Int
+  n: Int
+  clusters: List<ReportCluster>
+  generation: Int
+  summary: ChangeSummary
 }
 
 # ---------------------------------------------------------------------------

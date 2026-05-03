@@ -19,6 +19,7 @@ use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
     fingerprint::Fingerprint,
+    pair::{LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT},
     report::{ReportCluster, ReportOccurrence, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
@@ -49,6 +50,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
                 file_languages,
                 scan_root,
                 exclusion,
+                sources.get(&member.file_id).map(Vec::as_slice),
             )
         })
         .collect();
@@ -88,12 +90,16 @@ pub(crate) fn occurrence<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
     scan_root: &Path,
     exclusion: &ExclusionConfig,
+    source: Option<&[u8]>,
 ) -> ReportOccurrence {
     let absolute = registry.path(file_id).map(Path::to_path_buf);
     let language = file_languages.get(&file_id).copied().unwrap_or("");
     let hidden = absolute
         .as_deref()
         .is_some_and(|abs| exclusion.is_report_hidden(abs, language));
+    let (start_line, end_line) = source.map_or((0, 0), |bytes| {
+        byte_range_to_line_range(bytes, byte_range.start, byte_range.end)
+    });
     let path = absolute.map_or_else(PathBuf::new, |abs| {
         abs.strip_prefix(scan_root)
             .map_or_else(|_| abs.clone(), Path::to_path_buf)
@@ -102,8 +108,37 @@ pub(crate) fn occurrence<S: BuildHasher>(
         path,
         start_byte: byte_range.start,
         end_byte: byte_range.end,
+        start_line,
+        end_line,
         hidden,
     }
+}
+
+/// Converts a byte range into an inclusive 1-indexed line range.
+fn byte_range_to_line_range(source: &[u8], start: usize, end: usize) -> (i64, i64) {
+    let safe_start = start.min(source.len());
+    let end_offset = end.saturating_sub(1).min(source.len());
+    (
+        line_for_offset(source, safe_start),
+        line_for_offset(source, end_offset),
+    )
+}
+
+/// Returns the 1-indexed line containing `offset`.
+fn line_for_offset(source: &[u8], offset: usize) -> i64 {
+    let safe_offset = offset.min(source.len());
+    let line = source
+        .get(..safe_offset)
+        .map_or(1, |prefix| count_newlines(prefix).saturating_add(1));
+    i64::try_from(line).unwrap_or(i64::MAX)
+}
+
+/// Counts newline bytes in `source`.
+fn count_newlines(source: &[u8]) -> usize {
+    source
+        .split(|byte| *byte == b'\n')
+        .count()
+        .saturating_sub(1)
 }
 
 /// Produces a short, agent-readable one-line summary for the cluster.
@@ -159,13 +194,42 @@ pub(crate) fn report_bucket_kind(
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
 ) -> ClusterKind {
-    let kind = classify_signals(signals);
+    let kind = if is_csharp_lsh_type3_near_miss(signals, members, file_languages) {
+        ClusterKind::NearlyIdentical
+    } else {
+        classify_signals(signals)
+    };
     let equivalent = source_slices_are_equivalent_for_language(members, sources, file_languages);
     match (kind, equivalent, signals.structural >= 0.99) {
         (ClusterKind::Identical, false, _) => ClusterKind::NearlyIdentical,
         (ClusterKind::NearlyIdentical, true, true) => ClusterKind::Identical,
         _ => kind,
     }
+}
+
+/// Returns true for substantive C# Type-3 candidates found only through
+/// token LSH. These have no exact structural anchor (`structural=0.0`),
+/// but they passed the LSH-only Jaccard and node-count floors, so they
+/// are real near-miss duplication rather than the low-information token
+/// noise hidden from the ranked report.
+fn is_csharp_lsh_type3_near_miss<S: BuildHasher>(
+    signals: ReportSignals,
+    members: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> bool {
+    signals.structural <= f64::EPSILON
+        && signals.embedding_cos <= f64::EPSILON
+        && signals.token_jaccard >= LSH_ONLY_MIN_JACCARD
+        && members.len() >= 2
+        && members
+            .iter()
+            .all(|member| member.node_count >= LSH_ONLY_MIN_NODE_COUNT)
+        && members
+            .iter()
+            .all(|member| file_languages.get(&member.file_id).copied() == Some("csharp"))
+        && members
+            .first()
+            .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))
 }
 
 /// Maps the report bucket onto a one-line interpretation for AI agents.

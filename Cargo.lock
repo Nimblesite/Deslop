@@ -436,6 +436,7 @@ dependencies = [
  "fxprof-processed-profile",
  "nix 0.29.0",
  "pprof",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

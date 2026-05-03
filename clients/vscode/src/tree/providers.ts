@@ -66,9 +66,9 @@ function renderRemovedClusterSummary(
   generation: number,
 ): StatusNode | null {
   if (summary.clusters_removed <= 0) return null;
-  const fixedNoun = summary.clusters_removed === 1 ? "cluster" : "clusters";
+  const clusterNoun = summary.clusters_removed === 1 ? "cluster" : "clusters";
   return new StatusNode(
-    `${summary.clusters_removed.toLocaleString()} ${fixedNoun} fixed - ` +
+    `${summary.clusters_removed.toLocaleString()} ${clusterNoun} no longer reported - ` +
       `${remaining.toLocaleString()} remaining - generation ${generation.toLocaleString()}`,
     "info",
   );

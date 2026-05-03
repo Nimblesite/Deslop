@@ -21,7 +21,7 @@ Each tool has a JSON schema and an agent-readable description. Descriptions are 
 | Tool | Inputs | Output | Description |
 |---|---|---|---|
 | `top-offenders` | `{ n? }` | `TopOffenders` | Fetch the worst duplicate clusters with full occurrences, interpretation, signals, bucket, and score. Start here when choosing what to fix. |
-| `rescan` | `{ paths?, n? }` | `TopOffenders` | Ask the running LSP to execute `deslop.lsp.refreshReport`, synchronously reload the LSP-written state file, then return fresh top offenders. If the LSP socket is absent, falls back to cache reload only. Use when watcher lag or stale ranges are suspected. |
+| `rescan` | `{ paths?, n? }` | `RescanPayload` | Ask the running LSP to execute `deslop.lsp.refreshReport`, synchronously reload the LSP-written state file, then return fresh top offenders plus `generation` and `summary` change counts. If the LSP socket is absent, falls back to cache reload only with an empty summary. Use when watcher lag or stale ranges are suspected. |
 | `report-get` | `{ offset, limit }` (both required) | `ReportPage` | Fetch one page of the current duplication report. Worst offenders first. Call at session start; follow with `cluster-by-id` to drill in. Both `offset` and `limit` are required — the agent sizes its own context window. |
 | `report-query` | `{ offset, limit, language?, bucket?, path_contains?, min_score?, min_size? }` | `ReportPage` | Filtered lookup. Use instead of `report-get` when you can describe what you're looking for. |
 | `schema-doc` | `{}` | `SchemaDocPayload` | One-shot schema markdown. Call once when learning field meanings; report pages omit `schema_doc` by default to avoid repeated context bloat. |

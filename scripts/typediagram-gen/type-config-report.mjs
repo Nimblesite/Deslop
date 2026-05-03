@@ -17,10 +17,17 @@ export const REPORT_TYPE_CONFIG = {
       start_byte: "usize",
       end_byte: "usize",
     },
+    fieldSerdeAttrs: {
+      start_line: ["default"],
+      end_line: ["default"],
+    },
+    tsOptional: ["start_line", "end_line"],
     fieldDocs: {
       path: "Source path, relative to the scan root when possible.",
       start_byte: "Inclusive byte offset of the clone within the file.",
       end_byte: "Exclusive byte offset of the end of the clone.",
+      start_line: "One-based line number containing `start_byte`.",
+      end_line: "One-based line number containing the final byte of the clone.",
       hidden: "True when the file matches a `report_hide` pattern.",
     },
   },
@@ -112,10 +119,17 @@ export const REPORT_TYPE_CONFIG = {
     docs: "Single representative occurrence on a `ClusterSummary`. Bytes are the native unit on `ReportOccurrence`; agents convert to lines on demand.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { start_byte: "usize", end_byte: "usize" },
+    fieldSerdeAttrs: {
+      start_line: ["default"],
+      end_line: ["default"],
+    },
+    tsOptional: ["start_line", "end_line"],
     fieldDocs: {
       path: "Workspace-relative path of the occurrence.",
       start_byte: "Inclusive byte offset of the clone within the file.",
       end_byte: "Exclusive byte offset of the end of the clone.",
+      start_line: "One-based line number containing `start_byte`.",
+      end_line: "One-based line number containing the final byte of the clone.",
     },
   },
   ClusterSummary: {
@@ -192,13 +206,25 @@ export const REPORT_TYPE_CONFIG = {
     },
   },
   TopOffendersPayload: {
-    docs: "Wire payload for `top-offenders` and `rescan` MCP tools.",
+    docs: "Wire payload for the `top-offenders` MCP tool.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { total_clusters: "usize", n: "usize" },
     fieldDocs: {
       total_clusters: "Total clusters in the report (pre-truncation).",
       n: "Cap requested by the agent.",
       clusters: "Top `n` clusters, worst-first.",
+    },
+  },
+  RescanPayload: {
+    docs: "Wire payload for `rescan`. Mirrors top offenders and carries refresh progress so agents can confirm changed paths moved the report forward.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { total_clusters: "usize", n: "usize", generation: "u64" },
+    fieldDocs: {
+      total_clusters: "Total clusters in the refreshed report (pre-truncation).",
+      n: "Cap requested by the agent.",
+      clusters: "Top `n` clusters, worst-first, after the rescan.",
+      generation: "Generation exposed by the refreshed live report.",
+      summary: "Compact add/remove/update counts from the rescan pass.",
     },
   },
   RangeReport: {

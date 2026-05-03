@@ -212,3 +212,140 @@ fn now_ms() -> u64 {
         .unwrap_or_default();
     u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn records_handler_counts_and_phase_lifecycle() -> Result<(), Box<dyn std::error::Error>> {
+        let observability = Observability::default();
+        observability.record_handler("deslop/reportGet");
+        observability.record_handler("deslop/reportGet");
+
+        let guard = observability.start_phase(CpuPhase::Parsing, vec!["src/Alpha.cs".to_owned()]);
+        let running = observability.snapshot();
+        assert_eq!(running.current_phase, CpuPhase::Parsing);
+        assert_eq!(
+            running.handler_counts.get("deslop/reportGet"),
+            Some(&2),
+            "handler counts must saturating-increment by method name"
+        );
+        assert!(
+            running.last_100_phases.is_empty(),
+            "phase history is recorded when the guard drops"
+        );
+
+        drop(guard);
+        let finished = observability.snapshot();
+        assert_eq!(finished.current_phase, CpuPhase::Idle);
+        assert_eq!(finished.last_100_phases.len(), 1);
+        let record = finished
+            .last_100_phases
+            .first()
+            .ok_or_else(|| std::io::Error::other("finished phase missing"))?;
+        assert_eq!(record.phase, CpuPhase::Parsing);
+        assert_eq!(record.files_touched, vec!["src/Alpha.cs"]);
+        assert_eq!(record.cpu_ms, record.duration_ms);
+        assert!(record.started_at_ms <= now_ms());
+        Ok(())
+    }
+
+    #[test]
+    fn phase_history_keeps_only_the_last_hundred_records() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let observability = Observability::default();
+
+        for index in 0..=PHASE_HISTORY_LIMIT {
+            observability.finish_phase(CpuPhaseRecord {
+                phase: CpuPhase::ReportRendering,
+                started_at_ms: index as u64,
+                duration_ms: index as u64,
+                cpu_ms: index as u64,
+                files_touched: vec![format!("file-{index}.rs")],
+            });
+        }
+
+        let snapshot = observability.snapshot();
+        assert_eq!(snapshot.current_phase, CpuPhase::Idle);
+        assert_eq!(snapshot.last_100_phases.len(), PHASE_HISTORY_LIMIT);
+        let first = snapshot
+            .last_100_phases
+            .first()
+            .ok_or_else(|| std::io::Error::other("first phase missing"))?;
+        let last = snapshot
+            .last_100_phases
+            .last()
+            .ok_or_else(|| std::io::Error::other("last phase missing"))?;
+        assert_eq!(
+            first.files_touched,
+            vec!["file-1.rs"],
+            "oldest phase must be evicted when the rolling window is full"
+        );
+        assert_eq!(
+            last.files_touched,
+            vec![format!("file-{PHASE_HISTORY_LIMIT}.rs")]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_falls_back_to_empty_idle_report_when_lock_is_poisoned() {
+        let observability = Observability::default();
+        let poisoned = observability.clone();
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let _poisoned = std::panic::catch_unwind(move || {
+            if let Ok(_guard) = poisoned.inner.lock() {
+                assert_eq!(1, 2, "poison observability lock for fallback coverage");
+            }
+        });
+        std::panic::set_hook(previous_hook);
+
+        observability.record_handler("ignored-after-poison");
+        let guard = observability.start_phase(CpuPhase::Embedding, Vec::new());
+        drop(guard);
+
+        let snapshot = observability.snapshot();
+        assert_eq!(snapshot.current_phase, CpuPhase::Idle);
+        assert!(snapshot.last_100_phases.is_empty());
+        assert!(snapshot.handler_counts.is_empty());
+        assert_eq!(snapshot.in_flight.pending_watcher_events, 0);
+        assert_eq!(snapshot.in_flight.pending_embed_requests, 0);
+        assert_eq!(snapshot.in_flight.in_progress_parse_batch, None);
+    }
+
+    #[test]
+    fn cpu_phase_serializes_with_snake_case_names() -> Result<(), serde_json::Error> {
+        assert_eq!(serde_json::to_value(CpuPhase::Idle)?, "idle");
+        assert_eq!(
+            serde_json::to_value(CpuPhase::Fingerprinting)?,
+            "fingerprinting"
+        );
+        assert_eq!(serde_json::to_value(CpuPhase::Clustering)?, "clustering");
+        assert_eq!(serde_json::to_value(CpuPhase::Embedding)?, "embedding");
+        assert_eq!(
+            serde_json::to_value(CpuPhase::ReportRendering)?,
+            "report_rendering"
+        );
+        assert_eq!(
+            serde_json::to_value(CpuPhase::WatchingDebounce)?,
+            "watching_debounce"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn duration_and_timestamp_helpers_are_bounded() {
+        let started = Instant::now();
+        let elapsed = duration_ms(started);
+        assert!(
+            elapsed < u64::MAX,
+            "duration helper should convert ordinary monotonic elapsed time"
+        );
+        assert!(
+            now_ms() > 0,
+            "wall-clock helper should return a Unix epoch millisecond timestamp"
+        );
+    }
+}
