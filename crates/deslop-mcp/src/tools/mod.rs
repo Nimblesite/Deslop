@@ -35,12 +35,23 @@ pub struct ToolDefinition {
     pub input_schema: fn() -> Value,
 }
 
+/// Suffix appended to action-driving tool descriptions so agents know
+/// detector output is not infallible and have a one-step reporting
+/// path for clear misclassifications.
+macro_rules! fp_warn {
+    () => {
+        " False positives and mistakes possible — verify before acting. Log clear FPs and other bugs with `gh issue create -R Nimblesite/Deslop` or ask the user to file one at https://github.com/Nimblesite/Deslop/issues."
+    };
+}
+
 /// Static tool registry. `top-offenders` is the primary entry point.
 const TOOLS: [ToolDefinition; 12] = [
     ToolDefinition {
         name: "top-offenders",
-        description:
+        description: concat!(
             "Top N duplicate clusters with full data (occurrences, interpretation, signals, bucket, score). Default n=5. Start here — one call gives everything needed to fix duplication.",
+            fp_warn!(),
+        ),
         input_schema: schema_top_offenders,
     },
     ToolDefinition {
@@ -78,8 +89,10 @@ const TOOLS: [ToolDefinition; 12] = [
     },
     ToolDefinition {
         name: "find-similar",
-        description:
+        description: concat!(
             "Call BEFORE writing new code to PREVENT duplication: find existing clusters similar to a byte range or snippet, reuse the canonical, and avoid introducing new clones.",
+            fp_warn!(),
+        ),
         input_schema: schema_find_similar,
     },
     ToolDefinition {
