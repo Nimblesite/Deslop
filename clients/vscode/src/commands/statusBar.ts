@@ -36,7 +36,8 @@ export class StatusBar implements vscode.Disposable {
   }
 
   private render(): void {
-    const report = this.store.current.report;
+    // [VSIX-STATE-DIRTY]: status bar is a surface — show the visible count.
+    const report = this.store.current.visibleReport;
     const analysing = this._analysing.value;
     if (!report) {
       this.item.text = "$(sync~spin) dedup analysing";

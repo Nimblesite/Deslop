@@ -43,7 +43,10 @@ async function waitForRelativePathCluster(client: LanguageClient): Promise<Repor
 }
 
 async function waitForDiffTab(): Promise<vscode.TabInputTextDiff> {
-  for (let i = 0; i < 20; i += 1) {
+  // Under coverage instrumentation `vscode.diff` can take >2s to materialise
+  // a TabInputTextDiff after closeAllEditors. 10s matches the rest of this
+  // suite's wait helpers and absorbs that variance.
+  for (let i = 0; i < 100; i += 1) {
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
         if (tab.input instanceof vscode.TabInputTextDiff) return tab.input;

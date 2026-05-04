@@ -95,9 +95,10 @@ function wirePanel(
       report: reportWithDisplayLocations(report),
     });
   };
-  // effect() runs immediately (initial snapshot) and again whenever
-  // store.report changes — replaces the old two-step push + subscribe.
-  const sub = { dispose: effect(() => push(store.report.value)) };
+  // [VSIX-STATE-DIRTY]: webviews mirror the visible projection so an
+  // unsaved edit hides occurrences in lock-step with the tree. Commands
+  // that need cluster-id lookup go through canonical separately.
+  const sub = { dispose: effect(() => push(store.visibleReport.value)) };
   if (onReady) {
     // delay until the webview has mounted and acknowledged via `ready`
     const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {

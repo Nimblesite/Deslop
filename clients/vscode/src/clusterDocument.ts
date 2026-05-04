@@ -13,7 +13,9 @@ export function registerClusterDocumentProvider(
   context: vscode.ExtensionContext,
   store: ReportStore,
 ): void {
-  const provider = { provideTextDocumentContent: (uri: vscode.Uri) => clusterDocumentContent(uri, store.current.report) };
+  // [VSIX-STATE-DIRTY]: cluster preview documents are a surface — render
+  // from the visible projection so an in-progress edit drops the row.
+  const provider = { provideTextDocumentContent: (uri: vscode.Uri) => clusterDocumentContent(uri, store.current.visibleReport) };
   context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(CLUSTER_DOCUMENT_SCHEME, provider));
 }
 

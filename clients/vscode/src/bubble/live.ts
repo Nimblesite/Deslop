@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
-import { clusterHoverMarkdown } from "../clusterHover";
+import { clusterHoverMarkdown, clusterSlug } from "../clusterHover";
 import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity } from "../severity";
@@ -148,7 +148,9 @@ export class LiveBubble implements vscode.Disposable {
     range: vscode.Range,
     clusters: ReportCluster[],
   ): void {
-    const report = this.store.current.report;
+    // [VSIX-STATE-DIRTY]: bubble is a surface — derive from the visible
+    // projection so an in-progress edit dismisses the bubble immediately.
+    const report = this.store.current.visibleReport;
     if (!report) return;
     const best = bestBubbleCluster(
       report.clusters,
@@ -167,8 +169,6 @@ export class LiveBubble implements vscode.Disposable {
     const mode = vscode.workspace
       .getConfiguration("deslop")
       .get<string>("liveBubble.mode", "inline");
-    const rankIndex = report.clusters.findIndex((c) => c.id === best.id);
-    const rank = rankIndex >= 0 ? rankIndex + 1 : undefined;
     const lineEnd = editor.document.lineAt(range.end.line).range.end;
     const anchor = new vscode.Range(lineEnd, lineEnd);
 
@@ -177,7 +177,7 @@ export class LiveBubble implements vscode.Disposable {
       editor.setDecorations(this.ghostDecoration, [
         {
           range: editor.document.lineAt(range.end.line).range,
-          renderOptions: { after: { contentText: ghostText(best, severity, rank) } },
+          renderOptions: { after: { contentText: ghostText(best, severity) } },
         },
       ]);
     } else {
@@ -185,10 +185,10 @@ export class LiveBubble implements vscode.Disposable {
       editor.setDecorations(this.bubbleDecoration, [
         {
           range: anchor,
-          hoverMessage: bubbleHover(best, rank),
+          hoverMessage: bubbleHover(best),
           renderOptions: {
             after: {
-              contentText: inlineText(best, severity, rank),
+              contentText: inlineText(best, severity),
               color: SEVERITY_COLOR[severity],
               fontStyle: "normal",
               fontWeight: "600",
@@ -198,7 +198,7 @@ export class LiveBubble implements vscode.Disposable {
       ]);
     }
 
-    this.inlayProvider.set(editor.document.uri, range, best, rank);
+    this.inlayProvider.set(editor.document.uri, range, best);
     this.active = { editor, clusterId: best.id, range };
   }
 
@@ -214,8 +214,10 @@ export class LiveBubble implements vscode.Disposable {
 
   private clearRemovedActiveCluster(): void {
     // Read the signal unconditionally so the effect always tracks it,
-    // even when there is no active bubble yet.
-    const report = this.store.current.report;
+    // even when there is no active bubble yet. [VSIX-STATE-DIRTY]: the
+    // bubble must clear when an edit hides the cluster from the visible
+    // projection, even if the LSP still has it canonically.
+    const report = this.store.current.visibleReport;
     const active = this.active;
     if (!active || !report) return;
     const stillPresent = report.clusters.some(
@@ -245,16 +247,14 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
     uri: vscode.Uri;
     range: vscode.Range;
     cluster: ReportCluster;
-    rank: number | undefined;
   } | null = null;
 
   set(
     uri: vscode.Uri,
     range: vscode.Range,
     cluster: ReportCluster,
-    rank: number | undefined,
   ): void {
-    this.current = { uri, range, cluster, rank };
+    this.current = { uri, range, cluster };
     this.changeEmitter.fire();
   }
 
@@ -277,7 +277,7 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
       vscode.InlayHintKind.Type,
     );
     hint.paddingLeft = true;
-    hint.tooltip = bubbleHover(this.current.cluster, this.current.rank);
+    hint.tooltip = bubbleHover(this.current.cluster);
     return [hint];
   }
 }
@@ -295,39 +295,33 @@ export interface BubbleRenderParts {
 export function renderBubbleParts(
   cluster: ReportCluster,
   severity: Severity,
-  rank?: number,
 ): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
   const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  const rankPrefix = rank !== undefined ? `#${rank} ` : "";
+  const slug = clusterSlug(cluster);
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
   const strip = signalStrip(cluster);
   return {
-    inline: `  ${SEVERITY_DOT[severity]} ${rankPrefix}${title} × ${count}${location}`,
-    ghost: `  └─ ${SEVERITY_DOT[severity]} ${rankPrefix}${title}  ${strip}  × ${count}`,
+    inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}${location}`,
+    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title}  ${strip}  × ${count}`,
     signalStrip: strip,
-    hover: clusterHoverMarkdown(cluster, {
-      showDismiss: true,
-      ...(rank !== undefined && { rank }),
-    }),
+    hover: clusterHoverMarkdown(cluster, { showDismiss: true }),
   };
 }
 
 export function inlineText(
   cluster: ReportCluster,
   severity: Severity,
-  rank?: number,
 ): string {
-  return renderBubbleParts(cluster, severity, rank).inline;
+  return renderBubbleParts(cluster, severity).inline;
 }
 
 export function ghostText(
   cluster: ReportCluster,
   severity: Severity,
-  rank?: number,
 ): string {
-  return renderBubbleParts(cluster, severity, rank).ghost;
+  return renderBubbleParts(cluster, severity).ghost;
 }
 
 export function signalStrip(cluster: ReportCluster): string {
@@ -349,12 +343,11 @@ export function shortPath(p: string): string {
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
-// Bubble hover: full card with rank, canonical, and dismiss link.
+// Bubble hover: full card with slug, canonical, and dismiss link.
 export function bubbleHover(
   cluster: ReportCluster,
-  rank?: number,
 ): vscode.MarkdownString {
-  return renderBubbleParts(cluster, "faint", rank).hover;
+  return renderBubbleParts(cluster, "faint").hover;
 }
 
 function utf8ByteOffset(

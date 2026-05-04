@@ -6,13 +6,16 @@ use deslop_core::{
 };
 use serde_json::{json, Value};
 
+/// Length of the display slug — matches `docs/plans/cluster-slug-vs-rank.md`.
+const SLUG_LENGTH: usize = 7;
+
 /// Formats the cluster headline used by hover and diagnostics.
 #[must_use]
-pub fn cluster_summary(cluster: &ReportCluster, rank: Option<usize>) -> String {
+pub fn cluster_summary(cluster: &ReportCluster) -> String {
     let labels = bucket_labels(classify(cluster));
     format!(
-        "{rank}{title} — {action} {occurrences}.",
-        rank = rank_prefix(rank),
+        "{slug} {title} — {action} {occurrences}.",
+        slug = cluster_slug(cluster),
         title = labels.plain_title,
         action = labels.action_sentence,
         occurrences = occurrence_phrase(cluster),
@@ -63,7 +66,9 @@ fn occurrence_phrase(cluster: &ReportCluster) -> String {
     format!("{count} {suffix}")
 }
 
-/// Formats the optional global impact rank prefix.
-fn rank_prefix(rank: Option<usize>) -> String {
-    rank.map_or_else(String::new, |value| format!("#{value} "))
+/// Returns the stable display slug — first 7 chars of `cluster.id`.
+fn cluster_slug(cluster: &ReportCluster) -> &str {
+    let id = cluster.id.as_str();
+    let end = id.len().min(SLUG_LENGTH);
+    &id[..end]
 }

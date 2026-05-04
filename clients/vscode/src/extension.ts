@@ -404,9 +404,21 @@ export function wireNotifications(c: LanguageClient, store: ReportStore): void {
 }
 
 export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
-  return vscode.workspace.onDidChangeTextDocument((event) => {
+  // [VSIX-STATE-DIRTY]: text edits add to the dirty set so the visible
+  // projection elides their occurrences; saves remove the file from the set
+  // so the LSP's next reportChanged converges both views again.
+  const onChange = vscode.workspace.onDidChangeTextDocument((event) => {
     store.markFileDirty(event.document.uri.fsPath);
   });
+  const onSave = vscode.workspace.onDidSaveTextDocument((doc) => {
+    store.clearFileDirty(doc.uri.fsPath);
+  });
+  return {
+    dispose: () => {
+      onChange.dispose();
+      onSave.dispose();
+    },
+  };
 }
 
 export async function syncEmbeddingSettingsToLsp(

@@ -190,6 +190,21 @@ Rules that fall out of that:
 
 Centralisation is the enabler for [VSIX-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
 
+#### [VSIX-STATE-DIRTY] Canonical report vs. visible projection — dirty tracking contract
+
+When a user types into a file that participates in a cluster, two things must happen at once: stale byte ranges must stop driving decorations and tree rows ([#78], [#117]) **and** every command that resolves a cluster by id (`deslop.compareWithCanonical`, `deslop.openCluster`, `deslop.openOccurrence`, `deslop.openCanonicalFile`, `deslop.copyClusterLocations`, the cluster detail webview's row navigation) must continue to find that cluster until the LSP itself retracts it via `deslop/reportChanged`. Both requirements are non-negotiable.
+
+The store therefore exposes **two views of the same report**:
+
+- **Canonical report.** The exact snapshot the LSP last published. Only `deslop/reportChanged` (full snapshot or applied delta) writes it. Editor-side dirty tracking **never** mutates the canonical report. Every command that takes a cluster id, occurrence id, or file path resolves through the canonical report. Lookup by id never returns `undefined` for a cluster the LSP still considers live.
+- **Visible projection.** A `computed()` derived from the canonical report and the per-file dirty set. For each file with unsaved edits, occurrences in that file are filtered out of the projection. Clusters whose visible occurrence count drops below two are elided from the projection (a one-copy "top offender" is a contradiction — see [#117]). Tree providers, decorations, hovers, code lenses, the live bubble, the status bar, the activity-bar badge, and the session panel **only ever read the visible projection**. Webviews receive the visible projection through `postMessage`.
+
+`onDidChangeTextDocument` updates the dirty set, never the canonical report. On `didSaveTextDocument` (or external file watcher fire) the file leaves the dirty set; the LSP re-analyses and emits a fresh `deslop/reportChanged` which then updates the canonical report. The visible projection recomputes through the signal graph in the same microtask as either change.
+
+This makes the two requirements compose: the visible projection drops the cluster from the tree the moment the user types (no stale "1 copies"), while the canonical report keeps the cluster id resolvable so `compareWithCanonical` can still diff the canonical (saved) bytes against itself or another peer. When the user saves, the LSP confirms the new shape and both views converge.
+
+Tests must respect this contract too: any e2e test that injects a synthetic edit into a fixture file is responsible for restoring it before the suite ends, otherwise the dirty set leaks across suites and downstream tests see an unexpectedly empty visible projection.
+
 ### [VSIX-REACTIVITY] Preact Signals everywhere — every VSIX surface is reactive
 
 **This is a top-level invariant, not a webview implementation detail.** Deslop Live is reactive end-to-end: the file watcher fires, the scheduler re-analyses, the LSP pushes [`deslop/reportChanged`](live.md#live-notifications), the extension applies the delta to the [VSIX-STATE] store — and **every surface that displays report data must update in the same microtask**. Tree providers, decorations, the live bubble, code lenses, the status bar, hovers, the cluster webview, the embedding picker, the activity-bar badge, the session panel: all of them read from `@preact/signals`-backed values derived from the single store. **No surface holds its own cached copy of the report. No surface schedules its own refresh independent of a signal change.**

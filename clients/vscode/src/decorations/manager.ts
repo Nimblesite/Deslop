@@ -36,7 +36,9 @@ export class DecorationManager implements vscode.Disposable {
   }
 
   private redraw(editor: vscode.TextEditor): void {
-    const report = this.store.current.report;
+    // [VSIX-STATE-DIRTY]: render from the visible projection so decorations
+    // disappear immediately when the user types into a duplicated file.
+    const report = this.store.current.visibleReport;
     if (!report) {
       this.clear(editor);
       return;
@@ -76,7 +78,7 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
   });
 }
 
-// Kept for test harness — ClusterHoverProvider uses clusterHoverMarkdown directly with rank.
+// Kept for test harness — ClusterHoverProvider uses clusterHoverMarkdown directly.
 // Uses visibleOccurrenceCount so the count reflects what the user can act on.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
   return clusterHoverMarkdown(cluster, { count: visibleOccurrenceCount(cluster) });

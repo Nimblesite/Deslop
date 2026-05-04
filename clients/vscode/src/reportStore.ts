@@ -4,9 +4,24 @@
 // onDidChange is a compatibility shim for places that have not yet
 // migrated to effect() — it skips the initial synchronous run so
 // subscriber counts in existing tests stay correct.
+//
+// The store exposes two views of the same data ([VSIX-STATE-DIRTY]):
+//   * report          — canonical truth from the LSP. Only setSnapshot /
+//                       applyDelta (driven by deslop/reportChanged) write it.
+//                       Lookup by cluster id is always honoured here so
+//                       commands like compareWithCanonical, openCluster,
+//                       openOccurrence keep working through unsaved edits.
+//   * visibleReport   — derived projection. For each file the user has
+//                       edited locally (markFileDirty), occurrences in that
+//                       file are elided. Clusters whose visible occurrence
+//                       count drops below two are dropped from this view
+//                       (#117 — a one-copy "top offender" is a contradiction).
+//                       Surfaces — tree providers, decorations, bubbles,
+//                       hovers, code lenses, status bar, session panel,
+//                       webviews — render from this projection.
 
 import * as vscode from "vscode";
-import { signal, batch, effect, ReadonlySignal } from "@preact/signals-core";
+import { signal, batch, effect, computed, ReadonlySignal } from "@preact/signals-core";
 
 import {
   EmbeddingProgress,
@@ -22,7 +37,10 @@ export type LifecyclePhase =
   | { kind: "failed"; message: string };
 
 export interface ReportState {
+  /** Canonical report — what the LSP last published. Use for cluster-id lookups in commands. */
   report: Report | null;
+  /** Visible projection — canonical with dirty-file occurrences elided. Use for any rendered surface. */
+  visibleReport: Report | null;
   generation: number;
   lifecycle: LifecyclePhase;
   pendingEmbeddingModel: string | null;
@@ -31,13 +49,20 @@ export interface ReportState {
 
 export class ReportStore implements vscode.Disposable {
   private readonly _report = signal<Report | null>(null);
+  private readonly _dirtyFiles = signal<ReadonlySet<string>>(new Set());
   private readonly _generation = signal<number>(0);
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
 
-  /** Signal for direct use in effect() — re-renders only when the report changes. */
+  private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
+    projectVisible(this._report.value, this._dirtyFiles.value),
+  );
+
+  /** Canonical report signal — only the LSP writes this via setSnapshot / applyDelta. */
   readonly report: ReadonlySignal<Report | null> = this._report;
+  /** Visible projection signal — surfaces render from this so unsaved edits hide stale rows. */
+  readonly visibleReport: ReadonlySignal<Report | null> = this._visibleReport;
   /** Signal for direct use in effect() — re-renders only when lifecycle changes. */
   readonly lifecycle: ReadonlySignal<LifecyclePhase> = this._lifecycle;
   /** Signal for direct use in effect() — re-renders when embedding model pending changes. */
@@ -49,6 +74,7 @@ export class ReportStore implements vscode.Disposable {
   get current(): ReportState {
     return {
       report: this._report.value,
+      visibleReport: this._visibleReport.value,
       generation: this._generation.value,
       lifecycle: this._lifecycle.value,
       pendingEmbeddingModel: this._pendingEmbeddingModel.value,
@@ -109,38 +135,32 @@ export class ReportStore implements vscode.Disposable {
     });
   }
 
+  /**
+   * Mark a file as having unsaved local edits. Updates the dirty set only —
+   * the canonical report is untouched ([VSIX-STATE-DIRTY]). The visible
+   * projection recomputes through `visibleReport`, eliding occurrences in
+   * this file and any cluster that drops below two visible occurrences.
+   */
   markFileDirty(path: string): void {
-    const current = this._report.value;
-    if (!current) return;
-    let changed = false;
-    const clusters: ReportCluster[] = [];
-    for (const cluster of current.clusters) {
-      const kept = cluster.occurrences.filter((occurrence) => !sameReportFile(occurrence.path, path));
-      const removed = cluster.occurrences.length - kept.length;
-      if (removed === 0) {
-        clusters.push(cluster);
-        continue;
-      }
-      changed = true;
-      if (kept.length < 2) continue;
-      const oldTotal = occurrenceTotal(cluster);
-      const nextTotal = Math.max(kept.length, oldTotal - removed);
-      clusters.push({
-        ...cluster,
-        size: nextTotal,
-        occurrences: kept,
-        ...(cluster.occurrences_total !== undefined && { occurrences_total: nextTotal }),
-      });
-    }
-    if (!changed) return;
-    this._report.value = {
-      ...current,
-      metrics: {
-        ...current.metrics,
-        clusters_total: clusters.length,
-      },
-      clusters,
-    };
+    const key = normalisePath(path);
+    if (this._dirtyFiles.value.has(key)) return;
+    const next = new Set(this._dirtyFiles.value);
+    next.add(key);
+    this._dirtyFiles.value = next;
+  }
+
+  /**
+   * Drop a file from the dirty set. Wired to `onDidSaveTextDocument` and to
+   * the LSP's external-change watcher: once the file's bytes match what the
+   * LSP last analysed, the visible projection should mirror the canonical
+   * report again ([VSIX-STATE-DIRTY]).
+   */
+  clearFileDirty(path: string): void {
+    const key = normalisePath(path);
+    if (!this._dirtyFiles.value.has(key)) return;
+    const next = new Set(this._dirtyFiles.value);
+    next.delete(key);
+    this._dirtyFiles.value = next;
   }
 
   setLifecycle(lifecycle: LifecyclePhase): void {
@@ -159,18 +179,54 @@ export class ReportStore implements vscode.Disposable {
   }
 }
 
+function projectVisible(canonical: Report | null, dirty: ReadonlySet<string>): Report | null {
+  if (!canonical) return null;
+  if (dirty.size === 0) return canonical;
+  let changed = false;
+  const clusters: ReportCluster[] = [];
+  for (const cluster of canonical.clusters) {
+    const kept = cluster.occurrences.filter((occurrence) => !occurrenceIsDirty(occurrence.path, dirty));
+    const removed = cluster.occurrences.length - kept.length;
+    if (removed === 0) {
+      clusters.push(cluster);
+      continue;
+    }
+    changed = true;
+    if (kept.length < 2) continue;
+    const oldTotal = occurrenceTotal(cluster);
+    const nextTotal = Math.max(kept.length, oldTotal - removed);
+    clusters.push({
+      ...cluster,
+      size: nextTotal,
+      occurrences: kept,
+      ...(cluster.occurrences_total !== undefined && { occurrences_total: nextTotal }),
+    });
+  }
+  if (!changed) return canonical;
+  return {
+    ...canonical,
+    metrics: {
+      ...canonical.metrics,
+      clusters_total: clusters.length,
+    },
+    clusters,
+  };
+}
+
+function occurrenceIsDirty(occurrencePath: string, dirty: ReadonlySet<string>): boolean {
+  const left = normalisePath(occurrencePath);
+  for (const dirtyPath of dirty) {
+    if (samePathOrSuffix(left, dirtyPath) || samePathOrSuffix(dirtyPath, left)) return true;
+  }
+  return false;
+}
+
 function occurrenceTotal(cluster: ReportCluster): number {
   const total =
     cluster.occurrences_total && cluster.occurrences_total > 0
       ? cluster.occurrences_total
       : cluster.size;
   return Math.max(total, cluster.occurrences.length);
-}
-
-function sameReportFile(reportPath: string, changedPath: string): boolean {
-  const left = normalisePath(reportPath);
-  const right = normalisePath(changedPath);
-  return samePathOrSuffix(left, right) || samePathOrSuffix(right, left);
 }
 
 function samePathOrSuffix(left: string, right: string): boolean {

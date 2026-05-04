@@ -360,11 +360,9 @@ impl LanguageServer for LspBackend {
         if clusters.is_empty() {
             return Ok(None);
         }
-        let ranked = self.service.report_get().await;
         let workspace_root = self.service.session_config().await.workspace_root;
         Ok(hover::build_for_clusters_with_root(
             &clusters,
-            &ranked.clusters,
             &workspace_root,
         ))
     }

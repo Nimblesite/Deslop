@@ -14,13 +14,14 @@ export class ClusterHoverProvider implements vscode.HoverProvider {
 
   provideHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | null {
     const activePath = document.uri.fsPath;
-    for (const [index, cluster] of this.store.current.report?.clusters.entries() ?? []) {
+    // [VSIX-STATE-DIRTY]: hovers are a surface — read the visible projection.
+    for (const cluster of this.store.current.visibleReport?.clusters ?? []) {
       const occurrence = cluster.occurrences.find((item) =>
         sameFile(item.path, activePath) &&
         byteRangeToRange(document, item)?.contains(position),
       );
       if (occurrence) return new vscode.Hover(
-        clusterHoverMarkdown(cluster, { rank: index + 1, showCategory: false }),
+        clusterHoverMarkdown(cluster, { showCategory: false }),
       );
     }
     return null;

@@ -1,21 +1,29 @@
 // Shared hover card renderer — [VSIX-HOVER-SHARED].
 // Two layouts controlled by `showCategory`:
 //   Full (bubble, no adjacent diagnostic):
-//     **#N Category** × count  /  Canonical: `path`  /  links + Dismiss
+//     **{slug} Category** × count  /  Canonical: `path`  /  links + Dismiss
 //   Compact (squiggle hover, alongside diagnostic):
-//     **#N** × count  /  Canonical: `path`  /  links + Copy for AI
+//     **{slug}** × count  /  Canonical: `path`  /  links + Copy for AI
 //   The compact form omits the category label — the diagnostic already shows it.
+// Slug is the first 7 hex chars of cluster.id — stable across runs.
+// See docs/plans/cluster-slug-vs-rank.md.
 
 import * as vscode from "vscode";
 
 import { bucketLabels, occurrenceCount, ReportCluster, resolveBucket } from "./types/report";
 
 export interface ClusterHoverOptions {
-  readonly rank?: number;
   readonly showDismiss?: boolean;
   readonly count?: number;
   /// When false, the category label is omitted (use alongside a diagnostic).
   readonly showCategory?: boolean;
+}
+
+const SLUG_LENGTH = 7;
+
+/// Returns the stable display slug for a cluster (first 7 hex chars of id).
+export function clusterSlug(cluster: ReportCluster): string {
+  return cluster.id.slice(0, SLUG_LENGTH);
 }
 
 export function clusterHoverMarkdown(
@@ -25,14 +33,14 @@ export function clusterHoverMarkdown(
   const md = new vscode.MarkdownString();
   md.isTrusted = true;
   const count = options.count ?? occurrenceCount(cluster);
-  const rankPrefix = options.rank !== undefined ? `#${options.rank} ` : "";
+  const slug = clusterSlug(cluster);
   const showCategory = options.showCategory ?? true;
 
   if (showCategory) {
     const labels = bucketLabels(resolveBucket(cluster));
-    md.appendMarkdown(`**${rankPrefix}${labels.plainTitle}** × ${count}\n\n`);
+    md.appendMarkdown(`**${slug} ${labels.plainTitle}** × ${count}\n\n`);
   } else {
-    md.appendMarkdown(`**${rankPrefix}**× ${count}\n\n`);
+    md.appendMarkdown(`**${slug}** × ${count}\n\n`);
   }
 
   const canonical = cluster.occurrences[0];
