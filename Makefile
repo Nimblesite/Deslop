@@ -18,14 +18,14 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
-  # Wrapper is checked in at clients/jetbrains/gradlew{,.bat} so a fresh
-  # checkout has zero Gradle bootstrap requirement beyond a JDK on PATH.
-  # See DTK-MIG-DESLOP-JETBRAINS-GRADLE.
-  GRADLE ?= .\gradlew.bat
+  # No gradlew wrapper is checked in: callers (devs + CI) must provide
+  # `gradle` on PATH or override `GRADLE=...`. CI sets `GRADLE=gradle`
+  # via the gradle/actions/setup-gradle@v4 install.
+  GRADLE ?= gradle
 else
   RM = rm -rf
   MKDIR = mkdir -p
-  GRADLE ?= ./gradlew
+  GRADLE ?= gradle
 endif
 
 # ---------------------------------------------------------------------------
@@ -114,11 +114,16 @@ ci:
 	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
 
-## setup: Post-create dev environment setup (used by devcontainer)
+## setup: Post-create dev environment setup (used by devcontainer).
+##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
+##        per CLAUDE.md dependency-pinning rules. The CLI is required by
+##        `make typediagram-gen` and the deslop-core `build.rs` on every
+##        cargo build, so a fresh devcontainer needs it on PATH.
 setup:
 	@echo "==> Setting up development environment..."
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
+	npm install -g typediagram@0.5.0
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
