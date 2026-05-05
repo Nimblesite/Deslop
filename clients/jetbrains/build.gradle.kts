@@ -57,6 +57,11 @@ intellijPlatform {
 
 tasks.test {
     useJUnitPlatform()
+    // The real-binary contract test (DeslopRealBinaryContractTest) is opt-in
+    // via this system property. It depends on a release build of deslop-lsp
+    // existing at target/release/. CI sets DESLOP_LSP_REAL_BINARY to the
+    // built path; locally `make jetbrains-real-binary-test` runs it.
+    System.getenv("DESLOP_LSP_REAL_BINARY")?.let { systemProperty("deslop.lsp.realBinary", it) }
 }
 
 val hostPlatformName = hostPlatform()

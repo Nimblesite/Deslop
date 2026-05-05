@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package typediagram-gen
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
 
 JETBRAINS_DIR := clients/jetbrains
 
@@ -185,9 +185,15 @@ delete-path-binaries:
 	done
 
 ## deployment-verify: Validate deployment manifest and built binary contracts.
+##                    Also runs the verifier proof suite which builds fake
+##                    binaries and plugin zips violating each Shipwright
+##                    contract rule and asserts every verifier rejects them.
+##                    Without this, a silently-broken verifier could let a
+##                    drifted binary ship.
 deployment-verify: build
 	node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
 	node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release
+	node scripts/test-verifiers.mjs
 
 ## vsix-install: Install Node deps for clients/vscode + webview-ui
 vsix-install:
@@ -308,6 +314,20 @@ jetbrains-verify:
 jetbrains-package: jetbrains-build
 	@$(MAKE) jetbrains-verify
 	node scripts/verify-jetbrains-package.mjs
+
+## jetbrains-test: Run the JetBrains resolver unit tests via the wrapper.
+jetbrains-test:
+	cd $(JETBRAINS_DIR) && $(GRADLE) test --no-daemon
+
+## jetbrains-real-binary-test: Run the resolver tests AND the real-binary
+##                             contract test, which copies target/release/deslop-lsp
+##                             into a synthetic plugin root and proves the
+##                             resolver accepts it AND rejects manifest drift.
+##                             Requires a release build of deslop-lsp.
+jetbrains-real-binary-test:
+	cargo build --release -p deslop-lsp
+	cd $(JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
+	  $(GRADLE) test --no-daemon --rerun-tasks
 
 ## help: List all available targets
 help:

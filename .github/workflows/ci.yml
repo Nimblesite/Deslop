@@ -171,9 +171,13 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "9.0.0"
+      # The Gradle wrapper at clients/jetbrains/gradlew is the source of truth.
+      # No external setup-gradle step needed.
+
+      # Resolver tests against the real released deslop-lsp binary —
+      # proves the version contract end-to-end (DTK-MIG-DESLOP-JETBRAINS-RESOLVER).
+      - name: jetbrains-real-binary-test
+        run: make jetbrains-real-binary-test
 
       - name: jetbrains-package deployment gate
         run: make jetbrains-package
