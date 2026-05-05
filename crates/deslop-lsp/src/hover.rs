@@ -74,10 +74,7 @@ pub fn markdown_for_clusters(clusters: &[ReportCluster]) -> String {
 }
 
 /// Renders human-visible hover markdown without raw signal details.
-fn human_markdown(
-    clusters: &[ReportCluster],
-    workspace_root: Option<&Path>,
-) -> String {
+fn human_markdown(clusters: &[ReportCluster], workspace_root: Option<&Path>) -> String {
     render_clusters(clusters, workspace_root, Audience::Human)
 }
 
