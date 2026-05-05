@@ -7,7 +7,6 @@
 
 .PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package typediagram-gen
 
-GRADLE_VERSION ?= 9.0.0
 JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
@@ -19,11 +18,14 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
-  GRADLE ?= gradle
+  # Wrapper is checked in at clients/jetbrains/gradlew{,.bat} so a fresh
+  # checkout has zero Gradle bootstrap requirement beyond a JDK on PATH.
+  # See DTK-MIG-DESLOP-JETBRAINS-GRADLE.
+  GRADLE ?= .\gradlew.bat
 else
   RM = rm -rf
   MKDIR = mkdir -p
-  GRADLE ?= $(shell _gradle=$$(command -v gradle 2>/dev/null); if [ -z "$$_gradle" ]; then _gradle=$$(find "$(HOME)/.gradle/wrapper/dists" -path "*/gradle-$(GRADLE_VERSION)/bin/gradle" -type f 2>/dev/null | sort | tail -n 1); fi; printf '%s' "$${_gradle:-gradle}")
+  GRADLE ?= ./gradlew
 endif
 
 # ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ typediagram-gen:
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `scripts/coverage-check.sh` enforces
 ##       each one independently — no workspace roll-up masking.
-test: delete-path-binaries
+test: delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
@@ -75,13 +77,19 @@ test: delete-path-binaries
 ##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
 ##       mention in site/src and examples must co-locate a canonical
 ##       bucket label.
-lint:
+##       Depends on typediagram-gen so the wire-generated module exists
+##       before clippy parses the workspace on a fresh checkout.
+lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
-fmt:
+##      Depends on typediagram-gen because rustfmt walks the module tree
+##      and refuses to run when `mod wire_generated;` cannot resolve. The
+##      generated file is gitignored per CLAUDE.md, so on a clean CI
+##      checkout it must be produced before fmt walks the sources.
+fmt: typediagram-gen
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
 	@_fmt_out=$$(cargo fmt --all$(if $(CHECK), --check,) 2>&1); _fmt_rc=$$?; \
 	 echo "$$_fmt_out" | grep -v "unstable features are only available in nightly channel" || true; \
