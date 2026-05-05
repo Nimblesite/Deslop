@@ -114,11 +114,16 @@ ci:
 	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
 
-## setup: Post-create dev environment setup (used by devcontainer)
+## setup: Post-create dev environment setup (used by devcontainer).
+##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
+##        per CLAUDE.md dependency-pinning rules. The CLI is required by
+##        `make typediagram-gen` and the deslop-core `build.rs` on every
+##        cargo build, so a fresh devcontainer needs it on PATH.
 setup:
 	@echo "==> Setting up development environment..."
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
+	npm install -g typediagram@0.6.0
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
