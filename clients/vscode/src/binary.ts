@@ -157,7 +157,7 @@ function verifyCandidate(
     return resolvedBinary(component, candidate, probe.version);
   }
   if (!candidate.hardFailure) return undefined;
-  throw new BinaryVerificationError(component, candidate, foundVersion(probe));
+  throw new BinaryVerificationError(component, candidate, probeVersion(probe));
 }
 
 function handleMissing(candidate: Candidate, component?: DeploymentComponent): undefined {
@@ -308,7 +308,7 @@ function throwMissing(component: DeploymentComponent, skipped?: Candidate): neve
   throw new Error(`No matching ${component.id} ${component.expectedVersion} binary found.${suffix}`);
 }
 
-function foundVersion(probe: VersionProbe): string {
+function probeVersion(probe: VersionProbe): string {
   return probe.name && probe.version ? `${probe.name} ${probe.version}` : probe.raw || "not found";
 }
 

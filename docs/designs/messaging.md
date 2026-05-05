@@ -27,7 +27,7 @@ The brand voice is **academic in construction, urgent in tone**. Read it aloud a
 - **Feeds AI agents mid-generation.** Over MCP, the agent can ask *"is something like this already in the repo?"* before writing a single token. Duplication gets prevented, not audited.
 - **Feeds humans inline.** Over LSP, the editor lights up the cluster at end-of-line while the developer is still typing.
 - **Same engine on every surface.** LSP, MCP, CLI, webview — one `deslop-core` pipeline, one cache, one schema. Cold start and hot-path are the same code.
-- **Worst-first ranking.** Score = clone_size × clone_count × spanned_LOC. The top of the live view is always where the largest payoff lives.
+- **Worst-first ranking.** `weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)` (see `crates/deslop-core/src/cluster.rs::rank_weight`). The top of the live view is always where the largest payoff lives.
 - **Tree-sitter, not regex.** Four duplication categories — Identical, Nearly identical, Loosely similar, Same behavior — detected through AST fingerprints and embedding fusion, never line-matching.
 - **Structured output as product.** JSON is canonical; text and HTML renderers are views. Agents consume the same schema humans read.
 

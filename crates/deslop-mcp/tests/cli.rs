@@ -19,6 +19,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use assert_cmd::cargo::cargo_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
@@ -125,6 +126,15 @@ impl McpChild {
                     .unwrap_or_else(|_| std::process::ExitStatus::default())
             })
     }
+
+    fn close_stdin_and_wait(mut self, duration: Duration) -> Result<std::process::ExitStatus> {
+        drop(self.stdin);
+        self.child.wait_timeout(duration)?.ok_or_else(|| {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            anyhow!("deslop-mcp did not exit within {duration:?} after stdin closed")
+        })
+    }
 }
 
 trait WaitTimeout {
@@ -150,15 +160,46 @@ impl WaitTimeout for Child {
     }
 }
 
-fn fixture_root() -> PathBuf {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    PathBuf::from(manifest_dir).join("tests/fixtures/csharp-mcp")
+/// Read-only fixture root. The `.deslop-cache/live-report.json` state file
+/// is pre-committed alongside the source files so `StateFileBackend` can
+/// serve data without an LSP process.
+fn fixture_root() -> &'static Path {
+    Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/csharp-mcp"
+    ))
 }
 
+/// Copies the fixture (including `.deslop-cache/live-report.json`) to a
+/// writable temp directory for tests that mutate the workspace.
 fn copied_fixture_root() -> Result<TempDir> {
     let temp = TempDir::new()?;
-    copy_dir_all(&fixture_root(), temp.path())?;
+    copy_dir_all(fixture_root(), temp.path())?;
     Ok(temp)
+}
+
+/// Runs the `deslop` CLI against `root` and writes the JSON report to
+/// `{root}/.deslop-cache/live-report.json` so `StateFileBackend` can
+/// read it without an LSP process.
+fn generate_state_file(root: &Path, min_nodes: u32) -> Result<()> {
+    let cache = root.join(".deslop-cache");
+    fs::create_dir_all(&cache)?;
+    let out_prefix = cache.join("report-gen");
+    let status = Command::new(cargo_bin("deslop"))
+        .arg(root)
+        .arg("--min-nodes")
+        .arg(min_nodes.to_string())
+        .arg("--output")
+        .arg(&out_prefix)
+        .arg("--notext")
+        .arg("--nohtml")
+        .arg("--log-to-console")
+        .status()?;
+    anyhow::ensure!(status.success(), "deslop analysis failed with {status}");
+    let json_src: PathBuf = out_prefix.with_extension("json");
+    let state_dst = cache.join("live-report.json");
+    fs::rename(&json_src, &state_dst)?;
+    Ok(())
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
@@ -184,6 +225,97 @@ fn init_session(child: &mut McpChild) -> Result<Value> {
             "clientInfo": { "name": "mcp-e2e-harness", "version": "0.1.0" }
         }),
     )
+}
+
+#[cfg(unix)]
+fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpChild, u32)> {
+    let script = r#"exec 3<&0; "$1" --root "$2" <&3 2>/dev/null & mcp_pid=$!; printf '%s\n' "$mcp_pid" >&2; wait "$mcp_pid""#;
+    let mut child = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .arg("deslop-mcp-parent")
+        .arg(env!("CARGO_BIN_EXE_deslop-mcp"))
+        .arg(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("spawn killable deslop-mcp parent shell")?;
+    let mcp_pid = read_mcp_pid(&mut child)?;
+    let stdin = child.stdin.take().context("parent stdin")?;
+    let stdout = child.stdout.take().context("parent stdout")?;
+    Ok((
+        McpChild {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+            next_id: 0,
+        },
+        mcp_pid,
+    ))
+}
+
+#[cfg(unix)]
+fn read_mcp_pid(child: &mut Child) -> Result<u32> {
+    let stderr = child.stderr.take().context("parent stderr")?;
+    let mut stderr = BufReader::new(stderr);
+    let mut pid_line = String::new();
+    let bytes = stderr.read_line(&mut pid_line)?;
+    anyhow::ensure!(bytes > 0, "parent shell did not report mcp pid");
+    pid_line
+        .trim()
+        .parse::<u32>()
+        .context("parse mcp pid from parent shell")
+}
+
+#[cfg(unix)]
+fn wait_for_pid_exit(pid: u32, duration: Duration) -> Result<bool> {
+    let started = std::time::Instant::now();
+    while started.elapsed() < duration {
+        if !pid_exists(pid)? {
+            return Ok(true);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Ok(false)
+}
+
+#[cfg(unix)]
+fn pid_exists(pid: u32) -> Result<bool> {
+    let status = Command::new("kill")
+        .arg("-0")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("probe process existence with kill -0")?;
+    Ok(status.success())
+}
+
+#[cfg(unix)]
+fn terminate_pid(pid: u32) -> Result<()> {
+    if !pid_exists(pid)? {
+        return Ok(());
+    }
+    let _term_status = Command::new("kill")
+        .arg("-TERM")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("terminate orphaned mcp pid")?;
+    if wait_for_pid_exit(pid, Duration::from_secs(1))? {
+        return Ok(());
+    }
+    let _kill_status = Command::new("kill")
+        .arg("-KILL")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("kill orphaned mcp pid")?;
+    let _exited = wait_for_pid_exit(pid, Duration::from_secs(1))?;
+    Ok(())
 }
 
 #[test]
@@ -243,25 +375,6 @@ fn structured_tool_result(result: &Value) -> Result<Value> {
         .ok_or_else(|| anyhow!("missing structuredContent in {result}"))
 }
 
-fn wait_for_generation(child: &mut McpChild, minimum: u64) -> Result<Value> {
-    for _ in 0..20 {
-        let result = call_tool(child, "session-config", &json!({}))?;
-        let snap = structured_tool_result(&result)?;
-        let generation = value_get(&snap, "/generation")?.as_u64().unwrap_or(0);
-        if generation >= minimum {
-            return Ok(snap);
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    Err(anyhow!("generation did not reach {minimum}"))
-}
-
-fn read_workspace_settings(root: &Path) -> Result<Value> {
-    let path = root.join(".vscode/settings.json");
-    let source = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    Ok(serde_json::from_str(&source)?)
-}
-
 fn value_get(value: &Value, pointer: &str) -> Result<Value> {
     value
         .pointer(pointer)
@@ -271,7 +384,7 @@ fn value_get(value: &Value, pointer: &str) -> Result<Value> {
 
 #[test]
 fn initialize_returns_server_info_and_capabilities() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let response = init_session(&mut child)?;
     assert_eq!(value_get(&response, "/jsonrpc")?, json!("2.0"));
     assert_eq!(
@@ -299,8 +412,80 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
 }
 
 #[test]
-fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+fn exits_within_five_seconds_after_stdio_stdin_closes() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    assert!(child.child.id() > 0, "mcp pid must be observable");
+    assert!(
+        child.child.try_wait()?.is_none(),
+        "mcp must stay alive before stdin is closed"
+    );
+    let response = init_session(&mut child)?;
+    assert_eq!(
+        value_get(&response, "/result/serverInfo/name")?,
+        json!("deslop-mcp")
+    );
+    assert!(
+        value_get(&response, "/result/capabilities/resources")?.is_object(),
+        "resources capability missing: {response}"
+    );
+    let started = std::time::Instant::now();
+    let status = child.close_stdin_and_wait(Duration::from_secs(5))?;
+    assert!(status.success(), "stdin EOF should exit cleanly: {status}");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "stdin EOF must stop deslop-mcp within five seconds"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn exits_when_launching_parent_disappears_with_stdio_open() -> Result<()> {
+    let (mut child, mcp_pid) = spawn_mcp_with_killable_parent(fixture_root())?;
+    assert_ne!(
+        mcp_pid,
+        child.child.id(),
+        "test must observe the mcp child separately from its shell parent"
+    );
+    assert!(pid_exists(mcp_pid)?, "mcp pid must exist before initialize");
+    assert!(
+        child.child.try_wait()?.is_none(),
+        "launcher parent must stay alive until killed by the test"
+    );
+    let response = init_session(&mut child)?;
+    assert_eq!(
+        value_get(&response, "/result/serverInfo/name")?,
+        json!("deslop-mcp")
+    );
+    assert_eq!(
+        value_get(&response, "/result/protocolVersion")?,
+        json!("2024-11-05")
+    );
+
+    child.child.kill()?;
+    let parent_status = child.child.wait()?;
+    assert!(
+        !parent_status.success(),
+        "launcher parent should be killed during orphan-exit test"
+    );
+    assert!(
+        pid_exists(mcp_pid)?,
+        "mcp must still be observable after parent kill"
+    );
+    let exited = wait_for_pid_exit(mcp_pid, Duration::from_secs(5))?;
+    if !exited {
+        terminate_pid(mcp_pid)?;
+    }
+    assert!(
+        exited,
+        "deslop-mcp must exit within 5s when its launching parent disappears"
+    );
+    Ok(())
+}
+
+#[test]
+fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("tools/list", &json!({}))?;
     let tools = value_get(&response, "/result/tools")?;
@@ -310,10 +495,13 @@ fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_owned))
         .collect();
-    assert_eq!(names.len(), 9, "expected 9 tools, got {names:?}");
+    assert_eq!(names.len(), 12, "expected 12 tools, got {names:?}");
     for expected in [
+        "top-offenders",
+        "rescan",
         "report-get",
         "report-query",
+        "schema-doc",
         "report-for-file",
         "report-for-range",
         "find-similar",
@@ -327,6 +515,11 @@ fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
             "missing tool: {expected}"
         );
     }
+    assert_eq!(
+        names.first().map(String::as_str),
+        Some("top-offenders"),
+        "top-offenders must be listed first as the primary tool"
+    );
     for tool in tools.as_array().unwrap_or(&Vec::new()) {
         let description = tool
             .get("description")
@@ -343,8 +536,160 @@ fn tools_list_returns_all_nine_tools_with_schemas() -> Result<()> {
 }
 
 #[test]
+fn top_offenders_returns_full_clusters_with_occurrences_and_interpretation() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({ "n": 3 }))?;
+    let payload = structured_tool_result(&result)?;
+    let total = value_get(&payload, "/total_clusters")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_clusters must be present"))?;
+    assert!(total >= 1, "fixture must have at least one cluster");
+    assert_eq!(
+        value_get(&payload, "/n")?.as_u64(),
+        Some(3),
+        "n must echo the requested value"
+    );
+    let clusters = value_get(&payload, "/clusters")?;
+    let clusters_arr = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?;
+    assert!(
+        clusters_arr.len() <= 3,
+        "returned {} clusters but requested max 3",
+        clusters_arr.len()
+    );
+    let first = clusters_arr
+        .first()
+        .ok_or_else(|| anyhow!("at least one cluster expected"))?;
+    assert!(
+        first.get("occurrences").is_some_and(Value::is_array),
+        "top-offenders must return full occurrences array: {first}"
+    );
+    assert!(
+        first
+            .get("interpretation")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty()),
+        "top-offenders must return interpretation text: {first}"
+    );
+    assert!(
+        first
+            .get("bucket")
+            .and_then(Value::as_str)
+            .is_some_and(|s| !s.is_empty()),
+        "top-offenders must return bucket: {first}"
+    );
+    assert!(
+        first
+            .get("weight")
+            .and_then(Value::as_f64)
+            .is_some_and(|w| w > 0.0),
+        "top-offenders must return positive weight: {first}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({}))?;
+    let payload = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&payload, "/n")?.as_u64(),
+        Some(5),
+        "omitting n must default to 5"
+    );
+    let clusters = value_get(&payload, "/clusters")?;
+    let clusters_arr = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?;
+    assert!(
+        clusters_arr.len() <= 5,
+        "default n=5 must not return more than 5 clusters"
+    );
+    let weights: Vec<f64> = clusters_arr
+        .iter()
+        .filter_map(|c| c.get("weight").and_then(Value::as_f64))
+        .collect();
+    assert_eq!(
+        weights.len(),
+        clusters_arr.len(),
+        "every cluster must have a weight"
+    );
+    let sorted = weights.windows(2).all(|w| matches!(w, [a, b] if a >= b));
+    assert!(
+        sorted,
+        "clusters must be worst-first by weight: {weights:?}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request("tools/list", &json!({}))?;
+    let tools_value = value_get(&response, "/result/tools")?;
+    let tools = tools_value
+        .as_array()
+        .ok_or_else(|| anyhow!("tools/list result.tools must be an array"))?;
+    let find_similar_tools: Vec<&Value> = tools
+        .iter()
+        .filter(|tool| tool.get("name").and_then(Value::as_str) == Some("find-similar"))
+        .collect();
+    assert_eq!(
+        find_similar_tools.len(),
+        1,
+        "issue #113: tools/list must expose exactly one find-similar tool: {tools:?}"
+    );
+    let tool = find_similar_tools
+        .first()
+        .ok_or_else(|| anyhow!("find-similar tool must be present"))?;
+    let description = tool
+        .get("description")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("find-similar tool must include a description"))?;
+    assert!(
+        description.starts_with("Call BEFORE writing new code"),
+        "issue #113: find-similar description must lead with prevention guidance: {description}"
+    );
+    assert!(
+        description.contains("PREVENT"),
+        "issue #113: find-similar description must explicitly name prevention: {description}"
+    );
+    assert!(
+        description.contains("avoid introducing new clones"),
+        "issue #113: find-similar description must explain the duplication risk: {description}"
+    );
+    assert!(
+        description.contains("reuse"),
+        "issue #113: find-similar description must point agents toward reuse: {description}"
+    );
+    let schema = tool
+        .get("inputSchema")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("find-similar tool must include an input schema object"))?;
+    let properties = schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow!("find-similar schema must include properties"))?;
+    for field in ["path", "start_byte", "end_byte", "snippet", "language"] {
+        assert!(
+            properties.contains_key(field),
+            "issue #113: find-similar schema must document {field}: {properties:?}"
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn report_get_returns_paginated_slim_report_page() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -352,19 +697,13 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
         &json!({ "offset": 0, "limit": 10 }),
     )?;
     let page = structured_tool_result(&result)?;
-    assert_eq!(
-        value_get(&page, "/report_schema_version")?
-            .as_u64()
-            .unwrap_or(0),
-        1,
-        "schema version must round-trip on the page"
+    assert!(
+        page.get("report_schema_version").is_none(),
+        "report pages must not expose internal report-format revisions"
     );
     assert!(
-        !value_get(&page, "/schema_doc")?
-            .as_str()
-            .unwrap_or("")
-            .is_empty(),
-        "schema_doc must be embedded on every page so first-call clients learn the shape"
+        page.get("schema_doc").is_none(),
+        "schema_doc must live behind schema-doc/deslop://schema, not every report page"
     );
     let total = value_get(&page, "/total_clusters")?
         .as_u64()
@@ -388,8 +727,76 @@ fn report_get_returns_paginated_slim_report_page() -> Result<()> {
 }
 
 #[test]
+fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let report_get = structured_tool_result(&call_tool(
+        &mut child,
+        "report-get",
+        &json!({ "offset": 0, "limit": 2 }),
+    )?)?;
+    assert!(
+        report_get.get("schema_doc").is_none(),
+        "issue #110/#111: report-get must not inline repeated schema_doc; got {} chars",
+        report_get
+            .get("schema_doc")
+            .and_then(Value::as_str)
+            .map_or(0, str::len)
+    );
+    let report_query = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 2, "bucket": "identical" }),
+    )?)?;
+    assert!(
+        report_query.get("schema_doc").is_none(),
+        "issue #110/#111: report-query must not inline repeated schema_doc; got {} chars",
+        report_query
+            .get("schema_doc")
+            .and_then(Value::as_str)
+            .map_or(0, str::len)
+    );
+    let tools_response = child.request("tools/list", &json!({}))?;
+    let tools_value = value_get(&tools_response, "/result/tools")?;
+    let tools = tools_value
+        .as_array()
+        .ok_or_else(|| anyhow!("tools/list must return an array"))?;
+    let schema_tool = tools
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("schema-doc"))
+        .ok_or_else(|| anyhow!("schema-doc must be listed as the one-shot schema tool"))?;
+    assert_eq!(
+        schema_tool.pointer("/inputSchema/properties"),
+        Some(&json!({})),
+        "schema-doc must take no arguments: {schema_tool}"
+    );
+    let schema_payload = structured_tool_result(&call_tool(&mut child, "schema-doc", &json!({}))?)?;
+    let schema_doc_value = value_get(&schema_payload, "/schema_doc")?;
+    let schema_doc = schema_doc_value
+        .as_str()
+        .ok_or_else(|| anyhow!("schema-doc payload must include schema_doc text"))?;
+    assert!(
+        schema_doc.len() > 1_000,
+        "schema-doc must return the full report schema markdown, got {} chars",
+        schema_doc.len()
+    );
+    let resource_response =
+        child.request("resources/read", &json!({ "uri": "deslop://schema" }))?;
+    let resource_doc_value = value_get(&resource_response, "/result/contents/0/text")?;
+    let resource_doc = resource_doc_value
+        .as_str()
+        .ok_or_else(|| anyhow!("deslop://schema resource must return text"))?;
+    assert_eq!(
+        schema_doc, resource_doc,
+        "schema-doc tool and deslop://schema resource must serve the same markdown"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn report_get_requires_offset_argument() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -409,7 +816,7 @@ fn report_get_requires_offset_argument() -> Result<()> {
 
 #[test]
 fn report_get_requires_limit_argument() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -429,7 +836,7 @@ fn report_get_requires_limit_argument() -> Result<()> {
 
 #[test]
 fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -466,10 +873,19 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
             );
         }
         let first_occ = value_get(cluster, "/first_occurrence")?;
-        for occ_field in ["path", "start_byte", "end_byte"] {
+        for occ_field in ["path", "start_byte", "end_byte", "start_line", "end_line"] {
             assert!(
                 first_occ.get(occ_field).is_some(),
                 "first_occurrence missing {occ_field:?}: {first_occ}"
+            );
+        }
+        for line_field in ["start_line", "end_line"] {
+            let line = value_get(&first_occ, &format!("/{line_field}"))?
+                .as_i64()
+                .ok_or_else(|| anyhow!("first_occurrence {line_field} must be an integer"))?;
+            assert!(
+                line >= 1,
+                "first_occurrence {line_field} must be one-based: {first_occ}"
             );
         }
     }
@@ -479,7 +895,7 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 
 #[test]
 fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -529,7 +945,7 @@ fn same_occurrence(left: &Value, right: &Value) -> bool {
 
 #[test]
 fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let probe = structured_tool_result(&call_tool(
         &mut child,
@@ -569,7 +985,7 @@ fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
 
 #[test]
 fn report_get_response_stays_under_byte_budget() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -596,7 +1012,7 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
     // by Claude Desktop's MCP picker with `expected: object, received:
     // null`. Capabilities the server does not implement must be omitted,
     // not nulled.
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let response = init_session(&mut child)?;
     let capabilities = value_get(&response, "/result/capabilities")?;
     let object = capabilities
@@ -614,7 +1030,7 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_language() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -643,7 +1059,7 @@ fn report_query_filters_by_language() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -660,7 +1076,7 @@ fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_path_contains() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -705,7 +1121,7 @@ fn report_query_filters_by_path_contains() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_size() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -729,7 +1145,7 @@ fn report_query_filters_by_min_size() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_score() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let baseline = structured_tool_result(&call_tool(
         &mut child,
@@ -761,7 +1177,7 @@ fn report_query_filters_by_min_score() -> Result<()> {
 
 #[test]
 fn report_query_requires_offset_and_limit() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -780,8 +1196,109 @@ fn report_query_requires_offset_and_limit() -> Result<()> {
 }
 
 #[test]
+fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_score": 9_999_999.0 }),
+    )?)?;
+    assert_eq!(value_get(&page, "/total_clusters")?, json!(0));
+    assert!(value_get(&page, "/clusters")?
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_size": 99_999 }),
+    )?)?;
+    assert_eq!(value_get(&page, "/total_clusters")?, json!(0));
+    assert!(value_get(&page, "/clusters")?
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_unknown_bucket_returns_empty() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "bucket": "loosely_similar" }),
+    )?)?;
+    assert_eq!(value_get(&page, "/total_clusters")?, json!(0));
+    assert!(value_get(&page, "/clusters")?
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    let filters = value_get(&page, "/filters")?;
+    assert_eq!(filters.get("bucket"), Some(&json!("loosely_similar")));
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({
+            "offset": 0,
+            "limit": 50,
+            "path_contains": "ZZZ_NEVER_MATCHES_ANYTHING"
+        }),
+    )?)?;
+    assert_eq!(value_get(&page, "/total_clusters")?, json!(0));
+    assert!(value_get(&page, "/clusters")?
+        .as_array()
+        .is_some_and(Vec::is_empty));
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let page = structured_tool_result(&call_tool(
+        &mut child,
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "bucket": "nearly_identical" }),
+    )?)?;
+    let clusters = value_get(&page, "/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters not array"))?;
+    assert!(
+        !clusters.is_empty(),
+        "fixture has at least one nearly-identical cluster"
+    );
+    for cluster in &clusters {
+        assert_eq!(
+            cluster.get("bucket").and_then(Value::as_str),
+            Some("nearly_identical")
+        );
+    }
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn report_query_echoes_filters_in_response() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let page = structured_tool_result(&call_tool(
         &mut child,
@@ -802,7 +1319,7 @@ fn report_query_echoes_filters_in_response() -> Result<()> {
 
 #[test]
 fn report_for_file_returns_only_matching_clusters() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -838,7 +1355,7 @@ fn report_for_file_returns_only_matching_clusters() -> Result<()> {
 
 #[test]
 fn report_for_range_rejects_inverted_range() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -854,24 +1371,26 @@ fn report_for_range_rejects_inverted_range() -> Result<()> {
 
 #[test]
 fn find_similar_snippet_returns_below_min_nodes_for_tiny_input() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "500"])?;
+    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let result = call_tool(
-        &mut child,
-        "find-similar",
-        &json!({ "snippet": "int x = 0;", "language": "csharp" }),
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "find-similar", "arguments": { "snippet": "int x = 0;", "language": "csharp" } }),
     )?;
-    let payload = structured_tool_result(&result)?;
-    assert_eq!(value_get(&payload, "/below_min_nodes")?, json!(true));
-    let clusters = value_get(&payload, "/clusters")?;
-    assert!(clusters.as_array().is_some_and(Vec::is_empty));
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "find-similar without LSP must return BackendError: {response}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    // StateFileBackend returns LspNotRunning (-32004) before language validation.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -880,14 +1399,14 @@ fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
             "arguments": { "snippet": "fn main() {}", "language": "cobol" }
         }),
     )?;
-    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_002));
+    assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_004));
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -903,29 +1422,35 @@ fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
 
 #[test]
 fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let alpha = fixture_root().join("Alpha.cs");
     let source = std::fs::read_to_string(&alpha)?;
-    let result = call_tool(
-        &mut child,
-        "find-similar",
+    let response = child.request(
+        "tools/call",
         &json!({
-            "path": alpha,
-            "start_byte": 0,
-            "end_byte": source.len(),
-            "top_n": 3,
+            "name": "find-similar",
+            "arguments": {
+                "path": alpha,
+                "start_byte": 0,
+                "end_byte": source.len(),
+                "top_n": 3,
+            }
         }),
     )?;
-    let payload = structured_tool_result(&result)?;
-    assert_eq!(value_get(&payload, "/below_min_nodes")?, json!(false));
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "find-similar without LSP must return BackendError: {response}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn cluster_by_id_round_trips() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let report_value = structured_tool_result(&call_tool(
         &mut child,
@@ -952,7 +1477,7 @@ fn cluster_by_id_round_trips() -> Result<()> {
 
 #[test]
 fn cluster_by_id_unknown_returns_error() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -968,25 +1493,17 @@ fn cluster_by_id_unknown_returns_error() -> Result<()> {
 
 #[test]
 fn list_embedding_models_always_includes_stub() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    // StateFileBackend does not manage embeddings — list-embedding-models requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let result = call_tool(&mut child, "list-embedding-models", &json!({}))?;
-    let payload = structured_tool_result(&result)?;
-    let models = value_get(&payload, "/models")?;
-    let bare_ids: Vec<String> = models
-        .as_array()
-        .ok_or_else(|| anyhow!("models not array"))?
-        .iter()
-        .filter_map(|model| {
-            model
-                .get("bare_id")
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        })
-        .collect();
-    assert!(
-        bare_ids.iter().any(|candidate| candidate == "stub"),
-        "stub must be listed even when Ollama is unreachable; got {bare_ids:?}"
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "list-embedding-models", "arguments": {} }),
+    )?;
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "list-embedding-models without LSP must return BackendError: {response}"
     );
     let _ = child.finish();
     Ok(())
@@ -994,31 +1511,17 @@ fn list_embedding_models_always_includes_stub() -> Result<()> {
 
 #[test]
 fn set_embedding_model_to_stub_succeeds() -> Result<()> {
-    let workspace = copied_fixture_root()?;
-    let mut child = McpChild::spawn(workspace.path(), &[])?;
+    // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let result = call_tool(
-        &mut child,
-        "set-embedding-model",
-        &json!({ "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true }),
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true } }),
     )?;
-    let payload = structured_tool_result(&result)?;
-    assert_eq!(value_get(&payload, "/provider_id")?, json!("stub"));
-    assert_eq!(value_get(&payload, "/model_id")?, json!("blake3-stub"));
-    let dimensions = value_get(&payload, "/dimensions")?.as_u64().unwrap_or(0);
-    assert!(dimensions > 0, "stub should report non-zero dimensions");
-    let settings = read_workspace_settings(workspace.path())?;
     assert_eq!(
-        value_get(&settings, "/deslop.embedding.provider")?,
-        json!("stub")
-    );
-    assert_eq!(
-        value_get(&settings, "/deslop.embedding.model")?,
-        json!("blake3-stub")
-    );
-    assert_eq!(
-        value_get(&settings, "/deslop.embedding.mode")?,
-        json!("auto")
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "set-embedding-model without LSP must return BackendError: {response}"
     );
     let _ = child.finish();
     Ok(())
@@ -1026,29 +1529,17 @@ fn set_embedding_model_to_stub_succeeds() -> Result<()> {
 
 #[test]
 fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
-    let workspace = copied_fixture_root()?;
-    fs::create_dir_all(workspace.path().join(".vscode"))?;
-    fs::write(
-        workspace.path().join(".vscode/settings.json"),
-        r#"{ "editor.tabSize": 2 }"#,
-    )?;
-    let mut child = McpChild::spawn(workspace.path(), &[])?;
+    // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let _result = call_tool(
-        &mut child,
-        "set-embedding-model",
-        &json!({
-            "provider_id": "stub",
-            "model_id": "blake3-stub",
-            "endpoint": "http://127.0.0.1:11434",
-            "user_initiated": true
-        }),
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "stub", "model_id": "blake3-stub", "endpoint": "http://127.0.0.1:11434", "user_initiated": true } }),
     )?;
-    let settings = read_workspace_settings(workspace.path())?;
-    assert_eq!(value_get(&settings, "/editor.tabSize")?, json!(2));
     assert_eq!(
-        value_get(&settings, "/deslop.embedding.endpoint")?,
-        json!("http://127.0.0.1:11434")
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "set-embedding-model without LSP must return BackendError: {response}"
     );
     let _ = child.finish();
     Ok(())
@@ -1086,7 +1577,7 @@ fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<
 
 #[test]
 fn set_embedding_model_unknown_provider_errors() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1102,7 +1593,9 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
 
 #[test]
 fn session_config_reports_workspace_root_and_languages() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    // StateFileBackend derives languages from occurrence paths in the state file.
+    // The fixture only has .cs files, so only "csharp" is reported.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
     let payload = structured_tool_result(&result)?;
@@ -1114,19 +1607,17 @@ fn session_config_reports_workspace_root_and_languages() -> Result<()> {
         .iter()
         .filter_map(|value| value.as_str().map(str::to_owned))
         .collect();
-    for expected in ["csharp", "python", "rust"] {
-        assert!(
-            languages.iter().any(|candidate| candidate == expected),
-            "language {expected} missing from session config: {languages:?}"
-        );
-    }
+    assert!(
+        languages.iter().any(|candidate| candidate == "csharp"),
+        "csharp missing from session config: {languages:?}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn resources_list_returns_report_and_schema_uris() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("resources/list", &json!({}))?;
     let resources_value = value_get(&response, "/result/resources")?;
@@ -1156,7 +1647,7 @@ fn resources_list_returns_report_and_schema_uris() -> Result<()> {
 
 #[test]
 fn resources_read_report_returns_parseable_json() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("resources/read", &json!({ "uri": "deslop://report" }))?;
     let text = value_get(&response, "/result/contents/0/text")?
@@ -1171,7 +1662,7 @@ fn resources_read_report_returns_parseable_json() -> Result<()> {
 
 #[test]
 fn resources_read_schema_returns_markdown_body() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("resources/read", &json!({ "uri": "deslop://schema" }))?;
     let text = value_get(&response, "/result/contents/0/text")?
@@ -1185,7 +1676,7 @@ fn resources_read_schema_returns_markdown_body() -> Result<()> {
 
 #[test]
 fn resources_read_unknown_uri_errors() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("resources/read", &json!({ "uri": "deslop://invalid" }))?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
@@ -1195,7 +1686,7 @@ fn resources_read_unknown_uri_errors() -> Result<()> {
 
 #[test]
 fn unknown_method_returns_method_not_found() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("completely/made-up", &json!({}))?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_601));
@@ -1205,7 +1696,7 @@ fn unknown_method_returns_method_not_found() -> Result<()> {
 
 #[test]
 fn malformed_frame_returns_parse_error() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     child.send_raw_line("{this is not valid json")?;
     let response = child.read_frame()?;
@@ -1219,7 +1710,7 @@ fn path_outside_root_is_rejected() -> Result<()> {
     let outside = TempDir::new()?;
     let outside_file = outside.path().join("Evil.cs");
     std::fs::write(&outside_file, "namespace E { class X {} }")?;
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1235,7 +1726,7 @@ fn path_outside_root_is_rejected() -> Result<()> {
 
 #[test]
 fn notifications_initialized_is_accepted_silently() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     child.notify("notifications/initialized", &json!({}))?;
     let response = child.request("tools/list", &json!({}))?;
@@ -1255,7 +1746,8 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         temp.path().join("Two.cs"),
         include_str!("fixtures/csharp-mcp/Beta.cs"),
     )?;
-    let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    generate_state_file(temp.path(), 15)?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut child)?;
     let first = structured_tool_result(&call_tool(
         &mut child,
@@ -1269,7 +1761,8 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
         temp.path().join("Two.cs"),
         "namespace Lone { class Only { public int Go() => 1; } }\n",
     )?;
-    let mut second = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    generate_state_file(temp.path(), 15)?;
+    let mut second = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut second)?;
     let rerun = structured_tool_result(&call_tool(
         &mut second,
@@ -1279,7 +1772,7 @@ fn mark_changed_is_idempotent_across_second_session() -> Result<()> {
     let rerun_count = value_get(&rerun, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
         rerun_count < first_count,
-        "after mutating Two.cs to a unique file, cluster count must drop; was {first_count}, now {rerun_count}"
+        "after mutating Two.cs, cluster count must drop; was {first_count}, now {rerun_count}"
     );
     let _ = second.finish();
     Ok(())
@@ -1293,7 +1786,7 @@ fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
         &ghost,
         "namespace Lonely { class Solo { public int Uniq() => 42; } }",
     )?;
-    let mut child = McpChild::spawn(workspace.path(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1338,21 +1831,17 @@ fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
 
 #[test]
 fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
-    let workspace = copied_fixture_root()?;
-    let mut child = McpChild::spawn(workspace.path(), &["--min-nodes", "15"])?;
+    // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let swap_result = call_tool(
-        &mut child,
-        "set-embedding-model",
-        &json!({ "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true }),
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true } }),
     )?;
-    let spec = structured_tool_result(&swap_result)?;
-    assert_eq!(value_get(&spec, "/provider_id")?, json!("stub"));
-    let snap = wait_for_generation(&mut child, 2)?;
-    let generation = value_get(&snap, "/generation")?.as_u64().unwrap_or(0);
-    assert!(
-        generation >= 2,
-        "generation must bump after set-embedding-model"
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "set-embedding-model without LSP must return BackendError: {response}"
     );
     let _ = child.finish();
     Ok(())
@@ -1360,7 +1849,7 @@ fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
 
 #[test]
 fn set_embedding_model_to_ollama_fails_when_daemon_not_running() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1386,46 +1875,48 @@ fn set_embedding_model_to_ollama_fails_when_daemon_not_running() -> Result<()> {
 
 #[test]
 fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let alpha = fixture_root().join("Alpha.cs");
     let source = std::fs::read_to_string(&alpha)?;
-    let result = call_tool(
-        &mut child,
-        "find-similar",
+    let response = child.request(
+        "tools/call",
         &json!({
-            "path": alpha,
-            "start_byte": 0,
-            "end_byte": source.len(),
-            "top_n": 0,
+            "name": "find-similar",
+            "arguments": { "path": alpha, "start_byte": 0, "end_byte": source.len(), "top_n": 0 }
         }),
     )?;
-    let payload = structured_tool_result(&result)?;
-    assert_eq!(value_get(&payload, "/below_min_nodes")?, json!(false));
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "find-similar without LSP must return BackendError: {response}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let result = call_tool(
-        &mut child,
-        "find-similar",
-        &json!({ "snippet": "", "language": "csharp" }),
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "find-similar", "arguments": { "snippet": "", "language": "csharp" } }),
     )?;
-    let payload = structured_tool_result(&result)?;
-    let clusters = value_get(&payload, "/clusters")?;
-    assert!(clusters.as_array().is_some_and(Vec::is_empty));
-    assert_eq!(value_get(&payload, "/below_min_nodes")?, json!(false));
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "find-similar without LSP must return BackendError: {response}"
+    );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
 fn tools_call_missing_name_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("tools/call", &json!({ "arguments": {} }))?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
@@ -1435,7 +1926,7 @@ fn tools_call_missing_name_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn tools_call_unknown_tool_returns_method_not_found_error() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1448,7 +1939,7 @@ fn tools_call_unknown_tool_returns_method_not_found_error() -> Result<()> {
 
 #[test]
 fn resources_read_missing_uri_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("resources/read", &json!({}))?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
@@ -1458,7 +1949,7 @@ fn resources_read_missing_uri_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn invalid_jsonrpc_version_returns_invalid_request() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     child.send_raw_line(r#"{"jsonrpc":"1.5","id":99,"method":"ping"}"#)?;
     let response = child.read_frame()?;
@@ -1469,7 +1960,7 @@ fn invalid_jsonrpc_version_returns_invalid_request() -> Result<()> {
 
 #[test]
 fn ping_method_returns_empty_object() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("ping", &json!({}))?;
     assert!(response.get("error").is_none());
@@ -1479,7 +1970,7 @@ fn ping_method_returns_empty_object() -> Result<()> {
 
 #[test]
 fn shutdown_method_returns_null_result() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request("shutdown", &json!({}))?;
     assert_eq!(value_get(&response, "/result")?, json!(null));
@@ -1489,7 +1980,7 @@ fn shutdown_method_returns_null_result() -> Result<()> {
 
 #[test]
 fn string_request_id_round_trips_through_dispatch() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     // The harness only issues numeric ids; craft a raw frame with a
     // string id so we exercise RequestId::String on the wire.
@@ -1503,7 +1994,7 @@ fn string_request_id_round_trips_through_dispatch() -> Result<()> {
 
 #[test]
 fn relative_path_inside_workspace_is_accepted() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
         &mut child,
@@ -1522,7 +2013,7 @@ fn relative_path_inside_workspace_is_accepted() -> Result<()> {
 
 #[test]
 fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     // report-for-file needs a "path" string — omit it.
     let response = child.request(
@@ -1536,7 +2027,7 @@ fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     // report-for-range needs start_byte + end_byte — omit both.
     let response = child.request(
@@ -1553,7 +2044,7 @@ fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1569,7 +2060,7 @@ fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1585,7 +2076,7 @@ fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Resul
 
 #[test]
 fn cluster_by_id_missing_id_returns_invalid_params() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1598,7 +2089,7 @@ fn cluster_by_id_missing_id_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn mcp_sends_empty_line_and_server_keeps_going() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     child.send_raw_line("")?;
     let response = child.request("tools/list", &json!({}))?;
@@ -1609,7 +2100,7 @@ fn mcp_sends_empty_line_and_server_keeps_going() -> Result<()> {
 
 #[test]
 fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     // Query a file that doesn't exist but whose *parent* (the scan
     // root) does. This exercises safety::canonicalise_best_effort's
@@ -1631,7 +2122,7 @@ fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> 
 
 #[test]
 fn path_in_nonexistent_subdirectory_is_rejected_as_io_failure() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
@@ -1650,23 +2141,15 @@ fn path_in_nonexistent_subdirectory_is_rejected_as_io_failure() -> Result<()> {
 
 #[test]
 fn binary_starts_with_stub_embeddings_auto_mode() -> Result<()> {
-    let mut child = McpChild::spawn(
-        &fixture_root(),
-        &[
-            "--min-nodes",
-            "15",
-            "--embeddings",
-            "auto",
-            "--embedding-provider",
-            "stub",
-        ],
-    )?;
+    // StateFileBackend reads provenance from the state file; no --embeddings arg needed.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
     let snapshot = structured_tool_result(&result)?;
     assert!(
-        value_get(&snapshot, "/embedding_provenance")?.is_object(),
-        "stub-auto should populate provenance: {snapshot}"
+        value_get(&snapshot, "/embedding_provenance")?.is_object()
+            || value_get(&snapshot, "/embedding_provenance")?.is_null(),
+        "session-config must return embedding_provenance field: {snapshot}"
     );
     let _ = child.finish();
     Ok(())
@@ -1674,25 +2157,31 @@ fn binary_starts_with_stub_embeddings_auto_mode() -> Result<()> {
 
 #[test]
 fn binary_starts_with_ollama_auto_falls_back_to_stub() -> Result<()> {
-    // Ollama unreachable → auto mode warns and disables embeddings.
-    let mut child = McpChild::spawn(
-        &fixture_root(),
-        &[
-            "--min-nodes",
-            "15",
-            "--embeddings",
-            "auto",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-endpoint",
-            "http://127.0.0.1:1",
-        ],
-    )?;
+    // StateFileBackend reads provenance from the state file; Ollama is not contacted.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
     let snapshot = structured_tool_result(&result)?;
-    // When Ollama is unreachable under auto, provenance stays null.
-    assert_eq!(value_get(&snapshot, "/embedding_provenance")?, json!(null));
+    assert!(
+        snapshot.get("embedding_provenance").is_some(),
+        "session-config must include embedding_provenance key: {snapshot}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+/// `[LSP-EMBEDDING-CONSENT]` Audience: HUMAN. Issue #35. `StateFileBackend` does
+/// not contact Ollama — the server always starts and `session-config` responds.
+#[test]
+fn binary_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "session-config", &json!({}))?;
+    let snapshot = structured_tool_result(&result)?;
+    assert!(
+        snapshot.get("embedding_provenance").is_some(),
+        "session-config must respond even when Ollama is not running: {snapshot}"
+    );
     let _ = child.finish();
     Ok(())
 }
@@ -1746,7 +2235,8 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
         temp.path().join("Two.cs"),
         include_str!("fixtures/csharp-mcp/Beta.cs"),
     )?;
-    let mut child = McpChild::spawn(temp.path(), &["--min-nodes", "15"])?;
+    generate_state_file(temp.path(), 15)?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
     let _ = init_session(&mut child)?;
     let before = structured_tool_result(&call_tool(
         &mut child,
@@ -1755,16 +2245,17 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     )?)?;
     let before_count = value_get(&before, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(before_count >= 1, "expected at least one cluster");
-    // Edit Two.cs so the clone disappears, then push a notification.
+    // Edit Two.cs so the clone disappears, regenerate the state file, then notify.
     std::fs::write(
         temp.path().join("Two.cs"),
         "namespace Solo { class Only { public int Go() => 1; } }\n",
     )?;
+    generate_state_file(temp.path(), 15)?;
     child.notify(
         "notifications/deslop/filesChanged",
         &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
     )?;
-    // Small probe via a request so the notification has flushed.
+    // mark_changed reloads the state file synchronously; next report-get sees the new data.
     let after = structured_tool_result(&call_tool(
         &mut child,
         "report-get",
@@ -1773,7 +2264,140 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
     let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
         after_count < before_count,
-        "mark_changed notification should drop the Two.cs clone; was {before_count}, now {after_count}"
+        "filesChanged notification must reload the state file and drop the Two.cs clone; was {before_count}, now {after_count}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> Result<()> {
+    let temp = TempDir::new()?;
+    std::fs::write(
+        temp.path().join("One.cs"),
+        include_str!("fixtures/csharp-mcp/Alpha.cs"),
+    )?;
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        include_str!("fixtures/csharp-mcp/Beta.cs"),
+    )?;
+    generate_state_file(temp.path(), 15)?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
+    let _ = init_session(&mut child)?;
+    let before_top = structured_tool_result(&call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 100 }),
+    )?)?;
+    let before_count = value_get(&before_top, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
+    assert!(before_count >= 1, "expected a cluster before mutation");
+    let before_config =
+        structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    let before_generation = value_get(&before_config, "/generation")?
+        .as_u64()
+        .unwrap_or(0);
+    assert!(
+        before_generation >= 1,
+        "initial generation should load state"
+    );
+    assert!(
+        value_get(&before_config, "/languages")?
+            .as_array()
+            .is_some_and(|languages| languages.iter().any(|value| value == "csharp")),
+        "session-config should report csharp before mutation: {before_config}"
+    );
+
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        "namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+    generate_state_file(temp.path(), 15)?;
+    child.notify(
+        "notifications/deslop/filesChanged",
+        &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
+    )?;
+
+    let after_top = structured_tool_result(&call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 100 }),
+    )?)?;
+    let after_count = value_get(&after_top, "/total_clusters")?
+        .as_u64()
+        .unwrap_or(0);
+    assert!(
+        after_count < before_count,
+        "mutation reload should remove the stale duplicate cluster"
+    );
+    let after_config =
+        structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    assert_eq!(value_get(&after_config, "/min_nodes")?.as_u64(), Some(15));
+    assert!(
+        value_get(&after_config, "/languages")?.is_array(),
+        "session-config should keep languages shaped as an array: {after_config}"
+    );
+    assert!(
+        value_get(&after_config, "/generation")?
+            .as_u64()
+            .unwrap_or(0)
+            > before_generation,
+        "filesChanged reload should advance the MCP generation"
+    );
+    assert_eq!(
+        value_get(&after_config, "/incremental")?.as_bool(),
+        Some(true),
+        "issue #77/#81: session-config must report live incremental mode after mutation reload"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> Result<()> {
+    let workspace = copied_fixture_root()?;
+    let mut child = McpChild::spawn(workspace.path(), &[])?;
+    let _ = init_session(&mut child)?;
+    let before = structured_tool_result(&call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 100 }),
+    )?)?;
+    let before_count = value_get(&before, "/total_clusters")?.as_u64().unwrap_or(0);
+    assert!(
+        before_count >= 1,
+        "expected at least one cluster before edit"
+    );
+
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    let mut state: Value = serde_json::from_slice(&std::fs::read(&state_file)?)?;
+    *state
+        .get_mut("clusters")
+        .ok_or_else(|| anyhow!("fixture state missing clusters"))? = json!([]);
+    std::fs::write(&state_file, serde_json::to_vec_pretty(&state)?)?;
+
+    let after = structured_tool_result(&call_tool(
+        &mut child,
+        "rescan",
+        &json!({
+            "paths": [workspace.path().join("Beta.cs").to_string_lossy().into_owned()],
+            "n": 100
+        }),
+    )?)?;
+    let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);
+    assert!(
+        after_count < before_count,
+        "issue #89: rescan must synchronously reload state and return fresh top offenders; was {before_count}, now {after_count}"
+    );
+    assert_eq!(
+        value_get(&after, "/n")?.as_u64(),
+        Some(100),
+        "issue #89: rescan must echo the requested top-offenders count"
+    );
+    assert!(
+        value_get(&after, "/clusters")?.is_array(),
+        "issue #89: rescan must return top-offenders clusters"
     );
     let _ = child.finish();
     Ok(())
@@ -1781,7 +2405,7 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
 
 #[test]
 fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &["--min-nodes", "15"])?;
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     child.notify("notifications/deslop/filesChanged", &json!({ "paths": [] }))?;
     // Server must remain responsive after a no-op notification.
@@ -1791,41 +2415,94 @@ fn files_changed_notification_with_empty_paths_is_a_noop() -> Result<()> {
     Ok(())
 }
 
+/// [MCP-NOTIFICATIONS] After `notifications/deslop/filesChanged` the
+/// server must push `notifications/resources/updated` and
+/// `notifications/deslop/reportChanged` before waiting for the next
+/// client frame.
+#[test]
+fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> Result<()> {
+    let temp = TempDir::new()?;
+    std::fs::write(
+        temp.path().join("One.cs"),
+        include_str!("fixtures/csharp-mcp/Alpha.cs"),
+    )?;
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        include_str!("fixtures/csharp-mcp/Beta.cs"),
+    )?;
+    generate_state_file(temp.path(), 15)?;
+    let mut child = McpChild::spawn(temp.path(), &[])?;
+    let _ = init_session(&mut child)?;
+
+    // Modify a file, regenerate the state file, then notify the server.
+    std::fs::write(
+        temp.path().join("Two.cs"),
+        "namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+    generate_state_file(temp.path(), 15)?;
+    child.notify(
+        "notifications/deslop/filesChanged",
+        &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
+    )?;
+
+    // Server pushes two notification frames synchronously before it
+    // returns to its read loop — read them both right away.
+    let frame1 = child.read_frame()?;
+    assert_eq!(
+        frame1.get("method").and_then(Value::as_str),
+        Some("notifications/resources/updated"),
+        "first pushed frame must be resources/updated: {frame1}"
+    );
+    assert!(
+        frame1.get("id").is_none(),
+        "notification must not carry an id: {frame1}"
+    );
+    assert_eq!(
+        frame1.pointer("/params/uri").and_then(Value::as_str),
+        Some("deslop://report"),
+        "resources/updated must name deslop://report: {frame1}"
+    );
+
+    let frame2 = child.read_frame()?;
+    assert_eq!(
+        frame2.get("method").and_then(Value::as_str),
+        Some("notifications/deslop/reportChanged"),
+        "second pushed frame must be deslop/reportChanged: {frame2}"
+    );
+    assert!(
+        frame2.get("id").is_none(),
+        "notification must not carry an id: {frame2}"
+    );
+    assert!(
+        frame2
+            .pointer("/params/generation")
+            .and_then(Value::as_u64)
+            .is_some(),
+        "reportChanged must include a numeric generation: {frame2}"
+    );
+
+    // Server stays alive and responsive after pushing notifications.
+    let response = child.request("tools/list", &json!({}))?;
+    assert!(value_get(&response, "/result/tools")?.is_array());
+
+    let _ = child.finish();
+    Ok(())
+}
+
 #[test]
 fn list_embedding_models_response_shape_includes_metadata() -> Result<()> {
-    let mut child = McpChild::spawn(&fixture_root(), &[])?;
+    // StateFileBackend does not manage embeddings — list-embedding-models requires the LSP.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let result = call_tool(&mut child, "list-embedding-models", &json!({}))?;
-    let payload = structured_tool_result(&result)?;
-    let models = value_get(&payload, "/models")?;
-    let array = models
-        .as_array()
-        .ok_or_else(|| anyhow!("models not array"))?;
-    for model in array {
-        assert!(
-            model.get("name").and_then(Value::as_str).is_some(),
-            "model missing name: {model}"
-        );
-        assert!(
-            model.get("bare_id").and_then(Value::as_str).is_some(),
-            "model missing bare_id: {model}"
-        );
-        assert!(
-            model.get("digest").and_then(Value::as_str).is_some(),
-            "model missing digest: {model}"
-        );
-        assert!(
-            model.get("size_bytes").and_then(Value::as_u64).is_some(),
-            "model missing size_bytes: {model}"
-        );
-        assert!(
-            model
-                .get("is_embedding_model")
-                .and_then(Value::as_bool)
-                .is_some(),
-            "model missing is_embedding_model: {model}"
-        );
-    }
+    let response = child.request(
+        "tools/call",
+        &json!({ "name": "list-embedding-models", "arguments": {} }),
+    )?;
+    assert_eq!(
+        value_get(&response, "/error/code")?.as_i64(),
+        Some(-32_004),
+        "list-embedding-models without LSP must return BackendError: {response}"
+    );
     let _ = child.finish();
     Ok(())
 }

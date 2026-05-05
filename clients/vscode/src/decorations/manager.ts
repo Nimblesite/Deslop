@@ -2,17 +2,12 @@
 // No background fill, no emoji, no border boxes.
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 
+import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
-import {
-  bucketLabels,
-  clusterInterpretation,
-  ReportCluster,
-  ReportOccurrence,
-  resolveBucket,
-  Severity,
-} from "../types/report";
+import { ReportCluster, ReportOccurrence, Severity, visibleOccurrenceCount } from "../types/report";
 
 const SEVERITIES: Severity[] = ["worst", "top10", "mid", "faint"];
 
@@ -23,7 +18,9 @@ export class DecorationManager implements vscode.Disposable {
   constructor(private readonly store: ReportStore) {
     this.byKind = new Map(SEVERITIES.map((kind) => [kind, createDecoration(kind)]));
     this.disposables.push(
-      store.onDidChange(() => this.redrawAll()),
+      // effect() tracks store.report via the redraw() read — rerenders only
+      // when the report signal changes, not on every store mutation.
+      { dispose: effect(() => this.redrawAll()) },
       vscode.window.onDidChangeVisibleTextEditors(() => this.redrawAll()),
       vscode.workspace.onDidChangeTextDocument(() => this.redrawAll()),
     );
@@ -39,7 +36,9 @@ export class DecorationManager implements vscode.Disposable {
   }
 
   private redraw(editor: vscode.TextEditor): void {
-    const report = this.store.current.report;
+    // [VSIX-STATE-DIRTY]: render from the visible projection so decorations
+    // disappear immediately when the user types into a duplicated file.
+    const report = this.store.current.visibleReport;
     if (!report) {
       this.clear(editor);
       return;
@@ -55,10 +54,7 @@ export class DecorationManager implements vscode.Disposable {
         if (!sameFile(occurrence.path, activePath)) continue;
         const range = byteRangeToRange(editor.document, occurrence);
         if (!range) continue;
-        buckets.get(severity)?.push({
-          range,
-          hoverMessage: hoverFor(cluster),
-        });
+        buckets.get(severity)?.push({ range });
       }
     }
     for (const [kind, decoration] of this.byKind) {
@@ -82,27 +78,10 @@ function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
   });
 }
 
-// Decoration hover is a shared-text surface per [CLONE-BUCKETS-DUAL-LABEL]
-// (humans read it on hover, agents scrape it via LSP/MCP). Uses
-// hybridTitle + actionSentence so the label class stays consistent
-// with the LSP diagnostic message, live bubble hover, and Problems
-// panel — one shared-text vocabulary across every hover in the IDE.
+// Kept for test harness — ClusterHoverProvider uses clusterHoverMarkdown directly.
+// Uses visibleOccurrenceCount so the count reflects what the user can act on.
 export function hoverFor(cluster: ReportCluster): vscode.MarkdownString {
-  const md = new vscode.MarkdownString();
-  md.isTrusted = true;
-  const labels = bucketLabels(resolveBucket(cluster));
-  md.appendMarkdown(`**${labels.hybridTitle}** — ${labels.actionSentence}\n\n`);
-  md.appendMarkdown(`${clusterInterpretation(cluster)}\n\n`);
-  md.appendMarkdown(
-    `structural \`${cluster.signals.structural.toFixed(2)}\` · ` +
-      `jaccard \`${cluster.signals.token_jaccard.toFixed(2)}\` · ` +
-      `embedding \`${cluster.signals.embedding_cos.toFixed(2)}\` · ` +
-      `fused \`${cluster.signals.fused.toFixed(2)}\`\n\n`,
-  );
-  md.appendMarkdown(
-    `[Open cluster](command:deslop.openCluster?${encodeURIComponent(JSON.stringify([cluster.id]))})`,
-  );
-  return md;
+  return clusterHoverMarkdown(cluster, { count: visibleOccurrenceCount(cluster) });
 }
 
 export function byteRangeToRange(
@@ -119,7 +98,7 @@ export function byteRangeToRange(
   return new vscode.Range(start, end);
 }
 
-function sameFile(reportPath: string, editorPath: string): boolean {
+export function sameFile(reportPath: string, editorPath: string): boolean {
   if (reportPath === editorPath) return true;
   return editorPath.endsWith(reportPath) || reportPath.endsWith(editorPath);
 }

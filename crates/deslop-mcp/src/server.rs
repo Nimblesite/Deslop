@@ -21,9 +21,10 @@ use tracing::{debug, error, info};
 
 use crate::{
     backend::McpBackend,
+    notify::NotificationSender,
     protocol::{
-        ErrorCode, JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, RequestId,
-        JSONRPC_VERSION,
+        jsonrpc_error, jsonrpc_error_response, jsonrpc_response_ok, ErrorCode, JsonRpcError,
+        JsonRpcRequest, RequestId, JSONRPC_VERSION,
     },
     resources::{read_resource, resources_list_payload},
     tools::{dispatch_tool_call, tools_list_payload, wrap_tool_result},
@@ -39,34 +40,41 @@ pub enum ServerError {
     Io(#[from] io::Error),
 }
 
-/// Server instance. Owns the backend + an output mutex so
-/// notifications and responses never interleave on the wire.
+/// Server instance. Owns the backend reference.
+///
+/// The output writer is supplied at [`run`](Self::run) time and wrapped
+/// in a [`NotificationSender`] so background worker threads (embedding
+/// refresh) can push notifications without waiting for the read loop.
 #[derive(Debug)]
 pub struct McpServer<B: McpBackend> {
     /// Shared backend. `Arc` so future async variants can share it.
     backend: Arc<B>,
-    /// Output mutex. Every line-write goes through this.
-    stdout_mutex: Arc<Mutex<()>>,
 }
 
 impl<B: McpBackend> McpServer<B> {
     /// Constructs a new server bound to `backend`.
     #[must_use]
     pub fn new(backend: Arc<B>) -> Self {
-        Self {
-            backend,
-            stdout_mutex: Arc::new(Mutex::new(())),
-        }
+        Self { backend }
     }
 
     /// Drives the server over an explicit `(reader, writer)` pair.
-    /// Returns when EOF is reached or a fatal I/O error occurs.
+    ///
+    /// `writer` is boxed into a [`NotificationSender`] and wired into
+    /// the backend so both the request loop and detached worker threads
+    /// share the same serialised write path. Returns when EOF is
+    /// reached or a fatal I/O error occurs.
     ///
     /// # Errors
     ///
-    /// Returns [`ServerError::Io`] on unrecoverable transport
-    /// failures.
-    pub fn run<R: Read, W: Write>(&self, reader: R, mut writer: W) -> Result<(), ServerError> {
+    /// Returns [`ServerError::Io`] on unrecoverable transport failures.
+    pub fn run<R: Read, W: Write + Send + 'static>(
+        &self,
+        reader: R,
+        writer: W,
+    ) -> Result<(), ServerError> {
+        let sender: NotificationSender = Arc::new(Mutex::new(Box::new(writer)));
+        self.backend.set_notification_sender(Arc::clone(&sender));
         let mut buffered = BufReader::new(reader);
         let mut line = String::new();
         loop {
@@ -80,49 +88,49 @@ impl<B: McpBackend> McpServer<B> {
             if trimmed.is_empty() {
                 continue;
             }
-            self.handle_frame(trimmed, &mut writer)?;
+            self.handle_frame(trimmed, &sender)?;
         }
     }
 
     /// Handles one JSON-RPC frame — request, notification, or a
     /// malformed line (which produces a parse-error response).
-    fn handle_frame<W: Write>(&self, line: &str, writer: &mut W) -> Result<(), ServerError> {
+    fn handle_frame(&self, line: &str, sender: &NotificationSender) -> Result<(), ServerError> {
         let request: JsonRpcRequest = match serde_json::from_str(line) {
             Ok(parsed) => parsed,
             Err(parse_err) => {
                 error!(reason = %parse_err, "mcp_parse_error");
-                let error = JsonRpcErrorResponse::new(
+                let error = jsonrpc_error_response(
                     None,
-                    JsonRpcError::new(ErrorCode::ParseError, parse_err.to_string()),
+                    jsonrpc_error(ErrorCode::ParseError, parse_err.to_string()),
                 );
-                return write_json(&self.stdout_mutex, writer, &error);
+                return write_json(sender, &error);
             }
         };
         if request.jsonrpc != JSONRPC_VERSION {
-            let error = JsonRpcErrorResponse::new(
+            let error = jsonrpc_error_response(
                 request.id.clone(),
-                JsonRpcError::new(
+                jsonrpc_error(
                     ErrorCode::InvalidRequest,
                     format!("unsupported jsonrpc version {:?}", request.jsonrpc),
                 ),
             );
-            return write_json(&self.stdout_mutex, writer, &error);
+            return write_json(sender, &error);
         }
         request.id.clone().map_or_else(
             || {
                 self.handle_notification(&request);
                 Ok(())
             },
-            |id| self.handle_request(id, &request, writer),
+            |id| self.handle_request(id, &request, sender),
         )
     }
 
     /// Handles a request (id-bearing frame).
-    fn handle_request<W: Write>(
+    fn handle_request(
         &self,
         id: RequestId,
         request: &JsonRpcRequest,
-        writer: &mut W,
+        sender: &NotificationSender,
     ) -> Result<(), ServerError> {
         let method = request.method.as_str();
         let params = request.params.clone().unwrap_or_else(|| json!({}));
@@ -135,28 +143,23 @@ impl<B: McpBackend> McpServer<B> {
             "tools/call" => self.handle_tool_call(&params),
             "resources/list" => Ok(resources_list_payload()),
             "resources/read" => self.handle_resource_read(&params),
-            other => Err(JsonRpcError::new(
+            other => Err(jsonrpc_error(
                 ErrorCode::MethodNotFound,
                 format!("method {other:?} is not implemented"),
             )),
         };
         match outcome {
-            Ok(result) => {
-                let response = JsonRpcResponse::ok(id, result);
-                write_json(&self.stdout_mutex, writer, &response)
-            }
-            Err(error) => {
-                let response = JsonRpcErrorResponse::new(Some(id), error);
-                write_json(&self.stdout_mutex, writer, &response)
-            }
+            Ok(result) => write_json(sender, &jsonrpc_response_ok(id, result)),
+            Err(error) => write_json(sender, &jsonrpc_error_response(Some(id), error)),
         }
     }
 
     /// Handles a notification (no `id`).
     ///
     /// `notifications/deslop/filesChanged` — carries `{ paths: [...] }`
-    /// and re-runs analysis. Exposed so a host (editor, file watcher)
-    /// can push incremental edits without polling tool calls.
+    /// and re-runs analysis. The backend pushes `notifications/resources/updated`
+    /// and `notifications/deslop/reportChanged` through its stored
+    /// [`NotificationSender`] after the analysis completes.
     fn handle_notification(&self, request: &JsonRpcRequest) {
         debug!(method = %request.method, "mcp_notification_received");
         if request.method == "notifications/deslop/filesChanged" {
@@ -203,7 +206,7 @@ impl<B: McpBackend> McpServer<B> {
     /// forwards to [`dispatch_tool_call`].
     fn handle_tool_call(&self, params: &Value) -> Result<Value, JsonRpcError> {
         let name = params.get("name").and_then(Value::as_str).ok_or_else(|| {
-            JsonRpcError::new(ErrorCode::InvalidParams, "tools/call requires a 'name'")
+            jsonrpc_error(ErrorCode::InvalidParams, "tools/call requires a 'name'")
         })?;
         let arguments = params
             .get("arguments")
@@ -217,32 +220,23 @@ impl<B: McpBackend> McpServer<B> {
     /// [`read_resource`].
     fn handle_resource_read(&self, params: &Value) -> Result<Value, JsonRpcError> {
         let uri = params.get("uri").and_then(Value::as_str).ok_or_else(|| {
-            JsonRpcError::new(ErrorCode::InvalidParams, "resources/read requires a 'uri'")
+            jsonrpc_error(ErrorCode::InvalidParams, "resources/read requires a 'uri'")
         })?;
         read_resource(self.backend.as_ref(), uri)
     }
 }
 
-/// Serialises `value` and writes it as one newline-terminated frame.
-fn write_json<W: Write, T: serde::Serialize>(
-    stdout_mutex: &Arc<Mutex<()>>,
-    writer: &mut W,
+/// Serialises `value` and writes it as one newline-terminated frame
+/// under the sender mutex so responses never interleave on the wire.
+fn write_json<T: serde::Serialize>(
+    sender: &NotificationSender,
     value: &T,
 ) -> Result<(), ServerError> {
     let bytes = serde_json::to_vec(value).map_err(|err| io_from_serde(&err))?;
-    write_frame(stdout_mutex, writer, &bytes)
-}
-
-/// Writes a single newline-terminated frame under the output mutex.
-fn write_frame<W: Write>(
-    stdout_mutex: &Arc<Mutex<()>>,
-    writer: &mut W,
-    bytes: &[u8],
-) -> Result<(), ServerError> {
-    let _guard = stdout_mutex
+    let mut writer = sender
         .lock()
-        .map_err(|_poisoned| ServerError::Io(io::Error::other("mcp stdout mutex poisoned")))?;
-    writer.write_all(bytes)?;
+        .map_err(|_| ServerError::Io(io::Error::other("mcp stdout mutex poisoned")))?;
+    writer.write_all(&bytes)?;
     writer.write_all(b"\n")?;
     writer.flush()?;
     Ok(())

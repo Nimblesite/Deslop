@@ -321,7 +321,7 @@ fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
 /// key is absent.
 fn resolve_config_threshold(args: &Cli) -> Result<Option<f64>> {
     let config = match args.config.as_deref() {
-        Some(path) => ExclusionConfig::load(path)
+        Some(path) => ExclusionConfig::load_for_root(path, &args.path)
             .with_context(|| format!("load config {}", path.display()))?,
         None => ExclusionConfig::discover(&args.path)
             .with_context(|| format!("discover config in {}", args.path.display()))?,

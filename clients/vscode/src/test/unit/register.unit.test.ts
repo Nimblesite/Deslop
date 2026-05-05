@@ -20,8 +20,11 @@ function cluster(path: string, start: number, end: number): ReportCluster {
     weight: 1,
     size: 1,
     canonical_node_count: 0,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: [{ path, start_byte: start, end_byte: end, hidden: false }],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };

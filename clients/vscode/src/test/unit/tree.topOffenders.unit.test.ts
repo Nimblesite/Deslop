@@ -17,7 +17,7 @@ import {
 } from "../../tree/providers";
 import { openOccurrence } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
-import { ReportOccurrence } from "../../types/report";
+import { ReportCluster, ReportOccurrence } from "../../types/report";
 import {
   cluster,
   iconColorId,
@@ -27,6 +27,22 @@ import {
   withGroupBy,
 } from "./tree.helpers";
 import { CATEGORY_STYLE } from "../../tree/nodes";
+
+function reportOccurrence(occurrencePath: string, startByte = 0, endByte = 20): ReportOccurrence {
+  return { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false };
+}
+
+function withOccurrences(
+  base: ReportCluster,
+  occurrences: ReportOccurrence[],
+): ReportCluster {
+  return {
+    ...base,
+    size: occurrences.length,
+    occurrences_total: occurrences.length,
+    occurrences,
+  };
+}
 
 suite("TopOffendersProvider", () => {
   test("renders an Analysing… placeholder before the first report arrives", () => {
@@ -72,17 +88,37 @@ suite("TopOffendersProvider", () => {
     assert.match(labels[1] ?? "", /Alpha\.cs/);
     assert.match(labels[2] ?? "", /Alpha\.cs/);
     assert.match(labels[3] ?? "", /Gamma\.cs/);
-    assert.deepEqual(descriptions, [
-      "rank-1-beta",
-      "rank-2-alpha",
-      "rank-3-alpha",
-      "rank-4-gamma",
-    ]);
+    assert.ok(
+      descriptions.every((d) => /^\d+ copies$/.test(d)),
+      `cluster descriptions must show copy count, not cluster id; got: ${JSON.stringify(descriptions)}`,
+    );
     const first = nodes[0];
     assert.ok(first, "first row must exist");
     assert.equal(first.command?.command, "deslop.openCluster");
     assert.deepEqual(first.command?.arguments, ["rank-1-beta"]);
     assert.equal(provider.getChildren(first).length, 2);
+  });
+
+  test("issue_47_cluster_tooltip_keeps_labeled_cluster_id_after_human_description", () => {
+    const store = new ReportStore();
+    const clusterId = "1802186da488862f";
+    store.setSnapshot(
+      report([cluster(clusterId, 48_936.95, "/repo/src/ICD10/CliE2ETests.cs")]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [node] = provider.getChildren();
+    assert.ok(node, "cluster row must render");
+    assert.notEqual(
+      String(node.description ?? ""),
+      clusterId,
+      "row description must not use the hex cluster id as the human anchor",
+    );
+    assert.match(
+      tooltipText(node),
+      /cluster id:\s+`1802186da488862f`/,
+      "tooltip must keep the machine id discoverable behind a labeled cluster id field",
+    );
   });
 
   test("file mode roots are FileNodes sorted by max cluster weight desc", async () => {
@@ -404,6 +440,46 @@ suite("TopOffendersProvider", () => {
     assert.equal(kids.length, c.occurrences.length);
   });
 
+  test("occurrence node tooltip shows parent cluster rank, category, and position (#47)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster("a", 10, "/f1")]), 0);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [root] = provider.getChildren();
+    assert.ok(root, "cluster root must exist");
+    const [first, second] = provider.getChildren(root);
+    assert.ok(first, "first occurrence node must exist");
+    assert.ok(second, "second occurrence node must exist");
+    const tip1 = tooltipText(first);
+    const tip2 = tooltipText(second);
+    assert.match(tip1, /#1/, "tooltip must show the parent cluster rank");
+    assert.match(tip1, /Identical code/, "tooltip must name the category");
+    assert.match(tip1, /occurrence 1 of 2/, "tooltip must show position in cluster");
+    assert.match(tip2, /occurrence 2 of 2/, "second occurrence tooltip must reflect its index");
+  });
+
+  test("compare with canonical context values hide non-actionable rows (#14)", () => {
+    const store = new ReportStore();
+    const singleOccurrence = withOccurrences(cluster("single", 5, "/single"), [
+      reportOccurrence("/single"),
+    ]);
+    store.setSnapshot(
+      report([cluster("multi", 10, "/f1"), singleOccurrence]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [multi, single] = provider.getChildren();
+    assert.ok(multi, "multi-occurrence cluster root must exist");
+    assert.ok(single, "single-occurrence cluster root must exist");
+    assert.equal(multi.contextValue, "deslop.clusterComparable");
+    assert.equal(single.contextValue, "deslop.clusterSingle");
+
+    const [canonical, comparable] = provider.getChildren(multi);
+    assert.ok(canonical, "canonical occurrence row must exist");
+    assert.ok(comparable, "comparable occurrence row must exist");
+    assert.equal(canonical.contextValue, "deslop.occurrenceCanonical");
+    assert.equal(comparable.contextValue, "deslop.occurrence");
+  });
+
   test("occurrence row reports and opens the exact file, line, and column", async () => {
     // [VSIX-ACTIVITY-BAR] Issue #8: tree occurrence rows must show
     // path:line:column, not machine-oriented start_byte..end_byte.
@@ -488,7 +564,11 @@ suite("TopOffendersProvider", () => {
     try {
       store.setSnapshot(report([cluster("stale", 1, "/stale.cs")]), 1);
       assert.equal(treeRefreshes, 1, "snapshot must refresh the tree");
-      assert.equal(String(provider.getChildren()[0]?.description ?? ""), "stale");
+      assert.match(
+        String(provider.getChildren()[0]?.description ?? ""),
+        /^\d+ copies$/,
+        "description must show copy count after snapshot",
+      );
 
       store.applyDelta({
         from_generation: 1,
@@ -501,7 +581,108 @@ suite("TopOffendersProvider", () => {
       });
 
       assert.equal(treeRefreshes, 2, "delta must refresh the tree");
-      assert.equal(String(provider.getChildren()[0]?.description ?? ""), "fresh");
+      assert.match(
+        String(provider.getChildren()[0]?.description ?? ""),
+        /^\d+ copies$/,
+        "description must show copy count after delta",
+      );
+    } finally {
+      sub.dispose();
+      provider.dispose();
+      ticker.dispose();
+    }
+  });
+
+  test("does not surface removed-cluster progress or historical counts (#128)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("fixed", 100, "/repo/Fixed.cs"),
+        cluster("next", 95, "/repo/Next.cs"),
+        cluster("still", 80, "/repo/Still.cs"),
+      ]),
+      1,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+
+    store.applyDelta({
+      from_generation: 1,
+      to_generation: 2,
+      clusters_added: [],
+      clusters_removed: ["fixed"],
+      clusters_updated: [],
+      cache_stats: { hits: 2, misses: 0 },
+      tool_version: "v2",
+    });
+
+    const nodes = provider.getChildren();
+    const labels = nodes.map(labelText);
+    const joined = labels.join("\n");
+
+    assert.equal(nodes.length, 2, "top offenders must only show current report clusters");
+    assert.match(labels[0] ?? "", /Next\.cs/, "highest remaining offender must be first");
+    assert.ok(labels.some((label) => /Next\.cs/.test(label)), "next offender must remain visible");
+    assert.ok(labels.some((label) => /Still\.cs/.test(label)), "remaining offender must remain visible");
+    assert.doesNotMatch(joined, /no longer reported/i, "removed-cluster history is not product state");
+    assert.doesNotMatch(joined, /\bremaining\b/i, "top offenders must not show historical counters");
+    assert.doesNotMatch(joined, /generation\s+\d+/i, "top offenders must not expose generation summaries");
+    assert.doesNotMatch(joined, /Fixed\.cs/, "removed cluster must leave the offender list");
+  });
+
+  test("dirty file edits prune stale offsets from top offenders immediately (#78)", () => {
+    const dirtyOnly = withOccurrences(
+      cluster("dirty-only", 100, "/repo/Dirty.cs"),
+      [reportOccurrence("/repo/Dirty.cs", 10, 20)],
+    );
+    const mixedSingleton = withOccurrences(
+      cluster("mixed-singleton", 95, "/repo/Dirty.cs"),
+      [
+        reportOccurrence("/repo/Dirty.cs", 30, 40),
+        reportOccurrence("/repo/Clean.cs", 50, 60),
+      ],
+    );
+    const mixedPeers = withOccurrences(
+      cluster("mixed-peers", 90, "/repo/Dirty.cs"),
+      [
+        reportOccurrence("/repo/Dirty.cs", 70, 80),
+        reportOccurrence("/repo/CleanA.cs", 90, 100),
+        reportOccurrence("/repo/CleanB.cs", 110, 120),
+      ],
+    );
+    const clean = withOccurrences(
+      cluster("clean", 80, "/repo/Other.cs"),
+      [
+        reportOccurrence("/repo/OtherA.cs", 130, 140),
+        reportOccurrence("/repo/OtherB.cs", 150, 160),
+      ],
+    );
+    const store = new ReportStore();
+    store.setSnapshot(report([dirtyOnly, mixedSingleton, mixedPeers, clean]), 9);
+    const ticker = new StatusTicker();
+    const provider = new TopOffendersProvider(store, ticker);
+    let treeRefreshes = 0;
+    const sub = provider.onDidChangeTreeData(() => {
+      treeRefreshes += 1;
+    });
+
+    try {
+      const before = provider.getChildren();
+      assert.equal(before.length, 4, "fixture starts with four top-offender rows");
+      assert.match(before.map(labelText).join("\n"), /Dirty\.cs/, "fixture must expose dirty offsets");
+
+      store.markFileDirty("/repo/Dirty.cs");
+
+      const after = provider.getChildren();
+      const labels = after.map(labelText);
+      const mixedNode = after.find((node) => labelText(node).includes("CleanA.cs"));
+
+      assert.equal(treeRefreshes, 1, "dirty pruning must refresh the tree once");
+      assert.equal(after.length, 2, "dirty-only and singleton clusters must disappear from top offenders");
+      assert.doesNotMatch(labels.join("\n"), /Dirty\.cs/, "stale dirty-file offsets must be hidden");
+      assert.doesNotMatch(labels.join("\n"), /Clean\.cs/, "one-copy mixed cluster must be hidden");
+      assert.ok(mixedNode, "mixed cluster must remain via its clean peer occurrences");
+      assert.match(labelText(mixedNode), /#1\b/, "surviving cluster is re-ranked after pruning");
+      assert.equal(provider.getChildren(mixedNode).length, 2, "only clean peer occurrences remain expandable");
     } finally {
       sub.dispose();
       provider.dispose();
@@ -519,5 +700,23 @@ suite("TopOffendersProvider", () => {
     );
     assert.ok(errorNode, "top offenders must show a failed-lifecycle banner");
     assert.match(labelText(errorNode), /Stopped: crash/);
+  });
+
+  test("retains existing clusters during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("c1", 100, "/repo/A.cs"),
+        cluster("c2", 80, "/repo/B.cs"),
+      ]),
+      0,
+    );
+    store.setLifecycle({ kind: "analysing" });
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const nodes = provider.getChildren();
+    assert.ok(nodes.length >= 2, "cluster rows must remain visible during re-analysis");
+    const labels = nodes.map(labelText);
+    assert.ok(labels.some((l) => /A\.cs/i.test(l) || /c1/i.test(l)), "A.cs cluster must stay visible");
+    assert.ok(labels.some((l) => /B\.cs/i.test(l) || /c2/i.test(l)), "B.cs cluster must stay visible");
   });
 });

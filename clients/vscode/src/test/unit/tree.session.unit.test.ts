@@ -6,13 +6,27 @@ import { ReportStore } from "../../reportStore";
 import { cluster, labelText, report } from "./tree.helpers";
 
 suite("SessionProvider", () => {
-  test("renders five session rows when a report is loaded", () => {
+  test("renders four session rows when a report is loaded", () => {
     const store = new ReportStore();
     store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
     const nodes = provider.getChildren();
-    assert.equal(nodes.length, 5);
+    assert.equal(nodes.length, 4);
     assert.equal(provider.getChildren(nodes[0]).length, 0);
+  });
+
+  test("omits internal report format fields from the human session panel (#118)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
+    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
+    const nodes = provider.getChildren();
+    const labels = nodes.map(labelText);
+    assert.deepEqual(labels, ["Embedding model", "Cache", "Files analysed", "State"]);
+    assert.equal(nodes.length, 4);
+    assert.ok(labels.includes("Embedding model"));
+    assert.ok(labels.includes("Files analysed"));
+    assert.ok(labels.includes("State"));
+    assert.ok(!labels.some((label) => /schema/i.test(label)));
   });
 
   test("renders a 'no session' placeholder before a report arrives", () => {
@@ -41,6 +55,7 @@ suite("SessionProvider", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 23797,
+      message: null,
     });
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
@@ -104,5 +119,17 @@ suite("SessionProvider", () => {
     assert.ok(errorNode, `expected an error StatusNode, got ${JSON.stringify(nodes.map(labelText))}`);
     assert.match(labelText(errorNode), /Stopped: binary missing/);
     assert.equal(errorNode.command?.command, "deslop.revealLog");
+  });
+
+  test("retains session data during re-analysis — stale > blank ([VSIX-REACTIVITY-TREE])", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster("a", 1, "/f")]), 0);
+    store.setLifecycle({ kind: "analysing" });
+    const provider = new SessionProvider(store, new StatusTicker(), () => undefined);
+    const nodes = provider.getChildren();
+    assert.equal(nodes.length, 4, "session rows must remain visible during re-analysis");
+    const labels = nodes.map((n) => (typeof n.label === "string" ? n.label : ""));
+    assert.ok(labels.includes("Embedding model"), "Embedding model row must stay visible");
+    assert.ok(labels.includes("State"), "State row must stay visible");
   });
 });

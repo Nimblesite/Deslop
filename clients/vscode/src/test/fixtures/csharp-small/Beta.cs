@@ -1,5 +1,5 @@
 public class Beta {
-    public int Compute(int a, int b) {
+    public int Calculate(int a, int b) {
         var sum = a + b;
         var total = 0;
         for (var i = 0; i < 12; i++) {

@@ -1,8 +1,10 @@
-// Unit tests for the report-schema pure helpers. Verdict tests exercise
-// the canonical [CLONE-BUCKETS-ROUTING] table via verdictOf — every
-// assertion here mirrors one row of that table.
+// Unit tests for the report-schema pure helpers. Bucket tests exercise
+// the canonical [CLONE-BUCKETS-ROUTING] table — every assertion here
+// mirrors one row of that table.
 
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
   FUSED_THRESHOLD,
   bucketLabels,
@@ -10,16 +12,11 @@ import {
   occurrenceCount,
   resolveBucket,
   severityOf,
-  verdictOf,
   type ReportCluster,
   type ReportSignals,
 } from "../../types/report";
 
-const signals = (
-  s: number,
-  j: number,
-  e: number,
-): ReportSignals => ({
+const signals = (s: number, j: number, e: number): ReportSignals => ({
   structural: s,
   token_jaccard: j,
   embedding_cos: e,
@@ -31,15 +28,34 @@ const cluster = (overrides: Partial<ReportCluster> = {}): ReportCluster => ({
   weight: 1,
   size: 4,
   canonical_node_count: 10,
+  bucket: "identical",
   signals: signals(0, 0, 0),
   occurrences: [
     { path: "A.cs", start_byte: 0, end_byte: 10, hidden: false },
     { path: "B.cs", start_byte: 0, end_byte: 10, hidden: false },
   ],
+  occurrences_total: 0,
+  occurrences_truncated: false,
   summary: "",
   interpretation: "",
   ...overrides,
 });
+
+function reportTypesPath(): string {
+  const compiledRun = path.resolve(__dirname, "../../../src/types/report.ts");
+  if (fs.existsSync(compiledRun)) {
+    return compiledRun;
+  }
+  return path.resolve(__dirname, "../../types/report.ts");
+}
+
+function reportTypesSource(): string {
+  return fs.readFileSync(reportTypesPath(), "utf8");
+}
+
+function legacyName(): string {
+  return ["Verd", "ict"].join("");
+}
 
 suite("report schema helpers", () => {
   test("FUSED_THRESHOLD is 0.85", () => {
@@ -86,26 +102,24 @@ suite("report schema helpers", () => {
     assert.equal(classifyCluster(signals(0.3, 0.4, 0.2)), "loosely_similar");
   });
 
-  test("verdictOf DUPLICATE requires structural AND jaccard to saturate", () => {
-    assert.equal(verdictOf(signals(1.0, 1.0, 0)), "DUPLICATE");
-  });
-
-  test("verdictOf NEAR-MISS for Type-3", () => {
-    assert.equal(verdictOf(signals(0.0, 0.95, 0)), "NEAR-MISS");
-  });
-
-  test("verdictOf SEMANTIC MATCH when embedding rescues syntactic mismatch", () => {
-    assert.equal(verdictOf(signals(0.2, 0.3, 0.9)), "SEMANTIC MATCH");
-  });
-
-  test("verdictOf LOOSELY SIMILAR on weak residual signal", () => {
-    assert.equal(verdictOf(signals(0.3, 0.4, 0.2)), "LOOSELY SIMILAR");
+  test("report types do not keep legacy clone bucket aliases (#84)", () => {
+    const source = reportTypesSource();
+    const alias = legacyName();
+    const helper = ["verd", "ict", "Of"].join("");
+    assert.doesNotMatch(source, new RegExp(`export\\s+type\\s+${alias}\\b`));
+    assert.doesNotMatch(source, new RegExp(`function\\s+${helper}\\b`));
+    assert.doesNotMatch(source, new RegExp(`Legacy\\s+${alias}`));
+    assert.doesNotMatch(source, /\bDUPLICATE\b/);
+    assert.doesNotMatch(source, /\bNEAR-MISS\b/);
+    assert.doesNotMatch(source, /\bSEMANTIC MATCH\b/);
   });
 
   test("resolveBucket prefers JSON wire label over recomputation", () => {
-    const bucket = resolveBucket(cluster({
-      bucket: "same_behavior",
-    }));
+    const bucket = resolveBucket(
+      cluster({
+        bucket: "same_behavior",
+      }),
+    );
     assert.equal(bucket, "same_behavior");
   });
 
@@ -125,15 +139,27 @@ suite("report schema helpers", () => {
 
   test("bucketLabels hybrid_title carries bracketed Type-N on every bucket", () => {
     assert.ok(bucketLabels("identical").hybridTitle.includes("[Type-1/2]"));
-    assert.ok(bucketLabels("nearly_identical").hybridTitle.includes("[Type-3]"));
-    assert.ok(bucketLabels("loosely_similar").hybridTitle.includes("[weak LSH]"));
+    assert.ok(
+      bucketLabels("nearly_identical").hybridTitle.includes("[Type-3]"),
+    );
+    assert.ok(
+      bucketLabels("loosely_similar").hybridTitle.includes("[weak LSH]"),
+    );
     assert.ok(bucketLabels("same_behavior").hybridTitle.includes("[Type-4"));
   });
 
   test("bucketLabels plain_title never contains Type-N", () => {
-    for (const b of ["identical", "nearly_identical", "loosely_similar", "same_behavior"] as const) {
+    for (const b of [
+      "identical",
+      "nearly_identical",
+      "loosely_similar",
+      "same_behavior",
+    ] as const) {
       const title = bucketLabels(b).plainTitle;
-      assert.ok(!/\bType-\d/.test(title), `plain_title must be jargon-free: ${title}`);
+      assert.ok(
+        !/\bType-\d/.test(title),
+        `plain_title must be jargon-free: ${title}`,
+      );
     }
   });
 

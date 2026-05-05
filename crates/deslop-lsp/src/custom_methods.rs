@@ -2,17 +2,22 @@
 //! ([LSP-CUSTOM-METHODS]). Each method is a thin async forwarder onto
 //! the [`deslop_core::live::LiveApi`] surface.
 
-use std::{path::PathBuf, time::Instant};
+use std::time::Instant;
 
 use deslop_core::{
     live::{FindSimilarRequest, LiveApi},
     render::{render_cluster_markdown, render_text},
     report::{occurrence_count, Report, ReportCluster, LIVE_WIRE_OCCURRENCE_CAP},
+    wire_generated::{
+        ClusterIdParams, PathParams, RangeParams, ReportDeltaParams, SetModelParams,
+        VirtualDocumentParams,
+    },
 };
 use serde::{Deserialize, Serialize};
 use tower_lsp::jsonrpc::Result as LspResult;
 
 use crate::backend::LspBackend;
+use crate::observability::CpuPhase;
 
 /// Method name for `deslop/reportSchemaDoc`. Serves the markdown
 /// `schema_doc` that used to ride every `deslop/reportGet` response;
@@ -53,6 +58,8 @@ pub const LIST_MODELS: &str = "deslop/embeddingListModels";
 pub const SET_MODEL: &str = "deslop/embeddingSetModel";
 /// Method name for `deslop/sessionConfig`.
 pub const SESSION_CONFIG: &str = "deslop/sessionConfig";
+/// Method name for `deslop/cpuReport`.
+pub const CPU_REPORT: &str = "deslop/cpuReport";
 
 /// Method name for `deslop/virtualDocument`. Resolves `deslop://schema`,
 /// `deslop://report`, and `deslop://cluster/<id>` URIs into markdown so
@@ -60,55 +67,12 @@ pub const SESSION_CONFIG: &str = "deslop/sessionConfig";
 /// ([LSP-EDITOR-SURFACES]).
 pub const VIRTUAL_DOCUMENT: &str = "deslop/virtualDocument";
 
-/// Parameters for the file/range/cluster lookups.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PathParams {
-    /// Workspace-relative or absolute path.
-    pub path: PathBuf,
-}
-
-/// Parameters for `report/delta`.
-#[derive(Debug, Default, Deserialize, Serialize)]
-pub struct ReportDeltaParams {
-    /// Generation the client already has. Missing means "previous generation."
-    pub since_generation: Option<u64>,
-}
-
-/// Parameters for `report/forRange`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct RangeParams {
-    /// Path scoping the range.
-    pub path: PathBuf,
-    /// Inclusive start byte.
-    pub start_byte: usize,
-    /// Exclusive end byte.
-    pub end_byte: usize,
-}
-
-/// Parameters for `cluster/byId`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ClusterIdParams {
-    /// Stable cluster id.
-    pub id: String,
-}
-
-/// Parameters for [`VIRTUAL_DOCUMENT`].
-#[derive(Debug, Deserialize, Serialize)]
-pub struct VirtualDocumentParams {
-    /// `deslop://{schema|report|cluster/<id>}` URI.
-    pub uri: String,
-}
-
-/// Parameters for `embedding/setModel`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SetModelParams {
-    /// Provider registry key.
-    pub provider_id: String,
-    /// Model identifier.
-    pub model_id: String,
-    /// Optional endpoint override.
-    pub endpoint: Option<String>,
-}
+// `PathParams`, `ReportDeltaParams`, `RangeParams`, `ClusterIdParams`,
+// `VirtualDocumentParams`, and `SetModelParams` live in
+// `deslop_core::wire_generated`, generated from
+// `docs/models/live-ipc.td` so the VSIX and the LSP share one wire
+// definition. They're re-exported into the module's `use` block at the
+// top of the file.
 
 /// Forwards `report/get`. Accepts and ignores any params the client
 /// happens to send (tower-lsp rejects `params: {}` unless the handler
@@ -122,7 +86,11 @@ pub async fn report_get(
     backend: &LspBackend,
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
+    backend.observability().record_handler(REPORT_GET);
     let started = Instant::now();
+    let _phase = backend
+        .observability()
+        .start_phase(CpuPhase::ReportRendering, Vec::new());
     let report = backend.service().report_get().await;
     let slim: Report = (*report)
         .clone()
@@ -138,6 +106,20 @@ pub async fn report_get(
     Ok(serde_json::to_value(&slim).unwrap_or(serde_json::Value::Null))
 }
 
+/// Returns the current CPU/work observability snapshot.
+///
+/// # Errors
+///
+/// Never errors today — kept fallible to match the JSON-RPC method
+/// signature.
+pub async fn cpu_report(
+    backend: &LspBackend,
+    _params: IgnoredParams,
+) -> LspResult<serde_json::Value> {
+    backend.observability().record_handler(CPU_REPORT);
+    Ok(serde_json::to_value(backend.observability().snapshot()).unwrap_or(serde_json::Value::Null))
+}
+
 /// Forwards `report/schemaDoc`. Returns the markdown that used to ride
 /// every [`REPORT_GET`] response ([LSP-WIRE-BUDGET]). Clients fetch this
 /// lazily (e.g. VSIX `openSchemaDoc` command) so the live wire stays
@@ -151,6 +133,11 @@ pub async fn report_schema_doc(
     backend: &LspBackend,
     _params: IgnoredParams,
 ) -> LspResult<serde_json::Value> {
+    schema_doc_value(backend).await
+}
+
+/// Returns the live schema markdown as a JSON string value.
+async fn schema_doc_value(backend: &LspBackend) -> LspResult<serde_json::Value> {
     let report = backend.service().report_get().await;
     Ok(serde_json::Value::String(report.schema_doc.clone()))
 }
@@ -355,10 +342,7 @@ pub async fn virtual_document(
     params: VirtualDocumentParams,
 ) -> LspResult<serde_json::Value> {
     match parse_virtual_uri(&params.uri) {
-        Some(VirtualDocument::Schema) => {
-            let report = backend.service().report_get().await;
-            Ok(serde_json::Value::String(report.schema_doc.clone()))
-        }
+        Some(VirtualDocument::Schema) => schema_doc_value(backend).await,
         Some(VirtualDocument::Report) => {
             let report = backend.service().report_get().await;
             Ok(serde_json::Value::String(render_text(&report)))

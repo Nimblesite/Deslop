@@ -4,6 +4,7 @@
 
 import * as vscode from "vscode";
 import * as path from "node:path";
+import { effect } from "@preact/signals-core";
 
 import { COLOR } from "../design";
 import { reportWithDisplayLocations } from "../locations";
@@ -27,19 +28,12 @@ export function openClusterPanel(
 ): void {
   const key = `cluster:${clusterId}`;
   const existing = activePanels.get(key);
-  if (existing) {
-    existing.panel.reveal(vscode.ViewColumn.Active);
-    return;
-  }
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
   const unsub = wirePanel(panel, store, "cluster", (webview) => {
     void webview.postMessage({ kind: "select/cluster", id: clusterId });
   });
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    handleMessage(store, msg).catch((err: unknown) => {
-      console.error("handleMessage failed", err);
-    });
-  });
+  wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
@@ -50,17 +44,10 @@ export function openClusterPanel(
 export function openReportPanel(context: vscode.ExtensionContext, store: ReportStore): void {
   const key = "report";
   const existing = activePanels.get(key);
-  if (existing) {
-    existing.panel.reveal(vscode.ViewColumn.Active);
-    return;
-  }
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
   const panel = createPanel(context, "report", "Deslop: report");
   const unsub = wirePanel(panel, store, "report");
-  panel.webview.onDidReceiveMessage((msg: unknown) => {
-    handleMessage(store, msg).catch((err: unknown) => {
-      console.error("handleMessage failed", err);
-    });
-  });
+  wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
     activePanels.delete(key);
@@ -88,6 +75,12 @@ function createPanel(
   return panel;
 }
 
+function wireMessages(panel: vscode.WebviewPanel, store: ReportStore): void {
+  panel.webview.onDidReceiveMessage((msg: unknown) => {
+    handleMessage(store, msg).catch((err: unknown) => console.error("handleMessage failed", err));
+  });
+}
+
 function wirePanel(
   panel: vscode.WebviewPanel,
   store: ReportStore,
@@ -102,8 +95,10 @@ function wirePanel(
       report: reportWithDisplayLocations(report),
     });
   };
-  push(store.current.report);
-  const sub = store.onDidChange((state) => push(state.report));
+  // [VSIX-STATE-DIRTY]: webviews mirror the visible projection so an
+  // unsaved edit hides occurrences in lock-step with the tree. Commands
+  // that need cluster-id lookup go through canonical separately.
+  const sub = { dispose: effect(() => push(store.visibleReport.value)) };
   if (onReady) {
     // delay until the webview has mounted and acknowledged via `ready`
     const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {

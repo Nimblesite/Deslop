@@ -23,6 +23,9 @@ use super::{
     wire::{EmbeddingModelInfo, FileReport, FindSimilarRequest, FindSimilarResult, SessionConfig},
 };
 
+/// Pseudo-provider accepted by `deslop/embeddingSetModel` to disable embeddings.
+const OFF_PROVIDER_ID: &str = "off";
+
 /// Stable async surface every transport (LSP, MCP) forwards to.
 #[async_trait]
 pub trait LiveApi: Send + Sync + std::fmt::Debug {
@@ -232,6 +235,9 @@ impl LiveApi for LiveService {
         model_id: &str,
         endpoint: Option<&str>,
     ) -> Result<Option<EmbeddingProvenance>, LiveError> {
+        if provider_id == OFF_PROVIDER_ID {
+            return disable_embeddings(self).await;
+        }
         let provider = build_provider(provider_id, model_id, endpoint)?;
         self.embedding_set_provider(provider).await
     }
@@ -250,6 +256,28 @@ impl LiveApi for LiveService {
             .map(|cluster| cluster.weight)
             .collect()
     }
+}
+
+/// Disables the live session embedding pass and records delta history.
+///
+/// # Errors
+///
+/// Returns [`LiveError`] when the no-embedding refresh fails.
+async fn disable_embeddings(
+    service: &LiveService,
+) -> Result<Option<EmbeddingProvenance>, LiveError> {
+    let (previous_generation, previous_report, to_generation) = {
+        let mut guard = service.inner.lock().await;
+        let previous_generation = guard.generation();
+        let previous_report = guard.report();
+        let delta = guard.disable_embeddings()?;
+        (previous_generation, previous_report, delta.to_generation)
+    };
+    service
+        .remember_snapshot(previous_generation, previous_report)
+        .await;
+    tracing::info!(generation = to_generation, "embedding analysis disabled");
+    Ok(None)
 }
 
 /// Runs one refresh job on a blocking worker and commits its report if

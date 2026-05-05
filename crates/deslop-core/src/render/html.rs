@@ -22,6 +22,7 @@ use crate::{
     render::{
         highlight::highlight_snippet,
         html_css::{REPORT_CSS, SITE_CSS},
+        html_escape::escape,
         html_footer::write_run_details,
     },
     report::{Report, ReportCluster, ReportOccurrence},
@@ -478,21 +479,4 @@ fn language_for_path(path: &Path) -> &'static str {
         Some("py") => "python",
         _ => "unknown",
     }
-}
-
-/// HTML-escapes the four characters that can break out of content
-/// context. Never emits entities for anything else so the output stays
-/// human-diffable.
-pub(super) fn escape(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            other => out.push(other),
-        }
-    }
-    out
 }

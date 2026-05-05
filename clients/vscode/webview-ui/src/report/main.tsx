@@ -53,7 +53,7 @@ function ReportApp() {
           class="label"
           style={{ fontFamily: FONT.mono, color: COLOR.onSurfaceMuted }}
         >
-          DESLOP · REPORT · v{snapshot.report_schema_version} · {snapshot.tool_version}
+          DESLOP · REPORT · {snapshot.tool_version}
         </div>
         <div
           style={{

@@ -1,21 +1,18 @@
-# Live analysis — in-memory session behind the LSP and MCP servers
+# Live analysis — in-process session in the LSP
 
-Deslop v1 is a batch CLI. The VSIX, the LSP server, and the MCP server all need a **live, watcher-driven, always-up-to-date report** that updates as the user (or an AI agent) edits files. This document specifies the `live` module inside `deslop-core` that every non-CLI binary runs on top of. The CLI pipeline is unchanged — the `live` module is a thin orchestration layer over [PIPELINE-INCREMENTAL] and the `update_files(changed)` entry point promised in [pipeline.md §13](pipeline.md).
+`deslop-lsp` runs a persistent `AnalysisSession` that watches the workspace, re-analyses on every file change, and writes the current report to a shared state file on disk. `deslop-mcp` reads that state file — it runs no analysis of its own. The CLI is unchanged: no watcher, no background threads, exits after one pass.
 
-**There is no daemon process.** The `live` module just keeps an analysis session alive for as long as the binary that owns it is running. The LSP server and the MCP server are long-running because LSP and MCP are long-running protocols; they're not background services, they're conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`).
-
-See also: [lsp.md](lsp.md), [mcp.md](mcp.md), [vsix.md](vsix.md).
+See also: [lsp.md](lsp.md), [mcp.md](mcp.md).
 
 ### [LIVE-PACKAGING] Crate + binary layout
 
-The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo feature. Two thin binaries link it:
+The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo feature. Only one binary links it:
 
-- `crates/deslop-lsp` — JSON-RPC over stdio (LSP transport).
-- `crates/deslop-mcp` — JSON-RPC over stdio (Model Context Protocol transport).
+- `crates/deslop-lsp` — JSON-RPC over stdio. Owns the `AnalysisSession`, the watcher, the scheduler, and all pipeline work. Writes the state file and the IPC socket.
 
-Both binaries stay under 100 LOC of glue — transport demux, dispatch, shutdown. All live-session logic — state, watcher, scheduler, query API — is reachable from `deslop_core::live::*` once the feature is enabled. Nothing in the pipeline moves; no pipeline code is duplicated.
+`crates/deslop-mcp` does **not** link the `live` feature. It reads the LSP's output via the state file ([LIVE-STATE-FILE]) and delegates compute operations via the IPC socket ([LIVE-IPC-SOCKET]).
 
-End-to-end flow — who owns each box, who talks to whom, and where the live analysis lives:
+`crates/deslop` (CLI) does not link `live` either — zero watcher, zero background threads.
 
 ```mermaid
 flowchart LR
@@ -23,186 +20,211 @@ flowchart LR
 
     subgraph VSCode["VS Code process"]
         direction TB
-        subgraph VSIX["Deslop VSIX (TypeScript extension)"]
-            direction TB
-            UI["Live bubble · tree view · webview<br/>Ollama model picker · status bar"]
-            LspClient["LSP client"]
-            McpHost["Bundled MCP host entry"]
-        end
+        UI["Deslop VSIX (bubble · tree · webview · status bar)"]
+        LspClient["LSP client"]
+        McpHost["Bundled MCP host"]
+        UI --> LspClient
     end
 
-    subgraph AgentHost["AI agent host process<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
-        direction TB
-        AgentLoop["Agent planner / tool-use loop"]
-        McpClient["MCP client"]
-        AgentLoop --> McpClient
+    subgraph AgentHost["AI agent host (Claude Code · Cursor · Continue)"]
+        Agent["Agent + MCP client"]
     end
 
-    subgraph Binaries["Binaries (processes)"]
-        direction TB
-        LspBin["deslop-lsp<br/>(stdio JSON-RPC)"]
-        McpBin["deslop-mcp<br/>(stdio MCP)"]
-        CliBin["deslop (CLI)<br/>(one-shot batch)"]
+    subgraph LspProc["deslop-lsp process"]
+        LspInner["AnalysisSession · watcher · scheduler · LiveApi\n(deslop-core live feature linked in)"]
     end
 
-    subgraph CoreCrate["deslop-core (one crate)"]
-        direction TB
-        Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
-        Pipeline["pipeline module<br/>PipelineSession · update_files()<br/>discover · parse · fingerprint · LSH · embed · rank · render"]
-        Live --> Pipeline
+    subgraph McpProc["deslop-mcp process"]
+        McpInner["State-file reader + in-memory cache\nIPC delegate for compute ops\n(no analysis work)"]
     end
 
+    CliProc(["deslop CLI process\n(one-shot batch)"])
+
+    StateFile[(".deslop-cache/live-report.json")]
+    IpcSocket[(".deslop-cache/deslop.sock")]
+    DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
-    Ollama[(Ollama<br/>/api/tags · /api/embed)]
+    Ollama[(Ollama /api/embed)]
 
-    UI -- "user types · tree click · picker" --> LspClient
-    LspClient == "spawns + LSP stdio" ==> LspBin
-    McpHost == "spawns + MCP stdio" ==> McpBin
+    LspClient == "spawns · LSP stdio" ==> LspProc
+    McpHost == "spawns · MCP stdio" ==> McpProc
+    Agent == "spawns · MCP stdio" ==> McpProc
+    CI == "spawns one-shot" ==> CliProc
 
-    McpClient == "spawns + MCP stdio" ==> McpBin
-    CI == "spawns one-shot" ==> CliBin
+    Workspace -- "file events (notify)" --> LspProc
+    Workspace -- "walk + read" --> CliProc
 
-    LspBin --> Live
-    McpBin --> Live
-    CliBin --> Pipeline
+    LspProc -- "atomic write after every pass" --> StateFile
+    LspProc -- "read/write" --> DiskCache
+    LspProc -- "listens" --> IpcSocket
+    LspProc <-- "embed batches" --> Ollama
 
-    Workspace -- "file events" --> Live
-    Workspace -- "walk + read" --> Pipeline
+    McpProc -- "reads (cached in-memory)" --> StateFile
+    McpProc -- "find-similar · listModels" --> IpcSocket
 
-    Live <-- "listModels · embed" --> Ollama
-    Pipeline <-- "embed" --> Ollama
+    CliProc -- "read/write" --> DiskCache
+    CliProc <-- "embed batches" --> Ollama
 ```
-
-**The CLI does not enable the `live` feature.** CLI builds stay zero-watcher, zero-background-thread, zero `notify` dependency — identical to v1. The feature flag — not a separate crate — is what keeps the CLI lean. One crate, one lint profile, one version, one place to add a language. See [principles.md §[PRINCIPLES-LONG-RUNNING-DAEMON]](principles.md).
-
-Two consumers of the live analysis live inside the VS Code process (the VSIX UI through the LSP client, and any MCP-aware agent inside VS Code through the bundled MCP host), and one lives outside (an AI agent running in a terminal that spawns `deslop-mcp` directly). All three paths — VSIX UI, in-editor agent, external agent — end at the same `AnalysisSession` in the `live` module and the same `PipelineSession` underneath. Nothing is re-implemented per client.
 
 ### [LIVE-LIFECYCLE] Session lifecycle
 
-One `AnalysisSession` per workspace root, owned by the binary that created it. The client (VSIX / LSP client / MCP client) launches a binary, the binary receives an `initialize` frame with the workspace root + config (min-nodes, exclusion config path, embedding settings), and the session:
+One `AnalysisSession` per workspace root, owned by `deslop-lsp`. On `initialize`:
 
-1. Opens the `.deslop-cache/` for that root (fingerprint cache + embedding cache).
-2. Runs a full initial deterministic analysis with incremental semantics on — usually a warm cache on second launch, so startup is cheap. The live session does **not** run embeddings here unless the client supplied a previously-selected model.
-3. Starts a file watcher ([LIVE-WATCHER]).
-4. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
-5. Sends `ready` with the initial `Report`.
+1. Opens `.deslop-cache/` for the root (fingerprint cache + embedding cache).
+2. Runs a full initial analysis (warm cache on second launch → cheap).
+3. Writes the initial report to `.deslop-cache/live-report.json` ([LIVE-STATE-FILE]).
+4. Starts the IPC socket ([LIVE-IPC-SOCKET]).
+5. Starts the file watcher ([LIVE-WATCHER]).
+6. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
+7. Sends `ready` with the initial `Report` to the LSP client.
 
-Shutdown is a graceful drain: stop accepting new edits, finish the current re-analysis, flush caches, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
+Shutdown: stop accepting new edits, finish the current pass, flush caches, remove the IPC socket, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
+
+### [LIVE-PROFILING] CPU repro evidence
+
+When `deslop-lsp` appears pegged at 100% CPU, capture both diagnosis channels:
+
+1. Run the VS Code command `Deslop: Reveal CPU Report` and attach the markdown output.
+2. Restart the extension host with `DESLOP_PROFILE_DIR=~/Desktop`, reproduce the spike, then zip and attach the generated `deslop-lsp-*-firefox-profile.json` file.
+
+The profile path is compiled behind the `deslop-lsp` `profiling` cargo feature and is active only when `DESLOP_PROFILE_DIR` is set. The file is Firefox processed-profile JSON and can be opened at `https://profiler.firefox.com/` for stack inspection.
 
 ### [LIVE-EMBEDDING-CONSENT] Explicit live embedding consent
 
-LSP and MCP are live modes, so local embedding work is opt-in at the model boundary. A fresh live session starts with structural + token/LSH signals only. It must not begin the embedding pass merely because Ollama is installed, because a local model pass can take minutes and can compete with the editor or agent loop for CPU.
+A fresh live session starts with structural + token/LSH signals only. The embedding pass is opt-in at the model boundary. The user selects a model from `embedding/listModels`; `embedding/setModel` is the consent boundary: the selected provider/model is recorded, the embedding cache is invalidated, and embedding work is queued immediately. Agent surfaces must not call this boundary autonomously or infer a preferred model.
 
-Before the first live embedding pass, the client tells the user that local embedding calculations are about to run and that they may be slow. The user then selects a concrete model from `embedding/listModels`. `embedding/setModel` is the consent boundary: after that call the selected provider/model is recorded as active, the embedding cache layer is invalidated, and embedding work is queued immediately. Agent-facing surfaces must not call this boundary autonomously, infer a preferred model, or "upgrade" the model as a convenience; MCP requires an explicit `user_initiated: true` argument and may only set it after a human asked for the switch.
+Embedding refreshes are always low priority with bounded batches and yield states between them so the LSP transport, watcher, and editor remain responsive. `latest_report` serves the last complete structural/token report until the embedding-enhanced generation is ready.
 
-Selected-model embedding refreshes are always low priority. Provider calls run in bounded batches, and live mode inserts short yield/sleep states between batches so the LSP, MCP transport, file watcher, and editor remain responsive. While embedding work is queued or running, `latest_report` remains the last complete structural/token report; live consumers keep serving it until the embedding-enhanced generation is ready.
+Progress is observable: `queued`, `starting`, `running`, `complete`, `failed`.
 
-Embedding state is observable through progress notifications with `queued`, `starting`, `running`, `complete`, and `failed` phases. Clients surface those states in a stable place, preferably the VSIX Session panel, with model id, done/total counts where known, and failure text when a provider rejects the pass.
-
-LSP and MCP model state must not diverge. A user-approved model switch from either live surface writes the same workspace embedding settings (`deslop.embedding.provider`, `deslop.embedding.model`, `deslop.embedding.endpoint`, and `deslop.embedding.mode`) that the VSIX/LSP reads on startup and configuration reload. MCP must not keep a successful model change only in process memory; if it accepts a user-initiated switch, the shared settings file is the source of truth that keeps LSP, VSIX, and MCP reactive to one another.
+A user-approved model switch from either live surface writes the shared workspace embedding settings (`.vscode/settings.json` keys `deslop.embedding.*`). The MCP must not hold a successful model change in process memory only — it writes the settings file so LSP picks it up on config reload.
 
 ### [LIVE-STATE] In-process state
 
-The `live` module keeps one `AnalysisSession` in memory:
-
 ```rust
 pub struct AnalysisSession {
-    pipeline: PipelineSession,        // analysis state (deslop-core::pipeline)
-    latest_report: Arc<Report>,       // immutable snapshot, swapped atomically
-    generation: u64,                  // monotonic; bumped every re-analysis
-    subscribers: Vec<Subscriber>,     // LSP/MCP clients awaiting deltas
+    pipeline: PipelineSession,
+    latest_report: Arc<Report>,
+    generation: u64,
+    subscribers: Vec<Subscriber>,
     embedding_provider: Arc<dyn EmbeddingProvider>,
 }
 ```
 
-`PipelineSession` already carries the file registry, the per-file fingerprints, the normalised trees, and the source bytes ([PIPELINE-INCREMENTAL] + [DECISION-MIN-NODES]). `AnalysisSession` adds only **orchestration state**: the current report snapshot, the generation counter, and the subscriber list.
+`PipelineSession` carries the file registry, per-file fingerprints, normalised trees, and source bytes ([PIPELINE-INCREMENTAL]). `AnalysisSession` adds orchestration state: the current snapshot, the generation counter, and the subscriber list. All mutable state is reachable from `AnalysisSession`. [STATE-FILE-REGISTRY] is still the only blessed process-global.
 
-`latest_report` is an `Arc<Report>` swapped under a lock so readers get a consistent snapshot. `generation` lets a subscriber skip forward: *"I last saw generation 42, what changed since?"* This is the same version-cursor pattern an LSP uses for document syncs.
+### [LIVE-STATE-FILE] Shared state file
 
-All mutable state is reachable from `AnalysisSession`. Nothing in `deslop-core` adds new process-global mutable state — [STATE-FILE-REGISTRY] is still the only blessed global, and it's owned per-session through `PipelineSession`.
+After every scheduler pass that produces a new generation, the LSP writes the current report to:
+
+```
+{workspace_root}/.deslop-cache/live-report.json
+```
+
+**Write is atomic:** write to `live-report.json.tmp`, then `rename()`. Readers always see a complete file or the previous version — never a partial write.
+
+**Format:** canonical `Report` JSON — identical schema to `deslop --output report.json`. The `generation` field lets readers detect that a newer version is available. This file is also what the `deslop://report` MCP resource serves.
+
+If the LSP is not running, the MCP serves the last written state — stale but complete for its generation.
+
+### [LIVE-IPC-SOCKET] IPC socket
+
+Compute-heavy operations that cannot be answered from the state file are delegated to the running LSP via a local socket:
+
+- **Unix/macOS:** `{workspace_root}/.deslop-cache/deslop.sock` (Unix domain socket)
+- **Windows:** `\\.\pipe\deslop-{workspace_root_hash}` (named pipe)
+
+The LSP creates the socket on startup and removes it on clean shutdown. The MCP connects on demand (lazy, not persistent). The IPC protocol is JSON-RPC 2.0 using a subset of the `LiveApi` methods:
+
+| Method | Used by MCP for |
+|---|---|
+| `duplicates/findSimilar` | `find-similar` tool |
+| `embedding/listModels` | `list-embedding-models` tool |
+| `session/config` | `session-config` tool (live fields) |
+
+If the socket is absent (LSP not running), `find-similar` returns `LspNotRunning`. `list-embedding-models` and `session-config` fall back to the state file where possible.
 
 ### [LIVE-WATCHER] File watcher
 
-Use the `notify` crate (cross-platform, already on the v2 roadmap per [PRINCIPLES-LONG-RUNNING-DAEMON]). Watch the workspace root recursively, filtered by the same extension set registered via the `LanguageParser` trait.
+**The watcher runs only in `deslop-lsp`.** `deslop-mcp` watches only `.deslop-cache/live-report.json` (a single file) for change notifications — it never watches the workspace.
 
-Events are debounced and coalesced: a burst of saves from a formatter or refactor tool must collapse into one re-analysis pass. Debounce window is **250 ms** of quiet after the last event, capped at **2 s** of total accumulation so a stream of edits doesn't starve the scheduler.
+Use the `notify` crate (cross-platform, zero C deps). Watch the workspace root recursively, filtered by `LanguageParser::file_extensions()`. Debounce: **250 ms** of quiet after the last event, capped at **2 s** total accumulation so a formatter burst doesn't starve the scheduler.
 
-Events that cross `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debounce — the session never re-parses an excluded file.
+Events matching `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debounce.
+
+The LSP supplements the watcher with `textDocument/didChange` and `workspace/didChangeWatchedFiles` from the editor — belt-and-suspenders for in-buffer edits where the OS watcher may lag. Both paths converge on the same `AnalysisSession`.
 
 ### [LIVE-SCHEDULER] Re-analysis scheduler
 
-After the watcher emits a coalesced changeset, the scheduler:
+After the watcher emits a coalesced changeset:
 
-1. Calls `PipelineSession::update_files(changed: &[PathBuf]) -> Report` ([pipeline.md §13]).
-2. The pipeline reuses the P6 fingerprint cache and the P5 embedding cache transparently.
+1. Calls `PipelineSession::update_files(changed: &[PathBuf]) -> Report`.
+2. Pipeline reuses fingerprint and embedding caches.
 3. Recomputes clustering + ranking over the updated fingerprint set.
 4. Atomically swaps `latest_report`; bumps `generation`.
-5. Pushes a `ReportDelta` to every subscriber.
+5. Writes the new report to `.deslop-cache/live-report.json` ([LIVE-STATE-FILE]).
+6. Pushes a `ReportDelta` to every LSP subscriber.
 
-Re-analysis is single-threaded per session — one pass in flight at a time. If a new changeset lands while one is running, it's queued; consecutive queued changesets are merged before dispatch. This keeps the session CPU-bounded by the incremental cost of what actually changed, never by redundant re-runs.
+Single-threaded per session. Consecutive queued changesets merge before dispatch.
 
-Budget: a coalesced changeset of ≤ 10 files with a warm fingerprint cache must complete re-analysis in **< 500 ms** on a 100 K-LOC workspace. Miss the budget → `tracing::warn!` with the timing breakdown; the budget is a perf regression guard, not a correctness assertion.
+Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the budget → `tracing::warn!` with timing breakdown.
 
 ### [LIVE-DELTA] Report deltas
 
-`ReportDelta` is the wire-shaped diff between two generations of `Report`. Subscribers consume deltas instead of full snapshots so update traffic stays small when one file changes in a repo with thousands of clusters.
+`ReportDelta` is the wire diff between two generations. LSP subscribers consume deltas instead of full snapshots so update traffic stays small.
 
 ```rust
 pub struct ReportDelta {
     pub from_generation: u64,
     pub to_generation: u64,
     pub clusters_added: Vec<ReportCluster>,
-    pub clusters_removed: Vec<String>,       // cluster ids
+    pub clusters_removed: Vec<String>,
     pub clusters_updated: Vec<ReportCluster>,
     pub cache_stats: CacheStats,
     pub tool_version: String,
 }
 ```
 
-`ReportDelta` lives in `deslop_core::delta` (no feature gate — it's a pure projection over two reports, useful to any consumer). Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]) — same clone, same id, even after an edit. That stability is what makes the delta shape useful: an IDE can keep its tree view mounted and just flip colours when a cluster's signals or occurrence set changes.
+Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report format"]). Clients that miss generations ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
 
-Clients that miss too many generations (or connect mid-session) ask for a full snapshot via `report/get`, then resume delta consumption at the snapshot's generation.
+### [LIVE-QUERY-API] Query API (LSP-internal)
 
-### [LIVE-QUERY-API] Query API (shared by LSP + MCP)
-
-The `live` module exposes a small, stable query surface through the `LiveApi` trait. Both the LSP and the MCP servers hold a `LiveApi` impl and forward transport-framed requests to it. This is the contract the VSIX UI and the AI agent both speak.
+The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl and routes LSP-transport requests to it. The MCP does **not** hold `LiveApi` — it reads the state file for snapshot queries and connects via the IPC socket for compute operations.
 
 | Method | Input | Output | Purpose |
 |---|---|---|---|
 | `report/get` | `{}` | `Report` | Full current snapshot. |
-| `report/delta` | `{ since_generation: u64 }` | `ReportDelta` or `null` | Pull changes since a known generation. |
-| `report/forFile` | `{ path: String }` | `FileReport` | All clusters whose occurrences touch this file, byte-range sorted. |
-| `report/forRange` | `{ path, start_byte, end_byte }` | `Vec<ReportCluster>` | Clusters overlapping the given byte range. Powers "is the code I'm editing a duplicate of something?" |
-| `cluster/byId` | `{ id: ClusterId }` | `ReportCluster` | Fetch a cluster by stable id (for "jump to other occurrences"). |
-| `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Agent-facing: "is this snippet I'm about to write already present elsewhere?" Runs the fingerprint + LSH + embedding passes on the snippet against the live index; no cache mutation. |
-| `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerates Ollama models available on the host (`/api/tags`) plus the built-in `stub` provider. Powers the VSIX model picker. |
-| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | User-selected consent boundary. Switches the live session to the selected model, invalidates only the embedding layer ([FUSION-EMBED-PROVIDER]), then queues low-priority embedding work. `null` means the refresh was accepted and the new provenance will appear on the next completed report. Structural + LSH caches stay warm. |
-| `session/config` | `{}` | `SessionConfig` | min-nodes, languages active, embedding provenance, exclusion config path, `.deslop-cache/` path. |
-
-All methods are synchronous request/response. **No subscribe/unsubscribe primitives** on the query API — deltas are pushed (see [LIVE-NOTIFICATIONS]). Keeping read and push separate makes the transport layering identical for LSP and MCP.
+| `report/delta` | `{ since_generation: u64 }` | `ReportDelta \| null` | Pull changes since a known generation. |
+| `report/forFile` | `{ path }` | `FileReport` | Clusters touching this file. |
+| `report/forRange` | `{ path, start_byte, end_byte }` | `Vec<ReportCluster>` | Clusters overlapping the byte range. |
+| `cluster/byId` | `{ id }` | `ReportCluster` | Fetch by stable id. |
+| `duplicates/findSimilar` | `{ path, start_byte, end_byte }` or `{ snippet, language }` | `Vec<ReportCluster>` | Parse + fingerprint + LSH + embedding against the live index. No cache mutation. |
+| `embedding/listModels` | `{}` | `Vec<EmbeddingModelInfo>` | Enumerate available Ollama models. |
+| `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | Switch the live embedding model; write workspace settings. |
+| `session/config` | `{}` | `SessionConfig` | min-nodes, languages, embedding provenance, exclusion config, cache dir. |
 
 ### [LIVE-NOTIFICATIONS] Push notifications
 
-The session pushes three notification types:
+The LSP pushes three notification types to LSP clients (VSIX, other editors):
 
-- `report/changed` — fires after every scheduler pass that produced a non-empty delta (cluster added / removed / updated, or signal change on any existing cluster). Payload: `{ generation: u64, summary: ChangeSummary }` where `ChangeSummary` is `{ clusters_added: usize, clusters_removed: usize, clusters_updated: usize, worst_weight: f64 }`. Subscribers that want the full delta call `report/delta`. The session must fire this notification for **every** observable change, including pure removals (a deduplication edit that drops the cluster count from N to N-1 still fires `clusters_removed >= 1` and the VSIX must redraw — see [VSIX-REACTIVITY-INVARIANT]). Suppressing the notification because the *worst* cluster is unchanged is a bug.
-- `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors. Lets the VSIX render a live status indicator without polling.
-- `embedding/progress` — fires around live embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`. Phases are `queued`, `starting`, `running`, `complete`, and `failed`.
+- `report/changed` — fires after every pass with a non-empty delta. Payload: `{ generation: u64, summary: ChangeSummary }`. Must fire for pure removals — suppressing it is a bug.
+- `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors.
+- `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
 
-Notifications are fire-and-forget on the wire; subscribers that fall behind never block the scheduler. **The contract on the receiver side is non-negotiable: every editor client must apply the delta to its in-process store and re-render every surface that depends on the changed clusters.** For the VSIX that store + re-render path is mandated by [VSIX-REACTIVITY] (one signal graph, every surface). A client that receives `report/changed` and leaves any UI surface showing the pre-notification state is broken.
+The MCP is not an LSP subscriber. It detects report changes by watching `.deslop-cache/live-report.json` for modification and pushes its own MCP notifications ([MCP-NOTIFICATIONS]).
 
 ### [LIVE-PERF-BUDGETS] Performance budgets
 
 | Scenario | Budget |
 |---|---|
-| Cold start, empty cache, 100 K LOC | Same as `--incremental` CLI first-run (no new budget). |
+| Cold start, empty cache, 100 K LOC | Same as `--incremental` CLI first-run. |
 | Warm start, warm cache, 100 K LOC | < 2 s to `ready`. |
-| Incremental re-analysis of ≤ 10 changed files | < 500 ms end-to-end. |
-| `report/forFile` on a 100 K-LOC report | < 50 ms (index lookup, not re-analysis). |
-| `duplicates/findSimilar` on a ≤ 200-node snippet | < 250 ms (one parse + one LSH/ANN probe). |
+| Incremental re-analysis, ≤ 10 changed files | < 500 ms end-to-end. |
+| `report/forFile`, 100 K-LOC report | < 50 ms. |
+| `duplicates/findSimilar`, ≤ 200-node snippet | < 250 ms. |
 
-All budgets are measured per [PERF-BUDGET-TYPE12] methodology: release build, not instrumented, warmed-up JIT equivalent (= second invocation). Missed budgets surface as `tracing::warn!` with a timing breakdown; budget regressions are tracked the same way coverage is — ratchet only, never regress.
+Missed budgets → `tracing::warn!` with timing breakdown. Ratchet only.
 
 ### [LIVE-NO-REGEX-NO-SHORTCUTS] Rules inherited
 
-Everything from CLAUDE.md still applies inside the `live` module: no regex on source, no `unwrap`, no panics, `thiserror` for library errors, structured `tracing` only, 500-line file budget, coarse E2E tests only. E2E for the live module drives the real LSP/MCP binary over stdio with a fixture workspace and asserts against rendered deltas — never reaches into `AnalysisSession` internals.
+No regex on source, no `unwrap`, no panics, `thiserror` for library errors, structured `tracing` only, 500-line file budget, coarse E2E tests only. E2E tests drive the real LSP binary over stdio with a fixture workspace and assert against rendered deltas — never reach into `AnalysisSession` internals.

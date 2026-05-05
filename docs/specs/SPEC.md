@@ -14,59 +14,67 @@ Every user-facing surface (HTML report, CLI summary, VS Code extension) labels c
 
 ## Architecture at a glance
 
-Every binary in the product — CLI, LSP server, MCP server, VS Code extension, JetBrains plugin — is a **thin shell over one shared library** (`deslop-core`). Live analysis (watcher, scheduler, query API, push notifications) is a feature-gated `live` module inside that same crate, not a separate daemon crate. There is no daemon process — the LSP and MCP servers are conventional editor-spawned stdio servers (same lifecycle as `rust-analyzer`). A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
+Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it reads the state file the LSP writes after every pass. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
-Every shippable executable and editor package is also governed by the Deployment Toolkit manifest contract in [deployment.md](deployment.md). Hosts must verify required binaries before startup, packages must include the manifest beside bundled binaries, and release gates must prove the shipped artifacts match the manifest.
+Every shippable executable and editor package is governed by the Deployment Toolkit manifest contract in [deployment.md](deployment.md).
 
 ```mermaid
 flowchart LR
     CI(["CI / terminal"])
 
     subgraph VSCode["VS Code process"]
-        VSIX["Deslop VSIX<br/>(live bubble · tree view · picker)"]
+        VSIX["Deslop VSIX (bubble · tree · webview · status bar)"]
+        LspClient2["LSP client"]
+        McpHost2["Bundled MCP host"]
+        VSIX --> LspClient2
     end
 
-    subgraph JetBrains["JetBrains IDE process<br/>(Rider first)"]
-        JBPlugin["Deslop IntelliJ Platform plugin<br/>(LSP bridge · native IDE surfaces)"]
+    subgraph JetBrains["JetBrains IDE process (Rider first)"]
+        JBPlugin["Deslop IntelliJ Platform plugin"]
     end
 
-    subgraph AgentHost["AI agent host<br/>(Claude Desktop · Claude Code · Cursor · Continue)"]
+    subgraph AgentHost["AI agent host (Claude Code · Cursor · Continue)"]
         Agent["Agent + MCP client"]
     end
 
-    subgraph Binaries["Binaries (processes)"]
-        LspBin["deslop-lsp"]
-        McpBin["deslop-mcp"]
-        CliBin["deslop (CLI)"]
+    subgraph LspProc["deslop-lsp process"]
+        LspInner["AnalysisSession · watcher · scheduler · LiveApi\n(deslop-core live feature linked in)"]
     end
 
-    subgraph CoreCrate["deslop-core (one crate)"]
-        Live["live module<br/>AnalysisSession · watcher · scheduler · LiveApi<br/>(feature = &quot;live&quot;)"]
-        Pipeline["pipeline module<br/>PipelineSession · update_files · discover · parse<br/>fingerprint · LSH · embed · rank · render"]
-        Live --> Pipeline
+    subgraph McpProc["deslop-mcp process"]
+        McpInner["State-file reader + in-memory cache\n(no analysis work)"]
     end
 
+    CliProc(["deslop CLI process\n(one-shot batch)"])
+
+    StateFile[(".deslop-cache/live-report.json")]
+    IpcSocket[(".deslop-cache/deslop.sock")]
+    DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
     Ollama[(Ollama)]
 
-    VSIX == "spawns + LSP stdio" ==> LspBin
-    VSIX == "bundles + spawns MCP" ==> McpBin
-    JBPlugin == "spawns + LSP stdio" ==> LspBin
-    Agent == "spawns + MCP stdio" ==> McpBin
-    CI == "spawns one-shot" ==> CliBin
+    LspClient2 == "spawns · LSP stdio" ==> LspProc
+    McpHost2 == "spawns · MCP stdio" ==> McpProc
+    JBPlugin == "spawns · LSP stdio" ==> LspProc
+    Agent == "spawns · MCP stdio" ==> McpProc
+    CI == "spawns one-shot" ==> CliProc
 
-    LspBin --> Live
-    McpBin --> Live
-    CliBin --> Pipeline
+    Workspace -- "file events (notify)" --> LspProc
+    Workspace -- "walk + read" --> CliProc
 
-    Workspace -- "file events" --> Live
-    Workspace -- "walk + read" --> Pipeline
+    LspProc -- "atomic write after every pass" --> StateFile
+    LspProc -- "read/write" --> DiskCache
+    LspProc -- "listens" --> IpcSocket
+    LspProc <-- "embed batches" --> Ollama
 
-    Live <--> Ollama
-    Pipeline <--> Ollama
+    McpProc -- "reads (cached in-memory)" --> StateFile
+    McpProc -- "find-similar · listModels" --> IpcSocket
+
+    CliProc -- "read/write" --> DiskCache
+    CliProc <-- "embed batches" --> Ollama
 ```
 
-The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX → LSP → `live` module → `update_files` → pipeline** — is one process hop (the LSP binary) and one in-crate module boundary. The agent path — **Agent → MCP → `live` module** — is the same live index reframed for programmatic consumers. The CI path — **CI → CLI → pipeline** — skips the `live` module entirely; batch runs never need a watcher. All three paths share the same analysis code.
+The hot loop — **Developer → VSIX → LSP → `live` module → `update_files` → pipeline** — is one process hop. The agent path — **Agent → MCP → state file** — is zero analysis work: the MCP serves the latest report the LSP already produced. The CI path — **CI → CLI → pipeline** — skips `live` entirely.
 
 ## Topic files
 
@@ -78,7 +86,7 @@ The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX �
 - [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.deslop.toml` `exclude` / `report_hide` tiers and per-language overlays; `[CONFIG-CROSS-LANGUAGE]` candidate-pair language scope.
 - [decisions.md](decisions.md) — `[DECISION-*]` defaults with fallback rules (`--min-nodes`, cross-language, two-pass Type-3 recall).
 - [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
-- [live.md](live.md) — `[LIVE-*]` in-memory analysis session behind the LSP and MCP servers: lifecycle, watcher, scheduler, delta protocol, `LiveApi` query surface, push notifications. No daemon process.
+- [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
@@ -86,6 +94,49 @@ The hot loop that delivers the [VSIX-LIVE-BUBBLE] UX — **Developer → VSIX �
 - [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
 - [competitors.md](competitors.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
 - [autofix-extract.md](autofix-extract.md) — `[AUTOFIX-EXTRACT-*]` LSP `refactor.extract` code action that rewrites true Type-1 clusters as a single shared method. v1: pure tree-sitter, no semantic model, blocked on the bucket Type-1 / Type-2 split.
+
+## Algorithm implementation status
+
+The pipeline draws on a small handful of clone-detection research lines. Every algorithm called out in [landscape.md](landscape.md) and [fusion.md](fusion.md) is mapped here to the file that implements it (✅) or to the plan file that tracks it (⏳). Status markers are mechanical; they reflect what `cargo build` and `make ci` produce today, not aspirations.
+
+| Research line | Status | Implementation pointer |
+| --- | --- | --- |
+| Tree-sitter parsing per language ([PIPELINE-LANG-TRAIT]) | ✅ C# / Rust / Python | [`crates/deslop-core/src/lang/`](../../crates/deslop-core/src/lang/) — `csharp.rs`, `rust_lang.rs`, `python.rs`, `shared.rs` |
+| Baxter-style AST normalization ([PIPELINE-NORMALIZE-AST]) | ✅ | `crates/deslop-core/src/lang/shared.rs::build_normalised_root` |
+| Boilerplate-only filter ([PIPELINE-BOILERPLATE-FILTER]) | ✅ | `crates/deslop-core/src/boilerplate.rs` (called from `fingerprint.rs` + `sibling.rs`) |
+| Chilowicz Merkle subtree fingerprints ([PIPELINE-FINGERPRINT-MERKLE]) | ✅ BLAKE3 | `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` |
+| Sibling-window extension (Type-3 recall) | ✅ widths 2–8 | `crates/deslop-core/src/sibling.rs::collect_non_boilerplate_sibling_fingerprints` |
+| Exact-clone clustering ([PIPELINE-CLUSTER-EXACT]) | ✅ | `crates/deslop-core/src/pair.rs::collect_structural_pairs` |
+| SourcererCC token k-grams + Jaccard | ✅ | `crates/deslop-core/src/tokens.rs` |
+| MinHash signatures (Broder 1997) | ✅ 128 hashes | `crates/deslop-core/src/lsh.rs::minhash_signature` |
+| LSH banding (Indyk & Motwani) | ✅ 32 bands × 4 rows | `crates/deslop-core/src/lsh.rs::band_collisions` |
+| Embedding pass — local-by-default | ✅ Ollama provider | `crates/deslop-core/src/embedding/ollama.rs`, `crates/deslop-core/src/embedding/provider.rs` |
+| HNSW ANN index ([FUSION-EMBED-PROVIDER]) | ✅ `instant-distance` | `crates/deslop-core/src/embedding/pairs.rs` |
+| Embedding cache keyed by `(content, provider, model, version)` | ✅ | `crates/deslop-core/src/embedding/cache.rs` |
+| Max/sum fusion (ensemble-LLM 2025) ([FUSION-STRATEGY-MAX-SUM]) | ✅ clamped to `[0,1]` | `crates/deslop-core/src/pair.rs::PairScore::fused` |
+| Cross-language opt-in ([CONFIG-CROSS-LANGUAGE]) | ✅ | `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` |
+| Transitive-closure clustering | ✅ | `crates/deslop-core/src/cluster.rs` |
+| Worst-offenders ranking ([PIPELINE-RANK-WORST-FIRST]) | ✅ `nodes × (size−1) × log2(1 + spanned_bytes)` | `crates/deslop-core/src/cluster.rs::rank_weight` |
+| Repo-wide metrics + fail-over threshold ([METRICS-REPO], [EXIT-CODES]) | ✅ exit 3 on breach | `crates/deslop-core/src/report_metrics.rs`, `crates/deslop/src/main.rs` |
+| Incremental fingerprint cache ([PIPELINE-INCREMENTAL]) | ✅ opt-in `--incremental` | `crates/deslop-core/src/fpcache.rs` |
+| JSON / text / human-HTML renderers ([OUTPUT-SCHEMA-JSON], [OUTPUT-HUMAN-HTML]) | ✅ | `crates/deslop-core/src/render/`, `crates/deslop-core/src/report_render.rs` |
+| Live `AnalysisSession` + watcher + scheduler ([LIVE-*]) | ✅ debounce 250 ms / cap 2 s | `crates/deslop-core/src/live/` (`session.rs`, `watcher.rs`, `scheduler.rs`, `debouncer.rs`) |
+| LSP server with diagnostics, hover, code lens, custom `deslop/*` methods ([LSP-*]) | ✅ | `crates/deslop-lsp/src/` |
+| MCP server with `find-similar`, `top-offenders`, `cluster-by-id`, etc. ([MCP-*]) | ✅ state-file + IPC | `crates/deslop-mcp/src/` |
+| State-file + IPC architecture | ✅ `.deslop-cache/live-report.json` + `.deslop-cache/deslop.sock` | `crates/deslop-lsp/tests/state_file_and_ipc.rs`, `crates/deslop-mcp/tests/lsp_integration.rs` |
+| Canonical clone buckets ([CLONE-BUCKETS]) | ✅ `Identical` / `NearlyIdentical` / `LooselySimilar` / `SameBehavior` | `crates/deslop-core/src/buckets.rs` |
+| Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `deployment-toolkit.json`, `scripts/verify-*` |
+| VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
+| JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |
+| Type-1 / Type-2 bucket split (autofix prerequisite) | ⏳ tracked by [#42](https://github.com/Nimblesite/Deslop/issues/42) | — |
+| Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT-*]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
+| Autofix AI-assisted Extract for Type-2 / Type-3 | ⏳ | [`plans/autofix-extract-ai-plan.md`](../plans/autofix-extract-ai-plan.md) |
+| Rator-style node degrees-of-freedom encoding ([TECH-LLM-HYBRID]) | 🚫 not implemented | research only — would replace LSH if adopted |
+| HyClone-style execution-validated Type-4 ([TECH-LLM-HYBRID]) | 🚫 not implemented | research only — Python-specific |
+| LLM-ensemble embedding fusion (multi-model max/sum) | 🚫 not implemented | single embedding model today; provider trait keeps this open |
+| Winnowing / SimHash primitives | 🚫 not used | MinHash chosen per [In Defense of MinHash Over SimHash](http://proceedings.mlr.press/v33/shrivastava14.pdf) |
+
+Site-facing version of the same map: [`site/src/docs/research-background.md`](../../site/src/docs/research-background.md).
 
 ## Sibling docs
 

@@ -7,12 +7,15 @@ import * as vscode from "vscode";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import type { LanguageClient } from "vscode-languageclient/node";
 import {
   openWorstCluster,
   openOccurrence,
   jumpToNextOccurrence,
   compareWithCanonical,
   openSchemaDoc,
+  openCpuReport,
+  renderCpuReport,
 } from "../../commands/register";
 import {
   aiPayloadForCluster,
@@ -51,12 +54,24 @@ async function closeAllDiffs(): Promise<void> {
   await vscode.commands.executeCommand("workbench.action.closeAllEditors");
 }
 
+async function commandsEventuallyInclude(...ids: string[]): Promise<string[]> {
+  for (let i = 0; i < 30; i += 1) {
+    const commands = await vscode.commands.getCommands(true);
+    if (ids.every((id) => commands.includes(id))) return commands;
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 100);
+    });
+  }
+  return await vscode.commands.getCommands(true);
+}
+
 function cluster(id: string, paths: string[]): ReportCluster {
   return {
     id,
     weight: 10,
     size: 2,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: paths.map((p) => ({
       path: p,
@@ -64,6 +79,8 @@ function cluster(id: string, paths: string[]): ReportCluster {
       end_byte: 50,
       hidden: false,
     })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };
@@ -78,8 +95,11 @@ function clusterWithRanges(
     weight: 10,
     size: occurrences.length,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };
@@ -87,7 +107,6 @@ function clusterWithRanges(
 
 function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 1,
@@ -103,6 +122,7 @@ function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "# docs",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters,
   };
@@ -135,6 +155,27 @@ suite("register command implementations", () => {
 
   test("openWorstCluster shows info when store is empty", () => {
     openWorstCluster(fakeCtx(), new ReportStore());
+  });
+
+  test("activation keeps VSIX commands separate from namespaced LSP commands", async () => {
+    const commands = await commandsEventuallyInclude(
+      "deslop.refreshReport",
+      "deslop.openCluster",
+      "deslop.lsp.refreshReport",
+      "deslop.lsp.openCluster",
+    );
+    assert.equal(
+      commands.filter((command) => command === "deslop.refreshReport").length,
+      1,
+    );
+    assert.equal(
+      commands.filter((command) => command === "deslop.openCluster").length,
+      1,
+    );
+    assert.ok(commands.includes("deslop.refreshReport"));
+    assert.ok(commands.includes("deslop.openCluster"));
+    assert.ok(commands.includes("deslop.lsp.refreshReport"));
+    assert.ok(commands.includes("deslop.lsp.openCluster"));
   });
 
   test("openWorstCluster opens a panel when the report has clusters", () => {
@@ -183,7 +224,43 @@ suite("register command implementations", () => {
       report([cluster("c-1", [doc.uri.fsPath, "/tmp/cdd-sibling.cs"])]),
       0,
     );
-    jumpToNextOccurrence(store);
+    await jumpToNextOccurrence(store);
+  });
+
+  test("jumpToNextOccurrence uses code-lens cluster id and occurrence index deterministically", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-lens-jump-"));
+    const fileA = path.join(dir, "A.cs");
+    const fileB = path.join(dir, "B.cs");
+    const fileC = path.join(dir, "C.cs");
+    fs.writeFileSync(fileA, "public class A { int x = 1; }\n", "utf8");
+    fs.writeFileSync(fileB, "public class B { int y = 2; }\n", "utf8");
+    fs.writeFileSync(fileC, "public class C { int z = 3; }\n", "utf8");
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        clusterWithRanges("c-cycle", [
+          { path: fileA, start_byte: 0, end_byte: 16 },
+          { path: fileB, start_byte: 0, end_byte: 16 },
+          { path: fileC, start_byte: 0, end_byte: 16 },
+        ]),
+      ]),
+      0,
+    );
+
+    await jumpToNextOccurrence(store, "c-cycle", 0);
+    let editor = vscode.window.activeTextEditor;
+    assert.equal(editor?.document.uri.fsPath, fileB);
+    assert.match(editor?.document.getText() ?? "", /public class B/);
+    assert.equal(editor?.selection.start.line, 0);
+    assert.equal(editor?.selection.start.character, 0);
+    assert.equal(editor?.selection.end.character, 16);
+
+    await jumpToNextOccurrence(store, "c-cycle", 2);
+    editor = vscode.window.activeTextEditor;
+    assert.equal(editor?.document.uri.fsPath, fileA);
+    assert.match(editor?.document.getText() ?? "", /public class A/);
+    assert.equal(editor?.selection.end.character, 16);
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   test("jumpToNextOccurrence shows the info message when no cluster overlaps", async () => {
@@ -194,14 +271,14 @@ suite("register command implementations", () => {
     await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report([cluster("c", ["/other"])]), 0);
-    jumpToNextOccurrence(store);
+    await jumpToNextOccurrence(store);
   });
 
   test("jumpToNextOccurrence bails when there is no active editor", async () => {
     await vscode.commands.executeCommand("workbench.action.closeAllEditors");
     const store = new ReportStore();
     store.setSnapshot(report([cluster("c", ["/p"])]), 0);
-    jumpToNextOccurrence(store);
+    await jumpToNextOccurrence(store);
   });
 
   test("compareWithCanonical opens a diff whose two sides are distinct resources with the matching occurrence bytes", async () => {
@@ -327,14 +404,16 @@ suite("register command implementations", () => {
     assert.match(text, /stale-cluster/);
   });
 
-  test("openSchemaDoc opens a markdown editor", async () => {
+  test("openSchemaDoc prefers packaged docs over a stale snapshot", async () => {
+    const expected = fs.readFileSync(packagedSchemaDocPath(), "utf8");
     const store = new ReportStore();
     store.setSnapshot(report([]), 0);
     await openSchemaDoc(fakeCtx(), store);
     const active = vscode.window.activeTextEditor;
     assert.ok(active, "schema doc editor should be active");
     assert.equal(active.document.languageId, "markdown");
-    assert.match(active.document.getText(), /# docs/);
+    assert.equal(active.document.getText(), expected);
+    assert.doesNotMatch(active.document.getText(), /# docs/);
   });
 
   test("openSchemaDoc reads the packaged fallback when schema_doc is absent", async () => {
@@ -344,6 +423,56 @@ suite("register command implementations", () => {
     assert.ok(active, "packaged schema doc editor should be active");
     assert.equal(active.document.languageId, "markdown");
     assert.equal(active.document.getText(), expected);
+  });
+
+  test("openCpuReport fetches the LSP CPU report and opens markdown", async () => {
+    await openCpuReport(() => ({
+      sendRequest: (method: string) => {
+        assert.equal(method, "deslop/cpuReport");
+        return Promise.resolve({
+          current_phase: "idle",
+          handler_counts: { "deslop/reportGet": 2, hover: 1 },
+          in_flight: {
+            pending_watcher_events: 0,
+            pending_embed_requests: 0,
+            in_progress_parse_batch: null,
+          },
+          last_100_phases: [
+            {
+              phase: "report_rendering",
+              started_at_ms: 10,
+              duration_ms: 3,
+              cpu_ms: 3,
+              files_touched: ["src/Alpha.cs"],
+            },
+          ],
+        });
+      },
+    }) as unknown as LanguageClient);
+    const active = vscode.window.activeTextEditor;
+    assert.ok(active, "CPU report editor should be active");
+    assert.equal(active.document.languageId, "markdown");
+    const text = active.document.getText();
+    assert.match(text, /# Deslop CPU Report/);
+    assert.match(text, /Current phase: idle/);
+    assert.match(text, /`deslop\/reportGet` \| 2/);
+    assert.match(text, /report_rendering/);
+  });
+
+  test("renderCpuReport keeps zero-valued in-flight fields visible", () => {
+    const text = renderCpuReport({
+      current_phase: "idle",
+      handler_counts: {},
+      in_flight: {
+        pending_watcher_events: 0,
+        pending_embed_requests: 0,
+        in_progress_parse_batch: null,
+      },
+      last_100_phases: [],
+    });
+    assert.match(text, /Pending watcher events: 0/);
+    assert.match(text, /Pending embedding requests: 0/);
+    assert.match(text, /In-progress parse batch: 0/);
   });
 });
 

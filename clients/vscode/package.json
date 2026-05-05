@@ -53,7 +53,7 @@
       },
       {
         "command": "deslop.compareWithCanonical",
-        "title": "Deslop: Compare With Canonical Occurrence"
+        "title": "Compare With Canonical"
       },
       {
         "command": "deslop.compareOccurrenceWithCanonical",
@@ -74,6 +74,10 @@
       {
         "command": "deslop.showSchemaDoc",
         "title": "Deslop: Show Schema Documentation"
+      },
+      {
+        "command": "deslop.revealCpuReport",
+        "title": "Deslop: Reveal CPU Report"
       },
       {
         "command": "deslop.openCluster",
@@ -152,12 +156,12 @@
       "view/item/context": [
         {
           "command": "deslop.openClusterDetails",
-          "when": "viewItem == deslop.cluster",
+          "when": "viewItem =~ /deslop\\.cluster/",
           "group": "navigation@1"
         },
         {
           "command": "deslop.openCanonicalFile",
-          "when": "viewItem == deslop.cluster",
+          "when": "viewItem =~ /deslop\\.cluster/",
           "group": "navigation@2"
         },
         {
@@ -167,47 +171,47 @@
         },
         {
           "command": "deslop.openAllOccurrences",
-          "when": "viewItem == deslop.cluster",
+          "when": "viewItem == deslop.clusterComparable",
           "group": "navigation@3"
         },
         {
           "command": "deslop.compareWithCanonical",
-          "when": "viewItem == deslop.cluster",
+          "when": "viewItem == deslop.clusterComparable",
           "group": "navigation@4"
         },
         {
           "command": "deslop.openClusterDetails",
-          "when": "viewItem == deslop.occurrence",
+          "when": "viewItem =~ /deslop\\.occurrence/",
           "group": "navigation@2"
         },
         {
           "command": "deslop.revealOccurrenceInExplorer",
-          "when": "viewItem == deslop.occurrence",
+          "when": "viewItem =~ /deslop\\.occurrence/",
           "group": "navigation@3"
         },
         {
           "command": "deslop.copyContextForAI",
-          "when": "viewItem == deslop.cluster",
+          "when": "viewItem =~ /deslop\\.cluster/",
           "group": "1_copy@1"
         },
         {
           "command": "deslop.copyContextForAI",
-          "when": "viewItem == deslop.occurrence",
+          "when": "viewItem =~ /deslop\\.occurrence/",
           "group": "1_copy@1"
         },
         {
           "command": "deslop.copyClusterLocations",
-          "when": "viewItem == deslop.cluster",
+          "when": "viewItem =~ /deslop\\.cluster/",
           "group": "1_copy@2"
         },
         {
           "command": "deslop.copyHumanLocation",
-          "when": "viewItem == deslop.occurrence",
+          "when": "viewItem =~ /deslop\\.occurrence/",
           "group": "1_copy@2"
         },
         {
           "command": "deslop.copySourceSnippet",
-          "when": "viewItem == deslop.occurrence",
+          "when": "viewItem =~ /deslop\\.occurrence/",
           "group": "1_copy@3"
         }
       ]
@@ -249,8 +253,7 @@
         "deslop.embedding.provider": {
           "type": "string",
           "enum": [
-            "ollama",
-            "stub"
+            "ollama"
           ],
           "default": "ollama",
           "description": "Embedding provider id used after the user enables live embeddings."
@@ -305,6 +308,21 @@
           "default": "",
           "description": "Optional absolute path to deslop-lsp. The binary must match deployment-toolkit.json before activation."
         },
+        "deslop.lsp.workerThreads": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "scope": "window",
+          "description": "Tokio worker threads for deslop-lsp. Use 0 for Tokio's CPU-count default; lower values background analysis on large workspaces."
+        },
+        "deslop.lsp.nice": {
+          "type": "integer",
+          "default": 0,
+          "minimum": -20,
+          "maximum": 19,
+          "scope": "window",
+          "description": "macOS/Linux nice value for deslop-lsp. Use positive values to lower analyser CPU priority; 0 leaves priority unchanged."
+        },
         "deslop.mcpPath": {
           "type": "string",
           "default": "",
@@ -347,11 +365,13 @@
     "test": "vscode-test",
     "pretest:ollama": "npm run compile && npm run build && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
-    "coverage": "npm run pretest && vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
+    "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs && npm run verify:package"
   },
   "dependencies": {
+    "@preact/signals-core": "^1.14.1",
     "pino": "^10.3.1",
     "vscode-languageclient": "^9.0.1"
   },

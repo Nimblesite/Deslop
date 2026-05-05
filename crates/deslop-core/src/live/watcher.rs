@@ -8,7 +8,7 @@
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use notify::{
@@ -53,7 +53,6 @@ impl LiveWatcher {
             sender: tx,
             allowed,
             exclusion,
-            seen: Arc::new(Mutex::new(HashSet::new())),
         };
         let mut watcher = recommended_watcher(handler)?;
         watcher.watch(root, RecursiveMode::Recursive)?;
@@ -71,9 +70,6 @@ struct WatcherHandler {
     allowed: HashSet<String>,
     /// Exclusion config consulted before forwarding.
     exclusion: Arc<ExclusionConfig>,
-    /// De-duplicates paths within the same callback batch so a
-    /// `Modify(Metadata) + Modify(Data)` pair only fires once.
-    seen: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 impl std::fmt::Debug for WatcherHandler {
@@ -93,7 +89,16 @@ impl EventHandler for WatcherHandler {
         if !is_relevant_event(event.kind) {
             return;
         }
+        // Dedup paths within this single callback batch so a
+        // `Modify(Metadata) + Modify(Data)` pair only fires once. The
+        // set is stack-local — every new callback starts fresh, so a
+        // path seen in an earlier batch is forwarded again on the next
+        // edit ([LIVE-WATCHER]).
+        let mut seen_in_batch: HashSet<PathBuf> = HashSet::new();
         for path in event.paths {
+            if !seen_in_batch.insert(path.clone()) {
+                continue;
+            }
             self.forward_one(path);
         }
     }
@@ -108,19 +113,7 @@ impl WatcherHandler {
         if self.exclusion.is_excluded(&path, None) {
             return;
         }
-        if !self.record_seen(&path) {
-            return;
-        }
         let _result = self.sender.try_send(path);
-    }
-
-    /// Tracks `path` so duplicate events in the same callback batch
-    /// are dropped.
-    fn record_seen(&self, path: &Path) -> bool {
-        let Ok(mut guard) = self.seen.lock() else {
-            return false;
-        };
-        guard.insert(path.to_path_buf())
     }
 }
 

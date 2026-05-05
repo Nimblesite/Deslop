@@ -8,7 +8,7 @@ use deslop_core::{
     config::ExclusionConfig,
     report::{
         ActionHint, CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence,
-        ReportSignals, REPORT_SCHEMA_VERSION,
+        ReportSignals,
     },
     report_boilerplate::build_boilerplate_hints,
     report_metrics::RepoMetrics,
@@ -69,7 +69,6 @@ fn range(
 
 fn sample_report() -> Report {
     Report {
-        report_schema_version: REPORT_SCHEMA_VERSION,
         tool_version: "test".to_owned(),
         min_nodes: 3,
         files_analysed: 2,
@@ -124,6 +123,8 @@ fn sample_occurrences() -> Vec<ReportOccurrence> {
                 path: PathBuf::from(format!("file-{index}.cs")),
                 start_byte,
                 end_byte: start_byte.saturating_add(5),
+                start_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
+                end_line: i64::try_from(index.saturating_add(1)).unwrap_or(i64::MAX),
                 hidden: false,
             }
         })

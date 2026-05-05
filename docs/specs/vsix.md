@@ -25,7 +25,7 @@ After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX i
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
 
-- **Severity dot** — the same colour ramp as [LSP-SEVERITY] (red for top 1% weight, amber for 1–10%, blue for 10–50%, faint grey never shown as a bubble).
+- **Severity dot** — colour mapped to the cluster's resolved severity per [LSP-SEVERITY-BUCKET]: red (`Error`), amber (`Warning`), blue (`Information`), grey (`Hint`). Defaults: `Identical` → red, all others → amber. Clusters whose bucket is configured to `"none"` are never shown as a bubble.
 - **Short verdict** — one of: `DUPLICATE` (structural = 1.0), `NEAR-MISS` (token jaccard ≥ 0.90, structural < 1.0), `SEMANTIC MATCH` (embedding cos ≥ 0.90). One word, uppercase, so the user sees it without reading.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
 - **Signal strip** — three 8-pixel bars for structural / jaccard / embedding. Bright = high, dim = low. Lets the user distinguish "identical copy" from "semantic near-miss" at a glance.
@@ -169,7 +169,7 @@ Each lens has three actions in its command array:
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
 - **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
 
-The lens is suppressed for clusters below the 50th weight percentile (consistent with [LSP-SEVERITY]). Users can toggle via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action).
+The lens is suppressed for clusters whose bucket is configured to `"none"` severity ([LSP-SEVERITY-BUCKET]) or that fall below the configured percentile floor ([LSP-SEVERITY-PERCENTILE]). Users can toggle via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action).
 
 ### [VSIX-DECORATIONS] Editor decorations
 
@@ -190,6 +190,21 @@ Rules that fall out of that:
 
 Centralisation is the enabler for [VSIX-REACTIVITY] below: one store + signal-backed derivations = no stale pixels.
 
+#### [VSIX-STATE-DIRTY] Canonical report vs. visible projection — dirty tracking contract
+
+When a user types into a file that participates in a cluster, two things must happen at once: stale byte ranges must stop driving decorations and tree rows ([#78], [#117]) **and** every command that resolves a cluster by id (`deslop.compareWithCanonical`, `deslop.openCluster`, `deslop.openOccurrence`, `deslop.openCanonicalFile`, `deslop.copyClusterLocations`, the cluster detail webview's row navigation) must continue to find that cluster until the LSP itself retracts it via `deslop/reportChanged`. Both requirements are non-negotiable.
+
+The store therefore exposes **two views of the same report**:
+
+- **Canonical report.** The exact snapshot the LSP last published. Only `deslop/reportChanged` (full snapshot or applied delta) writes it. Editor-side dirty tracking **never** mutates the canonical report. Every command that takes a cluster id, occurrence id, or file path resolves through the canonical report. Lookup by id never returns `undefined` for a cluster the LSP still considers live.
+- **Visible projection.** A `computed()` derived from the canonical report and the per-file dirty set. For each file with unsaved edits, occurrences in that file are filtered out of the projection. Clusters whose visible occurrence count drops below two are elided from the projection (a one-copy "top offender" is a contradiction — see [#117]). Tree providers, decorations, hovers, code lenses, the live bubble, the status bar, the activity-bar badge, and the session panel **only ever read the visible projection**. Webviews receive the visible projection through `postMessage`.
+
+`onDidChangeTextDocument` updates the dirty set, never the canonical report. On `didSaveTextDocument` (or external file watcher fire) the file leaves the dirty set; the LSP re-analyses and emits a fresh `deslop/reportChanged` which then updates the canonical report. The visible projection recomputes through the signal graph in the same microtask as either change.
+
+This makes the two requirements compose: the visible projection drops the cluster from the tree the moment the user types (no stale "1 copies"), while the canonical report keeps the cluster id resolvable so `compareWithCanonical` can still diff the canonical (saved) bytes against itself or another peer. When the user saves, the LSP confirms the new shape and both views converge.
+
+Tests must respect this contract too: any e2e test that injects a synthetic edit into a fixture file is responsible for restoring it before the suite ends, otherwise the dirty set leaks across suites and downstream tests see an unexpectedly empty visible projection.
+
 ### [VSIX-REACTIVITY] Preact Signals everywhere — every VSIX surface is reactive
 
 **This is a top-level invariant, not a webview implementation detail.** Deslop Live is reactive end-to-end: the file watcher fires, the scheduler re-analyses, the LSP pushes [`deslop/reportChanged`](live.md#live-notifications), the extension applies the delta to the [VSIX-STATE] store — and **every surface that displays report data must update in the same microtask**. Tree providers, decorations, the live bubble, code lenses, the status bar, hovers, the cluster webview, the embedding picker, the activity-bar badge, the session panel: all of them read from `@preact/signals`-backed values derived from the single store. **No surface holds its own cached copy of the report. No surface schedules its own refresh independent of a signal change.**
@@ -205,6 +220,8 @@ Three hard guarantees, applied to every surface (tree included):
 #### [VSIX-REACTIVITY-TREE] Tree providers are signal-driven
 
 `TopOffendersProvider`, `FocusedFileProvider`, `SessionProvider` — and any future tree — derive their `getChildren` output from the store's signals via a `computed()` view. Their `onDidChangeTreeData` event fires from one place: a `signals.effect()` watching the relevant computed value. **The tree must not call `reportGet` directly, must not maintain a parallel `clusters` array, and must not be refreshed from outside the signal graph.** Removing 500 lines from a watched file fires `deslop/reportChanged` → store applies delta → computed `topOffenders.value` recomputes → `onDidChangeTreeData` fires → VS Code calls `getChildren` → tree shows the new state. Any surface still showing a cluster that no longer exists in `report.clusters` is a correctness bug.
+
+**Re-analysis data retention.** When lifecycle transitions to `"analysing"` and the store already holds a report, every tree panel **keeps rendering the existing report** — it does not replace content with a spinner. The status bar carries the `(analysing…)` indicator; the tree panels are not cleared. A spinner placeholder is only shown when no report exists yet (`"starting"` with no data) or when the LSP has `"failed"`. Once `deslop/reportChanged` fires and the delta is applied, the tree updates atomically to the new state. Blanking the tree during re-analysis is a UX bug that breaks the "LIVE" brand promise.
 
 #### [VSIX-REACTIVITY-DECORATIONS] Decorations and bubble are signal-driven
 
@@ -306,7 +323,7 @@ Every interaction has a command palette entry:
 - `Deslop: Toggle Show All Code Lenses`
 - `Deslop: Show Schema Documentation`
 
-Each entry maps 1:1 to an LSP `workspace/executeCommand` or virtual-document open. Nothing UI-only — keeps the VSIX a thin client.
+VSIX command IDs stay in the `deslop.*` namespace for command palette, menus, and URI links. Any matching LSP `workspace/executeCommand` verb uses the `deslop.lsp.*` namespace so the language client does not double-register VSIX-owned commands during activation.
 
 ### [VSIX-SETTINGS] Settings
 
@@ -321,6 +338,7 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.embedding.mode` | `off` | Fresh live sessions do not run embeddings until the picker persists `auto` after model selection. |
 | `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
 | `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
+| `deslop.diagnostics.scope` | `"open-files"` | `"open-files"` keeps LSP 3.17 pull behaviour (Problems only populated for tabs the editor has open); `"workspace"` makes the LSP push `publishDiagnostics` for every offender file so Problems mirrors the Top Offenders tree even with no tabs open. See [lsp.md §LSP-DIAGNOSTICS-SCOPE](lsp.md#lsp-diagnostics-scope). |
 | `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |
 
 Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required.

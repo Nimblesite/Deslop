@@ -3,12 +3,15 @@
 //! Mirrors the JSON-RPC fault model the LSP / MCP transports expose.
 //! Each variant carries enough structured context that a transport
 //! adapter can lift it into a JSON-RPC error without losing fields.
-//! [`LiveErrorWire`] is the serialisable shape consumed by transports.
+//! [`LiveErrorWire`] is the serialisable shape consumed by transports;
+//! its definition lives in `docs/models/live-ipc.td` and is re-exported
+//! here so callers keep the single import path they already use.
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use crate::wire_generated::LiveErrorWire;
 
 use crate::error::CoreError;
 
@@ -80,20 +83,21 @@ pub enum LiveError {
         /// Diagnostic context.
         message: String,
     },
+    /// The filesystem watcher could not be started — e.g. OS-level
+    /// permission denied on the workspace root ([LIVE-WATCHER]).
+    #[error("filesystem watcher failed to start: {message}")]
+    WatcherInit {
+        /// OS or `notify` diagnostic message.
+        message: String,
+    },
+    /// The session was constructed from a cached report but the
+    /// background pipeline pass that backs parser-driven queries has
+    /// not yet completed ([LIVE-CACHE-SEED]).
+    #[error("analysis pipeline not ready yet")]
+    AnalysisNotReady,
     /// Wraps any [`CoreError`] surfaced by the underlying pipeline.
     #[error(transparent)]
     Core(#[from] CoreError),
-}
-
-/// Serialisable wire shape for [`LiveError`]. Transports lift
-/// `LiveError` into this struct before encoding so the JSON-RPC error
-/// payload is stable.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LiveErrorWire {
-    /// Short machine-readable identifier (e.g. `"unparseable_input"`).
-    pub code: String,
-    /// Human-readable rendering, equivalent to `format!("{err}")`.
-    pub message: String,
 }
 
 impl LiveError {
@@ -117,6 +121,8 @@ impl LiveError {
             Self::UnknownCluster { .. } => "unknown_cluster",
             Self::ProviderUnreachable { .. } => "provider_unreachable",
             Self::SchedulerBusy { .. } => "scheduler_busy",
+            Self::WatcherInit { .. } => "watcher_init",
+            Self::AnalysisNotReady => "analysis_not_ready",
             Self::Core(_) => "core_error",
         }
     }

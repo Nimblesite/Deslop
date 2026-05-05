@@ -12,6 +12,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.jetbrains.intellij.platform.gradle.tasks.BuildPluginTask
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
 plugins {
@@ -111,8 +112,13 @@ val copyLspArtifactsToSandbox = tasks.register<CopyLspArtifactsToSandbox>("copyL
     hostPlatform.set(hostPlatformName)
 }
 
-tasks.named("buildPlugin") {
+tasks.named<BuildPluginTask>("buildPlugin") {
     dependsOn(copyLspArtifactsToSandbox)
+    eachFile {
+        if (!isDirectory && path.contains("/bin/")) {
+            permissions { unix("rwxr-xr-x") }
+        }
+    }
 }
 
 fun hostPlatform(): String {

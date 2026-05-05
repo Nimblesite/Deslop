@@ -48,7 +48,6 @@ function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
 
 function report(clusters: ReportCluster[] = [cluster()]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "test",
     min_nodes: 30,
     files_analysed: 2,
@@ -64,6 +63,7 @@ function report(clusters: ReportCluster[] = [cluster()]): Report {
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: null,
     clusters,
   };

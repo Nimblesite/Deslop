@@ -81,9 +81,8 @@ fn write_cache_stats(out: &mut String, report: &Report) {
 fn write_header(out: &mut String, report: &Report) {
     let _ = writeln!(
         out,
-        "deslop {tool} (schema v{schema}) -- {files} file(s), {clusters} cluster(s), {hidden} hidden",
+        "deslop {tool} -- {files} file(s), {clusters} cluster(s), {hidden} hidden",
         tool = report.tool_version,
-        schema = report.report_schema_version,
         files = report.files_analysed,
         clusters = report.clusters.len(),
         hidden = report.clusters_hidden,

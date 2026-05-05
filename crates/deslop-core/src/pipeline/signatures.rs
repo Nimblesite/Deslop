@@ -12,8 +12,8 @@ use crate::{
     lsh::{minhash_signature, Signature, SIGNATURE_LEN},
     state::FileId,
     tokens::{
-        kgrams, token_stream_for_fingerprint, token_stream_for_fingerprint_with_language,
-        KGRAM_WIDTH,
+        cross_language_token_stream_for_fingerprint, kgrams, token_stream_for_fingerprint,
+        token_stream_for_fingerprint_with_language, KGRAM_WIDTH,
     },
 };
 
@@ -59,6 +59,42 @@ pub fn build_signatures_with_languages<S: BuildHasher>(
         signatures.push(signature);
     }
     signatures
+}
+
+/// Builds aliases-only signatures for explicit cross-language audits.
+#[must_use]
+pub fn build_cross_language_signatures<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    trees: &[NormalizedNode],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> Vec<Signature> {
+    let tree_index = build_tree_index(trees);
+    fingerprints
+        .iter()
+        .map(|fingerprint| {
+            let language = file_languages.get(&fingerprint.file_id).copied();
+            cross_language_signature(fingerprint, &tree_index, language)
+        })
+        .collect()
+}
+
+/// Builds one cross-language signature, falling back to fingerprint scope.
+fn cross_language_signature(
+    fingerprint: &Fingerprint,
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+    language: Option<&str>,
+) -> Signature {
+    let Some(language) = language else {
+        return empty_signature(fingerprint, None);
+    };
+    let Some(root) = tree_index.get(&fingerprint.file_id).copied() else {
+        return empty_signature(fingerprint, Some(language));
+    };
+    let tokens = cross_language_token_stream_for_fingerprint(root, fingerprint, language);
+    tokens.map_or_else(
+        || empty_signature(fingerprint, Some(language)),
+        |tokens| signature_for_tokens(&tokens, fingerprint, Some(language)),
+    )
 }
 
 /// Returns true when an exact fingerprint range contains prologue syntax.
@@ -109,14 +145,12 @@ fn signature_for_tokens(
     minhash_signature(&gram_slices)
 }
 
-/// Empty-token signatures stay legacy-compatible except for Python prologue
-/// ranges, where unique fallbacks prevent issue #34 false-positive clusters.
+/// Empty-token signatures are scoped to the exact fingerprint instead of a
+/// shared legacy default so unrelated empty token streams do not LSH-cluster
+/// through compatibility behavior (issue #86).
 fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signature {
-    if matches!(language, Some("python")) {
-        fallback_signature(fingerprint)
-    } else {
-        default_signature()
-    }
+    let _ = language;
+    fallback_signature(fingerprint)
 }
 
 /// Fingerprint-scoped signature used when no k-grams are available. This
@@ -138,7 +172,46 @@ fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
     signature
 }
 
-/// Default signature used for legacy non-Python empty token streams.
-fn default_signature() -> Signature {
-    [u64::MAX; SIGNATURE_LEN]
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::{ast::ByteRange, fingerprint::Fingerprint, state::FileRegistry};
+
+    fn fingerprint(seed: u8, start: usize, end: usize) -> Fingerprint {
+        let mut registry = FileRegistry::new();
+        let file_id = registry.register(PathBuf::from(format!("fixture_{seed}.rs")));
+        Fingerprint {
+            hash: [seed; 32],
+            file_id,
+            byte_range: ByteRange { start, end },
+            node_count: 1,
+        }
+    }
+
+    #[test]
+    fn issue_86_empty_non_python_signatures_are_fingerprint_scoped() {
+        let first = fingerprint(1, 0, 0);
+        let second = fingerprint(2, 0, 0);
+
+        let first_rust = empty_signature(&first, Some("rust"));
+        let second_rust = empty_signature(&second, Some("rust"));
+        let first_unknown = empty_signature(&first, None);
+        let second_unknown = empty_signature(&second, None);
+
+        assert_ne!(
+            first_rust, second_rust,
+            "issue #86: unrelated empty Rust token streams must not share a legacy signature"
+        );
+        assert_ne!(
+            first_unknown, second_unknown,
+            "issue #86: unrelated empty unknown-language streams must not share a legacy signature"
+        );
+        assert_eq!(
+            first_rust,
+            empty_signature(&first, Some("rust")),
+            "fingerprint-scoped fallback must stay deterministic for the same fingerprint"
+        );
+    }
 }

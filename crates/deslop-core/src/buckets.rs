@@ -167,18 +167,25 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
     }
 }
 
-/// Routes a cluster's fused signal triple onto its canonical bucket per
-/// `[CLONE-BUCKETS-ROUTING]`. `SameBehavior` is tested **before**
-/// `NearlyIdentical` so a strong embedding signal on syntactically
-/// divergent code gets the AI label rather than being absorbed into
-/// near-miss.
+/// Resolves a report cluster's canonical bucket. Fresh reports carry the
+/// authoritative wire label; older reports fall back to signal routing.
 #[must_use]
 pub fn classify(cluster: &ReportCluster) -> ClusterKind {
-    classify_signals(cluster.signals)
+    kind_from_wire_label(&cluster.bucket).unwrap_or_else(|| classify_signals(cluster.signals))
 }
 
-/// Signals-only variant of [`classify`] for callers that already have
-/// the triple (e.g. the CLI summary row iterating over every cluster).
+/// Parses the stable JSON `cluster.bucket` wire label.
+fn kind_from_wire_label(label: &str) -> Option<ClusterKind> {
+    match label {
+        "identical" => Some(ClusterKind::Identical),
+        "nearly_identical" => Some(ClusterKind::NearlyIdentical),
+        "loosely_similar" => Some(ClusterKind::LooselySimilar),
+        "same_behavior" => Some(ClusterKind::SameBehavior),
+        _ => None,
+    }
+}
+
+/// Signals-only fallback for reports that do not carry `cluster.bucket`.
 #[must_use]
 pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     if signals.structural >= 0.99 && signals.token_jaccard >= 0.99 {
@@ -186,8 +193,7 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     } else if signals.embedding_cos >= 0.80 && signals.structural < 0.50 {
         ClusterKind::SameBehavior
     } else if signals.structural >= 0.99
-        || (signals.structural >= 0.10 && signals.token_jaccard >= 0.95)
-        || (signals.structural <= 0.01 && signals.token_jaccard >= 0.90)
+        || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
         ClusterKind::NearlyIdentical
     } else {

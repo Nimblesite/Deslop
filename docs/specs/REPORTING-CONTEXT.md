@@ -104,5 +104,5 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 
 ## Tool metadata
 
-- Tool: `deslop`. The report header states the tool version and report schema version.
+- Tool: `deslop`. The report header states the tool version.
 - The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, embedding_cos, fused }`, and an agent-oriented `summary` string per cluster.

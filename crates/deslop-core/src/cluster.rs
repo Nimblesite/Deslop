@@ -54,10 +54,8 @@ pub fn build_ranked_fused_clusters(
     fingerprints: &[Fingerprint],
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
-    let mut clusters: Vec<Cluster> = fused_clusters
-        .iter()
-        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
-        .collect();
+    let mut clusters = reportable_clusters(fingerprints, fused_clusters);
+    let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
             .weight
@@ -65,7 +63,46 @@ pub fn build_ranked_fused_clusters(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
-    collapse_cross_cluster_overlap(clusters)
+    let collapsed = collapse_cross_cluster_overlap(clusters);
+    log_ranked_cluster_distribution(&collapsed, fused_clusters.len(), dropped_below_min_members);
+    collapsed
+}
+
+/// Materialises every fused cluster that remains reportable.
+fn reportable_clusters(
+    fingerprints: &[Fingerprint],
+    fused_clusters: &[FusedCluster],
+) -> Vec<Cluster> {
+    fused_clusters
+        .iter()
+        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
+        .collect()
+}
+
+/// Emits the structured GH#45 ranked-cluster distribution summary.
+fn log_ranked_cluster_distribution(clusters: &[Cluster], input_total: usize, dropped: usize) {
+    let (largest_weight, mean_weight) = weight_summary(clusters);
+    tracing::info!(
+        total = clusters.len(),
+        input_total,
+        dropped_below_min_members = dropped,
+        largest_weight,
+        mean_weight,
+        "ranked clusters built",
+    );
+}
+
+/// Returns `(largest_weight, mean_weight)` for a ranked cluster slice.
+fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
+    let largest = clusters.first().map_or(0.0, |cluster| cluster.weight);
+    let total = clusters.iter().map(|cluster| cluster.weight).sum::<f64>();
+    let divisor = u32::try_from(clusters.len()).map_or(f64::from(u32::MAX), f64::from);
+    let mean = if clusters.is_empty() {
+        0.0
+    } else {
+        total / divisor
+    };
+    (largest, mean)
 }
 
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
@@ -95,8 +132,9 @@ fn collapsed_members(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<
 fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster {
     let size = members.len();
     let smallest_nodes = smallest_node_count(&members);
+    let rank_nodes = refactor_potential_node_count(smallest_nodes, signals);
     let spanned_bytes = spanned_byte_count(&members);
-    let weight = rank_weight(smallest_nodes, size, spanned_bytes);
+    let weight = rank_weight(rank_nodes, size, spanned_bytes);
     let id_source = cluster_id_source(&members);
     Cluster {
         id: encode_short_id(id_source),
@@ -121,6 +159,26 @@ fn spanned_byte_count(members: &[Fingerprint]) -> u64 {
         .iter()
         .map(|member| u64::try_from(member.byte_range.len()).unwrap_or(u64::MAX))
         .fold(0_u64, u64::saturating_add)
+}
+
+/// Returns the node count used for ranking.
+///
+/// Low-structural Type-4 clusters often span a large interface-shaped AST
+/// region while only a small body fragment is actually refactorable. Keep the
+/// rendered `canonical_node_count` unchanged, but rank those clusters by a
+/// conservative refactor-potential fraction so exact duplicates stay ahead.
+fn refactor_potential_node_count(clone_node_count: usize, signals: PairScore) -> usize {
+    if signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
+        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
+    {
+        clone_node_count
+            .saturating_mul(LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR)
+            .checked_div(LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR)
+            .unwrap_or(clone_node_count)
+            .max(1)
+    } else {
+        clone_node_count
+    }
 }
 
 /// Selects the deterministic hash source for the public cluster id.
@@ -234,6 +292,16 @@ fn drop_cluster(dropped: &mut [bool], index: usize) {
     }
 }
 
+/// Decision produced by [`evaluate_pair`] for one `(outer, inner)` cluster pair.
+enum PairDecision {
+    /// Discard the inner cluster; the outer subsumes it.
+    DropInner,
+    /// Discard the outer cluster; the inner subsumes it.
+    DropOuter,
+    /// Retain both clusters.
+    Keep,
+}
+
 /// Collapses redundant nested clusters produced by the same physical
 /// code being fingerprinted at multiple AST subtree depths.
 ///
@@ -260,28 +328,8 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     let len = clusters.len();
     let mut dropped = vec![false; len];
     for outer in 0..len {
-        if cluster_dropped(&dropped, outer) {
-            continue;
-        }
-        let Some(outer_cluster) = clusters.get(outer) else {
-            continue;
-        };
-        for inner in (outer.saturating_add(1))..len {
-            if cluster_dropped(&dropped, inner) {
-                continue;
-            }
-            let Some(inner_cluster) = clusters.get(inner) else {
-                continue;
-            };
-            if !all_occurrences_contained_in_some(&inner_cluster.members, &outer_cluster.members) {
-                continue;
-            }
-            if outer_cluster.signals.structural >= inner_cluster.signals.structural {
-                drop_cluster(&mut dropped, inner);
-            } else if outer_files_covered_by_inner(&inner_cluster.members, &outer_cluster.members) {
-                drop_cluster(&mut dropped, outer);
-                break;
-            }
+        if !cluster_dropped(&dropped, outer) {
+            scan_inner_pairs(&clusters, &mut dropped, outer, len);
         }
     }
     clusters
@@ -289,6 +337,50 @@ fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
         .enumerate()
         .filter_map(|(index, cluster)| (!cluster_dropped(&dropped, index)).then_some(cluster))
         .collect()
+}
+
+/// Evaluates every `(outer, inner)` pair for the given `outer` index and
+/// updates `dropped` accordingly. Breaks early when `outer` itself is dropped.
+fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) {
+    for inner in (outer.saturating_add(1))..len {
+        if cluster_dropped(dropped, inner) {
+            continue;
+        }
+        let Some(outer_cluster) = clusters.get(outer) else {
+            continue;
+        };
+        let Some(inner_cluster) = clusters.get(inner) else {
+            continue;
+        };
+        match evaluate_pair(outer_cluster, inner_cluster) {
+            PairDecision::DropInner => drop_cluster(dropped, inner),
+            PairDecision::DropOuter => {
+                drop_cluster(dropped, outer);
+                break;
+            }
+            PairDecision::Keep => {}
+        }
+    }
+}
+
+/// Decides which cluster to drop when their occurrence byte ranges nest.
+/// Returns [`PairDecision::Keep`] when neither cluster dominates the other.
+fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
+    if all_occurrences_contained_in_some(&inner.members, &outer.members) {
+        // Inner's occurrences all nest inside outer's — outer dominates.
+        if outer.signals.structural >= inner.signals.structural {
+            PairDecision::DropInner
+        } else if outer_files_covered_by_inner(&inner.members, &outer.members) {
+            PairDecision::DropOuter
+        } else {
+            PairDecision::Keep
+        }
+    } else if all_occurrences_contained_in_some(&outer.members, &inner.members) {
+        // Outer's occurrences all nest inside inner's — inner dominates.
+        PairDecision::DropOuter
+    } else {
+        PairDecision::Keep
+    }
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
@@ -329,6 +421,14 @@ const F64_MAX_EXACT_INTEGER: f64 = 9_007_199_254_740_992.0;
 /// 2^32 as an `f64`. Used by [`lossless_f64_from_u64`] to reassemble 64-bit
 /// values without a direct `u64 as f64` cast.
 const F64_TWO_POW_32: f64 = 4_294_967_296.0;
+/// Structural ceiling below which Type-4 span size is treated as low-signal.
+const LOW_STRUCTURAL_TYPE4_CEILING: f64 = 0.10;
+/// Semantic confidence floor for Type-4 ranking dampening.
+const TYPE4_EMBEDDING_FLOOR: f64 = 0.90;
+/// Rank low-structural Type-4 clusters at 10% of their AST node span.
+const LOW_STRUCTURAL_TYPE4_WEIGHT_NUMERATOR: usize = 1;
+/// Denominator for the low-structural Type-4 ranking fraction.
+const LOW_STRUCTURAL_TYPE4_WEIGHT_DENOMINATOR: usize = 10;
 
 /// Shortens a full 32-byte hash to an 8-byte hex stable id for reporting.
 #[must_use]

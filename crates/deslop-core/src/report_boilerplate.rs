@@ -5,39 +5,17 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     boilerplate::BoilerplateRange,
     config::ExclusionConfig,
     state::{FileId, FileRegistry},
 };
 
-/// Low-severity hygiene hint for import/prologue boilerplate.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReportBoilerplateHint {
-    /// Hint category. Currently `"imports"`.
-    pub kind: String,
-    /// Language id the hint applies to.
-    pub language: String,
-    /// Always `"info"` for boilerplate hygiene hints.
-    pub severity: String,
-    /// Gentle remediation guidance.
-    pub recommendation: String,
-    /// Suppressed byte ranges that justify the hint.
-    pub occurrences: Vec<ReportBoilerplateOccurrence>,
-}
-
-/// One suppressed import/prologue occurrence in the report.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReportBoilerplateOccurrence {
-    /// Source path, relative to the scan root when possible.
-    pub path: PathBuf,
-    /// Inclusive start byte of the suppressed boilerplate range.
-    pub start_byte: usize,
-    /// Exclusive end byte of the suppressed boilerplate range.
-    pub end_byte: usize,
-}
+// `ReportBoilerplateHint` and `ReportBoilerplateOccurrence` are
+// generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. The data shapes live in
+// `crate::wire_generated`; the constructor below stays here.
+pub use crate::wire_generated::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 
 /// Builds report hints from suppressed boilerplate ranges.
 #[must_use]

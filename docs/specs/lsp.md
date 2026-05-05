@@ -20,28 +20,60 @@ Declared in the `initialize` response:
 | `hoverProvider` | On hover over a clone range: show cluster id, signal breakdown, interpretation, and a "jump to occurrence N" list. |
 | `definitionProvider` (overloaded) | "Go to definition" from inside a clone range jumps to the canonical occurrence of that cluster. Users keep the muscle memory. |
 | `executeCommandProvider` | Commands for: toggle daemon, refresh report, open full report, pick embedding model, extract-to-shared-function (future). |
-| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as `Information` / `Hint` diagnostics. Severity scales with cluster weight ([LSP-SEVERITY]). |
+| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. Severity is determined by clone bucket ([LSP-SEVERITY]) and is fully user-configurable. |
 | `workspace/didChangeWatchedFiles` | Register for writes outside the editor (build output, generated files, `git checkout`). |
 | Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS]. |
 
-### [LSP-SEVERITY] Mapping cluster weight → diagnostic severity
+### [LSP-SEVERITY] Diagnostic severity — two axes
 
-Cluster weights (`count × (size−1) × log2(1 + spanned_loc)`) are unbounded, so they're bucketed:
+Severity is determined by **two independent axes**, applied in order:
 
-| Weight percentile in current report | Severity | UX |
+#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket
+
+The clone bucket is the primary determinant. All four buckets default to `Warning` or higher — duplication is always actionable and should never be silent by default. `Identical` code defaults to `Error` because there is no legitimate reason for bit-for-bit duplicates to exist in a codebase.
+
+| Bucket | Default severity | Can be configured to |
 |---|---|---|
-| Top 1% (the worst offenders) | `Warning` | Yellow squiggle, surfaces in Problems panel. |
-| 1 – 10% | `Information` | Info dot, Problems panel. |
-| 10 – 50% | `Hint` | Faded underline, Problems panel only if filter allows. |
-| Bottom 50% | Not published as a diagnostic | Still visible via code lens + hover. |
+| `Identical` | `Error` | `"warning"` · `"information"` · `"hint"` · `"none"` |
+| `NearlyIdentical` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
+| `LooselySimilar` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
+| `SameBehavior` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
 
-**Percentile is computed across the whole report, not per file.** A cluster's severity is its weight's percentile against the weights of every cluster in the live report. A cluster that is the worst offender in a sleepy file but mid-tier overall must rank mid-tier in the Problems panel — otherwise a quiet file with three trivial near-misses would publish a `Warning` while the actual hot files compete for the same bucket. This matches the "worst offenders first" rank order surfaced everywhere else (CLI text report, VSIX top-offenders tree, HTML report).
+**Every severity is user-configurable** per bucket via VS Code settings. Valid values: `"error" | "warning" | "information" | "hint" | "none"`. Setting `"none"` suppresses diagnostics for that bucket entirely — the cluster stays visible in the tree, code lens, and hover but does not appear in the Problems panel or the squiggle gutter.
+
+```jsonc
+// .vscode/settings.json
+// Loosen: treat all duplication as warning-only, suppress AI matches.
+"deslop.severity.identical":       "warning",
+"deslop.severity.nearlyIdentical": "warning",
+"deslop.severity.looselySimilar":  "information",
+"deslop.severity.sameBehavior":    "none"
+
+// Strict: everything is an error, no exceptions.
+"deslop.severity.identical":       "error",
+"deslop.severity.nearlyIdentical": "error",
+"deslop.severity.looselySimilar":  "error",
+"deslop.severity.sameBehavior":    "error"
+```
+
+#### [LSP-SEVERITY-PERCENTILE] Secondary axis: weight-percentile thresholds
+
+Within each bucket, a cluster is only published as a diagnostic if its weight percentile (across the whole live report) meets the configured floor. This prevents noise from trivial clusters of the same type drowning out the worst offenders.
+
+| Percentile threshold setting | Default | Effect |
+|---|---|---|
+| `deslop.severity.errorPercentileFloor` | `0` (all) | Only clusters at or above this percentile floor publish as `Error`. |
+| `deslop.severity.warningPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Warning`. |
+| `deslop.severity.informationPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Information`. |
+| `deslop.severity.hintPercentileFloor` | `0` (all) | Only clusters at or above this floor publish as `Hint`. |
+
+**Percentile is computed across the whole report, not per file.** The defaults (`0`) publish every cluster in its bucket. Teams who want only the worst 10% of identical-code clusters to raise errors set `deslop.severity.errorPercentileFloor = 90`.
 
 Because severity depends on the global weight set, the diagnostic provider declares `inter_file_dependencies: true` ([LSP-CAPABILITIES]); editing one file shifts every other file's percentile, and the client must refresh the corresponding diagnostics.
 
-Severity is **never** `Error` — duplication isn't a compile error, and polluting the error stream breaks existing developer workflows (CI red on clone count is a future opt-in, not the default). Percentile thresholds are fixed; the user doesn't tune severity, they tune `min-nodes` and exclusion patterns instead.
+Clusters below their bucket's percentile floor remain visible via code lens, hover, and the VSIX tree — they are not published as diagnostics but are not hidden.
 
-Severity bucketing lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
+**Severity resolution is stateless per cluster**: `bucket → configured_severity → percentile_check → publish or suppress`. Severity bucketing lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 
@@ -57,6 +89,23 @@ Each published diagnostic carries:
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
 
 Diagnostics refresh on every `report/changed` notification from the daemon. Pull-based (LSP 3.17) because push-based diagnostics can interleave badly with buffer edits; `tower-lsp` gives us pull for free.
+
+### [LSP-DIAGNOSTICS-SCOPE] Open-file vs. workspace publication
+
+Pull-based diagnostics only travel to the editor for files the client actively pulls — in practice, files the user has open. With no tab open the Problems panel is empty even when the workspace contains thousands of offenders, which contradicts the Top Offenders tree (always full) and surprises users who expect Problems to mirror the tree. The fix is a single workspace setting that selects the publication scope. Tracked by [#129](https://github.com/Nimblesite/Deslop/issues/129).
+
+| Setting | Type | Default | Effect |
+|---|---|---|---|
+| `deslop.diagnostics.scope` | `"open-files" \| "workspace"` | `"open-files"` | `open-files` keeps the LSP 3.17 pull contract: only files the editor pulls for receive diagnostics. `workspace` actively pushes `textDocument/publishDiagnostics` for **every** file with at least one occurrence after each pipeline pass, so Problems stays populated regardless of which tabs are open. |
+
+**`workspace` mode publication contract:**
+
+- After every `report/changed`, the LSP iterates the cluster set, groups occurrences by file, and pushes one `publishDiagnostics` per offender file with the full per-file diagnostic list (same payload `diagnostic()` would have produced for a pull).
+- Files that drop out of the offender set in a later pass receive an empty `publishDiagnostics` so the editor clears their stale entries — this is non-negotiable per [LSP-PUSH] reactivity.
+- Severity, percentile gating, and message content are identical to pull mode — `[LSP-SEVERITY]` is the single source of truth.
+- Pull (`textDocument/diagnostic`) keeps working in both modes; `workspace` mode is additive, never replacing the pull path.
+
+`open-files` is the default because pushing thousands of diagnostics on first open of a large workspace is noisy and slows the editor's Problems panel; users who want full coverage opt in. The setting is workspace-scoped (`scope: "window"` in the VSIX) and forwarded to the LSP at `initialize` and on `workspace/didChangeConfiguration`.
 
 ### [LSP-CODE-LENS] Code lens
 
@@ -111,6 +160,26 @@ Standard LSP does not have a "give me the live dedup report" request, so the she
 
 Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embeddingProgress`) mirror the daemon push methods. Namespacing (`deslop/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
 
+The MCP-facing Unix socket at `.deslop-cache/deslop.sock` exposes the same live service for agent-side calls that do not travel through a full LSP client. It accepts `duplicates/findSimilar`, `embedding/listModels`, and `deslop.lsp.refreshReport`; the last one runs the same full-refresh command used by `workspace/executeCommand` so agent `rescan` calls can force re-analysis before reading the LSP state file.
+
+### [LSP-PUSH] Active push — the LSP never waits for the editor to ask
+
+**This is the most critical correctness property of the live surface.** The LSP must push `deslop/reportChanged` (and `deslop/analysisState`) the moment re-analysis completes — unconditionally, regardless of which actor caused the file change.
+
+**Three complementary triggers feed the same session:**
+
+1. **`notify`-backed filesystem watcher** (`[LIVE-WATCHER]`) — started at LSP init against the full workspace root. Catches every mutation: terminal saves, `git pull`, AI coding agents editing files, CI pipelines, formatters, other editors. **This is the primary, non-negotiable trigger.** The LSP is not a VS Code extension; it cannot assume all mutations come from the editor.
+2. **`textDocument/didChange` / `textDocument/didOpen`** — editor-side events for files the user has open. Belt-and-suspenders; slightly faster than waiting for the OS watcher on in-buffer edits.
+3. **`workspace/didChangeWatchedFiles`** — the editor's own file-event relay. Belt-and-suspenders.
+
+All three routes call `AnalysisSession::apply_changes` on the **same `Arc<Mutex<AnalysisSession>>`** — no duplicate state, just serialised access. The watcher-driven path goes through `Scheduler` (with a 250 ms debounce); the editor-driven path goes directly.
+
+When the `Scheduler` finishes a pass it broadcasts `ReportChangedNotification` and `AnalysisState`. A background tokio task (`crates/deslop-lsp/src/file_watch.rs`) drains those broadcasts and pushes `deslop/reportChanged` + `deslop/analysisState` to the editor with no request from the editor.
+
+**The VSIX must never rely on polling.** Stale UI after any external mutation — git, terminal, AI agent, CI — is a push-path correctness bug, not a refresh issue. Fix the push.
+
+The `LspBackend` struct owns `_watcher: LiveWatcher` and `_scheduler: Scheduler` for the session lifetime; dropping either stops the watch loop. Watcher startup failures (`LiveError::WatcherInit`) are fatal — the editor surfaces them through the standard "server crashed" notification.
+
 ### [LSP-EMBEDDING-CONSENT] Startup embedding behaviour
 
 The LSP starts with embeddings off unless its launch arguments carry a model that the user previously selected: `--embeddings auto|required`, `--embedding-provider`, `--embedding-model`, and `--embedding-endpoint`. A fresh VSIX install launches the LSP with `--embeddings off`, so the initial report is structural/token only and no local model work starts silently.
@@ -123,11 +192,11 @@ The LSP and MCP must converge through the same workspace embedding settings. MCP
 
 `executeCommandProvider` advertises:
 
-- `deslop.refreshReport` — force a full re-analysis (drop incremental state, re-run). Rarely needed; the scheduler is reliable.
-- `deslop.openCluster` — open `deslop://cluster/<id>` in the client.
-- `deslop.openReport` — open `deslop://report`.
-- `deslop.pickEmbeddingModel` — tell the client to prompt the user with the result of `embedding/listModels` and call `embedding/setModel` with the selection. The VSIX implements the prompt as a proper picker ([VSIX-EMBED-PICKER]); other clients fall back to a `showMessageRequest`.
-- `deslop.toggleIncremental` — flip the daemon's incremental-cache behaviour (rare; mostly for debugging cache invalidation).
+- `deslop.lsp.refreshReport` — force a full re-analysis (drop incremental state, re-run). Rarely needed; the scheduler is reliable. MCP `rescan` may call the same verb over the LSP IPC socket when an agent needs a synchronous post-edit refresh.
+- `deslop.lsp.openCluster` — open `deslop://cluster/<id>` in the client.
+- `deslop.lsp.openReport` — open `deslop://report`.
+- `deslop.lsp.pickEmbeddingModel` — tell the client to prompt the user with the result of `embedding/listModels` and call `embedding/setModel` with the selection. The VSIX implements the prompt as a proper picker ([VSIX-EMBED-PICKER]); other clients fall back to a `showMessageRequest`.
+- `deslop.lsp.toggleIncremental` — flip the daemon's incremental-cache behaviour (rare; mostly for debugging cache invalidation).
 
 No `extract-to-function` command in v1 — that's an edit action that belongs downstream of a real refactor engine. Listed here as the eventual home for it so clients know where it will live.
 

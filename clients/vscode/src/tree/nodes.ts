@@ -84,8 +84,9 @@ export class ClusterNode extends vscode.TreeItem {
       ? { rank, severity, bucket, file: fileLabel }
       : { rank, severity, bucket };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = cluster.id;
-    this.contextValue = "deslop.cluster";
+    this.description = `${occurrenceCount(cluster)} copies`;
+    this.contextValue =
+      occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
     this.iconPath = categoryIcon(bucket);
     this.accessibilityInformation = {
       label: `#${rank} ${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}`,
@@ -96,7 +97,8 @@ export class ClusterNode extends vscode.TreeItem {
     this.tooltip = new vscode.MarkdownString(
       `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\``,
+        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        `cluster id: \`${cluster.id}\``,
     );
     this.command = {
       command: "deslop.openCluster",
@@ -107,11 +109,28 @@ export class ClusterNode extends vscode.TreeItem {
 }
 
 export class OccurrenceNode extends vscode.TreeItem {
-  constructor(readonly occurrence: ReportOccurrence) {
+  constructor(
+    readonly occurrence: ReportOccurrence,
+    parentCluster?: ReportCluster,
+    parentRank?: number,
+    occurrenceIndex?: number,
+  ) {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
     if (location) this.description = location.description;
-    this.contextValue = "deslop.occurrence";
+    this.contextValue =
+      parentCluster !== undefined && occurrenceIndex === 0
+        ? "deslop.occurrenceCanonical"
+        : "deslop.occurrence";
+    if (parentCluster !== undefined && occurrenceIndex !== undefined) {
+      const labels = bucketLabels(resolveBucket(parentCluster));
+      const total = occurrenceCount(parentCluster);
+      const rankText = parentRank !== undefined ? `#${parentRank} ` : "";
+      this.tooltip = new vscode.MarkdownString(
+        `**${rankText}${labels.plainTitle}** · occurrence ${occurrenceIndex + 1} of ${total}\n\n` +
+          labels.actionSentence,
+      );
+    }
     this.command = {
       command: "deslop.openOccurrence",
       title: location?.commandTitle ?? "Open occurrence",

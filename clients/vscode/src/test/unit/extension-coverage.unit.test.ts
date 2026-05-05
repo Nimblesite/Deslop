@@ -19,7 +19,6 @@ function reportWithEmbedding(
   embedding: Report["embedding_provenance"] = null,
 ): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 0,
@@ -35,6 +34,7 @@ function reportWithEmbedding(
     },
     schema_doc: "",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: embedding,
     clusters: [],
   };
@@ -86,16 +86,16 @@ suite("extension coverage branches", () => {
     await cfg.update("configPath", "/tmp/deslop.toml", vscode.ConfigurationTarget.Global);
     await setEmbeddingConfig({
       mode: "required",
-      provider: "stub",
-      model: "stub",
+      provider: "ollama",
+      model: "nomic-embed-code",
       endpoint: "http://127.0.0.1:9000",
     });
 
     assert.deepEqual(currentInitializationOptions(), {
       minNodes: 42,
       embedding: {
-        provider: "stub",
-        model: "stub",
+        provider: "ollama",
+        model: "nomic-embed-code",
         endpoint: "http://127.0.0.1:9000",
         mode: "required",
       },
@@ -126,10 +126,10 @@ suite("extension coverage branches", () => {
     const store = new ReportStore();
 
     wireNotifications(client, store);
-    stateCb?.("idle");
+    stateCb?.({ state: "idle" });
     assert.equal(store.current.lifecycle.kind, "ready");
 
-    stateCb?.("errored");
+    stateCb?.({ state: "errored", message: "Analysis failed: bad fixture" });
     const failedLifecycle = store.current.lifecycle;
     assert.equal(failedLifecycle.kind, "failed");
     assert.ok("message" in failedLifecycle);
@@ -137,10 +137,10 @@ suite("extension coverage branches", () => {
   });
 
   test("syncEmbeddingSettingsToLsp skips when no client or embeddings are off", async () => {
-    await setEmbeddingConfig({ mode: "auto", provider: "stub", model: "stub" });
+    await setEmbeddingConfig({ mode: "auto", provider: "ollama", model: "nomic-embed-text" });
     await syncEmbeddingSettingsToLsp(new ReportStore(), () => undefined);
 
-    await setEmbeddingConfig({ mode: "off", provider: "stub", model: "stub" });
+    await setEmbeddingConfig({ mode: "off", provider: "ollama", model: "nomic-embed-text" });
     const client = {
       sendRequest: () => {
         throw new Error("must not be called");
@@ -150,7 +150,7 @@ suite("extension coverage branches", () => {
   });
 
   test("syncEmbeddingSettingsToLsp skips pending and already-active models", async () => {
-    await setEmbeddingConfig({ mode: "auto", provider: "stub", model: "stub" });
+    await setEmbeddingConfig({ mode: "auto", provider: "ollama", model: "nomic-embed-text" });
     const client = {
       sendRequest: () => {
         throw new Error("must not be called");
@@ -158,16 +158,19 @@ suite("extension coverage branches", () => {
     } as unknown as LanguageClient;
 
     const pending = new ReportStore();
-    pending.setPendingEmbeddingModel("stub");
+    pending.setPendingEmbeddingModel("nomic-embed-text");
     await syncEmbeddingSettingsToLsp(pending, () => client);
 
     const active = new ReportStore();
     active.setSnapshot(
       reportWithEmbedding({
-        provider_id: "stub",
-        model_id: "stub",
+        provider_id: "ollama",
+        model_id: "nomic-embed-text",
         model_version: "0",
-        dimensions: 64,
+        dimensions: 768,
+        attempted_subtrees: 0,
+        indexed_subtrees: 0,
+        failed_subtrees: 0,
       }),
       0,
     );

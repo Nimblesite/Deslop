@@ -89,6 +89,54 @@ fn lsp_survives_when_configured_ollama_endpoint_is_unreachable() -> Result<()> {
     Ok(())
 }
 
+/// [LSP-EMBEDDING-CONSENT] Audience: HUMAN. Issue #35. Even when the user
+/// explicitly opted in with `--embeddings required`, an unreachable Ollama
+/// endpoint must not crash the LSP. The process must stay alive and serve the
+/// LSP protocol in a degraded (no-embedding) state rather than crash-looping
+/// VS Code. Positive invariant: child still running after the liveness window.
+#[test]
+fn lsp_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
+    let workspace = tempfile::tempdir()?;
+    let mut child = spawn_lsp_with_embeddings(
+        workspace.path(),
+        EmbeddingLaunch {
+            mode: "required",
+            provider: "ollama",
+            model: "nomic-embed-text",
+            endpoint: UNREACHABLE_ENDPOINT,
+        },
+    )?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("child stdin missing"))?;
+    let init = br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}"#;
+    let header = format!("Content-Length: {}\r\n\r\n", init.len());
+    stdin.write_all(header.as_bytes())?;
+    stdin.write_all(init)?;
+    stdin.flush()?;
+
+    let deadline = Instant::now() + LIVENESS_WINDOW;
+    while Instant::now() < deadline {
+        match child.try_wait()? {
+            Some(status) => {
+                let stderr = drain_stderr(&mut child);
+                let _ = child.kill();
+                return Err(anyhow!(
+                    "deslop-lsp exited during initialise with status {status:?} — \
+                     even with --embeddings required the LSP must stay alive when \
+                     the Ollama endpoint is unreachable; embeddings are optional. \
+                     stderr:\n{stderr}"
+                ));
+            }
+            None => thread::sleep(Duration::from_millis(100)),
+        }
+    }
+    drop(stdin);
+    let _ = child.kill();
+    Ok(())
+}
+
 #[derive(Copy, Clone)]
 struct EmbeddingLaunch {
     mode: &'static str,

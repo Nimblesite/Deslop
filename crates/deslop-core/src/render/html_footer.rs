@@ -1,7 +1,7 @@
 //! "Run details" footer for the HTML report.
 //!
 //! Per [OUTPUT-HUMAN-HTML] the body of the report stays scannable —
-//! the verbose run metadata (tool / schema versions, embedding
+//! the verbose run metadata (tool version, embedding
 //! provenance, per-cluster signal numbers, action-hints playbook,
 //! schema doc) lives inside a single collapsed `<details>` tucked at
 //! the bottom of the page. Humans can ignore it; agents and
@@ -18,14 +18,12 @@ pub fn write_run_details(out: &mut String, report: &Report, escape: fn(&str) -> 
         "<details class=\"run-details\"><summary>Run details, signals, and schema reference</summary>\
          <dl>\
          <dt>Tool</dt><dd>{tool}</dd>\
-         <dt>Schema</dt><dd>v{schema}</dd>\
          <dt>Files analysed</dt><dd>{files}</dd>\
          <dt>Visible groups</dt><dd>{visible}</dd>\
          <dt>Hidden groups</dt><dd>{hidden}</dd>\
          <dt>Embeddings</dt><dd>{embeddings}</dd>\
          </dl>",
         tool = escape(&report.tool_version),
-        schema = report.report_schema_version,
         files = report.files_analysed,
         visible = report.clusters.len(),
         hidden = report.clusters_hidden,

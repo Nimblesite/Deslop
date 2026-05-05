@@ -33,7 +33,7 @@ This plan is embeddings-only. Do not add or change chat, tool, or completion pay
 - `embedding/listModels` and `list-embedding-models` never include `stub` in production.
 - `embedding/setModel` and `set-embedding-model` reject `provider_id: "stub"` as an unsupported provider.
 - VSIX picker rows are derived from production provider model listing only.
-- If existing workspace settings still contain `deslop.embedding.provider = "stub"`, VSIX startup/sync must coerce to a safe state: provider `ollama`, embeddings mode `off`, and no silent embedding work.
+- If existing workspace settings still contain `deslop.embedding.provider = "stub"`, VSIX startup/sync must ignore the unsupported provider in memory without rewriting user settings: pass provider `ollama`, embeddings mode `off`, and no silent embedding work.
 
 ## Test Plan
 
@@ -48,7 +48,7 @@ This plan is embeddings-only. Do not add or change chat, tool, or completion pay
 - VSIX tests:
   - Picker unit tests assert no stub row or synthetic fallback model is rendered.
   - Settings tests assert `deslop.embedding.provider` enum/default excludes `stub`.
-  - Add a legacy settings test proving stale `stub` configuration is coerced to safe off/ollama behavior.
+  - Add a legacy settings test proving stale `stub` configuration is ignored without migration compatibility.
 - Packaging acceptance:
   - Build/package the VSIX and inspect the packaged output for `blake3-stub`, `StubProvider`, and user-facing `stub` provider strings; none may appear outside test artifacts.
   - Run `make test`, `make lint`, and the non-Ollama VSIX test target.
@@ -69,7 +69,7 @@ This plan is embeddings-only. Do not add or change chat, tool, or completion pay
 - [ ] Update production model listing so only registered production providers contribute models.
 - [ ] Remove the stub fallback from the VSIX picker and preserve the existing "Ollama not detected" empty-state behavior.
 - [ ] Remove `stub` from production VSIX settings enums, defaults, and picker logic.
-- [ ] Add migration handling for stale workspace settings that still reference `deslop.embedding.provider = "stub"`.
+- [ ] Ignore stale workspace settings that still reference `deslop.embedding.provider = "stub"` without migration compatibility.
 - [ ] Move the BLAKE3 embedding shim into test-only support and update direct Rust tests to import it from there.
 - [ ] Replace black-box tests that depend on `provider_id: "stub"` with mock Ollama endpoint coverage.
 - [ ] Update MCP tool schema tests and CLI/LSP/MCP tests so production only allows `ollama`.

@@ -5,9 +5,8 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package typediagram-gen
 
-GRADLE ?= gradle
 JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
@@ -19,9 +18,14 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
+  # No gradlew wrapper is checked in: callers (devs + CI) must provide
+  # `gradle` on PATH or override `GRADLE=...`. CI sets `GRADLE=gradle`
+  # via the gradle/actions/setup-gradle@v4 install.
+  GRADLE ?= gradle
 else
   RM = rm -rf
   MKDIR = mkdir -p
+  GRADLE ?= gradle
 endif
 
 # ---------------------------------------------------------------------------
@@ -39,6 +43,16 @@ build:
 	@echo "==> Building..."
 	cargo build --release --workspace
 
+## typediagram-gen: Regenerate wire-format Rust IPC models from
+##                  `docs/models/*.td` via the typediagram CLI. The
+##                  generated file is gitignored; cargo's build.rs
+##                  invokes this same script automatically, so manual
+##                  invocation is only needed when iterating on the
+##                  .td spec or the generator script itself.
+typediagram-gen:
+	@echo "==> typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
+	node scripts/typediagram-gen.mjs
+
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
 ##       Does NOT require Ollama — tests whose names contain `ollama_`
@@ -49,7 +63,7 @@ build:
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `scripts/coverage-check.sh` enforces
 ##       each one independently — no workspace roll-up masking.
-test: delete-path-binaries
+test: delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
@@ -63,13 +77,19 @@ test: delete-path-binaries
 ##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
 ##       mention in site/src and examples must co-locate a canonical
 ##       bucket label.
-lint:
+##       Depends on typediagram-gen so the wire-generated module exists
+##       before clippy parses the workspace on a fresh checkout.
+lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
-fmt:
+##      Depends on typediagram-gen because rustfmt walks the module tree
+##      and refuses to run when `mod wire_generated;` cannot resolve. The
+##      generated file is gitignored per CLAUDE.md, so on a clean CI
+##      checkout it must be produced before fmt walks the sources.
+fmt: typediagram-gen
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
 	@_fmt_out=$$(cargo fmt --all$(if $(CHECK), --check,) 2>&1); _fmt_rc=$$?; \
 	 echo "$$_fmt_out" | grep -v "unstable features are only available in nightly channel" || true; \
@@ -94,11 +114,16 @@ ci:
 	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
 
-## setup: Post-create dev environment setup (used by devcontainer)
+## setup: Post-create dev environment setup (used by devcontainer).
+##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
+##        per CLAUDE.md dependency-pinning rules. The CLI is required by
+##        `make typediagram-gen` and the deslop-core `build.rs` on every
+##        cargo build, so a fresh devcontainer needs it on PATH.
 setup:
 	@echo "==> Setting up development environment..."
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
+	npm install -g typediagram@0.5.0
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
@@ -176,8 +201,10 @@ vsix-install:
 
 ## vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 ##             Depends on `vsix-install` so a cold CI checkout has the
-##             webview-ui + extension Node deps needed for esbuild bundling.
-vsix-build: vsix-install
+##             webview-ui + extension Node deps needed for esbuild bundling,
+##             and on `typediagram-gen` so the gitignored wire-generated.ts
+##             exists before tsc runs.
+vsix-build: vsix-install typediagram-gen
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
@@ -273,9 +300,8 @@ vsix-rebuild:
 	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
 ## jetbrains-build: Build the JetBrains plugin zip.
-##                 JetBrains archive verification is deferred to GitHub #55
-##                 while the local Gradle validation path is tracked in #56.
 jetbrains-build:
+	$(RM) $(JETBRAINS_DIR)/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
 
@@ -283,8 +309,10 @@ jetbrains-build:
 jetbrains-verify:
 	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
 
-## jetbrains-package: Alias for the JetBrains plugin package artifact.
+## jetbrains-package: Build and verify the JetBrains plugin package artifact.
 jetbrains-package: jetbrains-build
+	@$(MAKE) jetbrains-verify
+	node scripts/verify-jetbrains-package.mjs
 
 ## help: List all available targets
 help:
@@ -312,4 +340,4 @@ help:
 	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"
 	@echo "  jetbrains-build - Build the JetBrains plugin zip"
 	@echo "  jetbrains-verify - Verify JetBrains plugin configuration and structure"
-	@echo "  jetbrains-package - Alias for jetbrains-build"
+	@echo "  jetbrains-package - Build and verify the JetBrains plugin zip"

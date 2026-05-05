@@ -8,10 +8,11 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { ReportStore } from "../reportStore";
 import { openClusterPanel, openReportPanel } from "../webview/panels";
 import { pickEmbeddingModel } from "./embeddingPicker";
-import { ReportCluster, ReportOccurrence } from "../types/report";
+import { Report, ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
 import {
+  aiPayloadForCluster,
   canonicalOccurrenceForCluster,
   clusterIdForTreeNode,
   copyClusterLocations,
@@ -24,111 +25,96 @@ import {
 
 type ClientFactory = () => LanguageClient | undefined;
 
+const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
+
+interface CommandDeps {
+  readonly context: vscode.ExtensionContext;
+  readonly store: ReportStore;
+  readonly clientOf: ClientFactory;
+}
+
+interface CommandBinding {
+  readonly id: string;
+  readonly run: (deps: CommandDeps, ...args: unknown[]) => unknown;
+}
+
+const COMMAND_BINDINGS: readonly CommandBinding[] = [
+  { id: "deslop.openReport", run: ({ context, store }) => openReportPanel(context, store) },
+  { id: "deslop.openWorstCluster", run: ({ context, store }) => openWorstCluster(context, store) },
+  { id: "deslop.openCluster", run: ({ context, store }, id) => openClusterPanel(context, store, id as string) },
+  { id: "deslop.openOccurrence", run: (_deps, target) => openOccurrenceTarget(target) },
+  { id: "deslop.pickEmbeddingModel", run: ({ store, clientOf }) => pickEmbeddingModel(store, clientOf) },
+  { id: "deslop.refreshReport", run: ({ clientOf }) => refreshReport(clientOf) },
+  { id: "deslop.toggleShowAllLenses", run: toggleShowAllLenses },
+  { id: "deslop.showSchemaDoc", run: ({ context, store, clientOf }) => openSchemaDoc(context, store, clientOf) },
+  { id: "deslop.revealCpuReport", run: ({ clientOf }) => openCpuReport(clientOf) },
+  { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
+  { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
+  { id: "deslop.openAllOccurrences", run: (_deps, node) => openAllOccurrences(node as ClusterNode) },
+  { id: "deslop.openCanonicalFile", run: (_deps, node) => openCanonicalOccurrence(node as ClusterNode) },
+  { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
+  { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
+  { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
+  { id: "deslop.copyContextForAI", run: ({ store }, node) => copyContextForAI(node as ClusterNode | OccurrenceNode, store) },
+  { id: "deslop.copyClusterContextById", run: ({ store }, id) => copyClusterContextById(store, id) },
+  { id: "deslop.copyHumanLocation", run: (_deps, node) => copyHumanLocation(node as OccurrenceNode) },
+  { id: "deslop.copyClusterLocations", run: (_deps, node) => copyClusterLocations(node as ClusterNode) },
+  { id: "deslop.copySourceSnippet", run: (_deps, node) => copySourceSnippet(node as OccurrenceNode) },
+  { id: "deslop.revealOccurrenceInExplorer", run: (_deps, node) => revealOccurrenceInExplorer(node as OccurrenceNode) },
+];
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   store: ReportStore,
   clientOf: ClientFactory,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand("deslop.openReport", () => openReportPanel(context, store)),
-    vscode.commands.registerCommand("deslop.openWorstCluster", () =>
-      openWorstCluster(context, store),
-    ),
-    vscode.commands.registerCommand("deslop.openCluster", (id: string) =>
-      openClusterPanel(context, store, id),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openOccurrence",
-      async (target: unknown) => {
-        const occurrence = occurrenceFromCommandTarget(target);
-        if (!occurrence) {
-          void vscode.window.showInformationMessage(
-            "Deslop: no occurrence resolved for this command.",
-          );
-          return;
-        }
-        await openOccurrence(occurrence);
-      },
-    ),
-    vscode.commands.registerCommand("deslop.jumpToNextOccurrence", () =>
-      jumpToNextOccurrence(store),
-    ),
-    vscode.commands.registerCommand("deslop.compareWithCanonical", (target: unknown) =>
-      compareWithCanonicalTarget(store, target),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.compareOccurrenceWithCanonical",
-      (target: unknown) => compareWithCanonicalTarget(store, target),
-    ),
-    vscode.commands.registerCommand("deslop.pickEmbeddingModel", () =>
-      pickEmbeddingModel(store, clientOf),
-    ),
-    vscode.commands.registerCommand("deslop.refreshReport", () =>
-      clientOf()?.sendRequest("workspace/executeCommand", {
-        command: "deslop.refreshReport",
-        arguments: [],
-      }),
-    ),
-    vscode.commands.registerCommand("deslop.toggleShowAllLenses", async () => {
-      const cfg = vscode.workspace.getConfiguration("deslop");
-      const next = !cfg.get<boolean>("showAllLenses", false);
-      await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
-    }),
-    // [VSIX-TOP-OFFENDERS-GROUPING] Mode-set commands write to the
-    // workspace target so the choice persists per-repo. Two distinct
-    // commands (rather than a toggle) keep the title-bar button text
-    // honest: each button reads "switch to <next>", not "toggle".
-    vscode.commands.registerCommand("deslop.topOffenders.showByCluster", () =>
-      setTopOffendersGroupBy("cluster"),
-    ),
-    vscode.commands.registerCommand("deslop.topOffenders.showByFile", () =>
-      setTopOffendersGroupBy("file"),
-    ),
-    vscode.commands.registerCommand("deslop.showSchemaDoc", () =>
-      openSchemaDoc(context, store, clientOf),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copyContextForAI",
-      (node: ClusterNode | OccurrenceNode) => copyContextForAI(node, store),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copyHumanLocation",
-      (node: OccurrenceNode) => copyHumanLocation(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copyClusterLocations",
-      (node: ClusterNode) => copyClusterLocations(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.copySourceSnippet",
-      (node: OccurrenceNode) => copySourceSnippet(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.revealOccurrenceInExplorer",
-      (node: OccurrenceNode) => revealOccurrenceInExplorer(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openAllOccurrences",
-      (node: ClusterNode) => openAllOccurrences(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openCanonicalFile",
-      (node: ClusterNode) => openCanonicalOccurrence(node),
-    ),
-    vscode.commands.registerCommand(
-      "deslop.openClusterDetails",
-      (node: ClusterNode | OccurrenceNode) => {
-        const id = clusterIdForTreeNode(node, store);
-        if (!id) {
-          void vscode.window.showInformationMessage(
-            "Deslop: no cluster resolved for this tree row.",
-          );
-          return;
-        }
-        openClusterPanel(context, store, id);
-      },
-    ),
-  );
+  const deps = { context, store, clientOf };
+  for (const binding of COMMAND_BINDINGS) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(binding.id, (...args: unknown[]) =>
+        binding.run(deps, ...args),
+      ),
+    );
+  }
+}
+
+function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
+  return clientOf()?.sendRequest("workspace/executeCommand", {
+    command: LSP_REFRESH_REPORT_COMMAND,
+    arguments: [],
+  });
+}
+
+async function toggleShowAllLenses(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const next = !cfg.get<boolean>("showAllLenses", false);
+  await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
+}
+
+async function openOccurrenceTarget(target: unknown): Promise<void> {
+  const occurrence = occurrenceFromCommandTarget(target);
+  if (occurrence) await openOccurrence(occurrence);
+  else void vscode.window.showInformationMessage("Deslop: no occurrence resolved for this command.");
+}
+
+async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
+  const clusterId = typeof id === "string" ? id : String(id);
+  const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
+  if (!cluster) return;
+  const rank = (store.current.report?.clusters.indexOf(cluster) ?? -1) + 1;
+  await vscode.env.clipboard.writeText(aiPayloadForCluster(cluster, rank));
+  void vscode.window.showInformationMessage("Copied AI context to clipboard");
+}
+
+function openClusterDetails(
+  context: vscode.ExtensionContext,
+  store: ReportStore,
+  node: ClusterNode | OccurrenceNode,
+): void {
+  const id = clusterIdForTreeNode(node, store);
+  if (id) openClusterPanel(context, store, id);
+  else void vscode.window.showInformationMessage("Deslop: no cluster resolved for this tree row.");
 }
 
 async function setTopOffendersGroupBy(value: "cluster" | "file"): Promise<void> {
@@ -200,10 +186,22 @@ function isReportOccurrence(target: unknown): target is ReportOccurrence {
   );
 }
 
-export function jumpToNextOccurrence(store: ReportStore): void {
-  const editor = vscode.window.activeTextEditor;
+export async function jumpToNextOccurrence(
+  store: ReportStore,
+  clusterId?: unknown,
+  occurrenceIndex?: unknown,
+): Promise<void> {
   const report = store.current.report;
-  if (!editor || !report) return;
+  if (!report) return;
+  const commandTarget = occurrenceAfterCommandIndex(report, clusterId, occurrenceIndex);
+  if (commandTarget) {
+    await openOccurrence(commandTarget).catch(() => undefined);
+    return;
+  }
+  if (clusterId !== undefined || occurrenceIndex !== undefined) return;
+
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
   const here = editor.selection.active;
   const activePath = editor.document.uri.fsPath;
   const cluster = findClusterContaining(report.clusters, activePath, editor.document, here);
@@ -214,7 +212,25 @@ export function jumpToNextOccurrence(store: ReportStore): void {
   const others = cluster.occurrences.filter((o) => !sameFile(o.path, activePath));
   const next = others[0] ?? cluster.occurrences[0];
   if (!next) return;
-  openOccurrence(next).catch(() => undefined);
+  await openOccurrence(next).catch(() => undefined);
+}
+
+function occurrenceAfterCommandIndex(
+  report: Report,
+  clusterId: unknown,
+  occurrenceIndex: unknown,
+): ReportOccurrence | undefined {
+  if (
+    typeof clusterId !== "string" ||
+    typeof occurrenceIndex !== "number" ||
+    !Number.isInteger(occurrenceIndex) ||
+    occurrenceIndex < 0
+  ) {
+    return undefined;
+  }
+  const cluster = report.clusters.find((candidate) => candidate.id === clusterId);
+  if (!cluster?.occurrences.length) return undefined;
+  return cluster.occurrences[(occurrenceIndex + 1) % cluster.occurrences.length];
 }
 
 export async function compareWithCanonicalTarget(
@@ -295,12 +311,22 @@ function isClusterNode(target: unknown): target is ClusterNode {
   return typeof cluster?.id === "string" && Array.isArray(cluster.occurrences);
 }
 
-export async function compareWithCanonical(store: ReportStore, clusterId: string): Promise<void> {
-  const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
+export async function compareWithCanonical(
+  store: ReportStore,
+  clusterId: string,
+): Promise<void> {
+  const cluster = compareCluster(store, clusterId);
   if (!cluster || cluster.occurrences.length < 2) return;
   const [a, b] = cluster.occurrences;
   if (!a || !b) return;
   await openCompareDiff(cluster.id, a, b);
+}
+
+function compareCluster(
+  store: ReportStore,
+  clusterId: string,
+): ReportCluster | undefined {
+  return store.current.report?.clusters.find((c) => c.id === clusterId);
 }
 
 async function openCompareDiff(
@@ -308,9 +334,6 @@ async function openCompareDiff(
   a: ReportOccurrence,
   b: ReportOccurrence,
 ): Promise<void> {
-  // Always diff occurrence bytes via the deslop-compare provider — same-file
-  // clusters would otherwise collapse to "whole file vs. itself" because
-  // `vscode.diff` dedupes identical URIs into a single editor pane.
   await vscode.commands.executeCommand(
     "vscode.diff",
     buildCompareUri(a, "a", clusterId),
@@ -324,16 +347,15 @@ export async function openSchemaDoc(
   store: ReportStore,
   clientOf?: ClientFactory,
 ): Promise<void> {
-  // Live wire blanks `schema_doc` to keep reportGet tiny. Prefer the
-  // dedicated `deslop/reportSchemaDoc` RPC, then whatever the snapshot
-  // happens to carry, then the packaged markdown copy for offline use.
+  // The packaged markdown is the current extension-facing reference.
+  // RPC/snapshot fallbacks are only for unusual packaging failures;
+  // persisted reports may be discarded and recreated when their shape
+  // no longer matches.
+  const packaged = await readPackagedSchemaDoc(ctx);
   const remote = await fetchSchemaDocViaRpc(clientOf);
   const fallback = store.current.report?.schema_doc;
-  const packaged = firstNonEmpty(remote, fallback)
-    ? undefined
-    : await readPackagedSchemaDoc(ctx);
   const content =
-    firstNonEmpty(remote, fallback, packaged) ?? "Schema doc unavailable.";
+    firstNonEmpty(packaged, remote, fallback) ?? "Schema doc unavailable.";
   const doc = await vscode.workspace.openTextDocument({
     language: "markdown",
     content,
@@ -368,6 +390,71 @@ async function readPackagedSchemaDoc(
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   return values.find((v) => typeof v === "string" && v.length > 0);
+}
+
+interface CpuPhaseRecord {
+  readonly phase?: string;
+  readonly started_at_ms?: number;
+  readonly duration_ms?: number;
+  readonly cpu_ms?: number;
+  readonly files_touched?: readonly string[];
+}
+
+interface CpuReport {
+  readonly current_phase?: string;
+  readonly last_100_phases?: readonly CpuPhaseRecord[];
+  readonly handler_counts?: Readonly<Record<string, number>>;
+  readonly in_flight?: {
+    readonly pending_watcher_events?: number;
+    readonly pending_embed_requests?: number;
+    readonly in_progress_parse_batch?: number | null;
+  };
+}
+
+export async function openCpuReport(clientOf: ClientFactory): Promise<void> {
+  const client = clientOf();
+  if (!client) {
+    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
+    return;
+  }
+  const report = await client.sendRequest<CpuReport>("deslop/cpuReport");
+  const doc = await vscode.workspace.openTextDocument({
+    language: "markdown",
+    content: renderCpuReport(report),
+  });
+  await vscode.window.showTextDocument(doc, { preview: true });
+}
+
+export function renderCpuReport(report: CpuReport): string {
+  const inFlight = report.in_flight ?? {};
+  const handlers = Object.entries(report.handler_counts ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const phases = report.last_100_phases ?? [];
+  const lines = [
+    "# Deslop CPU Report",
+    "",
+    `- Current phase: ${report.current_phase ?? "unknown"}`,
+    `- Pending watcher events: ${inFlight.pending_watcher_events ?? 0}`,
+    `- Pending embedding requests: ${inFlight.pending_embed_requests ?? 0}`,
+    `- In-progress parse batch: ${inFlight.in_progress_parse_batch ?? 0}`,
+    "",
+    "## Handler Counts",
+    "",
+    "| Handler | Count |",
+    "|---|---:|",
+    ...handlers.map(([name, count]) => `| \`${name}\` | ${count} |`),
+    "",
+    "## Last 100 Phases",
+    "",
+    "| Phase | Started ms | Wall ms | CPU ms | Files |",
+    "|---|---:|---:|---:|---|",
+    ...phases.map((phase) => {
+      const files = (phase.files_touched ?? []).join(", ");
+      return `| ${phase.phase ?? "unknown"} | ${phase.started_at_ms ?? 0} | ${phase.duration_ms ?? 0} | ${phase.cpu_ms ?? 0} | ${files || "-"} |`;
+    }),
+  ];
+  return lines.join("\n");
 }
 
 export function findClusterContaining(

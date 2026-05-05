@@ -15,11 +15,21 @@ Build:
 make jetbrains-build
 ```
 
-Verify plugin metadata:
+Verify plugin metadata and structure:
 
 ```bash
 make jetbrains-verify
 ```
+
+Build the release zip and run all local package gates:
+
+```bash
+make jetbrains-package
+```
+
+The Makefile uses `gradle` from `PATH` when available. On Unix hosts without a
+PATH install it falls back to a cached Gradle 9.0.0 distribution under
+`~/.gradle/wrapper/dists`; set `GRADLE=/path/to/gradle` to override it.
 
 Local Rider smoke path:
 

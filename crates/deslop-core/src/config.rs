@@ -44,8 +44,12 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
 /// Directory components that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_COMPONENTS: &[&str] = &["generated"];
 
-/// Generated migration path components hidden from summaries.
-const BUILTIN_REPORT_HIDE_COMPONENT_PAIRS: &[(&str, &str)] = &[("alembic", "versions")];
+/// Non-actionable path component pairs hidden from summaries.
+const BUILTIN_REPORT_HIDE_COMPONENT_PAIRS: &[(&str, &str)] = &[
+    ("alembic", "versions"),
+    ("test", "fixtures"),
+    ("tests", "fixtures"),
+];
 
 /// File suffixes that are always analysed but hidden from summaries.
 const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
@@ -54,6 +58,8 @@ const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
     ".designer.cs",
     ".pb.cs",
     ".openapi.cs",
+    ".generated.py",
+    "_generated.py",
 ];
 
 /// Import/prologue boilerplate reporting mode.
@@ -143,6 +149,10 @@ struct RawBoilerplate {
 pub struct ExclusionConfig {
     /// Source path of the config that produced this value, for diagnostics.
     source: PathBuf,
+    /// Scan root the config applies to, when known. Built-in summary
+    /// hiding uses this to avoid hiding a fixture corpus when it is the
+    /// explicit target being analysed.
+    scan_root: Option<PathBuf>,
     /// Shared exclude matcher applied regardless of language.
     default_exclude: Gitignore,
     /// Shared report-hide matcher applied regardless of language.
@@ -180,6 +190,7 @@ impl ExclusionConfig {
     pub fn empty() -> Self {
         Self {
             source: PathBuf::new(),
+            scan_root: None,
             default_exclude: empty_matcher(),
             default_report_hide: empty_matcher(),
             per_language: HashMap::new(),
@@ -198,6 +209,21 @@ impl ExclusionConfig {
     /// [`CoreError::ConfigPattern`] when a pattern is rejected by
     /// `ignore::gitignore`.
     pub fn load(path: &Path) -> Result<Self, CoreError> {
+        Self::load_with_root(path, None)
+    }
+
+    /// Loads the config from an explicit file path for a known scan
+    /// root.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`ExclusionConfig::load`].
+    pub fn load_for_root(path: &Path, scan_root: &Path) -> Result<Self, CoreError> {
+        Self::load_with_root(path, Some(scan_root))
+    }
+
+    /// Shared config loader used by root-aware and rootless call sites.
+    fn load_with_root(path: &Path, scan_root: Option<&Path>) -> Result<Self, CoreError> {
         let source = fs::read_to_string(path).map_err(|err| CoreError::Io {
             path: path.to_path_buf(),
             source: err,
@@ -206,7 +232,7 @@ impl ExclusionConfig {
             path: path.to_path_buf(),
             source: err,
         })?;
-        Self::compile(path, &raw)
+        Self::compile(path, scan_root, &raw)
     }
 
     /// Searches `scan_root` for [`DEFAULT_CONFIG_FILENAME`]. When found,
@@ -220,14 +246,14 @@ impl ExclusionConfig {
     pub fn discover(scan_root: &Path) -> Result<Self, CoreError> {
         let candidate = scan_root.join(DEFAULT_CONFIG_FILENAME);
         if candidate.is_file() {
-            Self::load(&candidate)
+            Self::load_for_root(&candidate, scan_root)
         } else {
-            Ok(Self::empty())
+            Ok(Self::empty().with_scan_root(scan_root))
         }
     }
 
     /// Compiles a validated [`RawConfig`] into matcher form.
-    fn compile(path: &Path, raw: &RawConfig) -> Result<Self, CoreError> {
+    fn compile(path: &Path, scan_root: Option<&Path>, raw: &RawConfig) -> Result<Self, CoreError> {
         let default_exclude = build_matcher(path, &raw.defaults.exclude)?;
         let default_report_hide = build_matcher(path, &raw.defaults.report_hide)?;
         let default_boilerplate_imports = raw
@@ -251,6 +277,7 @@ impl ExclusionConfig {
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
         Ok(Self {
             source: path.to_path_buf(),
+            scan_root: scan_root.map(Path::to_path_buf),
             default_exclude,
             default_report_hide,
             per_language,
@@ -258,6 +285,13 @@ impl ExclusionConfig {
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
         })
+    }
+
+    /// Returns a copy of this config bound to `scan_root`.
+    #[must_use]
+    fn with_scan_root(mut self, scan_root: &Path) -> Self {
+        self.scan_root = Some(scan_root.to_path_buf());
+        self
     }
 
     /// Returns the `[threshold] max_duplication_percent` loaded from
@@ -309,7 +343,7 @@ impl ExclusionConfig {
     /// files are still analysed — the flag only affects rendering.
     #[must_use]
     pub fn is_report_hidden(&self, path: &Path, language: &str) -> bool {
-        if built_in_report_hidden(path) {
+        if built_in_report_hidden(path, self.scan_root.as_deref()) {
             return true;
         }
         if matches(&self.default_report_hide, path) {
@@ -340,8 +374,10 @@ fn built_in_excluded(path: &Path) -> bool {
 }
 
 /// Returns true when built-in generated-code rules hide a path from summaries.
-fn built_in_report_hidden(path: &Path) -> bool {
-    has_hidden_component(path) || has_hidden_component_pair(path) || has_hidden_suffix(path)
+fn built_in_report_hidden(path: &Path, scan_root: Option<&Path>) -> bool {
+    has_hidden_component(path)
+        || has_hidden_component_pair(path, scan_root)
+        || has_hidden_suffix(path)
 }
 
 /// Returns true when the path has a generated-code directory component.
@@ -354,11 +390,24 @@ fn has_hidden_component(path: &Path) -> bool {
 }
 
 /// Returns true when the path contains a generated-code component pair.
-fn has_hidden_component_pair(path: &Path) -> bool {
+fn has_hidden_component_pair(path: &Path, scan_root: Option<&Path>) -> bool {
     let components: Vec<String> = path_components(path).collect();
-    BUILTIN_REPORT_HIDE_COMPONENT_PAIRS
-        .iter()
-        .any(|pair| contains_component_pair(&components, *pair))
+    BUILTIN_REPORT_HIDE_COMPONENT_PAIRS.iter().any(|pair| {
+        contains_component_pair(&components, *pair)
+            && !scan_root_contains_component_pair(scan_root, *pair)
+    })
+}
+
+/// Returns true when the scan root itself is inside a hidden component
+/// pair. In that case the user intentionally asked to analyse that
+/// corpus, so the built-in dogfood hide rule must not erase every
+/// positive fixture cluster.
+fn scan_root_contains_component_pair(scan_root: Option<&Path>, pair: (&str, &str)) -> bool {
+    let Some(root) = scan_root else {
+        return false;
+    };
+    let components: Vec<String> = path_components(root).collect();
+    contains_component_pair(&components, pair)
 }
 
 /// Returns true when adjacent path components match `pair`.
