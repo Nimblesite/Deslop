@@ -220,6 +220,13 @@ fn state_file_stamp(state_file: &Path) -> Result<StateFileStamp, BackendError> {
 }
 
 /// Reads the LSP-written state file and parses it into a [`Report`].
+///
+/// Used by explicit-reload paths only. On a parse failure the file is
+/// deleted (per issue #118: an old-format file from a previous version
+/// must not block startup). Watcher reloads must call
+/// [`parse_state_report`] instead — inotify can fire on a partially
+/// written file (`std::fs::write` truncates then writes), so deleting
+/// on every parse failure would race with the LSP's own writes.
 fn read_state_report(state_file: &Path) -> Result<Report, BackendError> {
     let bytes = fs::read(state_file).map_err(|err| map_state_file_io_error(&err))?;
     match serde_json::from_slice(&bytes) {
@@ -229,6 +236,13 @@ fn read_state_report(state_file: &Path) -> Result<Report, BackendError> {
             Err(BackendError::LspNotRunning)
         }
     }
+}
+
+/// Reads + parses the state file without deleting it on parse failure.
+/// Safe to call from the file watcher where partial writes are expected.
+fn parse_state_report(state_file: &Path) -> Result<Report, BackendError> {
+    let bytes = fs::read(state_file).map_err(|err| map_state_file_io_error(&err))?;
+    serde_json::from_slice(&bytes).map_err(|err| BackendError::StateFileCorrupt(err.to_string()))
 }
 
 /// Removes an LSP state file that failed report JSON parsing.
@@ -322,7 +336,7 @@ fn reload_and_notify(
             return;
         }
     };
-    let Ok(report) = read_state_report(state_file) else {
+    let Ok(report) = parse_state_report(state_file) else {
         warn!("mcp_state_file_parse_failed");
         return;
     };
