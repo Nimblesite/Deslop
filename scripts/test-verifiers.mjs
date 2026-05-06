@@ -19,6 +19,7 @@ const verifyManifest = join(repoRoot, "scripts/verify-deployment-manifest.mjs");
 const verifyBinaries = join(repoRoot, "scripts/verify-deployment-binaries.mjs");
 const verifyJetBrains = join(repoRoot, "scripts/verify-jetbrains-package.mjs");
 const verifyVsix = join(repoRoot, "clients/vscode/scripts/verify-vsix-package.mjs");
+const verifyReleaseWorkflow = join(repoRoot, "scripts/verify-release-workflow-gates.mjs");
 const platform = "darwin-arm64";
 // verify-vsix-package.mjs hard-codes currentPlatform() and has no override
 // arg, so the fake-VSIX cases must stage binaries under the host platform.
@@ -47,6 +48,11 @@ const cases = [
   vsixRejectsWrongComponentNameBundle,
   vsixRejectsUndeclaredBundle,
   vsixAcceptsValidPackage,
+  releaseWorkflowRejectsMissingManifestGate,
+  releaseWorkflowRejectsMissingBinaryGate,
+  releaseWorkflowRejectsMissingVsixGate,
+  releaseWorkflowRejectsBareVsce,
+  releaseWorkflowAcceptsRepoWorkflow,
 ];
 
 let failed = 0;
@@ -241,6 +247,33 @@ function vsixAcceptsValidPackage(work) {
   expectSuccess(verifyVsix, [vsixPath], /Verified deployment manifest/);
 }
 
+// ---------- release workflow gate verifier ----------
+
+function releaseWorkflowRejectsMissingManifestGate(work) {
+  const path = writeReleaseWorkflow(work, { skipManifestGate: true });
+  expectFail(verifyReleaseWorkflow, [path], /missing the manifest validator/);
+}
+
+function releaseWorkflowRejectsMissingBinaryGate(work) {
+  const path = writeReleaseWorkflow(work, { skipBinaryGate: true });
+  expectFail(verifyReleaseWorkflow, [path], /missing the binary version contract verifier/);
+}
+
+function releaseWorkflowRejectsMissingVsixGate(work) {
+  const path = writeReleaseWorkflow(work, { skipVsixGate: true });
+  expectFail(verifyReleaseWorkflow, [path], /missing the VSIX package verifier/);
+}
+
+function releaseWorkflowRejectsBareVsce(work) {
+  const path = writeReleaseWorkflow(work, { useBareVsce: true });
+  expectFail(verifyReleaseWorkflow, [path], /calls 'npx vsce package' directly/);
+}
+
+function releaseWorkflowAcceptsRepoWorkflow() {
+  const path = join(repoRoot, ".github/workflows/release.yml");
+  expectSuccess(verifyReleaseWorkflow, [path], /release workflow gates wired/);
+}
+
 // ---------- helpers ----------
 
 function writeManifestWithDeslopComponent(work, overrides) {
@@ -351,6 +384,41 @@ function buildVsixZip(work, options) {
   });
   if (result.status !== 0) throw new Error(`zip failed: ${result.stderr}`);
   return vsixPath;
+}
+
+function writeReleaseWorkflow(work, options) {
+  const lines = [
+    "name: Release",
+    "on:",
+    "  push:",
+    "    tags: ['v*']",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: cargo build --release",
+  ];
+  if (!options.skipManifestGate) {
+    lines.push("      - run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json");
+  }
+  if (!options.skipBinaryGate) {
+    lines.push("      - run: node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release linux-x64");
+  }
+  lines.push("  package-vsix:");
+  lines.push("    runs-on: ubuntu-latest");
+  lines.push("    steps:");
+  if (options.useBareVsce) {
+    lines.push("      - run: npx vsce package --no-dependencies -o deslop.vsix");
+    lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
+  } else if (!options.skipVsixGate) {
+    lines.push("      - run: cd clients/vscode && npm run package");
+    lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
+  } else {
+    lines.push("      - run: echo skipped");
+  }
+  const path = join(work, "release.yml");
+  writeFileSync(path, `${lines.join("\n")}\n`);
+  return path;
 }
 
 function detectHostPlatform() {
