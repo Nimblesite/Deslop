@@ -1,6 +1,6 @@
 // Manifest-backed binary resolver for the VS Code host.
 // Contract source:
-// https://github.com/MelbourneDeveloper/deployment_toolkit/blob/main/docs/specs/ide-extension-deployment.md#required-startup-behavior
+// https://github.com/Nimblesite/Shipwright/blob/main/docs/specs/ide-extension-deployment.md#required-startup-behavior
 
 import * as fs from "node:fs";
 import * as path from "node:path";

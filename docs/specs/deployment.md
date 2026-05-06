@@ -156,9 +156,10 @@ them directly. Until then, product-local tests must prove the same behavior.
 ### [DEPLOY-PRIVATE-DTK-DOCS] Private Deployment Toolkit docs
 
 Deployment Toolkit documentation and fixtures live in the private
-`MelbourneDeveloper/deployment_toolkit` repository. Agents working these issues
-must use authenticated `gh` access to read the docs and fixtures; they must not
-rely on local absolute paths or assume the GitHub URLs are public.
+`Nimblesite/Shipwright` repository (formerly `MelbourneDeveloper/deployment_toolkit`).
+Agents working these issues must use authenticated `gh` access to read the docs
+and fixtures; they must not rely on local absolute paths or assume the GitHub
+URLs are public.
 
 Relevant private docs include:
 

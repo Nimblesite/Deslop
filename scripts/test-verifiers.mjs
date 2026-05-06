@@ -10,7 +10,7 @@
 // is not silently green on broken inputs — the version gate has bite.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -20,6 +20,7 @@ const verifyBinaries = join(repoRoot, "scripts/verify-deployment-binaries.mjs");
 const verifyJetBrains = join(repoRoot, "scripts/verify-jetbrains-package.mjs");
 const verifyVsix = join(repoRoot, "clients/vscode/scripts/verify-vsix-package.mjs");
 const verifyReleaseWorkflow = join(repoRoot, "scripts/verify-release-workflow-gates.mjs");
+const stampVersion = join(repoRoot, "scripts/stamp-deployment-version.mjs");
 const platform = "darwin-arm64";
 // verify-vsix-package.mjs hard-codes currentPlatform() and has no override
 // arg, so the fake-VSIX cases must stage binaries under the host platform.
@@ -29,7 +30,10 @@ const cases = [
   manifestRejectsMissingProductId,
   manifestRejectsLooseSemver,
   manifestRejectsHostVerifyingUnknownComponent,
+  manifestRejectsExpectedVersionDrift,
   manifestAcceptsRepoManifest,
+  stamperRewritesProductAndComponentVersions,
+  stamperRejectsInvalidVersion,
   binariesRejectWrongVersion,
   binariesRejectWrongComponentName,
   binariesRejectMissingBinary,
@@ -120,9 +124,85 @@ function manifestRejectsHostVerifyingUnknownComponent(work) {
   expectFail(verifyManifest, [path], /unknown component does-not-exist/);
 }
 
+function manifestRejectsExpectedVersionDrift(work) {
+  const path = join(work, "drifted.json");
+  writeFileSync(
+    path,
+    JSON.stringify({
+      manifestVersion: 1,
+      product: { id: "deslop", version: "0.2.0" },
+      components: [
+        {
+          id: "deslop",
+          kind: "cli",
+          language: "rust",
+          binaryName: "deslop",
+          expectedVersion: "0.1.0",
+          versionCheckStrategy: "version-flag",
+        },
+      ],
+    }),
+  );
+  expectFail(verifyManifest, [path], /expectedVersion 0\.1\.0 must match product\.version 0\.2\.0/);
+}
+
 function manifestAcceptsRepoManifest() {
   const path = join(repoRoot, "deployment-toolkit.json");
   expectSuccess(verifyManifest, [path], /valid deployment manifest/);
+}
+
+// ---------- version stamper ----------
+
+function stamperRewritesProductAndComponentVersions(work) {
+  const path = join(work, "manifest.json");
+  writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        manifestVersion: 1,
+        product: { id: "deslop", version: "0.1.0" },
+        components: [
+          { id: "deslop", kind: "cli", language: "rust", binaryName: "deslop", expectedVersion: "0.1.0", versionCheckStrategy: "version-flag" },
+          { id: "deslop-vscode", kind: "extension-vscode", language: "typescript", expectedVersion: "0.1.0" },
+        ],
+      },
+      null,
+      2,
+    ),
+  );
+  const result = spawnSync("node", [stampVersion, path, "0.4.2"], { encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`stamper exited ${result.status}\nstderr=${result.stderr}`);
+  }
+  const stamped = JSON.parse(readFileSync(path, "utf8"));
+  if (stamped.product.version !== "0.4.2") {
+    throw new Error(`product.version not stamped: ${stamped.product.version}`);
+  }
+  for (const component of stamped.components) {
+    if (component.expectedVersion !== "0.4.2") {
+      throw new Error(`${component.id}.expectedVersion not stamped: ${component.expectedVersion}`);
+    }
+  }
+  expectSuccess(verifyManifest, [path], /valid deployment manifest/);
+}
+
+function stamperRejectsInvalidVersion(work) {
+  const path = join(work, "manifest.json");
+  writeFileSync(
+    path,
+    JSON.stringify({
+      manifestVersion: 1,
+      product: { id: "deslop", version: "0.1.0" },
+      components: [],
+    }),
+  );
+  const result = spawnSync("node", [stampVersion, path, "v0.2"], { encoding: "utf8" });
+  if (result.status === 0) {
+    throw new Error("stamper accepted invalid version");
+  }
+  if (!/semantic version/.test(`${result.stdout}\n${result.stderr}`)) {
+    throw new Error(`stamper rejection message did not mention semantic version: ${result.stderr}`);
+  }
 }
 
 // ---------- binary verifier ----------

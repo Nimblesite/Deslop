@@ -27,13 +27,13 @@ then falls back to a cached Gradle 9.0.0 distribution under
 `~/.gradle/wrapper/dists`; set `GRADLE=/path/to/gradle` to override it.
 
 The shared Deployment Toolkit repository is private:
-`MelbourneDeveloper/deployment_toolkit`. Agents working from Deployment Toolkit
-migration issues must use authenticated `gh` access before relying on its docs
-or fixtures:
+`Nimblesite/Shipwright` (formerly `MelbourneDeveloper/deployment_toolkit`).
+Agents working from Deployment Toolkit migration issues must use authenticated
+`gh` access before relying on its docs or fixtures:
 
 ```bash
 gh auth status
-gh repo view MelbourneDeveloper/deployment_toolkit --json nameWithOwner,isPrivate,url,defaultBranchRef
+gh repo view Nimblesite/Shipwright --json nameWithOwner,isPrivate,url,defaultBranchRef
 ```
 
 When Deslop changes its deployment contract, update the private toolkit fixtures

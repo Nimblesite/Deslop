@@ -11,20 +11,27 @@ assertSemver(manifest.product?.version, "product.version");
 assertArray(manifest.components, "components");
 
 const componentIds = new Set();
-for (const component of manifest.components) verifyComponent(component, componentIds);
+for (const component of manifest.components) {
+  verifyComponent(component, componentIds, manifest.product.version);
+}
 for (const [hostName, host] of Object.entries(manifest.hosts ?? {})) {
   verifyHost(hostName, host, componentIds);
 }
 
 console.log(`${manifestPath}: valid deployment manifest`);
 
-function verifyComponent(component, componentIds) {
+function verifyComponent(component, componentIds, productVersion) {
   assertString(component.id, "component.id");
   if (componentIds.has(component.id)) throw new Error(`duplicate component id ${component.id}`);
   componentIds.add(component.id);
   assertString(component.kind, `${component.id}.kind`);
   assertString(component.language, `${component.id}.language`);
   assertSemver(component.expectedVersion, `${component.id}.expectedVersion`);
+  if (component.expectedVersion !== productVersion) {
+    throw new Error(
+      `${component.id}.expectedVersion ${component.expectedVersion} must match product.version ${productVersion}`,
+    );
+  }
   if (["cli", "lsp", "mcp"].includes(component.kind)) {
     assertString(component.binaryName, `${component.id}.binaryName`);
     assertEqual(component.versionCheckStrategy, "version-flag", `${component.id}.versionCheckStrategy`);

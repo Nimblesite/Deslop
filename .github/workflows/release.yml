@@ -40,6 +40,20 @@ jobs:
           npm version "${{ steps.extract.outputs.version }}" --no-git-tag-version --allow-same-version
           node -e "if (require('./package.json').version !== '${{ steps.extract.outputs.version }}') { process.exit(1) }"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Shipwright deployment-toolkit gate (DTK-MIG-DESLOP-CI-GATES, #41).
+      # The manifest is the source of truth for activation checks and
+      # release artifact verification; without stamping it here the
+      # binary version verifier would fail the very next build.
+      - name: Stamp version into deployment-toolkit.json
+        run: node scripts/stamp-deployment-version.mjs deployment-toolkit.json "${{ steps.extract.outputs.version }}"
+
+      - name: Validate deployment manifest
+        run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Refresh Cargo.lock
@@ -50,7 +64,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock clients/vscode/package.json clients/vscode/package-lock.json
+          git add Cargo.toml Cargo.lock clients/vscode/package.json clients/vscode/package-lock.json deployment-toolkit.json
           git diff --staged --quiet && exit 0
           git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
           git push origin HEAD:main
@@ -125,6 +139,28 @@ jobs:
       - name: Build release binaries (cross)
         if: matrix.cross
         run: cross build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Shipwright binary version contract (DTK-MIG-DESLOP-CI-GATES, #41).
+      # Skipped for cross-compiled targets because the foreign-arch binary
+      # cannot execute on the runner; native targets cover the
+      # version-stamping path the cross builds share.
+      - name: Verify deployment binaries
+        if: ${{ !matrix.cross }}
+        shell: bash
+        run: |
+          case "${{ matrix.artifact_name }}" in
+            linux-x64)   _platform=linux-x64 ;;
+            linux-arm64) _platform=linux-arm64 ;;
+            macos-x64)   _platform=darwin-x64 ;;
+            macos-arm64) _platform=darwin-arm64 ;;
+            windows-x64) _platform=win32-x64 ;;
+            *) echo "unknown artifact ${{ matrix.artifact_name }}"; exit 1 ;;
+          esac
+          node scripts/verify-deployment-binaries.mjs deployment-toolkit.json "target/${{ matrix.target }}/release" "$_platform"
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
@@ -254,9 +290,24 @@ jobs:
         working-directory: clients/vscode
         run: npx tsc --noEmit
 
-      - name: Package VSIX
+      # Stage the deployment manifest into the extension root so
+      # `npm run package` (and its `verify:package` step) can find it.
+      # `make _vsix-stage-bundled-binaries` does the same locally.
+      - name: Stage deployment manifest into extension
+        run: cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+
+      # `npm run package` runs build + the underlying packager +
+      # assert-vsix-schema-doc + verify:package (verify-vsix-package.mjs).
+      # Routing through it is the Shipwright VSIX gate
+      # (DTK-MIG-DESLOP-CI-GATES, #41) — without it a release could ship a
+      # VSIX missing deployment-toolkit.json or a bundled binary.
+      - name: Package and verify VSIX
         working-directory: clients/vscode
-        run: npx vsce package --no-dependencies -o deslop-vscode-${{ needs.version.outputs.version }}.vsix
+        run: npm run package
+
+      - name: Tag VSIX with release version
+        working-directory: clients/vscode
+        run: mv deslop-vscode.vsix deslop-vscode-${{ needs.version.outputs.version }}.vsix
 
       - uses: actions/upload-artifact@v4
         with:
