@@ -18,7 +18,11 @@ const repoRoot = resolve(new URL("..", import.meta.url).pathname);
 const verifyManifest = join(repoRoot, "scripts/verify-deployment-manifest.mjs");
 const verifyBinaries = join(repoRoot, "scripts/verify-deployment-binaries.mjs");
 const verifyJetBrains = join(repoRoot, "scripts/verify-jetbrains-package.mjs");
+const verifyVsix = join(repoRoot, "clients/vscode/scripts/verify-vsix-package.mjs");
 const platform = "darwin-arm64";
+// verify-vsix-package.mjs hard-codes currentPlatform() and has no override
+// arg, so the fake-VSIX cases must stage binaries under the host platform.
+const hostPlatform = detectHostPlatform();
 
 const cases = [
   manifestRejectsMissingProductId,
@@ -36,6 +40,13 @@ const cases = [
   jetbrainsRejectsWrongComponentNameBundle,
   jetbrainsRejectsUndeclaredBundle,
   jetbrainsAcceptsValidPackage,
+  vsixRejectsMissingManifest,
+  vsixRejectsMissingBundledLsp,
+  vsixRejectsMissingBundledMcp,
+  vsixRejectsWrongVersionBundle,
+  vsixRejectsWrongComponentNameBundle,
+  vsixRejectsUndeclaredBundle,
+  vsixAcceptsValidPackage,
 ];
 
 let failed = 0;
@@ -193,6 +204,43 @@ function jetbrainsAcceptsValidPackage(work) {
   expectSuccess(verifyJetBrains, [zipPath, platform], /Verified JetBrains package/);
 }
 
+// ---------- vsix package verifier ----------
+
+function vsixRejectsMissingManifest(work) {
+  const vsixPath = buildVsixZip(work, { manifest: null });
+  expectFail(verifyVsix, [vsixPath], /Missing extension\/deployment-toolkit\.json/);
+}
+
+function vsixRejectsMissingBundledLsp(work) {
+  const vsixPath = buildVsixZip(work, { skipBundledLsp: true });
+  expectFail(verifyVsix, [vsixPath], /Missing extension\/bin\/.*\/deslop-lsp/);
+}
+
+function vsixRejectsMissingBundledMcp(work) {
+  const vsixPath = buildVsixZip(work, { skipBundledMcp: true });
+  expectFail(verifyVsix, [vsixPath], /Missing extension\/bin\/.*\/deslop-mcp/);
+}
+
+function vsixRejectsWrongVersionBundle(work) {
+  const vsixPath = buildVsixZip(work, { lspVersion: "0.0.9" });
+  expectFail(verifyVsix, [vsixPath], /reported deslop-lsp 0\.0\.9/);
+}
+
+function vsixRejectsWrongComponentNameBundle(work) {
+  const vsixPath = buildVsixZip(work, { lspName: "wrong-name" });
+  expectFail(verifyVsix, [vsixPath], /reported wrong-name 0\.1\.0/);
+}
+
+function vsixRejectsUndeclaredBundle(work) {
+  const vsixPath = buildVsixZip(work, { extraBinName: "rogue-helper" });
+  expectFail(verifyVsix, [vsixPath], /Undeclared executable in VSIX/);
+}
+
+function vsixAcceptsValidPackage(work) {
+  const vsixPath = buildVsixZip(work, {});
+  expectSuccess(verifyVsix, [vsixPath], /Verified deployment manifest/);
+}
+
 // ---------- helpers ----------
 
 function writeManifestWithDeslopComponent(work, overrides) {
@@ -260,6 +308,58 @@ function buildJetBrainsZip(work, options) {
   });
   if (result.status !== 0) throw new Error(`zip failed: ${result.stderr}`);
   return zipPath;
+}
+
+function buildVsixZip(work, options) {
+  const stagingRoot = join(work, "stage");
+  const extensionRoot = join(stagingRoot, "extension");
+  const binDir = join(extensionRoot, "bin", hostPlatform);
+  mkdirSync(binDir, { recursive: true });
+
+  if (options.manifest !== null) {
+    const manifestSource = options.manifest ?? join(repoRoot, "deployment-toolkit.json");
+    copyFileSync(manifestSource, join(extensionRoot, "deployment-toolkit.json"));
+  }
+
+  if (!options.skipBundledLsp) {
+    const name = options.lspName ?? "deslop-lsp";
+    const version = options.lspVersion ?? "0.1.0";
+    writeFakeBinary(join(binDir, "deslop-lsp"), {
+      plain: `${name} ${version}`,
+      json: { manifestVersion: 1, name, version, kind: "lsp", language: "rust", product: "deslop" },
+    });
+  }
+
+  if (!options.skipBundledMcp) {
+    writeFakeBinary(join(binDir, "deslop-mcp"), {
+      plain: "deslop-mcp 0.1.0",
+      json: { manifestVersion: 1, name: "deslop-mcp", version: "0.1.0", kind: "mcp", language: "rust", product: "deslop" },
+    });
+  }
+
+  if (options.extraBinName) {
+    writeFakeBinary(join(binDir, options.extraBinName), {
+      plain: `${options.extraBinName} 0.1.0`,
+      json: { manifestVersion: 1, name: options.extraBinName, version: "0.1.0", kind: "cli", language: "rust", product: options.extraBinName },
+    });
+  }
+
+  const vsixPath = join(work, "package.vsix");
+  const result = spawnSync("zip", ["-rq", vsixPath, "extension"], {
+    cwd: stagingRoot,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) throw new Error(`zip failed: ${result.stderr}`);
+  return vsixPath;
+}
+
+function detectHostPlatform() {
+  if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
+  if (process.platform === "darwin" && process.arch === "x64") return "darwin-x64";
+  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
+  if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
+  if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
+  throw new Error(`unsupported host platform ${process.platform}-${process.arch}`);
 }
 
 function expectFail(script, args, expected) {
