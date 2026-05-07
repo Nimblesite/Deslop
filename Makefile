@@ -199,6 +199,8 @@ deployment-verify: build
 	node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
 	node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release
 	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
+	node scripts/test-release-workflow-contract.mjs
+	node scripts/test-release-version-stamping.mjs
 	node scripts/test-verifiers.mjs
 
 ## vsix-install: Install Node deps for clients/vscode + webview-ui

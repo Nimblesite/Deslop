@@ -10,7 +10,7 @@
 // is not silently green on broken inputs — the version gate has bite.
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -20,8 +20,8 @@ const verifyBinaries = join(repoRoot, "scripts/verify-deployment-binaries.mjs");
 const verifyJetBrains = join(repoRoot, "scripts/verify-jetbrains-package.mjs");
 const verifyVsix = join(repoRoot, "clients/vscode/scripts/verify-vsix-package.mjs");
 const verifyReleaseWorkflow = join(repoRoot, "scripts/verify-release-workflow-gates.mjs");
-const stampVersion = join(repoRoot, "scripts/stamp-deployment-version.mjs");
 const platform = "darwin-arm64";
+const validVersion = "0.0.0-dev";
 // verify-vsix-package.mjs hard-codes currentPlatform() and has no override
 // arg, so the fake-VSIX cases must stage binaries under the host platform.
 const hostPlatform = detectHostPlatform();
@@ -32,8 +32,6 @@ const cases = [
   manifestRejectsHostVerifyingUnknownComponent,
   manifestRejectsExpectedVersionDrift,
   manifestAcceptsRepoManifest,
-  stamperRewritesProductAndComponentVersions,
-  stamperRejectsInvalidVersion,
   binariesRejectWrongVersion,
   binariesRejectWrongComponentName,
   binariesRejectMissingBinary,
@@ -55,6 +53,7 @@ const cases = [
   releaseWorkflowRejectsMissingManifestGate,
   releaseWorkflowRejectsMissingBinaryGate,
   releaseWorkflowRejectsMissingVsixGate,
+  releaseWorkflowRejectsMissingVersionStamper,
   releaseWorkflowRejectsBareVsce,
   releaseWorkflowAcceptsRepoWorkflow,
 ];
@@ -107,14 +106,14 @@ function manifestRejectsHostVerifyingUnknownComponent(work) {
     path,
     JSON.stringify({
       manifestVersion: 1,
-      product: { id: "deslop", version: "0.1.0" },
+      product: { id: "deslop", version: validVersion },
       components: [
         {
           id: "deslop",
           kind: "cli",
           language: "rust",
           binaryName: "deslop",
-          expectedVersion: "0.1.0",
+          expectedVersion: validVersion,
           versionCheckStrategy: "version-flag",
         },
       ],
@@ -137,13 +136,13 @@ function manifestRejectsExpectedVersionDrift(work) {
           kind: "cli",
           language: "rust",
           binaryName: "deslop",
-          expectedVersion: "0.1.0",
+          expectedVersion: validVersion,
           versionCheckStrategy: "version-flag",
         },
       ],
     }),
   );
-  expectFail(verifyManifest, [path], /expectedVersion 0\.1\.0 must match product\.version 0\.2\.0/);
+  expectFail(verifyManifest, [path], /expectedVersion 0\.0\.0-dev must match product\.version 0\.2\.0/);
 }
 
 function manifestAcceptsRepoManifest() {
@@ -151,64 +150,10 @@ function manifestAcceptsRepoManifest() {
   expectSuccess(verifyManifest, [path], /valid deployment manifest/);
 }
 
-// ---------- version stamper ----------
-
-function stamperRewritesProductAndComponentVersions(work) {
-  const path = join(work, "manifest.json");
-  writeFileSync(
-    path,
-    JSON.stringify(
-      {
-        manifestVersion: 1,
-        product: { id: "deslop", version: "0.1.0" },
-        components: [
-          { id: "deslop", kind: "cli", language: "rust", binaryName: "deslop", expectedVersion: "0.1.0", versionCheckStrategy: "version-flag" },
-          { id: "deslop-vscode", kind: "extension-vscode", language: "typescript", expectedVersion: "0.1.0" },
-        ],
-      },
-      null,
-      2,
-    ),
-  );
-  const result = spawnSync("node", [stampVersion, path, "0.4.2"], { encoding: "utf8" });
-  if (result.status !== 0) {
-    throw new Error(`stamper exited ${result.status}\nstderr=${result.stderr}`);
-  }
-  const stamped = JSON.parse(readFileSync(path, "utf8"));
-  if (stamped.product.version !== "0.4.2") {
-    throw new Error(`product.version not stamped: ${stamped.product.version}`);
-  }
-  for (const component of stamped.components) {
-    if (component.expectedVersion !== "0.4.2") {
-      throw new Error(`${component.id}.expectedVersion not stamped: ${component.expectedVersion}`);
-    }
-  }
-  expectSuccess(verifyManifest, [path], /valid deployment manifest/);
-}
-
-function stamperRejectsInvalidVersion(work) {
-  const path = join(work, "manifest.json");
-  writeFileSync(
-    path,
-    JSON.stringify({
-      manifestVersion: 1,
-      product: { id: "deslop", version: "0.1.0" },
-      components: [],
-    }),
-  );
-  const result = spawnSync("node", [stampVersion, path, "v0.2"], { encoding: "utf8" });
-  if (result.status === 0) {
-    throw new Error("stamper accepted invalid version");
-  }
-  if (!/semantic version/.test(`${result.stdout}\n${result.stderr}`)) {
-    throw new Error(`stamper rejection message did not mention semantic version: ${result.stderr}`);
-  }
-}
-
 // ---------- binary verifier ----------
 
 function binariesRejectWrongVersion(work) {
-  const manifestPath = writeManifestWithDeslopComponent(work, { expectedVersion: "0.1.0" });
+  const manifestPath = writeManifestWithDeslopComponent(work, { expectedVersion: validVersion });
   const binDir = join(work, "bin");
   mkdirSync(binDir);
   writeFakeBinary(join(binDir, "deslop"), {
@@ -223,10 +168,10 @@ function binariesRejectWrongComponentName(work) {
   const binDir = join(work, "bin");
   mkdirSync(binDir);
   writeFakeBinary(join(binDir, "deslop"), {
-    plain: "wrong-name 0.1.0",
-    json: { manifestVersion: 1, name: "wrong-name", version: "0.1.0", kind: "cli", language: "rust", product: "deslop" },
+    plain: `wrong-name ${validVersion}`,
+    json: { manifestVersion: 1, name: "wrong-name", version: validVersion, kind: "cli", language: "rust", product: "deslop" },
   });
-  expectFail(verifyBinaries, [manifestPath, binDir, platform], /reported wrong-name 0\.1\.0/);
+  expectFail(verifyBinaries, [manifestPath, binDir, platform], /reported wrong-name 0\.0\.0-dev/);
 }
 
 function binariesRejectMissingBinary(work) {
@@ -241,8 +186,8 @@ function binariesRejectStaleJsonManifestVersion(work) {
   const binDir = join(work, "bin");
   mkdirSync(binDir);
   writeFakeBinary(join(binDir, "deslop"), {
-    plain: "deslop 0.1.0",
-    json: { manifestVersion: 999, name: "deslop", version: "0.1.0", kind: "cli", language: "rust", product: "deslop" },
+    plain: `deslop ${validVersion}`,
+    json: { manifestVersion: 999, name: "deslop", version: validVersion, kind: "cli", language: "rust", product: "deslop" },
   });
   expectFail(verifyBinaries, [manifestPath, binDir, platform], /manifestVersion must be 1/);
 }
@@ -252,8 +197,8 @@ function binariesAcceptValidContract(work) {
   const binDir = join(work, "bin");
   mkdirSync(binDir);
   writeFakeBinary(join(binDir, "deslop"), {
-    plain: "deslop 0.1.0",
-    json: { manifestVersion: 1, name: "deslop", version: "0.1.0", kind: "cli", language: "rust", product: "deslop" },
+    plain: `deslop ${validVersion}`,
+    json: { manifestVersion: 1, name: "deslop", version: validVersion, kind: "cli", language: "rust", product: "deslop" },
   });
   expectSuccess(verifyBinaries, [manifestPath, binDir, platform], /Verified deployment binaries/);
 }
@@ -277,7 +222,7 @@ function jetbrainsRejectsWrongVersionBundle(work) {
 
 function jetbrainsRejectsWrongComponentNameBundle(work) {
   const zipPath = buildJetBrainsZip(work, { lspName: "deslop" });
-  expectFail(verifyJetBrains, [zipPath, platform], /reported deslop 0\.1\.0/);
+  expectFail(verifyJetBrains, [zipPath, platform], /reported deslop 0\.0\.0-dev/);
 }
 
 function jetbrainsRejectsUndeclaredBundle(work) {
@@ -314,7 +259,7 @@ function vsixRejectsWrongVersionBundle(work) {
 
 function vsixRejectsWrongComponentNameBundle(work) {
   const vsixPath = buildVsixZip(work, { lspName: "wrong-name" });
-  expectFail(verifyVsix, [vsixPath], /reported wrong-name 0\.1\.0/);
+  expectFail(verifyVsix, [vsixPath], /reported wrong-name 0\.0\.0-dev/);
 }
 
 function vsixRejectsUndeclaredBundle(work) {
@@ -344,6 +289,11 @@ function releaseWorkflowRejectsMissingVsixGate(work) {
   expectFail(verifyReleaseWorkflow, [path], /missing the VSIX package verifier/);
 }
 
+function releaseWorkflowRejectsMissingVersionStamper(work) {
+  const path = writeReleaseWorkflow(work, { skipVersionStamper: true });
+  expectFail(verifyReleaseWorkflow, [path], /missing the build-time release version stamper/);
+}
+
 function releaseWorkflowRejectsBareVsce(work) {
   const path = writeReleaseWorkflow(work, { useBareVsce: true });
   expectFail(verifyReleaseWorkflow, [path], /calls 'npx vsce package' directly/);
@@ -362,14 +312,14 @@ function writeManifestWithDeslopComponent(work, overrides) {
     path,
     JSON.stringify({
       manifestVersion: 1,
-      product: { id: "deslop", version: "0.1.0" },
+      product: { id: "deslop", version: validVersion },
       components: [
         {
           id: "deslop",
           kind: "cli",
           language: "rust",
           binaryName: "deslop",
-          expectedVersion: overrides.expectedVersion ?? "0.1.0",
+          expectedVersion: overrides.expectedVersion ?? validVersion,
           versionCheckStrategy: "version-flag",
           required: true,
           platforms: [platform],
@@ -400,7 +350,7 @@ function buildJetBrainsZip(work, options) {
 
   if (!options.skipBundledLsp) {
     const name = options.lspName ?? "deslop-lsp";
-    const version = options.lspVersion ?? "0.1.0";
+    const version = options.lspVersion ?? validVersion;
     writeFakeBinary(join(binDir, "deslop-lsp"), {
       plain: `${name} ${version}`,
       json: { manifestVersion: 1, name, version, kind: "lsp", language: "rust", product: "deslop" },
@@ -409,8 +359,8 @@ function buildJetBrainsZip(work, options) {
 
   if (options.extraBinName) {
     writeFakeBinary(join(binDir, options.extraBinName), {
-      plain: `${options.extraBinName} 0.1.0`,
-      json: { manifestVersion: 1, name: options.extraBinName, version: "0.1.0", kind: "cli", language: "rust", product: options.extraBinName },
+      plain: `${options.extraBinName} ${validVersion}`,
+      json: { manifestVersion: 1, name: options.extraBinName, version: validVersion, kind: "cli", language: "rust", product: options.extraBinName },
     });
   }
 
@@ -436,7 +386,7 @@ function buildVsixZip(work, options) {
 
   if (!options.skipBundledLsp) {
     const name = options.lspName ?? "deslop-lsp";
-    const version = options.lspVersion ?? "0.1.0";
+    const version = options.lspVersion ?? validVersion;
     writeFakeBinary(join(binDir, "deslop-lsp"), {
       plain: `${name} ${version}`,
       json: { manifestVersion: 1, name, version, kind: "lsp", language: "rust", product: "deslop" },
@@ -445,15 +395,15 @@ function buildVsixZip(work, options) {
 
   if (!options.skipBundledMcp) {
     writeFakeBinary(join(binDir, "deslop-mcp"), {
-      plain: "deslop-mcp 0.1.0",
-      json: { manifestVersion: 1, name: "deslop-mcp", version: "0.1.0", kind: "mcp", language: "rust", product: "deslop" },
+      plain: `deslop-mcp ${validVersion}`,
+      json: { manifestVersion: 1, name: "deslop-mcp", version: validVersion, kind: "mcp", language: "rust", product: "deslop" },
     });
   }
 
   if (options.extraBinName) {
     writeFakeBinary(join(binDir, options.extraBinName), {
-      plain: `${options.extraBinName} 0.1.0`,
-      json: { manifestVersion: 1, name: options.extraBinName, version: "0.1.0", kind: "cli", language: "rust", product: options.extraBinName },
+      plain: `${options.extraBinName} ${validVersion}`,
+      json: { manifestVersion: 1, name: options.extraBinName, version: validVersion, kind: "cli", language: "rust", product: options.extraBinName },
     });
   }
 
@@ -478,6 +428,9 @@ function writeReleaseWorkflow(work, options) {
     "    steps:",
     "      - run: cargo build --release",
   ];
+  if (!options.skipVersionStamper) {
+    lines.push("      - run: node scripts/stamp-release-version.mjs 0.1.0");
+  }
   if (!options.skipManifestGate) {
     lines.push("      - run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json");
   }

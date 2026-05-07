@@ -325,7 +325,7 @@ fn prints_exact_version_contract() -> Result<()> {
     assert!(output.status.success(), "status was {}", output.status);
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "deslop-mcp 0.1.0\n"
+        format!("deslop-mcp {}\n", expected_version())
     );
     assert!(output.stderr.is_empty(), "stderr must stay empty");
     Ok(())
@@ -348,7 +348,10 @@ fn prints_json_version_contract() -> Result<()> {
 fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
     assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
     assert_eq!(value.get("name"), Some(&Value::from(name)));
-    assert_eq!(value.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(
+        value.get("version").and_then(Value::as_str),
+        Some(expected_version())
+    );
     assert_eq!(value.get("kind"), Some(&Value::from(kind)));
     assert_eq!(value.get("language"), Some(&Value::from("rust")));
     assert_eq!(value.get("product"), Some(&Value::from("deslop")));
@@ -397,7 +400,7 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     );
     assert_eq!(
         value_get(&response, "/result/serverInfo/version")?,
-        json!("0.1.0")
+        json!(expected_version())
     );
     assert!(
         value_get(&response, "/result/capabilities/tools")?.is_object(),
@@ -409,6 +412,10 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     );
     let _ = child.finish();
     Ok(())
+}
+
+fn expected_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 #[test]

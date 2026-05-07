@@ -4,11 +4,12 @@ use std::fmt::Write as _;
 #[test]
 fn prints_version_and_exits_zero() -> Result<()> {
     let mut cmd = Command::cargo_bin("deslop")?;
+    let expected = format!("deslop {}\n", expected_version());
     let _assertion = cmd
         .arg("--version")
         .assert()
         .success()
-        .stdout("deslop 0.1.0\n")
+        .stdout(expected)
         .stderr("");
     Ok(())
 }
@@ -29,10 +30,17 @@ fn prints_json_version_contract() -> Result<()> {
 fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
     assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
     assert_eq!(value.get("name"), Some(&Value::from(name)));
-    assert_eq!(value.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(
+        value.get("version").and_then(Value::as_str),
+        Some(expected_version())
+    );
     assert_eq!(value.get("kind"), Some(&Value::from(kind)));
     assert_eq!(value.get("language"), Some(&Value::from("rust")));
     assert_eq!(value.get("product"), Some(&Value::from("deslop")));
+}
+
+fn expected_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 // Implements [CLI-INVOCATION-HELP]: `--help` advertises the configurable

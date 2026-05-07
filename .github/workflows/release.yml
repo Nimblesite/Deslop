@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   version:
-    name: Bump workspace version
+    name: Prepare release version
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -19,55 +19,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract version from tag
-        id: extract
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Stamp version into workspace Cargo.toml
-        run: |
-          set -euo pipefail
-          sed -i 's/^version = ".*"$/version = "${{ steps.extract.outputs.version }}"/' Cargo.toml
-          grep -E '^version = "${{ steps.extract.outputs.version }}"$' Cargo.toml
-
-      - name: Stamp version into clients/vscode/package.json
-        working-directory: clients/vscode
-        run: |
-          set -euo pipefail
-          npm version "${{ steps.extract.outputs.version }}" --no-git-tag-version --allow-same-version
-          node -e "if (require('./package.json').version !== '${{ steps.extract.outputs.version }}') { process.exit(1) }"
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - name: Extract version from tag
+        id: extract
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tagged commit is on main
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
       # Shipwright deployment-toolkit gate (DTK-MIG-DESLOP-CI-GATES, #41).
       # The manifest is the source of truth for activation checks and
       # release artifact verification; without stamping it here the
       # binary version verifier would fail the very next build.
-      - name: Stamp version into deployment-toolkit.json
-        run: node scripts/stamp-deployment-version.mjs deployment-toolkit.json "${{ steps.extract.outputs.version }}"
+      - name: Stamp release version
+        run: node scripts/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
 
       - name: Validate deployment manifest
         run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Refresh Cargo.lock
-        run: cargo update --workspace --offline || cargo generate-lockfile
-
-      - name: Commit and push version bump
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock clients/vscode/package.json clients/vscode/package-lock.json deployment-toolkit.json
-          git diff --staged --quiet && exit 0
-          git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
-          git push origin HEAD:main
 
   build:
     name: Build (${{ matrix.artifact_name }})
@@ -79,39 +55,34 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: linux-x64
-            bin: deslop
-            archive_ext: tar.gz
             cross: false
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: linux-arm64
-            bin: deslop
-            archive_ext: tar.gz
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: macos-x64
-            bin: deslop
-            archive_ext: tar.gz
             cross: false
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-arm64
-            bin: deslop
-            archive_ext: tar.gz
             cross: false
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x64
-            bin: deslop.exe
-            archive_ext: zip
             cross: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          ref: main
+          node-version: "20"
+
+      - name: Stamp release version
+        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -140,10 +111,6 @@ jobs:
         if: matrix.cross
         run: cross build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       # Shipwright binary version contract (DTK-MIG-DESLOP-CI-GATES, #41).
       # Skipped for cross-compiled targets because the foreign-arch binary
       # cannot execute on the runner; native targets cover the
@@ -169,7 +136,9 @@ jobs:
           set -euo pipefail
           stage="deslop-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
           mkdir -p "dist/${stage}"
-          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/${stage}/"
+          for b in deslop deslop-lsp deslop-mcp; do
+            cp "target/${{ matrix.target }}/release/${b}" "dist/${stage}/"
+          done
           cp README.md LICENSE* "dist/${stage}/" 2>/dev/null || true
           tar -C dist -czf "dist/${stage}.tar.gz" "${stage}"
           shasum -a 256 "dist/${stage}.tar.gz" | awk '{print $1"  "$2}' | sed "s|dist/||" > "dist/${stage}.tar.gz.sha256"
@@ -181,7 +150,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $stage = "deslop-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
           New-Item -ItemType Directory -Force -Path "dist/$stage" | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/$stage/"
+          foreach ($b in @("deslop.exe", "deslop-lsp.exe", "deslop-mcp.exe")) {
+            Copy-Item "target/${{ matrix.target }}/release/$b" "dist/$stage/"
+          }
           if (Test-Path README.md) { Copy-Item README.md "dist/$stage/" }
           Get-ChildItem -Path . -Filter "LICENSE*" | ForEach-Object { Copy-Item $_.FullName "dist/$stage/" }
           Compress-Archive -Path "dist/$stage" -DestinationPath "dist/$stage.zip"
@@ -233,12 +204,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Stamp release version
+        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - name: Download per-platform VSIX binaries
         uses: actions/download-artifact@v4
@@ -321,10 +293,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/

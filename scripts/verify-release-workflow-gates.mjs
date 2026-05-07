@@ -23,6 +23,11 @@ const requiredReferences = [
     rationale: "Release must fail if deployment-toolkit.json is invalid",
   },
   {
+    needle: "scripts/stamp-release-version.mjs",
+    label: "build-time release version stamper",
+    rationale: "Release must stamp the tag version without committing source changes",
+  },
+  {
     needle: "scripts/verify-deployment-binaries.mjs",
     label: "binary version contract verifier",
     rationale: "Release must fail if a built binary reports a version or component id that differs from the manifest",

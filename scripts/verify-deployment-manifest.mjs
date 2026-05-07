@@ -59,12 +59,7 @@ function assertEqual(actual, expected, label) {
 
 function assertSemver(value, label) {
   assertString(value, label);
-  const parts = value.split(".");
-  if (parts.length !== 3 || parts.some((part) => !allDigits(part))) {
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(value)) {
     throw new Error(`${label} must be a semantic version`);
   }
-}
-
-function allDigits(value) {
-  return value.length > 0 && [...value].every((char) => char >= "0" && char <= "9");
 }

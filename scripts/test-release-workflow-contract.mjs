@@ -35,17 +35,24 @@ if (failed > 0) {
 console.log(`\n${tests.length} release workflow contract tests passed`);
 
 function releaseBuildsTaggedSourceWithoutPostTagVersionCommit() {
+  const versionJob = sectionBetween("  version:", "  build:");
   assertAbsent(
     /ref:\s*main\b/,
     "release jobs must not checkout main; tag releases must build the tagged commit",
   );
-  assertAbsent(
+  assertSectionAbsent(
+    versionJob,
     /\bgit\s+commit\b/,
     "release workflow must not commit a version bump after the tag already triggered the release",
   );
-  assertAbsent(
+  assertSectionAbsent(
+    versionJob,
     /\bgit\s+push\b/,
     "release workflow must not push mutable source changes during a tag release",
+  );
+  assertPresent(
+    /node scripts\/stamp-release-version\.mjs "\$\{\{ steps\.extract\.outputs\.version \}\}"/,
+    "release workflow must stamp the tag version as a build-time input",
   );
 }
 
@@ -73,6 +80,10 @@ function releaseArchivesContainPackageManagerDeclaredBinaries() {
 
 function assertAbsent(pattern, message) {
   if (pattern.test(workflow)) throw new Error(message);
+}
+
+function assertSectionAbsent(section, pattern, message) {
+  if (pattern.test(section)) throw new Error(message);
 }
 
 function assertPresent(pattern, message) {

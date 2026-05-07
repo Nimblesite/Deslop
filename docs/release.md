@@ -3,6 +3,18 @@
 Deslop uses `deployment-toolkit.json` as the source of truth for release
 artifacts and IDE startup checks.
 
+Source-controlled project versions intentionally stay at the placeholder
+`0.0.0-dev`. Release and test workflows stamp the tag version into the working
+tree with:
+
+```bash
+node scripts/stamp-release-version.mjs 1.2.3
+```
+
+The release workflow must never commit that stamped tree back to Deslop. The
+tagged commit is the source identity; the stamped working tree is only the
+build/package input.
+
 Before publishing, run:
 
 ```bash
