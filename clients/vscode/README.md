@@ -11,7 +11,7 @@ Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — 
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals — no stale pixels, ever.
 - **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries offline-ready. No post-install downloads. The MCP server auto-registers with Claude Code / Copilot Chat so your AI agents consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
-- **Falls back to your CLI install.** If you already have `deslop` on `PATH` via Homebrew tap or Scoop bucket at a matching version, the extension uses it — one binary, one cache, one truth.
+- **Uses the installed extension bundle.** The VSIX runs the binaries unpacked under its own `bin/<platform>/` folder. No post-install copying and no PATH lookup are required.
 
 ## Design
 
@@ -19,8 +19,8 @@ Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic insp
 
 ## Install
 
-- Download `deslop-vscode-X.Y.Z.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then `code --install-extension deslop-vscode-X.Y.Z.vsix`.
-- CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`. The extension will pick up the PATH install automatically when its version matches.
+- Download the platform-specific `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`.
+- CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`.
 
 ## Settings
 

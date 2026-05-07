@@ -2,7 +2,7 @@
 
 The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
 
-Distribution: `.vsix` attached to each GitHub Release — see [.github/workflows/release.yml](../../.github/workflows/release.yml). Extension id: `nimblesite.deslop-vscode`. Install via `code --install-extension deslop-vscode-X.Y.Z.vsix`, or from the Marketplace/OpenVSX once we set up publisher accounts.
+Distribution: one platform-specific `.vsix` per VS Code target attached to each GitHub Release — see [.github/workflows/release.yml](../../.github/workflows/release.yml). Extension id: `nimblesite.deslop-vscode`. Install via `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, or from the Marketplace/OpenVSX once we set up publisher accounts.
 
 ### [VSIX-PRINCIPLES] UX principles
 
@@ -93,10 +93,12 @@ Activation binaries are resolved once per session; a `Deslop: Reveal Active Bina
 VSIX tests must exercise the same binary layout the installed extension uses:
 `${extensionPath}/bin/${platform}/`. Test configuration must not point
 `DESLOP_BINARY_DIR`, `DESLOP_LSP_PATH`, or `DESLOP_MCP_PATH` at
-`target/release`, `~/.cargo/bin`, Homebrew, Scoop, or any other external
+`target/release`, `~/.cargo/bin`, Homebrew, Scoop, PATH, or any other external
 install. The Makefile stages the release binaries into the extension bundle
 before `vsix-test`, `vsix-coverage`, and `vsix-test-ollama` run, then clears
-the override environment variables in the VS Code test host.
+the override environment variables in the VS Code test host. Runtime uses the
+absolute bundled paths in `${extensionPath}/bin/${platform}/` and does not
+prepend that directory to PATH.
 
 Before test entry points run, installed `deslop`, `deslop-lsp`, and
 `deslop-mcp` binaries are removed from the cargo install path and the build
@@ -371,6 +373,6 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Cluster webview renders interpretation, signals, and occurrences.
 - Full-report webview refreshes on daemon notification.
 - Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` fallback, missing binary, component-name mismatch, and version mismatch.
-- VSIX archive package tests prove `extension/deployment-toolkit.json` exists, `deslop`, `deslop-lsp`, and `deslop-mcp` are under `extension/bin/<platform>/`, no undeclared executable is present there, and every bundled binary reports the manifest `expectedVersion`.
+- VSIX archive package tests prove `extension/deployment-toolkit.json` exists, `deslop`, `deslop-lsp`, and `deslop-mcp` are under the single target `extension/bin/<platform>/`, no other platform binary directory is present, no undeclared executable is present there, and every host-executable bundled binary reports the manifest `expectedVersion`.
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.

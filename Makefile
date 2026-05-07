@@ -168,9 +168,8 @@ install-binary:
 ## delete-path-binaries: Remove cargo-installed Deslop binaries before tests so
 ##                       extension tests cannot accidentally pass by resolving
 ##                       PATH instead of the extension bundle. VS Code extension
-##                       directories in PATH are skipped — the resolver's bundled
-##                       candidate (clients/vscode/bin/<platform>/) always wins
-##                       because it is evaluated before the path candidate.
+##                       directory. The VSIX resolver uses explicit bundled
+##                       paths and must never rely on PATH resolution.
 delete-path-binaries:
 	@echo "==> Removing cargo-installed Deslop binaries from PATH..."
 	@for _bin in deslop deslop-lsp deslop-mcp; do \
@@ -178,14 +177,9 @@ delete-path-binaries:
 	  $(RM) "$(HOME)/.cargo/bin/$$_bin" "$(HOME)/.cargo/bin/$$_bin.exe"; \
 	  _found=$$(command -v $$_bin 2>/dev/null || true); \
 	  if [ -n "$$_found" ]; then \
-	    case "$$_found" in \
-	      */.vscode/extensions/*|*/.vscode-server/extensions/*|*/.cursor/extensions/*) \
-	        echo "SKIP: $$_bin at $$_found is a VS Code extension bundle — not a PATH install" ;; \
-	      *) \
-	        echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
-	        echo "Remove it before running tests; extension tests must use bundled binaries."; \
-	        exit 1 ;; \
-	    esac; \
+	    echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
+	    echo "Remove it before running tests; extension tests must use bundled binaries by absolute path."; \
+	    exit 1; \
 	  fi; \
 	done
 
@@ -236,8 +230,8 @@ vsix-coverage: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-
 
 ## vsix-package: Build the .vsix artifact (does not publish).
 ##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
-##               binaries into clients/vscode/bin/<platform>/ so the installed
-##               extension can resolve them via the bundled path
+##               binaries into clients/vscode/bin/<platform>/ and produces a
+##               platform-specific VSIX via `vsce package --target`
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
 vsix-package: delete-path-binaries vsix-install vsix-build _vsix-stage-and-package
@@ -255,7 +249,7 @@ _vsix-stage-bundled-binaries:
 	 case "$$_platform" in win32-*) _ext=.exe ;; *) _ext= ;; esac; \
 	 _dest=clients/vscode/bin/$$_platform; \
 	 echo "==> Staging bundled binaries into $$_dest"; \
-	 $(RM) "$$_dest"; $(MKDIR) "$$_dest"; \
+	 $(RM) clients/vscode/bin; $(MKDIR) "$$_dest"; \
 	 for _bin in deslop-lsp deslop-mcp deslop; do \
 	   _src=target/release/$$_bin$$_ext; \
 	   if [ ! -f "$$_src" ]; then echo "FAIL: $$_src missing (vsix-build should have produced it)"; exit 1; fi; \
@@ -278,6 +272,7 @@ vsix-clean:
 	$(RM) clients/vscode/out
 	$(RM) clients/vscode/dist
 	$(RM) clients/vscode/deslop-vscode.vsix
+	$(RM) clients/vscode/deslop-vscode-*.vsix
 	$(RM) clients/vscode/deployment-toolkit.json
 	$(RM) clients/vscode/coverage
 
@@ -286,10 +281,12 @@ vsix-clean:
 ##                    `code` isn't on PATH.
 vsix-install-code:
 	@if command -v code >/dev/null 2>&1; then \
-	  echo "==> Installing clients/vscode/deslop-vscode.vsix into the VS Code CLI..."; \
-	  code --install-extension clients/vscode/deslop-vscode.vsix --force; \
+	  _vsix=$$(ls clients/vscode/deslop-vscode-*.vsix 2>/dev/null | head -n1); \
+	  if [ -z "$$_vsix" ]; then echo "FAIL: no clients/vscode/deslop-vscode-*.vsix found"; exit 1; fi; \
+	  echo "==> Installing $$_vsix into the VS Code CLI..."; \
+	  code --install-extension "$$_vsix" --force; \
 	else \
-	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-vscode.vsix"; \
+	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-vscode-<target>.vsix"; \
 	fi
 
 ## vsix-rebuild: Nuke every build artifact (cargo target/, staged bin/, node_modules,

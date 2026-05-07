@@ -10,7 +10,7 @@ import {
   type DeploymentManifest,
 } from "../../binary";
 import { mkdirSync, writeFileSync, chmodSync, rmSync } from "node:fs";
-import { delimiter, resolve } from "node:path";
+import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 function platformId(): string {
@@ -102,12 +102,22 @@ suite("binary resolver", () => {
     assert.throws(() => resolveBinary(extDir, "lsp", manifest(), {}, env), /env-dir/);
   });
 
-  test("PATH mismatch falls back to matching bundled binary", () => {
+  test("PATH candidates are ignored when the bundle is present", () => {
     const env: NodeJS.ProcessEnv = { PATH: pathDir };
     const resolved = resolveBinary(extDir, "lsp", manifest(), {}, env);
     assert.equal(resolved.source, "bundled");
     assert.equal(resolved.version, "0.1.0");
-    assert.ok(env["PATH"]?.split(delimiter).includes(bundledDir) ?? false);
+    assert.equal(resolved.path, resolve(bundledDir, "deslop-lsp"));
+    assert.equal(env["PATH"], pathDir);
+  });
+
+  test("bundled binary resolution keeps PATH unchanged", () => {
+    const env: NodeJS.ProcessEnv = { PATH: pathDir };
+    const before = env["PATH"];
+    const resolved = resolveBinary(extDir, "mcp", manifest(), {}, env);
+    assert.equal(resolved.source, "bundled");
+    assert.equal(resolved.path, resolve(bundledDir, "deslop-mcp"));
+    assert.equal(env["PATH"], before);
   });
 
   test("bundled success resolves all VS Code activation checks", () => {

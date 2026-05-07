@@ -3,10 +3,9 @@
 // but the release workflow is what actually publishes — if it skips the
 // Shipwright verifiers a tag push can ship a manifest-mismatched binary or a
 // VSIX missing deployment-toolkit.json. This script asserts the release
-// workflow references each Shipwright verifier and routes the VSIX through
-// `npm run package` (which runs `verify:package`) rather than calling vsce
-// directly. JetBrains gates are out of scope here per the active migration
-// split.
+// workflow references each Shipwright verifier and packages platform-specific
+// VSIX artifacts with the VS Code `--target` contract. JetBrains gates are out
+// of scope here per the active migration split.
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
@@ -45,10 +44,28 @@ for (const { needle, label, rationale } of requiredReferences) {
   }
 }
 
-if (workflow.includes("npx vsce package")) {
+if (!workflow.includes('node-version: "22.x"')) {
   throw new Error(
-    `${workflowPath} calls 'npx vsce package' directly. Route VSIX packaging through 'npm run package' so verify:package runs against the produced artifact.`,
+    `${workflowPath} must use Node 22.x for the VSIX release path, matching the VS Code platform-specific sample.`,
   );
+}
+
+for (const target of ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"]) {
+  if (!workflow.includes(`vsix_target: ${target}`)) {
+    throw new Error(`${workflowPath} is missing VSIX target ${target}.`);
+  }
+}
+
+if (!workflow.includes("--target ${{ matrix.vsix_target }}")) {
+  throw new Error(`${workflowPath} must package VSIX artifacts with --target \${{ matrix.vsix_target }}.`);
+}
+
+if (!workflow.includes("-${{ matrix.vsix_target }}.vsix")) {
+  throw new Error(`${workflowPath} must suffix VSIX filenames with the VS Code target.`);
+}
+
+if (/npx\s+vsce\s+package(?![^\n]*--target)/.test(workflow)) {
+  throw new Error(`${workflowPath} calls 'npx vsce package' without --target.`);
 }
 
 console.log(`${workflowPath}: release workflow gates wired (manifest + binaries + VSIX)`);

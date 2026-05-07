@@ -27,6 +27,9 @@ Test entry points remove cargo-installed `deslop`, `deslop-lsp`, and
 `deslop-mcp` binaries before running. VSIX tests stage the release binaries
 inside `clients/vscode/bin/<platform>/` and clear resolver override
 environment variables so activation proves the extension bundle, not PATH.
+VSIX release artifacts are platform-specific and must be packaged with
+`vsce package --target`; release filenames use
+`deslop-vscode-X.Y.Z-<target>.vsix`.
 
 `make jetbrains-package` builds the JetBrains plugin zip, runs Gradle project
 configuration and plugin structure verification, then runs

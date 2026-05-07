@@ -14,6 +14,7 @@ const workflow = readFileSync(workflowPath, "utf8");
 const tests = [
   releaseBuildsTaggedSourceWithoutPostTagVersionCommit,
   releaseArchivesContainPackageManagerDeclaredBinaries,
+  releaseBuildsPlatformSpecificVsixArtifacts,
 ];
 
 let failed = 0;
@@ -76,6 +77,26 @@ function releaseArchivesContainPackageManagerDeclaredBinaries() {
       `Scoop declares ${binary}, so the Windows release archive must contain it`,
     );
   }
+}
+
+function releaseBuildsPlatformSpecificVsixArtifacts() {
+  for (const target of ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"]) {
+    assertIncludes(workflow, `vsix_target: ${target}`, `release workflow must include VSIX target ${target}`);
+  }
+  assertIncludes(
+    workflow,
+    "--target ${{ matrix.vsix_target }}",
+    "release workflow must call the VS Code platform-specific package target",
+  );
+  assertIncludes(
+    workflow,
+    "deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix",
+    "release VSIX filenames must include the release version and platform target",
+  );
+  assertAbsent(
+    /Flatten vsix-bin-/,
+    "release workflow must not build one combined VSIX from every platform's binaries",
+  );
 }
 
 function assertAbsent(pattern, message) {

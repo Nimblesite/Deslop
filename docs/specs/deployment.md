@@ -88,7 +88,8 @@ For Deslop's migration issues, mismatch behavior is:
 - An explicit user setting mismatch is a hard activation error.
 - `DESLOP_LSP_PATH`, `DESLOP_MCP_PATH`, and `DESLOP_BINARY_DIR` mismatches are
   hard activation errors for required components.
-- A mismatched PATH candidate is skipped when a matching bundled binary exists.
+- VS Code does not probe PATH for activation binaries. It resolves explicit
+  user/env overrides or the bundled path under the installed extension.
 - A mismatched bundled binary is a package/release failure and blocks
   activation.
 
@@ -97,12 +98,14 @@ found version or `not found`, candidate path/source, and the next action.
 
 ### [DEPLOY-VSIX-PACKAGE] VSIX package contract
 
-The VSIX artifact must include:
+Each platform-specific VSIX artifact must be built with `vsce package --target`
+for the target platform and must include:
 
 - `extension/deployment-toolkit.json`.
-- `deslop`, `deslop-lsp`, and `deslop-mcp` for the target platform under
+- `deslop`, `deslop-lsp`, and `deslop-mcp` for exactly one target platform under
   `extension/bin/<platform>/`.
 - No undeclared executable under `extension/bin/<platform>/`.
+- No binaries for any other platform.
 
 Package tests must inspect the produced `.vsix`, not only the staging
 directory. They must fail on a missing manifest, missing binary, extra binary,

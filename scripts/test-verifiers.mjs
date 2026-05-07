@@ -1,13 +1,5 @@
-// Proof tests for deployment-toolkit verifier scripts.
-//
-// These cover DTK-MIG-DESLOP-CI-GATES (#41), DTK-MIG-DESLOP-JETBRAINS-PACKAGE-VERIFIER
-// (#55), and the version-check acceptance criterion shared with
-// DTK-MIG-DESLOP-JETBRAINS-RESOLVER (#40). Each verifier script is fed a fake
-// binary or fake plugin zip that violates exactly one Shipwright contract
-// rule (wrong version, wrong component id, missing binary, missing manifest,
-// undeclared bundled binary) and the test asserts the verifier exits non-zero
-// with a message that names the violation. A passing run proves the verifier
-// is not silently green on broken inputs — the version gate has bite.
+// Proof tests for deployment-toolkit verifier scripts. Each fake artifact
+// violates one Shipwright contract rule so verifier failures have bite.
 
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
@@ -22,39 +14,24 @@ const verifyVsix = join(repoRoot, "clients/vscode/scripts/verify-vsix-package.mj
 const verifyReleaseWorkflow = join(repoRoot, "scripts/verify-release-workflow-gates.mjs");
 const platform = "darwin-arm64";
 const validVersion = "0.0.0-dev";
-// verify-vsix-package.mjs hard-codes currentPlatform() and has no override
-// arg, so the fake-VSIX cases must stage binaries under the host platform.
 const hostPlatform = detectHostPlatform();
 
 const cases = [
-  manifestRejectsMissingProductId,
-  manifestRejectsLooseSemver,
-  manifestRejectsHostVerifyingUnknownComponent,
-  manifestRejectsExpectedVersionDrift,
-  manifestAcceptsRepoManifest,
-  binariesRejectWrongVersion,
-  binariesRejectWrongComponentName,
-  binariesRejectMissingBinary,
-  binariesRejectStaleJsonManifestVersion,
-  binariesAcceptValidContract,
-  jetbrainsRejectsMissingManifest,
-  jetbrainsRejectsMissingBundledBinary,
-  jetbrainsRejectsWrongVersionBundle,
-  jetbrainsRejectsWrongComponentNameBundle,
-  jetbrainsRejectsUndeclaredBundle,
-  jetbrainsAcceptsValidPackage,
-  vsixRejectsMissingManifest,
-  vsixRejectsMissingBundledLsp,
-  vsixRejectsMissingBundledMcp,
-  vsixRejectsWrongVersionBundle,
-  vsixRejectsWrongComponentNameBundle,
-  vsixRejectsUndeclaredBundle,
-  vsixAcceptsValidPackage,
-  releaseWorkflowRejectsMissingManifestGate,
-  releaseWorkflowRejectsMissingBinaryGate,
-  releaseWorkflowRejectsMissingVsixGate,
-  releaseWorkflowRejectsMissingVersionStamper,
-  releaseWorkflowRejectsBareVsce,
+  manifestRejectsMissingProductId, manifestRejectsLooseSemver,
+  manifestRejectsHostVerifyingUnknownComponent, manifestRejectsExpectedVersionDrift,
+  manifestAcceptsRepoManifest, binariesRejectWrongVersion,
+  binariesRejectWrongComponentName, binariesRejectMissingBinary,
+  binariesRejectStaleJsonManifestVersion, binariesAcceptValidContract,
+  jetbrainsRejectsMissingManifest, jetbrainsRejectsMissingBundledBinary,
+  jetbrainsRejectsWrongVersionBundle, jetbrainsRejectsWrongComponentNameBundle,
+  jetbrainsRejectsUndeclaredBundle, jetbrainsAcceptsValidPackage,
+  vsixRejectsMissingManifest, vsixRejectsMissingBundledLsp,
+  vsixRejectsMissingBundledMcp, vsixRejectsWrongVersionBundle,
+  vsixRejectsWrongComponentNameBundle, vsixRejectsUndeclaredBundle,
+  vsixRejectsForeignPlatformBundle, vsixRejectsCompiledOutDir,
+  vsixAcceptsValidPackage, releaseWorkflowRejectsMissingManifestGate,
+  releaseWorkflowRejectsMissingBinaryGate, releaseWorkflowRejectsMissingVsixGate,
+  releaseWorkflowRejectsMissingVersionStamper, releaseWorkflowRejectsBareVsce,
   releaseWorkflowAcceptsRepoWorkflow,
 ];
 
@@ -78,8 +55,6 @@ if (failed > 0) {
   process.exit(1);
 }
 console.log(`\n${cases.length} verifier proof tests passed`);
-
-// ---------- manifest verifier ----------
 
 function manifestRejectsMissingProductId(work) {
   const path = join(work, "missing-product.json");
@@ -239,37 +214,47 @@ function jetbrainsAcceptsValidPackage(work) {
 
 function vsixRejectsMissingManifest(work) {
   const vsixPath = buildVsixZip(work, { manifest: null });
-  expectFail(verifyVsix, [vsixPath], /Missing extension\/deployment-toolkit\.json/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /Missing extension\/deployment-toolkit\.json/);
 }
 
 function vsixRejectsMissingBundledLsp(work) {
   const vsixPath = buildVsixZip(work, { skipBundledLsp: true });
-  expectFail(verifyVsix, [vsixPath], /Missing extension\/bin\/.*\/deslop-lsp/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /Missing extension\/bin\/.*\/deslop-lsp/);
 }
 
 function vsixRejectsMissingBundledMcp(work) {
   const vsixPath = buildVsixZip(work, { skipBundledMcp: true });
-  expectFail(verifyVsix, [vsixPath], /Missing extension\/bin\/.*\/deslop-mcp/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /Missing extension\/bin\/.*\/deslop-mcp/);
 }
 
 function vsixRejectsWrongVersionBundle(work) {
   const vsixPath = buildVsixZip(work, { lspVersion: "0.0.9" });
-  expectFail(verifyVsix, [vsixPath], /reported deslop-lsp 0\.0\.9/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /reported deslop-lsp 0\.0\.9/);
 }
 
 function vsixRejectsWrongComponentNameBundle(work) {
   const vsixPath = buildVsixZip(work, { lspName: "wrong-name" });
-  expectFail(verifyVsix, [vsixPath], /reported wrong-name 0\.0\.0-dev/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /reported wrong-name 0\.0\.0-dev/);
 }
 
 function vsixRejectsUndeclaredBundle(work) {
   const vsixPath = buildVsixZip(work, { extraBinName: "rogue-helper" });
-  expectFail(verifyVsix, [vsixPath], /Undeclared executable in VSIX/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /Undeclared executable in VSIX/);
+}
+
+function vsixRejectsForeignPlatformBundle(work) {
+  const vsixPath = buildVsixZip(work, { extraPlatform: foreignPlatform() });
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /must contain only/);
+}
+
+function vsixRejectsCompiledOutDir(work) {
+  const vsixPath = buildVsixZip(work, { extraOutFile: true });
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /must not include extension\/out\//);
 }
 
 function vsixAcceptsValidPackage(work) {
   const vsixPath = buildVsixZip(work, {});
-  expectSuccess(verifyVsix, [vsixPath], /Verified deployment manifest/);
+  expectSuccess(verifyVsix, [vsixPath, hostPlatform], /Verified deployment manifest/);
 }
 
 // ---------- release workflow gate verifier ----------
@@ -296,7 +281,7 @@ function releaseWorkflowRejectsMissingVersionStamper(work) {
 
 function releaseWorkflowRejectsBareVsce(work) {
   const path = writeReleaseWorkflow(work, { useBareVsce: true });
-  expectFail(verifyReleaseWorkflow, [path], /calls 'npx vsce package' directly/);
+  expectFail(verifyReleaseWorkflow, [path], /without --target|must package VSIX artifacts with --target/);
 }
 
 function releaseWorkflowAcceptsRepoWorkflow() {
@@ -378,6 +363,14 @@ function buildVsixZip(work, options) {
   const extensionRoot = join(stagingRoot, "extension");
   const binDir = join(extensionRoot, "bin", hostPlatform);
   mkdirSync(binDir, { recursive: true });
+  if (options.extraPlatform) {
+    const extraDir = join(extensionRoot, "bin", options.extraPlatform);
+    mkdirSync(extraDir, { recursive: true });
+    writeFakeBinary(join(extraDir, "deslop-lsp"), {
+      plain: `deslop-lsp ${validVersion}`,
+      json: { manifestVersion: 1, name: "deslop-lsp", version: validVersion, kind: "lsp", language: "rust", product: "deslop" },
+    });
+  }
 
   if (options.manifest !== null) {
     const manifestSource = options.manifest ?? join(repoRoot, "deployment-toolkit.json");
@@ -406,6 +399,11 @@ function buildVsixZip(work, options) {
       json: { manifestVersion: 1, name: options.extraBinName, version: validVersion, kind: "cli", language: "rust", product: options.extraBinName },
     });
   }
+  if (options.extraOutFile) {
+    const outDir = join(extensionRoot, "out");
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, "extension.js"), "compiled test artifact");
+  }
 
   const vsixPath = join(work, "package.vsix");
   const result = spawnSync("zip", ["-rq", vsixPath, "extension"], {
@@ -425,7 +423,18 @@ function writeReleaseWorkflow(work, options) {
     "jobs:",
     "  build:",
     "    runs-on: ubuntu-latest",
+    "    strategy:",
+    "      matrix:",
+    "        include:",
+    "          - vsix_target: linux-x64",
+    "          - vsix_target: linux-arm64",
+    "          - vsix_target: darwin-x64",
+    "          - vsix_target: darwin-arm64",
+    "          - vsix_target: win32-x64",
     "    steps:",
+    "      - uses: actions/setup-node@v4",
+    "        with:",
+    "          node-version: \"22.x\"",
     "      - run: cargo build --release",
   ];
   if (!options.skipVersionStamper) {
@@ -444,7 +453,7 @@ function writeReleaseWorkflow(work, options) {
     lines.push("      - run: npx vsce package --no-dependencies -o deslop.vsix");
     lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
   } else if (!options.skipVsixGate) {
-    lines.push("      - run: cd clients/vscode && npm run package");
+    lines.push("      - run: cd clients/vscode && npm run package -- --target ${{ matrix.vsix_target }} --out deslop-vscode-0.1.0-${{ matrix.vsix_target }}.vsix");
     lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
   } else {
     lines.push("      - run: echo skipped");
@@ -461,6 +470,10 @@ function detectHostPlatform() {
   if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
   if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
   throw new Error(`unsupported host platform ${process.platform}-${process.arch}`);
+}
+
+function foreignPlatform() {
+  return hostPlatform === "linux-x64" ? "darwin-arm64" : "linux-x64";
 }
 
 function expectFail(script, args, expected) {

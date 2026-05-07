@@ -368,7 +368,7 @@
     "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
-    "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs && npm run verify:package"
+    "package": "node ./scripts/package-vsix.mjs"
   },
   "dependencies": {
     "@preact/signals-core": "^1.14.1",

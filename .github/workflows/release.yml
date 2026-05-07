@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.x"
 
       - name: Extract version from tag
         id: extract
@@ -55,22 +55,27 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: linux-x64
+            vsix_target: linux-x64
             cross: false
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: linux-arm64
+            vsix_target: linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: macos-x64
+            vsix_target: darwin-x64
             cross: false
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-arm64
+            vsix_target: darwin-arm64
             cross: false
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x64
+            vsix_target: win32-x64
             cross: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -79,7 +84,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.x"
 
       - name: Stamp release version
         run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
@@ -164,9 +169,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "vsix-bin/${{ matrix.artifact_name }}"
+          rm -rf clients/vscode/bin
+          mkdir -p "clients/vscode/bin/${{ matrix.vsix_target }}"
           for b in deslop deslop-lsp deslop-mcp; do
-            cp "target/${{ matrix.target }}/release/${b}" "vsix-bin/${{ matrix.artifact_name }}/"
+            cp "target/${{ matrix.target }}/release/${b}" "clients/vscode/bin/${{ matrix.vsix_target }}/"
           done
 
       - name: Stage VSIX binaries (windows)
@@ -174,10 +180,39 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path "vsix-bin/${{ matrix.artifact_name }}" | Out-Null
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue clients/vscode/bin
+          New-Item -ItemType Directory -Force -Path "clients/vscode/bin/${{ matrix.vsix_target }}" | Out-Null
           foreach ($b in @("deslop.exe", "deslop-lsp.exe", "deslop-mcp.exe")) {
-            Copy-Item "target/${{ matrix.target }}/release/$b" "vsix-bin/${{ matrix.artifact_name }}/"
+            Copy-Item "target/${{ matrix.target }}/release/$b" "clients/vscode/bin/${{ matrix.vsix_target }}/"
           }
+
+      - name: Stage deployment manifest into extension
+        shell: bash
+        run: cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+
+      - name: Install extension deps
+        working-directory: clients/vscode
+        run: npm install --no-audit --no-fund
+
+      - name: Install webview-ui deps
+        working-directory: clients/vscode/webview-ui
+        run: npm install --no-audit --no-fund
+
+      - name: Build webview-ui
+        working-directory: clients/vscode/webview-ui
+        run: npm run build
+
+      - name: Typecheck extension
+        working-directory: clients/vscode
+        run: npx tsc --noEmit
+
+      - name: Package target VSIX
+        working-directory: clients/vscode
+        run: npm run package -- --target ${{ matrix.vsix_target }} --out deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix
+
+      - name: Verify target VSIX
+        working-directory: clients/vscode
+        run: node ./scripts/verify-vsix-package.mjs deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix ${{ matrix.vsix_target }}
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
@@ -190,106 +225,16 @@ jobs:
             dist/deslop-*.zip.sha256
           if-no-files-found: error
 
-      - name: Upload VSIX binaries artifact
+      - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vsix-bin-${{ matrix.artifact_name }}
-          path: vsix-bin/${{ matrix.artifact_name }}
-          if-no-files-found: error
-
-  package-vsix:
-    name: Package VSIX
-    needs: [version, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Stamp release version
-        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
-
-      - name: Download per-platform VSIX binaries
-        uses: actions/download-artifact@v4
-        with:
-          pattern: vsix-bin-*
-          path: clients/vscode/bin
-          merge-multiple: false
-
-      - name: Flatten vsix-bin-<platform> → bin/<platform>/
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd clients/vscode/bin
-          for dir in vsix-bin-*; do
-            platform="${dir#vsix-bin-}"
-            # Match VS Code extension platform naming (matches Makefile _vsix-stage-and-package).
-            case "$platform" in
-              linux-x64)   target=linux-x64 ;;
-              linux-arm64) target=linux-arm64 ;;
-              macos-x64)   target=darwin-x64 ;;
-              macos-arm64) target=darwin-arm64 ;;
-              windows-x64) target=win32-x64 ;;
-              *) echo "unknown platform $platform"; exit 1 ;;
-            esac
-            mkdir -p "$target"
-            mv "$dir"/* "$target"/
-            rmdir "$dir"
-          done
-          chmod +x */deslop */deslop-lsp */deslop-mcp 2>/dev/null || true
-          ls -la
-
-      - name: Install extension deps
-        working-directory: clients/vscode
-        run: npm install
-
-      - name: Install webview-ui deps
-        working-directory: clients/vscode/webview-ui
-        run: npm install
-
-      - name: Build webview-ui
-        working-directory: clients/vscode/webview-ui
-        run: npm run build
-
-      - name: Build extension
-        working-directory: clients/vscode
-        run: npm run build
-
-      - name: Typecheck extension
-        working-directory: clients/vscode
-        run: npx tsc --noEmit
-
-      # Stage the deployment manifest into the extension root so
-      # `npm run package` (and its `verify:package` step) can find it.
-      # `make _vsix-stage-bundled-binaries` does the same locally.
-      - name: Stage deployment manifest into extension
-        run: cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
-
-      # `npm run package` runs build + the underlying packager +
-      # assert-vsix-schema-doc + verify:package (verify-vsix-package.mjs).
-      # Routing through it is the Shipwright VSIX gate
-      # (DTK-MIG-DESLOP-CI-GATES, #41) — without it a release could ship a
-      # VSIX missing deployment-toolkit.json or a bundled binary.
-      - name: Package and verify VSIX
-        working-directory: clients/vscode
-        run: npm run package
-
-      - name: Tag VSIX with release version
-        working-directory: clients/vscode
-        run: mv deslop-vscode.vsix deslop-vscode-${{ needs.version.outputs.version }}.vsix
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vsix
+          name: vsix-${{ matrix.vsix_target }}
           path: clients/vscode/deslop-vscode-*.vsix
           if-no-files-found: error
 
   release:
     name: Create GitHub release
-    needs: [version, build, package-vsix]
+    needs: [version, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
