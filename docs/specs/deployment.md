@@ -112,6 +112,38 @@ directory. They must fail on a missing manifest, missing binary, extra binary,
 non-executable binary where executability is meaningful, or wrong-version
 binary.
 
+### [DEPLOY-EXTERNAL-MCP-CONSUMER] External MCP clients consume the VSIX-bundled binary
+
+Every MCP client that runs outside the VS Code host process — Claude Code (CLI),
+Claude Desktop, Codex, Cursor, Continue — must reference `deslop-mcp` by an
+**absolute path into the unpacked VSIX**:
+
+```
+~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+```
+
+The unpacked VSIX is the canonical distribution surface per [DEPLOY-VSIX-PACKAGE].
+Pointing an MCP client at any other binary breaks [DEPLOY-VERSION-CONTRACT] +
+[DEPLOY-PROTOCOL-VERSION]: a locally-built `target/release/deslop-mcp` would
+shadow the shipright-versioned bundle and silently drift the agent's analysis
+off the extension's wire contract. The only PATH-resolved form Deslop supports
+is for users who installed the CLI via Homebrew or Scoop, because those package
+managers version the binary lock-step with the release.
+
+Consequences for this repo:
+
+- The Makefile must not provide a target that puts source-built `deslop`,
+  `deslop-lsp`, or `deslop-mcp` binaries onto the user's `PATH`. There is no
+  `make install-binary` target. `cargo install --path crates/deslop-*` is
+  forbidden.
+- `make delete-path-binaries` is invoked from every `vsix-*` and `test` target
+  so a developer machine that previously leaked binaries onto `PATH` is
+  scrubbed before tests run, and the rule is verifiable on a fresh checkout.
+- Every doc that shows an MCP wiring snippet (`README.md`,
+  `clients/vscode/README.md`, `docs/snippets/agents-md-recipe.md`,
+  `site/src/docs/ai-integration.md`) leads with the absolute VSIX path and
+  documents the brew/scoop PATH form as the only secondary alternative.
+
 ### [DEPLOY-EXTENSION-BUNDLED-TESTS] Extension tests must use bundled binaries
 
 IDE extension tests must run against binaries bundled inside the extension

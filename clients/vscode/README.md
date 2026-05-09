@@ -10,8 +10,38 @@ Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — 
 - **Worst-first activity-bar view.** The Duplicate Clusters panel always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals — no stale pixels, ever.
-- **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries offline-ready. No post-install downloads. The MCP server auto-registers with Claude Code / Copilot Chat so your AI agents consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
+- **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries offline-ready. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
 - **Uses the installed extension bundle.** The VSIX runs the binaries unpacked under its own `bin/<platform>/` folder. No post-install copying and no PATH lookup are required.
+
+## Wire `deslop-mcp` into external MCP clients
+
+External MCP clients that run *outside* VS Code's process — Claude Code (CLI), Claude Desktop, Codex, Cursor, Continue — do not inherit VS Code's bundled `PATH`, so they cannot auto-discover the `deslop-mcp` binary. Point them at the **VSIX-bundled binary by absolute path** so the agent runs the exact binary this extension ships.
+
+After installing this VSIX, the binary lives at:
+
+```
+~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+```
+
+Where `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`, and `<VERSION>` matches the installed extension. Bump `<VERSION>` whenever you update the extension.
+
+Example — Claude Code:
+
+```bash
+claude mcp add deslop -s user -- \
+  ~/.vscode/extensions/nimblesite.deslop-vscode-0.1.0/bin/darwin-arm64/deslop-mcp \
+  --root .
+```
+
+Example — Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.deslop]
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-0.1.0/bin/darwin-arm64/deslop-mcp"
+args    = ["--root", "."]
+```
+
+The full set of client wiring snippets — including Claude Desktop and the rule against pointing MCP clients at `cargo install` / `target/release` binaries — lives in the [root README](https://github.com/Nimblesite/Deslop#use-deslop-from-an-ai-agent-mcp).
 
 ## Design
 

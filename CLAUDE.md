@@ -84,6 +84,8 @@ Processes communicate using IPC. Generate IPC model code with [typeDiagram](http
 - **Mandatory Bug Fix Process** = [text](.claude/skills/fix-bug/SKILL.md)
 - **No legacy code.** Legacy = deleted.
 - **Copying files is illegal.** MOVE them.
+- **VSIX is the only legitimate distribution. Building MUST NOT install binaries to `PATH`.** `cargo build`, `make build`, `make ci`, and every other build target leave artifacts under `target/` only. There is no `make install-binary` target — `cargo install --path crates/deslop-*` is ⛔️ ILLEGAL on this repo. The release pipeline ships binaries via the `.vsix` (and via Homebrew/Scoop for the CLI). Local builds are for testing the source you just changed; they are not a distribution channel.
+- **External MCP clients (Claude Code, Claude Desktop, Codex, Cursor, Continue) MUST point at the VSIX-bundled binary by absolute path** — `~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp` on Unix, equivalent on Windows. The bare-name `deslop-mcp` (PATH lookup) form is only valid for users who installed the CLI via Homebrew/Scoop. A locally-built binary on `PATH` would shadow the shipright-versioned bundle and silently drift the agent's analysis off the extension's wire contract. Every doc that shows an MCP config snippet uses the absolute VSIX path as the primary form.
 - **Centralize all global state** in `crates/deslop-core/src/state.rs`.
 - **Never delete failing tests. Never remove assertions.** Reducing assertiveness = ⛔️ ILLEGAL.root — NOT env vars, NOT gh repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
 - **Coarse E2E tests only.** No unit tests. Drive the CLI end-to-end against fixture repos and assert against rendered reports.

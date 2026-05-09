@@ -122,7 +122,11 @@
       "Skill(fix-bug:*)",
       "Bash(cp crates/deslop-core/src/wire_generated.rs /tmp/wire_generated_baseline.rs)",
       "Bash(cp clients/vscode/src/types/wire-generated.ts /tmp/wire_generated_baseline.ts)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop log --oneline deployment -5)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop branch --list)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop worktree list)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop status --short)"
     ]
   },
   "autoMemoryEnabled": false

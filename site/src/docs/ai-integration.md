@@ -11,6 +11,49 @@ icon: smart_toy
 
 Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI.
 
+## Wire `deslop-mcp` into your client — point at the VSIX-bundled binary
+
+`deslop-mcp` ships **inside the VS Code extension VSIX**. After you install the extension, every external MCP client (Claude Code, Claude Desktop, Codex, Cursor, Continue) should reference the unpacked VSIX binary by absolute path so the agent runs the exact binary the extension ships — version-locked to the VSIX, no `PATH` drift.
+
+After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+
+```
+~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+```
+
+`<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`. `<VERSION>` is the installed extension version — bump it whenever you update the VSIX.
+
+### Claude Code
+
+```bash
+claude mcp add deslop -s user -- \
+  ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  --root .
+```
+
+### Codex (`~/.codex/config.toml`)
+
+```toml
+[mcp_servers.deslop]
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+args    = ["--root", "."]
+```
+
+### Claude Desktop (`claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "deslop": {
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "args": ["--root", "/absolute/path/to/your/repo"]
+    }
+  }
+}
+```
+
+> **Do not point an MCP client at a `cargo install` or `target/release` build.** Building Deslop from source is for testing the change you just made; it is not a distribution channel. The repo deliberately ships no `make install-binary` target. The only PATH-resolved form Deslop supports is `brew install nimblesite/tap/deslop` / `scoop install deslop` for CLI users — those package managers version the binary lock-step with the release.
+
 ## Prevention beats cure — `find-similar` is the keystone
 
 The fastest deduplication is the one that never lands. Deslop's MCP server exposes `find-similar` as the **prevention** tool: an agent calls it *before* writing a new function, helper, or test setup. If the proposed pattern already exists with high similarity, the agent reuses the canonical implementation instead of authoring a fresh copy.

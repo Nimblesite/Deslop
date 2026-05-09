@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
 
 JETBRAINS_DIR := clients/jetbrains
 
@@ -146,30 +146,17 @@ build-release:
 	@echo "==> Building release binary..."
 	cargo build --release --package deslop
 
-## install-binary: Clean, build release, and install all three binaries
-##                 (deslop, deslop-lsp, deslop-mcp) onto the user's PATH.
-##                 Deletes the installed binaries and runs `cargo clean` first
-##                 so a stale build artifact can never shadow the source on disk.
-install-binary:
-	@for _bin in deslop deslop-lsp deslop-mcp; do \
-	  echo "==> Removing previously installed $$_bin binary..."; \
-	  cargo uninstall $$_bin 2>/dev/null || true; \
-	  $(RM) "$(HOME)/.cargo/bin/$$_bin"; \
-	done
-	@echo "==> Cleaning build artifacts..."
-	cargo clean --release --package deslop --package deslop-lsp --package deslop-mcp
-	@echo "==> Building release binaries from clean state..."
-	cargo build --release --package deslop --package deslop-lsp --package deslop-mcp
-	@for _crate in deslop deslop-lsp deslop-mcp; do \
-	  echo "==> Installing $$_crate binary..."; \
-	  cargo install --locked --path crates/$$_crate --force; \
-	done
-
-## delete-path-binaries: Remove cargo-installed Deslop binaries before tests so
-##                       extension tests cannot accidentally pass by resolving
-##                       PATH instead of the extension bundle. VS Code extension
-##                       directory. The VSIX resolver uses explicit bundled
-##                       paths and must never rely on PATH resolution.
+## delete-path-binaries: Remove any Deslop binaries that have leaked onto the
+##                       user's PATH (e.g. from a stray `cargo install`). The
+##                       VSIX is the only legitimate distribution surface — the
+##                       VS Code extension, Claude Code MCP, Codex MCP, and any
+##                       other host MUST resolve `deslop`, `deslop-lsp`, and
+##                       `deslop-mcp` from the unpacked VSIX `bin/<platform>/`
+##                       directory by absolute path. PATH resolution would let
+##                       a locally-built binary shadow the shipright-versioned
+##                       bundle. This target is invoked by every `vsix-*` and
+##                       `test` target so a developer machine that previously
+##                       ran `cargo install` is automatically scrubbed.
 delete-path-binaries:
 	@echo "==> Removing cargo-installed Deslop binaries from PATH..."
 	@for _bin in deslop deslop-lsp deslop-mcp; do \
@@ -350,7 +337,7 @@ help:
 	@echo "  test-ollama    - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  ci-ollama      - make ci plus make test-ollama"
 	@echo "  build-release  - Build the release binary for the deslop CLI"
-	@echo "  install-binary - Build release and install binary onto PATH"
+	@echo "  delete-path-binaries - Scrub Deslop binaries off PATH (VSIX bundle is canonical)"
 	@echo "  vsix-install   - Install Node deps for clients/vscode + webview-ui"
 	@echo "  vsix-build     - Build LSP + MCP + VSIX bundle + webview UI"
 	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"

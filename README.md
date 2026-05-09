@@ -113,26 +113,43 @@ Full flag reference: `deslop --help`.
 
 Deslop ships an MCP server — `deslop-mcp` — that exposes live clone analysis as tools any MCP-compatible agent can call: `top-offenders`, `rescan`, `report-get`, `report-for-file`, `report-for-range`, `find-similar`, `cluster-by-id`, `list-embedding-models`, `set-embedding-model`, `session-config`.
 
-The VS Code extension bundles `deslop-mcp` alongside the LSP. If you installed the CLI standalone, `brew install nimblesite/tap/deslop` and `scoop install deslop` both ship the MCP binary too.
+### The binary lives inside the VSIX — point your agent at it by absolute path
+
+The VS Code extension bundles `deslop-mcp` alongside the LSP, **and that bundled binary is the canonical one for every external MCP client too** (Claude Code, Claude Desktop, Codex, Cursor, Continue). The MCP config snippets below use an absolute path into the unpacked VSIX so the agent runs the exact binary the extension ships — version-locked to the VSIX, no PATH drift, no stale `cargo install` shadowing the release.
+
+After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+
+| Platform | Path |
+| --- | --- |
+| macOS / Linux | `~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp` |
+| Windows | `%USERPROFILE%\.vscode\extensions\nimblesite.deslop-vscode-<VERSION>\bin\win32-x64\deslop-mcp.exe` |
+
+`<platform>` is one of `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`. `<VERSION>` is the installed extension version — bump it whenever you update the VSIX.
+
+> **Do not use a `cargo install`-built binary in your MCP config.** Building Deslop from source produces `target/release/deslop-mcp` for testing only — it is not a distribution channel. The repo deliberately ships no `make install-binary` target, and `make delete-path-binaries` runs before every test target to scrub leaked PATH copies. The only "PATH-resolved" form that is supported is when the user installed the CLI via `brew install nimblesite/tap/deslop` or `scoop install deslop` — those package managers version the binary lock-step with releases.
 
 ### Claude Code
 
 ```bash
-claude mcp add deslop -- deslop-mcp --root .
+claude mcp add deslop -s user -- \
+  ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  --root .
 ```
 
-Or edit `~/.claude.json` / `.mcp.json` directly:
+Or edit `~/.claude.json` directly:
 
 ```json
 {
   "mcpServers": {
     "deslop": {
-      "command": "deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "."]
     }
   }
 }
 ```
+
+Homebrew/Scoop CLI users may substitute `"command": "deslop-mcp"` (PATH lookup) since the package manager guarantees the binary version matches the install.
 
 ### Claude Desktop
 
@@ -142,14 +159,14 @@ Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "deslop": {
-      "command": "deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "/absolute/path/to/your/repo"]
     }
   }
 }
 ```
 
-Restart Claude Desktop. Use an absolute path — Claude Desktop doesn't inherit a working directory.
+Restart Claude Desktop. Use an absolute path for `--root` — Claude Desktop doesn't inherit a working directory.
 
 ### Codex
 
@@ -157,7 +174,7 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.deslop]
-command = "deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 

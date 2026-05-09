@@ -6,6 +6,35 @@ The whole point of Deslop is to keep duplicates out of the repo in the first pla
 
 ---
 
+## Step 0 — wire `deslop-mcp` into your client
+
+The MCP rules below assume your client can actually call `deslop-mcp`. Configure it once per machine, per client.
+
+**The binary you wire up is the one bundled inside the installed VSIX**, not a `cargo install` build. Building Deslop from source produces `target/release/deslop-mcp` for testing only — it is deliberately not installed onto `PATH`. Point your MCP client at the unpacked VSIX path so the agent talks to the exact binary the extension ships and stays version-locked to it.
+
+After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+
+```
+~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+```
+
+`<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`. `<VERSION>` is the installed extension version — update it when you update the VSIX.
+
+- **Claude Code:** `claude mcp add deslop -s user -- ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp --root .`
+- **Codex (`~/.codex/config.toml`):**
+  ```toml
+  [mcp_servers.deslop]
+  command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+  args    = ["--root", "."]
+  ```
+- **Claude Desktop, Cursor, Continue:** same idea — set `command` to the absolute VSIX path, set `args` to `["--root", "<absolute repo path>"]`.
+
+Homebrew/Scoop CLI users (`brew install nimblesite/tap/deslop` / `scoop install deslop`) may use the bare-name `"command": "deslop-mcp"` form because the package manager versions the binary lock-step with releases. Everyone else uses the absolute VSIX path.
+
+The full snippet set lives in the [root README](https://github.com/Nimblesite/Deslop#use-deslop-from-an-ai-agent-mcp).
+
+---
+
 ## Paste this into `AGENTS.md` and `CLAUDE.md`
 
 ```markdown

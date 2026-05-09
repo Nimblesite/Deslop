@@ -4,6 +4,29 @@ Thin Model Context Protocol shell that reads the live report written by `deslop-
 
 Crate: `crates/deslop-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Under 100 LOC of glue.
 
+### [MCP-EXTERNAL-CLIENT] External MCP client wiring
+
+External MCP clients — Claude Code (CLI), Claude Desktop, Codex, Cursor,
+Continue — run outside the VS Code host process and do not inherit the
+extension's bundled `PATH`. They must be configured with an **absolute path
+into the unpacked VSIX**:
+
+```
+~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+```
+
+This is the same binary the VS Code extension launches for its in-process MCP
+host, so the agent sees identical analysis whether it talks to Copilot Chat
+inside VS Code or to Codex over its own stdio MCP. Per
+[DEPLOY-EXTERNAL-MCP-CONSUMER] this is the only supported wiring outside of
+the brew/scoop PATH form. Pointing a client at `target/release/deslop-mcp` or
+a `cargo install` artifact silently drifts the agent's analysis off the
+shipright-versioned wire contract and is forbidden by the rules in
+[CLAUDE.md](../../CLAUDE.md).
+
+Wiring examples per client live in the [root README](../../README.md#use-deslop-from-an-ai-agent-mcp)
+and the paste-ready [`docs/snippets/agents-md-recipe.md`](../snippets/agents-md-recipe.md).
+
 ### [MCP-WHY-LIVE] Why the agent sees a live report
 
 An agent that runs the CLI once at the start of a session sees a stale report after its first edit. The LSP re-analyses on every file change and writes the new report to `.deslop-cache/live-report.json`. The MCP reads that file on every tool call — so the agent always works against a report that reflects the current source. No duplicate CPU, no extra watcher, no divergent analysis state.
