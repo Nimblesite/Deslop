@@ -501,7 +501,17 @@ impl McpBackend for StateFileBackend {
                         push_report_changed(s, gen);
                     }
                 }
-                Ok(refresh_progress.unwrap_or_else(|| empty_rescan_progress(gen)))
+                // Issue #135: report the MCP backend generation that
+                // `report-get` and `session-config` will return next, so
+                // agents see one consistent counter. The LSP's internal
+                // generation must not leak through the MCP wire.
+                Ok(refresh_progress.map_or_else(
+                    || empty_rescan_progress(gen),
+                    |progress| RescanProgress {
+                        generation: gen,
+                        summary: progress.summary,
+                    },
+                ))
             }
             Err(BackendError::LspNotRunning) => Ok(empty_rescan_progress(
                 self.generation.load(Ordering::Relaxed),
