@@ -43,20 +43,20 @@ Each tool has a JSON schema and an agent-readable description. Descriptions are 
 
 | Tool | Inputs | Output | Description |
 |---|---|---|---|
-| `top-offenders` | `{ n? }` | `TopOffenders` | Fetch the worst duplicate clusters with full occurrences, interpretation, signals, bucket, and score. Start here when choosing what to fix. |
-| `rescan` | `{ paths?, n? }` | `RescanPayload` | Ask the running LSP to execute `deslop.lsp.refreshReport`, synchronously reload the LSP-written state file, then return fresh top offenders plus `generation` and `summary` change counts. If the LSP socket is absent, falls back to cache reload only with an empty summary. Use when watcher lag or stale ranges are suspected. |
+| `top-offenders` | `{ n?, max_occurrences? }` | `TopOffenders` | Fetch the worst duplicate clusters with full occurrences, interpretation, signals, bucket, and score. Start here when choosing what to fix. `max_occurrences` (default 15) caps total occurrences across returned clusters per [MCP-OCCURRENCE-BUDGET]. |
+| `rescan` | `{ paths?, n?, max_occurrences? }` | `RescanPayload` | Ask the running LSP to execute `deslop.lsp.refreshReport`, synchronously reload the LSP-written state file, then return fresh top offenders plus `generation` and `summary` change counts. If the LSP socket is absent, falls back to cache reload only with an empty summary. Same `max_occurrences` budget as `top-offenders`. Use when watcher lag or stale ranges are suspected. |
 | `report-get` | `{ offset, limit }` (both required) | `ReportPage` | Fetch one page of the current duplication report. Worst offenders first. Call at session start; follow with `cluster-by-id` to drill in. Both `offset` and `limit` are required — the agent sizes its own context window. |
 | `report-query` | `{ offset, limit, language?, bucket?, path_contains?, min_score?, min_size? }` | `ReportPage` | Filtered lookup. Use instead of `report-get` when you can describe what you're looking for. |
 | `schema-doc` | `{}` | `SchemaDocPayload` | One-shot schema markdown. Call once when learning field meanings; report pages omit `schema_doc` by default to avoid repeated context bloat. |
-| `report-for-file` | `{ path }` | `FileReport` | All clone clusters touching this file. Call before editing to see what's already duplicated here. |
-| `report-for-range` | `{ path, start_byte, end_byte }` | `[Cluster]` | Clusters overlapping the byte range you're about to edit. |
+| `report-for-file` | `{ path, max_occurrences? }` | `FileReport` | All clone clusters touching this file. Call before editing to see what's already duplicated here. `max_occurrences` (default 15) per [MCP-OCCURRENCE-BUDGET]. |
+| `report-for-range` | `{ path, start_byte, end_byte, max_occurrences? }` | `[Cluster]` | Clusters overlapping the byte range you're about to edit. Same budget. |
 | `cluster-by-id` | `{ id }` | `Cluster` | Fetch a cluster by its stable 16-char id. The only tool that returns full occurrence lists — `report-get` and `report-query` omit them to keep pages slim. |
 
 **Compute tools** (delegate to LSP via [LIVE-IPC-SOCKET] — requires LSP running):
 
 | Tool | Inputs | Output | Description |
 |---|---|---|---|
-| `find-similar` | `{ path?, start_byte?, end_byte?, snippet?, language? }` | `[Cluster]` | **Before you write a new block, call this.** Runs the full structural + LSH + embedding passes on the input against the live index. Prevents introducing new clones. Returns `LspNotRunning` if LSP is absent. See [MCP-TOOL-FINDSIMILAR]. |
+| `find-similar` | `{ path?, start_byte?, end_byte?, snippet?, language?, top_n?, max_occurrences? }` | `[Cluster]` | **Before you write a new block, call this.** Runs the full structural + LSH + embedding passes on the input against the live index. Prevents introducing new clones. Returns `LspNotRunning` if LSP is absent. Same budget as `top-offenders`. See [MCP-TOOL-FINDSIMILAR]. |
 | `list-embedding-models` | `{}` | `[EmbeddingModelInfo]` | Enumerate Ollama models on the host. Delegates to LSP; falls back to state file embedding provenance if LSP is absent. |
 | `set-embedding-model` | `{ provider_id, model_id, endpoint?, user_initiated: true }` | `EmbeddingProvenance` | Switch the live embedding model after a human-initiated request. Writes shared workspace settings and notifies the LSP via IPC. The agent must not use this autonomously. See [MCP-EMBEDDING-CONSENT]. |
 
@@ -67,6 +67,58 @@ Each tool has a JSON schema and an agent-readable description. Descriptions are 
 | `session-config` | `{}` | `SessionConfig` | min-nodes, active languages, embedding provenance, exclusion config path, cache root. Read from state file; live fields from LSP if reachable. |
 
 All tools are source-read-only except `set-embedding-model`; `rescan` never edits source, but it may trigger the LSP's full refresh command before reloading MCP's cache and emitting report-change notifications. `set-embedding-model` requires `user_initiated: true` and may only be set after a human asked for the switch.
+
+### [MCP-OCCURRENCE-BUDGET] Per-call total-occurrence budget
+
+Every tool that ships full `ReportCluster` shapes — `top-offenders`, `rescan`,
+`report-for-file`, `report-for-range`, `find-similar` — accepts an optional
+`max_occurrences` parameter (default **15**) that bounds the **total** number
+of occurrences across **all** returned clusters. The budget is the
+fix for [issue #136](https://github.com/Nimblesite/Deslop/issues/136): an
+unbounded `top-offenders` response on a real workspace ships 50+ occurrences
+per cluster (each carrying byte ranges + paths), and that's enough to
+crash some MCP clients (e.g. Codex's `rmcp_client`). No tool result is
+allowed to be large enough to break the agent.
+
+**Algorithm.** Walk the candidate clusters worst-first. Track running
+`used` occurrences. For each cluster:
+
+- If `used >= max_occurrences`: **drop this cluster and every following
+  cluster.**
+- Else if `cluster.occurrences.len() <= remaining_budget`: include the
+  cluster fully, advance `used`.
+- Else: include the cluster with `occurrences` truncated to the
+  `remaining_budget`, set `occurrences_truncated = true`, mark
+  `used = max_occurrences`. Stop after this cluster.
+
+A budget that is exactly consumed by a cluster's full occurrence list
+does **not** set `occurrences_truncated`; truncation only fires when a
+cluster's tail was actually dropped.
+
+**`total_occurrences`.** Every payload reports the **unfiltered**
+occurrence count across every cluster the tool would have considered.
+Agents read this to know how much was filtered. For
+`top-offenders` / `rescan` it sums across the entire report; for
+`report-for-file` / `report-for-range` it sums across the clusters
+matching the path/range; for `find-similar` it sums across the matched
+clusters.
+
+**Per-cluster `occurrences_total`.** Already on `ReportCluster` from the
+live-wire truncation pass. The budget keeps it accurate per cluster:
+when the tail is dropped, `occurrences_total` reflects the cluster's
+true count, not the truncated array length.
+
+**`cluster-by-id`** is the escape hatch. It returns the full cluster
+without applying the budget (the agent specifically asked for one
+cluster), capped only by the existing live-wire `LIVE_WIRE_OCCURRENCE_CAP`
+of 100. Agents that need every occurrence of a clipped cluster call
+`cluster-by-id` with the cluster's stable id.
+
+Tool descriptions in `crates/deslop-mcp/src/tools/mod.rs` lead with the
+budget so an LLM reading `tools/list` sees the contract before the first
+call. Tests `issue_136_top_offenders_max_occurrences_caps_response_and_reports_total`
+and `issue_136_top_offenders_default_max_occurrences_is_fifteen` in
+`crates/deslop-mcp/tests/cli.rs` lock the behaviour.
 
 ### [MCP-EMBEDDING-CONSENT] Embedding model consent
 

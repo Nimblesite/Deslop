@@ -49,7 +49,7 @@ const TOOLS: [ToolDefinition; 12] = [
     ToolDefinition {
         name: "top-offenders",
         description: concat!(
-            "Top N duplicate clusters with full data (occurrences, interpretation, signals, bucket, score). Default n=5. Start here — one call gives everything needed to fix duplication.",
+            "Top N duplicate clusters with full data (occurrences, interpretation, signals, bucket, score). Default n=5. Capped by max_occurrences (default 15) total across returned clusters — when the budget is hit, the overrunning cluster is truncated and following clusters are dropped. Result reports total_occurrences (unfiltered count) plus per-cluster occurrences_truncated. Use cluster-by-id to fetch the full occurrence list of any one cluster.",
             fp_warn!(),
         ),
         input_schema: schema_top_offenders,
@@ -57,7 +57,7 @@ const TOOLS: [ToolDefinition; 12] = [
     ToolDefinition {
         name: "rescan",
         description:
-            "Synchronously reload the latest LSP state after edits, then return fresh top offenders. Use when watcher lag or stale ranges are suspected.",
+            "Synchronously reload the latest LSP state after edits, then return fresh top offenders. Same n/max_occurrences semantics as top-offenders. Use when watcher lag or stale ranges are suspected.",
         input_schema: schema_rescan,
     },
     ToolDefinition {

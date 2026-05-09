@@ -636,6 +636,106 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
 }
 
 #[test]
+fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> Result<()> {
+    // Issue #136 [MCP-OCCURRENCE-BUDGET]. A `top-offenders` response on a real
+    // workspace can ship 50+ occurrences per cluster — large enough to crash
+    // some MCP clients (e.g. Codex's rmcp_client). The fix: a `max_occurrences`
+    // budget across returned clusters that keeps the response small while
+    // surfacing the true unfiltered count via `total_occurrences` so the agent
+    // knows what was filtered. cluster-by-id remains the way to fetch the full
+    // occurrence list of any one cluster.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+
+    let baseline = call_tool(&mut child, "top-offenders", &json!({ "n": 5 }))?;
+    let baseline_payload = structured_tool_result(&baseline)?;
+    let baseline_total = value_get(&baseline_payload, "/total_occurrences")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_occurrences must be a non-negative integer"))?;
+    assert!(
+        baseline_total > 0,
+        "fixture must contain at least one occurrence: {baseline_payload}"
+    );
+
+    // Pick a budget strictly below the baseline total so truncation MUST
+    // fire (either per-cluster or by dropping trailing clusters).
+    let budget = baseline_total
+        .checked_sub(1)
+        .filter(|&b| b > 0)
+        .unwrap_or(1);
+    let result = call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 5, "max_occurrences": budget }),
+    )?;
+    let payload = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&payload, "/max_occurrences")?.as_u64(),
+        Some(budget),
+        "result must echo the requested max_occurrences"
+    );
+    assert_eq!(
+        value_get(&payload, "/total_occurrences")?.as_u64(),
+        Some(baseline_total),
+        "total_occurrences must equal the unfiltered count, not the budgeted count"
+    );
+    let clusters = value_get(&payload, "/clusters")?;
+    let clusters_arr = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?;
+    let returned: u64 = clusters_arr
+        .iter()
+        .map(|c| {
+            c.get("occurrences")
+                .and_then(Value::as_array)
+                .map_or(0u64, |a| a.len() as u64)
+        })
+        .sum();
+    assert!(
+        returned <= budget,
+        "budget={budget} must yield at most {budget} occurrences total across returned clusters; got {returned}"
+    );
+    // The budget can manifest two ways: (a) a cluster shipped with
+    // `occurrences_truncated=true` (its tail dropped), or (b) trailing
+    // clusters were dropped entirely (returned_clusters < total_clusters
+    // limited by `n`). Either is a valid truncation signal — assert at
+    // least one fired given baseline_total exceeds the budget of 2.
+    let total_clusters = value_get(&payload, "/total_clusters")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_clusters missing"))?;
+    let n_requested = value_get(&payload, "/n")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("n missing"))?;
+    let cap = total_clusters.min(n_requested);
+    let returned_clusters = clusters_arr.len() as u64;
+    let truncation_marker_present = clusters_arr
+        .iter()
+        .any(|c| c.get("occurrences_truncated").and_then(Value::as_bool) == Some(true));
+    let dropped_following_cluster = returned_clusters < cap;
+    assert!(
+        truncation_marker_present || dropped_following_cluster,
+        "budget={budget} with baseline_total={baseline_total} must drop trailing clusters or set occurrences_truncated; got {returned_clusters}/{cap} clusters back: {clusters_arr:#?}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_136_top_offenders_default_max_occurrences_is_fifteen() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({}))?;
+    let payload = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&payload, "/max_occurrences")?.as_u64(),
+        Some(15),
+        "omitting max_occurrences must default to 15 ([MCP-OCCURRENCE-BUDGET])"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_identical() -> Result<()>
 {
     let mut child = McpChild::spawn(fixture_root(), &[])?;

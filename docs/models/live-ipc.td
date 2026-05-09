@@ -38,11 +38,13 @@ type FindSimilarRequest {
 type FindSimilarResult {
   clusters: List<ReportCluster>
   below_min_nodes: Bool
+  total_occurrences: Int
 }
 
 type FileReport {
   path: String
   clusters: List<ReportCluster>
+  total_occurrences: Int
 }
 
 type SessionConfig {
@@ -394,6 +396,8 @@ type SchemaDocPayload {
 type TopOffendersPayload {
   total_clusters: Int
   n: Int
+  max_occurrences: Int
+  total_occurrences: Int
   clusters: List<ReportCluster>
 }
 
@@ -405,6 +409,8 @@ type TopOffendersPayload {
 type RescanPayload {
   total_clusters: Int
   n: Int
+  max_occurrences: Int
+  total_occurrences: Int
   clusters: List<ReportCluster>
   generation: Int
   summary: ChangeSummary
@@ -420,6 +426,7 @@ type RangeReport {
   start_byte: Int
   end_byte: Int
   clusters: List<ReportCluster>
+  total_occurrences: Int
 }
 
 # ---------------------------------------------------------------------------

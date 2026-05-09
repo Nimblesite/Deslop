@@ -57,19 +57,24 @@ export const CORE_TYPE_CONFIG = {
   FindSimilarResult: {
     docs: "Result of `duplicates/findSimilar`. See `docs/models/live-ipc.td`.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { total_occurrences: "usize" },
     fieldDocs: {
-      clusters: "Top-N clusters covering the input, worst-first.",
+      clusters: "Top-N clusters covering the input, worst-first, post-budget.",
       below_min_nodes:
         "True when every subtree fell below the session's `min_nodes` floor.",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster matched by the query — what the budget filtered down from ([MCP-OCCURRENCE-BUDGET]).",
     },
   },
   FileReport: {
     docs: "File-scoped subset of a report; returned by `report/forFile`.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldOverrides: { path: "PathBuf" },
+    fieldOverrides: { path: "PathBuf", total_occurrences: "usize" },
     fieldDocs: {
       path: "Path the report covers, workspace-relative when possible.",
-      clusters: "Clusters whose occurrences touch `path`, byte-range sorted.",
+      clusters: "Clusters whose occurrences touch `path`, byte-range sorted, post-budget.",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster touching `path`.",
     },
   },
   SessionConfig: {

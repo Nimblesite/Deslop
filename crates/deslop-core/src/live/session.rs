@@ -394,9 +394,11 @@ impl AnalysisSession {
             .cloned()
             .collect();
         clusters.sort_by_key(|cluster| earliest_byte_for_path(cluster, path));
+        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         FileReport {
             path: path.to_path_buf(),
             clusters,
+            total_occurrences,
         }
     }
 
@@ -532,9 +534,11 @@ impl AnalysisSession {
         self.guard_path(path)?;
         let mut clusters = self.report_for_range(path, start_byte, end_byte);
         truncate(&mut clusters, max_results);
+        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
             clusters,
             below_min_nodes: false,
+            total_occurrences,
         })
     }
 
@@ -551,13 +555,16 @@ impl AnalysisSession {
             return Ok(FindSimilarResult {
                 clusters: Vec::new(),
                 below_min_nodes: true,
+                total_occurrences: 0,
             });
         }
         let mut clusters = self.clusters_matching_hashes(&snippet_hashes);
         truncate(&mut clusters, max_results);
+        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
             clusters,
             below_min_nodes: false,
+            total_occurrences,
         })
     }
 
