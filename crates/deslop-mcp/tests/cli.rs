@@ -636,6 +636,41 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
 }
 
 #[test]
+fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_identical() -> Result<()>
+{
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({ "n": 5 }))?;
+    let payload = structured_tool_result(&result)?;
+    let clusters = value_get(&payload, "/clusters")?;
+    let structural_only_nearly_identical = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?
+        .iter()
+        .find(|cluster| {
+            cluster.get("bucket").and_then(Value::as_str) == Some("nearly_identical")
+                && cluster
+                    .pointer("/signals/structural")
+                    .and_then(Value::as_f64)
+                    == Some(1.0)
+                && cluster
+                    .pointer("/signals/token_jaccard")
+                    .and_then(Value::as_f64)
+                    == Some(0.0)
+                && cluster
+                    .pointer("/signals/embedding_cos")
+                    .and_then(Value::as_f64)
+                    == Some(0.0)
+        });
+    assert!(
+        structural_only_nearly_identical.is_none(),
+        "issue #134: top-offenders must not present structural-only zero-token matches as ordinary nearly_identical duplication: {structural_only_nearly_identical:#?}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
 fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;

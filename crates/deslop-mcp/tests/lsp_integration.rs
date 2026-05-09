@@ -400,6 +400,35 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let beta = workspace.path().join("Beta.cs");
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
+
+    let mut mcp = initialized_mcp(workspace.path())?;
+    fs::write(
+        &beta,
+        b"namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+    let response = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "rescan",
+            "arguments": { "paths": [beta.to_string_lossy().into_owned()], "n": 1 }
+        }),
+    )?;
+    let after = structured_content(&response, "rescan")?;
+    assert_rescan_generation_matches_visible_state(&mut mcp, &after)?;
+    Ok(())
+}
+
 fn beta_cluster_id(response: &Value, structured: &Value) -> Result<String> {
     structured
         .get("clusters")
@@ -433,6 +462,35 @@ fn assert_rescan_progress(after: &Value, response: &Value) -> Result<()> {
     ensure!(
         after.get("n").and_then(Value::as_u64) == Some(100),
         "rescan must echo the requested top-offenders count: {response}"
+    );
+    Ok(())
+}
+
+fn assert_rescan_generation_matches_visible_state(
+    mcp: &mut McpHandle,
+    after: &Value,
+) -> Result<()> {
+    let rescan_generation = after
+        .get("generation")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("rescan must expose a numeric generation: {after}"))?;
+    let report = mcp.request(
+        "tools/call",
+        &json!({ "name": "report-get", "arguments": { "offset": 0, "limit": 0 } }),
+    )?;
+    let report_page = structured_content(&report, "report-get")?;
+    let session = mcp.request(
+        "tools/call",
+        &json!({ "name": "session-config", "arguments": {} }),
+    )?;
+    let session_config = structured_content(&session, "session-config")?;
+    ensure!(
+        report_page.get("generation").and_then(Value::as_u64) == Some(rescan_generation),
+        "issue #135: rescan generation must match report-get generation: rescan {rescan_generation}, report {report_page}"
+    );
+    ensure!(
+        session_config.get("generation").and_then(Value::as_u64) == Some(rescan_generation),
+        "issue #135: rescan generation must match session-config generation: rescan {rescan_generation}, session {session_config}"
     );
     Ok(())
 }
