@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 mod common;
 use common::{
     copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, SOCKET_TIMEOUT,
+    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
 };
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
