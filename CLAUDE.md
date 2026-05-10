@@ -12,6 +12,9 @@
 ⚠️ ALL MODELS TRANSFERRED ACROSS THE WIRE MUST USE typeDiagram. NO IFS. NO BUTS
 https://typediagram.dev/docs/language-reference.html ⚠️
 
+⚠️ DESLOP.LIVE means the whole loop (watcher → scheduler → session → broadcast → UI).
+ Incremental updates trigger the whole pipeline, including the UI to update reactively ⚠️ 
+
 ## Project Overview
 
 **Deslop** (a.k.a. Deslop Live) is a **live duplicate-code analysis server** for AI coding agents and the humans driving them. The shipping surfaces are `deslop-lsp` (LSP server feeding live clone warnings to any LSP-capable editor) and `deslop-mcp` (MCP server letting Claude Code / Cursor / Copilot / Continue / Codex query the running analysis mid-generation, *before* a copy-paste happens). The `deslop` CLI is the cold-cache fallback for CI gates and one-shot audits. All three binaries are thin shells over one `deslop-core` library — the LSP and MCP sit in the agent's inner loop, the CLI re-uses the same engine for batch runs. Ranking is **worst offenders first** (highest weighted duplication impact at the top). Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap. Languages start with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.

@@ -19,7 +19,7 @@ use deslop_core::{
     embedding::{EmbeddingMode, StubProvider},
     live::{
         AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest, LiveApi,
-        LiveError, LiveService, LiveWatcher,
+        LiveError, LiveService, LiveWatcher, Scheduler,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
@@ -109,6 +109,88 @@ async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Res
     assert!(
         outcome.is_err(),
         "explicit nonexistent config path must propagate an error"
+    );
+    Ok(())
+}
+
+// Implements #139: editing `.deslop.toml` is a first-class live
+// incremental update. Drives the full live loop —
+// [`LiveWatcher`] → [`Scheduler`] → [`AnalysisSession`] →
+// `report_changed` broadcast — and asserts the cluster becomes hidden
+// after a `report_hide` edit reaches disk. Deslop.Live MUST react to
+// config edits the same way it reacts to source edits. No
+// developer-window reload, no manual rescan.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    // Canonicalise so notify-reported paths and our paths share a prefix.
+    let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
+    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
+    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        hidden_dir.join("Alpha.cs"),
+    )
+    .context("copy Alpha.cs")?;
+    let _beta_bytes = fs::copy(
+        fixture("csharp-small").join("Beta.cs"),
+        hidden_dir.join("Beta.cs"),
+    )
+    .context("copy Beta.cs")?;
+    let config_path = scan_root.join(".deslop.toml");
+    fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
+
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(scan_root.clone(), 15, false, None, provider)
+        .context("session")?;
+    let pre = session.report();
+    assert!(
+        !pre.clusters.is_empty(),
+        "preconditions: cluster must be visible before the config edit"
+    );
+    let pre_generation = session.generation();
+
+    let session_lock = Arc::new(tokio::sync::Mutex::new(session));
+    let extensions = vec!["cs".to_owned(), "rs".to_owned(), "py".to_owned()];
+    let exclusion = Arc::new(ExclusionConfig::empty());
+    let (_watcher_keep_alive, watcher_rx) =
+        LiveWatcher::start(&scan_root, extensions, exclusion)
+            .map_err(|err| anyhow!("watcher start: {err}"))?;
+    let scheduler = Scheduler::with_system_clock(Arc::clone(&session_lock), watcher_rx);
+    let mut report_rx = scheduler.subscribe_report_changed();
+    // FSEvents (macOS) and inotify (Linux) need a beat to attach.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    fs::write(
+        &config_path,
+        "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
+    )
+    .context("rewrite .deslop.toml")?;
+
+    let notification = tokio::time::timeout(Duration::from_secs(15), report_rx.recv())
+        .await
+        .context("timed out waiting for report_changed after .deslop.toml edit")?
+        .context("report_changed channel closed")?;
+    assert!(
+        notification.generation > pre_generation,
+        ".deslop.toml edit must bump the generation; pre={pre_generation}, post={}",
+        notification.generation,
+    );
+
+    let post = {
+        let guard = session_lock.lock().await;
+        guard.report()
+    };
+    assert!(
+        post.clusters.is_empty(),
+        "live `report_hide` edit must hide the cluster from the visible report; \
+         got {} cluster(s) after the live config update",
+        post.clusters.len(),
+    );
+    assert!(
+        post.clusters_hidden >= 1,
+        "live `report_hide` edit must move the cluster into clusters_hidden; got {}",
+        post.clusters_hidden,
     );
     Ok(())
 }
