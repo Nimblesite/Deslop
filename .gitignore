@@ -104,6 +104,5 @@ clients/vscode/src/types/wire-generated.ts
 
 .ghissues/
 clients/vscode/bin/
-clients/vscode/deployment-toolkit.json
 
 clients/vscode/media/webview/
