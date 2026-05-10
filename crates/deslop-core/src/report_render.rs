@@ -65,7 +65,21 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     );
     let kind = report_bucket_kind(signals, &cluster.members, sources, file_languages);
     let interpretation = interpret(kind);
-    let bucket = kind.wire_label().to_owned();
+    // Issue #134: structural-only matches (high structural fingerprint,
+    // zero token overlap, zero embedding support) are skeleton-shape
+    // collisions. They are still surfaced — Type-2 renamed clones are
+    // legitimate duplication candidates — but the wire label is
+    // demoted away from "nearly_identical" so reports do not overstate
+    // the evidence when only the syntactic shape lines up.
+    let bucket = if kind == ClusterKind::NearlyIdentical
+        && signals.structural >= 0.99
+        && signals.token_jaccard <= f64::EPSILON
+        && signals.embedding_cos <= f64::EPSILON
+    {
+        "structural_only".to_owned()
+    } else {
+        kind.wire_label().to_owned()
+    };
     let occurrences_total = occurrences.len();
     ReportCluster {
         id: cluster.id.clone(),
