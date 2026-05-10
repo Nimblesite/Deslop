@@ -23,7 +23,7 @@ use deslop_core::{
     EmbeddingSpec, Report,
 };
 use serde_json::{json, Value};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::{notify::push_report_changed, NotificationSender};
 

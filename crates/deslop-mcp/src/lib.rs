@@ -2,9 +2,10 @@
 //! to AI agents over JSON-RPC 2.0 / stdio.
 //!
 //! Implements [mcp.md]: peer of the LSP shell ([lsp.md]), thin wrapper
-//! around the LSP-written state file at `.deslop-cache/live-report.json`
-//! via [`backend::StateFileBackend`]. The MCP no longer runs its own
-//! analysis pipeline — the LSP is the single source of truth.
+//! around the LSP IPC socket via [`backend::LiveBackend`]. Every read
+//! and compute call delegates to the LSP's in-memory `latest_report`
+//! over `.deslop-cache/deslop.sock` — the LSP is the single source of
+//! truth and there is no on-disk staleness window between MCP and LSP.
 //!
 //! Implements:
 //! - [MCP-CAPABILITIES] — tools + resources + notifications surface.
@@ -33,7 +34,7 @@ pub mod safety;
 pub mod server;
 pub mod tools;
 
-pub use backend::{McpBackend, SessionBackendConfig, StateFileBackend};
+pub use backend::{LiveBackend, McpBackend, SessionBackendConfig};
 pub use notify::NotificationSender;
 pub use protocol::{ErrorCode, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId};
 pub use safety::{resolve_within_root, PathResolutionError};

@@ -21,7 +21,6 @@ use thiserror::Error;
 
 use crate::safety::PathResolutionError;
 
-mod filters;
 mod ipc;
 mod state;
 
@@ -166,11 +165,10 @@ pub trait McpBackend: Send + Sync {
     fn session_config(&self) -> Result<SessionConfigSnapshot, BackendError>;
 
     /// Signals to the backend that one or more watched files have
-    /// changed. The [`StateFileBackend`] implementation first asks the
-    /// running LSP to execute `deslop.lsp.refreshReport` over IPC, then
-    /// reloads the LSP-written state file and pushes
-    /// `notifications/resources/updated` + `notifications/deslop/reportChanged`
-    /// through the stored sender ([MCP-NOTIFICATIONS]).
+    /// changed. The [`LiveBackend`] implementation forwards a
+    /// `deslop.lsp.refreshReport` IPC request to the running LSP and
+    /// pushes the resulting `notifications/deslop/reportChanged` to
+    /// the MCP client ([MCP-NOTIFICATIONS]).
     ///
     /// # Errors
     ///
@@ -242,7 +240,7 @@ pub struct RescanProgress {
     pub summary: ChangeSummary,
 }
 
-/// Knobs for constructing a [`StateFileBackend`].
+/// Knobs for constructing a [`LiveBackend`].
 #[derive(Debug, Clone)]
 pub struct SessionBackendConfig {
     /// Workspace root to analyse.

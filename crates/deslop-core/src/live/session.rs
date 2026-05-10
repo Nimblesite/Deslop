@@ -334,7 +334,10 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.latest_report = Arc::clone(&next_arc);
-        self.write_state_file();
+        // Per-keystroke writes were the dominant source of inotify
+        // chatter on large workspaces. The seed-cache file is now
+        // persisted only on cold-pass install ([LIVE-SEED-CACHE]); the
+        // MCP reads the live state via IPC, not this file.
         Ok(ReportDelta::between(
             Some((prev_generation, &previous)),
             self.generation,
@@ -476,7 +479,8 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
-        self.write_state_file();
+        // Embedding refresh writes are still per-pass and noisy; seed
+        // cache only updates on cold-pass install.
         Some(CommittedEmbeddingRefresh {
             previous_generation,
             previous_report,
@@ -595,8 +599,11 @@ impl AnalysisSession {
         })
     }
 
-    /// [LIVE-STATE-FILE] Writes the current report snapshot to
-    /// `{root}/.deslop-cache/live-report.json`. Best-effort.
+    /// [LIVE-SEED-CACHE] Persists the current report snapshot to
+    /// `{root}/.deslop-cache/live-report.json` so the next LSP startup
+    /// has a fast warm-start. Called only on initial-pass and
+    /// cold-pass install — never on per-keystroke incremental updates.
+    /// Best-effort: failures are logged but never propagated.
     fn write_state_file(&self) {
         persist_state_file(&self.root, self.latest_report.as_ref(), self.generation);
     }

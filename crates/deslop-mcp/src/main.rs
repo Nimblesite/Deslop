@@ -1,8 +1,8 @@
 //! `deslop-mcp` binary — MCP server over stdio.
 //!
 //! Thin shell over [`deslop_mcp::McpServer`]: parse CLI args,
-//! configure tracing, construct the [`StateFileBackend`], and
-//! drive the server against stdin / stdout.
+//! configure tracing, construct the [`LiveBackend`], and drive
+//! the server against stdin / stdout.
 
 use std::{env, io, path::PathBuf, sync::Arc};
 
@@ -11,7 +11,7 @@ use std::{thread, time::Duration};
 
 use clap::Parser;
 use deslop_core::{version_contract_output, ComponentKind};
-use deslop_mcp::{McpServer, SessionBackendConfig, StateFileBackend};
+use deslop_mcp::{LiveBackend, McpServer, SessionBackendConfig};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
@@ -66,7 +66,7 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         root: cli.root,
         config_path: cli.config,
     };
-    let backend = Arc::new(StateFileBackend::initialise(config)?);
+    let backend = Arc::new(LiveBackend::initialise(config)?);
     let server = McpServer::new(backend);
     let stdin = io::stdin();
     // io::Stdout is Write + Send + 'static; StdoutLock<'_> is not Send,

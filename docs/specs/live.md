@@ -10,7 +10,7 @@ The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo 
 
 - `crates/deslop-lsp` — JSON-RPC over stdio. Owns the `AnalysisSession`, the watcher, the scheduler, and all pipeline work. Writes the state file and the IPC socket.
 
-`crates/deslop-mcp` does **not** link the `live` feature. It reads the LSP's output via the state file ([LIVE-STATE-FILE]) and delegates compute operations via the IPC socket ([LIVE-IPC-SOCKET]).
+`crates/deslop-mcp` does **not** link the `live` feature. It is a pure transport adapter that delegates **every** read and compute call to the running LSP via the IPC socket ([LIVE-IPC-SOCKET]). It never reads `.deslop-cache/live-report.json` — that file is the LSP's private warm-start cache ([LIVE-SEED-CACHE]), not a wire contract.
 
 `crates/deslop` (CLI) does not link `live` either — zero watcher, zero background threads.
 
@@ -72,8 +72,8 @@ One `AnalysisSession` per workspace root, owned by `deslop-lsp`. On `initialize`
 
 1. Opens `.deslop-cache/` for the root (fingerprint cache + embedding cache).
 2. Runs a full initial analysis (warm cache on second launch → cheap).
-3. Writes the initial report to `.deslop-cache/live-report.json` ([LIVE-STATE-FILE]).
-4. Starts the IPC socket ([LIVE-IPC-SOCKET]).
+3. Writes the initial report to `.deslop-cache/live-report.json` ([LIVE-SEED-CACHE]) so the next LSP startup can warm-start.
+4. Starts the IPC socket ([LIVE-IPC-SOCKET]) — the read surface for the MCP.
 5. Starts the file watcher ([LIVE-WATCHER]).
 6. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
 7. Sends `ready` with the initial `Report` to the LSP client.
@@ -113,9 +113,9 @@ pub struct AnalysisSession {
 
 `PipelineSession` carries the file registry, per-file fingerprints, normalised trees, and source bytes ([PIPELINE-INCREMENTAL]). `AnalysisSession` adds orchestration state: the current snapshot, the generation counter, and the subscriber list. All mutable state is reachable from `AnalysisSession`. [STATE-FILE-REGISTRY] is still the only blessed process-global.
 
-### [LIVE-STATE-FILE] Shared state file
+### [LIVE-SEED-CACHE] Warm-start seed cache
 
-After every scheduler pass that produces a new generation, the LSP writes the current report to:
+After the **initial** full pipeline pass and after every **cold-pass install** (the post-cache-seed background refresh), the LSP writes the current report to:
 
 ```
 {workspace_root}/.deslop-cache/live-report.json
@@ -123,26 +123,41 @@ After every scheduler pass that produces a new generation, the LSP writes the cu
 
 **Write is atomic:** write to `live-report.json.tmp`, then `rename()`. Readers always see a complete file or the previous version — never a partial write.
 
-**Format:** canonical `Report` JSON — identical schema to `deslop --output report.json`. The `generation` field lets readers detect that a newer version is available. This file is also what the `deslop://report` MCP resource serves.
+**Format:** canonical `Report` JSON — identical schema to `deslop --output report.json`.
 
-If the LSP is not running, the MCP serves the last written state — stale but complete for its generation.
+**Use:** the file is an **LSP-private startup cache**, not an IPC channel. On the next LSP startup, [LIVE-CACHE-SEED] (`AnalysisSession::try_seeded_from_cache`) loads it so the editor sees clusters within milliseconds while the cold full pass runs in the background.
+
+**Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
 
 ### [LIVE-IPC-SOCKET] IPC socket
 
-Compute-heavy operations that cannot be answered from the state file are delegated to the running LSP via a local socket:
+The LSP exposes its in-memory `latest_report` directly through a local socket. **This is the only read path used by the MCP.** No on-disk cache is consulted on the read side.
 
 - **Unix/macOS:** `{workspace_root}/.deslop-cache/deslop.sock` (Unix domain socket)
-- **Windows:** `\\.\pipe\deslop-{workspace_root_hash}` (named pipe)
+- **Windows:** named-pipe support is a future ticket; today the IPC server is `#[cfg(unix)]` only.
 
-The LSP creates the socket on startup and removes it on clean shutdown. The MCP connects on demand (lazy, not persistent). The IPC protocol is JSON-RPC 2.0 using a subset of the `LiveApi` methods:
+The LSP creates the socket on startup and removes it on clean shutdown. The MCP connects on demand (lazy, not persistent). Protocol: line-delimited JSON-RPC 2.0.
 
-| Method | Used by MCP for |
+**Single-shot methods** (one request → one response, connection closes):
+
+| Method | MCP tool consumer |
 |---|---|
-| `duplicates/findSimilar` | `find-similar` tool |
-| `embedding/listModels` | `list-embedding-models` tool |
-| `session/config` | `session-config` tool (live fields) |
+| `report/get` | `report-get`, `report-query`, top-offenders bookkeeping |
+| `report/forFile` | `report-for-file` |
+| `report/forRange` | `report-for-range` |
+| `cluster/byId` | `cluster-by-id` |
+| `session/config` | `session-config` |
+| `duplicates/findSimilar` | `find-similar` |
+| `embedding/listModels` | `list-embedding-models` |
+| `deslop.lsp.refreshReport` | `rescan` |
 
-If the socket is absent (LSP not running), `find-similar` returns `LspNotRunning`. `list-embedding-models` and `session-config` fall back to the state file where possible.
+**Long-lived subscription**:
+
+| Method | MCP behaviour |
+|---|---|
+| `report/subscribe` | One frame per generation bump until the subscriber disconnects. The MCP forwards each frame as `notifications/deslop/reportChanged` to its own client. |
+
+If the socket is absent, every IPC call returns `LspNotRunning` immediately. The MCP exposes that variant to its own client with an actionable message; it does **not** fall back to a second pipeline. CI / one-shot audits use the `deslop` CLI instead.
 
 ### [LIVE-WATCHER] File watcher
 
@@ -162,8 +177,8 @@ After the watcher emits a coalesced changeset:
 2. Pipeline reuses fingerprint and embedding caches.
 3. Recomputes clustering + ranking over the updated fingerprint set.
 4. Atomically swaps `latest_report`; bumps `generation`.
-5. Writes the new report to `.deslop-cache/live-report.json` ([LIVE-STATE-FILE]).
-6. Pushes a `ReportDelta` to every LSP subscriber.
+5. Broadcasts the new generation through `report_changed` so both LSP push notifications and IPC `report/subscribe` subscribers receive the same event ([LIVE-IPC-SOCKET]).
+6. **Does NOT** rewrite `live-report.json`. The seed cache is per-cold-pass only ([LIVE-SEED-CACHE]).
 
 Single-threaded per session. Consecutive queued changesets merge before dispatch.
 
@@ -189,7 +204,7 @@ Cluster ids are stable across runs ([REPORTING-CONTEXT §"How to read the report
 
 ### [LIVE-QUERY-API] Query API (LSP-internal)
 
-The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl and routes LSP-transport requests to it. The MCP does **not** hold `LiveApi` — it reads the state file for snapshot queries and connects via the IPC socket for compute operations.
+The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl and routes both LSP-transport requests and IPC dispatches to it. The MCP does **not** hold `LiveApi`; every MCP read becomes one IPC round-trip to the LSP-held `LiveService` ([LIVE-IPC-SOCKET]). Single source of truth — no second copy of analysis state exists in the MCP process.
 
 | Method | Input | Output | Purpose |
 |---|---|---|---|
@@ -211,7 +226,7 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors.
 - `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
 
-The MCP is not an LSP subscriber. It detects report changes by watching `.deslop-cache/live-report.json` for modification and pushes its own MCP notifications ([MCP-NOTIFICATIONS]).
+The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop-cache/live-report.json` and never watches the workspace.
 
 ### [LIVE-PERF-BUDGETS] Performance budgets
 
