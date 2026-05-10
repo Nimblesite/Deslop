@@ -255,6 +255,120 @@ fn malformed_config_file_reports_error() -> Result<()> {
     Ok(())
 }
 
+// Implements [EXCLUSION-CONFIG] (#138): `.deslop.toml` patterns are
+// scan-root-relative, not absolute. A pattern `subdir/**` (no `**/`
+// prefix) must hide files at `<scan_root>/subdir/...`. The bundled
+// CLI in Basilisk failed because `GitignoreBuilder::new("/")` rooted
+// every matcher at `/` and matched against absolute paths.
+#[test]
+fn report_hide_pattern_is_scan_root_relative() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("repo");
+    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
+    let visible_dir = scan_root.join("src");
+    fs::create_dir_all(&hidden_dir)?;
+    fs::create_dir_all(&visible_dir)?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        hidden_dir.join("Alpha.cs"),
+    )?;
+    let _beta_bytes = fs::copy(
+        fixture("csharp-small").join("Beta.cs"),
+        visible_dir.join("Beta.cs"),
+    )?;
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
+    )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let report = read_json_report(&out.json)?;
+    let clusters = field(&report, "clusters")
+        .as_array()
+        .context("clusters array")?;
+    let mut alpha_hidden: Option<bool> = None;
+    let mut beta_hidden: Option<bool> = None;
+    for cluster in clusters {
+        let Some(occurrences) = field(cluster, "occurrences").as_array() else {
+            continue;
+        };
+        for occurrence in occurrences {
+            let path = field(occurrence, "path").as_str().unwrap_or("");
+            let hidden = field(occurrence, "hidden").as_bool().unwrap_or(false);
+            if path.ends_with("Alpha.cs") {
+                alpha_hidden = Some(hidden);
+            } else if path.ends_with("Beta.cs") {
+                beta_hidden = Some(hidden);
+            }
+        }
+    }
+    assert_eq!(
+        alpha_hidden,
+        Some(true),
+        "scan-root-relative pattern `benchmarks/fixtures/**` must hide Alpha.cs at <scan_root>/benchmarks/fixtures/Alpha.cs",
+    );
+    assert_eq!(
+        beta_hidden,
+        Some(false),
+        "Beta.cs at <scan_root>/src/Beta.cs must remain visible",
+    );
+    Ok(())
+}
+
+// Implements [EXCLUSION-CONFIG] (#138): the same scan-root-relative
+// rule applies to `exclude`. A pattern `subdir/**` must drop files
+// at `<scan_root>/subdir/...` from discovery without requiring a
+// `**/` prefix.
+#[test]
+fn exclude_pattern_is_scan_root_relative() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("repo");
+    let excluded_dir = scan_root.join("benchmarks").join("fixtures");
+    let kept_dir = scan_root.join("src");
+    fs::create_dir_all(&excluded_dir)?;
+    fs::create_dir_all(&kept_dir)?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        excluded_dir.join("Alpha.cs"),
+    )?;
+    let _beta_bytes = fs::copy(
+        fixture("csharp-small").join("Beta.cs"),
+        kept_dir.join("Beta.cs"),
+    )?;
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[defaults]\nexclude = [\"benchmarks/fixtures/**\"]\n",
+    )?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let body = fs::read_to_string(&out.json)?;
+    assert!(
+        body.contains("\"files_analysed\": 1"),
+        "scan-root-relative `exclude` pattern must drop benchmarks/fixtures/Alpha.cs and leave only Beta.cs analysed: {body}",
+    );
+    assert!(
+        !body.contains("benchmarks/fixtures/Alpha.cs"),
+        "Alpha.cs under benchmarks/fixtures must not appear in the report: {body}",
+    );
+    Ok(())
+}
+
 // Implements default output paths: running without `--output` writes
 // `deslop-report.{json,txt,html}` into the current working
 // directory. We run the command with `current_dir(tempdir)` so the
