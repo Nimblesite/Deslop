@@ -2225,17 +2225,32 @@ fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
 
 #[test]
 fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
-    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    // [MCP-IPC-CLIENT] find-similar against the live LSP must
+    // tolerate an empty snippet — it is below the parser's minimum
+    // node floor, so the success-path reply marks `below_min_nodes`
+    // and returns no clusters (no error envelope).
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
         &json!({ "name": "find-similar", "arguments": { "snippet": "", "language": "csharp" } }),
     )?;
+    assert!(
+        response.pointer("/error").is_none(),
+        "find-similar with the live LSP must succeed (no JSON-RPC error envelope): {response}"
+    );
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "find-similar without LSP must return BackendError: {response}"
+        value_get(&response, "/result/structuredContent/below_min_nodes")?.as_bool(),
+        Some(true),
+        "empty snippet must report below_min_nodes=true: {response}"
+    );
+    let clusters = value_get(&response, "/result/structuredContent/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters must be array: {response}"))?;
+    assert!(
+        clusters.is_empty(),
+        "empty snippet must return no clusters: {response}"
     );
     let _ = child.finish();
     Ok(())

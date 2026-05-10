@@ -332,7 +332,7 @@ suite("extension internals", () => {
         schema_doc: "",
         action_hints: [],
         boilerplate_hints: [],
-        embedding_provenance: null,
+        embedding_provenance: undefined,
         clusters: [],
       },
       0,
@@ -369,7 +369,7 @@ suite("extension internals", () => {
           schema_doc: "",
           action_hints: [],
           boilerplate_hints: [],
-          embedding_provenance: null,
+          embedding_provenance: undefined,
           clusters: [],
         });
       },
@@ -400,7 +400,7 @@ suite("extension internals", () => {
           schema_doc: "",
           action_hints: [],
           boilerplate_hints: [],
-          embedding_provenance: null,
+          embedding_provenance: undefined,
           clusters: [],
         }),
     } as unknown as LanguageClient;

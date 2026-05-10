@@ -56,7 +56,7 @@ function report(): Report {
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],
-    embedding_provenance: null,
+    embedding_provenance: undefined,
     clusters: [cluster("c-a", 10, 0.95, 5)],
   };
 }

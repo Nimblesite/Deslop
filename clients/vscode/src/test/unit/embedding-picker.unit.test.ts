@@ -46,7 +46,7 @@ function newStore(embedding?: {
             failed_subtrees: 0,
             ...embedding,
           }
-        : null,
+        : undefined,
       clusters: [],
     },
     0,

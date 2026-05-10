@@ -276,7 +276,7 @@ function formatProgress(progress: {
   done: number;
   total: number;
   model_id: string;
-  message?: string | null;
+  message?: string;
 }): string {
   const done = progress.done.toLocaleString();
   const total = progress.total.toLocaleString();

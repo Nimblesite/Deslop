@@ -16,7 +16,7 @@ import { ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
 
 function reportWithEmbedding(
-  embedding: Report["embedding_provenance"] = null,
+  embedding: Report["embedding_provenance"] = undefined,
 ): Report {
   return {
     tool_version: "v",
