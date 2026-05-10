@@ -1,8 +1,8 @@
-//! Unix-domain socket IPC server ([LSP-IPC]).
+//! Unix-domain socket IPC server ([LSP-IPC], [LIVE-IPC-SOCKET]).
 //!
 //! The LSP exposes `.deslop-cache/deslop.sock` so the MCP server can
 //! query the live in-memory analysis state directly — no on-disk cache
-//! involved on the read path. Methods served:
+//! involved on the read path ([MCP-IPC-CLIENT]). Methods served:
 //!
 //! Single-shot reads (one request → one response, connection closes):
 //! - `report/get`, `report/forFile`, `report/forRange`,
@@ -150,7 +150,7 @@ mod unix {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         let method = request.get("method").and_then(Value::as_str).unwrap_or("");
         if method == "report/subscribe" {
-            run_subscribe_loop(writer, &id, report_changed, handle);
+            run_subscribe_loop(writer, &id, service, report_changed, handle);
             return;
         }
         let params = request.get("params").cloned().unwrap_or(Value::Null);
@@ -160,16 +160,27 @@ mod unix {
     }
 
     /// Long-lived broadcast forwarder. Sends one JSON-RPC notification
-    /// frame per [`ReportChangedNotification`] received. Returns when
-    /// the client disconnects (broken pipe) or the broadcast channel
-    /// closes.
+    /// frame per [`ReportChangedNotification`] received. The ack frame
+    /// carries the current generation so the subscriber can sync its
+    /// own counter without a follow-up IPC call ([MCP-IPC-CLIENT]).
+    /// Returns when the client disconnects (broken pipe) or the
+    /// broadcast channel closes.
     fn run_subscribe_loop(
         writer: UnixStream,
         id: &Value,
+        service: &Arc<LiveService>,
         report_changed: &broadcast::Sender<ReportChangedNotification>,
         handle: &Handle,
     ) {
-        let ack = json_rpc_response(id, Ok(json!({"subscribed": true})));
+        let initial_generation = handle.block_on(async {
+            let session = service.session();
+            let guard = session.lock().await;
+            guard.generation()
+        });
+        let ack = json_rpc_response(
+            id,
+            Ok(json!({"subscribed": true, "generation": initial_generation})),
+        );
         if write_frame(&writer, &ack).is_err() {
             return;
         }

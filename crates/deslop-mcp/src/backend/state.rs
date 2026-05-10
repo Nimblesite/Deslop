@@ -1,11 +1,14 @@
 //! `LiveBackend` — [`McpBackend`] implementation that calls the LSP
 //! IPC socket on every read ([MCP-WHY-LIVE], [MCP-IPC-CLIENT]).
 //!
-//! Single source of truth: the LSP's in-memory `latest_report`. The MCP
-//! never touches `.deslop-cache/live-report.json` — that file is now an
-//! LSP-private startup cache, not a wire contract. Every read tool call
-//! issues one JSON-RPC request to `.deslop-cache/deslop.sock`. When the
-//! socket is missing, callers receive [`BackendError::LspNotRunning`].
+//! Single source of truth: the LSP's in-memory `latest_report`
+//! ([LIVE-IPC-SOCKET]). The MCP never touches
+//! `.deslop-cache/live-report.json` — that file is the LSP's private
+//! warm-start cache ([LIVE-SEED-CACHE]), not a wire contract. Every
+//! read tool call issues one JSON-RPC request to
+//! `.deslop-cache/deslop.sock`. When the socket is missing, callers
+//! receive [`BackendError::LspNotRunning`] — there is no fallback
+//! pipeline; CI/one-shot use the `deslop` CLI.
 
 use std::{
     io::{BufRead, BufReader},
@@ -92,60 +95,18 @@ impl LiveBackend {
         Ok(config)
     }
 
-    /// Spawns the long-lived `report/subscribe` forwarder. Returns
-    /// silently when the socket is missing — `set_notification_sender`
-    /// then degrades to "no push notifications" without bringing the
-    /// MCP down.
-    fn spawn_subscribe_loop(&self) {
-        let socket = self.ipc_socket.clone();
-        let sender = Arc::clone(&self.sender);
-        let generation = Arc::clone(&self.generation);
-        let _thread = std::thread::spawn(move || {
-            run_subscribe_loop(&socket, &sender, &generation);
-        });
-    }
 }
 
-/// Connects to the LSP, sends `report/subscribe`, and forwards each
-/// received `report/changed` notification to the MCP client. Reconnects
-/// silently on transient drops; exits on persistent unavailability.
-fn run_subscribe_loop(
-    socket: &Path,
-    sender: &Arc<Mutex<Option<NotificationSender>>>,
-    generation: &Arc<AtomicU64>,
-) {
-    let stream = match connect_subscribe(socket) {
-        Ok(stream) => stream,
-        Err(error) => {
-            debug!(reason = %error, "mcp_subscribe_connect_failed");
-            return;
-        }
-    };
-    let mut reader = BufReader::new(stream);
-    let mut line = String::new();
-    if reader.read_line(&mut line).is_err() {
-        return;
-    }
-    line.clear();
-    while reader.read_line(&mut line).is_ok() && !line.is_empty() {
-        if let Some(notification) = parse_report_changed(&line) {
-            generation.store(notification.generation, Ordering::Relaxed);
-            let Ok(guard) = sender.lock() else {
-                return;
-            };
-            if let Some(s) = guard.as_ref() {
-                push_report_changed(s, notification.generation);
-            }
-        }
-        line.clear();
-    }
-    debug!("mcp_subscribe_loop_exited");
-}
-
-/// Sends the initial `report/subscribe` request and returns the
-/// connected stream once the server has acknowledged.
+/// Connects to the subscribe socket, sends the initial JSON-RPC
+/// request, blocks for the ack frame, and returns the buffered
+/// reader alongside the LSP's current generation. Returning the
+/// reader (not the underlying stream) preserves any bytes the LSP
+/// wrote between the ack and the next user call, which a separate
+/// `try_clone`'d stream would lose to BufReader's internal buffer.
 #[cfg(unix)]
-fn connect_subscribe(socket: &Path) -> std::io::Result<std::os::unix::net::UnixStream> {
+fn connect_subscribe_and_read_ack(
+    socket: &Path,
+) -> std::io::Result<(BufReader<std::os::unix::net::UnixStream>, u64)> {
     use std::{io::Write, os::unix::net::UnixStream};
     let mut stream = UnixStream::connect(socket)?;
     let payload = serde_json::to_vec(&json!({
@@ -158,15 +119,56 @@ fn connect_subscribe(socket: &Path) -> std::io::Result<std::os::unix::net::UnixS
     stream.write_all(&payload)?;
     stream.write_all(b"\n")?;
     stream.flush()?;
-    Ok(stream)
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    let _bytes = reader.read_line(&mut line)?;
+    let generation = parse_subscribe_ack_generation(&line).unwrap_or(0);
+    Ok((reader, generation))
 }
 
 #[cfg(not(unix))]
-fn connect_subscribe(_socket: &Path) -> std::io::Result<std::fs::File> {
+fn connect_subscribe_and_read_ack(
+    _socket: &Path,
+) -> std::io::Result<(BufReader<std::fs::File>, u64)> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "MCP subscribe is Unix-only",
     ))
+}
+
+/// Spawns the background thread that drains broadcast notifications
+/// from `reader` and forwards them as MCP `reportChanged` frames.
+#[cfg(unix)]
+fn spawn_subscribe_reader(
+    reader: BufReader<std::os::unix::net::UnixStream>,
+    sender: Arc<Mutex<Option<NotificationSender>>>,
+    generation: Arc<AtomicU64>,
+) {
+    let _thread = std::thread::spawn(move || {
+        let mut reader = reader;
+        let mut line = String::new();
+        while reader.read_line(&mut line).is_ok() && !line.is_empty() {
+            if let Some(notification) = parse_report_changed(&line) {
+                generation.store(notification.generation, Ordering::Relaxed);
+                let Ok(guard) = sender.lock() else {
+                    return;
+                };
+                if let Some(s) = guard.as_ref() {
+                    push_report_changed(s, notification.generation);
+                }
+            }
+            line.clear();
+        }
+        debug!("mcp_subscribe_loop_exited");
+    });
+}
+
+#[cfg(not(unix))]
+fn spawn_subscribe_reader(
+    _reader: BufReader<std::fs::File>,
+    _sender: Arc<Mutex<Option<NotificationSender>>>,
+    _generation: Arc<AtomicU64>,
+) {
 }
 
 /// Parses one `report/changed` notification frame, returning `None`
@@ -178,6 +180,16 @@ fn parse_report_changed(line: &str) -> Option<ReportChangedNotification> {
     }
     let params = frame.get("params").cloned()?;
     serde_json::from_value(params).ok()
+}
+
+/// Reads the `generation` field from the `report/subscribe` ack so
+/// the MCP can sync its counter without an extra IPC round-trip.
+fn parse_subscribe_ack_generation(line: &str) -> Option<u64> {
+    let frame: Value = serde_json::from_str(line.trim()).ok()?;
+    frame
+        .get("result")
+        .and_then(|result| result.get("generation"))
+        .and_then(Value::as_u64)
 }
 
 impl McpBackend for LiveBackend {
@@ -274,7 +286,21 @@ impl McpBackend for LiveBackend {
     }
 
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError> {
-        let result = ipc_call(&self.ipc_socket, "cluster/byId", &json!({ "id": id }))?;
+        let result = match ipc_call(&self.ipc_socket, "cluster/byId", &json!({ "id": id })) {
+            Ok(value) => value,
+            // The LSP surfaces unknown ids as a JSON-RPC error. The
+            // generic IPC client maps every RPC error to
+            // `StateFileCorrupt`, but the MCP wire contract requires
+            // `UnknownCluster` so the agent gets a stable code
+            // ([MCP-TESTING]).
+            Err(BackendError::StateFileCorrupt(message))
+                if message.contains("unknown cluster id")
+                    || message.contains("no cluster with id") =>
+            {
+                return Err(BackendError::UnknownCluster(id.to_owned()));
+            }
+            Err(error) => return Err(error),
+        };
         let cluster: ReportCluster = serde_json::from_value(result).map_err(|err| {
             BackendError::StateFileCorrupt(format!("ipc cluster parse: {err}"))
         })?;
@@ -334,7 +360,24 @@ impl McpBackend for LiveBackend {
         };
         *guard = Some(sender);
         drop(guard);
-        self.spawn_subscribe_loop();
+        // Synchronously open the subscribe socket so the initial
+        // generation is recorded before any tool call returns. The
+        // subscribe ack carries the LSP's current generation; the
+        // same BufReader that consumed it is then handed to the
+        // background reader thread so any `report/changed` frames the
+        // LSP wrote between ack and reader spawn are not lost in a
+        // discarded buffer ([MCP-IPC-CLIENT]).
+        match connect_subscribe_and_read_ack(&self.ipc_socket) {
+            Ok((reader, initial_generation)) => {
+                self.generation.store(initial_generation, Ordering::Relaxed);
+                spawn_subscribe_reader(
+                    reader,
+                    Arc::clone(&self.sender),
+                    Arc::clone(&self.generation),
+                );
+            }
+            Err(error) => debug!(reason = %error, "mcp_subscribe_connect_failed"),
+        }
     }
 }
 

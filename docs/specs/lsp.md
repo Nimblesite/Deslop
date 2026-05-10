@@ -160,7 +160,7 @@ Standard LSP does not have a "give me the live dedup report" request, so the she
 
 Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embeddingProgress`) mirror the daemon push methods. Namespacing (`deslop/*`) keeps us well clear of reserved LSP methods and any other server's custom namespace.
 
-The MCP-facing Unix socket at `.deslop-cache/deslop.sock` exposes the same live service for agent-side calls that do not travel through a full LSP client. It accepts `duplicates/findSimilar`, `embedding/listModels`, and `deslop.lsp.refreshReport`; the last one runs the same full-refresh command used by `workspace/executeCommand` so agent `rescan` calls can force re-analysis before reading the LSP state file.
+The MCP-facing Unix socket at `.deslop-cache/deslop.sock` exposes the same live service for agent-side calls that do not travel through a full LSP client. The full method surface is documented in [LIVE-IPC-SOCKET]: five single-shot reads (`report/get`, `report/forFile`, `report/forRange`, `cluster/byId`, `session/config`), three single-shot computes (`duplicates/findSimilar`, `embedding/listModels`, `deslop.lsp.refreshReport`), and one long-lived subscription (`report/subscribe`) that fans `report/changed` notifications out to the MCP. `deslop.lsp.refreshReport` runs the same full-refresh command used by `workspace/executeCommand` so agent `rescan` calls force a re-analysis pass before the next `report/get`.
 
 ### [LSP-PUSH] Active push — the LSP never waits for the editor to ask
 

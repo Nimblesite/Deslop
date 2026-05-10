@@ -212,8 +212,20 @@ impl AnalysisSession {
         if !pending.is_empty() {
             let _delta = self.apply_changes(&pending)?;
         }
-        self.write_state_file();
+        // The seed cache is written by the cold-pass install path
+        // ([LIVE-SEED-CACHE]) — `cache_seed::commit_refresh` calls
+        // [`Self::persist_seed_cache`] explicitly. `refresh_full` and
+        // other reuse paths share `install_pipeline` but must not
+        // touch disk.
         Ok(previous_report)
+    }
+
+    /// Public, explicit seed-cache write. Called after the LSP cold
+    /// pass installs the freshly-built pipeline so the next LSP
+    /// startup has a warm cache. Must NOT be called on per-pass
+    /// updates ([LIVE-SEED-CACHE]).
+    pub fn persist_seed_cache(&self) {
+        self.write_state_file();
     }
 
     /// Forces a fresh full-workspace analysis pass for editor command
@@ -501,17 +513,21 @@ impl AnalysisSession {
         out
     }
 
-    /// Stable list of registered parser ids. Empty during the
-    /// cache-seed window before the background pipeline installs.
+    /// Stable list of registered parser ids. During the cache-seed
+    /// window the pipeline isn't installed yet, so fall back to
+    /// scanning the seeded report's occurrences and mapping their
+    /// extensions to language ids — keeps `session/config` useful
+    /// for IPC subscribers that arrive before the cold pass commits
+    /// ([LIVE-CACHE-SEED]).
     fn parser_ids(&self) -> Vec<String> {
-        let Some(pipeline) = self.pipeline.as_ref() else {
-            return Vec::new();
-        };
-        pipeline
-            .parsers()
-            .iter()
-            .map(|parser| parser.id().to_owned())
-            .collect()
+        if let Some(pipeline) = self.pipeline.as_ref() {
+            return pipeline
+                .parsers()
+                .iter()
+                .map(|parser| parser.id().to_owned())
+                .collect();
+        }
+        languages_from_report_occurrences(&self.latest_report)
     }
 
     /// Runs the underlying pipeline. Caller guarantees `pipeline` is
@@ -615,13 +631,45 @@ impl AnalysisSession {
         } else {
             self.root.join(path)
         };
-        if resolved.starts_with(&self.root) {
+        // Canonicalize both sides so macOS `/var/...` ↔
+        // `/private/var/...` resolves identically — without this the
+        // MCP sends canonicalized paths and the LSP fails to match
+        // a non-canonical workspace root prefix.
+        let canonical_resolved = std::fs::canonicalize(&resolved).unwrap_or(resolved);
+        let canonical_root = std::fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
+        if canonical_resolved.starts_with(&canonical_root) {
             Ok(())
         } else {
             Err(LiveError::PathOutsideWorkspace {
-                path: resolved,
-                workspace_root: self.root.clone(),
+                path: canonical_resolved,
+                workspace_root: canonical_root,
             })
         }
+    }
+}
+
+/// Derives language ids from the occurrence paths of a report,
+/// mapping known file extensions onto the canonical parser id.
+/// Used as a fallback for `parser_ids` during the cache-seed
+/// window before the background pipeline installs.
+fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
+    let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
+    for cluster in &report.clusters {
+        for occurrence in &cluster.occurrences {
+            if let Some(language) = extension_to_language(&occurrence.path) {
+                let _inserted = seen.insert(language);
+            }
+        }
+    }
+    seen.into_iter().map(str::to_owned).collect()
+}
+
+/// Maps a file extension to the canonical parser language id.
+fn extension_to_language(path: &Path) -> Option<&'static str> {
+    match path.extension().and_then(|extension| extension.to_str())? {
+        "cs" => Some("csharp"),
+        "rs" => Some("rust"),
+        "py" => Some("python"),
+        _ => None,
     }
 }

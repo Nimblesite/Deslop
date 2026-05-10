@@ -135,6 +135,10 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
 /// refreshed state file.
 #[test]
 fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
+    // [MCP-IPC-CLIENT] / [LIVE-IPC-SOCKET] rescan triggers a full LSP
+    // re-analysis over IPC. The MCP response reflects the new state
+    // immediately — without round-tripping through `live-report.json`,
+    // which is now an LSP-private warm-start cache only ([LIVE-SEED-CACHE]).
     let workspace = copied_fixture()?;
     let beta = workspace.path().join("Beta.cs");
     let lsp = spawn_lsp_and_initialize(workspace.path())?;
@@ -142,11 +146,14 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
 
     let socket = workspace.path().join(".deslop-cache/deslop.sock");
     wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-    let initial_bytes = fs::read(&state_file)?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
+    // Flush any pending cold-pass install so the post-mutation rescan
+    // does not race a delayed background commit.
+    let _flush = mcp.request(
+        "tools/call",
+        &json!({ "name": "rescan", "arguments": { "n": 1 } }),
+    )?;
     let before = mcp.request(
         "tools/call",
         &json!({ "name": "top-offenders", "arguments": { "n": 100 } }),
@@ -194,19 +201,21 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     );
     assert_stale_cluster_absent(clusters, &stale_cluster_id, &response)?;
 
-    let updated_bytes = fs::read(&state_file)?;
+    // Cross-check: a follow-up plain `report-get` over IPC sees the
+    // same fresh state — proving the read path doesn't leak the
+    // pre-edit cluster from any cache.
+    let cross = mcp.request(
+        "tools/call",
+        &json!({ "name": "report-get", "arguments": { "offset": 0, "limit": 100 } }),
+    )?;
+    let cross_structured = structured_content(&cross, "report-get")?;
+    let cross_count = cross_structured
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .unwrap_or(before_count);
     ensure!(
-        updated_bytes != initial_bytes,
-        "MCP rescan must cause the LSP to rewrite live-report.json"
-    );
-    let state: Value = serde_json::from_slice(&updated_bytes)?;
-    let state_count = state
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(0_u64, |items| items.len() as u64);
-    ensure!(
-        state_count == after_count,
-        "MCP rescan response must be loaded from the refreshed LSP state file: response {after_count}, state {state_count}"
+        cross_count == after_count,
+        "MCP report-get after rescan must match the rescan response: rescan={after_count}, report-get={cross_count}"
     );
     Ok(())
 }

@@ -261,11 +261,16 @@ pub(super) fn call_find_similar(
             "find-similar requires exactly one of (path + start_byte + end_byte) or (snippet + language)",
         ));
     }
+    // Floor at 1 so `top_n: 0` falls back to a meaningful budget
+    // rather than truncating the response to zero clusters. The
+    // `top-offenders` tool uses the same semantics
+    // ([MCP-OCCURRENCE-BUDGET]).
     let top_n = args
         .get("top_n")
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(5);
+        .unwrap_or(5)
+        .max(1);
     let max_occurrences = extract_max_occurrences(args);
     let output = if has_range {
         call_find_similar_range(backend, args, top_n)?

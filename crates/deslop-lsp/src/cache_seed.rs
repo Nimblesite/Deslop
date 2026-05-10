@@ -130,6 +130,10 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
                 generation,
                 current.as_ref(),
             );
+            // Persist the post-cold-pass snapshot so the next LSP
+            // startup has a warm seed cache ([LIVE-SEED-CACHE]). The
+            // call is the only seed-cache write path in this module.
+            guard.persist_seed_cache();
             (previous_generation, previous_report, generation, delta)
         })
     };
