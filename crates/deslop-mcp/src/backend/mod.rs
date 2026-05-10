@@ -1,13 +1,11 @@
 //! [`McpBackend`] — the trait the server dispatches tool calls against.
 //!
-//! The MCP server is a transport adapter; the backend holds the live
-//! analysis state. This file ships one concrete implementation,
-//! [`StateFileBackend`], which reads `.deslop-cache/live-report.json`
-//! written by the LSP server.
-//!
-//! When `deslop_core::live::LiveApi` lands (P7), a `LiveApiBackend`
-//! impl slots in without changing the server code — that is the whole
-//! point of this trait ([MCP-WHY-LIVE], [MCP-CAPABILITIES]).
+//! The MCP server is a transport adapter; the backend holds no analysis
+//! state of its own. This file ships one concrete implementation,
+//! [`LiveBackend`], which delegates every read and compute call to the
+//! running LSP via the `.deslop-cache/deslop.sock` Unix socket — the
+//! LSP's in-memory `latest_report` is the single source of truth.
+//! ([MCP-WHY-LIVE], [MCP-IPC-CLIENT], [MCP-CAPABILITIES]).
 
 use std::path::{Path, PathBuf};
 
@@ -27,7 +25,7 @@ mod filters;
 mod ipc;
 mod state;
 
-pub use state::StateFileBackend;
+pub use state::LiveBackend;
 
 /// Errors surfaced by the backend during tool execution.
 #[derive(Debug, Error)]
@@ -55,11 +53,14 @@ pub enum BackendError {
     /// Internal mutex was poisoned. Fatal — the session is toast.
     #[error("backend state mutex poisoned; analysis aborted")]
     MutexPoisoned,
-    /// The LSP server is not running — its state file does not exist.
+    /// The LSP server is not running — its IPC socket is absent.
     #[error("LSP is not running — start deslop-lsp to enable this tool")]
     LspNotRunning,
-    /// The LSP state file exists but could not be parsed.
-    #[error("state file corrupt: {0}")]
+    /// IPC transport / parse failure. Catch-all for malformed wire
+    /// frames, broken pipes, and protocol drift between LSP and MCP.
+    /// Variant name retained for backwards binary compatibility with
+    /// previous releases that exposed it as `state file corrupt`.
+    #[error("ipc transport failure: {0}")]
     StateFileCorrupt(String),
 }
 

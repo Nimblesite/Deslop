@@ -166,9 +166,11 @@ impl LspBackend {
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
         let (watcher, scheduler) =
             crate::file_watch::start(&root, Arc::clone(&session), client.clone())?;
-        let ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service))
-            .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
-            .ok();
+        let report_changed = scheduler.report_changed_sender();
+        let ipc =
+            crate::ipc::IpcServer::start(&root, Arc::clone(&service), report_changed.clone())
+                .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
+                .ok();
         if seeded_from_cache {
             crate::cache_seed::spawn_refresh(crate::cache_seed::RefreshTask {
                 session: Arc::clone(&session),
@@ -180,6 +182,7 @@ impl LspBackend {
                 config_path: None,
                 provider,
                 mode: embedding.mode,
+                report_changed,
             });
         }
         Ok(Self {

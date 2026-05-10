@@ -72,6 +72,18 @@ impl Scheduler {
         self.report_changed.subscribe()
     }
 
+    /// Returns the underlying `report/changed` broadcast sender so
+    /// out-of-band paths (cache-seed cold pass, IPC subscribers) can
+    /// route through the same fan-out as the scheduler's own passes.
+    /// Cloning a `Sender` is cheap; consumers call `.subscribe()` on
+    /// the clone to attach.
+    #[must_use]
+    pub fn report_changed_sender(
+        &self,
+    ) -> tokio::sync::broadcast::Sender<ReportChangedNotification> {
+        self.report_changed.clone()
+    }
+
     /// Subscribes to `analysis/state` notifications.
     #[must_use]
     pub fn subscribe_state(&self) -> tokio::sync::broadcast::Receiver<AnalysisState> {
