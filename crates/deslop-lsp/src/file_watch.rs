@@ -18,9 +18,13 @@
 //! decorations, bubble, status bar) refreshes immediately without any
 //! editor action ([LSP-PUSH-NOTIFICATIONS], [VSIX-REACTIVITY-INVARIANT]).
 
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use deslop_core::{
+    config::DEFAULT_CONFIG_FILENAME,
     live::{
         AnalysisSession, AnalysisState, LiveError, LiveWatcher, ReportChangedNotification,
         Scheduler,
@@ -49,21 +53,39 @@ const WATCHED_EXTENSIONS: &[&str] = &["cs", "rs", "py"];
 /// `root` (e.g. permission denied on the workspace directory).
 pub fn start(
     root: &Path,
+    config_path: Option<&Path>,
     session: Arc<Mutex<AnalysisSession>>,
     client: Client,
 ) -> Result<(LiveWatcher, Scheduler), LiveError> {
     let extensions: Vec<String> = WATCHED_EXTENSIONS.iter().map(|e| (*e).to_owned()).collect();
     let exclusion = Arc::new(ExclusionConfig::empty());
+    let config_paths = watched_config_paths(root, config_path);
     let (watcher, watcher_rx) =
-        LiveWatcher::start(root, extensions, exclusion).map_err(|err| LiveError::WatcherInit {
-            message: err.to_string(),
+        LiveWatcher::start(root, extensions, exclusion, config_paths.clone()).map_err(|err| {
+            LiveError::WatcherInit {
+                message: err.to_string(),
+            }
         })?;
     let scheduler = Scheduler::with_system_clock(session, watcher_rx);
     let report_rx = scheduler.subscribe_report_changed();
     let state_rx = scheduler.subscribe_state();
     let _join = tokio::spawn(forward_broadcasts(client, report_rx, state_rx));
-    tracing::info!(root = %root.display(), "file_watch started");
+    tracing::info!(
+        root = %root.display(),
+        config_paths = ?config_paths,
+        "file_watch started",
+    );
     Ok((watcher, scheduler))
+}
+
+/// Builds the list of config-file paths the watcher must forward as
+/// first-class live updates ([LIVE-CONFIG-LIVE], #139).
+fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
+    let default = root.join(DEFAULT_CONFIG_FILENAME);
+    match override_path {
+        Some(explicit) => vec![default, explicit.to_path_buf()],
+        None => vec![default],
+    }
 }
 
 /// Loops over both broadcast channels and pushes each event as an LSP

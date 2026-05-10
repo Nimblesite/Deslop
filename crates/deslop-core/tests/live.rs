@@ -154,7 +154,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     let extensions = vec!["cs".to_owned(), "rs".to_owned(), "py".to_owned()];
     let exclusion = Arc::new(ExclusionConfig::empty());
     let (_watcher_keep_alive, watcher_rx) =
-        LiveWatcher::start(&scan_root, extensions, exclusion)
+        LiveWatcher::start(&scan_root, extensions, exclusion, vec![config_path.clone()])
             .map_err(|err| anyhow!("watcher start: {err}"))?;
     let scheduler = Scheduler::with_system_clock(Arc::clone(&session_lock), watcher_rx);
     let mut report_rx = scheduler.subscribe_report_changed();
@@ -395,8 +395,9 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
 
     let extensions = vec!["cs".to_owned()];
     let exclusion = Arc::new(ExclusionConfig::empty());
-    let (_watcher_keep_alive, mut rx) = LiveWatcher::start(&root, extensions, exclusion)
-        .map_err(|err| anyhow!("watcher start: {err}"))?;
+    let (_watcher_keep_alive, mut rx) =
+        LiveWatcher::start(&root, extensions, exclusion, Vec::new())
+            .map_err(|err| anyhow!("watcher start: {err}"))?;
     // FSEvents (macOS) and inotify (Linux) both need a beat to attach
     // before the first event is reported.
     tokio::time::sleep(Duration::from_secs(1)).await;

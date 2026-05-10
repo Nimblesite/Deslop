@@ -328,9 +328,19 @@ impl AnalysisSession {
     /// empty delta — the queued paths are replayed inside
     /// [`Self::install_pipeline`].
     ///
+    /// When any entry in `changed` is a watched config file
+    /// (`<root>/.deslop.toml` or the explicit override), the live
+    /// exclusion config is reloaded before re-rendering so a
+    /// `report_hide` edit hides the matching cluster on the next
+    /// generation ([LIVE-CONFIG-LIVE], #139). Source-file entries are
+    /// re-fingerprinted as before; config-file entries are dropped
+    /// from the per-file pass because they are not source.
+    ///
     /// # Errors
     ///
-    /// Propagates pipeline errors via [`LiveError::Core`].
+    /// Propagates pipeline errors via [`LiveError::Core`]. A bad
+    /// `.deslop.toml` (parse / pattern error) is logged and the
+    /// previous config is kept — a typo never bricks the daemon.
     pub fn apply_changes(&mut self, changed: &[PathBuf]) -> Result<ReportDelta, LiveError> {
         if self.pipeline.is_none() {
             self.pending_changes.extend(changed.iter().cloned());
@@ -340,9 +350,28 @@ impl AnalysisSession {
                 &self.latest_report,
             ));
         }
+        let watched = watched_config_paths(&self.root, self.config_path.as_deref());
+        let config_changed = changed.iter().any(|path| is_config_path(path, &watched));
+        if config_changed {
+            if let Some(pipeline) = self.pipeline.as_mut() {
+                if let Err(err) = pipeline.reload_exclusion() {
+                    tracing::warn!(
+                        error = %err,
+                        "deslop_toml_reload_failed; keeping prior exclusion config",
+                    );
+                } else {
+                    tracing::info!("deslop_toml_reloaded mode=rerender-only");
+                }
+            }
+        }
+        let source_changed: Vec<PathBuf> = changed
+            .iter()
+            .filter(|path| !is_config_path(path, &watched))
+            .cloned()
+            .collect();
         let previous = Arc::clone(&self.latest_report);
         let prev_generation = self.generation;
-        let next = self.run_pipeline(changed)?;
+        let next = self.run_pipeline(&source_changed)?;
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.latest_report = Arc::clone(&next_arc);
@@ -672,4 +701,32 @@ fn extension_to_language(path: &Path) -> Option<&'static str> {
         "py" => Some("python"),
         _ => None,
     }
+}
+
+/// Builds the canonical set of config paths that should trigger a live
+/// exclusion reload — `<root>/.deslop.toml` plus the explicit override
+/// (if any) ([LIVE-CONFIG-LIVE], #139).
+fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
+    let default = root.join(crate::config::DEFAULT_CONFIG_FILENAME);
+    let mut paths = vec![canonicalise_or_clone(&default)];
+    if let Some(explicit) = override_path {
+        paths.push(canonicalise_or_clone(explicit));
+    }
+    paths
+}
+
+/// Returns `true` when `candidate` matches one of the watched config
+/// paths in either canonical or as-given form.
+fn is_config_path(candidate: &Path, watched: &[PathBuf]) -> bool {
+    if watched.iter().any(|watched_path| watched_path == candidate) {
+        return true;
+    }
+    let canonical = canonicalise_or_clone(candidate);
+    watched.iter().any(|watched_path| watched_path == &canonical)
+}
+
+/// Canonicalises `path` when possible; otherwise returns a clone so
+/// non-existent override paths still compare predictably.
+fn canonicalise_or_clone(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
