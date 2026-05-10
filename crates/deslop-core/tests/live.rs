@@ -113,6 +113,51 @@ async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Res
     Ok(())
 }
 
+// Implements #137: live AnalysisSession (the LSP / VSIX live surface)
+// must honor `.deslop.toml` `report_hide` patterns the same way the
+// CLI does. With both clones placed under `benchmarks/fixtures/` and
+// a scan-root-relative `report_hide = ["benchmarks/fixtures/**"]`,
+// the live report must drop the all-hidden cluster from
+// `report.clusters` and count it in `clusters_hidden`.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let scan_root = tmp.path();
+    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
+    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        hidden_dir.join("Alpha.cs"),
+    )
+    .context("copy Alpha.cs")?;
+    let _beta_bytes = fs::copy(
+        fixture("csharp-small").join("Beta.cs"),
+        hidden_dir.join("Beta.cs"),
+    )
+    .context("copy Beta.cs")?;
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
+    )
+    .context("write .deslop.toml")?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(scan_root.to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    let report = session.report();
+    assert!(
+        report.clusters.is_empty(),
+        "scan-root-relative `report_hide` must drop the all-hidden cluster from the live report; got {} cluster(s): {:?}",
+        report.clusters.len(),
+        report.clusters,
+    );
+    assert!(
+        report.clusters_hidden >= 1,
+        "live render must count the hidden cluster in clusters_hidden; got {}",
+        report.clusters_hidden,
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
