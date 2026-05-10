@@ -186,8 +186,7 @@ fn issue_118_incompatible_seed_cache_cannot_brick_lsp_startup() -> Result<()> {
         parsed
             .get("tool_version")
             .and_then(Value::as_str)
-            .map(|version| version != "stale")
-            .unwrap_or(false),
+            .is_some_and(|version| version != "stale"),
         "stale tool_version must not survive cold-pass install: {parsed}",
     );
     Ok(())

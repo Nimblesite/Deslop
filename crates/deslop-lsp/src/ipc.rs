@@ -149,7 +149,7 @@ mod unix {
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         let method = request.get("method").and_then(Value::as_str).unwrap_or("");
         if method == "report/subscribe" {
-            run_subscribe_loop(writer, &id, service, report_changed, handle);
+            run_subscribe_loop(&writer, &id, service, report_changed, handle);
             return;
         }
         let params = request.get("params").cloned().unwrap_or(Value::Null);
@@ -165,7 +165,7 @@ mod unix {
     /// Returns when the client disconnects (broken pipe) or the
     /// broadcast channel closes.
     fn run_subscribe_loop(
-        writer: UnixStream,
+        writer: &UnixStream,
         id: &Value,
         service: &Arc<LiveService>,
         report_changed: &broadcast::Sender<ReportChangedNotification>,
@@ -180,7 +180,7 @@ mod unix {
             id,
             Ok(json!({"subscribed": true, "generation": initial_generation})),
         );
-        if write_frame(&writer, &ack).is_err() {
+        if write_frame(writer, &ack).is_err() {
             return;
         }
         let mut receiver = report_changed.subscribe();
@@ -189,7 +189,7 @@ mod unix {
             match next {
                 Ok(notification) => {
                     let frame = subscribe_notification_frame(&notification);
-                    if write_frame(&writer, &frame).is_err() {
+                    if write_frame(writer, &frame).is_err() {
                         tracing::debug!("ipc_subscribe_client_disconnected");
                         return;
                     }
@@ -222,7 +222,7 @@ mod unix {
     /// Routes a JSON-RPC method to the appropriate [`LiveService`] call.
     fn dispatch(
         method: &str,
-        params: Value,
+        params: &Value,
         service: &Arc<LiveService>,
         handle: &Handle,
     ) -> Result<Value, Value> {
@@ -247,7 +247,7 @@ mod unix {
 
     /// Delegates `report/forFile` to [`LiveApi::report_for_file`].
     fn dispatch_report_for_file(
-        params: Value,
+        params: &Value,
         service: &Arc<LiveService>,
         handle: &Handle,
     ) -> Result<Value, Value> {
@@ -261,7 +261,7 @@ mod unix {
 
     /// Delegates `report/forRange` to [`LiveApi::report_for_range`].
     fn dispatch_report_for_range(
-        params: Value,
+        params: &Value,
         service: &Arc<LiveService>,
         handle: &Handle,
     ) -> Result<Value, Value> {
@@ -287,7 +287,7 @@ mod unix {
 
     /// Delegates `cluster/byId` to [`LiveApi::cluster_by_id`].
     fn dispatch_cluster_by_id(
-        params: Value,
+        params: &Value,
         service: &Arc<LiveService>,
         handle: &Handle,
     ) -> Result<Value, Value> {
@@ -312,11 +312,11 @@ mod unix {
 
     /// Delegates `duplicates/findSimilar` to [`LiveService::find_similar`].
     fn dispatch_find_similar(
-        params: Value,
+        params: &Value,
         service: &Arc<LiveService>,
         handle: &Handle,
     ) -> Result<Value, Value> {
-        let request: deslop_core::live::FindSimilarRequest = serde_json::from_value(params)
+        let request: deslop_core::live::FindSimilarRequest = serde_json::from_value(params.clone())
             .map_err(|e| json!({"code": -32602, "message": format!("invalid params: {e}")}))?;
         let result = handle
             .block_on(service.find_similar(&request))

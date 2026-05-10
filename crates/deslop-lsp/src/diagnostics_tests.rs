@@ -255,7 +255,8 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
     ];
     for (bucket, expected_severity) in buckets {
         let cluster = sample_cluster("c", 1.0, vec![occurrence("A.cs", 0, 2)], bucket);
-        let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
+        let total_occurrences: usize =
+            file_report_total_occurrences(std::slice::from_ref(&cluster));
         let file_report = FileReport {
             path: PathBuf::from("A.cs"),
             clusters: vec![cluster],

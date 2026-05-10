@@ -44,7 +44,7 @@ struct McpChild {
     /// Owned per-test workspace clone. `Some` when [`McpChild::spawn`]
     /// copied a read-only fixture template; `None` when the caller
     /// passed an already-isolated path.
-    _workspace: Option<TempDir>,
+    workspace: Option<TempDir>,
 }
 
 /// Kill-on-drop wrapper for the companion LSP child. Lives as a
@@ -71,7 +71,7 @@ impl McpChild {
     /// already-writable workspace directly; the helper will use it
     /// in place.
     fn spawn(root: &Path, extra_args: &[&str]) -> Result<Self> {
-        let (workspace_root, owned_workspace) = if root == fixture_root() {
+        let (workspace_root, ownedworkspace) = if root == fixture_root() {
             let temp = TempDir::new().context("alloc per-test workspace")?;
             copy_dir_all(root, temp.path())?;
             (temp.path().to_path_buf(), Some(temp))
@@ -99,7 +99,7 @@ impl McpChild {
             stdout: BufReader::new(stdout),
             next_id: 0,
             lsp: Some(lsp),
-            _workspace: owned_workspace,
+            workspace: ownedworkspace,
         })
     }
 
@@ -169,7 +169,7 @@ impl McpChild {
             mut child,
             stdin,
             lsp: _lsp,
-            _workspace,
+            workspace: _workspace,
             ..
         } = self;
         drop(stdin);
@@ -191,7 +191,7 @@ impl McpChild {
     /// than [`fixture_root`] so the path lands inside the pinned
     /// workspace ([MCP-SAFETY]).
     fn workspace_root(&self) -> PathBuf {
-        self._workspace
+        self.workspace
             .as_ref()
             .map_or_else(|| fixture_root().to_path_buf(), |t| t.path().to_path_buf())
     }
@@ -400,7 +400,7 @@ fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpChild, u32)> {
             stdout: BufReader::new(stdout),
             next_id: 0,
             lsp: None,
-            _workspace: None,
+            workspace: None,
         },
         mcp_pid,
     ))
@@ -1912,7 +1912,7 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
 }
 
 #[test]
-fn session_config_reports_workspace_root_and_languages() -> Result<()> {
+fn session_config_reportsworkspace_root_and_languages() -> Result<()> {
     // [MCP-IPC-CLIENT] session-config goes over IPC to the running
     // LSP, so `min_nodes` is the LSP's default (30) — the fixture's
     // pre-committed value is no longer the wire source.
@@ -2320,7 +2320,7 @@ fn string_request_id_round_trips_through_dispatch() -> Result<()> {
 }
 
 #[test]
-fn relative_path_inside_workspace_is_accepted() -> Result<()> {
+fn relative_path_insideworkspace_is_accepted() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
