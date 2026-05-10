@@ -286,7 +286,6 @@ fn wait_for_socket(root: &Path) -> Result<()> {
     ))
 }
 
-
 trait WaitTimeout {
     fn wait_timeout(
         &mut self,

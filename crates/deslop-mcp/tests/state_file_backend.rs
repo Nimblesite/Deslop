@@ -194,11 +194,7 @@ fn issue_118_incompatible_seed_cache_cannot_brick_lsp_startup() -> Result<()> {
 }
 
 /// Helper that wraps the verbose `tools/call report-get` envelope.
-fn call_report_get(
-    mcp: &mut common::McpHandle,
-    offset: u64,
-    limit: u64,
-) -> Result<Value> {
+fn call_report_get(mcp: &mut common::McpHandle, offset: u64, limit: u64) -> Result<Value> {
     let response = mcp.request(
         "tools/call",
         &json!({
@@ -222,4 +218,3 @@ fn cluster_ids(page: &Value) -> Vec<String> {
         })
         .unwrap_or_default()
 }
-

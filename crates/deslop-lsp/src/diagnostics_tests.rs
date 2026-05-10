@@ -188,7 +188,7 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
     let _secondary = write_source(workspace.path(), "Beta.cs", secondary_source)?;
     let occurrences = vec![occurrence("Alpha.cs", 0, 5), occurrence("Beta.cs", 2, 5)];
     let cluster = sample_cluster("cluster-1", 100.0, occurrences, "identical");
-    let total_occurrences: usize = file_report_total_occurrences(&[cluster.clone()]);
+    let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
     let file_report = FileReport {
         path: PathBuf::from("Alpha.cs"),
         clusters: vec![cluster],
@@ -255,7 +255,7 @@ fn build_for_file_publishes_all_buckets_with_correct_severity() -> Result<()> {
     ];
     for (bucket, expected_severity) in buckets {
         let cluster = sample_cluster("c", 1.0, vec![occurrence("A.cs", 0, 2)], bucket);
-        let total_occurrences: usize = file_report_total_occurrences(&[cluster.clone()]);
+        let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
         let file_report = FileReport {
             path: PathBuf::from("A.cs"),
             clusters: vec![cluster],
@@ -289,7 +289,7 @@ fn build_for_file_empty_related_info_becomes_none() -> Result<()> {
         vec![occurrence("Alpha.cs", 0, 3)],
         "identical",
     );
-    let total_occurrences: usize = file_report_total_occurrences(&[cluster.clone()]);
+    let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
     let file_report = FileReport {
         path: PathBuf::from("Alpha.cs"),
         clusters: vec![cluster],
@@ -321,7 +321,7 @@ fn many_occurrences_produce_exactly_one_canonical_related_item() -> Result<()> {
         occs.push(occurrence("Other.cs", 0, 3));
     }
     let cluster = sample_cluster("big", 100.0, occs, "identical");
-    let total_occurrences: usize = file_report_total_occurrences(&[cluster.clone()]);
+    let total_occurrences: usize = file_report_total_occurrences(std::slice::from_ref(&cluster));
     let file_report = FileReport {
         path: PathBuf::from("Main.cs"),
         clusters: vec![cluster],

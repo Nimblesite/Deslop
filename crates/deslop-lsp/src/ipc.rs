@@ -140,12 +140,11 @@ mod unix {
         if reader.read_line(&mut line).is_err() {
             return;
         }
-        let request: Value = match serde_json::from_str(line.trim()) {
-            Ok(v) => v,
-            Err(_) => {
-                let _written = write_frame(&writer, &parse_error());
-                return;
-            }
+        let request: Value = if let Ok(v) = serde_json::from_str(line.trim()) {
+            v
+        } else {
+            let _written = write_frame(&writer, &parse_error());
+            return;
         };
         let id = request.get("id").cloned().unwrap_or(Value::Null);
         let method = request.get("method").and_then(Value::as_str).unwrap_or("");
@@ -154,7 +153,7 @@ mod unix {
             return;
         }
         let params = request.get("params").cloned().unwrap_or(Value::Null);
-        let result = dispatch(method, params, service, handle);
+        let result = dispatch(method, &params, service, handle);
         let response = json_rpc_response(&id, result);
         let _written = write_frame(&writer, &response);
     }
@@ -241,12 +240,9 @@ mod unix {
     }
 
     /// Delegates `report/get` to [`LiveApi::report_get`].
-    fn dispatch_report_get(
-        service: &Arc<LiveService>,
-        handle: &Handle,
-    ) -> Result<Value, Value> {
+    fn dispatch_report_get(service: &Arc<LiveService>, handle: &Handle) -> Result<Value, Value> {
         let report = handle.block_on(service.report_get());
-        serde_json::to_value(report.as_ref()).map_err(rpc_serialise_error)
+        serde_json::to_value(report.as_ref()).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Delegates `report/forFile` to [`LiveApi::report_for_file`].
@@ -260,7 +256,7 @@ mod unix {
             .and_then(Value::as_str)
             .ok_or_else(|| json!({"code": -32602, "message": "missing path"}))?;
         let file_report = handle.block_on(service.report_for_file(Path::new(path)));
-        serde_json::to_value(&file_report).map_err(rpc_serialise_error)
+        serde_json::to_value(&file_report).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Delegates `report/forRange` to [`LiveApi::report_for_range`].
@@ -286,7 +282,7 @@ mod unix {
         let end = usize::try_from(end_byte)
             .map_err(|_| json!({"code": -32602, "message": "end_byte overflow"}))?;
         let clusters = handle.block_on(service.report_for_range(Path::new(path), start, end));
-        serde_json::to_value(&clusters).map_err(rpc_serialise_error)
+        serde_json::to_value(&clusters).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Delegates `cluster/byId` to [`LiveApi::cluster_by_id`].
@@ -302,7 +298,7 @@ mod unix {
         let cluster = handle
             .block_on(service.cluster_by_id(id))
             .map_err(|err| json!({"code": -32603, "message": err.to_string()}))?;
-        serde_json::to_value(&cluster).map_err(rpc_serialise_error)
+        serde_json::to_value(&cluster).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Delegates `session/config` to [`LiveApi::session_config`].
@@ -311,7 +307,7 @@ mod unix {
         handle: &Handle,
     ) -> Result<Value, Value> {
         let config = handle.block_on(service.session_config());
-        serde_json::to_value(&config).map_err(rpc_serialise_error)
+        serde_json::to_value(&config).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Delegates `duplicates/findSimilar` to [`LiveService::find_similar`].
@@ -325,16 +321,13 @@ mod unix {
         let result = handle
             .block_on(service.find_similar(&request))
             .map_err(|e| json!({"code": -32603, "message": e.to_string()}))?;
-        serde_json::to_value(&result).map_err(rpc_serialise_error)
+        serde_json::to_value(&result).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Delegates `embedding/listModels` to [`LiveService::embedding_list_models`].
-    fn dispatch_list_models(
-        service: &Arc<LiveService>,
-        handle: &Handle,
-    ) -> Result<Value, Value> {
+    fn dispatch_list_models(service: &Arc<LiveService>, handle: &Handle) -> Result<Value, Value> {
         let models = handle.block_on(service.embedding_list_models());
-        serde_json::to_value(&models).map_err(rpc_serialise_error)
+        serde_json::to_value(&models).map_err(|err| rpc_serialise_error(&err))
     }
 
     /// Forces the same full refresh as `workspace/executeCommand`
@@ -385,7 +378,7 @@ mod unix {
     }
 
     /// Maps a serialisation failure to a JSON-RPC internal-error envelope.
-    fn rpc_serialise_error(err: serde_json::Error) -> Value {
+    fn rpc_serialise_error(err: &serde_json::Error) -> Value {
         json!({"code": -32603, "message": err.to_string()})
     }
 }

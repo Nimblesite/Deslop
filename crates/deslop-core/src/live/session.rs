@@ -665,7 +665,8 @@ impl AnalysisSession {
         // MCP sends canonicalized paths and the LSP fails to match
         // a non-canonical workspace root prefix.
         let canonical_resolved = std::fs::canonicalize(&resolved).unwrap_or(resolved);
-        let canonical_root = std::fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
+        let canonical_root =
+            std::fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
         if canonical_resolved.starts_with(&canonical_root) {
             Ok(())
         } else {
@@ -722,7 +723,9 @@ fn is_config_path(candidate: &Path, watched: &[PathBuf]) -> bool {
         return true;
     }
     let canonical = canonicalise_or_clone(candidate);
-    watched.iter().any(|watched_path| watched_path == &canonical)
+    watched
+        .iter()
+        .any(|watched_path| watched_path == &canonical)
 }
 
 /// Canonicalises `path` when possible; otherwise returns a clone so

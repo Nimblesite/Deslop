@@ -141,8 +141,8 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
 
     let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(scan_root.clone(), 15, false, None, provider)
-        .context("session")?;
+    let session =
+        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
     let pre = session.report();
     assert!(
         !pre.clusters.is_empty(),

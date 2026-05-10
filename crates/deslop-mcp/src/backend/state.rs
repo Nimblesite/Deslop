@@ -94,7 +94,6 @@ impl LiveBackend {
         })?;
         Ok(config)
     }
-
 }
 
 /// Connects to the subscribe socket, sends the initial JSON-RPC
@@ -102,7 +101,7 @@ impl LiveBackend {
 /// reader alongside the LSP's current generation. Returning the
 /// reader (not the underlying stream) preserves any bytes the LSP
 /// wrote between the ack and the next user call, which a separate
-/// `try_clone`'d stream would lose to BufReader's internal buffer.
+/// `try_clone`'d stream would lose to `BufReader`'s internal buffer.
 #[cfg(unix)]
 fn connect_subscribe_and_read_ack(
     socket: &Path,
@@ -213,9 +212,7 @@ impl McpBackend for LiveBackend {
             &json!({ "path": resolved }),
         )?;
         let file_report: deslop_core::live::wire::FileReport = serde_json::from_value(result)
-            .map_err(|err| {
-                BackendError::StateFileCorrupt(format!("ipc forFile parse: {err}"))
-            })?;
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forFile parse: {err}")))?;
         Ok(file_report.clusters)
     }
 
@@ -235,9 +232,8 @@ impl McpBackend for LiveBackend {
                 "end_byte": end_byte,
             }),
         )?;
-        let clusters: Vec<ReportCluster> = serde_json::from_value(result).map_err(|err| {
-            BackendError::StateFileCorrupt(format!("ipc forRange parse: {err}"))
-        })?;
+        let clusters: Vec<ReportCluster> = serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forRange parse: {err}")))?;
         Ok(clusters)
     }
 
@@ -301,9 +297,8 @@ impl McpBackend for LiveBackend {
             }
             Err(error) => return Err(error),
         };
-        let cluster: ReportCluster = serde_json::from_value(result).map_err(|err| {
-            BackendError::StateFileCorrupt(format!("ipc cluster parse: {err}"))
-        })?;
+        let cluster: ReportCluster = serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc cluster parse: {err}")))?;
         Ok(cluster)
     }
 
@@ -336,16 +331,18 @@ impl McpBackend for LiveBackend {
     }
 
     fn mark_changed(&self, _paths: &[PathBuf]) -> Result<RescanProgress, BackendError> {
-        let result =
-            match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
-                Ok(result) => result,
-                Err(BackendError::LspNotRunning) => {
-                    return Ok(empty_rescan_progress(self.generation.load(Ordering::Relaxed)))
-                }
-                Err(err) => return Err(err),
-            };
+        let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
+            Ok(result) => result,
+            Err(BackendError::LspNotRunning) => {
+                return Ok(empty_rescan_progress(
+                    self.generation.load(Ordering::Relaxed),
+                ))
+            }
+            Err(err) => return Err(err),
+        };
         let progress = refresh_progress_from_result(&result)?;
-        self.generation.store(progress.generation, Ordering::Relaxed);
+        self.generation
+            .store(progress.generation, Ordering::Relaxed);
         if let Ok(guard) = self.sender.lock() {
             if let Some(s) = guard.as_ref() {
                 push_report_changed(s, progress.generation);

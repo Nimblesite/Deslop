@@ -144,9 +144,9 @@ where
         let mut copy = cluster.clone();
         let total_for_cluster = occurrence_count(&copy);
         copy.occurrences_total = total_for_cluster;
-        let remaining = budget - used;
+        let remaining = budget.saturating_sub(used);
         if copy.occurrences.len() <= remaining {
-            used += copy.occurrences.len();
+            used = used.saturating_add(copy.occurrences.len());
             emitted.push(copy);
             continue;
         }
