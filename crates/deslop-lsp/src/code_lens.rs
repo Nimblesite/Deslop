@@ -130,9 +130,11 @@ mod tests {
                 occurrence("Other.cs", 10, 20),
             ],
         );
+        let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
             clusters: vec![cluster],
+            total_occurrences,
         };
         let lenses = build_for_file(&report);
         assert_eq!(
@@ -213,9 +215,11 @@ mod tests {
     #[test]
     fn build_for_file_with_no_matching_cluster_returns_empty_vec() {
         let cluster = make_cluster("c", 2, vec![occurrence("Other.cs", 0, 5)]);
+        let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
             clusters: vec![cluster],
+            total_occurrences,
         };
         let lenses = build_for_file(&report);
         assert!(lenses.is_empty(), "nothing from a non-matching cluster");

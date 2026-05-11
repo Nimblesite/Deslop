@@ -212,8 +212,20 @@ impl AnalysisSession {
         if !pending.is_empty() {
             let _delta = self.apply_changes(&pending)?;
         }
-        self.write_state_file();
+        // The seed cache is written by the cold-pass install path
+        // ([LIVE-SEED-CACHE]) — `cache_seed::commit_refresh` calls
+        // [`Self::persist_seed_cache`] explicitly. `refresh_full` and
+        // other reuse paths share `install_pipeline` but must not
+        // touch disk.
         Ok(previous_report)
+    }
+
+    /// Public, explicit seed-cache write. Called after the LSP cold
+    /// pass installs the freshly-built pipeline so the next LSP
+    /// startup has a warm cache. Must NOT be called on per-pass
+    /// updates ([LIVE-SEED-CACHE]).
+    pub fn persist_seed_cache(&self) {
+        self.write_state_file();
     }
 
     /// Forces a fresh full-workspace analysis pass for editor command
@@ -316,9 +328,19 @@ impl AnalysisSession {
     /// empty delta — the queued paths are replayed inside
     /// [`Self::install_pipeline`].
     ///
+    /// When any entry in `changed` is a watched config file
+    /// (`<root>/.deslop.toml` or the explicit override), the live
+    /// exclusion config is reloaded before re-rendering so a
+    /// `report_hide` edit hides the matching cluster on the next
+    /// generation ([LIVE-CONFIG-LIVE], #139). Source-file entries are
+    /// re-fingerprinted as before; config-file entries are dropped
+    /// from the per-file pass because they are not source.
+    ///
     /// # Errors
     ///
-    /// Propagates pipeline errors via [`LiveError::Core`].
+    /// Propagates pipeline errors via [`LiveError::Core`]. A bad
+    /// `.deslop.toml` (parse / pattern error) is logged and the
+    /// previous config is kept — a typo never bricks the daemon.
     pub fn apply_changes(&mut self, changed: &[PathBuf]) -> Result<ReportDelta, LiveError> {
         if self.pipeline.is_none() {
             self.pending_changes.extend(changed.iter().cloned());
@@ -328,13 +350,35 @@ impl AnalysisSession {
                 &self.latest_report,
             ));
         }
+        let watched = watched_config_paths(&self.root, self.config_path.as_deref());
+        let config_changed = changed.iter().any(|path| is_config_path(path, &watched));
+        if config_changed {
+            if let Some(pipeline) = self.pipeline.as_mut() {
+                if let Err(err) = pipeline.reload_exclusion() {
+                    tracing::warn!(
+                        error = %err,
+                        "deslop_toml_reload_failed; keeping prior exclusion config",
+                    );
+                } else {
+                    tracing::info!("deslop_toml_reloaded mode=rerender-only");
+                }
+            }
+        }
+        let source_changed: Vec<PathBuf> = changed
+            .iter()
+            .filter(|path| !is_config_path(path, &watched))
+            .cloned()
+            .collect();
         let previous = Arc::clone(&self.latest_report);
         let prev_generation = self.generation;
-        let next = self.run_pipeline(changed)?;
+        let next = self.run_pipeline(&source_changed)?;
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.latest_report = Arc::clone(&next_arc);
-        self.write_state_file();
+        // Per-keystroke writes were the dominant source of inotify
+        // chatter on large workspaces. The seed-cache file is now
+        // persisted only on cold-pass install ([LIVE-SEED-CACHE]); the
+        // MCP reads the live state via IPC, not this file.
         Ok(ReportDelta::between(
             Some((prev_generation, &previous)),
             self.generation,
@@ -394,9 +438,11 @@ impl AnalysisSession {
             .cloned()
             .collect();
         clusters.sort_by_key(|cluster| earliest_byte_for_path(cluster, path));
+        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         FileReport {
             path: path.to_path_buf(),
             clusters,
+            total_occurrences,
         }
     }
 
@@ -474,7 +520,8 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
-        self.write_state_file();
+        // Embedding refresh writes are still per-pass and noisy; seed
+        // cache only updates on cold-pass install.
         Some(CommittedEmbeddingRefresh {
             previous_generation,
             previous_report,
@@ -495,17 +542,21 @@ impl AnalysisSession {
         out
     }
 
-    /// Stable list of registered parser ids. Empty during the
-    /// cache-seed window before the background pipeline installs.
+    /// Stable list of registered parser ids. During the cache-seed
+    /// window the pipeline isn't installed yet, so fall back to
+    /// scanning the seeded report's occurrences and mapping their
+    /// extensions to language ids — keeps `session/config` useful
+    /// for IPC subscribers that arrive before the cold pass commits
+    /// ([LIVE-CACHE-SEED]).
     fn parser_ids(&self) -> Vec<String> {
-        let Some(pipeline) = self.pipeline.as_ref() else {
-            return Vec::new();
-        };
-        pipeline
-            .parsers()
-            .iter()
-            .map(|parser| parser.id().to_owned())
-            .collect()
+        if let Some(pipeline) = self.pipeline.as_ref() {
+            return pipeline
+                .parsers()
+                .iter()
+                .map(|parser| parser.id().to_owned())
+                .collect();
+        }
+        languages_from_report_occurrences(&self.latest_report)
     }
 
     /// Runs the underlying pipeline. Caller guarantees `pipeline` is
@@ -532,9 +583,11 @@ impl AnalysisSession {
         self.guard_path(path)?;
         let mut clusters = self.report_for_range(path, start_byte, end_byte);
         truncate(&mut clusters, max_results);
+        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
             clusters,
             below_min_nodes: false,
+            total_occurrences,
         })
     }
 
@@ -551,13 +604,16 @@ impl AnalysisSession {
             return Ok(FindSimilarResult {
                 clusters: Vec::new(),
                 below_min_nodes: true,
+                total_occurrences: 0,
             });
         }
         let mut clusters = self.clusters_matching_hashes(&snippet_hashes);
         truncate(&mut clusters, max_results);
+        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
         Ok(FindSimilarResult {
             clusters,
             below_min_nodes: false,
+            total_occurrences,
         })
     }
 
@@ -588,8 +644,11 @@ impl AnalysisSession {
         })
     }
 
-    /// [LIVE-STATE-FILE] Writes the current report snapshot to
-    /// `{root}/.deslop-cache/live-report.json`. Best-effort.
+    /// [LIVE-SEED-CACHE] Persists the current report snapshot to
+    /// `{root}/.deslop-cache/live-report.json` so the next LSP startup
+    /// has a fast warm-start. Called only on initial-pass and
+    /// cold-pass install — never on per-keystroke incremental updates.
+    /// Best-effort: failures are logged but never propagated.
     fn write_state_file(&self) {
         persist_state_file(&self.root, self.latest_report.as_ref(), self.generation);
     }
@@ -601,13 +660,76 @@ impl AnalysisSession {
         } else {
             self.root.join(path)
         };
-        if resolved.starts_with(&self.root) {
+        // Canonicalize both sides so macOS `/var/...` ↔
+        // `/private/var/...` resolves identically — without this the
+        // MCP sends canonicalized paths and the LSP fails to match
+        // a non-canonical workspace root prefix.
+        let canonical_resolved = std::fs::canonicalize(&resolved).unwrap_or(resolved);
+        let canonical_root =
+            std::fs::canonicalize(&self.root).unwrap_or_else(|_| self.root.clone());
+        if canonical_resolved.starts_with(&canonical_root) {
             Ok(())
         } else {
             Err(LiveError::PathOutsideWorkspace {
-                path: resolved,
-                workspace_root: self.root.clone(),
+                path: canonical_resolved,
+                workspace_root: canonical_root,
             })
         }
     }
+}
+
+/// Derives language ids from the occurrence paths of a report,
+/// mapping known file extensions onto the canonical parser id.
+/// Used as a fallback for `parser_ids` during the cache-seed
+/// window before the background pipeline installs.
+fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
+    let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
+    for cluster in &report.clusters {
+        for occurrence in &cluster.occurrences {
+            if let Some(language) = extension_to_language(&occurrence.path) {
+                let _inserted = seen.insert(language);
+            }
+        }
+    }
+    seen.into_iter().map(str::to_owned).collect()
+}
+
+/// Maps a file extension to the canonical parser language id.
+fn extension_to_language(path: &Path) -> Option<&'static str> {
+    match path.extension().and_then(|extension| extension.to_str())? {
+        "cs" => Some("csharp"),
+        "rs" => Some("rust"),
+        "py" => Some("python"),
+        _ => None,
+    }
+}
+
+/// Builds the canonical set of config paths that should trigger a live
+/// exclusion reload — `<root>/.deslop.toml` plus the explicit override
+/// (if any) ([LIVE-CONFIG-LIVE], #139).
+fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
+    let default = root.join(crate::config::DEFAULT_CONFIG_FILENAME);
+    let mut paths = vec![canonicalise_or_clone(&default)];
+    if let Some(explicit) = override_path {
+        paths.push(canonicalise_or_clone(explicit));
+    }
+    paths
+}
+
+/// Returns `true` when `candidate` matches one of the watched config
+/// paths in either canonical or as-given form.
+fn is_config_path(candidate: &Path, watched: &[PathBuf]) -> bool {
+    if watched.iter().any(|watched_path| watched_path == candidate) {
+        return true;
+    }
+    let canonical = canonicalise_or_clone(candidate);
+    watched
+        .iter()
+        .any(|watched_path| watched_path == &canonical)
+}
+
+/// Canonicalises `path` when possible; otherwise returns a clone so
+/// non-existent override paths still compare predictably.
+fn canonicalise_or_clone(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }

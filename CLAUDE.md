@@ -12,6 +12,9 @@
 ⚠️ ALL MODELS TRANSFERRED ACROSS THE WIRE MUST USE typeDiagram. NO IFS. NO BUTS
 https://typediagram.dev/docs/language-reference.html ⚠️
 
+⚠️ DESLOP.LIVE means the whole loop (watcher → scheduler → session → broadcast → UI).
+ Incremental updates trigger the whole pipeline, including the UI to update reactively ⚠️ 
+
 ## Project Overview
 
 **Deslop** (a.k.a. Deslop Live) is a **live duplicate-code analysis server** for AI coding agents and the humans driving them. The shipping surfaces are `deslop-lsp` (LSP server feeding live clone warnings to any LSP-capable editor) and `deslop-mcp` (MCP server letting Claude Code / Cursor / Copilot / Continue / Codex query the running analysis mid-generation, *before* a copy-paste happens). The `deslop` CLI is the cold-cache fallback for CI gates and one-shot audits. All three binaries are thin shells over one `deslop-core` library — the LSP and MCP sit in the agent's inner loop, the CLI re-uses the same engine for batch runs. Ranking is **worst offenders first** (highest weighted duplication impact at the top). Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap. Languages start with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
@@ -84,6 +87,8 @@ Processes communicate using IPC. Generate IPC model code with [typeDiagram](http
 - **Mandatory Bug Fix Process** = [text](.claude/skills/fix-bug/SKILL.md)
 - **No legacy code.** Legacy = deleted.
 - **Copying files is illegal.** MOVE them.
+- **VSIX is the only legitimate distribution. Building MUST NOT install binaries to `PATH`.** `cargo build`, `make build`, `make ci`, and every other build target leave artifacts under `target/` only. There is no `make install-binary` target — `cargo install --path crates/deslop-*` is ⛔️ ILLEGAL on this repo. The release pipeline ships binaries via the `.vsix` (and via Homebrew/Scoop for the CLI). Local builds are for testing the source you just changed; they are not a distribution channel.
+- **External MCP clients (Claude Code, Claude Desktop, Codex, Cursor, Continue) MUST point at the VSIX-bundled binary by absolute path** — `~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp` on Unix, equivalent on Windows. The bare-name `deslop-mcp` (PATH lookup) form is only valid for users who installed the CLI via Homebrew/Scoop. A locally-built binary on `PATH` would shadow the shipright-versioned bundle and silently drift the agent's analysis off the extension's wire contract. Every doc that shows an MCP config snippet uses the absolute VSIX path as the primary form.
 - **Centralize all global state** in `crates/deslop-core/src/state.rs`.
 - **Never delete failing tests. Never remove assertions.** Reducing assertiveness = ⛔️ ILLEGAL.root — NOT env vars, NOT gh repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
 - **Coarse E2E tests only.** No unit tests. Drive the CLI end-to-end against fixture repos and assert against rendered reports.

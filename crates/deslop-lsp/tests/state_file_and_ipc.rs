@@ -123,9 +123,14 @@ fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
     Ok(())
 }
 
-/// [LIVE-CACHE-SEED] A valid state file is a real startup snapshot, not
-/// a dead end: the LSP must serve it immediately, then install the
-/// background pipeline and keep applying incremental file updates.
+/// [LIVE-CACHE-SEED], [LIVE-SEED-CACHE], [MCP-IPC-CLIENT] A valid seed
+/// cache is a real startup snapshot, not a dead end: the LSP must serve
+/// it immediately, then install the background pipeline and keep
+/// applying incremental file updates. Under the IPC-truth architecture,
+/// freshness is observed via the live `report/get` over IPC — the seed
+/// cache is only rewritten on cold-pass install, never on incremental
+/// edits.
+#[cfg(unix)]
 #[test]
 fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -153,22 +158,35 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
         "valid cached state metadata must be preserved at startup: {seeded}"
     );
 
+    // Cold-pass install rewrites the seed cache exactly once.
     wait_for_state_file_change(&state_path, &cached_bytes, ANALYSIS_TIMEOUT)?;
-    let refreshed_bytes = fs::read(&state_path)?;
-    let refreshed: serde_json::Value = serde_json::from_slice(&refreshed_bytes)?;
-    let refreshed_count = cluster_count(&refreshed);
+    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
+    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    let post_install = ipc_call(
+        &socket_path,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "report/get",
+            "params": {}
+        }),
+    )?;
+    let refreshed_count = post_install
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
     ensure!(
         refreshed_count > 0,
-        "background full scan must recreate a real current state file: {refreshed}"
+        "background full scan must produce real clusters in the live IPC report: {post_install}"
     );
     ensure!(
-        refreshed
-            .get("clusters")
+        post_install
+            .pointer("/result/clusters")
             .and_then(serde_json::Value::as_array)
             .is_some_and(|clusters| clusters
                 .iter()
                 .all(|cluster| cluster.get("id") != Some(&serde_json::json!("cached-gh73")))),
-        "background full scan must replace the staged cache marker: {refreshed}"
+        "background full scan must replace the staged cache marker in the live report: {post_install}"
     );
 
     let beta = workspace.path().join("Beta.cs");
@@ -178,9 +196,8 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
     )?;
     write_frame(&mut stdin, &watched_file_changed(&beta)?)?;
 
-    wait_for_state_file_change(&state_path, &refreshed_bytes, ANALYSIS_TIMEOUT)?;
-    let updated: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)?;
-    let updated_count = cluster_count(&updated);
+    let updated_count =
+        wait_for_cluster_count_change(&socket_path, refreshed_count, ANALYSIS_TIMEOUT)?;
     ensure!(
         updated_count < refreshed_count,
         "incremental update after cache load must reduce cluster count: {refreshed_count} -> {updated_count}"
@@ -198,7 +215,7 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
         .map_or(0, Vec::len);
     ensure!(
         live_count == updated_count,
-        "live reportGet must match the incrementally updated state file: {live}"
+        "live reportGet over stdio must match the IPC view of the incremental update: {live}"
     );
     Ok(())
 }
@@ -262,8 +279,12 @@ fn incompatible_state_file_is_wiped_and_startup_scans_from_scratch() -> Result<(
     Ok(())
 }
 
-/// [LIVE-STATE-FILE] After a file edit triggers re-analysis, the state
-/// file must be overwritten with a report reflecting the change.
+/// [LIVE-SEED-CACHE], [MCP-IPC-CLIENT] After a file edit triggers
+/// re-analysis, the live IPC report must reflect the change. Under the
+/// IPC-truth architecture the seed cache is not rewritten on every
+/// incremental edit; freshness lives in memory and is exposed over the
+/// `report/get` IPC method.
+#[cfg(unix)]
 #[test]
 fn state_file_updated_after_file_change() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -274,13 +295,26 @@ fn state_file_updated_after_file_change() -> Result<()> {
 
     let _init = handshake(&mut stdin, &mut stdout)?;
 
-    let state_path = workspace.path().join(STATE_FILE);
-    wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
+    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
+    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
 
-    let initial_bytes = fs::read(&state_path)?;
-    let initial: serde_json::Value = serde_json::from_slice(&initial_bytes)?;
-    let initial_count = cluster_count(&initial);
-    ensure!(initial_count > 0, "initial state must have clusters");
+    let initial = ipc_call(
+        &socket_path,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "report/get",
+            "params": {}
+        }),
+    )?;
+    let initial_count = initial
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    ensure!(
+        initial_count > 0,
+        "initial live IPC report must have clusters: {initial}"
+    );
 
     fs::write(
         &beta,
@@ -288,11 +322,8 @@ fn state_file_updated_after_file_change() -> Result<()> {
     )?;
     write_frame(&mut stdin, &watched_file_changed(&beta)?)?;
 
-    wait_for_state_file_change(&state_path, &initial_bytes, ANALYSIS_TIMEOUT)?;
-
-    let updated: serde_json::Value = serde_json::from_slice(&fs::read(&state_path)?)
-        .map_err(|error| anyhow!("updated state file is not valid JSON: {error}"))?;
-    let updated_count = cluster_count(&updated);
+    let updated_count =
+        wait_for_cluster_count_change(&socket_path, initial_count, ANALYSIS_TIMEOUT)?;
     ensure!(
         updated_count < initial_count,
         "removing Beta.cs duplicates must reduce cluster count: \
@@ -382,8 +413,11 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
     Ok(())
 }
 
-/// [LSP-IPC] MCP uses `deslop.lsp.refreshReport` over IPC to force a
-/// full re-analysis after an agent edit, then reloads the state file.
+/// [LSP-IPC], [MCP-IPC-CLIENT] MCP uses `deslop.lsp.refreshReport` over
+/// IPC to force a full re-analysis after an agent edit. Under the
+/// IPC-truth architecture, freshness is observed via the live
+/// `report/get` IPC reply — the seed cache is only rewritten on
+/// cold-pass install.
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_refresh_report_request() -> Result<()> {
@@ -397,13 +431,24 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
 
     let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
     wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
-    let state_path = workspace.path().join(STATE_FILE);
-    wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
 
-    let initial_bytes = fs::read(&state_path)?;
-    let initial: serde_json::Value = serde_json::from_slice(&initial_bytes)?;
-    let initial_count = cluster_count(&initial);
-    ensure!(initial_count > 0, "initial state must have clusters");
+    let initial = ipc_call(
+        &socket_path,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "report/get",
+            "params": {}
+        }),
+    )?;
+    let initial_count = initial
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    ensure!(
+        initial_count > 0,
+        "initial live IPC report must have clusters: {initial}"
+    );
 
     fs::write(
         &beta,
@@ -442,13 +487,19 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
         "refreshReport must report removed clusters after the Beta.cs edit: {response}"
     );
 
-    let updated_bytes = fs::read(&state_path)?;
-    ensure!(
-        updated_bytes != initial_bytes,
-        "refreshReport must rewrite the LSP state file"
-    );
-    let updated: serde_json::Value = serde_json::from_slice(&updated_bytes)?;
-    let updated_count = cluster_count(&updated);
+    let updated = ipc_call(
+        &socket_path,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "report/get",
+            "params": {}
+        }),
+    )?;
+    let updated_count = updated
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
     ensure!(
         updated_count < initial_count,
         "refreshReport must rescan edited files and reduce cluster count: {initial_count} -> {updated_count}"
@@ -530,6 +581,46 @@ fn wait_for_state_file_change(path: &Path, previous: &[u8], timeout: Duration) -
         std::thread::sleep(POLL_INTERVAL);
     }
     Err(anyhow!("timed out waiting for state file to change"))
+}
+
+/// Polls the LSP's IPC socket for `report/get` until the visible cluster
+/// count differs from `previous_count` or `timeout` elapses. Used to
+/// observe live incremental updates without depending on `live-report.json`
+/// mtimes — under the IPC-truth architecture ([LIVE-SEED-CACHE],
+/// [MCP-IPC-CLIENT]) the seed cache is only written on cold-pass install.
+#[cfg(unix)]
+fn wait_for_cluster_count_change(
+    socket_path: &Path,
+    previous_count: usize,
+    timeout: Duration,
+) -> Result<usize> {
+    let start = Instant::now();
+    loop {
+        if let Ok(report) = ipc_call(
+            socket_path,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "report/get",
+                "params": {}
+            }),
+        ) {
+            let count = report
+                .pointer("/result/clusters")
+                .and_then(serde_json::Value::as_array)
+                .map_or(0, Vec::len);
+            if count != previous_count {
+                return Ok(count);
+            }
+        }
+        if start.elapsed() >= timeout {
+            break;
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+    Err(anyhow!(
+        "timed out waiting for live cluster count to differ from {previous_count}"
+    ))
 }
 
 /// Sends one JSON-RPC envelope over the Unix socket and returns the response line.

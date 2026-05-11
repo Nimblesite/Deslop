@@ -4,7 +4,10 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use deslop_core::{
     embedding::{EmbeddingMode, EmbeddingProvider},
-    live::{AnalysisSession, ChangeSummary, LiveError, LiveService, ReportChangedNotification},
+    live::{
+        broadcast_report_changed, AnalysisSession, ChangeSummary, LiveError, LiveService,
+        ReportChangedNotification, ReportChangedSender,
+    },
     EmbeddingSettings, PipelineSession, ReportDelta,
 };
 use tokio::sync::Mutex;
@@ -72,6 +75,10 @@ pub(crate) struct RefreshTask {
     pub(crate) provider: Arc<dyn EmbeddingProvider>,
     /// Embedding mode used by the cold pass.
     pub(crate) mode: EmbeddingMode,
+    /// Broadcast sender shared with the scheduler so MCP IPC
+    /// subscribers see the cache-seed cold-pass commit alongside
+    /// scheduler-driven passes.
+    pub(crate) report_changed: ReportChangedSender,
 }
 
 /// Runs `PipelineSession::initialise` on a blocking thread so the
@@ -123,6 +130,10 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
                 generation,
                 current.as_ref(),
             );
+            // Persist the post-cold-pass snapshot so the next LSP
+            // startup has a warm seed cache ([LIVE-SEED-CACHE]). The
+            // call is the only seed-cache write path in this module.
+            guard.persist_seed_cache();
             (previous_generation, previous_report, generation, delta)
         })
     };
@@ -136,11 +147,13 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
     task.service
         .remember_snapshot(previous_generation, previous_report)
         .await;
+    let notification = ReportChangedNotification {
+        generation,
+        summary: ChangeSummary::from_delta(&delta),
+    };
+    broadcast_report_changed(&task.report_changed, notification.clone());
     task.client
-        .send_notification::<ReportChangedLspNotification>(ReportChangedNotification {
-            generation,
-            summary: ChangeSummary::from_delta(&delta),
-        })
+        .send_notification::<ReportChangedLspNotification>(notification)
         .await;
     push_state(&task.client, "idle").await;
 }
@@ -254,6 +267,7 @@ mod tests {
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
         let (client, mut socket) = initialized_loopback_client().await?;
+        let (report_changed, _rx) = tokio::sync::broadcast::channel(8);
         let task = RefreshTask {
             session,
             service,
@@ -264,6 +278,7 @@ mod tests {
             config_path: None,
             provider,
             mode: EmbeddingMode::Off,
+            report_changed,
         };
         let (pipeline, report) = initialise_in_background(&task).await?;
 

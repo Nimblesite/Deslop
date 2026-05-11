@@ -123,7 +123,7 @@ function report(clusters: ReportCluster[]): Report {
     schema_doc: "# docs",
     action_hints: [],
     boilerplate_hints: [],
-    embedding_provenance: null,
+    embedding_provenance: undefined,
     clusters,
   };
 }

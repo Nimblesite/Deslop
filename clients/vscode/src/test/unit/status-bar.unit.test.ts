@@ -25,7 +25,7 @@ function report(): Report {
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],
-    embedding_provenance: null,
+    embedding_provenance: undefined,
     clusters: [
       {
         id: "a",

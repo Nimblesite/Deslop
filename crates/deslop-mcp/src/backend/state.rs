@@ -1,380 +1,197 @@
-//! `StateFileBackend` — [`McpBackend`] implementation that reads the
-//! `.deslop-cache/live-report.json` file written by the LSP server.
+//! `LiveBackend` — [`McpBackend`] implementation that calls the LSP
+//! IPC socket on every read ([MCP-WHY-LIVE], [MCP-IPC-CLIENT]).
 //!
-//! Implements [MCP-WHY-LIVE]: the MCP server no longer runs its own
-//! analysis pipeline. It reads the single source of truth produced by
-//! `deslop-lsp` and pushes change notifications whenever the file
-//! changes on disk.
+//! Single source of truth: the LSP's in-memory `latest_report`
+//! ([LIVE-IPC-SOCKET]). The MCP never touches
+//! `.deslop-cache/live-report.json` — that file is the LSP's private
+//! warm-start cache ([LIVE-SEED-CACHE]), not a wire contract. Every
+//! read tool call issues one JSON-RPC request to
+//! `.deslop-cache/deslop.sock`. When the socket is missing, callers
+//! receive [`BackendError::LspNotRunning`] — there is no fallback
+//! pipeline; CI/one-shot use the `deslop` CLI.
 
 use std::{
-    collections::BTreeSet,
-    fs,
-    io::ErrorKind,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc, Mutex, RwLock,
-    },
-    time::SystemTime,
+    sync::{atomic::AtomicU64, atomic::Ordering, Arc, Mutex},
 };
 
 use deslop_core::{
     live::wire::{
         ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
-        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest,
+        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, ReportChangedNotification,
+        SessionConfig,
     },
     report::ReportCluster,
     EmbeddingSpec, Report,
 };
-use notify::{recommended_watcher, EventHandler, RecursiveMode, Watcher as NotifyWatcher};
 use serde_json::{json, Value};
-use tracing::{debug, warn};
+use tracing::debug;
 
 use crate::{notify::push_report_changed, NotificationSender};
 
 use super::{
-    filters, ipc::ipc_call, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend,
-    RescanProgress, SessionBackendConfig, SessionConfigSnapshot,
+    ipc::ipc_call, BackendError, FindSimilarInput, FindSimilarOutput, McpBackend, RescanProgress,
+    SessionBackendConfig, SessionConfigSnapshot,
 };
 
-/// `McpBackend` implementation that reads the LSP-written state file.
-///
-/// Provides live clone data without running its own analysis pipeline.
-/// The LSP server writes `.deslop-cache/live-report.json`; this backend
-/// reads it on demand and watches for changes via `notify`.
-pub struct StateFileBackend {
+/// `McpBackend` implementation that delegates every read to the LSP via
+/// the shared Unix socket. No on-disk cache, no file watcher, no
+/// duplicate analysis pipeline.
+pub struct LiveBackend {
     /// Workspace root pinned at initialisation.
     root: PathBuf,
-    /// Absolute path to the LSP-written state file.
-    state_file: PathBuf,
-    /// Absolute path to the LSP IPC socket. Used to delegate
-    /// `find-similar` and `list-embedding-models` to the running LSP
-    /// when the state file alone is not enough ([MCP-IPC-CLIENT]).
+    /// Absolute path to the LSP IPC socket.
     ipc_socket: PathBuf,
-    /// Monotonic generation counter, bumped on every reload.
+    /// Last-seen LSP generation. Updated lazily after each IPC read so
+    /// the synchronous `generation()` accessor stays cheap.
     generation: Arc<AtomicU64>,
-    /// Most-recently-loaded report. `None` until first successful load.
-    cached: Arc<RwLock<Option<Arc<Report>>>>,
-    /// State-file fingerprint loaded with `cached`.
-    cached_stamp: Arc<RwLock<Option<StateFileStamp>>>,
     /// Shared notification sender wired by [`McpServer::run`].
     sender: Arc<Mutex<Option<NotificationSender>>>,
 }
 
-/// Fingerprint of the LSP-written state file, used by the watcher to
-/// skip re-reads when neither the modification time nor the length
-/// changed.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct StateFileStamp {
-    /// Last-modified time of the state file at load time.
-    modified: SystemTime,
-    /// Byte length of the state file at load time.
-    len: u64,
-}
-
-impl std::fmt::Debug for StateFileBackend {
+impl std::fmt::Debug for LiveBackend {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("StateFileBackend")
+            .debug_struct("LiveBackend")
             .field("root", &self.root)
-            .field("state_file", &self.state_file)
+            .field("ipc_socket", &self.ipc_socket)
             .finish_non_exhaustive()
     }
 }
 
-impl StateFileBackend {
-    /// Constructs the backend from `config`. Does not read the state
-    /// file eagerly — the first tool call triggers the initial load.
+impl LiveBackend {
+    /// Constructs the backend from `config`. Lightweight — no IPC traffic.
     ///
     /// # Errors
     ///
-    /// Returns [`BackendError::StateFileCorrupt`] only if the config
-    /// path cannot be canonicalised; never on a missing LSP state file.
+    /// Currently infallible; returns `Result` for symmetry with the
+    /// previous backend signature so callers do not have to branch.
     pub fn initialise(config: SessionBackendConfig) -> Result<Self, BackendError> {
         let cache_dir = config.root.join(".deslop-cache");
-        let state_file = cache_dir.join("live-report.json");
         let ipc_socket = cache_dir.join("deslop.sock");
         Ok(Self {
             root: config.root,
-            state_file,
             ipc_socket,
             generation: Arc::new(AtomicU64::new(0)),
-            cached: Arc::new(RwLock::new(None)),
-            cached_stamp: Arc::new(RwLock::new(None)),
             sender: Arc::new(Mutex::new(None)),
         })
     }
 
-    /// Returns the cached report, reloading from disk when the state
-    /// file changed since the cache was loaded.
-    ///
-    /// # Errors
-    ///
-    /// See [`Self::reload_cache`].
-    fn cached_report(&self) -> Result<Arc<Report>, BackendError> {
-        let stamp = state_file_stamp(&self.state_file)?;
-        {
-            let report_guard = self
-                .cached
-                .read()
-                .map_err(|_| BackendError::MutexPoisoned)?;
-            let stamp_guard = self
-                .cached_stamp
-                .read()
-                .map_err(|_| BackendError::MutexPoisoned)?;
-            if let (Some(report), Some(cached_stamp)) =
-                (report_guard.as_ref(), stamp_guard.as_ref())
-            {
-                if cached_stamp == &stamp {
-                    return Ok(Arc::clone(report));
+    /// Issues an IPC `report/get` and decodes the result into `Report`.
+    fn fetch_report(&self) -> Result<Arc<Report>, BackendError> {
+        let result = ipc_call(&self.ipc_socket, "report/get", &json!({}))?;
+        let report: Report = serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc report parse: {err}")))?;
+        Ok(Arc::new(report))
+    }
+
+    /// Issues `session/config` and decodes the response.
+    fn fetch_session_config(&self) -> Result<SessionConfig, BackendError> {
+        let result = ipc_call(&self.ipc_socket, "session/config", &json!({}))?;
+        let config: SessionConfig = serde_json::from_value(result).map_err(|err| {
+            BackendError::StateFileCorrupt(format!("ipc session_config parse: {err}"))
+        })?;
+        Ok(config)
+    }
+}
+
+/// Connects to the subscribe socket, sends the initial JSON-RPC
+/// request, blocks for the ack frame, and returns the buffered
+/// reader alongside the LSP's current generation. Returning the
+/// reader (not the underlying stream) preserves any bytes the LSP
+/// wrote between the ack and the next user call, which a separate
+/// `try_clone`'d stream would lose to `BufReader`'s internal buffer.
+#[cfg(unix)]
+fn connect_subscribe_and_read_ack(
+    socket: &Path,
+) -> std::io::Result<(BufReader<std::os::unix::net::UnixStream>, u64)> {
+    use std::{io::Write, os::unix::net::UnixStream};
+    let mut stream = UnixStream::connect(socket)?;
+    let payload = serde_json::to_vec(&json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "report/subscribe",
+        "params": {},
+    }))
+    .unwrap_or_default();
+    stream.write_all(&payload)?;
+    stream.write_all(b"\n")?;
+    stream.flush()?;
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    let _bytes = reader.read_line(&mut line)?;
+    let generation = parse_subscribe_ack_generation(&line).unwrap_or(0);
+    Ok((reader, generation))
+}
+
+#[cfg(not(unix))]
+fn connect_subscribe_and_read_ack(
+    _socket: &Path,
+) -> std::io::Result<(BufReader<std::fs::File>, u64)> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "MCP subscribe is Unix-only",
+    ))
+}
+
+/// Spawns the background thread that drains broadcast notifications
+/// from `reader` and forwards them as MCP `reportChanged` frames.
+#[cfg(unix)]
+fn spawn_subscribe_reader(
+    reader: BufReader<std::os::unix::net::UnixStream>,
+    sender: Arc<Mutex<Option<NotificationSender>>>,
+    generation: Arc<AtomicU64>,
+) {
+    let _thread = std::thread::spawn(move || {
+        let mut reader = reader;
+        let mut line = String::new();
+        while reader.read_line(&mut line).is_ok() && !line.is_empty() {
+            if let Some(notification) = parse_report_changed(&line) {
+                generation.store(notification.generation, Ordering::Relaxed);
+                let Ok(guard) = sender.lock() else {
+                    return;
+                };
+                if let Some(s) = guard.as_ref() {
+                    push_report_changed(s, notification.generation);
                 }
             }
+            line.clear();
         }
-        self.reload_cache_with_stamp(stamp)
-    }
-
-    /// Reads and parses the LSP state file, updates the in-memory cache,
-    /// and increments the generation counter.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`BackendError::LspNotRunning`] when the file does not
-    /// exist, and [`BackendError::StateFileCorrupt`] for all other I/O
-    /// or parse failures.
-    fn reload_cache(&self) -> Result<Arc<Report>, BackendError> {
-        let stamp = state_file_stamp(&self.state_file)?;
-        self.reload_cache_with_stamp(stamp)
-    }
-
-    /// Variant of [`Self::reload_cache`] that takes a pre-computed
-    /// [`StateFileStamp`] so the file watcher does not stat the file
-    /// twice (once to detect the change, once to read it).
-    fn reload_cache_with_stamp(&self, stamp: StateFileStamp) -> Result<Arc<Report>, BackendError> {
-        let report = read_state_report(&self.state_file)?;
-        let shared = Arc::new(report);
-        let mut guard = self
-            .cached
-            .write()
-            .map_err(|_| BackendError::MutexPoisoned)?;
-        *guard = Some(Arc::clone(&shared));
-        let mut stamp_guard = self
-            .cached_stamp
-            .write()
-            .map_err(|_| BackendError::MutexPoisoned)?;
-        *stamp_guard = Some(stamp);
-        let _ = self.generation.fetch_add(1, Ordering::Relaxed);
-        Ok(shared)
-    }
-
-    /// Asks the running LSP to execute `deslop.lsp.refreshReport`.
-    ///
-    /// Returns `Ok(None)` when the LSP socket is absent so MCP-only
-    /// fixture tests and cache-only sessions keep the previous reload
-    /// behaviour with an empty progress summary.
-    fn request_lsp_refresh(&self) -> Result<Option<RescanProgress>, BackendError> {
-        let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
-            Ok(result) => result,
-            Err(BackendError::LspNotRunning) => return Ok(None),
-            Err(err) => return Err(err),
-        };
-        Ok(Some(refresh_progress_from_result(&result)?))
-    }
-
-    /// Starts a background thread that watches the parent directory of
-    /// the state file and calls [`reload_and_notify`] on any change.
-    ///
-    /// Silently returns if the watcher cannot be created — the backend
-    /// still works by reloading on every tool call.
-    fn spawn_file_watcher(&self) {
-        let Some(watch_dir) = self.state_file.parent().map(Path::to_path_buf) else {
-            return;
-        };
-        let state_file = self.state_file.clone();
-        let cached = Arc::clone(&self.cached);
-        let cached_stamp = Arc::clone(&self.cached_stamp);
-        let generation = Arc::clone(&self.generation);
-        let sender = Arc::clone(&self.sender);
-        let _thread = std::thread::spawn(move || {
-            run_watcher(
-                &watch_dir,
-                &state_file,
-                &cached,
-                &cached_stamp,
-                &generation,
-                &sender,
-            );
-        });
-    }
+        debug!("mcp_subscribe_loop_exited");
+    });
 }
 
-/// Returns the (mtime, length) stamp used to detect state-file changes.
-fn state_file_stamp(state_file: &Path) -> Result<StateFileStamp, BackendError> {
-    let metadata = fs::metadata(state_file).map_err(|err| map_state_file_io_error(&err))?;
-    let modified = metadata
-        .modified()
-        .map_err(|err| BackendError::StateFileCorrupt(err.to_string()))?;
-    Ok(StateFileStamp {
-        modified,
-        len: metadata.len(),
-    })
-}
-
-/// Reads the LSP-written state file and parses it into a [`Report`].
-///
-/// Used by explicit-reload paths only. On a parse failure the file is
-/// deleted (per issue #118: an old-format file from a previous version
-/// must not block startup). Watcher reloads must call
-/// [`parse_state_report`] instead — inotify can fire on a partially
-/// written file (`std::fs::write` truncates then writes), so deleting
-/// on every parse failure would race with the LSP's own writes.
-fn read_state_report(state_file: &Path) -> Result<Report, BackendError> {
-    let bytes = fs::read(state_file).map_err(|err| map_state_file_io_error(&err))?;
-    match serde_json::from_slice(&bytes) {
-        Ok(report) => Ok(report),
-        Err(err) => {
-            delete_incompatible_state_file(state_file, &err)?;
-            Err(BackendError::LspNotRunning)
-        }
-    }
-}
-
-/// Reads + parses the state file without deleting it on parse failure.
-/// Safe to call from the file watcher where partial writes are expected.
-fn parse_state_report(state_file: &Path) -> Result<Report, BackendError> {
-    let bytes = fs::read(state_file).map_err(|err| map_state_file_io_error(&err))?;
-    serde_json::from_slice(&bytes).map_err(|err| BackendError::StateFileCorrupt(err.to_string()))
-}
-
-/// Removes an LSP state file that failed report JSON parsing.
-fn delete_incompatible_state_file(
-    state_file: &Path,
-    parse_error: &serde_json::Error,
-) -> Result<(), BackendError> {
-    match fs::remove_file(state_file) {
-        Ok(()) => {
-            warn!(reason = %parse_error, "mcp_state_file_incompatible_deleted");
-            Ok(())
-        }
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-        Err(err) => Err(BackendError::StateFileCorrupt(err.to_string())),
-    }
-}
-
-/// Lifts a state-file I/O error into a [`BackendError`], distinguishing
-/// "LSP is not running" (file not found) from corruption.
-fn map_state_file_io_error(err: &std::io::Error) -> BackendError {
-    if err.kind() == ErrorKind::NotFound {
-        BackendError::LspNotRunning
-    } else {
-        BackendError::StateFileCorrupt(err.to_string())
-    }
-}
-
-/// Derives the set of language ids present in a report by mapping
-/// occurrence file extensions to known language ids.
-fn languages_from_report(report: &Report) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    for cluster in &report.clusters {
-        for occ in &cluster.occurrences {
-            if let Some(lang) = extension_to_language(&occ.path) {
-                let _inserted = seen.insert(lang);
-            }
-        }
-    }
-    seen.into_iter().map(str::to_owned).collect()
-}
-
-/// Maps a file extension to a canonical language id.
-fn extension_to_language(path: &Path) -> Option<&'static str> {
-    match path.extension().and_then(|e| e.to_str())? {
-        "cs" => Some("csharp"),
-        "rs" => Some("rust"),
-        "py" => Some("python"),
-        _ => None,
-    }
-}
-
-/// Entry point for the background watcher thread.
-fn run_watcher(
-    watch_dir: &Path,
-    state_file: &Path,
-    cached: &Arc<RwLock<Option<Arc<Report>>>>,
-    cached_stamp: &Arc<RwLock<Option<StateFileStamp>>>,
-    generation: &Arc<AtomicU64>,
-    sender: &Arc<Mutex<Option<NotificationSender>>>,
+#[cfg(not(unix))]
+fn spawn_subscribe_reader(
+    _reader: BufReader<std::fs::File>,
+    _sender: Arc<Mutex<Option<NotificationSender>>>,
+    _generation: Arc<AtomicU64>,
 ) {
-    let (tx, rx) = std::sync::mpsc::channel();
-    let handler = ChannelHandler { tx };
-    let Ok(mut watcher) = recommended_watcher(handler) else {
-        warn!("mcp_state_file_watcher_init_failed");
-        return;
-    };
-    if watcher
-        .watch(watch_dir, RecursiveMode::NonRecursive)
-        .is_err()
-    {
-        warn!(dir = %watch_dir.display(), "mcp_state_file_watch_failed");
-        return;
-    }
-    for _event in rx {
-        reload_and_notify(state_file, cached, cached_stamp, generation, sender);
-    }
 }
 
-/// Reloads the state file and notifies the client if a sender is set.
-fn reload_and_notify(
-    state_file: &Path,
-    cached: &RwLock<Option<Arc<Report>>>,
-    cached_stamp: &RwLock<Option<StateFileStamp>>,
-    generation: &AtomicU64,
-    sender: &Mutex<Option<NotificationSender>>,
-) {
-    let stamp = match state_file_stamp(state_file) {
-        Ok(stamp) => stamp,
-        Err(err) => {
-            debug!(reason = %err, "mcp_state_file_reload_failed");
-            return;
-        }
-    };
-    let Ok(report) = parse_state_report(state_file) else {
-        warn!("mcp_state_file_parse_failed");
-        return;
-    };
-    let shared = Arc::new(report);
-    let Ok(mut guard) = cached.write() else {
-        return;
-    };
-    *guard = Some(shared);
-    drop(guard);
-    let Ok(mut stamp_guard) = cached_stamp.write() else {
-        return;
-    };
-    *stamp_guard = Some(stamp);
-    let gen = generation.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
-    let Ok(lock) = sender.lock() else {
-        return;
-    };
-    if let Some(s) = lock.as_ref() {
-        push_report_changed(s, gen);
+/// Parses one `report/changed` notification frame, returning `None`
+/// when the line is not a recognisable notification.
+fn parse_report_changed(line: &str) -> Option<ReportChangedNotification> {
+    let frame: Value = serde_json::from_str(line.trim()).ok()?;
+    if frame.get("method").and_then(Value::as_str) != Some("report/changed") {
+        return None;
     }
+    let params = frame.get("params").cloned()?;
+    serde_json::from_value(params).ok()
 }
 
-/// Bridges `notify` events into a std channel so the watcher thread
-/// can block on `rx.recv()` without requiring an async runtime.
-struct ChannelHandler {
-    /// Channel sender used to signal incoming filesystem events.
-    tx: std::sync::mpsc::Sender<()>,
+/// Reads the `generation` field from the `report/subscribe` ack so
+/// the MCP can sync its counter without an extra IPC round-trip.
+fn parse_subscribe_ack_generation(line: &str) -> Option<u64> {
+    let frame: Value = serde_json::from_str(line.trim()).ok()?;
+    frame
+        .get("result")
+        .and_then(|result| result.get("generation"))
+        .and_then(Value::as_u64)
 }
 
-impl EventHandler for ChannelHandler {
-    fn handle_event(&mut self, event: notify::Result<notify::Event>) {
-        if event.is_ok() {
-            let _ = self.tx.send(());
-        }
-    }
-}
-
-impl McpBackend for StateFileBackend {
+impl McpBackend for LiveBackend {
     fn root(&self) -> &Path {
         &self.root
     }
@@ -384,15 +201,19 @@ impl McpBackend for StateFileBackend {
     }
 
     fn report_get(&self) -> Result<Arc<Report>, BackendError> {
-        self.cached_report()
+        self.fetch_report()
     }
 
     fn report_for_file(&self, path: &Path) -> Result<Vec<ReportCluster>, BackendError> {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
-        let report = self.cached_report()?;
-        Ok(filters::filter_clusters_by_path(
-            &report, &resolved, &self.root,
-        ))
+        let result = ipc_call(
+            &self.ipc_socket,
+            "report/forFile",
+            &json!({ "path": resolved }),
+        )?;
+        let file_report: deslop_core::live::wire::FileReport = serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forFile parse: {err}")))?;
+        Ok(file_report.clusters)
     }
 
     fn report_for_range(
@@ -402,10 +223,18 @@ impl McpBackend for StateFileBackend {
         end_byte: usize,
     ) -> Result<Vec<ReportCluster>, BackendError> {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
-        let report = self.cached_report()?;
-        Ok(filters::filter_clusters_by_range(
-            &report, &resolved, start_byte, end_byte, &self.root,
-        ))
+        let result = ipc_call(
+            &self.ipc_socket,
+            "report/forRange",
+            &json!({
+                "path": resolved,
+                "start_byte": start_byte,
+                "end_byte": end_byte,
+            }),
+        )?;
+        let clusters: Vec<ReportCluster> = serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forRange parse: {err}")))?;
+        Ok(clusters)
     }
 
     fn find_similar(
@@ -453,13 +282,24 @@ impl McpBackend for StateFileBackend {
     }
 
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError> {
-        let report = self.cached_report()?;
-        report
-            .clusters
-            .iter()
-            .find(|c| c.id == id)
-            .cloned()
-            .ok_or_else(|| BackendError::UnknownCluster(id.to_owned()))
+        let result = match ipc_call(&self.ipc_socket, "cluster/byId", &json!({ "id": id })) {
+            Ok(value) => value,
+            // The LSP surfaces unknown ids as a JSON-RPC error. The
+            // generic IPC client maps every RPC error to
+            // `StateFileCorrupt`, but the MCP wire contract requires
+            // `UnknownCluster` so the agent gets a stable code
+            // ([MCP-TESTING]).
+            Err(BackendError::StateFileCorrupt(message))
+                if message.contains("unknown cluster id")
+                    || message.contains("no cluster with id") =>
+            {
+                return Err(BackendError::UnknownCluster(id.to_owned()));
+            }
+            Err(error) => return Err(error),
+        };
+        let cluster: ReportCluster = serde_json::from_value(result)
+            .map_err(|err| BackendError::StateFileCorrupt(format!("ipc cluster parse: {err}")))?;
+        Ok(cluster)
     }
 
     fn list_embedding_models(&self) -> Result<Vec<WireEmbeddingModelInfo>, BackendError> {
@@ -479,35 +319,36 @@ impl McpBackend for StateFileBackend {
     }
 
     fn session_config(&self) -> Result<SessionConfigSnapshot, BackendError> {
-        let report = self.cached_report()?;
-        let languages = languages_from_report(&report);
+        let config = self.fetch_session_config()?;
         Ok(SessionConfigSnapshot {
-            root: self.root.clone(),
-            min_nodes: report.min_nodes,
-            languages,
-            embedding_provenance: report.embedding_provenance.clone(),
-            incremental: true,
-            cumulative_cache_stats: report.cache_stats,
+            root: config.workspace_root,
+            min_nodes: config.min_nodes,
+            languages: config.languages,
+            embedding_provenance: config.embedding_provenance,
+            incremental: config.incremental,
+            cumulative_cache_stats: deslop_core::report::CacheStats::default(),
         })
     }
 
     fn mark_changed(&self, _paths: &[PathBuf]) -> Result<RescanProgress, BackendError> {
-        let refresh_progress = self.request_lsp_refresh()?;
-        match self.reload_cache() {
-            Ok(_) => {
-                let gen = self.generation.load(Ordering::Relaxed);
-                if let Ok(guard) = self.sender.lock() {
-                    if let Some(s) = guard.as_ref() {
-                        push_report_changed(s, gen);
-                    }
-                }
-                Ok(refresh_progress.unwrap_or_else(|| empty_rescan_progress(gen)))
+        let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
+            Ok(result) => result,
+            Err(BackendError::LspNotRunning) => {
+                return Ok(empty_rescan_progress(
+                    self.generation.load(Ordering::Relaxed),
+                ))
             }
-            Err(BackendError::LspNotRunning) => Ok(empty_rescan_progress(
-                self.generation.load(Ordering::Relaxed),
-            )),
-            Err(err) => Err(err),
+            Err(err) => return Err(err),
+        };
+        let progress = refresh_progress_from_result(&result)?;
+        self.generation
+            .store(progress.generation, Ordering::Relaxed);
+        if let Ok(guard) = self.sender.lock() {
+            if let Some(s) = guard.as_ref() {
+                push_report_changed(s, progress.generation);
+            }
         }
+        Ok(progress)
     }
 
     fn set_notification_sender(&self, sender: NotificationSender) {
@@ -516,7 +357,24 @@ impl McpBackend for StateFileBackend {
         };
         *guard = Some(sender);
         drop(guard);
-        self.spawn_file_watcher();
+        // Synchronously open the subscribe socket so the initial
+        // generation is recorded before any tool call returns. The
+        // subscribe ack carries the LSP's current generation; the
+        // same BufReader that consumed it is then handed to the
+        // background reader thread so any `report/changed` frames the
+        // LSP wrote between ack and reader spawn are not lost in a
+        // discarded buffer ([MCP-IPC-CLIENT]).
+        match connect_subscribe_and_read_ack(&self.ipc_socket) {
+            Ok((reader, initial_generation)) => {
+                self.generation.store(initial_generation, Ordering::Relaxed);
+                spawn_subscribe_reader(
+                    reader,
+                    Arc::clone(&self.sender),
+                    Arc::clone(&self.generation),
+                );
+            }
+            Err(error) => debug!(reason = %error, "mcp_subscribe_connect_failed"),
+        }
     }
 }
 

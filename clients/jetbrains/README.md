@@ -27,9 +27,23 @@ Build the release zip and run all local package gates:
 make jetbrains-package
 ```
 
-The Makefile uses `gradle` from `PATH` when available. On Unix hosts without a
-PATH install it falls back to a cached Gradle 9.0.0 distribution under
-`~/.gradle/wrapper/dists`; set `GRADLE=/path/to/gradle` to override it.
+Run resolver tests:
+
+```bash
+make jetbrains-test
+```
+
+Run resolver tests AND prove the resolver accepts the real released
+`deslop-lsp` binary plus rejects manifest drift:
+
+```bash
+make jetbrains-real-binary-test
+```
+
+Gradle is invoked via the checked-in wrapper at `clients/jetbrains/gradlew`
+(or `gradlew.bat` on Windows). A fresh checkout only needs a JDK on PATH —
+the wrapper downloads its own Gradle distribution. Override the binary by
+setting `GRADLE=/path/to/gradle` if you need a different runtime.
 
 Local Rider smoke path:
 

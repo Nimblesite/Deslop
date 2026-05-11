@@ -23,7 +23,7 @@ function emptyReport(overrides: Partial<Report> = {}): Report {
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],
-    embedding_provenance: null,
+    embedding_provenance: undefined,
     clusters: [],
     ...overrides,
   };
@@ -282,7 +282,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 200,
-      message: null,
+      message: undefined,
     });
     assert.equal(fired, 1);
     assert.deepEqual(store.current.embeddingProgress, {
@@ -291,7 +291,7 @@ suite("ReportStore", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 200,
-      message: null,
+      message: undefined,
     });
   });
 
@@ -303,7 +303,7 @@ suite("ReportStore", () => {
       model_id: "blake3-stub",
       done: 64,
       total: 64,
-      message: null,
+      message: undefined,
     });
     store.setEmbeddingProgress(null);
     assert.equal(store.current.embeddingProgress, null);

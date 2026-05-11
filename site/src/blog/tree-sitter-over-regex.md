@@ -4,6 +4,7 @@ title: Regex on source code is illegal
 date: 2026-04-10
 author: Christian Findlay
 tags: posts
+description: Deslop parses every language with tree-sitter — no regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with, and why it survives reformatting and identifier renaming.
 excerpt: Deslop parses every language with tree-sitter. No regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with.
 ---
 

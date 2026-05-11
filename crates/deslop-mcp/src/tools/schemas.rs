@@ -50,7 +50,8 @@ pub(super) fn schema_report_for_file() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "path": { "type": "string", "description": "Absolute or workspace-relative path." }
+            "path": { "type": "string", "description": "Absolute or workspace-relative path." },
+            "max_occurrences": { "type": "integer", "minimum": 1, "default": 15, "description": "Total occurrence budget across returned clusters. Worst-first; cluster that overruns the budget is truncated and following clusters are dropped. Result still reports total_occurrences for the unfiltered count." }
         },
         "required": ["path"],
         "additionalProperties": false,
@@ -64,7 +65,8 @@ pub(super) fn schema_report_for_range() -> Value {
         "properties": {
             "path": { "type": "string", "description": "Absolute or workspace-relative path." },
             "start_byte": { "type": "integer", "minimum": 0 },
-            "end_byte": { "type": "integer", "minimum": 0 }
+            "end_byte": { "type": "integer", "minimum": 0 },
+            "max_occurrences": { "type": "integer", "minimum": 1, "default": 15, "description": "Total occurrence budget across returned clusters. See top-offenders for semantics." }
         },
         "required": ["path", "start_byte", "end_byte"],
         "additionalProperties": false,
@@ -84,7 +86,8 @@ pub(super) fn schema_find_similar() -> Value {
                 "type": "string",
                 "enum": ["csharp", "rust", "python"]
             },
-            "top_n": { "type": "integer", "minimum": 0, "default": 5 }
+            "top_n": { "type": "integer", "minimum": 0, "default": 5 },
+            "max_occurrences": { "type": "integer", "minimum": 1, "default": 15, "description": "Total occurrence budget across returned clusters. See top-offenders for semantics." }
         },
         "additionalProperties": false,
     })
@@ -95,7 +98,8 @@ pub(super) fn schema_top_offenders() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "n": { "type": "integer", "minimum": 1, "default": 5, "description": "Max clusters to return." }
+            "n": { "type": "integer", "minimum": 1, "default": 5, "description": "Max clusters to return." },
+            "max_occurrences": { "type": "integer", "minimum": 1, "default": 15, "description": "Total occurrence budget across returned clusters. Worst-first: clusters are added until the next one would push occurrences past this budget; the overrunning cluster is truncated and following clusters are dropped. The result reports total_occurrences for the unfiltered count, plus occurrences_truncated per cluster." }
         },
         "additionalProperties": false,
     })
@@ -111,7 +115,8 @@ pub(super) fn schema_rescan() -> Value {
                 "items": { "type": "string", "minLength": 1 },
                 "description": "Optional absolute or workspace-relative paths changed by the caller."
             },
-            "n": { "type": "integer", "minimum": 1, "default": 5, "description": "Max clusters to return after reload." }
+            "n": { "type": "integer", "minimum": 1, "default": 5, "description": "Max clusters to return after reload." },
+            "max_occurrences": { "type": "integer", "minimum": 1, "default": 15, "description": "Total occurrence budget across returned clusters. See top-offenders for semantics." }
         },
         "additionalProperties": false,
     })

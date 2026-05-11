@@ -55,7 +55,7 @@ suite("SessionProvider", () => {
       model_id: "nomic-embed-text",
       done: 0,
       total: 23797,
-      message: null,
+      message: undefined,
     });
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();
@@ -92,7 +92,7 @@ suite("SessionProvider", () => {
     // [LIVE-EMBEDDING-CONSENT]
     const store = new ReportStore();
     const snapshot = report([]);
-    snapshot.embedding_provenance = null;
+    snapshot.embedding_provenance = undefined;
     store.setSnapshot(snapshot, 0);
     const provider = new SessionProvider(store, new StatusTicker(), () => ({}) as never);
     const nodes = provider.getChildren();

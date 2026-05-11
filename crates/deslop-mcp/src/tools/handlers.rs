@@ -3,9 +3,11 @@
 use std::path::{Path, PathBuf};
 
 use deslop_core::{
+    report::occurrence_count,
     wire_generated::{
-        EmbeddingModelList, FindSimilarResult, McpSessionConfig, RangeReport, ReportPageFilters,
-        RescanPayload, SchemaDocPayload, SetEmbeddingModelResponse, TopOffendersPayload,
+        EmbeddingModelList, FindSimilarResult, McpSessionConfig, RangeReport, ReportCluster,
+        ReportPageFilters, RescanPayload, SchemaDocPayload, SetEmbeddingModelResponse,
+        TopOffendersPayload,
     },
     Report,
 };
@@ -19,6 +21,16 @@ use crate::{
 
 use super::backend_to_rpc;
 
+/// Default total-occurrence budget for tools that ship full clusters
+/// over the wire ([MCP-OCCURRENCE-BUDGET]). Worst-first: clusters fill
+/// the budget in order; the cluster that overruns it is included with
+/// its occurrences truncated and `occurrences_truncated = true`, and
+/// any following clusters are dropped. The unfiltered count is always
+/// reported in `total_occurrences` so the agent knows how much was
+/// filtered. Default chosen so a `top-offenders` n=5 response on a
+/// monorepo stays well under any plausible MCP client buffer limit.
+pub(super) const DEFAULT_MAX_OCCURRENCES: usize = 15;
+
 /// Serialises a typed wire payload, falling back to JSON `null` only if
 /// serde fails (which it cannot for the wire types here — they all derive
 /// `Serialize`). Centralised so the handlers stay terse.
@@ -26,16 +38,19 @@ fn to_value<T: serde::Serialize>(value: &T) -> Value {
     serde_json::to_value(value).unwrap_or(Value::Null)
 }
 
-/// `top-offenders` forwarder. Returns up to `n` full [`ReportCluster`]
-/// records — occurrences, interpretation, signals, bucket — everything
-/// the agent needs to act without a follow-up `cluster-by-id` call.
+/// `top-offenders` forwarder. Returns up to `n` clusters with full
+/// data — occurrences, interpretation, signals, bucket — capped by
+/// the `max_occurrences` total-occurrence budget so a single response
+/// never blows up the agent's context window
+/// ([MCP-OCCURRENCE-BUDGET]).
 pub(super) fn call_top_offenders(
     backend: &dyn McpBackend,
     args: &Value,
 ) -> Result<Value, JsonRpcError> {
     let n = extract_top_n(args);
+    let max_occurrences = extract_max_occurrences(args);
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    Ok(top_offenders_payload(&report, n))
+    Ok(top_offenders_payload(&report, n, max_occurrences))
 }
 
 /// `rescan` reloads the LSP-written state file and returns fresh top offenders.
@@ -43,26 +58,40 @@ pub(super) fn call_rescan(backend: &dyn McpBackend, args: &Value) -> Result<Valu
     let paths = extract_optional_paths(args, "paths")?;
     let progress = backend.mark_changed(&paths).map_err(backend_to_rpc)?;
     let n = extract_top_n(args);
+    let max_occurrences = extract_max_occurrences(args);
     let report = backend.report_get().map_err(backend_to_rpc)?;
-    Ok(rescan_payload(&report, n, progress))
+    Ok(rescan_payload(&report, n, max_occurrences, progress))
 }
 
 /// Builds the top-offenders JSON payload.
-fn top_offenders_payload(report: &Report, n: usize) -> Value {
+fn top_offenders_payload(report: &Report, n: usize, max_occurrences: usize) -> Value {
+    let total_occurrences = total_occurrences_in(&report.clusters);
+    let clusters = apply_occurrence_budget(report.clusters.iter().take(n), max_occurrences);
     let payload = TopOffendersPayload {
         total_clusters: report.clusters.len(),
         n,
-        clusters: report.clusters.iter().take(n).cloned().collect(),
+        max_occurrences,
+        total_occurrences,
+        clusters,
     };
     to_value(&payload)
 }
 
 /// Builds the `rescan` JSON payload from the refreshed report and progress.
-fn rescan_payload(report: &Report, n: usize, progress: RescanProgress) -> Value {
+fn rescan_payload(
+    report: &Report,
+    n: usize,
+    max_occurrences: usize,
+    progress: RescanProgress,
+) -> Value {
+    let total_occurrences = total_occurrences_in(&report.clusters);
+    let clusters = apply_occurrence_budget(report.clusters.iter().take(n), max_occurrences);
     let payload = RescanPayload {
         total_clusters: report.clusters.len(),
         n,
-        clusters: report.clusters.iter().take(n).cloned().collect(),
+        max_occurrences,
+        total_occurrences,
+        clusters,
         generation: progress.generation,
         summary: progress.summary,
     };
@@ -76,6 +105,57 @@ fn extract_top_n(args: &Value) -> usize {
         .and_then(|v| usize::try_from(v).ok())
         .unwrap_or(5)
         .max(1)
+}
+
+/// Extracts the `max_occurrences` total-occurrence budget, defaulting
+/// to [`DEFAULT_MAX_OCCURRENCES`]. Floored at 1 so a misbehaving caller
+/// cannot zero out every cluster.
+pub(super) fn extract_max_occurrences(args: &Value) -> usize {
+    args.get("max_occurrences")
+        .and_then(Value::as_u64)
+        .and_then(|v| usize::try_from(v).ok())
+        .unwrap_or(DEFAULT_MAX_OCCURRENCES)
+        .max(1)
+}
+
+/// Returns the total number of occurrences across all clusters,
+/// using the authoritative count from [`occurrence_count`] so wire
+/// truncations do not under-count the unfiltered total
+/// ([MCP-OCCURRENCE-BUDGET]).
+pub(super) fn total_occurrences_in(clusters: &[ReportCluster]) -> usize {
+    clusters.iter().map(occurrence_count).sum()
+}
+
+/// Walks `clusters` worst-first, including each one until the running
+/// total of occurrences would exceed `budget`. The cluster that overruns
+/// the budget is included with its occurrences truncated to the
+/// remaining headroom and `occurrences_truncated` set; any following
+/// cluster is dropped entirely. A budget of zero returns no clusters.
+pub(super) fn apply_occurrence_budget<'a, I>(clusters: I, budget: usize) -> Vec<ReportCluster>
+where
+    I: IntoIterator<Item = &'a ReportCluster>,
+{
+    let mut used = 0usize;
+    let mut emitted = Vec::new();
+    for cluster in clusters {
+        if used >= budget {
+            break;
+        }
+        let mut copy = cluster.clone();
+        let total_for_cluster = occurrence_count(&copy);
+        copy.occurrences_total = total_for_cluster;
+        let remaining = budget.saturating_sub(used);
+        if copy.occurrences.len() <= remaining {
+            used = used.saturating_add(copy.occurrences.len());
+            emitted.push(copy);
+            continue;
+        }
+        copy.occurrences.truncate(remaining);
+        copy.occurrences_truncated = true;
+        used = budget;
+        emitted.push(copy);
+    }
+    emitted
 }
 
 /// `report-get` forwarder. Renders a slim paginated `ReportPage`
@@ -124,12 +204,16 @@ pub(super) fn call_report_for_file(
     args: &Value,
 ) -> Result<Value, JsonRpcError> {
     let path = extract_string(args, "path")?;
+    let max_occurrences = extract_max_occurrences(args);
     let clusters = backend
         .report_for_file(Path::new(&path))
         .map_err(backend_to_rpc)?;
+    let total_occurrences = total_occurrences_in(&clusters);
+    let trimmed = apply_occurrence_budget(clusters.iter(), max_occurrences);
     let payload = deslop_core::wire_generated::FileReport {
         path: PathBuf::from(path),
-        clusters,
+        clusters: trimmed,
+        total_occurrences,
     };
     Ok(to_value(&payload))
 }
@@ -142,17 +226,21 @@ pub(super) fn call_report_for_range(
     let path = extract_string(args, "path")?;
     let start_byte = extract_u64(args, "start_byte")?;
     let end_byte = extract_u64(args, "end_byte")?;
+    let max_occurrences = extract_max_occurrences(args);
     reject_inverted_range(start_byte, end_byte)?;
     let start_byte_usize = usize::try_from(start_byte).unwrap_or(usize::MAX);
     let end_byte_usize = usize::try_from(end_byte).unwrap_or(usize::MAX);
     let clusters = backend
         .report_for_range(Path::new(&path), start_byte_usize, end_byte_usize)
         .map_err(backend_to_rpc)?;
+    let total_occurrences = total_occurrences_in(&clusters);
+    let trimmed = apply_occurrence_budget(clusters.iter(), max_occurrences);
     let payload = RangeReport {
         path: PathBuf::from(path),
         start_byte: start_byte_usize,
         end_byte: end_byte_usize,
-        clusters,
+        clusters: trimmed,
+        total_occurrences,
     };
     Ok(to_value(&payload))
 }
@@ -173,19 +261,28 @@ pub(super) fn call_find_similar(
             "find-similar requires exactly one of (path + start_byte + end_byte) or (snippet + language)",
         ));
     }
+    // Floor at 1 so `top_n: 0` falls back to a meaningful budget
+    // rather than truncating the response to zero clusters. The
+    // `top-offenders` tool uses the same semantics
+    // ([MCP-OCCURRENCE-BUDGET]).
     let top_n = args
         .get("top_n")
         .and_then(Value::as_u64)
         .and_then(|value| usize::try_from(value).ok())
-        .unwrap_or(5);
+        .unwrap_or(5)
+        .max(1);
+    let max_occurrences = extract_max_occurrences(args);
     let output = if has_range {
         call_find_similar_range(backend, args, top_n)?
     } else {
         call_find_similar_snippet(backend, args, top_n)?
     };
+    let total_occurrences = total_occurrences_in(&output.clusters);
+    let trimmed = apply_occurrence_budget(output.clusters.iter(), max_occurrences);
     let payload = FindSimilarResult {
-        clusters: output.clusters,
+        clusters: trimmed,
         below_min_nodes: output.below_min_nodes,
+        total_occurrences,
     };
     Ok(to_value(&payload))
 }

@@ -1,7 +1,12 @@
 {
   "title": "Deslop",
-  "description": "The live duplicate-code server for AI coding agents. Deslop runs as an LSP + MCP server that feeds real-time clone signals to Claude, Cursor, Copilot, and your editor as code is written — not a batch report after the damage is done.",
+  "description": "The live LSP + MCP duplicate-code server for AI coding agents. Deslop streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex as code is written — find-similar prevents the copy-paste before it lands. Install via the VS Code VSIX (bundles LSP, MCP server, and CLI); JetBrains plugin in active development.",
   "url": "https://deslop.live",
   "stylesheet": "/assets/css/styles.css",
-  "author": "Christian Findlay"
+  "author": "Christian Findlay",
+  "keywords": "deslop, duplicate code, code clone detection, AI code duplication, LLM duplicate code, MCP server, LSP server, claude code, claude desktop, cursor, copilot, continue, codex, tree-sitter, AST clone detection, find-similar, VS Code extension, JetBrains plugin, code deduplication",
+  "ogImage": "/assets/img/og-card.png",
+  "ogImageWidth": "1200",
+  "ogImageHeight": "630",
+  "themeColor": "#171717"
 }

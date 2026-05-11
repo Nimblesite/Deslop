@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "deslop"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "deslop-core"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "deslop-lsp"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "deslop-mcp"
-version = "0.1.0"
+version = "0.0.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",

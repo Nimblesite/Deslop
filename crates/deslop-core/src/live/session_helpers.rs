@@ -262,7 +262,7 @@ pub(super) fn stub_model_info() -> EmbeddingModelInfo {
 /// read from this same file.
 pub(super) const STATE_FILE_NAME: &str = "live-report.json";
 
-/// [LIVE-STATE-FILE] Writes `bytes` to `{dir}/live-report.json` via an
+/// [LIVE-SEED-CACHE] Writes `bytes` to `{dir}/live-report.json` via an
 /// atomic tmp-then-rename so readers never see a partial file.
 pub(super) fn atomic_write_json(dir: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = dir.join("live-report.json.tmp");
@@ -270,7 +270,7 @@ pub(super) fn atomic_write_json(dir: &Path, bytes: &[u8]) -> std::io::Result<()>
     std::fs::rename(&tmp, dir.join(STATE_FILE_NAME))
 }
 
-/// [LIVE-STATE-FILE] Atomically writes `report` to
+/// [LIVE-SEED-CACHE] Atomically writes `report` to
 /// `{root}/.deslop-cache/live-report.json`. Best-effort: failures are
 /// logged at `warn` and never propagated.
 pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) {

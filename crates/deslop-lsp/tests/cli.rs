@@ -25,12 +25,13 @@ use crate::common::{
 #[test]
 fn prints_exact_version_contract() -> Result<()> {
     let mut cmd = Command::cargo_bin("deslop-lsp")?;
+    let expected = format!("deslop-lsp {}\n", expected_version());
     let _assertion = cmd
         .timeout(Duration::from_secs(10))
         .arg("--version")
         .assert()
         .success()
-        .stdout("deslop-lsp 0.1.0\n")
+        .stdout(expected)
         .stderr("");
     Ok(())
 }
@@ -56,7 +57,10 @@ fn initialize_reports_server_info_version() -> Result<()> {
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let init = handshake(&mut stdin, &mut stdout)?;
     assert_eq!(pointer(&init, "/result/serverInfo/name")?, "deslop-lsp");
-    assert_eq!(pointer(&init, "/result/serverInfo/version")?, "0.1.0");
+    assert_eq!(
+        pointer(&init, "/result/serverInfo/version")?,
+        expected_version()
+    );
     let _shutdown = call(&mut stdin, &mut stdout, "shutdown", &Value::Null)?;
     let _ = child.kill();
     Ok(())
@@ -192,8 +196,15 @@ fn pointer<'a>(value: &'a Value, path: &str) -> Result<&'a str> {
 fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
     assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
     assert_eq!(value.get("name"), Some(&Value::from(name)));
-    assert_eq!(value.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(
+        value.get("version").and_then(Value::as_str),
+        Some(expected_version())
+    );
     assert_eq!(value.get("kind"), Some(&Value::from(kind)));
     assert_eq!(value.get("language"), Some(&Value::from("rust")));
     assert_eq!(value.get("product"), Some(&Value::from("deslop")));
+}
+
+fn expected_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }

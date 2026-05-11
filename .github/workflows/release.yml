@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   version:
-    name: Bump workspace version
+    name: Prepare release version
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -19,41 +19,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
 
       - name: Extract version from tag
         id: extract
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Stamp version into workspace Cargo.toml
+      - name: Ensure tagged commit is on main
         run: |
           set -euo pipefail
-          sed -i 's/^version = ".*"$/version = "${{ steps.extract.outputs.version }}"/' Cargo.toml
-          grep -E '^version = "${{ steps.extract.outputs.version }}"$' Cargo.toml
+          git fetch origin main --depth=1
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Stamp version into clients/vscode/package.json
-        working-directory: clients/vscode
-        run: |
-          set -euo pipefail
-          npm version "${{ steps.extract.outputs.version }}" --no-git-tag-version --allow-same-version
-          node -e "if (require('./package.json').version !== '${{ steps.extract.outputs.version }}') { process.exit(1) }"
+      # Shipwright deployment-toolkit gate (DTK-MIG-DESLOP-CI-GATES, #41).
+      # The manifest is the source of truth for activation checks and
+      # release artifact verification; without stamping it here the
+      # binary version verifier would fail the very next build.
+      - name: Stamp release version
+        run: node scripts/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Refresh Cargo.lock
-        run: cargo update --workspace --offline || cargo generate-lockfile
-
-      - name: Commit and push version bump
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock clients/vscode/package.json clients/vscode/package-lock.json
-          git diff --staged --quiet && exit 0
-          git commit -m "chore: bump version to ${{ steps.extract.outputs.version }}"
-          git push origin HEAD:main
+      - name: Validate deployment manifest
+        run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
 
   build:
     name: Build (${{ matrix.artifact_name }})
@@ -65,39 +55,39 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: linux-x64
-            bin: deslop
-            archive_ext: tar.gz
+            vsix_target: linux-x64
             cross: false
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: linux-arm64
-            bin: deslop
-            archive_ext: tar.gz
+            vsix_target: linux-arm64
             cross: true
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: macos-x64
-            bin: deslop
-            archive_ext: tar.gz
+            vsix_target: darwin-x64
             cross: false
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-arm64
-            bin: deslop
-            archive_ext: tar.gz
+            vsix_target: darwin-arm64
             cross: false
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x64
-            bin: deslop.exe
-            archive_ext: zip
+            vsix_target: win32-x64
             cross: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          ref: main
+          node-version: "22.x"
+
+      - name: Stamp release version
+        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -126,6 +116,24 @@ jobs:
         if: matrix.cross
         run: cross build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
 
+      # Shipwright binary version contract (DTK-MIG-DESLOP-CI-GATES, #41).
+      # Skipped for cross-compiled targets because the foreign-arch binary
+      # cannot execute on the runner; native targets cover the
+      # version-stamping path the cross builds share.
+      - name: Verify deployment binaries
+        if: ${{ !matrix.cross }}
+        shell: bash
+        run: |
+          case "${{ matrix.artifact_name }}" in
+            linux-x64)   _platform=linux-x64 ;;
+            linux-arm64) _platform=linux-arm64 ;;
+            macos-x64)   _platform=darwin-x64 ;;
+            macos-arm64) _platform=darwin-arm64 ;;
+            windows-x64) _platform=win32-x64 ;;
+            *) echo "unknown artifact ${{ matrix.artifact_name }}"; exit 1 ;;
+          esac
+          node scripts/verify-deployment-binaries.mjs deployment-toolkit.json "target/${{ matrix.target }}/release" "$_platform"
+
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
         shell: bash
@@ -133,7 +141,9 @@ jobs:
           set -euo pipefail
           stage="deslop-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
           mkdir -p "dist/${stage}"
-          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/${stage}/"
+          for b in deslop deslop-lsp deslop-mcp; do
+            cp "target/${{ matrix.target }}/release/${b}" "dist/${stage}/"
+          done
           cp README.md LICENSE* "dist/${stage}/" 2>/dev/null || true
           tar -C dist -czf "dist/${stage}.tar.gz" "${stage}"
           shasum -a 256 "dist/${stage}.tar.gz" | awk '{print $1"  "$2}' | sed "s|dist/||" > "dist/${stage}.tar.gz.sha256"
@@ -145,7 +155,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $stage = "deslop-${{ needs.version.outputs.version }}-${{ matrix.artifact_name }}"
           New-Item -ItemType Directory -Force -Path "dist/$stage" | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.bin }}" "dist/$stage/"
+          foreach ($b in @("deslop.exe", "deslop-lsp.exe", "deslop-mcp.exe")) {
+            Copy-Item "target/${{ matrix.target }}/release/$b" "dist/$stage/"
+          }
           if (Test-Path README.md) { Copy-Item README.md "dist/$stage/" }
           Get-ChildItem -Path . -Filter "LICENSE*" | ForEach-Object { Copy-Item $_.FullName "dist/$stage/" }
           Compress-Archive -Path "dist/$stage" -DestinationPath "dist/$stage.zip"
@@ -157,9 +169,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "vsix-bin/${{ matrix.artifact_name }}"
+          rm -rf clients/vscode/bin
+          mkdir -p "clients/vscode/bin/${{ matrix.vsix_target }}"
           for b in deslop deslop-lsp deslop-mcp; do
-            cp "target/${{ matrix.target }}/release/${b}" "vsix-bin/${{ matrix.artifact_name }}/"
+            cp "target/${{ matrix.target }}/release/${b}" "clients/vscode/bin/${{ matrix.vsix_target }}/"
           done
 
       - name: Stage VSIX binaries (windows)
@@ -167,10 +180,39 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path "vsix-bin/${{ matrix.artifact_name }}" | Out-Null
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue clients/vscode/bin
+          New-Item -ItemType Directory -Force -Path "clients/vscode/bin/${{ matrix.vsix_target }}" | Out-Null
           foreach ($b in @("deslop.exe", "deslop-lsp.exe", "deslop-mcp.exe")) {
-            Copy-Item "target/${{ matrix.target }}/release/$b" "vsix-bin/${{ matrix.artifact_name }}/"
+            Copy-Item "target/${{ matrix.target }}/release/$b" "clients/vscode/bin/${{ matrix.vsix_target }}/"
           }
+
+      - name: Stage deployment manifest into extension
+        shell: bash
+        run: cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+
+      - name: Install extension deps
+        working-directory: clients/vscode
+        run: npm install --no-audit --no-fund
+
+      - name: Install webview-ui deps
+        working-directory: clients/vscode/webview-ui
+        run: npm install --no-audit --no-fund
+
+      - name: Build webview-ui
+        working-directory: clients/vscode/webview-ui
+        run: npm run build
+
+      - name: Typecheck extension
+        working-directory: clients/vscode
+        run: npx tsc --noEmit
+
+      - name: Package target VSIX
+        working-directory: clients/vscode
+        run: npm run package -- --target ${{ matrix.vsix_target }} --out deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix
+
+      - name: Verify target VSIX
+        working-directory: clients/vscode
+        run: node ./scripts/verify-vsix-package.mjs deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix ${{ matrix.vsix_target }}
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
@@ -183,97 +225,19 @@ jobs:
             dist/deslop-*.zip.sha256
           if-no-files-found: error
 
-      - name: Upload VSIX binaries artifact
+      - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vsix-bin-${{ matrix.artifact_name }}
-          path: vsix-bin/${{ matrix.artifact_name }}
-          if-no-files-found: error
-
-  package-vsix:
-    name: Package VSIX
-    needs: [version, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Download per-platform VSIX binaries
-        uses: actions/download-artifact@v4
-        with:
-          pattern: vsix-bin-*
-          path: clients/vscode/bin
-          merge-multiple: false
-
-      - name: Flatten vsix-bin-<platform> → bin/<platform>/
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd clients/vscode/bin
-          for dir in vsix-bin-*; do
-            platform="${dir#vsix-bin-}"
-            # Match VS Code extension platform naming (matches Makefile _vsix-stage-and-package).
-            case "$platform" in
-              linux-x64)   target=linux-x64 ;;
-              linux-arm64) target=linux-arm64 ;;
-              macos-x64)   target=darwin-x64 ;;
-              macos-arm64) target=darwin-arm64 ;;
-              windows-x64) target=win32-x64 ;;
-              *) echo "unknown platform $platform"; exit 1 ;;
-            esac
-            mkdir -p "$target"
-            mv "$dir"/* "$target"/
-            rmdir "$dir"
-          done
-          chmod +x */deslop */deslop-lsp */deslop-mcp 2>/dev/null || true
-          ls -la
-
-      - name: Install extension deps
-        working-directory: clients/vscode
-        run: npm install
-
-      - name: Install webview-ui deps
-        working-directory: clients/vscode/webview-ui
-        run: npm install
-
-      - name: Build webview-ui
-        working-directory: clients/vscode/webview-ui
-        run: npm run build
-
-      - name: Build extension
-        working-directory: clients/vscode
-        run: npm run build
-
-      - name: Typecheck extension
-        working-directory: clients/vscode
-        run: npx tsc --noEmit
-
-      - name: Package VSIX
-        working-directory: clients/vscode
-        run: npx vsce package --no-dependencies -o deslop-vscode-${{ needs.version.outputs.version }}.vsix
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vsix
+          name: vsix-${{ matrix.vsix_target }}
           path: clients/vscode/deslop-vscode-*.vsix
           if-no-files-found: error
 
   release:
     name: Create GitHub release
-    needs: [version, build, package-vsix]
+    needs: [version, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/

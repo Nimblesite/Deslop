@@ -19,7 +19,7 @@ use serde_json::Value;
 #[test]
 fn plain_version_is_handled_before_server_startup() -> Result<()> {
     let output = version_output(action_from_args(["deslop-lsp", "--version"])?)?;
-    assert_eq!(output, "deslop-lsp 0.1.0\n");
+    assert_eq!(output, expected_plain_version());
     assert!(output.starts_with("deslop-lsp"));
     assert!(output.ends_with('\n'));
 
@@ -30,7 +30,7 @@ fn plain_version_is_handled_before_server_startup() -> Result<()> {
         Ok(())
     })?;
     assert!(!runner_called, "version preflight must not run the server");
-    assert_eq!(String::from_utf8(stdout)?, "deslop-lsp 0.1.0\n");
+    assert_eq!(String::from_utf8(stdout)?, expected_plain_version());
     Ok(())
 }
 
@@ -48,12 +48,23 @@ fn json_version_is_handled_before_server_startup() -> Result<()> {
     let payload: Value = serde_json::from_slice(&stdout)?;
     assert_eq!(payload.get("manifestVersion"), Some(&Value::from(1)));
     assert_eq!(payload.get("name"), Some(&Value::from("deslop-lsp")));
-    assert_eq!(payload.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(
+        payload.get("version").and_then(Value::as_str),
+        Some(expected_version())
+    );
     assert_eq!(payload.get("kind"), Some(&Value::from("lsp")));
     assert_eq!(payload.get("language"), Some(&Value::from("rust")));
     assert_eq!(payload.get("product"), Some(&Value::from("deslop")));
     assert!(payload.get("unknown").is_none());
     Ok(())
+}
+
+fn expected_plain_version() -> String {
+    format!("deslop-lsp {}\n", expected_version())
+}
+
+fn expected_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 /// A normal invocation parses the supported startup flags into one

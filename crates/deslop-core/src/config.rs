@@ -254,8 +254,8 @@ impl ExclusionConfig {
 
     /// Compiles a validated [`RawConfig`] into matcher form.
     fn compile(path: &Path, scan_root: Option<&Path>, raw: &RawConfig) -> Result<Self, CoreError> {
-        let default_exclude = build_matcher(path, &raw.defaults.exclude)?;
-        let default_report_hide = build_matcher(path, &raw.defaults.report_hide)?;
+        let default_exclude = build_matcher(path, scan_root, &raw.defaults.exclude)?;
+        let default_report_hide = build_matcher(path, scan_root, &raw.defaults.report_hide)?;
         let default_boilerplate_imports = raw
             .defaults
             .boilerplate
@@ -263,8 +263,8 @@ impl ExclusionConfig {
             .unwrap_or(BoilerplateImportsMode::Suppress);
         let mut per_language: HashMap<String, LanguageMatchers> = HashMap::new();
         for (language, section) in &raw.language {
-            let exclude = build_matcher(path, &section.exclude)?;
-            let report_hide = build_matcher(path, &section.report_hide)?;
+            let exclude = build_matcher(path, scan_root, &section.exclude)?;
+            let report_hide = build_matcher(path, scan_root, &section.report_hide)?;
             let _previous = per_language.insert(
                 language.clone(),
                 LanguageMatchers {
@@ -444,11 +444,18 @@ fn matches(matcher: &Gitignore, path: &Path) -> bool {
 }
 
 /// Compiles a list of glob patterns into an [`ignore::gitignore::Gitignore`]
-/// matcher. The builder is rooted at `/` so absolute paths (which is what
-/// [`crate::discover`] produces) match the same way they would in a
-/// repo-wide `.gitignore`.
-fn build_matcher(source: &Path, patterns: &[String]) -> Result<Gitignore, CoreError> {
-    let mut builder = GitignoreBuilder::new("/");
+/// matcher. The builder is rooted at the scan root when known so user
+/// patterns are scan-root-relative — `subdir/**` matches
+/// `<scan_root>/subdir/...` regardless of where the scan root sits on
+/// disk (#138). With no scan root the matcher falls back to `/` so
+/// absolute-path callers still get the original behaviour.
+fn build_matcher(
+    source: &Path,
+    scan_root: Option<&Path>,
+    patterns: &[String],
+) -> Result<Gitignore, CoreError> {
+    let root = scan_root.unwrap_or_else(|| Path::new("/"));
+    let mut builder = GitignoreBuilder::new(root);
     for pattern in patterns {
         if let Err(err) = builder.add_line(None, pattern) {
             return Err(CoreError::ConfigPattern {

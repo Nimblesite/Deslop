@@ -39,20 +39,33 @@ impl LiveWatcher {
     ///
     /// Returns the underlying `notify` error when the watcher cannot
     /// be constructed (e.g. permission denied).
+    ///
+    /// `config_paths` lists exact filesystem paths that bypass the
+    /// extension filter — used so `.deslop.toml` (and any explicit
+    /// override) reaches the scheduler as a first-class live change
+    /// ([LIVE-WATCHER], #139). Each entry is canonicalised before
+    /// comparison so notify-reported paths line up on macOS
+    /// (`/private/var/...` vs `/var/...`).
     pub fn start(
         root: &Path,
         extensions: Vec<String>,
         exclusion: Arc<ExclusionConfig>,
+        config_paths: Vec<PathBuf>,
     ) -> Result<(Self, Receiver<PathBuf>), notify::Error> {
         let (tx, rx) = mpsc::channel::<PathBuf>(CHANNEL_CAPACITY);
         let allowed: HashSet<String> = extensions
             .into_iter()
             .map(|ext| ext.to_lowercase())
             .collect();
+        let watched_config_paths: HashSet<PathBuf> = config_paths
+            .into_iter()
+            .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
+            .collect();
         let handler = WatcherHandler {
             sender: tx,
             allowed,
             exclusion,
+            watched_config_paths,
         };
         let mut watcher = recommended_watcher(handler)?;
         watcher.watch(root, RecursiveMode::Recursive)?;
@@ -70,6 +83,10 @@ struct WatcherHandler {
     allowed: HashSet<String>,
     /// Exclusion config consulted before forwarding.
     exclusion: Arc<ExclusionConfig>,
+    /// Canonical paths that bypass the extension/exclusion filter and
+    /// reach the scheduler directly — `.deslop.toml` plus any explicit
+    /// override path ([LIVE-WATCHER], #139).
+    watched_config_paths: HashSet<PathBuf>,
 }
 
 impl std::fmt::Debug for WatcherHandler {
@@ -107,6 +124,10 @@ impl EventHandler for WatcherHandler {
 impl WatcherHandler {
     /// Forwards one path if it passes the filter set.
     fn forward_one(&self, path: PathBuf) {
+        if self.is_watched_config_path(&path) {
+            let _result = self.sender.try_send(path);
+            return;
+        }
         if !path_matches_filter(&path, &self.allowed) {
             return;
         }
@@ -114,6 +135,17 @@ impl WatcherHandler {
             return;
         }
         let _result = self.sender.try_send(path);
+    }
+
+    /// Returns `true` when `path` (or its canonical form) matches a
+    /// watched config path. Used to bypass the extension filter for
+    /// `.deslop.toml` ([LIVE-WATCHER], #139).
+    fn is_watched_config_path(&self, path: &Path) -> bool {
+        if self.watched_config_paths.contains(path) {
+            return true;
+        }
+        let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        self.watched_config_paths.contains(&canonical)
     }
 }
 

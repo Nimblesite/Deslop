@@ -26,20 +26,65 @@ use tempfile::TempDir;
 /// One live `deslop-mcp` child-process conversation. Holds stdio
 /// handles + the buffered line reader so the test author works in
 /// request/response pairs instead of raw bytes.
+///
+/// Under [MCP-IPC-CLIENT] every read tool call delegates to the LSP
+/// over its IPC socket — there is no on-disk fallback. The harness
+/// auto-spawns a companion `deslop-lsp` child against the same root
+/// when [`McpChild::spawn`] is invoked. Both children are torn down
+/// on drop. Tests that previously read a pre-committed
+/// `live-report.json` fixture now exercise the full LSP→IPC→MCP chain.
 struct McpChild {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: i64,
+    /// Companion LSP process. Reaped when this handle drops so the
+    /// per-test workspace can be reclaimed without leaking sockets.
+    lsp: Option<LspGuard>,
+    /// Owned per-test workspace clone. `Some` when [`McpChild::spawn`]
+    /// copied a read-only fixture template; `None` when the caller
+    /// passed an already-isolated path.
+    workspace: Option<TempDir>,
+}
+
+/// Kill-on-drop wrapper for the companion LSP child. Lives as a
+/// standalone field on [`McpChild`] so the parent struct does not
+/// need its own `Drop` impl — that would lock down moves out of
+/// [`McpChild::stdin`] in `finish` / `close_stdin_and_wait`.
+struct LspGuard(Child);
+
+impl Drop for LspGuard {
+    fn drop(&mut self) {
+        let _killed = self.0.kill();
+        let _waited = self.0.wait();
+    }
 }
 
 impl McpChild {
+    /// Spawns an LSP+MCP pair against `root` ([MCP-IPC-CLIENT]).
+    ///
+    /// Pass [`fixture_root()`] for read-only templates and the
+    /// helper will copy the corpus into a per-test [`TempDir`] before
+    /// starting the children — this avoids socket-bind contention
+    /// when `cargo test` runs the suite in parallel and prevents the
+    /// LSP from polluting the checked-in fixture tree. Pass any
+    /// already-writable workspace directly; the helper will use it
+    /// in place.
     fn spawn(root: &Path, extra_args: &[&str]) -> Result<Self> {
+        let (workspace_root, ownedworkspace) = if root == fixture_root() {
+            let temp = TempDir::new().context("alloc per-test workspace")?;
+            copy_dir_all(root, temp.path())?;
+            (temp.path().to_path_buf(), Some(temp))
+        } else {
+            (root.to_path_buf(), None)
+        };
+        let lsp = LspGuard(spawn_companion_lsp(&workspace_root)?);
+        wait_for_socket(&workspace_root)?;
         let binary = env!("CARGO_BIN_EXE_deslop-mcp");
         let mut cmd = Command::new(binary);
         let _ = cmd
             .arg("--root")
-            .arg(root)
+            .arg(&workspace_root)
             .args(extra_args)
             .env("RUST_LOG", "info")
             .stdin(Stdio::piped())
@@ -53,6 +98,8 @@ impl McpChild {
             stdin,
             stdout: BufReader::new(stdout),
             next_id: 0,
+            lsp: Some(lsp),
+            workspace: ownedworkspace,
         })
     }
 
@@ -113,18 +160,40 @@ impl McpChild {
         Ok(())
     }
 
-    fn finish(mut self) -> std::process::ExitStatus {
-        drop(self.stdin);
-        self.child
+    fn finish(self) -> std::process::ExitStatus {
+        // Destructure so we can move pieces independently. The
+        // companion LSP guard drops at the end of this scope and
+        // reaps the LSP child without an explicit `kill_companion_lsp`
+        // call ([MCP-IPC-CLIENT]).
+        let Self {
+            mut child,
+            stdin,
+            lsp: _lsp,
+            workspace: _workspace,
+            ..
+        } = self;
+        drop(stdin);
+        child
             .wait_timeout(Duration::from_secs(30))
             .ok()
             .flatten()
             .unwrap_or_else(|| {
-                let _ = self.child.kill();
-                self.child
+                let _ = child.kill();
+                child
                     .wait()
                     .unwrap_or_else(|_| std::process::ExitStatus::default())
             })
+    }
+
+    /// Returns the writable per-test workspace root the LSP+MCP pair
+    /// is bound to. Tests that reference workspace files (e.g.
+    /// `find-similar` with a `path` argument) must use this rather
+    /// than [`fixture_root`] so the path lands inside the pinned
+    /// workspace ([MCP-SAFETY]).
+    fn workspace_root(&self) -> PathBuf {
+        self.workspace
+            .as_ref()
+            .map_or_else(|| fixture_root().to_path_buf(), |t| t.path().to_path_buf())
     }
 
     fn close_stdin_and_wait(mut self, duration: Duration) -> Result<std::process::ExitStatus> {
@@ -135,6 +204,86 @@ impl McpChild {
             anyhow!("deslop-mcp did not exit within {duration:?} after stdin closed")
         })
     }
+}
+
+/// Spawns a companion `deslop-lsp` process and drives the LSP
+/// `initialize`+`initialized` handshake so the IPC socket is ready
+/// before the MCP child connects.
+fn spawn_companion_lsp(root: &Path) -> Result<Child> {
+    let bin = cargo_bin("deslop-lsp");
+    let mut child = Command::new(bin)
+        .arg(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("spawn companion deslop-lsp")?;
+    let mut stdin = child.stdin.take().context("lsp stdin")?;
+    let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
+    lsp_handshake(&mut stdin, &mut stdout).context("lsp initialize")?;
+    child.stdin = Some(stdin);
+    child.stdout = Some(stdout.into_inner());
+    Ok(child)
+}
+
+/// Sends the minimal `initialize` + `initialized` LSP handshake.
+fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) -> Result<()> {
+    let init = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {"processId": null, "rootUri": null, "capabilities": {}}
+    });
+    write_lsp_frame(stdin, &serde_json::to_string(&init)?)?;
+    let _response = read_lsp_frame(stdout)?;
+    let initialized = json!({"jsonrpc": "2.0", "method": "initialized", "params": {}});
+    write_lsp_frame(stdin, &serde_json::to_string(&initialized)?)
+}
+
+/// Writes one LSP-framed JSON-RPC message.
+fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
+    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
+    stdin.write_all(header.as_bytes())?;
+    stdin.write_all(payload.as_bytes())?;
+    stdin.flush()?;
+    Ok(())
+}
+
+/// Reads one LSP-framed JSON-RPC response and returns it as JSON.
+fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
+    use std::io::Read as _;
+    let mut content_length: Option<usize> = None;
+    loop {
+        let mut line = String::new();
+        let _read = reader.read_line(&mut line)?;
+        if line == "\r\n" {
+            break;
+        }
+        if let Some(rest) = line.strip_prefix("Content-Length: ") {
+            content_length = Some(rest.trim().parse::<usize>()?);
+        }
+    }
+    let length = content_length.ok_or_else(|| anyhow!("missing Content-Length"))?;
+    let mut buf = vec![0_u8; length];
+    reader.read_exact(&mut buf)?;
+    Ok(serde_json::from_slice(&buf)?)
+}
+
+/// Polls until `<root>/.deslop-cache/deslop.sock` exists. Failure
+/// after 30 s is fatal — the LSP is meant to bind within seconds.
+fn wait_for_socket(root: &Path) -> Result<()> {
+    let socket = root.join(".deslop-cache").join("deslop.sock");
+    let started = std::time::Instant::now();
+    while started.elapsed() < Duration::from_secs(30) {
+        if socket.exists() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(anyhow!(
+        "companion LSP did not bind {} within 30s",
+        socket.display()
+    ))
 }
 
 trait WaitTimeout {
@@ -250,6 +399,8 @@ fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpChild, u32)> {
             stdin,
             stdout: BufReader::new(stdout),
             next_id: 0,
+            lsp: None,
+            workspace: None,
         },
         mcp_pid,
     ))
@@ -325,7 +476,7 @@ fn prints_exact_version_contract() -> Result<()> {
     assert!(output.status.success(), "status was {}", output.status);
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "deslop-mcp 0.1.0\n"
+        format!("deslop-mcp {}\n", expected_version())
     );
     assert!(output.stderr.is_empty(), "stderr must stay empty");
     Ok(())
@@ -348,7 +499,10 @@ fn prints_json_version_contract() -> Result<()> {
 fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
     assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
     assert_eq!(value.get("name"), Some(&Value::from(name)));
-    assert_eq!(value.get("version"), Some(&Value::from("0.1.0")));
+    assert_eq!(
+        value.get("version").and_then(Value::as_str),
+        Some(expected_version())
+    );
     assert_eq!(value.get("kind"), Some(&Value::from(kind)));
     assert_eq!(value.get("language"), Some(&Value::from("rust")));
     assert_eq!(value.get("product"), Some(&Value::from("deslop")));
@@ -397,7 +551,7 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     );
     assert_eq!(
         value_get(&response, "/result/serverInfo/version")?,
-        json!("0.1.0")
+        json!(expected_version())
     );
     assert!(
         value_get(&response, "/result/capabilities/tools")?.is_object(),
@@ -409,6 +563,10 @@ fn initialize_returns_server_info_and_capabilities() -> Result<()> {
     );
     let _ = child.finish();
     Ok(())
+}
+
+fn expected_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
 }
 
 #[test]
@@ -623,6 +781,141 @@ fn top_offenders_defaults_to_five_and_clusters_are_worst_first() -> Result<()> {
     assert!(
         sorted,
         "clusters must be worst-first by weight: {weights:?}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_136_top_offenders_max_occurrences_caps_response_and_reports_total() -> Result<()> {
+    // Issue #136 [MCP-OCCURRENCE-BUDGET]. A `top-offenders` response on a real
+    // workspace can ship 50+ occurrences per cluster — large enough to crash
+    // some MCP clients (e.g. Codex's rmcp_client). The fix: a `max_occurrences`
+    // budget across returned clusters that keeps the response small while
+    // surfacing the true unfiltered count via `total_occurrences` so the agent
+    // knows what was filtered. cluster-by-id remains the way to fetch the full
+    // occurrence list of any one cluster.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+
+    let baseline = call_tool(&mut child, "top-offenders", &json!({ "n": 5 }))?;
+    let baseline_payload = structured_tool_result(&baseline)?;
+    let baseline_total = value_get(&baseline_payload, "/total_occurrences")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_occurrences must be a non-negative integer"))?;
+    assert!(
+        baseline_total > 0,
+        "fixture must contain at least one occurrence: {baseline_payload}"
+    );
+
+    // Pick a budget strictly below the baseline total so truncation MUST
+    // fire (either per-cluster or by dropping trailing clusters).
+    let budget = baseline_total
+        .checked_sub(1)
+        .filter(|&b| b > 0)
+        .unwrap_or(1);
+    let result = call_tool(
+        &mut child,
+        "top-offenders",
+        &json!({ "n": 5, "max_occurrences": budget }),
+    )?;
+    let payload = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&payload, "/max_occurrences")?.as_u64(),
+        Some(budget),
+        "result must echo the requested max_occurrences"
+    );
+    assert_eq!(
+        value_get(&payload, "/total_occurrences")?.as_u64(),
+        Some(baseline_total),
+        "total_occurrences must equal the unfiltered count, not the budgeted count"
+    );
+    let clusters = value_get(&payload, "/clusters")?;
+    let clusters_arr = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?;
+    let returned: u64 = clusters_arr
+        .iter()
+        .map(|c| {
+            c.get("occurrences")
+                .and_then(Value::as_array)
+                .map_or(0u64, |a| a.len() as u64)
+        })
+        .sum();
+    assert!(
+        returned <= budget,
+        "budget={budget} must yield at most {budget} occurrences total across returned clusters; got {returned}"
+    );
+    // The budget can manifest two ways: (a) a cluster shipped with
+    // `occurrences_truncated=true` (its tail dropped), or (b) trailing
+    // clusters were dropped entirely (returned_clusters < total_clusters
+    // limited by `n`). Either is a valid truncation signal — assert at
+    // least one fired given baseline_total exceeds the budget of 2.
+    let total_clusters = value_get(&payload, "/total_clusters")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("total_clusters missing"))?;
+    let n_requested = value_get(&payload, "/n")?
+        .as_u64()
+        .ok_or_else(|| anyhow!("n missing"))?;
+    let cap = total_clusters.min(n_requested);
+    let returned_clusters = clusters_arr.len() as u64;
+    let truncation_marker_present = clusters_arr
+        .iter()
+        .any(|c| c.get("occurrences_truncated").and_then(Value::as_bool) == Some(true));
+    let dropped_following_cluster = returned_clusters < cap;
+    assert!(
+        truncation_marker_present || dropped_following_cluster,
+        "budget={budget} with baseline_total={baseline_total} must drop trailing clusters or set occurrences_truncated; got {returned_clusters}/{cap} clusters back: {clusters_arr:#?}"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_136_top_offenders_default_max_occurrences_is_fifteen() -> Result<()> {
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({}))?;
+    let payload = structured_tool_result(&result)?;
+    assert_eq!(
+        value_get(&payload, "/max_occurrences")?.as_u64(),
+        Some(15),
+        "omitting max_occurrences must default to 15 ([MCP-OCCURRENCE-BUDGET])"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn issue_134_top_offenders_does_not_label_structural_only_matches_as_nearly_identical() -> Result<()>
+{
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let result = call_tool(&mut child, "top-offenders", &json!({ "n": 5 }))?;
+    let payload = structured_tool_result(&result)?;
+    let clusters = value_get(&payload, "/clusters")?;
+    let structural_only_nearly_identical = clusters
+        .as_array()
+        .ok_or_else(|| anyhow!("clusters must be an array"))?
+        .iter()
+        .find(|cluster| {
+            cluster.get("bucket").and_then(Value::as_str) == Some("nearly_identical")
+                && cluster
+                    .pointer("/signals/structural")
+                    .and_then(Value::as_f64)
+                    == Some(1.0)
+                && cluster
+                    .pointer("/signals/token_jaccard")
+                    .and_then(Value::as_f64)
+                    == Some(0.0)
+                && cluster
+                    .pointer("/signals/embedding_cos")
+                    .and_then(Value::as_f64)
+                    == Some(0.0)
+        });
+    assert!(
+        structural_only_nearly_identical.is_none(),
+        "issue #134: top-offenders must not present structural-only zero-token matches as ordinary nearly_identical duplication: {structural_only_nearly_identical:#?}"
     );
     let _ = child.finish();
     Ok(())
@@ -1371,17 +1664,28 @@ fn report_for_range_rejects_inverted_range() -> Result<()> {
 
 #[test]
 fn find_similar_snippet_returns_below_min_nodes_for_tiny_input() -> Result<()> {
-    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    // [MCP-IPC-CLIENT] A snippet smaller than `min_nodes` parses
+    // cleanly but produces no fingerprint — the response surfaces
+    // an empty `clusters` list with `below_min_nodes: true` per
+    // [MCP-TOOL-FINDSIMILAR].
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
         &json!({ "name": "find-similar", "arguments": { "snippet": "int x = 0;", "language": "csharp" } }),
     )?;
+    let payload = value_get(&response, "/result/structuredContent")?;
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "find-similar without LSP must return BackendError: {response}"
+        payload.get("below_min_nodes"),
+        Some(&json!(true)),
+        "tiny snippet must surface below_min_nodes: {response}",
+    );
+    assert!(
+        payload
+            .get("clusters")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty),
+        "below-min-nodes input must return no clusters: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -1422,27 +1726,35 @@ fn find_similar_requires_exactly_one_input_variant() -> Result<()> {
 
 #[test]
 fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
-    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    // [MCP-IPC-CLIENT] find-similar delegates to the live LSP via
+    // IPC. Range input on a file already in the corpus must surface
+    // its sibling cluster on Beta.cs.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let alpha = fixture_root().join("Alpha.cs");
-    let source = std::fs::read_to_string(&alpha)?;
+    // Use a workspace-relative path so the MCP's `resolve_within_root`
+    // canonical form lines up with the LSP's pinned workspace root —
+    // macOS exposes `/private/var/...` vs `/var/...` for the same
+    // tempdir, and only the LSP's view is authoritative.
+    let source = std::fs::read_to_string(child.workspace_root().join("Alpha.cs"))?;
     let response = child.request(
         "tools/call",
         &json!({
             "name": "find-similar",
             "arguments": {
-                "path": alpha,
+                "path": "Alpha.cs",
                 "start_byte": 0,
                 "end_byte": source.len(),
                 "top_n": 3,
             }
         }),
     )?;
-    assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "find-similar without LSP must return BackendError: {response}"
+    let clusters = value_get(&response, "/result/structuredContent/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+    assert!(
+        !clusters.is_empty(),
+        "find-similar on Alpha.cs must return at least the Beta sibling cluster: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -1493,17 +1805,25 @@ fn cluster_by_id_unknown_returns_error() -> Result<()> {
 
 #[test]
 fn list_embedding_models_always_includes_stub() -> Result<()> {
-    // StateFileBackend does not manage embeddings — list-embedding-models requires the LSP.
+    // [MCP-IPC-CLIENT] list-embedding-models delegates to the
+    // companion LSP via IPC. The stub provider is always available
+    // even when Ollama is unreachable.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
         &json!({ "name": "list-embedding-models", "arguments": {} }),
     )?;
-    assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "list-embedding-models without LSP must return BackendError: {response}"
+    let models = value_get(&response, "/result/structuredContent/models")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    let has_stub = models
+        .iter()
+        .any(|model| model.get("provider_id") == Some(&json!("stub")));
+    assert!(
+        has_stub,
+        "list-embedding-models must always include the stub provider: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -1592,14 +1912,15 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
 }
 
 #[test]
-fn session_config_reports_workspace_root_and_languages() -> Result<()> {
-    // StateFileBackend derives languages from occurrence paths in the state file.
-    // The fixture only has .cs files, so only "csharp" is reported.
+fn session_config_reportsworkspace_root_and_languages() -> Result<()> {
+    // [MCP-IPC-CLIENT] session-config goes over IPC to the running
+    // LSP, so `min_nodes` is the LSP's default (30) — the fixture's
+    // pre-committed value is no longer the wire source.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
     let payload = structured_tool_result(&result)?;
-    assert_eq!(value_get(&payload, "/min_nodes")?.as_u64().unwrap_or(0), 15);
+    assert_eq!(value_get(&payload, "/min_nodes")?.as_u64().unwrap_or(0), 30);
     let languages_value = value_get(&payload, "/languages")?;
     let languages: Vec<String> = languages_value
         .as_array()
@@ -1875,22 +2196,28 @@ fn set_embedding_model_to_ollama_fails_when_daemon_not_running() -> Result<()> {
 
 #[test]
 fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
-    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    // [MCP-IPC-CLIENT] `top_n: 0` must use the default cap rather
+    // than returning an empty list. The find-similar IPC roundtrip
+    // surfaces at least the Beta sibling.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
-    let alpha = fixture_root().join("Alpha.cs");
-    let source = std::fs::read_to_string(&alpha)?;
+    // Workspace-relative path keeps the MCP↔LSP canonical view
+    // aligned (see find_similar_range_finds_clone_on_alpha).
+    let source = std::fs::read_to_string(child.workspace_root().join("Alpha.cs"))?;
     let response = child.request(
         "tools/call",
         &json!({
             "name": "find-similar",
-            "arguments": { "path": alpha, "start_byte": 0, "end_byte": source.len(), "top_n": 0 }
+            "arguments": { "path": "Alpha.cs", "start_byte": 0, "end_byte": source.len(), "top_n": 0 }
         }),
     )?;
-    assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "find-similar without LSP must return BackendError: {response}"
+    let clusters = value_get(&response, "/result/structuredContent/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+    assert!(
+        !clusters.is_empty(),
+        "find-similar with top_n=0 must fall back to default and return clusters: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -1898,17 +2225,32 @@ fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
 
 #[test]
 fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
-    // StateFileBackend does not run analysis — find-similar requires the LSP.
+    // [MCP-IPC-CLIENT] find-similar against the live LSP must
+    // tolerate an empty snippet — it is below the parser's minimum
+    // node floor, so the success-path reply marks `below_min_nodes`
+    // and returns no clusters (no error envelope).
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
         &json!({ "name": "find-similar", "arguments": { "snippet": "", "language": "csharp" } }),
     )?;
+    assert!(
+        response.pointer("/error").is_none(),
+        "find-similar with the live LSP must succeed (no JSON-RPC error envelope): {response}"
+    );
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "find-similar without LSP must return BackendError: {response}"
+        value_get(&response, "/result/structuredContent/below_min_nodes")?.as_bool(),
+        Some(true),
+        "empty snippet must report below_min_nodes=true: {response}"
+    );
+    let clusters = value_get(&response, "/result/structuredContent/clusters")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("clusters must be array: {response}"))?;
+    assert!(
+        clusters.is_empty(),
+        "empty snippet must return no clusters: {response}"
     );
     let _ = child.finish();
     Ok(())
@@ -1993,7 +2335,7 @@ fn string_request_id_round_trips_through_dispatch() -> Result<()> {
 }
 
 #[test]
-fn relative_path_inside_workspace_is_accepted() -> Result<()> {
+fn relative_path_insideworkspace_is_accepted() -> Result<()> {
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(
@@ -2333,7 +2675,10 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
     );
     let after_config =
         structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
-    assert_eq!(value_get(&after_config, "/min_nodes")?.as_u64(), Some(15));
+    // [MCP-IPC-CLIENT] min_nodes now comes from the live LSP, not
+    // the test's `generate_state_file` invocation — LSP defaults
+    // to 30.
+    assert_eq!(value_get(&after_config, "/min_nodes")?.as_u64(), Some(30));
     assert!(
         value_get(&after_config, "/languages")?.is_array(),
         "session-config should keep languages shaped as an array: {after_config}"
@@ -2356,9 +2701,17 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
 
 #[test]
 fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> Result<()> {
+    // [MCP-IPC-CLIENT] rescan triggers the LSP's
+    // `deslop.lsp.refreshReport` over IPC and the next read sees the
+    // re-analysed state. Mutating source (not the seed cache) is the
+    // only way to influence the LSP under the new architecture.
     let workspace = copied_fixture_root()?;
     let mut child = McpChild::spawn(workspace.path(), &[])?;
     let _ = init_session(&mut child)?;
+    // Flush the LSP cold-pass install before measuring `before` so
+    // the post-mutation rescan does not race a delayed background
+    // commit that would re-introduce the stale cluster.
+    let _flush = call_tool(&mut child, "rescan", &json!({ "n": 1 }))?;
     let before = structured_tool_result(&call_tool(
         &mut child,
         "top-offenders",
@@ -2370,12 +2723,12 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
         "expected at least one cluster before edit"
     );
 
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    let mut state: Value = serde_json::from_slice(&std::fs::read(&state_file)?)?;
-    *state
-        .get_mut("clusters")
-        .ok_or_else(|| anyhow!("fixture state missing clusters"))? = json!([]);
-    std::fs::write(&state_file, serde_json::to_vec_pretty(&state)?)?;
+    // Replace Beta.cs with a unique implementation so the duplicate
+    // cluster between Alpha.cs and Beta.cs disappears after rescan.
+    std::fs::write(
+        workspace.path().join("Beta.cs"),
+        "namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
 
     let after = structured_tool_result(&call_tool(
         &mut child,
@@ -2388,7 +2741,7 @@ fn issue_89_rescan_tool_reloads_state_file_and_returns_fresh_top_offenders() -> 
     let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
         after_count < before_count,
-        "issue #89: rescan must synchronously reload state and return fresh top offenders; was {before_count}, now {after_count}"
+        "issue #89: rescan must synchronously trigger LSP re-analysis and return fresh top offenders; was {before_count}, now {after_count}"
     );
     assert_eq!(
         value_get(&after, "/n")?.as_u64(),
@@ -2491,18 +2844,58 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
 
 #[test]
 fn list_embedding_models_response_shape_includes_metadata() -> Result<()> {
-    // StateFileBackend does not manage embeddings — list-embedding-models requires the LSP.
+    // [MCP-IPC-CLIENT] / issue #87 — every model row carries the
+    // generated metadata fields and avoids the legacy ones.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
         &json!({ "name": "list-embedding-models", "arguments": {} }),
     )?;
+    let models = value_get(&response, "/result/structuredContent/models")?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    let stub = models
+        .iter()
+        .find(|model| model.get("provider_id") == Some(&json!("stub")))
+        .ok_or_else(|| anyhow!("stub row missing: {response}"))?;
     assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "list-embedding-models without LSP must return BackendError: {response}"
+        stub.get("model_id"),
+        Some(&json!("blake3-stub")),
+        "stub row must use generated model_id: {stub}",
     );
+    assert_eq!(
+        stub.get("model_version"),
+        Some(&json!("v1")),
+        "stub row must carry model_version: {stub}",
+    );
+    assert!(
+        stub.get("dimensions").and_then(Value::as_u64).is_some(),
+        "stub row must carry numeric dimensions: {stub}",
+    );
+    assert_eq!(
+        stub.get("recommended"),
+        Some(&json!(false)),
+        "stub row must carry recommended flag: {stub}",
+    );
+    assert_eq!(
+        stub.get("reachable"),
+        Some(&json!(true)),
+        "stub row must carry reachable flag: {stub}",
+    );
+    for legacy_key in [
+        "name",
+        "bare_id",
+        "digest",
+        "size_bytes",
+        "is_embedding_model",
+    ] {
+        assert!(
+            stub.get(legacy_key).is_none(),
+            "issue #87: stub row must not expose legacy key {legacy_key}: {stub}",
+        );
+    }
     let _ = child.finish();
     Ok(())
 }

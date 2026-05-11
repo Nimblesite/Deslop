@@ -1,6 +1,6 @@
 {
   "name": "deslop-site",
-  "version": "1.0.0",
+  "version": "0.0.0-dev",
   "type": "module",
   "private": true,
   "scripts": {

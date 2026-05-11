@@ -65,7 +65,21 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     );
     let kind = report_bucket_kind(signals, &cluster.members, sources, file_languages);
     let interpretation = interpret(kind);
-    let bucket = kind.wire_label().to_owned();
+    // Issue #134: structural-only matches (high structural fingerprint,
+    // zero token overlap, zero embedding support) are skeleton-shape
+    // collisions. They are still surfaced — Type-2 renamed clones are
+    // legitimate duplication candidates — but the wire label is
+    // demoted away from "nearly_identical" so reports do not overstate
+    // the evidence when only the syntactic shape lines up.
+    let bucket = if kind == ClusterKind::NearlyIdentical
+        && signals.structural >= 0.99
+        && signals.token_jaccard <= f64::EPSILON
+        && signals.embedding_cos <= f64::EPSILON
+    {
+        "structural_only".to_owned()
+    } else {
+        kind.wire_label().to_owned()
+    };
     let occurrences_total = occurrences.len();
     ReportCluster {
         id: cluster.id.clone(),
@@ -200,11 +214,50 @@ pub(crate) fn report_bucket_kind(
         classify_signals(signals)
     };
     let equivalent = source_slices_are_equivalent_for_language(members, sources, file_languages);
-    match (kind, equivalent, signals.structural >= 0.99) {
+    let kind = match (kind, equivalent, signals.structural >= 0.99) {
         (ClusterKind::Identical, false, _) => ClusterKind::NearlyIdentical,
         (ClusterKind::NearlyIdentical, true, true) => ClusterKind::Identical,
         _ => kind,
+    };
+    // Issue #134: a *cross-file multi-copy* structural-only match
+    // (high structural fingerprint, no token or semantic support,
+    // 3+ occurrences spread across 3+ files) is too weak to call
+    // "nearly identical". The issue's reproduction shows clusters of
+    // 7-53 occurrences with `structural=1.0, token_jaccard=0,
+    // embedding_cos=0` dominating top-offenders — test scaffolding
+    // or generated boilerplate replicated across many test files.
+    //
+    // Source-bytes equivalent clusters (Identical) keep their bucket
+    // because byte-level proof is independent of the signal triple.
+    // Single-file repetitions (e.g. three `[Fact]`-decorated methods
+    // in one test class) and small two-occurrence pairs keep
+    // `NearlyIdentical` — at those scales a structural-only match
+    // really does identify a Type-3 candidate worth extracting.
+    if kind == ClusterKind::NearlyIdentical && is_scaffolding_structural_only(signals, members) {
+        return ClusterKind::LooselySimilar;
     }
+    kind
+}
+
+/// Returns true when the structural fingerprint is the only positive
+/// support *and* the cluster spans enough distinct files to mirror the
+/// cross-test-file scaffolding pattern from issue #134. The signal
+/// thresholds (0.05) match the issue acceptance criterion
+/// (`token_jaccard=0.00` and `embedding_cos=0.00`) while tolerating
+/// `MinHash` collision noise. The 3-member, 3-file floors preserve
+/// genuine same-file Type-3 clusters and small two-occurrence pairs.
+fn is_scaffolding_structural_only(signals: ReportSignals, members: &[Fingerprint]) -> bool {
+    if signals.structural < 0.99
+        || signals.token_jaccard >= 0.05
+        || signals.embedding_cos >= 0.05
+        || members.len() < 3
+    {
+        return false;
+    }
+    let mut files: Vec<FileId> = members.iter().map(|member| member.file_id).collect();
+    files.sort_unstable();
+    files.dedup();
+    files.len() >= 3
 }
 
 /// Returns true for substantive C# Type-3 candidates found only through

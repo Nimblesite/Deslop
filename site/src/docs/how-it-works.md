@@ -1,6 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: How It Works
+title: How It Works — Tree-sitter ASTs, MinHash LSH, HNSW embeddings
+description: Deslop's pipeline — tree-sitter parse, AST normalization, Merkle fingerprints, MinHash + LSH, HNSW embeddings, fused 0.85 threshold, worst-offenders ranking. 250 ms reactive loop.
 eleventyNavigation:
   key: How It Works
   order: 2
@@ -60,7 +61,7 @@ For **nearly identical code** (Type-3, structurally similar but not identical), 
 
 ## Embed (semantic)
 
-Optional. When enabled, each subtree is run through a code-embedding model (local Ollama by default — `nomic-embed-text` out of the box, any Ollama embedding model selectable via `--embedding-model`). Nearest-neighbour search runs over an **HNSW** index (`instant-distance`, pure Rust, deterministic seed) at the cosine threshold defined in [`crates/deslop-core/src/embedding/pairs.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/embedding/pairs.rs). This produces **same behavior, different code** candidates (Type-4) — semantically equivalent but syntactically different code, such as an imperative loop versus a LINQ expression. SSCD (Wiley 2024) validated HNSW + ANN as the right recall layer at scale; Deslop adopts the same shape and pairs it with the structural and LSH passes per [`fusion.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/fusion.md).
+Optional, **off by default** — opt in with `--embeddings auto` (probe and fall back with a warning) or `--embeddings required` (hard-fail if the provider is unreachable). When enabled, each subtree is run through a code-embedding model (local Ollama by default — `nomic-embed-text` out of the box, any Ollama embedding model selectable via `--embedding-model`). Nearest-neighbour search runs over an **HNSW** index (`instant-distance`, pure Rust, deterministic seed) at the cosine threshold defined in [`crates/deslop-core/src/embedding/pairs.rs`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/embedding/pairs.rs). This produces **same behavior, different code** candidates (Type-4) — semantically equivalent but syntactically different code, such as an imperative loop versus a LINQ expression. SSCD (Wiley 2024) validated HNSW + ANN as the right recall layer at scale; Deslop adopts the same shape and pairs it with the structural and LSH passes per [`fusion.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/fusion.md).
 
 The embedding cache is keyed by `(content_hash, provider_id, model_id, model_version)` so switching models invalidates only the embedding layer — structural and LSH caches survive.
 

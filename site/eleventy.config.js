@@ -63,7 +63,7 @@ layout: layouts/base.njk
   <aside class="docs-sidebar" id="docs-sidebar">
     <div class="docs-sidebar__brand">
       <h2>The Manuscript</h2>
-      <p class="docs-sidebar__version">v0.1.0-preview</p>
+      <p class="docs-sidebar__version">Live LSP + MCP · preview</p>
     </div>
     <nav class="docs-sidebar__nav" aria-label="Documentation">
       {% for entry in navPages %}
@@ -398,11 +398,48 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
 </html>
 `;
 
+// Strip the upstream `/api/` link from llms.txt — Deslop's site doesn't
+// ship an API reference route, so the placeholder would be a 404 from the
+// AI-discoverability artefact itself.
+const LLMS_TXT_OVERRIDE = `---json
+{
+  "permalink": "llms.txt",
+  "eleventyExcludeFromCollections": true
+}
+---
+# {{ site.title | default(site.name) }}
+
+> {{ site.description }}
+
+## Install
+
+- VS Code extension (preferred — bundles LSP + MCP + CLI): https://github.com/Nimblesite/Deslop/releases/latest
+- Homebrew (CLI only): brew install nimblesite/tap/deslop
+- Scoop (CLI only): scoop install deslop
+
+## Documentation
+{% for page in collections.docs %}
+- [{{ page.data.title }}]({{ site.url }}{{ page.url }}){% if page.data.description %} — {{ page.data.description }}{% endif %}
+{% endfor %}
+
+## Blog Posts
+{% for post in collections.posts | reverse | limit(10) %}
+- [{{ post.data.title }}]({{ site.url }}{{ post.url }}){% if post.data.excerpt or post.data.description %} — {{ post.data.excerpt | default(post.data.description) }}{% endif %}
+{% endfor %}
+
+## Navigation
+- Home: {{ site.url }}/
+- Documentation: {{ site.url }}/docs/
+- Blog: {{ site.url }}/blog/
+- Source: https://github.com/Nimblesite/Deslop
+`;
+
 const OVERRIDES = {
   "blog/index.njk": BLOG_INDEX_OVERRIDE,
   "_includes/layouts/base.njk": BASE_LAYOUT_OVERRIDE,
   "_includes/layouts/docs.njk": DOCS_LAYOUT_OVERRIDE,
   "_includes/layouts/blog.njk": BLOG_POST_LAYOUT_OVERRIDE,
+  "llms.txt.njk": LLMS_TXT_OVERRIDE,
 };
 
 /**
@@ -424,7 +461,12 @@ export default function (eleventyConfig) {
       name: "Deslop",
       url: "https://deslop.live",
       description:
-        "The live duplicate-code server for AI coding agents. Deslop runs as an LSP + MCP server that streams real-time clone signals to Claude, Cursor, Copilot, and your editor as code is written — worst offenders surface inline, before duplication lands in the repo. Batch CLI reports are one output mode, not the product.",
+        "The live LSP + MCP duplicate-code server for AI coding agents. Deslop streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex as code is written — find-similar prevents the copy-paste before it lands. Install via the VS Code VSIX (bundles LSP, MCP server, and CLI); JetBrains plugin in active development.",
+      keywords:
+        "deslop, duplicate code, code clone detection, AI code duplication, LLM duplicate code, MCP server, LSP server, claude code, claude desktop, cursor, copilot, continue, codex, tree-sitter, AST clone detection, find-similar, VS Code extension, JetBrains plugin, code deduplication",
+      ogImage: "/assets/img/og-card.png",
+      ogImageWidth: "1200",
+      ogImageHeight: "630",
     },
     features: {
       blog: true,

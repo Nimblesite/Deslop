@@ -2,7 +2,7 @@
   "name": "deslop-vscode",
   "displayName": "Deslop",
   "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
-  "version": "0.1.0",
+  "version": "0.0.0-dev",
   "publisher": "nimblesite",
   "license": "MIT",
   "icon": "media/logo.png",
@@ -368,7 +368,7 @@
     "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
-    "package": "npm run build && vsce package --no-dependencies -o deslop-vscode.vsix && node ./scripts/assert-vsix-schema-doc.mjs && npm run verify:package"
+    "package": "node ./scripts/package-vsix.mjs"
   },
   "dependencies": {
     "@preact/signals-core": "^1.14.1",

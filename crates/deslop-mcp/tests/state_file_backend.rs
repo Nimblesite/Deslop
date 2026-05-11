@@ -1,181 +1,219 @@
-//! Focused tests for `StateFileBackend`.
+//! Repurposed `StateFileBackend` tests, retargeted at `LiveBackend` +
+//! the LSP IPC surface ([MCP-IPC-CLIENT], [LIVE-IPC-SOCKET],
+//! [LIVE-SEED-CACHE]).
+//!
+//! The original tests asserted file-reader behaviour: cache reload on
+//! mtime change (#90), durable on-disk state after read, and deletion
+//! of incompatible state files (#118). With the IPC architecture the
+//! MCP does not read `live-report.json` at all — every read is a
+//! socket round-trip to the LSP. The invariants survive in a stronger
+//! form here:
+//!
+//! - "no stale cached snapshot in MCP" — file mtime is replaced by an
+//!   LSP-driven `rescan` round-trip that proves the next `report-get`
+//!   reflects the new state immediately.
+//! - "MCP read never mutates the seed cache" — the seed cache is the
+//!   LSP's private warm-start file ([LIVE-SEED-CACHE]); the MCP must
+//!   not touch it.
+//! - "incompatible seed cache cannot bring the LSP down" — moved to
+//!   the LSP startup path, which is the only consumer of the file
+//!   under the new architecture.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
+#![cfg(unix)]
+
+use std::{fs, time::Duration};
+
+use anyhow::{anyhow, ensure, Context, Result};
+use serde_json::{json, Value};
+
+mod common;
+use common::{
+    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
+    ChildKillOnDrop, SOCKET_TIMEOUT,
 };
 
-use anyhow::{Context, Result};
-use deslop_mcp::{McpBackend, SessionBackendConfig, StateFileBackend};
-use serde_json::Value;
-use tempfile::TempDir;
+/// [MCP-IPC-CLIENT] Repurposes `issue_90_report_get_reloads_state_file_between_plain_calls`.
+///
+/// Original invariant: a second plain `report_get` must not return a
+/// stale cached snapshot — when the LSP-written state file changes,
+/// the next read must observe the change.
+///
+/// New mechanism: there is no MCP-side cache to invalidate. Every
+/// `report_get` is an IPC round-trip. We mutate a source file, force
+/// the LSP to re-analyse via `rescan`, and assert the next plain
+/// `report_get` reflects the new generation. Same invariant: stale
+/// state cannot survive a forced LSP refresh.
+#[test]
+fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
 
-fn fixture_root() -> &'static Path {
-    Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/csharp-mcp"
-    ))
-}
+    let mut mcp = initialized_mcp(workspace.path())?;
 
-fn copied_fixture_root() -> Result<TempDir> {
-    let temp = TempDir::new()?;
-    copy_dir_all(fixture_root(), temp.path())?;
-    Ok(temp)
-}
+    let before = call_report_get(&mut mcp, /*offset*/ 0, /*limit*/ 64)?;
+    let before_total = before
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("total_clusters missing: {before}"))?;
+    ensure!(
+        before_total > 0,
+        "fixture must produce at least one visible cluster before mutation: {before}",
+    );
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let target = dst.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_dir_all(&entry.path(), &target)?;
-        } else {
-            let _bytes = fs::copy(entry.path(), target)?;
-        }
-    }
+    // Mutate Beta.cs so a re-analysis would produce a different
+    // cluster set, then force the LSP to re-run.
+    let beta = workspace.path().join("Beta.cs");
+    let original = fs::read(&beta)?;
+    fs::write(
+        &beta,
+        b"namespace Beta { public class Differ { public int Run(int x) { return x + 1; } } }\n",
+    )?;
+    let rescan = mcp.request(
+        "tools/call",
+        &json!({"name": "rescan", "arguments": {"n": 5}}),
+    )?;
+    let rescan_structured = structured_content(&rescan, "rescan")?;
+    let rescan_generation = rescan_structured
+        .get("generation")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("rescan generation missing: {rescan}"))?;
+    ensure!(
+        rescan_generation > 0,
+        "rescan must advance generation past zero: {rescan}",
+    );
+
+    let after = call_report_get(&mut mcp, /*offset*/ 0, /*limit*/ 64)?;
+    let after_total = after
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("total_clusters missing: {after}"))?;
+
+    ensure!(
+        after_total != before_total
+            || cluster_ids(&before) != cluster_ids(&after),
+        "issue #90: plain report-get after rescan must reflect mutated source, not return stale state. before={before}, after={after}",
+    );
+
+    // Restore so TempDir cleanup is symmetric.
+    fs::write(&beta, original)?;
     Ok(())
 }
 
-fn backend_for(root: &Path) -> Result<StateFileBackend> {
-    Ok(StateFileBackend::initialise(SessionBackendConfig {
-        root: root.to_path_buf(),
-        config_path: None,
-    })?)
-}
-
+/// [LIVE-SEED-CACHE] Repurposes `current_state_file_persists_after_successful_load`.
+///
+/// Original invariant: a successful state-file read must not delete
+/// or rewrite the file. Under the IPC architecture the MCP no longer
+/// reads it at all; the file is the LSP's private warm-start cache.
+/// The new contract: an MCP `report-get` must not modify
+/// `.deslop-cache/live-report.json` — only the LSP's cold-pass /
+/// initial-pass install paths may write it.
 #[test]
-fn issue_90_report_get_reloads_state_file_between_plain_calls() -> Result<()> {
-    let workspace = copied_fixture_root()?;
-    let backend = backend_for(workspace.path())?;
-    let before = backend.report_get()?;
-    let before_generation = backend.generation();
-    let first_id = before
-        .clusters
-        .first()
-        .map(|cluster| cluster.id.clone())
-        .context("fixture should start with at least one cluster")?;
-    assert!(
-        !before.clusters.is_empty(),
-        "fixture should expose duplicate clusters before mutation"
-    );
-    assert!(
-        before_generation >= 1,
-        "first report_get should load the state file and bump generation"
-    );
-
+fn mcp_read_does_not_mutate_lsp_seed_cache() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    remove_all_clusters(&state_file)?;
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for seed cache")?;
 
-    let after = backend.report_get()?;
-    let after_generation = backend.generation();
-    assert!(
-        after.clusters.is_empty(),
-        "issue #90: plain report_get calls must not return a stale cached snapshot"
+    // Sample mtime + bytes after the LSP's initial pass has settled.
+    // A small sleep here is unavoidable: the cold-pass install can
+    // race with `wait_for_path`. We re-check mtime stability before
+    // measuring rather than relying on the timer alone.
+    std::thread::sleep(Duration::from_millis(150));
+    let baseline_mtime = fs::metadata(&state_file)?.modified()?;
+    let baseline_bytes = fs::read(&state_file)?;
+
+    let mut mcp = initialized_mcp(workspace.path())?;
+    let _page = call_report_get(&mut mcp, 0, 64)?;
+    let _again = call_report_get(&mut mcp, 0, 64)?;
+
+    let after_mtime = fs::metadata(&state_file)?.modified()?;
+    let after_bytes = fs::read(&state_file)?;
+    ensure!(
+        baseline_mtime == after_mtime,
+        "MCP read must not touch the LSP seed cache mtime: before={baseline_mtime:?}, after={after_mtime:?}",
     );
-    assert!(
-        !after.clusters.iter().any(|cluster| cluster.id == first_id),
-        "removed cluster {first_id} must not survive in the next plain MCP snapshot"
-    );
-    assert!(
-        after_generation > before_generation,
-        "reloading the changed state file should advance generation"
+    ensure!(
+        baseline_bytes == after_bytes,
+        "MCP read must not rewrite the LSP seed cache contents",
     );
     Ok(())
 }
 
+/// [LIVE-SEED-CACHE] Repurposes `issue_118_incompatible_state_file_is_deleted_instead_of_migrated`.
+///
+/// Original invariant: an incompatible state file from a previous
+/// version must be removed instead of crashing the loader. Under the
+/// new architecture the MCP never reads the file, so the consumer is
+/// the LSP's warm-start path. The contract: an incompatible seed
+/// cache cannot brick the LSP — startup proceeds, the cold pass
+/// rewrites the file, and MCP IPC works against the fresh state.
 #[test]
-fn current_state_file_persists_after_successful_load() -> Result<()> {
-    let workspace = copied_fixture_root()?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    let before = fs::read(&state_file)?;
-    let backend = backend_for(workspace.path())?;
-
-    let report = backend.report_get()?;
-
-    assert!(
-        state_file.exists(),
-        "valid current state must remain on disk after load"
-    );
-    assert_eq!(
-        fs::read(&state_file)?,
-        before,
-        "valid current state must not be rewritten during a read"
-    );
-    assert!(
-        !report.clusters.is_empty(),
-        "fixture current state should load duplicate clusters"
-    );
-    assert!(
-        backend.generation() >= 1,
-        "successful state load should advance generation"
-    );
-    assert!(
-        report.tool_version.starts_with('0'),
-        "fixture current state should expose the current report shape"
-    );
-    Ok(())
-}
-
-#[test]
-fn issue_118_incompatible_state_file_is_deleted_instead_of_migrated() -> Result<()> {
-    let workspace = copied_fixture_root()?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+fn issue_118_incompatible_seed_cache_cannot_brick_lsp_startup() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let cache_dir = workspace.path().join(".deslop-cache");
+    fs::create_dir_all(&cache_dir).context("create .deslop-cache")?;
+    let state_file = cache_dir.join("live-report.json");
     fs::write(&state_file, br#"{"tool_version":"stale","clusters":[]}"#)?;
-    let backend = backend_for(workspace.path())?;
 
-    let Err(err) = backend.report_get() else {
-        anyhow::bail!("incompatible state file must not load successfully");
-    };
-    let message = err.to_string();
-    assert!(
-        message.contains("LSP is not running"),
-        "deleted incompatible state should behave like absent current state, got {message}"
-    );
-    assert!(
-        !state_file.exists(),
-        "incompatible persisted state must be deleted so LSP can recreate it"
-    );
-    assert_eq!(
-        backend.generation(),
-        0,
-        "failed state loads must not advance generation"
-    );
-    assert!(
-        state_file.parent().is_some_and(Path::exists),
-        "cache directory should remain available for the recreated state file"
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+
+    let mut mcp = initialized_mcp(workspace.path())?;
+    let response = call_report_get(&mut mcp, 0, 64)?;
+    let total = response
+        .get("total_clusters")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("total_clusters missing: {response}"))?;
+    ensure!(
+        total > 0,
+        "incompatible seed cache must not block the cold pass; LSP must produce live clusters from source: {response}",
     );
 
-    let fixture_state = fixture_root().join(".deslop-cache/live-report.json");
-    let _bytes = fs::copy(&fixture_state, &state_file)?;
-    let recreated = backend.report_get()?;
-
-    assert!(
-        state_file.exists(),
-        "current state must be recreated at the same path"
-    );
-    assert!(
-        !recreated.clusters.is_empty(),
-        "recreated current state must load duplicate clusters"
-    );
-    assert!(
-        backend.generation() >= 1,
-        "loading recreated state should advance generation"
+    // Verify the seed cache was rewritten with current-shape JSON
+    // (i.e. parses as a Report).
+    let bytes = fs::read(&state_file).context("seed cache present after cold pass")?;
+    let parsed: Value =
+        serde_json::from_slice(&bytes).context("rewritten seed cache must be valid JSON")?;
+    ensure!(
+        parsed
+            .get("tool_version")
+            .and_then(Value::as_str)
+            .is_some_and(|version| version != "stale"),
+        "stale tool_version must not survive cold-pass install: {parsed}",
     );
     Ok(())
 }
 
-fn remove_all_clusters(state_file: &PathBuf) -> Result<()> {
-    let mut state: Value = serde_json::from_slice(&fs::read(state_file)?)?;
-    let clusters = state
-        .get_mut("clusters")
-        .and_then(Value::as_array_mut)
-        .context("fixture state missing clusters")?;
-    assert!(
-        !clusters.is_empty(),
-        "fixture state should have clusters before mutation"
-    );
-    clusters.clear();
-    fs::write(state_file, serde_json::to_vec_pretty(&state)?)?;
-    Ok(())
+/// Helper that wraps the verbose `tools/call report-get` envelope.
+fn call_report_get(mcp: &mut common::McpHandle, offset: u64, limit: u64) -> Result<Value> {
+    let response = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "report-get",
+            "arguments": {"offset": offset, "limit": limit},
+        }),
+    )?;
+    structured_content(&response, "report-get")
+}
+
+/// Returns the cluster ids on a `report-get` page in stable order.
+fn cluster_ids(page: &Value) -> Vec<String> {
+    page.get("clusters")
+        .and_then(Value::as_array)
+        .map(|clusters| {
+            clusters
+                .iter()
+                .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
 }

@@ -208,21 +208,40 @@ export const REPORT_TYPE_CONFIG = {
   TopOffendersPayload: {
     docs: "Wire payload for the `top-offenders` MCP tool.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldOverrides: { total_clusters: "usize", n: "usize" },
+    fieldOverrides: {
+      total_clusters: "usize",
+      n: "usize",
+      max_occurrences: "usize",
+      total_occurrences: "usize",
+    },
     fieldDocs: {
       total_clusters: "Total clusters in the report (pre-truncation).",
       n: "Cap requested by the agent.",
-      clusters: "Top `n` clusters, worst-first.",
+      max_occurrences:
+        "Total-occurrence budget across returned clusters. Worst-first: clusters fill the budget; the cluster that overruns it is truncated and `occurrences_truncated` set; following clusters are dropped ([MCP-OCCURRENCE-BUDGET]).",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster in the report — what the budget filtered down from. Always >= the sum of returned cluster occurrences.",
+      clusters: "Top `n` clusters, worst-first, post-budget.",
     },
   },
   RescanPayload: {
     docs: "Wire payload for `rescan`. Mirrors top offenders and carries refresh progress so agents can confirm changed paths moved the report forward.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldOverrides: { total_clusters: "usize", n: "usize", generation: "u64" },
+    fieldOverrides: {
+      total_clusters: "usize",
+      n: "usize",
+      max_occurrences: "usize",
+      total_occurrences: "usize",
+      generation: "u64",
+    },
     fieldDocs: {
       total_clusters: "Total clusters in the refreshed report (pre-truncation).",
       n: "Cap requested by the agent.",
-      clusters: "Top `n` clusters, worst-first, after the rescan.",
+      max_occurrences:
+        "Total-occurrence budget across returned clusters; same semantics as `top-offenders` ([MCP-OCCURRENCE-BUDGET]).",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster in the refreshed report.",
+      clusters: "Top `n` clusters, worst-first, after the rescan, post-budget.",
       generation: "Generation exposed by the refreshed live report.",
       summary: "Compact add/remove/update counts from the rescan pass.",
     },
@@ -230,12 +249,19 @@ export const REPORT_TYPE_CONFIG = {
   RangeReport: {
     docs: "Wire payload for `report-for-range`. Echoes the request range so the agent can correlate without rebuilding the call.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
-    fieldOverrides: { path: "PathBuf", start_byte: "usize", end_byte: "usize" },
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+      total_occurrences: "usize",
+    },
     fieldDocs: {
       path: "Path scoping the range.",
       start_byte: "Inclusive start byte echoed from the request.",
       end_byte: "Exclusive end byte echoed from the request.",
-      clusters: "Clusters overlapping the range.",
+      clusters: "Clusters overlapping the range, post-budget.",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster overlapping the range.",
     },
   },
   EmbeddingModelList: {

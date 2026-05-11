@@ -1,6 +1,6 @@
 ---
 layout: layouts/docs.njk
-title: VS Code Cluster Panel
+title: VS Code Cluster Panel — Reading a Deslop clone cluster
 description: Field guide for the Deslop VS Code cluster detail panel, including cluster ids, ranking, signals, occurrences, and comparison actions.
 eleventyNavigation:
   key: VS Code Cluster Panel
