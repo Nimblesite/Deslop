@@ -25,7 +25,7 @@ Deslop was designed from the first commit with coding agents as a first-class au
 | `report-query` | Filtered query over the report. |
 | `rescan` | Force-refresh after large external changes. |
 | `list-embedding-models` | Models the provider advertises. |
-| `set-embedding-model` | Switch the semantic (Type-4) model at runtime. |
+| `set-embedding-model` | Switch the Type-4 (same behavior, different code) semantic model at runtime. |
 | `session-config` | Inspect the running server's effective config. |
 | `schema-doc` | Self-describing JSON schema for every response. |
 
