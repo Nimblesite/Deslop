@@ -86,8 +86,21 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     install_tracing();
     let cli = Cli::parse_from(args);
     let mode: EmbeddingMode = cli.embeddings.parse()?;
+    // [#141 MCP-SAFETY] Canonicalise the workspace root immediately so
+    // `--root .` (the default) cannot bind a session to whatever
+    // directory the agent harness happened to launch the binary
+    // from. Surfacing a stable absolute path here means session-config
+    // and every report path is anchored to a known location — without
+    // it, a client thinks it asked about workspace A while MCP scans
+    // workspace B.
+    let canonical_root = std::fs::canonicalize(&cli.root).map_err(|err| {
+        format!(
+            "--root {} could not be canonicalised: {err}",
+            cli.root.display()
+        )
+    })?;
     let config = SessionBackendConfig {
-        root: cli.root,
+        root: canonical_root,
         min_nodes: cli.min_nodes,
         incremental: cli.incremental,
         embedding_mode: mode,

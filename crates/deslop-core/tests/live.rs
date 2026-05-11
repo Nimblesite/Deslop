@@ -255,12 +255,16 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
-    let session_lock = make_session_lock(tmp.path())?;
+    // PipelineSession canonicalises root at init ([#141 MCP-SAFETY])
+    // so every reflected root is the canonical form. Tests compare
+    // against the same canonical path.
+    let root = fs::canonicalize(tmp.path()).context("canonicalize tmp")?;
+    let session_lock = make_session_lock(&root)?;
     let mut service = LiveService::new(Arc::clone(&session_lock));
     service.set_ollama_endpoint("http://127.0.0.1:1".to_owned());
 
-    let first_id = exercise_snapshot_lookups(&service, tmp.path()).await?;
-    let initial_generation = exercise_session_config(&service, &session_lock, tmp.path()).await?;
+    let first_id = exercise_snapshot_lookups(&service, &root).await?;
+    let initial_generation = exercise_session_config(&service, &session_lock, &root).await?;
     exercise_delta_cursor(&service, initial_generation).await;
     exercise_error_paths(&service, &first_id).await;
     {

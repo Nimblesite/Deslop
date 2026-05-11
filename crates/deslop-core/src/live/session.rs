@@ -439,18 +439,21 @@ impl AnalysisSession {
         })
     }
 
-    /// Asserts `path` is under the workspace root.
+    /// Asserts `path` is under the workspace root. Canonicalises the
+    /// candidate so symlink pairs like macOS `/var/...` →
+    /// `/private/var/...` are treated as one ([#141 MCP-SAFETY]).
     fn guard_path(&self, path: &Path) -> Result<(), LiveError> {
         let resolved = if path.is_absolute() {
             path.to_path_buf()
         } else {
             self.pipeline.root().join(path)
         };
-        if resolved.starts_with(self.pipeline.root()) {
+        let canonical = std::fs::canonicalize(&resolved).unwrap_or(resolved);
+        if canonical.starts_with(self.pipeline.root()) {
             Ok(())
         } else {
             Err(LiveError::PathOutsideWorkspace {
-                path: resolved,
+                path: canonical,
                 workspace_root: self.pipeline.root().to_path_buf(),
             })
         }
