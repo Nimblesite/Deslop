@@ -210,6 +210,58 @@ pub struct ReportCluster {
     pub interpretation: String,
 }
 
+/// Recomputes each cluster's ranking weight from non-hidden
+/// occurrences only, then re-sorts the slice worst-first. Applied
+/// after `render_report` has materialised occurrences with their
+/// `hidden` flags so a mixed cluster cannot ride hidden volume into
+/// the top of Top Offenders ([#140 EXCLUSION-CONFIG]).
+fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster]) {
+    for cluster in &mut *clusters {
+        let visible = visible_occurrence_count(cluster);
+        cluster.weight = visible_rank_weight(cluster.canonical_node_count, visible);
+    }
+    clusters.sort_by(|left, right| {
+        right
+            .weight
+            .partial_cmp(&left.weight)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+}
+
+/// Counts non-hidden occurrences on a rendered cluster. Hidden
+/// occurrences still travel with the cluster so consumers retain the
+/// "regular code duplicates generated code" context, but ranking
+/// ignores them.
+fn visible_occurrence_count(cluster: &ReportCluster) -> usize {
+    cluster
+        .occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.hidden)
+        .count()
+}
+
+/// Mirrors [PIPELINE-RANK-WORST-FIRST] but feeds it the visible
+/// occurrence count. Empty visible sets score zero so a cluster that
+/// is technically not all-hidden but has only one actionable copy
+/// sinks below cleaner clusters with more refactorable duplication.
+fn visible_rank_weight(canonical_node_count: usize, visible_size: usize) -> f64 {
+    if visible_size < 2 {
+        return 0.0;
+    }
+    let nodes = lossless_u32_to_f64(canonical_node_count.max(1));
+    let size_minus_one = lossless_u32_to_f64(visible_size.saturating_sub(1));
+    nodes * size_minus_one
+}
+
+/// Converts a `usize` to `f64` losslessly. Values past `u32::MAX` are
+/// clamped — cluster cardinalities never reach that range in
+/// practice but the clamp keeps the math precision-safe under the
+/// workspace's `cast_precision_loss` lint.
+fn lossless_u32_to_f64(value: usize) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
+}
+
 /// Returns the authoritative occurrence count for user-facing copy.
 #[must_use]
 pub fn occurrence_count(cluster: &ReportCluster) -> usize {
@@ -337,10 +389,20 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         })
         .collect();
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
-    let visible_clusters: Vec<ReportCluster> = materialised
+    let mut visible_clusters: Vec<ReportCluster> = materialised
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
+    // [#140 EXCLUSION-CONFIG]: in mixed clusters (some hidden, some
+    // visible) the original `weight` reflects every occurrence,
+    // including hidden ones, so a cluster with one actionable copy
+    // and many generated copies still ranks above a fully-visible
+    // cluster with fewer total but more actionable occurrences.
+    // Recompute weight from the visible occurrence count and re-sort
+    // so Top Offenders reflects how much actionable duplication a
+    // human can fix, not how much generated noise the cluster
+    // contains.
+    reweigh_by_visible_occurrences(&mut visible_clusters);
     let metrics = compute_repo_metrics(&MetricsInputs {
         clusters: inputs.clusters,
         sources: inputs.sources,

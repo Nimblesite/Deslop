@@ -119,6 +119,13 @@ impl PipelineSession {
     ) -> Result<(Self, Report), CoreError> {
         let parsers = default_parsers();
         let extension_to_language = build_extension_map(&parsers);
+        // [#141 MCP-SAFETY] Canonicalise the root so the registry,
+        // exclusion matchers and watcher inputs all share one
+        // filesystem identity. Without this the macOS `/var/...` →
+        // `/private/var/...` symlink pair leaves the registry holding
+        // one form while the canonical root sits on the other, and
+        // every later path comparison silently misses.
+        let root = std::fs::canonicalize(&root).unwrap_or(root);
         tracing::info!(
             root = %root.display(),
             root_exists = root.exists(),
@@ -364,11 +371,28 @@ impl PipelineSession {
 
     /// Resolves `path` against the workspace root so relative paths
     /// from a watcher are handled identically to absolute paths.
+    /// Canonicalises so symlinks resolve the same way as the canonical
+    /// [`self.root`] — without this the macOS `/var/...` →
+    /// `/private/var/...` symlink pair leaves watcher paths missing
+    /// the registry entries they should match ([#141 MCP-SAFETY]).
+    /// For paths whose leaf no longer exists (deletions) we
+    /// canonicalise the parent and rejoin the leaf so removals still
+    /// hit the registry.
     fn canonicalise_reference(&self, path: &Path) -> PathBuf {
-        if path.is_absolute() {
+        let joined = if path.is_absolute() {
             path.to_path_buf()
         } else {
             self.root.join(path)
+        };
+        if let Ok(resolved) = std::fs::canonicalize(&joined) {
+            return resolved;
+        }
+        match (joined.parent(), joined.file_name()) {
+            (Some(parent), Some(leaf)) => match std::fs::canonicalize(parent) {
+                Ok(canonical_parent) => canonical_parent.join(leaf),
+                Err(_) => joined,
+            },
+            _ => joined,
         }
     }
 

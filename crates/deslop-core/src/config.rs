@@ -32,6 +32,12 @@ use crate::{error::CoreError, report_metrics::validate_threshold_percent};
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 
 /// Directory components that are always excluded from discovery.
+///
+/// `.cargo` covers Cargo's vendored registry / git checkout caches
+/// ([#142]) — even when the surrounding repo points discovery at
+/// the user's home directory by accident, the boilerplate generated
+/// code under `.cargo/git/checkouts/...` and
+/// `.cargo/registry/src/...` never enters the report.
 const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "node_modules",
     "target",
@@ -39,6 +45,7 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "build",
     ".venv",
     "__pycache__",
+    ".cargo",
 ];
 
 /// Directory components that are always analysed but hidden from summaries.
