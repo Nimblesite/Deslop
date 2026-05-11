@@ -4,6 +4,7 @@ title: Why the ranking formula is the entire product
 date: 2026-04-15
 author: Christian Findlay
 tags: posts
+description: Deslop ranks duplicate-code clusters by clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes). The worst offender is always line one. Here's why the formula is not configurable.
 excerpt: Deslop ranks clusters by clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes). Every decision in the tool flows from that one line. Here's why it's not configurable.
 ---
 

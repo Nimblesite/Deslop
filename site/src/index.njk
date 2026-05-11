@@ -1,19 +1,56 @@
 ---
 layout: layouts/base.njk
-title: Deslop — Live duplicate-code server for AI coding agents
-description: A running LSP + MCP server that streams real-time duplicate-code signals to Claude, Cursor, Copilot, and your editor as code is written. Tree-sitter parsing, AST fingerprints, semantic fusion — worst offenders surface inline, not in a batch report after the copy-paste already landed.
+title: Deslop — Live MCP + LSP duplicate-code server for AI agents
+description: Live LSP + MCP duplicate-code server. Streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex — find-similar prevents the copy-paste before it lands.
+keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM duplicate code, MCP server, LSP server, claude code, cursor, copilot, continue, codex, tree-sitter, AST clone detection, find-similar, VS Code extension, JetBrains plugin, code deduplication, copy paste detector
 ---
+
+{% block head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Deslop",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Static Code Analysis",
+  "operatingSystem": "macOS, Linux, Windows",
+  "url": "https://deslop.live",
+  "downloadUrl": "https://github.com/Nimblesite/Deslop/releases/latest",
+  "softwareHelp": "https://deslop.live/docs/",
+  "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
+  "description": "Live LSP + MCP duplicate-code server for AI coding agents. Streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex as code is written. Tree-sitter parsing, AST fingerprints, MinHash LSH, HNSW embeddings.",
+  "featureList": [
+    "Live LSP server with 250 ms reactive file watcher",
+    "MCP server with 12 tools including find-similar for the agent inner loop",
+    "Tree-sitter parsing for C#, Rust, Python",
+    "Type-1, Type-2, Type-3, Type-4 clone detection",
+    "VS Code extension bundling LSP, MCP server, and CLI",
+    "JetBrains plugin in active development (Rider, IntelliJ, PyCharm, WebStorm, RustRover, CLion)"
+  ],
+  "publisher": {
+    "@type": "Organization",
+    "name": "Nimblesite",
+    "url": "https://nimblesite.co"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+{% endblock %}
 
 <div class="home">
   <section class="hero">
     <div class="hero__left">
-      <div class="eyebrow-chip"><span>Live LSP + MCP · find-similar prevents the copy-paste</span></div>
+      <div class="eyebrow-chip"><span>Live MCP + LSP · prevents the copy-paste · reactive in &lt;250 ms</span></div>
       <h1>
         Your agent is about to copy-paste.
         <em>Deslop tells it not to.</em>
       </h1>
       <p class="hero__lede">
-        Deslop is a <strong>live analysis server</strong> — LSP + MCP, running in your workspace — that feeds real-time duplicate-code signals to Claude, Cursor, Copilot, and your editor <em>as code is written</em>. Tree-sitter parsing, AST fingerprints, semantic fusion, millisecond response. Batch CLI reports are one output; the live stream is the product.
+        Deslop is a <strong>live LSP + MCP server</strong> running in your workspace. It streams real-time duplicate-code signals to <strong>Claude Code, Cursor, Copilot, Continue, Codex</strong> — and your editor — <em>as code is written</em>. The agent calls <code>find-similar</code> <em>before</em> writing a new function. If the pattern already exists, it reuses the canonical. The copy-paste never happens.
       </p>
       <div class="hero__cta">
         <a href="https://github.com/Nimblesite/Deslop/releases/latest" class="btn-primary" target="_blank" rel="noopener noreferrer">Install the VS Code extension</a>
@@ -25,7 +62,7 @@ description: A running LSP + MCP server that streams real-time duplicate-code si
         </div>
       </div>
       <p class="hero__sublede">
-        VS Code extension is the preferred install — you get the live bubble, the MCP server, the LSP server, and the CLI in a single bundle. Other IDE extensions coming soon. Just want the CLI? <code>brew install nimblesite/tap/deslop</code> or <code>scoop install deslop</code> (after adding the <a href="https://github.com/Nimblesite/scoop-bucket" target="_blank" rel="noopener noreferrer">Nimblesite bucket</a>).
+        The <strong>VSIX is the one install that gives you everything</strong> — live bubble, LSP server, MCP server, and the <code>deslop</code> CLI in one bundle. JetBrains plugin (Rider, IntelliJ, PyCharm, WebStorm, RustRover, CLion) is in active development; Zed and Neovim on the roadmap. Just want the CLI? <code>brew install nimblesite/tap/deslop</code> or <code>scoop install deslop</code> (after adding the <a href="https://github.com/Nimblesite/scoop-bucket" target="_blank" rel="noopener noreferrer">Nimblesite bucket</a>).
       </p>
     </div>
 
@@ -58,7 +95,7 @@ description: A running LSP + MCP server that streams real-time duplicate-code si
   </div>
 </div>
 <span class="muted">agent decision: <strong>reuse `legacy_auth.verify()`</strong> · no copy-paste emitted</span>
-<div class="report-footer">Live LSP · 4,208 files indexed · 18 ms per keystroke</div></pre>
+<div class="report-footer">Live LSP · 250 ms debounce · 2 s cap · reactive on every keystroke</div></pre>
       </div>
     </div>
   </section>
@@ -66,39 +103,39 @@ description: A running LSP + MCP server that streams real-time duplicate-code si
   <section class="bento">
     <div class="bento__grid">
       <div class="bento__cell">
-        <span class="bento__label">Clusters Detected</span>
+        <span class="bento__label">MCP Tools Shipped</span>
         <div class="bento__row">
-          <span class="bento__value">1,042</span>
-          <span class="bento__icon material-symbols-outlined">hub</span>
+          <span class="bento__value">12</span>
+          <span class="bento__icon material-symbols-outlined">smart_toy</span>
         </div>
       </div>
 
       <div class="bento__cell">
-        <span class="bento__label">Above Threshold</span>
+        <span class="bento__label">Languages</span>
         <div class="bento__row">
-          <span class="bento__value bento__value--alarm">314</span>
-          <span class="bento__icon bento__icon--alarm material-symbols-outlined">warning</span>
+          <span class="bento__value">C# · Rust · Python</span>
+          <span class="bento__icon material-symbols-outlined">code</span>
         </div>
       </div>
 
       <div class="bento__cell bento__cell--recess bento__cell--wide-2">
         <div class="bento__top">
-          <span class="bento__label">Top Offender</span>
-          <span class="bento__critical">CRITICAL</span>
+          <span class="bento__label">Keystone Tool</span>
+          <span class="bento__critical">PREVENT</span>
         </div>
         <div>
-          <div class="bento__offender">src/legacy/parser_v1.rs</div>
-          <p class="bento__blurb">Duplicated across 14 modules. Estimated refactor savings: 4.2GB LOC.</p>
+          <div class="bento__offender">find-similar</div>
+          <p class="bento__blurb">Agent matches a proposed snippet against the live corpus <em>before</em> writing it. Existing pattern wins. No duplicate lands.</p>
         </div>
       </div>
 
       <div class="bento__cell bento__cell--panorama bento__cell--wide-4">
         <div class="bento__panorama-inner">
           <div>
-            <span class="bento__label">Avg Scan Time (Linux Kernel)</span>
-            <span class="bento__value bento__value--hero">0.084<span class="unit">s</span></span>
+            <span class="bento__label">Watcher → Editor → Agent</span>
+            <span class="bento__value bento__value--hero">250<span class="unit">ms</span></span>
           </div>
-          <p class="bento__panorama-note">Multi-threaded parsing utilizes all available cores. Zero memory overhead for files under 50MB.</p>
+          <p class="bento__panorama-note">File-watcher debounce. 2 s hard cap. Incremental parse, atomic state rewrite, <code>deslop/reportChanged</code> fans out to every editor surface and MCP client in the same microtask. Stale UI is a correctness bug.</p>
         </div>
       </div>
     </div>

@@ -40,6 +40,7 @@ internal class DeslopRealBinaryContractTest {
         val binary = realBinary ?: return
         val pluginRoot = stageBundledBinary(binary)
         val manifest = loadRepoManifest()
+        val expectedVersion = manifest.requiredJetBrainsComponent("deslop-lsp").expectedVersion
 
         val resolved = DeslopBinaryResolver.resolveLsp(
             manifest,
@@ -47,7 +48,7 @@ internal class DeslopRealBinaryContractTest {
         )
 
         assertEquals("deslop-lsp", resolved.componentId)
-        assertEquals("0.1.0", resolved.version)
+        assertEquals(expectedVersion, resolved.version)
         assertEquals("bundled", resolved.source)
     }
 
@@ -55,6 +56,7 @@ internal class DeslopRealBinaryContractTest {
     fun realBinaryIsRejectedWhenManifestExpectsDifferentVersion() {
         val binary = realBinary ?: return
         val pluginRoot = stageBundledBinary(binary)
+        val actualVersion = loadRepoManifest().requiredJetBrainsComponent("deslop-lsp").expectedVersion
         val drifted = manifestExpectingVersion("9.9.9")
 
         val error = assertFailsWith<DeslopBinaryResolutionException> {
@@ -65,7 +67,7 @@ internal class DeslopRealBinaryContractTest {
         }
         val message = error.message.orEmpty()
         assertContains(message, "Expected 9.9.9")
-        assertContains(message, "Found deslop-lsp 0.1.0")
+        assertContains(message, "Found deslop-lsp $actualVersion")
         assertContains(message, "bundled")
     }
 

@@ -4,6 +4,7 @@ title: Duplication is the tax LLMs charge for speed
 date: 2026-04-20
 author: Christian Findlay
 tags: posts
+description: Coding agents generate plausible code faster than humans can review it — and duplicate it faster too. Deslop treats that as the defining problem of the era. Why the live LSP + MCP server matters more than another batch CLI.
 excerpt: Coding agents generate plausible code faster than humans can review it. They also duplicate it faster. Here's why Deslop treats that as the defining problem of the era, not a side-effect.
 ---
 
@@ -40,8 +41,8 @@ The only wrong move is to ignore the top of the report. That is where the money 
 
 ## Where this goes
 
-Deslop is v1 today: a batch CLI. v2 is the daemon — one process, a file watcher, an MCP server, and an LSP shell. Same pipeline, same schema, same cache. The CLI becomes the cold-cache fallback; the daemon is how you actually live with it.
+Deslop today is the live server. One process, a file watcher, an LSP shell, an MCP shell, and twelve MCP tools the agent can call mid-generation. Same pipeline, same schema, same cache as the CLI — the CLI is now the cold-cache fallback for CI gates. The VS Code extension bundles all of it (LSP, MCP, CLI) in a single VSIX. JetBrains is next.
 
-The primary user of the daemon is not you. It is the agent you are pair-programming with. Which is as it should be: agents generate duplication; agents should fix it.
+The primary user of the server is not you. It is the agent you are pair-programming with. Which is as it should be: agents generate duplication; agents should fix it — and, with `find-similar` in their inner loop, agents should prevent it.
 
-Install today. Run it on your messiest repo. Read line one.
+Install today. Open your messiest repo. Read line one.
