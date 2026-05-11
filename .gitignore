@@ -106,3 +106,5 @@ clients/vscode/src/types/wire-generated.ts
 clients/vscode/bin/
 
 clients/vscode/media/webview/
+
+crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/

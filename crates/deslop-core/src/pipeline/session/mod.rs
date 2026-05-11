@@ -112,6 +112,13 @@ impl PipelineSession {
     ) -> Result<(Self, Report), CoreError> {
         let parsers = default_parsers();
         let extension_to_language = build_extension_map(&parsers);
+        // [#141 MCP-SAFETY] Canonicalise the root so the registry,
+        // exclusion matchers and watcher inputs all share one
+        // filesystem identity. Without this the macOS `/var/...` →
+        // `/private/var/...` symlink pair leaves the registry holding
+        // one form while the canonical root sits on the other, and
+        // every later path comparison silently misses.
+        let root = std::fs::canonicalize(&root).unwrap_or(root);
         tracing::info!(
             root = %root.display(),
             root_exists = root.exists(),

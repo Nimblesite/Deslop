@@ -178,7 +178,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         })
         .collect();
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
-    let visible_clusters: Vec<ReportCluster> = materialised
+    let mut visible_clusters: Vec<ReportCluster> = materialised
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
