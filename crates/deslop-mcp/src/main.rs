@@ -62,8 +62,20 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     install_tracing();
     start_parent_monitor();
     let cli = Cli::parse_from(args);
+    // [#141 MCP-SAFETY] Canonicalise `--root` at startup so a relative
+    // path or a symlinked path resolves to a single stable filesystem
+    // identity. `--root .` (the default) cannot bind a session to
+    // whatever directory the agent harness happened to launch the
+    // binary from. Mis-typed roots fail fast with a clear error
+    // instead of silently scanning the launch CWD.
+    let canonical_root = std::fs::canonicalize(&cli.root).map_err(|err| {
+        format!(
+            "--root {} could not be canonicalised: {err}",
+            cli.root.display()
+        )
+    })?;
     let config = SessionBackendConfig {
-        root: cli.root,
+        root: canonical_root,
         config_path: cli.config,
     };
     let backend = Arc::new(LiveBackend::initialise(config)?);
