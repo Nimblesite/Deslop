@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries kill-deslop-processes deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
 
 JETBRAINS_DIR := clients/jetbrains
 
@@ -146,6 +146,44 @@ build-release:
 	@echo "==> Building release binary..."
 	cargo build --release --package deslop
 
+## kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
+##                        `deslop-lsp` and `deslop-mcp` process so a stale
+##                        child from a previous VSCode/Cursor session can't
+##                        shadow the freshly-installed VSIX bundle, and so
+##                        socket-bound integration tests don't get starved
+##                        by a runaway analyser on another workspace.
+##                        Matches by process name (not full cmdline) so it
+##                        will not accidentally kill `cargo build -p deslop-lsp`
+##                        or similar parent commands. Idempotent — exits 0
+##                        when no matching process exists. Invoked by every
+##                        `vsix-*` and `test` target via `delete-path-binaries`.
+kill-deslop-processes:
+	@echo "==> Killing any running deslop-lsp / deslop-mcp processes..."
+	@_initial_lsp=$$(pgrep -x deslop-lsp 2>/dev/null || true); \
+	 _initial_mcp=$$(pgrep -x deslop-mcp 2>/dev/null || true); \
+	 _initial="$$_initial_lsp $$_initial_mcp"; \
+	 _initial=$$(echo "$$_initial" | tr ' ' '\n' | sort -u | grep -v '^$$' || true); \
+	 if [ -z "$$_initial" ]; then echo "    (none running)"; exit 0; fi; \
+	 echo "    initial PIDs: $$(echo $$_initial | tr '\n' ' ')"; \
+	 pkill -x deslop-lsp 2>/dev/null || true; \
+	 pkill -x deslop-mcp 2>/dev/null || true; \
+	 sleep 1; \
+	 _survivors=""; \
+	 for _pid in $$_initial; do \
+	   if kill -0 "$$_pid" 2>/dev/null; then _survivors="$$_survivors $$_pid"; fi; \
+	 done; \
+	 if [ -n "$$_survivors" ]; then \
+	   echo "    SIGKILL on holdouts:$$_survivors"; \
+	   for _pid in $$_survivors; do kill -9 "$$_pid" 2>/dev/null || true; done; \
+	   sleep 1; \
+	   _final=""; \
+	   for _pid in $$_survivors; do \
+	     if kill -0 "$$_pid" 2>/dev/null; then _final="$$_final $$_pid"; fi; \
+	   done; \
+	   if [ -n "$$_final" ]; then echo "FAIL: PIDs alive after SIGKILL:$$_final"; exit 1; fi; \
+	 fi; \
+	 echo "    all targeted processes are dead (VSCode may auto-respawn — that is fine)"
+
 ## delete-path-binaries: Remove any Deslop binaries that have leaked onto the
 ##                       user's PATH (e.g. from a stray `cargo install`). The
 ##                       VSIX is the only legitimate distribution surface — the
@@ -284,6 +322,7 @@ vsix-install-code:
 ##               showing up" strikes. Composes existing targets — does not duplicate
 ##               their logic.
 vsix-rebuild:
+	@$(MAKE) kill-deslop-processes
 	@$(MAKE) clean
 	@$(MAKE) vsix-clean
 	@$(MAKE) vsix-package
