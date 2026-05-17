@@ -18,7 +18,7 @@ internal object DeslopBinaryResolver {
 
     fun resolveLsp(): DeslopResolvedBinary {
         val pluginRoot = pluginRoot()
-        val manifest = DeslopDeploymentManifest.load(pluginRoot.resolve("deployment-toolkit.json"))
+        val manifest = DeslopDeploymentManifest.load(pluginRoot.resolve("shipwright.json"))
         return resolveLsp(manifest, ResolverInputs(pluginRoot = pluginRoot))
     }
 
@@ -141,7 +141,7 @@ internal data class DeslopDeploymentManifest(
             throw DeslopBinaryResolutionException("JetBrains host does not verify $id.")
         }
         return components.firstOrNull { it.id == id }
-            ?: throw DeslopBinaryResolutionException("deployment-toolkit.json is missing $id.")
+            ?: throw DeslopBinaryResolutionException("shipwright.json is missing $id.")
     }
 
     companion object {
@@ -266,13 +266,13 @@ private fun mismatchMessage(
     found: String,
 ): String {
     return "Deslop cannot start: ${component.id} version mismatch. " +
-        "Expected ${component.expectedVersion} from deployment-toolkit.json. " +
+        "Expected ${component.expectedVersion} from shipwright.json. " +
         "Found $found at ${candidate.path} from ${candidate.source}."
 }
 
 private fun stringAt(json: JsonObject, key: String): String {
     return json.stringValue(key)
-        ?: throw DeslopBinaryResolutionException("deployment-toolkit.json is missing $key.")
+        ?: throw DeslopBinaryResolutionException("shipwright.json is missing $key.")
 }
 
 private fun objectAt(json: JsonObject, key: String): JsonObject? {

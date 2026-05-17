@@ -35,7 +35,7 @@ jobs:
           git fetch origin main --depth=1
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      # Shipwright deployment-toolkit gate (DTK-MIG-DESLOP-CI-GATES, #41).
+      # Shipwright manifest gate (DTK-MIG-DESLOP-CI-GATES, #41).
       # The manifest is the source of truth for activation checks and
       # release artifact verification; without stamping it here the
       # binary version verifier would fail the very next build.
@@ -43,7 +43,7 @@ jobs:
         run: node scripts/stamp-release-version.mjs "${{ steps.extract.outputs.version }}"
 
       - name: Validate deployment manifest
-        run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
+        run: node scripts/verify-deployment-manifest.mjs shipwright.json
 
   build:
     name: Build (${{ matrix.artifact_name }})
@@ -132,7 +132,7 @@ jobs:
             windows-x64) _platform=win32-x64 ;;
             *) echo "unknown artifact ${{ matrix.artifact_name }}"; exit 1 ;;
           esac
-          node scripts/verify-deployment-binaries.mjs deployment-toolkit.json "target/${{ matrix.target }}/release" "$_platform"
+          node scripts/verify-deployment-binaries.mjs shipwright.json "target/${{ matrix.target }}/release" "$_platform"
 
       - name: Package archive (unix)
         if: matrix.os != 'windows-latest'
@@ -188,7 +188,7 @@ jobs:
 
       - name: Stage deployment manifest into extension
         shell: bash
-        run: cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+        run: cp shipwright.json clients/vscode/shipwright.json
 
       - name: Install extension deps
         working-directory: clients/vscode

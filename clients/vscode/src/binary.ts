@@ -278,9 +278,9 @@ function requireComponent(manifest: DeploymentManifest, id: string): DeploymentC
 }
 
 function deploymentManifestPath(extensionPath: string): string {
-  const packagedPath = path.join(extensionPath, "deployment-toolkit.json");
+  const packagedPath = path.join(extensionPath, "shipwright.json");
   if (fs.existsSync(packagedPath)) return packagedPath;
-  return path.resolve(extensionPath, "..", "..", "deployment-toolkit.json");
+  return path.resolve(extensionPath, "..", "..", "shipwright.json");
 }
 
 function throwMissing(component: DeploymentComponent, skipped?: Candidate): never {
@@ -299,7 +299,7 @@ function mismatchMessage(
 ): string {
   return [
     `Deslop cannot start: ${component.id} version mismatch.`,
-    `Expected ${component.expectedVersion} from deployment-toolkit.json.`,
+    `Expected ${component.expectedVersion} from shipwright.json.`,
     `Found ${found} at ${candidate.path} from ${candidate.source}.`,
     "Use a matching binary or clear the configured override.",
   ].join(" ");

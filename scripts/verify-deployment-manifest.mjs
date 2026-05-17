@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 
-const manifestArg = process.argv[2] ?? "deployment-toolkit.json";
+const manifestArg = process.argv[2] ?? "shipwright.json";
 const manifestPath = isAbsolute(manifestArg) ? manifestArg : resolve(manifestArg);
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 

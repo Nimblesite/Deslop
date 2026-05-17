@@ -2,7 +2,7 @@
 // Tied to DTK-MIG-DESLOP-CI-GATES (#41). The CI workflow gates on PR / merge,
 // but the release workflow is what actually publishes — if it skips the
 // Shipwright verifiers a tag push can ship a manifest-mismatched binary or a
-// VSIX missing deployment-toolkit.json. This script asserts the release
+// VSIX missing shipwright.json. This script asserts the release
 // workflow references each Shipwright verifier and packages platform-specific
 // VSIX artifacts with the VS Code `--target` contract. JetBrains gates are out
 // of scope here per the active migration split.
@@ -19,7 +19,7 @@ const requiredReferences = [
   {
     needle: "scripts/verify-deployment-manifest.mjs",
     label: "manifest validator",
-    rationale: "Release must fail if deployment-toolkit.json is invalid",
+    rationale: "Release must fail if shipwright.json is invalid",
   },
   {
     needle: "scripts/stamp-release-version.mjs",
@@ -34,7 +34,7 @@ const requiredReferences = [
   {
     needle: "verify-vsix-package.mjs",
     label: "VSIX package verifier",
-    rationale: "Release must fail if the VSIX omits deployment-toolkit.json or a manifest-listed binary, or includes an undeclared binary",
+    rationale: "Release must fail if the VSIX omits shipwright.json or a manifest-listed binary, or includes an undeclared binary",
   },
 ];
 

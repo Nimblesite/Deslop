@@ -35,7 +35,7 @@ Implemented work intentionally not repeated here:
   `crates/deslop-lsp/tests/state_file_and_ipc.rs`,
   `crates/deslop-mcp/tests/cli.rs`, and
   `crates/deslop-mcp/tests/lsp_integration.rs`.
-- Deployment Toolkit migration: `deployment-toolkit.json` declares the Deslop
+- Deployment Toolkit migration: `shipwright.json` declares the Deslop
   executables, VSIX, JetBrains plugin, host activation checks, and release
   channels. Release gates now validate the manifest, binary version contracts,
   VSIX contents, and JetBrains package contents.

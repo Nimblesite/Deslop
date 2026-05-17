@@ -306,7 +306,7 @@
         "deslop.lspPath": {
           "type": "string",
           "default": "",
-          "description": "Optional absolute path to deslop-lsp. The binary must match deployment-toolkit.json before activation."
+          "description": "Optional absolute path to deslop-lsp. The binary must match shipwright.json before activation."
         },
         "deslop.lsp.workerThreads": {
           "type": "integer",
@@ -326,7 +326,7 @@
         "deslop.mcpPath": {
           "type": "string",
           "default": "",
-          "description": "Optional absolute path to deslop-mcp. The binary must match deployment-toolkit.json before activation."
+          "description": "Optional absolute path to deslop-mcp. The binary must match shipwright.json before activation."
         },
         "deslop.liveBubble.enabled": {
           "type": "boolean",

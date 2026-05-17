@@ -8,7 +8,7 @@ const packagePath = isAbsolute(packageArg) ? packageArg : resolve(packageArg);
 const platform = process.argv[3] ?? currentPlatform();
 const entries = unzipText(["-Z1", packagePath]).split("\n").filter(Boolean);
 const root = packageRoot(entries);
-const manifestEntry = `${root}/deployment-toolkit.json`;
+const manifestEntry = `${root}/shipwright.json`;
 
 assertEntry(entries, manifestEntry);
 

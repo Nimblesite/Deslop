@@ -1,4 +1,4 @@
-// Proof tests for deployment-toolkit verifier scripts. Each fake artifact
+// Proof tests for Shipwright verifier scripts. Each fake artifact
 // violates one Shipwright contract rule so verifier failures have bite.
 
 import { spawnSync } from "node:child_process";
@@ -121,7 +121,7 @@ function manifestRejectsExpectedVersionDrift(work) {
 }
 
 function manifestAcceptsRepoManifest() {
-  const path = join(repoRoot, "deployment-toolkit.json");
+  const path = join(repoRoot, "shipwright.json");
   expectSuccess(verifyManifest, [path], /valid deployment manifest/);
 }
 
@@ -182,7 +182,7 @@ function binariesAcceptValidContract(work) {
 
 function jetbrainsRejectsMissingManifest(work) {
   const zipPath = buildJetBrainsZip(work, { manifest: null });
-  expectFail(verifyJetBrains, [zipPath, platform], /Missing .*deployment-toolkit\.json/);
+  expectFail(verifyJetBrains, [zipPath, platform], /Missing .*shipwright\.json/);
 }
 
 function jetbrainsRejectsMissingBundledBinary(work) {
@@ -214,7 +214,7 @@ function jetbrainsAcceptsValidPackage(work) {
 
 function vsixRejectsMissingManifest(work) {
   const vsixPath = buildVsixZip(work, { manifest: null });
-  expectFail(verifyVsix, [vsixPath, hostPlatform], /Missing extension\/deployment-toolkit\.json/);
+  expectFail(verifyVsix, [vsixPath, hostPlatform], /Missing extension\/shipwright\.json/);
 }
 
 function vsixRejectsMissingBundledLsp(work) {
@@ -329,8 +329,8 @@ function buildJetBrainsZip(work, options) {
   mkdirSync(binDir, { recursive: true });
 
   if (options.manifest !== null) {
-    const manifestSource = options.manifest ?? join(repoRoot, "deployment-toolkit.json");
-    copyFileSync(manifestSource, join(pluginRoot, "deployment-toolkit.json"));
+    const manifestSource = options.manifest ?? join(repoRoot, "shipwright.json");
+    copyFileSync(manifestSource, join(pluginRoot, "shipwright.json"));
   }
 
   if (!options.skipBundledLsp) {
@@ -373,8 +373,8 @@ function buildVsixZip(work, options) {
   }
 
   if (options.manifest !== null) {
-    const manifestSource = options.manifest ?? join(repoRoot, "deployment-toolkit.json");
-    copyFileSync(manifestSource, join(extensionRoot, "deployment-toolkit.json"));
+    const manifestSource = options.manifest ?? join(repoRoot, "shipwright.json");
+    copyFileSync(manifestSource, join(extensionRoot, "shipwright.json"));
   }
 
   if (!options.skipBundledLsp) {
@@ -441,10 +441,10 @@ function writeReleaseWorkflow(work, options) {
     lines.push("      - run: node scripts/stamp-release-version.mjs 0.1.0");
   }
   if (!options.skipManifestGate) {
-    lines.push("      - run: node scripts/verify-deployment-manifest.mjs deployment-toolkit.json");
+    lines.push("      - run: node scripts/verify-deployment-manifest.mjs shipwright.json");
   }
   if (!options.skipBinaryGate) {
-    lines.push("      - run: node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release linux-x64");
+    lines.push("      - run: node scripts/verify-deployment-binaries.mjs shipwright.json target/release linux-x64");
   }
   lines.push("  package-vsix:");
   lines.push("    runs-on: ubuntu-latest");

@@ -70,7 +70,7 @@ val binaryDirectory = System.getenv("DESLOP_BINARY_DIR")?.let(::File)
     ?: rootProject.layout.projectDirectory.dir("../../target/release").asFile
 val lspBinaryFile = binaryDirectory.resolve(lspBinaryName)
 val deploymentManifestFile = rootProject.layout.projectDirectory
-    .file("../../deployment-toolkit.json")
+    .file("../../shipwright.json")
     .asFile
 
 abstract class CopyLspArtifactsToSandbox : DefaultTask() {
@@ -100,7 +100,7 @@ abstract class CopyLspArtifactsToSandbox : DefaultTask() {
         Files.createDirectories(targetDir)
         Files.copy(
             deploymentManifest.get().asFile.toPath(),
-            pluginRoot.resolve("deployment-toolkit.json"),
+            pluginRoot.resolve("shipwright.json"),
             StandardCopyOption.REPLACE_EXISTING,
         )
         Files.copy(binaryFile.toPath(), targetBinary, StandardCopyOption.REPLACE_EXISTING)

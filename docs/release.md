@@ -1,6 +1,6 @@
 # Release Gates
 
-Deslop uses `deployment-toolkit.json` as the source of truth for release
+Deslop uses `shipwright.json` as the source of truth for release
 artifacts and IDE startup checks.
 
 Source-controlled project versions intentionally stay at the placeholder
@@ -34,7 +34,7 @@ VSIX release artifacts are platform-specific and must be packaged with
 `make jetbrains-package` builds the JetBrains plugin zip, runs Gradle project
 configuration and plugin structure verification, then runs
 `scripts/verify-jetbrains-package.mjs` against the generated archive. The
-archive verifier checks the root `deployment-toolkit.json`, the manifest-listed
+archive verifier checks the root `shipwright.json`, the manifest-listed
 host `deslop-lsp` binary, executable mode on Unix platforms, `--version`
 identity, and undeclared native files under the shipped `bin/<platform>/`
 directory. On Unix hosts the Makefile uses `gradle` from `PATH` when available,

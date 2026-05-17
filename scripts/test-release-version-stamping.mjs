@@ -41,8 +41,8 @@ function sourceProjectsUseVersionPlaceholder() {
   assertIncludes(read(repoRoot, "Cargo.toml"), `version = "${placeholder}"`);
   assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop"\nversion = "${placeholder}"`);
   assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop-mcp"\nversion = "${placeholder}"`);
-  assertJsonVersion(repoRoot, "deployment-toolkit.json", placeholder);
-  assertJsonVersion(repoRoot, "clients/vscode/deployment-toolkit.json", placeholder);
+  assertJsonVersion(repoRoot, "shipwright.json", placeholder);
+  assertJsonVersion(repoRoot, "clients/vscode/shipwright.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package-lock.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/webview-ui/package.json", placeholder);
@@ -59,8 +59,8 @@ function stamperSetsEveryProjectVersion(work) {
   assertIncludes(read(work, "Cargo.toml"), `version = "${version}"`);
   assertIncludes(read(work, "Cargo.lock"), `name = "deslop"\nversion = "${version}"`);
   assertIncludes(read(work, "Cargo.lock"), `name = "deslop-lsp"\nversion = "${version}"`);
-  assertJsonVersion(work, "deployment-toolkit.json", version);
-  assertJsonVersion(work, "clients/vscode/deployment-toolkit.json", version);
+  assertJsonVersion(work, "shipwright.json", version);
+  assertJsonVersion(work, "clients/vscode/shipwright.json", version);
   assertJsonVersion(work, "clients/vscode/package.json", version);
   assertJsonVersion(work, "clients/vscode/package-lock.json", version);
   assertJsonVersion(work, "clients/vscode/webview-ui/package.json", version);
@@ -80,8 +80,8 @@ function copyStampInputs(work) {
   for (const file of [
     "Cargo.toml",
     "Cargo.lock",
-    "deployment-toolkit.json",
-    "clients/vscode/deployment-toolkit.json",
+    "shipwright.json",
+    "clients/vscode/shipwright.json",
     "clients/vscode/package.json",
     "clients/vscode/package-lock.json",
     "clients/vscode/webview-ui/package.json",

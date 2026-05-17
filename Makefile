@@ -215,8 +215,8 @@ delete-path-binaries:
 ##                    Without this, a silently-broken verifier could let a
 ##                    drifted binary ship.
 deployment-verify: build
-	node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
-	node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release
+	node scripts/verify-deployment-manifest.mjs shipwright.json
+	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
 	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
 	node scripts/test-release-workflow-contract.mjs
 	node scripts/test-release-version-stamping.mjs
@@ -281,7 +281,7 @@ _vsix-stage-bundled-binaries:
 	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
 	   chmod +x "$$_dest/$$_bin$$_ext"; \
 	 done
-	cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+	cp shipwright.json clients/vscode/shipwright.json
 
 _vsix-stage-and-package: _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run package
@@ -298,7 +298,7 @@ vsix-clean:
 	$(RM) clients/vscode/dist
 	$(RM) clients/vscode/deslop-vscode.vsix
 	$(RM) clients/vscode/deslop-vscode-*.vsix
-	$(RM) clients/vscode/deployment-toolkit.json
+	$(RM) clients/vscode/shipwright.json
 	$(RM) clients/vscode/coverage
 
 ## vsix-install-code: Install the packaged clients/vscode/deslop-vscode.vsix

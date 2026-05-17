@@ -6,7 +6,7 @@ GitHub issues #37, #38, #39, #40, and #41.
 
 ### [DEPLOY-MANIFEST] Manifest authority
 
-`deployment-toolkit.json` at the repository root is the single source of truth
+`shipwright.json` at the repository root is the single source of truth
 for deployable components, expected versions, host startup checks, package
 contents, and CI release gates.
 
@@ -74,7 +74,7 @@ JSON version output, or protocol metadata drift apart.
 
 ### [DEPLOY-RESOLVER] Host resolver contract
 
-IDE hosts must load `deployment-toolkit.json` before reporting ready or
+IDE hosts must load `shipwright.json` before reporting ready or
 starting required integrations. The host then reads its
 `activationVerifies` list and verifies every required component for the current
 platform.
@@ -101,7 +101,7 @@ found version or `not found`, candidate path/source, and the next action.
 Each platform-specific VSIX artifact must be built with `vsce package --target`
 for the target platform and must include:
 
-- `extension/deployment-toolkit.json`.
+- `extension/shipwright.json`.
 - `deslop`, `deslop-lsp`, and `deslop-mcp` for exactly one target platform under
   `extension/bin/<platform>/`.
 - No undeclared executable under `extension/bin/<platform>/`.
@@ -164,7 +164,7 @@ masked by a developer machine install.
 
 ### [DEPLOY-JETBRAINS-PACKAGE] JetBrains package contract
 
-The JetBrains plugin package must include `deployment-toolkit.json` at plugin
+The JetBrains plugin package must include `shipwright.json` at plugin
 root and verify `deslop-lsp` before creating or starting the LSP descriptor.
 
 If the package bundles native helpers under plugin-root `bin/<platform>/`, each
@@ -178,7 +178,7 @@ CI and release jobs must fail fast on deployment drift.
 
 Required gates:
 
-- Validate `deployment-toolkit.json` with the Deployment Toolkit schema.
+- Validate `shipwright.json` with the Deployment Toolkit schema.
 - Verify `deslop`, `deslop-lsp`, and `deslop-mcp` plain and JSON version
   output after release binaries are built.
 - Verify LSP and MCP initialize metadata against the manifest version.

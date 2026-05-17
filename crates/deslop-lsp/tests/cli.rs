@@ -18,7 +18,7 @@ use crate::common::{
     write_frame,
 };
 
-// Implements the deployment-toolkit binary contract: every IDE-launched
+// Implements the Shipwright binary contract: every IDE-launched
 // executable must expose a stable plain text version line.
 // Timeout is generous to accommodate `cargo llvm-cov` instrumentation
 // overhead when the whole suite runs concurrently.

@@ -83,7 +83,7 @@ internal class DeslopRealBinaryContractTest {
 
     private fun loadRepoManifest(): DeslopDeploymentManifest {
         val manifestPath = Path.of(System.getProperty("user.dir"))
-            .resolve("../../deployment-toolkit.json")
+            .resolve("../../shipwright.json")
             .toAbsolutePath()
             .normalize()
         return DeslopDeploymentManifest.load(manifestPath)

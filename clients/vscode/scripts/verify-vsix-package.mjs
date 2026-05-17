@@ -9,7 +9,7 @@ const vsixRoot = resolve(here, "..");
 const vsixArg = process.argv[2] ?? "deslop-vscode.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
 const targetPlatform = process.argv[3] ?? currentPlatform();
-const manifestEntry = "extension/deployment-toolkit.json";
+const manifestEntry = "extension/shipwright.json";
 
 const entries = unzipText(["-Z1", vsixPath]).split("\n").filter(Boolean);
 assertEntry(entries, manifestEntry);

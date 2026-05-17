@@ -125,7 +125,7 @@ The pipeline draws on a small handful of clone-detection research lines. Every a
 | MCP server with `find-similar`, `top-offenders`, `cluster-by-id`, etc. ([MCP-*]) | ✅ state-file + IPC | `crates/deslop-mcp/src/` |
 | State-file + IPC architecture | ✅ `.deslop-cache/live-report.json` + `.deslop-cache/deslop.sock` | `crates/deslop-lsp/tests/state_file_and_ipc.rs`, `crates/deslop-mcp/tests/lsp_integration.rs` |
 | Canonical clone buckets ([CLONE-BUCKETS]) | ✅ `Identical` / `NearlyIdentical` / `LooselySimilar` / `SameBehavior` | `crates/deslop-core/src/buckets.rs` |
-| Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `deployment-toolkit.json`, `scripts/verify-*` |
+| Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `shipwright.json`, `scripts/verify-*` |
 | VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
 | JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |
 | Type-1 / Type-2 bucket split (autofix prerequisite) | ⏳ tracked by [#42](https://github.com/Nimblesite/Deslop/issues/42) | — |

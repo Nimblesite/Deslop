@@ -11,7 +11,7 @@ const nodeProjects = [
   "clients/vscode/webview-ui",
   "site",
 ];
-const stagedDeploymentManifests = ["clients/vscode/deployment-toolkit.json"];
+const stagedDeploymentManifests = ["clients/vscode/shipwright.json"];
 
 const { root, version } = parseArgs(process.argv.slice(2));
 stampReleaseVersion(root, version);
@@ -21,7 +21,7 @@ export function stampReleaseVersion(rootPath, versionValue) {
   assertSemver(versionValue);
   stampCargoToml(join(rootPath, "Cargo.toml"), versionValue);
   stampCargoLock(join(rootPath, "Cargo.lock"), versionValue);
-  stampDeploymentManifest(join(rootPath, "deployment-toolkit.json"), versionValue);
+  stampDeploymentManifest(join(rootPath, "shipwright.json"), versionValue);
   for (const manifest of stagedDeploymentManifests) {
     const manifestPath = join(rootPath, manifest);
     if (existsSync(manifestPath)) stampDeploymentManifest(manifestPath, versionValue);
