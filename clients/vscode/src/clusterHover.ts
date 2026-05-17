@@ -10,20 +10,15 @@
 
 import * as vscode from "vscode";
 
-import { bucketLabels, occurrenceCount, ReportCluster, resolveBucket } from "./types/report";
+import { bucketLabels, clusterSlug, occurrenceCount, ReportCluster, resolveBucket } from "./types/report";
+
+export { clusterSlug };
 
 export interface ClusterHoverOptions {
   readonly showDismiss?: boolean;
   readonly count?: number;
   /// When false, the category label is omitted (use alongside a diagnostic).
   readonly showCategory?: boolean;
-}
-
-const SLUG_LENGTH = 7;
-
-/// Returns the stable display slug for a cluster (first 7 hex chars of id).
-export function clusterSlug(cluster: ReportCluster): string {
-  return cluster.id.slice(0, SLUG_LENGTH);
 }
 
 export function clusterHoverMarkdown(

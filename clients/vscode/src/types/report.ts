@@ -44,6 +44,16 @@ export interface OccurrenceDisplayLocation {
   commandTitle: string;
 }
 
+const SLUG_LENGTH = 7;
+
+/** Stable display slug for a cluster (first 7 hex chars of id). Shared
+ * across every cluster surface — tree, hover, bubble, report panel — so
+ * humans and AI agents see the same identity instead of the volatile
+ * #N rank index. [VSIX-CLUSTER-ID-CONSISTENCY] */
+export function clusterSlug(cluster: ReportCluster): string {
+  return cluster.id.slice(0, SLUG_LENGTH);
+}
+
 export function occurrenceCount(cluster: ReportCluster): number {
   const total =
     cluster.occurrences_total && cluster.occurrences_total > 0

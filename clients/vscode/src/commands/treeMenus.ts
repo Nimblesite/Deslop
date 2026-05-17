@@ -14,6 +14,7 @@ import {
   ReportCluster,
   ReportOccurrence,
   bucketLabels,
+  clusterSlug,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -148,6 +149,7 @@ export function aiPayloadForCluster(
   const bucket = resolveBucket(cluster);
   const labels = bucketLabels(bucket);
   const header = [
+    `slug: ${clusterSlug(cluster)}`,
     `cluster_id: ${cluster.id}`,
     `rank: ${rank}`,
     `bucket: ${bucket} (${labels.taxonomyLabel})`,
