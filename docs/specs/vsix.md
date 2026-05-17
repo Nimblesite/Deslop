@@ -122,9 +122,10 @@ On activation: load `deployment-toolkit.json`, verify all required VS Code activ
 A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Marketplace listing) opens the **Duplicate Clusters** view container. Inside:
 
 - **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for cluster-vs-file grouping modes. In every mode, cluster rows show:
-  - Rank badge (`#1`, `#2`, …) coloured by severity ([LSP-SEVERITY]). The badge is the cluster's global position in the worst-first report and never re-numbers per mode ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
-  - Short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
-  - Cluster id in a subdued monospace suffix.
+  - **Cluster slug** as the leading element of the bold label ([VSIX-TOP-OFFENDERS-CLUSTER-ID]) — the first 7 hex chars of `cluster.id`, identical to the slug used by the LSP hover bubble. The slug is stable across runs.
+  - Severity dot ([LSP-SEVERITY]) and short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
+  - Grey description tail: `rank #N · N copies`. The literal word **rank** appears on every surface that shows `#N` (description, tooltip, accessibility label, copy-for-AI) so neither humans nor AI agents confuse the volatile rank for the stable id ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+  - Full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`...\``) and in every command argument; only the visible label is shortened.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
 - **Focused File** tree — the cluster subset overlapping the currently open editor. Collapses when no clusters apply.
 - **Session** panel — compact footer with: active embedding model (linkable, opens the picker), `cache_stats`, `files_analysed`, daemon state (`idle` / `running`).
@@ -141,7 +142,7 @@ A view-title toggle in the Top Offenders header switches modes. The toggle write
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
 
-Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label keeps the form `#N <severity-dot> <plainTitle> · <file>` because the file is not implicit from any parent.
+Root rows are clusters in the report's worst-first order. No file-keyed reordering. Each root expands directly to its occurrence leaves. The row label keeps the form `<slug> <severity-dot> <plainTitle> · <file>` because the file is not implicit from any parent. The slug is the cluster's stable 7-hex prefix ([VSIX-TOP-OFFENDERS-CLUSTER-ID]); the row's volatile rank lives in the grey description as `rank #N · N copies`, never in the bold label.
 
 #### [VSIX-TOP-OFFENDERS-FILE-MODE] File mode
 
@@ -149,11 +150,26 @@ Root rows are files. A file's child nodes are bucket groups, one per [CLONE-BUCK
 
 Files sort by max cluster weight desc (primary — "worst offender first" applied to the file's most-painful cluster), with sum-of-weights desc as the tiebreaker and `localeCompare` of the path as the final stable key. Bucket groups within a file sort by max cluster weight desc. Clusters within a bucket group sort by weight desc.
 
-Cluster row labels in file mode drop the trailing `· <file>` suffix because the parent file row already shows it. The tooltip is mode-invariant — it always carries the full path so the AI-scrapable hover surface stays stable.
+Cluster row labels in file mode drop the trailing `· <file>` suffix because the parent file row already shows it. The bold label still leads with the cluster slug ([VSIX-TOP-OFFENDERS-CLUSTER-ID]); the rank still lives in the grey description tail. The tooltip is mode-invariant — it always carries the full path so the AI-scrapable hover surface stays stable.
 
-#### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global #N rank
+#### [VSIX-TOP-OFFENDERS-CLUSTER-ID] Cluster slug leads the row, rank never does
 
-The `#N` badge on a cluster row is the cluster's position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — `#1` is always the worst cluster in the repo, regardless of which lens the user picked.
+The bold label on every cluster row leads with the cluster slug — the first 7 hex chars of `cluster.id`. The slug is stable across runs, deltas, snapshots, and grouping modes; it is the single identifier humans and AI agents can quote between sessions. The same slug is used by the LSP hover bubble ([VSIX-HOVER-SHARED]), via the shared `clusterSlug()` helper, so the UI never shows two different short forms of the same id.
+
+The volatile rank (`#N`) is never the leading element of the label. Rendering rank as if it were an id has shipped two incidents (the LSP hover regression tracked in `docs/plans/cluster-slug-vs-rank.md`, and the Top Offenders tree regression that produced this section). Both humans and — critically — AI agents reading the rendered tree treat the leading element as the row's identity; using rank there means the "identity" changes on every snapshot, which silently breaks cross-message references in agent transcripts.
+
+Rules:
+
+1. The bold label **must** start with `<slug> <severity-dot> <plainTitle>` (or `<slug> <severity-dot> <plainTitle> · <file>` in cluster mode). No `#N` prefix, anywhere.
+2. The grey description **must** carry `rank #N · N copies`. The literal word **rank** must appear before `#N` — never bare.
+3. Every other surface that mentions `#N` — tooltip, accessibility label, copy-for-AI payload, occurrence-tooltip parent reference — must use the literal word **rank**. AI consumers parse for the word; bare `#N` is forbidden.
+4. The full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`<id>\``), in every command argument (`deslop.openCluster`, `deslop.compareWithCanonical`, …), and in the AI copy payloads. Display truncation is presentation-only.
+
+#### [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Global rank #N
+
+The rank #N attached to a cluster row is the cluster's position in the report's worst-first list. It does **not** change between modes, and it is **not** re-numbered within a file or within a bucket group. This keeps cross-file impact comparable at a glance — rank #1 is always the worst cluster in the repo, regardless of which lens the user picked.
+
+Rank lives in the grey description, not the bold label. The bold label leads with the stable cluster slug ([VSIX-TOP-OFFENDERS-CLUSTER-ID]).
 
 #### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders category metadata
 

@@ -62,14 +62,15 @@ suite("TopOffendersProvider", () => {
 
   test("cluster mode (default) lists clusters worst-first with global ranks", () => {
     // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] No file-keyed reordering.
-    // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] #N is the report's worst-first rank.
+    // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] rank #N lives in the grey description;
+    // [VSIX-TOP-OFFENDERS-CLUSTER-ID] the stable short id leads the bold label.
     const store = new ReportStore();
     store.setSnapshot(
       report([
-        cluster("rank-1-beta", 100, "/repo/src/b/Beta.cs"),
-        cluster("rank-2-alpha", 80, "/repo/src/a/Alpha.cs"),
-        cluster("rank-3-alpha", 60, "/repo/src/a/Alpha.cs"),
-        cluster("rank-4-gamma", 40, "/repo/src/c/Gamma.cs"),
+        cluster("1111aaaabbbbcccc", 100, "/repo/src/b/Beta.cs"),
+        cluster("2222aaaabbbbcccc", 80, "/repo/src/a/Alpha.cs"),
+        cluster("3333aaaabbbbcccc", 60, "/repo/src/a/Alpha.cs"),
+        cluster("4444aaaabbbbcccc", 40, "/repo/src/c/Gamma.cs"),
       ]),
       0,
     );
@@ -80,23 +81,123 @@ suite("TopOffendersProvider", () => {
     const descriptions = nodes.map((node) => String(node.description ?? ""));
 
     assert.equal(nodes.length, 4, "one top-level row must render per cluster");
-    assert.match(labels[0] ?? "", /#1\b/, "Beta keeps global rank #1 at the top");
-    assert.match(labels[1] ?? "", /#2\b/, "Alpha's first cluster keeps global rank #2");
-    assert.match(labels[2] ?? "", /#3\b/, "Alpha's second cluster keeps global rank #3");
-    assert.match(labels[3] ?? "", /#4\b/, "Gamma keeps global rank #4");
+    assert.ok(labels[0]?.startsWith("1111aaa "), `worst row leads with its slug, got: ${labels[0]}`);
+    assert.ok(labels[1]?.startsWith("2222aaa "), `row 2 leads with its slug, got: ${labels[1]}`);
+    assert.ok(labels[2]?.startsWith("3333aaa "), `row 3 leads with its slug, got: ${labels[2]}`);
+    assert.ok(labels[3]?.startsWith("4444aaa "), `row 4 leads with its slug, got: ${labels[3]}`);
     assert.match(labels[0] ?? "", /Beta\.cs/, "row label must show the file");
     assert.match(labels[1] ?? "", /Alpha\.cs/);
     assert.match(labels[2] ?? "", /Alpha\.cs/);
     assert.match(labels[3] ?? "", /Gamma\.cs/);
+    assert.match(descriptions[0] ?? "", /\brank\s+#1\b/, "row 1 carries rank #1 in its description");
+    assert.match(descriptions[1] ?? "", /\brank\s+#2\b/, "row 2 carries rank #2 in its description");
+    assert.match(descriptions[2] ?? "", /\brank\s+#3\b/, "row 3 carries rank #3 in its description");
+    assert.match(descriptions[3] ?? "", /\brank\s+#4\b/, "row 4 carries rank #4 in its description");
     assert.ok(
-      descriptions.every((d) => /^\d+ copies$/.test(d)),
-      `cluster descriptions must show copy count, not cluster id; got: ${JSON.stringify(descriptions)}`,
+      descriptions.every((d) => /\b\d+ copies\b/.test(d)),
+      `cluster descriptions must keep the copy count; got: ${JSON.stringify(descriptions)}`,
     );
     const first = nodes[0];
     assert.ok(first, "first row must exist");
     assert.equal(first.command?.command, "deslop.openCluster");
-    assert.deepEqual(first.command?.arguments, ["rank-1-beta"]);
+    assert.deepEqual(
+      first.command?.arguments,
+      ["1111aaaabbbbcccc"],
+      "command argument keeps the full 16-hex id; only the display is shortened",
+    );
     assert.equal(provider.getChildren(first).length, 2);
+  });
+
+  test("cluster row label leads with the stable slug, not the volatile #N rank", () => {
+    // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] / [VSIX-TOP-OFFENDERS-CLUSTER-MODE]
+    // [VSIX-TOP-OFFENDERS-CLUSTER-ID] The stable cluster identifier is the
+    // 16-hex hash; the rank #N is a volatile array-index that flips on every
+    // snapshot. Putting #N in the bold label makes humans (and AI agents
+    // reading the rendered tree) treat the rank as the row's identity.
+    // Cluster slug leads, rank moves to the grey description with the
+    // literal word "rank". Slug length is shared with the hover bubble
+    // (see clusterHover.ts::clusterSlug).
+    const store = new ReportStore();
+    const clusterId = "1802186da488862f";
+    store.setSnapshot(
+      report([
+        cluster(clusterId, 100, "/repo/src/Worst.cs"),
+        cluster("c0ffee1234567890", 80, "/repo/src/Next.cs"),
+      ]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [first, second] = provider.getChildren();
+    assert.ok(first, "first cluster row must render");
+    assert.ok(second, "second cluster row must render");
+
+    const firstLabel = labelText(first);
+    const firstDescription = String(first.description ?? "");
+    const firstTooltip = tooltipText(first);
+    const firstA11y = first.accessibilityInformation?.label ?? "";
+
+    assert.ok(
+      firstLabel.startsWith("1802186 "),
+      `label must lead with the stable slug (first 7 hex chars), got: ${firstLabel}`,
+    );
+    assert.doesNotMatch(
+      firstLabel,
+      /^#\d/,
+      `label must not lead with the volatile #N rank, got: ${firstLabel}`,
+    );
+    assert.doesNotMatch(
+      firstLabel,
+      /#1\b/,
+      `rank #N must not appear in the bold label at all, got: ${firstLabel}`,
+    );
+    assert.match(
+      firstDescription,
+      /\brank\s+#1\b/,
+      `description must spell out the word "rank" so AI consumers can't confuse it for an id, got: ${firstDescription}`,
+    );
+    assert.match(
+      firstDescription,
+      /\b2 copies\b/,
+      `description must keep the copy count, got: ${firstDescription}`,
+    );
+    assert.match(
+      firstTooltip,
+      /\brank\s+#1\b/,
+      `tooltip must use the word "rank", got: ${firstTooltip}`,
+    );
+    assert.match(
+      firstA11y,
+      /\brank\s+#?1\b/,
+      `accessibility label must spell out "rank", got: ${firstA11y}`,
+    );
+    assert.match(
+      firstTooltip,
+      /cluster id:\s+`1802186da488862f`/,
+      "tooltip must still expose the full 16-hex id for AI/cross-reference",
+    );
+
+    const secondLabel = labelText(second);
+    const secondDescription = String(second.description ?? "");
+    assert.ok(
+      secondLabel.startsWith("c0ffee1 "),
+      `second row's label must also lead with its own slug, got: ${secondLabel}`,
+    );
+    assert.match(
+      secondDescription,
+      /\brank\s+#2\b/,
+      `second row's description must carry "rank #2", got: ${secondDescription}`,
+    );
+
+    assert.equal(
+      first.command?.command,
+      "deslop.openCluster",
+      "row still navigates to the cluster",
+    );
+    assert.deepEqual(
+      first.command?.arguments,
+      [clusterId],
+      "command argument keeps the full 16-hex id; display truncation is presentation-only",
+    );
   });
 
   test("issue_47_cluster_tooltip_keeps_labeled_cluster_id_after_human_description", () => {
@@ -175,8 +276,9 @@ suite("TopOffendersProvider", () => {
     });
   });
 
-  test("the same cluster keeps the same global #N rank across cluster mode and file mode", async () => {
-    // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Cross-mode comparability.
+  test("the same cluster keeps the same global rank across cluster mode and file mode", async () => {
+    // [VSIX-TOP-OFFENDERS-RANK-GLOBAL] Cross-mode comparability. Rank lives
+    // in the grey description so the bold label is free for the stable id.
     const store = new ReportStore();
     store.setSnapshot(
       report([
@@ -188,8 +290,12 @@ suite("TopOffendersProvider", () => {
     );
     const provider = new TopOffendersProvider(store, new StatusTicker());
 
-    const clusterModeLabel = labelText(provider.getChildren()[2] as vscode.TreeItem);
-    assert.match(clusterModeLabel, /^#3\b/, "third row in cluster mode is rank #3 (least)");
+    const thirdRow = provider.getChildren()[2] as vscode.TreeItem;
+    assert.match(
+      String(thirdRow.description ?? ""),
+      /\brank\s+#3\b/,
+      "third row in cluster mode is rank #3 (least)",
+    );
 
     await withGroupBy("file", () => {
       const fileRoots = provider.getChildren();
@@ -199,9 +305,17 @@ suite("TopOffendersProvider", () => {
       assert.ok(aFile);
       const [aBucket] = provider.getChildren(aFile);
       assert.ok(aBucket);
-      const aClusters = provider.getChildren(aBucket).map(labelText);
-      assert.match(aClusters[0] ?? "", /^#1\b/, "weight-100 cluster keeps global rank #1 in file mode");
-      assert.match(aClusters[1] ?? "", /^#3\b/, "weight-60 cluster keeps global rank #3 — never re-numbered within the file");
+      const aClusters = provider.getChildren(aBucket);
+      assert.match(
+        String(aClusters[0]?.description ?? ""),
+        /\brank\s+#1\b/,
+        "weight-100 cluster keeps global rank #1 in file mode",
+      );
+      assert.match(
+        String(aClusters[1]?.description ?? ""),
+        /\brank\s+#3\b/,
+        "weight-60 cluster keeps global rank #3 — never re-numbered within the file",
+      );
     });
   });
 
@@ -282,8 +396,9 @@ suite("TopOffendersProvider", () => {
       const clusterNodes = provider.getChildren(bucketGroup);
       assert.equal(clusterNodes.length, 2);
       const labels = clusterNodes.map(labelText);
-      assert.match(labels[0] ?? "", /^#1\b/, "weight-100 cluster comes first and keeps global rank #1");
-      assert.match(labels[1] ?? "", /^#2\b/, "weight-60 cluster keeps global rank #2");
+      const descriptions = clusterNodes.map((n) => String(n.description ?? ""));
+      assert.match(descriptions[0] ?? "", /\brank\s+#1\b/, "weight-100 cluster comes first and carries rank #1 in its description");
+      assert.match(descriptions[1] ?? "", /\brank\s+#2\b/, "weight-60 cluster carries rank #2 in its description");
       assert.doesNotMatch(labels[0] ?? "", /Mixed\.cs/, "file suffix is dropped under a parent file");
       assert.doesNotMatch(labels[1] ?? "", /Mixed\.cs/);
     });
@@ -451,7 +566,7 @@ suite("TopOffendersProvider", () => {
     assert.ok(second, "second occurrence node must exist");
     const tip1 = tooltipText(first);
     const tip2 = tooltipText(second);
-    assert.match(tip1, /#1/, "tooltip must show the parent cluster rank");
+    assert.match(tip1, /\brank\s+#1\b/, "tooltip must spell out the parent cluster rank");
     assert.match(tip1, /Identical code/, "tooltip must name the category");
     assert.match(tip1, /occurrence 1 of 2/, "tooltip must show position in cluster");
     assert.match(tip2, /occurrence 2 of 2/, "second occurrence tooltip must reflect its index");
@@ -566,8 +681,8 @@ suite("TopOffendersProvider", () => {
       assert.equal(treeRefreshes, 1, "snapshot must refresh the tree");
       assert.match(
         String(provider.getChildren()[0]?.description ?? ""),
-        /^\d+ copies$/,
-        "description must show copy count after snapshot",
+        /\brank\s+#1\b.*\b\d+ copies\b/,
+        "description must show rank then copy count after snapshot",
       );
 
       store.applyDelta({
@@ -583,8 +698,8 @@ suite("TopOffendersProvider", () => {
       assert.equal(treeRefreshes, 2, "delta must refresh the tree");
       assert.match(
         String(provider.getChildren()[0]?.description ?? ""),
-        /^\d+ copies$/,
-        "description must show copy count after delta",
+        /\brank\s+#1\b.*\b\d+ copies\b/,
+        "description must show rank then copy count after delta",
       );
     } finally {
       sub.dispose();
@@ -681,7 +796,11 @@ suite("TopOffendersProvider", () => {
       assert.doesNotMatch(labels.join("\n"), /Dirty\.cs/, "stale dirty-file offsets must be hidden");
       assert.doesNotMatch(labels.join("\n"), /Clean\.cs/, "one-copy mixed cluster must be hidden");
       assert.ok(mixedNode, "mixed cluster must remain via its clean peer occurrences");
-      assert.match(labelText(mixedNode), /#1\b/, "surviving cluster is re-ranked after pruning");
+      assert.match(
+        String(mixedNode.description ?? ""),
+        /\brank\s+#1\b/,
+        "surviving cluster is re-ranked after pruning — rank #1 surfaces in the grey description",
+      );
       assert.equal(provider.getChildren(mixedNode).length, 2, "only clean peer occurrences remain expandable");
     } finally {
       sub.dispose();

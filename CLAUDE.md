@@ -190,3 +190,29 @@ rustfmt.toml
 ## Too Many Cooks (Multi-Agent Coordination)
 
 If the TMC server is available: register on start (name, intent, files), lock files before editing, broadcast your plan and message others frequently, check messages periodically, release locks when done. Never edit a locked file — wait or take another approach.
+
+## Migration to `lspkit`
+
+The cross-cutting LSP+MCP scaffolding in this repo is the prime example of the "one engine, two surfaces" pattern. That pattern is being distilled into the generic `lspkit-*` workspace at `/Users/christianfindlay/Documents/Code/lsp_toolkit`. Domain-specific analysis (parsing, fingerprinting, clustering, ranking, embeddings) stays here; the protocol shells are what migrate.
+
+**For new LSP/MCP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
+**For changes to existing scaffolding in this repo:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.
+
+Mapping (current → toolkit crate):
+
+| Current path | Toolkit crate |
+|---|---|
+| `crates/deslop-core/src/live/api.rs` `LiveApi` trait | `lspkit::EngineApi` — the headline contract (associated `Report` / `Query` / `Error`, `generation()`, `report()`, `rescan()`, `subscribe()`, `shutdown()`) |
+| `crates/deslop-core/src/live/session.rs` `AnalysisSession` + `LiveService` | `lspkit-live::Session` + consumer-implemented `Analyzer` |
+| `crates/deslop-core/src/live/watcher.rs` notify-driven watcher | `lspkit-live::watcher::FileWatcher` |
+| `crates/deslop-core/src/live/scheduler.rs` debouncer | `lspkit-live::scheduler::spawn` |
+| `crates/deslop-core/src/state.rs` `FileRegistry` | (engine-internal — stays here) |
+| `crates/deslop-lsp/src/main.rs` + `backend.rs` LSP entrypoint (tower-lsp) | `lspkit-server` (hand-rolled JSON-RPC + `Dispatcher` + `Capabilities`) — **note:** toolkit does not depend on `tower-lsp` (unmaintained) |
+| `crates/deslop-mcp/src/server.rs` + `protocol.rs` hand-rolled JSON-RPC | `lspkit-mcp` (rmcp adapter behind a newtype wall) |
+| `crates/deslop-mcp/src/tools/mod.rs` tool dispatch table | `lspkit-mcp::tools::ToolRegistry` + `lspkit-mcp::Adapter::register` |
+| `crates/deslop-mcp/src/backend/mod.rs` `LiveBackend` IPC client | (engine query path; both LSP and MCP consume the same `EngineApi` impl in-process) |
+| `crates/deslop-core/src/config.rs` `.deslop.toml` loader | `lspkit-config::load_from_ancestor` |
+| `crates/deslop-lsp/src/observability.rs` tracing setup | `lspkit::tracing_setup::TracingBuilder` (feature `tracing-setup`) |
+| `crates/deslop-mcp/src/main.rs:71–76` path canonicalization | (not yet in toolkit; v0.1 follow-up) |
+
+Code in this repo is **not** being removed — it stays canonical until the toolkit matures. This note exists so future agents reuse `lspkit` for new servers and avoid widening this repo's scaffolding.
