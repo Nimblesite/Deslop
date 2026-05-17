@@ -544,6 +544,46 @@ suite("tree menu renderers", () => {
     assert.match(text, /Use these byte ranges as precise edit anchors/);
   });
 
+  test("aiPayloadForCluster leads with the slug so AI and human surfaces agree (#146)", () => {
+    // [VSIX-CLUSTER-ID-CONSISTENCY] The human-facing tree, hover bubble, and
+    // webview panels all show the 7-hex slug as the cluster's identity. The
+    // AI payload must include that same slug as the lead identifier — and
+    // before the volatile `rank:` line — so an agent quoting the slug from a
+    // copy-for-AI payload can cross-reference it against any rendered surface.
+    // The canonical full id is preserved on its own line for unambiguous
+    // tooling round-trip.
+    const c = clusterWithRanges("1802186da488862f", [
+      { path: "src/foo.cs", start_byte: 0, end_byte: 10 },
+    ]);
+    const text = aiPayloadForCluster(c, 3);
+    const lines = text.split("\n");
+    const slugIndex = lines.findIndex((line) => /^slug: 1802186\b/.test(line));
+    const clusterIdIndex = lines.findIndex((line) =>
+      /^cluster_id: 1802186da488862f\b/.test(line),
+    );
+    const rankIndex = lines.findIndex((line) => /^rank: 3\b/.test(line));
+    assert.ok(
+      slugIndex >= 0,
+      `payload must include a 'slug:' header line so AI and human surfaces share the same id, got:\n${text}`,
+    );
+    assert.ok(
+      clusterIdIndex >= 0,
+      `payload must still expose the canonical 16-hex cluster_id for round-trip, got:\n${text}`,
+    );
+    assert.ok(
+      rankIndex >= 0,
+      `payload must still expose the volatile rank, got:\n${text}`,
+    );
+    assert.ok(
+      slugIndex < rankIndex,
+      `slug (stable id) must precede rank (volatile sort position) so AI agents do not mistake rank for identity, got slug at ${slugIndex} and rank at ${rankIndex}`,
+    );
+    assert.ok(
+      slugIndex <= clusterIdIndex,
+      `slug should lead, with full canonical id following — slug at ${slugIndex}, cluster_id at ${clusterIdIndex}`,
+    );
+  });
+
   test("aiPayloadForOccurrence includes parent cluster metadata when available", () => {
     const c = clusterWithRanges("c-occ", [
       { path: "src/foo.cs", start_byte: 0, end_byte: 50 },
