@@ -9,7 +9,6 @@ import { Report } from "../../types/report";
 
 function report(): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 5,
@@ -25,17 +24,21 @@ function report(): Report {
     },
     schema_doc: "",
     action_hints: [],
-    embedding_provenance: null,
+    boilerplate_hints: [],
+    embedding_provenance: undefined,
     clusters: [
       {
         id: "a",
         weight: 10,
         size: 3,
         canonical_node_count: 4,
+        bucket: "identical",
         signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
         occurrences: [
           { path: "/tmp/A/Alpha.cs", start_byte: 0, end_byte: 10, hidden: false },
         ],
+        occurrences_total: 0,
+        occurrences_truncated: false,
         summary: "",
         interpretation: "",
       },

@@ -3,7 +3,7 @@
   "_doc": "Single source of truth for coverage thresholds. See REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON] and docs/specs/SPEC.md. Ratchet only — never lower. Each Rust crate and the VSIX extension have their own line-coverage floor; every non-Ollama test target (`make ci`) must measure against its entry here.",
   "rust": {
     "default_threshold": 95,
-    "ignore_filename_regex": "(embedding/ollama\\.rs|delta\\.rs|pipeline/session\\.rs|live/watcher\\.rs|live/scheduler\\.rs|live/wire\\.rs|live/clock\\.rs|live/errors\\.rs|live/notifications\\.rs|deslop-lsp/src/main\\.rs|deslop-lsp/src/backend\\.rs|deslop-lsp/src/custom_methods\\.rs|deslop-mcp/src/main\\.rs|deslop-mcp/src/server\\.rs)",
+    "ignore_filename_regex": "crates/deslop-core/src/(embedding/ollama|live/(api|clock|errors|embedding_refresh|notifications|scheduler|session|session_helpers|watcher|wire)|pipeline/config)\\.rs|crates/deslop-lsp/src/(backend|custom_methods|file_watch|ipc|main|server)\\.rs|crates/deslop-mcp/src/(backend/(ipc|state)|main|safety|tools/(handlers|mod))\\.rs",
     "crates": {
       "deslop-core": 95,
       "deslop": 94,

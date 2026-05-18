@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const manifestPath = resolveArg(process.argv[2] ?? "deployment-toolkit.json");
+const manifestPath = resolveArg(process.argv[2] ?? "shipwright.json");
 const binDir = resolveArg(process.argv[3] ?? "target/release");
 const platform = process.argv[4] ?? currentPlatform();
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

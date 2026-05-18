@@ -6,6 +6,7 @@
 
 import * as vscode from "vscode";
 
+import { clusterSlug } from "../clusterHover";
 import { occurrenceDisplayLocation } from "../locations";
 import { SEVERITY_DOT } from "../severity";
 import {
@@ -49,18 +50,22 @@ export function displayPath(filePath: string): string {
   return vscode.workspace.asRelativePath(filePath, false);
 }
 
+// [VSIX-TOP-OFFENDERS-CLUSTER-ID] The bold label leads with the cluster's
+// stable slug (shared with the hover bubble via `clusterSlug`) — rank #N
+// is volatile (re-numbered on every snapshot) and would mislead humans
+// and AI consumers if it took the id slot.
 // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] / [VSIX-TOP-OFFENDERS-FILE-MODE]
 // File mode passes `file: undefined` so the redundant `· <file>`
 // suffix is dropped under a parent FileNode; cluster mode passes the
 // display path. Tooltip is built separately and stays mode-invariant.
 export function clusterRowLabel(args: {
-  rank: number;
+  slug: string;
   severity: Severity;
   bucket: Bucket;
   file?: string;
 }): string {
   const labels = bucketLabels(args.bucket);
-  const head = `#${args.rank} ${SEVERITY_DOT[args.severity]} ${labels.plainTitle}`;
+  const head = `${args.slug} ${SEVERITY_DOT[args.severity]} ${labels.plainTitle}`;
   return args.file ? `${head} · ${args.file}` : head;
 }
 
@@ -80,15 +85,17 @@ export class ClusterNode extends vscode.TreeItem {
     const filePath = representativePath(cluster);
     const fileLabel = displayPath(filePath);
     const showFile = options.showFile ?? true;
+    const slug = clusterSlug(cluster);
     const labelArgs = showFile
-      ? { rank, severity, bucket, file: fileLabel }
-      : { rank, severity, bucket };
+      ? { slug, severity, bucket, file: fileLabel }
+      : { slug, severity, bucket };
     super(clusterRowLabel(labelArgs), vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = cluster.id;
-    this.contextValue = "deslop.cluster";
+    this.description = `rank #${rank} · ${occurrenceCount(cluster)} copies`;
+    this.contextValue =
+      occurrenceCount(cluster) > 1 ? "deslop.clusterComparable" : "deslop.clusterSingle";
     this.iconPath = categoryIcon(bucket);
     this.accessibilityInformation = {
-      label: `#${rank} ${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}`,
+      label: `${labels.plainTitle} in ${fileLabel}, cluster ${cluster.id}, rank ${rank}`,
       role: "treeitem",
     };
     // Tooltip is the AI-scrapable hover surface and stays mode-invariant
@@ -96,7 +103,8 @@ export class ClusterNode extends vscode.TreeItem {
     this.tooltip = new vscode.MarkdownString(
       `**${labels.hybridTitle}** — ${labels.actionSentence}\n\n` +
         `file: \`${filePath}\`\n\n` +
-        `weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\``,
+        `rank #${rank} · weight: \`${cluster.weight.toFixed(2)}\` · size: \`${cluster.size}\` · copies: \`${occurrenceCount(cluster)}\`\n\n` +
+        `cluster id: \`${cluster.id}\``,
     );
     this.command = {
       command: "deslop.openCluster",
@@ -107,11 +115,28 @@ export class ClusterNode extends vscode.TreeItem {
 }
 
 export class OccurrenceNode extends vscode.TreeItem {
-  constructor(readonly occurrence: ReportOccurrence) {
+  constructor(
+    readonly occurrence: ReportOccurrence,
+    parentCluster?: ReportCluster,
+    parentRank?: number,
+    occurrenceIndex?: number,
+  ) {
     const location = occurrenceDisplayLocation(occurrence);
     super(location?.label ?? occurrence.path, vscode.TreeItemCollapsibleState.None);
     if (location) this.description = location.description;
-    this.contextValue = "deslop.occurrence";
+    this.contextValue =
+      parentCluster !== undefined && occurrenceIndex === 0
+        ? "deslop.occurrenceCanonical"
+        : "deslop.occurrence";
+    if (parentCluster !== undefined && occurrenceIndex !== undefined) {
+      const labels = bucketLabels(resolveBucket(parentCluster));
+      const total = occurrenceCount(parentCluster);
+      const rankText = parentRank !== undefined ? `rank #${parentRank} · ` : "";
+      this.tooltip = new vscode.MarkdownString(
+        `**${rankText}${labels.plainTitle}** · occurrence ${occurrenceIndex + 1} of ${total}\n\n` +
+          labels.actionSentence,
+      );
+    }
     this.command = {
       command: "deslop.openOccurrence",
       title: location?.commandTitle ?? "Open occurrence",

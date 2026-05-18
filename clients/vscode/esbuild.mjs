@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 
 const watch = process.argv.includes("--watch");
+const coverage = process.argv.includes("--coverage");
 
 const ctx = await esbuild.context({
   entryPoints: ["src/extension.ts"],
@@ -12,7 +13,7 @@ const ctx = await esbuild.context({
   sourcemap: true,
   external: ["vscode"],
   logLevel: "info",
-  minify: !watch,
+  minify: !watch && !coverage,
 });
 
 if (watch) {

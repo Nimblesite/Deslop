@@ -21,8 +21,11 @@ function clusterWithRanges(
     weight: 10,
     size: occurrences.length,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };

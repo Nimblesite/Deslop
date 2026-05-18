@@ -19,6 +19,7 @@ pub mod ast;
 pub mod boilerplate;
 pub mod buckets;
 pub mod cluster;
+mod cluster_filters;
 pub mod config;
 pub mod delta;
 pub mod discover;
@@ -38,10 +39,16 @@ pub mod report_boilerplate;
 pub mod report_hints;
 pub mod report_location;
 pub mod report_metrics;
+mod report_render;
 pub mod sibling;
 pub mod state;
 pub mod tokens;
 pub mod version_contract;
+/// Wire-format models generated from `docs/models/live-ipc.td` by
+/// `scripts/typediagram-gen.mjs`. Always compiled (no feature gate)
+/// because the always-on `embedding::ollama` module re-exports
+/// `OllamaModelInfo` from here.
+pub mod wire_generated;
 
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use config::{BoilerplateImportsMode, ExclusionConfig, DEFAULT_CONFIG_FILENAME};
@@ -53,7 +60,7 @@ pub use embedding::{
 };
 pub use error::CoreError;
 pub use pipeline::{debug_ast_dump, run, EmbeddingSettings, PipelineConfig, PipelineSession};
-pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs, REPORT_SCHEMA_VERSION};
+pub use report::{render_report, EmbeddingProvenance, Report, ReportInputs};
 pub use report_boilerplate::{ReportBoilerplateHint, ReportBoilerplateOccurrence};
 pub use report_metrics::{
     compute_repo_metrics, count_analysed_lines, validate_threshold_percent, AnalysedLines,

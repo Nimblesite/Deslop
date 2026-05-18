@@ -1,0 +1,321 @@
+export const REPORT_TYPE_CONFIG = {
+  ReportSignals: {
+    docs: "Per-cluster signal breakdown so consumers can tell why the cluster was flagged.",
+    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    fieldDocs: {
+      structural: "Mean structural signal across cluster pairs.",
+      token_jaccard: "Mean token Jaccard estimate across cluster pairs.",
+      embedding_cos: "Mean embedding cosine similarity across cluster pairs.",
+      fused: "Unit-bounded fused confidence from the three components.",
+    },
+  },
+  ReportOccurrence: {
+    docs: "A single clone occurrence — a specific `(file, byte_range)`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+    },
+    fieldSerdeAttrs: {
+      start_line: ["default"],
+      end_line: ["default"],
+    },
+    tsOptional: ["start_line", "end_line"],
+    fieldDocs: {
+      path: "Source path, relative to the scan root when possible.",
+      start_byte: "Inclusive byte offset of the clone within the file.",
+      end_byte: "Exclusive byte offset of the end of the clone.",
+      start_line: "One-based line number containing `start_byte`.",
+      end_line: "One-based line number containing the final byte of the clone.",
+      hidden: "True when the file matches a `report_hide` pattern.",
+    },
+  },
+  ReportCluster: {
+    docs: "One cluster as it appears in the rendered report.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      size: "usize",
+      canonical_node_count: "usize",
+      occurrences_total: "usize",
+    },
+    fieldDocs: {
+      id: "Stable short id for cross-referencing.",
+      weight: "Ranking weight (higher = worse).",
+      size: "Count of cloned occurrences in the cluster.",
+      canonical_node_count: "AST node count of one canonical member.",
+      signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
+      bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
+      occurrences: "Cluster members; live wire caps this list.",
+      occurrences_total: "Total occurrences before wire truncation.",
+      occurrences_truncated: "True when `occurrences` was truncated for the wire.",
+      summary: "Agent-oriented synthesis (blanked on the live wire).",
+      interpretation: "Derived one-line interpretation (blanked on the live wire).",
+    },
+  },
+  PathParams: {
+    docs: "Wire payload for `deslop/reportForFile` and `deslop/clusterById` (file-scoped lookups).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { path: "PathBuf" },
+    fieldDocs: {
+      path: "Workspace-relative or absolute path scoping the request.",
+    },
+  },
+  ReportDeltaParams: {
+    docs: "Wire payload for `deslop/reportDelta`.",
+    derives: ["Debug", "Clone", "Default", "Serialize", "Deserialize"],
+    fieldOverrides: { since_generation: "Option<u64>" },
+    fieldDocs: {
+      since_generation:
+        "Generation the client already has. Missing means \"previous generation.\"",
+    },
+  },
+  RangeParams: {
+    docs: "Wire payload for `deslop/reportForRange`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+    },
+    fieldDocs: {
+      path: "Path scoping the range.",
+      start_byte: "Inclusive start byte.",
+      end_byte: "Exclusive end byte.",
+    },
+  },
+  ClusterIdParams: {
+    docs: "Wire payload for `deslop/clusterById`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      id: "Stable cluster id.",
+    },
+  },
+  VirtualDocumentParams: {
+    docs: "Wire payload for `deslop/virtualDocument` ([LSP-EDITOR-SURFACES]).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      uri: "`deslop://{schema|report|cluster/<id>}` URI.",
+    },
+  },
+  SetModelParams: {
+    docs: "Wire payload for `deslop/embeddingSetModel`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      provider_id: "Provider registry key.",
+      model_id: "Model identifier.",
+      endpoint: "Optional endpoint override.",
+    },
+  },
+  LiveErrorWire: {
+    docs: "Serialisable wire shape for `deslop_core::live::LiveError`. Carried as `data` on JSON-RPC error frames so transports never lose the structured fault context.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      code: "Short machine-readable identifier (e.g. `\"unparseable_input\"`).",
+      message: "Human-readable rendering, equivalent to `format!(\"{err}\")`.",
+    },
+  },
+  OccurrenceSummary: {
+    docs: "Single representative occurrence on a `ClusterSummary`. Bytes are the native unit on `ReportOccurrence`; agents convert to lines on demand.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { start_byte: "usize", end_byte: "usize" },
+    fieldSerdeAttrs: {
+      start_line: ["default"],
+      end_line: ["default"],
+    },
+    tsOptional: ["start_line", "end_line"],
+    fieldDocs: {
+      path: "Workspace-relative path of the occurrence.",
+      start_byte: "Inclusive byte offset of the clone within the file.",
+      end_byte: "Exclusive byte offset of the end of the clone.",
+      start_line: "One-based line number containing `start_byte`.",
+      end_line: "One-based line number containing the final byte of the clone.",
+    },
+  },
+  ClusterSummary: {
+    docs: "Slim, agent-sized projection of a `ReportCluster`. Drops `members` + full `occurrences` arrays — those live behind `cluster-by-id`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { size_nodes: "usize", occurrence_count: "usize" },
+    fieldDocs: {
+      id: "Stable 16-char id; pass to `cluster-by-id` for the full record.",
+      bucket: "Canonical bucket label ([CLONE-BUCKETS]).",
+      score: "Worst-first ranking score; mirrors `ReportCluster.weight`.",
+      size_nodes: "Representative subtree node count (`canonical_node_count`).",
+      occurrence_count: "Total occurrences across the cluster, taken from `occurrences_total` so wire-truncated counts surface honestly.",
+      language: "Detected source language for the first occurrence (`csharp`, `rust`, `python`, ...) or `\"unknown\"`.",
+      first_occurrence: "Representative occurrence so the agent can navigate without fetching the full cluster.",
+    },
+  },
+  ReportPageInfo: {
+    docs: "Pagination cursor echoed on every `ReportPage`.",
+    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    fieldOverrides: { offset: "usize", limit: "usize", returned: "usize" },
+    fieldDocs: {
+      offset: "Zero-based cluster index this page started at.",
+      limit: "Maximum number of clusters requested.",
+      returned: "Actual number of clusters in this page (`<= limit`).",
+    },
+  },
+  ReportPageFilters: {
+    docs: "Filter knobs accepted by `report-query`. All combine with logical AND; absent fields match everything.",
+    derives: ["Debug", "Clone", "Default", "Serialize", "Deserialize"],
+    fieldOverrides: { min_size: "Option<usize>" },
+    fieldSerdeAttrs: {
+      language: ['skip_serializing_if = "Option::is_none"'],
+      bucket: ['skip_serializing_if = "Option::is_none"'],
+      path_contains: ['skip_serializing_if = "Option::is_none"'],
+      min_score: ['skip_serializing_if = "Option::is_none"'],
+      min_size: ['skip_serializing_if = "Option::is_none"'],
+    },
+    fieldDocs: {
+      language: "Match clusters whose detected language equals this id.",
+      bucket: "Match clusters whose canonical bucket equals this id.",
+      path_contains: "Match clusters where any occurrence path contains this case-sensitive substring.",
+      min_score: "Match clusters whose `weight` is `>= min_score`.",
+      min_size: "Match clusters whose `canonical_node_count` is `>= min_size`.",
+    },
+  },
+  ReportPage: {
+    docs: "Paginated `report-get` / `report-query` response. Carries headline metrics plus a slim slice of `ClusterSummary` rows.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      generation: "u64",
+      files_analysed: "usize",
+      min_nodes: "u32",
+      clusters_hidden: "usize",
+      total_clusters: "usize",
+    },
+    fieldSerdeAttrs: {
+      filters: ['skip_serializing_if = "Option::is_none"'],
+    },
+    fieldDocs: {
+      tool_version: "Binary / library version that produced the report.",
+      schema_doc: "Markdown schema explanation.",
+      generation: "Generation counter at the time the page was rendered.",
+      files_analysed: "Number of files analysed in the source report.",
+      min_nodes: "Minimum subtree node count used for clustering.",
+      clusters_hidden: "Clusters hidden because every member matched a `report_hide` pattern.",
+      embedding_provenance: "Provider/model/version that produced the embedding signals, if any.",
+      cache_stats: "Incremental-cache hit / miss counters.",
+      metrics: "Repo-wide duplication totals.",
+      action_hints: "Short agent-oriented playbook.",
+      total_clusters: "Count of clusters in the matched (filtered, pre-paginated) set.",
+      page: "Pagination cursor for this page.",
+      clusters: "Page slice of cluster summaries.",
+      filters: "Echoed active filters; absent when no filter was applied.",
+    },
+  },
+  TopOffendersPayload: {
+    docs: "Wire payload for the `top-offenders` MCP tool.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      total_clusters: "usize",
+      n: "usize",
+      max_occurrences: "usize",
+      total_occurrences: "usize",
+    },
+    fieldDocs: {
+      total_clusters: "Total clusters in the report (pre-truncation).",
+      n: "Cap requested by the agent.",
+      max_occurrences:
+        "Total-occurrence budget across returned clusters. Worst-first: clusters fill the budget; the cluster that overruns it is truncated and `occurrences_truncated` set; following clusters are dropped ([MCP-OCCURRENCE-BUDGET]).",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster in the report — what the budget filtered down from. Always >= the sum of returned cluster occurrences.",
+      clusters: "Top `n` clusters, worst-first, post-budget.",
+    },
+  },
+  RescanPayload: {
+    docs: "Wire payload for `rescan`. Mirrors top offenders and carries refresh progress so agents can confirm changed paths moved the report forward.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      total_clusters: "usize",
+      n: "usize",
+      max_occurrences: "usize",
+      total_occurrences: "usize",
+      generation: "u64",
+    },
+    fieldDocs: {
+      total_clusters: "Total clusters in the refreshed report (pre-truncation).",
+      n: "Cap requested by the agent.",
+      max_occurrences:
+        "Total-occurrence budget across returned clusters; same semantics as `top-offenders` ([MCP-OCCURRENCE-BUDGET]).",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster in the refreshed report.",
+      clusters: "Top `n` clusters, worst-first, after the rescan, post-budget.",
+      generation: "Generation exposed by the refreshed live report.",
+      summary: "Compact add/remove/update counts from the rescan pass.",
+    },
+  },
+  RangeReport: {
+    docs: "Wire payload for `report-for-range`. Echoes the request range so the agent can correlate without rebuilding the call.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      start_byte: "usize",
+      end_byte: "usize",
+      total_occurrences: "usize",
+    },
+    fieldDocs: {
+      path: "Path scoping the range.",
+      start_byte: "Inclusive start byte echoed from the request.",
+      end_byte: "Exclusive end byte echoed from the request.",
+      clusters: "Clusters overlapping the range, post-budget.",
+      total_occurrences:
+        "Unfiltered occurrence count across every cluster overlapping the range.",
+    },
+  },
+  EmbeddingModelList: {
+    docs: "Wire payload for `list-embedding-models`.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldDocs: {
+      models: "Models currently installed on the host.",
+    },
+  },
+  SetEmbeddingModelResponse: {
+    docs: "Wire payload for `set-embedding-model`. Mirrors `EmbeddingSpec` plus dimensions.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { dimensions: "usize" },
+    fieldDocs: {
+      provider_id: "Provider registry key (`ollama`, `stub`).",
+      model_id: "Human-readable model identifier.",
+      model_version: "Opaque version string reported by the provider.",
+      dimensions: "Embedding dimensionality.",
+    },
+  },
+  McpSessionConfig: {
+    docs: "Wire payload for the MCP `session-config` tool. Distinct from the LSP `SessionConfig` (richer, MCP-specific keys).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: { root: "PathBuf", min_nodes: "u32", generation: "u64" },
+    fieldDocs: {
+      root: "Workspace root pinned at session creation.",
+      min_nodes: "Subtree-size floor used throughout the session.",
+      languages: "Languages with registered parsers (alphabetical).",
+      incremental: "Whether the incremental fingerprint cache is enabled.",
+      embedding_provenance: "Currently-active embedding provenance, if any.",
+      cache_stats: "Cache-hit totals since session start.",
+      generation: "Current generation counter.",
+    },
+  },
+  Report: {
+    docs: "A complete analysis report.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      min_nodes: "u32",
+      files_analysed: "usize",
+      clusters_hidden: "usize",
+    },
+    fieldDocs: {
+      tool_version: "Binary / library version that produced the report.",
+      min_nodes: "Minimum subtree node count used for clustering.",
+      files_analysed: "Number of files analysed.",
+      clusters_hidden: "Clusters hidden because every member matched a `report_hide` pattern.",
+      cache_stats: "Incremental-cache hit / miss counters for this run.",
+      metrics: "Repo-wide duplication totals.",
+      schema_doc: "Markdown schema explanation.",
+      action_hints: "Short agent-oriented playbook.",
+      boilerplate_hints: "Optional import/prologue hygiene hints.",
+      embedding_provenance: "Provider/model/version that produced the embedding signals, if any.",
+      clusters: "Ordered clusters, worst offenders first.",
+    },
+  },
+};

@@ -12,6 +12,8 @@
 
 mod config;
 mod corpus;
+mod embedding_batch;
+mod embedding_observability;
 mod embedding_pass;
 mod run;
 mod session;

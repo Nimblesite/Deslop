@@ -1,13 +1,15 @@
 // Live duplication bubble — [VSIX-LIVE-BUBBLE].
 // Fires after every coalesced buffer edit. Calls deslop/duplicatesFindSimilar
 // on the most-recently-touched range; if fused >= 0.85, renders:
-//   primary: after-text decoration (severity dot + verdict + count + canonical)
+//   primary: after-text decoration (severity dot + bucket label + count + canonical)
 //   secondary: inlay hint with a 3-bar signal strip
 // Ghost-line mode uses a CodeLens on a phantom line.
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
+import { clusterHoverMarkdown, clusterSlug } from "../clusterHover";
 import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity } from "../severity";
@@ -16,7 +18,6 @@ import {
   ReportCluster,
   Severity,
   bucketLabels,
-  clusterInterpretation,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -66,6 +67,9 @@ export class LiveBubble implements vscode.Disposable {
         [{ language: "csharp" }, { language: "rust" }, { language: "python" }],
         this.inlayProvider,
       ),
+      // effect() tracks store.report (read inside clearRemovedActiveCluster).
+      // Clears the bubble automatically when the active cluster disappears.
+      { dispose: effect(() => this.clearRemovedActiveCluster()) },
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
     );
@@ -78,7 +82,10 @@ export class LiveBubble implements vscode.Disposable {
 
   // Idempotent registration so multiple LiveBubble instances (real + tests)
   // can co-exist without "command already exists" throws.
-  private tryRegister(id: string, handler: (...args: unknown[]) => unknown): void {
+  private tryRegister(
+    id: string,
+    handler: (...args: unknown[]) => unknown,
+  ): void {
     try {
       this.disposables.push(vscode.commands.registerCommand(id, handler));
     } catch {
@@ -141,14 +148,21 @@ export class LiveBubble implements vscode.Disposable {
     range: vscode.Range,
     clusters: ReportCluster[],
   ): void {
-    const report = this.store.current.report;
+    // [VSIX-STATE-DIRTY]: bubble is a surface — derive from the visible
+    // projection so an in-progress edit dismisses the bubble immediately.
+    const report = this.store.current.visibleReport;
     if (!report) return;
-    const best = bestBubbleCluster(report.clusters, clusters, this.dismissedClusters);
+    const best = bestBubbleCluster(
+      report.clusters,
+      clusters,
+      this.dismissedClusters,
+    );
     if (!best) {
       this.clearBubble();
       return;
     }
-    if (this.active?.clusterId === best.id && this.active.range.isEqual(range)) return;
+    if (this.active?.clusterId === best.id && this.active.range.isEqual(range))
+      return;
 
     const severities = indexedSeverity(report.clusters);
     const severity = severities.get(best.id) ?? "faint";
@@ -197,6 +211,20 @@ export class LiveBubble implements vscode.Disposable {
     this.inlayProvider.clear();
     this.active = null;
   }
+
+  private clearRemovedActiveCluster(): void {
+    // Read the signal unconditionally so the effect always tracks it,
+    // even when there is no active bubble yet. [VSIX-STATE-DIRTY]: the
+    // bubble must clear when an edit hides the cluster from the visible
+    // projection, even if the LSP still has it canonically.
+    const report = this.store.current.visibleReport;
+    const active = this.active;
+    if (!active || !report) return;
+    const stillPresent = report.clusters.some(
+      (cluster) => cluster.id === active.clusterId,
+    );
+    if (!stillPresent) this.clearBubble();
+  }
 }
 
 function bestBubbleCluster(
@@ -215,9 +243,17 @@ function bestBubbleCluster(
 class BubbleInlayProvider implements vscode.InlayHintsProvider {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeInlayHints = this.changeEmitter.event;
-  private current: { uri: vscode.Uri; range: vscode.Range; cluster: ReportCluster } | null = null;
+  private current: {
+    uri: vscode.Uri;
+    range: vscode.Range;
+    cluster: ReportCluster;
+  } | null = null;
 
-  set(uri: vscode.Uri, range: vscode.Range, cluster: ReportCluster): void {
+  set(
+    uri: vscode.Uri,
+    range: vscode.Range,
+    cluster: ReportCluster,
+  ): void {
     this.current = { uri, range, cluster };
     this.changeEmitter.fire();
   }
@@ -227,12 +263,19 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
     this.changeEmitter.fire();
   }
 
-  provideInlayHints(document: vscode.TextDocument, range: vscode.Range): vscode.InlayHint[] {
+  provideInlayHints(
+    document: vscode.TextDocument,
+    range: vscode.Range,
+  ): vscode.InlayHint[] {
     if (!this.current) return [];
     if (document.uri.toString() !== this.current.uri.toString()) return [];
     if (!range.contains(this.current.range.start)) return [];
     const strip = signalStrip(this.current.cluster);
-    const hint = new vscode.InlayHint(this.current.range.end, strip, vscode.InlayHintKind.Type);
+    const hint = new vscode.InlayHint(
+      this.current.range.end,
+      strip,
+      vscode.InlayHintKind.Type,
+    );
     hint.paddingLeft = true;
     hint.tooltip = bubbleHover(this.current.cluster);
     return [hint];
@@ -242,22 +285,51 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
 // The inline bubble and ghost-line decorations are pure-visual
 // surfaces (rendered only in the editor, never scraped by agents), so
 // they use `plainTitle` per [CLONE-BUCKETS-DUAL-LABEL].
-export function inlineText(cluster: ReportCluster, severity: Severity): string {
+export interface BubbleRenderParts {
+  inline: string;
+  ghost: string;
+  signalStrip: string;
+  hover: vscode.MarkdownString;
+}
+
+export function renderBubbleParts(
+  cluster: ReportCluster,
+  severity: Severity,
+): BubbleRenderParts {
   const canonical = cluster.occurrences[0];
   const count = occurrenceCount(cluster);
   const title = bucketLabels(resolveBucket(cluster)).plainTitle;
+  const slug = clusterSlug(cluster);
   const location = canonical ? ` · ${shortPath(canonical.path)}` : "";
-  return `  ${SEVERITY_DOT[severity]} ${title} × ${count}${location}`;
+  const strip = signalStrip(cluster);
+  return {
+    inline: `  ${SEVERITY_DOT[severity]} ${slug} ${title} × ${count}${location}`,
+    ghost: `  └─ ${SEVERITY_DOT[severity]} ${slug} ${title}  ${strip}  × ${count}`,
+    signalStrip: strip,
+    hover: clusterHoverMarkdown(cluster, { showDismiss: true }),
+  };
 }
 
-export function ghostText(cluster: ReportCluster, severity: Severity): string {
-  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  return `  └─ ${SEVERITY_DOT[severity]} ${title}  ${signalStrip(cluster)}  × ${occurrenceCount(cluster)}`;
+export function inlineText(
+  cluster: ReportCluster,
+  severity: Severity,
+): string {
+  return renderBubbleParts(cluster, severity).inline;
+}
+
+export function ghostText(
+  cluster: ReportCluster,
+  severity: Severity,
+): string {
+  return renderBubbleParts(cluster, severity).ghost;
 }
 
 export function signalStrip(cluster: ReportCluster): string {
   const bar = (v: number): string => {
-    const idx = Math.min(BARS.length - 1, Math.max(0, Math.round(v * (BARS.length - 1))));
+    const idx = Math.min(
+      BARS.length - 1,
+      Math.max(0, Math.round(v * (BARS.length - 1))),
+    );
     return BARS[idx] ?? "█";
   };
   const s = cluster.signals;
@@ -271,33 +343,19 @@ export function shortPath(p: string): string {
   return slash >= 0 ? p.slice(slash + 1) : p;
 }
 
-// The bubble hover sits above the LSP hover in VS Code's stacked
-// markdown. The LSP card already carries the bucket title, action
-// sentence, and occurrences list — so the bubble is just a compact
-// header (plain bucket label) plus action links. Raw signal scores
-// and clone-taxonomy tags belong on agent surfaces (diagnostic
-// `data`, Copy-for-AI), not on the human tooltip.
-export function bubbleHover(cluster: ReportCluster): vscode.MarkdownString {
-  const md = new vscode.MarkdownString();
-  md.isTrusted = true;
-  md.supportHtml = true;
-  const title = bucketLabels(resolveBucket(cluster)).plainTitle;
-  // Title owns its own line so the bold bucket label is the first
-  // thing the human reads; the action sentence follows on the next
-  // line in the same paragraph. Markdown renders this as one prose
-  // block, separate from the action links below.
-  md.appendMarkdown(`**${title}**\n${clusterInterpretation(cluster)}\n\n`);
-  const openArgs = encodeURIComponent(JSON.stringify([cluster.id]));
-  const dismissArgs = encodeURIComponent(JSON.stringify([cluster.id]));
-  md.appendMarkdown(
-    `[Open cluster](command:deslop.openCluster?${openArgs}) · ` +
-      `[Compare](command:deslop.compareWithCanonical?${openArgs}) · ` +
-      `[Dismiss for session](command:deslop.bubble.dismissCluster?${dismissArgs})`,
-  );
-  return md;
+// Bubble hover: full card with slug, canonical, and dismiss link.
+export function bubbleHover(
+  cluster: ReportCluster,
+): vscode.MarkdownString {
+  return renderBubbleParts(cluster, "faint").hover;
 }
 
-function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Position): number {
-  const text = doc.getText(new vscode.Range(new vscode.Position(0, 0), position));
+function utf8ByteOffset(
+  doc: vscode.TextDocument,
+  position: vscode.Position,
+): number {
+  const text = doc.getText(
+    new vscode.Range(new vscode.Position(0, 0), position),
+  );
   return Buffer.byteLength(text, "utf8");
 }

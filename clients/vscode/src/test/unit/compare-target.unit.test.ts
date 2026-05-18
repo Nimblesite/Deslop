@@ -28,7 +28,6 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
 
 function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 1,
@@ -44,7 +43,8 @@ function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "",
     action_hints: [],
-    embedding_provenance: null,
+    boilerplate_hints: [],
+    embedding_provenance: undefined,
     clusters,
   };
 }
@@ -58,8 +58,11 @@ function cluster(
     weight: 10,
     size: occurrences.length,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: occurrences.map((occurrence) => ({ ...occurrence, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };

@@ -134,6 +134,8 @@ mod tests {
             path: PathBuf::from(path),
             start_byte: start,
             end_byte: end,
+            start_line: 0_i64,
+            end_line: 0_i64,
             hidden: false,
         }
     }

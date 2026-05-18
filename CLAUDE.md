@@ -12,9 +12,26 @@
 ⚠️ ALL MODELS TRANSFERRED ACROSS THE WIRE MUST USE typeDiagram. NO IFS. NO BUTS
 https://typediagram.dev/docs/language-reference.html ⚠️
 
+⚠️ DESLOP.LIVE means the whole loop (watcher → scheduler → session → broadcast → UI).
+ Incremental updates trigger the whole pipeline, including the UI to update reactively ⚠️ 
+
 ## Project Overview
 
 **Deslop** (a.k.a. Deslop Live) is a **live duplicate-code analysis server** for AI coding agents and the humans driving them. The shipping surfaces are `deslop-lsp` (LSP server feeding live clone warnings to any LSP-capable editor) and `deslop-mcp` (MCP server letting Claude Code / Cursor / Copilot / Continue / Codex query the running analysis mid-generation, *before* a copy-paste happens). The `deslop` CLI is the cold-cache fallback for CI gates and one-shot audits. All three binaries are thin shells over one `deslop-core` library — the LSP and MCP sit in the agent's inner loop, the CLI re-uses the same engine for batch runs. Ranking is **worst offenders first** (highest weighted duplication impact at the top). Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap. Languages start with **C#**, then Rust and Python. Parsing is always tree-sitter — regex on source is illegal.
+
+## ⚡ PREVENTION beats CURE — `find-similar` is the keystone tool
+
+**The point of Deslop is to PREVENT duplication, not just scrub it afterwards.** Post-hoc deduplication is what every static analyzer already does. Deslop's edge is being **live in the agent's inner loop** so a duplicate never lands in the first place.
+
+**LAW for AI agents (Claude Code, Cursor, Copilot, Codex, Continue):**
+
+> **Before writing any new function, class, helper, or test setup, call the `find-similar` MCP tool first.** If the proposed pattern already exists with high similarity, reuse the canonical instead of authoring a new copy.
+
+This applies during **code authoring**. When fixing existing duplicates use `top-offenders` and `cluster-by-id`; when writing fresh code use `find-similar`. Both modes use the same live server — the call you make encodes the intent.
+
+The MCP tool description leads with PREVENTION ("Call BEFORE writing new code…"). Reports surface `find-similar` as the prevention path in their `action_hints`. This document and the user-facing `AGENTS.md` recipe teach this so agents pick it up without re-reading docstrings.
+
+Paste-ready snippet for users adding Deslop to their own project's `AGENTS.md` / `CLAUDE.md`: see [docs/snippets/agents-md-recipe.md](docs/snippets/agents-md-recipe.md).
 
 Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan + live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 - ALL SPEC SECTIONS HAVE NON-NUMERIC HIERARCHICALLY STRUCTURED SECTIONS. ALL TESTS REFER TO SPEC IDs. ALL CODE REFERS TO SPEC IDS.
@@ -43,6 +60,10 @@ fingerprint subtrees → cluster → token LSH → embeddings (hybrid) →
 fuse signals → rank → render report
 ```
 
+### IPC
+
+Processes communicate using IPC. Generate IPC model code with [typeDiagram](https://typediagram.dev/docs/language-reference.html). Do not store model code in git. Git ignore it.
+
 - **`crates/deslop-core`** — analysis library. Everything non-trivial lives here. The CLI, LSP, and MCP binaries all consume this single crate.
 - **`crates/deslop`** — thin CLI binary (<50 LOC of glue): arg parsing, tracing setup, invoke core, render output.
 - **`crates/deslop-lsp`** — LSP server surface; streams live clone warnings to any LSP-capable editor.
@@ -66,6 +87,8 @@ fuse signals → rank → render report
 - **Mandatory Bug Fix Process** = [text](.claude/skills/fix-bug/SKILL.md)
 - **No legacy code.** Legacy = deleted.
 - **Copying files is illegal.** MOVE them.
+- **VSIX is the only legitimate distribution. Building MUST NOT install binaries to `PATH`.** `cargo build`, `make build`, `make ci`, and every other build target leave artifacts under `target/` only. There is no `make install-binary` target — `cargo install --path crates/deslop-*` is ⛔️ ILLEGAL on this repo. The release pipeline ships binaries via the `.vsix` (and via Homebrew/Scoop for the CLI). Local builds are for testing the source you just changed; they are not a distribution channel.
+- **External MCP clients (Claude Code, Claude Desktop, Codex, Cursor, Continue) MUST point at the VSIX-bundled binary by absolute path** — `~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp` on Unix, equivalent on Windows. The bare-name `deslop-mcp` (PATH lookup) form is only valid for users who installed the CLI via Homebrew/Scoop. A locally-built binary on `PATH` would shadow the shipright-versioned bundle and silently drift the agent's analysis off the extension's wire contract. Every doc that shows an MCP config snippet uses the absolute VSIX path as the primary form.
 - **Centralize all global state** in `crates/deslop-core/src/state.rs`.
 - **Never delete failing tests. Never remove assertions.** Reducing assertiveness = ⛔️ ILLEGAL.root — NOT env vars, NOT gh repo variables, NOT CI YAML. Below threshold = pipeline fails. Ratchet only.
 - **Coarse E2E tests only.** No unit tests. Drive the CLI end-to-end against fixture repos and assert against rendered reports.
@@ -167,3 +190,29 @@ rustfmt.toml
 ## Too Many Cooks (Multi-Agent Coordination)
 
 If the TMC server is available: register on start (name, intent, files), lock files before editing, broadcast your plan and message others frequently, check messages periodically, release locks when done. Never edit a locked file — wait or take another approach.
+
+## Migration to `lspkit`
+
+The cross-cutting LSP+MCP scaffolding in this repo is the prime example of the "one engine, two surfaces" pattern. That pattern is being distilled into the generic `lspkit-*` workspace at `/Users/christianfindlay/Documents/Code/lsp_toolkit`. Domain-specific analysis (parsing, fingerprinting, clustering, ranking, embeddings) stays here; the protocol shells are what migrate.
+
+**For new LSP/MCP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
+**For changes to existing scaffolding in this repo:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.
+
+Mapping (current → toolkit crate):
+
+| Current path | Toolkit crate |
+|---|---|
+| `crates/deslop-core/src/live/api.rs` `LiveApi` trait | `lspkit::EngineApi` — the headline contract (associated `Report` / `Query` / `Error`, `generation()`, `report()`, `rescan()`, `subscribe()`, `shutdown()`) |
+| `crates/deslop-core/src/live/session.rs` `AnalysisSession` + `LiveService` | `lspkit-live::Session` + consumer-implemented `Analyzer` |
+| `crates/deslop-core/src/live/watcher.rs` notify-driven watcher | `lspkit-live::watcher::FileWatcher` |
+| `crates/deslop-core/src/live/scheduler.rs` debouncer | `lspkit-live::scheduler::spawn` |
+| `crates/deslop-core/src/state.rs` `FileRegistry` | (engine-internal — stays here) |
+| `crates/deslop-lsp/src/main.rs` + `backend.rs` LSP entrypoint (tower-lsp) | `lspkit-server` (hand-rolled JSON-RPC + `Dispatcher` + `Capabilities`) — **note:** toolkit does not depend on `tower-lsp` (unmaintained) |
+| `crates/deslop-mcp/src/server.rs` + `protocol.rs` hand-rolled JSON-RPC | `lspkit-mcp` (rmcp adapter behind a newtype wall) |
+| `crates/deslop-mcp/src/tools/mod.rs` tool dispatch table | `lspkit-mcp::tools::ToolRegistry` + `lspkit-mcp::Adapter::register` |
+| `crates/deslop-mcp/src/backend/mod.rs` `LiveBackend` IPC client | (engine query path; both LSP and MCP consume the same `EngineApi` impl in-process) |
+| `crates/deslop-core/src/config.rs` `.deslop.toml` loader | `lspkit-config::load_from_ancestor` |
+| `crates/deslop-lsp/src/observability.rs` tracing setup | `lspkit::tracing_setup::TracingBuilder` (feature `tracing-setup`) |
+| `crates/deslop-mcp/src/main.rs:71–76` path canonicalization | (not yet in toolkit; v0.1 follow-up) |
+
+Code in this repo is **not** being removed — it stays canonical until the toolkit matures. This note exists so future agents reuse `lspkit` for new servers and avoid widening this repo's scaffolding.

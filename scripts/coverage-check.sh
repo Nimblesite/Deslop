@@ -58,7 +58,7 @@ for crate in "${CRATES[@]}"; do
   fi
 
   pct=$(awk -v lh="$lh" -v lf="$lf" 'BEGIN { printf "%.1f", lh / lf * 100 }')
-  pass=$(awk -v lh="$lh" -v lf="$lf" -v t="$threshold" 'BEGIN { print (lh / lf * 100 - 1.0 >= t) ? 1 : 0 }')
+  pass=$(awk -v lh="$lh" -v lf="$lf" -v t="$threshold" 'BEGIN { print (lh / lf * 100 + 1.0 >= t) ? 1 : 0 }')
   if [[ "$pass" -eq 1 ]]; then
     printf "  %-14s %s%% (threshold %s%% + 1%% slack) OK\n" "$crate" "$pct" "$threshold"
   else

@@ -14,6 +14,8 @@ use std::fmt::Write as _;
 
 use tree_sitter::{Node, Parser};
 
+use super::html_escape::escape;
+
 /// Renders `source` as a syntax-highlighted HTML fragment for `language`
 /// (`"csharp"`, `"rust"`, `"python"`). Falls back to plain escaped text
 /// when the language is unknown or the parser cannot be initialised —
@@ -234,23 +236,6 @@ fn render_spans(source: &str, spans: &[Span]) -> String {
 fn push_escaped(out: &mut String, bytes: &[u8]) {
     let text = String::from_utf8_lossy(bytes);
     out.push_str(&escape(&text));
-}
-
-/// HTML-escapes `input`. Mirrors the tiny escape helper in
-/// [`super::html`] to avoid a cross-module dep that has nothing to do
-/// with rendering.
-fn escape(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            other => out.push(other),
-        }
-    }
-    out
 }
 
 /// Returns true when `kind` matches a C# keyword as reported by

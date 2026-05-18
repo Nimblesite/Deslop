@@ -1,6 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: Getting Started
+title: Getting Started — Install Deslop's live LSP + MCP server
+description: Install Deslop — the live LSP + MCP duplicate-code server for AI agents. The VS Code VSIX bundles LSP, MCP, and CLI in one install. Homebrew and Scoop for CLI-only.
 eleventyNavigation:
   key: Getting Started
   order: 1
@@ -9,15 +10,17 @@ icon: rocket_launch
 
 # Getting Started
 
-Deslop is a **live duplicate-code analysis server**. The preferred way to install it is the **VS Code extension** — the VSIX bundles the LSP server, the MCP server, and the CLI all at once, so you get the live bubble in your editor, the MCP channel for your AI agent, and the CLI on your `PATH`, from one download.
+Deslop is a **live duplicate-code analysis server** — LSP + MCP, running in your workspace, streaming real-time clone signals to Claude Code, Cursor, Copilot, Continue, Codex, and your editor *as code is being written*. The preferred way to install it is the **VS Code extension** — the VSIX bundles the LSP server, the MCP server, **and** the CLI in one download.
 
-> More IDE extensions (JetBrains, Zed, Neovim) are on the roadmap. Until then, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
+> The **JetBrains plugin** (Rider first, then IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion) is in active development. Zed and Neovim are on the roadmap. Until those ship, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
 
 ## Install (preferred) — VS Code extension
 
-1. Grab `deslop-vscode-X.Y.Z.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
-2. `code --install-extension deslop-vscode-X.Y.Z.vsix` — or use **Extensions panel → `…` menu → Install from VSIX…**.
-3. Open a `.cs` / `.rs` / `.py` file. The live bubble is active; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
+1. Grab `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+2. `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix` — or use **Extensions panel → `…` menu → Install from VSIX…**.
+3. Open a `.cs` / `.rs` / `.py` file. The live bubble is active immediately; the **Top Offenders** tree populates as the file watcher fires; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
+
+The VSIX ships binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64`.
 
 ## Install the CLI only (Homebrew / Scoop)
 
@@ -70,13 +73,15 @@ Raise it for large codebases where you only want major duplication. Lower it whe
 
 ## Enable semantic detection — same behavior, different code (Type-4)
 
-Structural and token passes are deterministic and run without network. Same-behavior matches (Type-4) — same behaviour, different syntax — require embeddings:
+Structural and token passes are deterministic and run without network. Same-behavior matches (Type-4) — same behaviour, different syntax — require embeddings. Embeddings are **off by default**:
 
 ```bash
-deslop . --embeddings required
+deslop . --embeddings auto
 ```
 
-Deslop will use a local Ollama model if one is configured, or degrade gracefully when embeddings are unavailable. See [How It Works](/docs/how-it-works/) for the fusion math.
+`auto` probes the local Ollama provider and falls back with a warning if it's unreachable. Use `--embeddings required` to hard-fail when the provider can't be contacted. The default model is `nomic-embed-text`; any Ollama embedding model selectable via `--embedding-model`.
+
+See [How It Works](/docs/how-it-works/) for the fusion math.
 
 ## Exclude noise
 
@@ -100,7 +105,7 @@ report_hide = [
 
 ## What to do next
 
-1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula.
-2. Read [AI Integration](/docs/ai-integration/) if you're wiring Deslop into an agent.
+1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula and the live pipeline.
+2. Read [AI Integration](/docs/ai-integration/) to wire `deslop-mcp` into Claude Code, Claude Desktop, Cursor, Continue, or Codex.
 3. Read [Output Formats](/docs/output-formats/) before parsing the JSON yourself.
 4. Read [VS Code Cluster Panel](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.

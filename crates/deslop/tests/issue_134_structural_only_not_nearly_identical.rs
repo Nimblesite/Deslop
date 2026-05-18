@@ -1,0 +1,116 @@
+//! Issue #134: a cluster whose only positive signal is the structural
+//! fingerprint (`structural >= 0.99`) but whose `token_jaccard` and
+//! `embedding_cos` are essentially zero must NOT be labeled
+//! `nearly_identical`. Without supporting token or semantic evidence,
+//! agents have no way to tell a real Type-2 clone from a structural
+//! skeleton match (test scaffolding, generated boilerplate). Bucketing
+//! these as `nearly_identical` makes top-offenders fill with
+//! low-actionability results, which is the exact regression #134
+//! reproduces.
+//!
+//! Acceptance: no cluster in the rendered report carries
+//! `bucket=nearly_identical` together with `structural >= 0.99`,
+//! `token_jaccard < 0.05`, and `embedding_cos < 0.05`.
+
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use anyhow::Result;
+use assert_cmd::Command;
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(scan_root)
+        .arg("--min-nodes")
+        .arg("30")
+        .arg("--embeddings")
+        .arg("off")
+        .arg("--output")
+        .arg(tmp.join("report"))
+        .assert()
+        .success();
+    let mut json_path = tmp.join("report");
+    let _replaced = json_path.set_extension("json");
+    let body = fs::read_to_string(&json_path)?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+fn signal(cluster: &serde_json::Value, key: &str) -> f64 {
+    cluster
+        .get("signals")
+        .and_then(|signals| signals.get(key))
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_default()
+}
+
+fn cluster_bucket(cluster: &serde_json::Value) -> &str {
+    cluster
+        .get("bucket")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("?")
+}
+
+fn cluster_id(cluster: &serde_json::Value) -> &str {
+    cluster
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("?")
+}
+
+#[test]
+fn issue_134_structural_only_clusters_are_not_nearly_identical() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = fixture("csharp-issue-134-structural-only");
+    let report = run_report(tmp.path(), &scan_root)?;
+    let total_clusters = report
+        .get("metrics")
+        .and_then(|metrics| metrics.get("clusters_total"))
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    assert!(
+        total_clusters >= 1,
+        "fixture must produce at least one cluster (visible or hidden) so \
+         the bucketing rule is actually exercised: {report}"
+    );
+    let clusters = report
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let offenders: Vec<String> = clusters
+        .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "nearly_identical")
+        .filter(|cluster| {
+            signal(cluster, "structural") >= 0.99
+                && signal(cluster, "token_jaccard") < 0.05
+                && signal(cluster, "embedding_cos") < 0.05
+        })
+        .map(|cluster| {
+            format!(
+                "cluster {} signals={{structural={:.2}, token_jaccard={:.2}, \
+                 embedding_cos={:.2}}}",
+                cluster_id(cluster),
+                signal(cluster, "structural"),
+                signal(cluster, "token_jaccard"),
+                signal(cluster, "embedding_cos"),
+            )
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "issue #134: structural-only clusters (token_jaccard < 0.05 and \
+         embedding_cos < 0.05) must not be labeled `nearly_identical`. \
+         Offending clusters: {offenders:#?}"
+    );
+    Ok(())
+}

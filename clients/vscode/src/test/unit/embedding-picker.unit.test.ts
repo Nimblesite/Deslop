@@ -6,7 +6,6 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import {
   buildItems,
-  formatSize,
   pickEmbeddingModel,
   isActive,
   setModel,
@@ -24,7 +23,6 @@ function newStore(embedding?: {
   const store = new ReportStore();
   store.setSnapshot(
     {
-      report_schema_version: 1,
       tool_version: "x",
       min_nodes: 30,
       files_analysed: 0,
@@ -40,7 +38,15 @@ function newStore(embedding?: {
       },
       schema_doc: "",
       action_hints: [],
-      embedding_provenance: embedding ?? null,
+      boilerplate_hints: [],
+      embedding_provenance: embedding
+        ? {
+            attempted_subtrees: 0,
+            indexed_subtrees: 0,
+            failed_subtrees: 0,
+            ...embedding,
+          }
+        : undefined,
       clusters: [],
     },
     0,
@@ -58,8 +64,8 @@ function model(
     model_id,
     model_version: "0",
     dimensions: 768,
-    size_bytes: 1024 * 1024 * 42,
-    is_embedding_model: true,
+    recommended: false,
+    reachable: true,
     ...overrides,
   };
 }
@@ -119,13 +125,6 @@ function installQuickPick(quickPick: FakeQuickPick): () => void {
 }
 
 suite("embeddingPicker helpers", () => {
-  test("formatSize grows through B/KiB/MiB/GiB", () => {
-    assert.match(formatSize(100), /B$/);
-    assert.match(formatSize(2048), /KiB$/);
-    assert.match(formatSize(5 * 1024 * 1024), /MiB$/);
-    assert.match(formatSize(10 * 1024 * 1024 * 1024), /GiB$/);
-  });
-
   test("isActive returns true only when provider + model match", () => {
     const active = { provider_id: "ollama", model_id: "nomic-embed-text" };
     assert.equal(isActive(active, model("ollama", "nomic-embed-text")), true);
@@ -138,10 +137,51 @@ suite("embeddingPicker helpers", () => {
   test("buildItems surfaces the 'Ollama not detected' hint when the list is empty", () => {
     const items = buildItems([], newStore());
     assert.ok(items.some((i) => i.label === "Ollama not detected"));
-    // There's still the stub entry + 'Pull new' + 'Refresh list'.
-    assert.ok(items.some((i) => i.label?.includes("stub")));
+    assert.ok(items.some((i) => i.label?.includes("Embeddings off")));
     assert.ok(items.some((i) => i.label?.includes("Pull a new model")));
     assert.ok(items.some((i) => i.label?.includes("Refresh list")));
+    assert.equal(
+      items.some((i) => i.label?.includes("stub")),
+      false,
+      "normal picker must not expose the deterministic test stub",
+    );
+  });
+
+  test("GH#127 normal picker can disable embeddings and hides deterministic stub", () => {
+    const items = buildItems(
+      [
+        model("ollama", "nomic-embed-text", { recommended: true }),
+        model("stub", "stub", { dimensions: 64 }),
+      ],
+      newStore({
+        provider_id: "ollama",
+        model_id: "nomic-embed-text",
+        model_version: "0",
+        dimensions: 768,
+      }),
+    );
+    const text = items.map((item) =>
+      `${item.label ?? ""} ${item.description ?? ""} ${item.detail ?? ""}`,
+    );
+    const offItem = items.find((item) =>
+      /turn embeddings off|disable embeddings/i.test(
+        `${item.label ?? ""} ${item.description ?? ""} ${item.detail ?? ""}`,
+      ),
+    );
+
+    assert.deepEqual(
+      {
+        hasOffItem: Boolean(offItem),
+        offItemIsPickable: Boolean(offItem && offItem.entryKind !== "none"),
+        hidesStub: !text.some((value) => /\bstub\b|deterministic|CI-friendly/i.test(value)),
+      },
+      {
+        hasOffItem: true,
+        offItemIsPickable: true,
+        hidesStub: true,
+      },
+      `normal picker items must expose off and hide test-only stub: ${JSON.stringify(text)}`,
+    );
   });
 
   test("setModel short-circuits when the request throws (covers error branch)", async () => {
@@ -153,8 +193,8 @@ suite("embeddingPicker helpers", () => {
       model_id: "nomic-embed-text",
       model_version: "0",
       dimensions: 768,
-      size_bytes: null,
-      is_embedding_model: true,
+      recommended: false,
+      reachable: true,
     });
   });
 
@@ -171,8 +211,8 @@ suite("embeddingPicker helpers", () => {
       model_id: "nomic-embed-code",
       model_version: "0",
       dimensions: 768,
-      size_bytes: null,
-      is_embedding_model: true,
+      recommended: false,
+      reachable: true,
     });
     const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
@@ -199,8 +239,8 @@ suite("embeddingPicker helpers", () => {
       model_id: "nomic-embed-text",
       model_version: "0",
       dimensions: 768,
-      size_bytes: null,
-      is_embedding_model: true,
+      recommended: false,
+      reachable: true,
     });
     const swap = calls.find((call) => call.method === "deslop/embeddingSetModel");
     const cfg = vscode.workspace.getConfiguration("deslop");
@@ -237,8 +277,8 @@ suite("embeddingPicker helpers", () => {
       model_id: "nomic-embed-text",
       model_version: "0",
       dimensions: 768,
-      size_bytes: null,
-      is_embedding_model: true,
+      recommended: false,
+      reachable: true,
     });
     const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
@@ -268,7 +308,7 @@ suite("embeddingPicker helpers", () => {
 
   test("buildItems marks the 'Ollama models' header as a non-pickable separator", () => {
     const items = buildItems(
-      [model("ollama", "nomic-embed-text"), model("stub", "stub", { dimensions: 64, size_bytes: null })],
+      [model("ollama", "nomic-embed-text"), model("stub", "stub", { dimensions: 64 })],
       newStore(),
     );
     const header = items.find((i) => i.label === "Ollama models");
@@ -289,19 +329,21 @@ suite("embeddingPicker helpers", () => {
     };
     const items = buildItems(
       [
-        model("ollama", "nomic-embed-text"),
-        model("ollama", "unknown-model", { is_embedding_model: false, size_bytes: null }),
-        model("stub", "stub", { dimensions: 64, size_bytes: null }),
+        model("ollama", "nomic-embed-text", { recommended: true }),
+        model("ollama", "unknown-model", { reachable: false }),
+        model("stub", "stub", { dimensions: 64 }),
       ],
       newStore(active),
     );
     const nomic = items.find((i) => i.label?.includes("nomic-embed-text"));
     assert.ok(nomic, "nomic entry should exist");
     assert.match(nomic.label, /active/);
-    // The unknown model should be labelled 'may not embed' since is_embedding_model=false.
+    assert.match(nomic.description ?? "", /recommended/);
+    // An unreachable model should be labelled 'offline' so the picker
+    // surfaces provider-down state to the user.
     const unknown = items.find((i) => i.label?.includes("unknown-model"));
     assert.ok(unknown, "unknown-model entry should exist");
-    assert.match(unknown.description ?? "", /may not embed/);
+    assert.match(unknown.description ?? "", /offline/);
   });
 
   test("pickEmbeddingModel reports when the analysis server is absent", async () => {
@@ -340,15 +382,16 @@ suite("embeddingPicker helpers", () => {
     }
   });
 
-  test("buildItems marks the deterministic stub entry active", () => {
+  test("buildItems marks the deterministic stub entry active in test builds", () => {
     const items = buildItems(
-      [model("stub", "stub", { dimensions: 64, size_bytes: null })],
+      [model("stub", "stub", { dimensions: 64 })],
       newStore({
         provider_id: "stub",
         model_id: "stub",
         model_version: "0",
         dimensions: 64,
       }),
+      { includeTestStub: true },
     );
     const stub = items.find((i) => i.label?.includes("stub"));
     assert.ok(stub, "stub entry should exist");

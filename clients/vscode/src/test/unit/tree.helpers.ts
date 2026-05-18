@@ -18,6 +18,7 @@ export function cluster(
     size: 2,
     canonical_node_count: 4,
     signals: bucketSignals(bucket),
+    bucket,
     occurrences: [
       { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false },
       {
@@ -27,6 +28,8 @@ export function cluster(
         hidden: false,
       },
     ],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: `dup in ${occurrencePath}`,
   };
@@ -62,7 +65,6 @@ export function tooltipText(item: vscode.TreeItem): string {
 
 export function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 5,
@@ -78,11 +80,15 @@ export function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "docs",
     action_hints: [],
+    boilerplate_hints: [],
     embedding_provenance: {
       provider_id: "ollama",
       model_id: "nomic-embed-text",
       model_version: "1",
       dimensions: 768,
+      attempted_subtrees: 0,
+      indexed_subtrees: 0,
+      failed_subtrees: 0,
     },
     clusters,
   };

@@ -1,6 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: Output Formats
+title: Output Formats — JSON, TXT, HTML
+description: Deslop emits three reports per run — canonical JSON for agents, line-oriented TXT for terminals, and standalone HTML for humans. Same schema, same ranking.
 eleventyNavigation:
   key: Output Formats
   order: 4
@@ -17,8 +18,7 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ```json
 {
-  "report_schema_version": "1.0",
-  "generator": { "name": "deslop", "version": "1.0.0" },
+  "generator": { "name": "deslop", "version": "0.0.0-dev" },
   "schema_doc": "…",
   "summary": {
     "clusters_total": 142,
@@ -33,7 +33,6 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ### Guarantees
 
-- `report_schema_version` is semver. Major bumps are breaking.
 - Fields marked `optional` in the schema may be absent. Fields marked `required` are always present.
 - Clusters are sorted by `score` descending. `clusters[0]` is always the worst offender.
 - UTF-8. No BOM. LF line endings.
@@ -43,7 +42,7 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 `deslop-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colors, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
 
 ```
-Deslop 1.0.0  —  142 clusters, 17 above threshold
+Deslop 0.0.0-dev  —  142 clusters, 17 above threshold
 ──────────────────────────────────────────────────────────────────────
 
   SCORE  KIND                FILE                            SPAN

@@ -10,47 +10,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde::{Deserialize, Serialize};
+use crate::report::{Report, ReportCluster};
 
-use crate::report::{CacheStats, Report, ReportCluster};
-
-/// Diff between two report generations.
-///
-/// `from_generation` and `to_generation` are monotonic counters owned
-/// by the session that produced the deltas; they are opaque to the
-/// delta itself. `clusters_added` / `clusters_removed` / `clusters_updated`
-/// partition the symmetric difference of cluster ids — a cluster whose
-/// payload is bit-identical across generations lands in none of the
-/// three.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReportDelta {
-    /// Generation of the earlier report (the `prev` argument to
-    /// [`ReportDelta::between`]). `0` is reserved for the
-    /// synthetic "before any analysis" generation so the very first
-    /// delta carries `from_generation: 0`.
-    pub from_generation: u64,
-    /// Generation of the later report.
-    pub to_generation: u64,
-    /// Clusters present in `to` but not in `from`, keyed by cluster id.
-    /// Ordered worst-first to mirror the report's own ordering so a
-    /// subscriber applying the delta sees the most impactful new
-    /// clusters first.
-    pub clusters_added: Vec<ReportCluster>,
-    /// Cluster ids present in `from` but not in `to`. Id-only because
-    /// the subscriber already has the payload from the previous
-    /// delivery.
-    pub clusters_removed: Vec<String>,
-    /// Clusters present in both snapshots whose payload changed
-    /// (weight, size, signals, occurrences, interpretation). Ordered
-    /// worst-first.
-    pub clusters_updated: Vec<ReportCluster>,
-    /// Cache telemetry for the generation-producing run.
-    pub cache_stats: CacheStats,
-    /// Producer version stamped on the later snapshot. Lets a client
-    /// that missed generations detect tool upgrades without parsing a
-    /// full report.
-    pub tool_version: String,
-}
+// `ReportDelta` is generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. The data shape lives in
+// `crate::wire_generated`; the `between`/`is_empty` impls stay here.
+pub use crate::wire_generated::ReportDelta;
 
 impl ReportDelta {
     /// Builds the delta between two snapshots. A `None` `prev` means

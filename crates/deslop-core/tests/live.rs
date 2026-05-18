@@ -19,10 +19,10 @@ use deslop_core::{
     embedding::{EmbeddingMode, StubProvider},
     live::{
         AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest, LiveApi,
-        LiveError, LiveService,
+        LiveError, LiveService, LiveWatcher, Scheduler,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
-    EmbeddingProvider, EmbeddingSpec, ProviderError,
+    EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
 /// Returns the absolute fixture path used by the CLI tests.
@@ -109,6 +109,133 @@ async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Res
     assert!(
         outcome.is_err(),
         "explicit nonexistent config path must propagate an error"
+    );
+    Ok(())
+}
+
+// Implements #139: editing `.deslop.toml` is a first-class live
+// incremental update. Drives the full live loop —
+// [`LiveWatcher`] → [`Scheduler`] → [`AnalysisSession`] →
+// `report_changed` broadcast — and asserts the cluster becomes hidden
+// after a `report_hide` edit reaches disk. Deslop.Live MUST react to
+// config edits the same way it reacts to source edits. No
+// developer-window reload, no manual rescan.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    // Canonicalise so notify-reported paths and our paths share a prefix.
+    let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
+    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
+    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        hidden_dir.join("Alpha.cs"),
+    )
+    .context("copy Alpha.cs")?;
+    let _beta_bytes = fs::copy(
+        fixture("csharp-small").join("Beta.cs"),
+        hidden_dir.join("Beta.cs"),
+    )
+    .context("copy Beta.cs")?;
+    let config_path = scan_root.join(".deslop.toml");
+    fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
+
+    let provider = Arc::new(StubProvider::new());
+    let session =
+        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
+    let pre = session.report();
+    assert!(
+        !pre.clusters.is_empty(),
+        "preconditions: cluster must be visible before the config edit"
+    );
+    let pre_generation = session.generation();
+
+    let session_lock = Arc::new(tokio::sync::Mutex::new(session));
+    let extensions = vec!["cs".to_owned(), "rs".to_owned(), "py".to_owned()];
+    let exclusion = Arc::new(ExclusionConfig::empty());
+    let (_watcher_keep_alive, watcher_rx) =
+        LiveWatcher::start(&scan_root, extensions, exclusion, vec![config_path.clone()])
+            .map_err(|err| anyhow!("watcher start: {err}"))?;
+    let scheduler = Scheduler::with_system_clock(Arc::clone(&session_lock), watcher_rx);
+    let mut report_rx = scheduler.subscribe_report_changed();
+    // FSEvents (macOS) and inotify (Linux) need a beat to attach.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    fs::write(
+        &config_path,
+        "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
+    )
+    .context("rewrite .deslop.toml")?;
+
+    let notification = tokio::time::timeout(Duration::from_secs(15), report_rx.recv())
+        .await
+        .context("timed out waiting for report_changed after .deslop.toml edit")?
+        .context("report_changed channel closed")?;
+    assert!(
+        notification.generation > pre_generation,
+        ".deslop.toml edit must bump the generation; pre={pre_generation}, post={}",
+        notification.generation,
+    );
+
+    let post = {
+        let guard = session_lock.lock().await;
+        guard.report()
+    };
+    assert!(
+        post.clusters.is_empty(),
+        "live `report_hide` edit must hide the cluster from the visible report; \
+         got {} cluster(s) after the live config update",
+        post.clusters.len(),
+    );
+    assert!(
+        post.clusters_hidden >= 1,
+        "live `report_hide` edit must move the cluster into clusters_hidden; got {}",
+        post.clusters_hidden,
+    );
+    Ok(())
+}
+
+// Implements #137: live AnalysisSession (the LSP / VSIX live surface)
+// must honor `.deslop.toml` `report_hide` patterns the same way the
+// CLI does. With both clones placed under `benchmarks/fixtures/` and
+// a scan-root-relative `report_hide = ["benchmarks/fixtures/**"]`,
+// the live report must drop the all-hidden cluster from
+// `report.clusters` and count it in `clusters_hidden`.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let scan_root = tmp.path();
+    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
+    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
+    let _alpha_bytes = fs::copy(
+        fixture("csharp-small").join("Alpha.cs"),
+        hidden_dir.join("Alpha.cs"),
+    )
+    .context("copy Alpha.cs")?;
+    let _beta_bytes = fs::copy(
+        fixture("csharp-small").join("Beta.cs"),
+        hidden_dir.join("Beta.cs"),
+    )
+    .context("copy Beta.cs")?;
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
+    )
+    .context("write .deslop.toml")?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(scan_root.to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    let report = session.report();
+    assert!(
+        report.clusters.is_empty(),
+        "scan-root-relative `report_hide` must drop the all-hidden cluster from the live report; got {} cluster(s): {:?}",
+        report.clusters.len(),
+        report.clusters,
+    );
+    assert!(
+        report.clusters_hidden >= 1,
+        "live render must count the hidden cluster in clusters_hidden; got {}",
+        report.clusters_hidden,
     );
     Ok(())
 }
@@ -250,6 +377,90 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
         "flush resets the timing windows"
     );
     Ok(())
+}
+
+/// [LIVE-WATCHER] Repeated edits to the same path must each surface
+/// as a watcher event so the scheduler keeps re-analysing on every
+/// save, not just the first one. Without this guarantee the VSIX tree
+/// freezes after the first save in a session ([VSIX-REACTIVITY-TREE]).
+#[tokio::test(flavor = "multi_thread")]
+async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    // FSEvents on macOS reports paths under the canonicalised root
+    // (`/private/var/...` instead of `/var/...`). Canonicalise here so
+    // event paths and the target path share a prefix the test can match.
+    let root = tmp.path().canonicalize().context("canonicalise root")?;
+    let target = root.join("Sample.cs");
+    fs::write(&target, b"class A {}\n").context("seed file")?;
+
+    let extensions = vec!["cs".to_owned()];
+    let exclusion = Arc::new(ExclusionConfig::empty());
+    let (_watcher_keep_alive, mut rx) =
+        LiveWatcher::start(&root, extensions, exclusion, Vec::new())
+            .map_err(|err| anyhow!("watcher start: {err}"))?;
+    // FSEvents (macOS) and inotify (Linux) both need a beat to attach
+    // before the first event is reported.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    fs::write(&target, b"class A { int x; }\n").context("first edit")?;
+    let first = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
+    assert_eq!(
+        first.file_name(),
+        target.file_name(),
+        "first edit must reach the channel",
+    );
+
+    fs::write(&target, b"class A { int x; int y; }\n").context("second edit")?;
+    let second = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
+    assert_eq!(
+        second.file_name(),
+        target.file_name(),
+        "second edit on the same path must also reach the channel — \
+         the dedup guard only applies within one notify callback batch",
+    );
+
+    fs::write(&target, b"class A { int x; int y; int z; }\n").context("third edit")?;
+    let third = wait_for_event(&mut rx, &target, Duration::from_secs(10)).await?;
+    assert_eq!(
+        third.file_name(),
+        target.file_name(),
+        "third edit on the same path must also reach the channel",
+    );
+    Ok(())
+}
+
+/// Drains the watcher channel until either the matching path arrives
+/// or the deadline elapses. Skips unrelated paths (sibling files,
+/// directory entries) that may slip through on noisy filesystems.
+async fn wait_for_event(
+    rx: &mut tokio::sync::mpsc::Receiver<PathBuf>,
+    target: &Path,
+    timeout: Duration,
+) -> Result<PathBuf> {
+    let started = tokio::time::Instant::now();
+    let target_name = target
+        .file_name()
+        .ok_or_else(|| anyhow!("target has no file name"))?;
+    loop {
+        let remaining = timeout.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            bail!(
+                "timed out waiting for watcher event on {}",
+                target.display()
+            );
+        }
+        match tokio::time::timeout(remaining, rx.recv()).await {
+            // Match by file name — macOS reports paths under /private/var
+            // while tempfile creates them under /var, so equality fails.
+            Ok(Some(path)) if path.file_name() == Some(target_name) => return Ok(path),
+            Ok(Some(_other)) => {}
+            Ok(None) => bail!("watcher channel closed before {} arrived", target.display()),
+            Err(_) => bail!(
+                "timed out waiting for watcher event on {}",
+                target.display()
+            ),
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -794,6 +1005,74 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     assert_eq!(
         after_provenance.provider_id, "counting-test",
         "persisted report must also reflect the new provider"
+    );
+    Ok(())
+}
+
+/// [LIVE-EMBEDDING-CONSENT] Regression: when the corpus contains
+/// duplicate snippets, the embedding pass must still report progress
+/// that reaches `total` by the time the pass ends. Previously the
+/// dedup logic counted unique vectors plus failed occurrences, so
+/// progress capped well below `total` and the editor's session panel
+/// froze at less than 100% even though the pass was finished.
+#[tokio::test(flavor = "multi_thread")]
+async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let body = b"namespace Demo { public class Tally { public int Sum(int b) { \
+        if (b < 0) { return 0; } int total = 0; \
+        for (int step = 0; step < b; step = step + 1) { total = total + step; } \
+        return total; } } }\n";
+    for index in 0..6 {
+        let path = tmp.path().join(format!("File{index}.cs"));
+        fs::write(&path, body).with_context(|| format!("write fixture {index}"))?;
+    }
+    let session_lock = make_session_lock(tmp.path())?;
+    let service = LiveService::new(session_lock);
+    let events: Arc<StdMutex<Vec<deslop_core::live::EmbeddingProgress>>> =
+        Arc::new(StdMutex::new(Vec::new()));
+    let events_clone = Arc::clone(&events);
+    let completed = Arc::new(tokio::sync::Notify::new());
+    let completed_clone = Arc::clone(&completed);
+    let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
+        if event.phase == deslop_core::live::EmbeddingPhase::Complete {
+            completed_clone.notify_waiters();
+        }
+        if let Ok(mut lock) = events_clone.lock() {
+            lock.push(event);
+        }
+    });
+    {
+        let session = service.session();
+        let mut guard = session.lock().await;
+        guard.set_embedding_progress_reporter(Some(reporter));
+    }
+    let _queued = service
+        .embedding_set_model("stub", "blake3-stub", None)
+        .await?;
+    tokio::time::timeout(Duration::from_secs(10), completed.notified())
+        .await
+        .context("embedding refresh completion")?;
+    let recorded = events.lock().map_err(|_| anyhow!("reporter mutex"))?;
+    let running: Vec<deslop_core::live::EmbeddingProgress> = recorded
+        .iter()
+        .filter(|event| event.phase == deslop_core::live::EmbeddingPhase::Running)
+        .cloned()
+        .collect();
+    assert!(
+        !running.is_empty(),
+        "embedding pass must emit at least one Running event with duplicates present"
+    );
+    let total = running
+        .first()
+        .map(|event| event.total)
+        .ok_or_else(|| anyhow!("running events must carry total"))?;
+    assert!(total > 0, "fixture must produce at least one fingerprint");
+    let max_done = running.iter().map(|event| event.done).max().unwrap_or(0);
+    assert_eq!(
+        max_done, total,
+        "Running progress must reach total ({total}); reached {max_done}. \
+         duplicate snippets must contribute to `done` so the panel does not \
+         freeze below 100%."
     );
     Ok(())
 }

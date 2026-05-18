@@ -47,6 +47,11 @@ pub const LSH_ONLY_MIN_JACCARD: f64 = 0.90;
 /// subtrees reach Jaccard ≈ 1.0 purely by accident. Requiring a
 /// substantive node count forces LSH-only matches to carry real signal.
 pub const LSH_ONLY_MIN_NODE_COUNT: usize = 40;
+/// Jaccard floor for explicit cross-language audit candidates. This is
+/// lower than the default LSH-only floor because cross-language AST
+/// vocabularies differ, and the mode is opt-in for ports/generated
+/// clients rather than normal same-language refactoring.
+pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
 
 /// Per-pair score breakdown in `[0, 1]`. See
 /// [FUSION-STRATEGY-MAX-SUM] for the semantics. Three slots are reserved
@@ -81,7 +86,7 @@ impl PairScore {
 
 /// A candidate clone pair identified by fingerprint indices into the
 /// flattened fingerprint list, plus its score and the node counts of
-/// both endpoints (needed by [`is_surviving`] to reject low-information
+/// both endpoints (needed by `survival_decision` to reject low-information
 /// LSH-only matches).
 #[derive(Debug, Clone, Copy)]
 pub struct CandidatePair {
@@ -92,6 +97,15 @@ pub struct CandidatePair {
     /// Node count of the smaller endpoint — used as the LSH-only
     /// information-content floor.
     pub min_node_count: usize,
+    /// Token-Jaccard floor for LSH-only candidates. Defaults to the
+    /// conservative same-language floor; explicit cross-language opt-in
+    /// lowers it to [`CROSS_LANGUAGE_MIN_JACCARD`] so port-audit
+    /// comparisons remain available without weakening normal runs.
+    pub lsh_only_min_jaccard: f64,
+    /// Fused-score floor for this pair. Defaults to [`FUSED_THRESHOLD`];
+    /// explicit cross-language audit pairs lower it to
+    /// [`CROSS_LANGUAGE_MIN_JACCARD`] so lower-overlap ports can surface.
+    pub fused_min_score: f64,
     /// Computed signal breakdown.
     pub score: PairScore,
 }
@@ -140,17 +154,147 @@ pub fn candidate_pairs_for_language_policy<S: BuildHasher>(
     signatures: &[Signature],
     lsh_pairs: &[(usize, usize)],
     embedding_pairs: &[EmbeddingPair],
+    cross_language_signatures: Option<&[Signature]>,
     file_languages: &HashMap<FileId, &'static str, S>,
     allow_cross_language: bool,
 ) -> Vec<CandidatePair> {
-    let pairs = candidate_pairs(fingerprints, signatures, lsh_pairs, embedding_pairs);
+    let mut pairs = candidate_pairs(fingerprints, signatures, lsh_pairs, embedding_pairs);
     if allow_cross_language {
-        return pairs;
+        add_cross_language_signature_pairs(
+            &mut pairs,
+            fingerprints,
+            cross_language_signatures.unwrap_or(signatures),
+            file_languages,
+        );
+        pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
+        return pairs
+            .into_iter()
+            .map(|pair| cross_language_opt_in_pair(pair, fingerprints, file_languages))
+            .collect();
     }
     pairs
         .into_iter()
         .filter(|pair| same_language_pair(pair, fingerprints, file_languages))
         .collect()
+}
+
+/// Explicit cross-language opt-in keeps LSH candidates subject to the
+/// Jaccard/fused gates, but not the same-language low-node-count guard.
+fn cross_language_opt_in_pair<S: BuildHasher>(
+    mut pair: CandidatePair,
+    fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> CandidatePair {
+    if pair.score.structural <= 0.0 && !same_language_pair(&pair, fingerprints, file_languages) {
+        pair.min_node_count = pair.min_node_count.max(LSH_ONLY_MIN_NODE_COUNT);
+        pair.lsh_only_min_jaccard = CROSS_LANGUAGE_MIN_JACCARD;
+        pair.fused_min_score = CROSS_LANGUAGE_MIN_JACCARD;
+    }
+    pair
+}
+
+/// Adds direct signature matches for explicit cross-language audits.
+fn add_cross_language_signature_pairs<S: BuildHasher>(
+    pairs: &mut Vec<CandidatePair>,
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) {
+    let mut existing: BTreeSet<(usize, usize)> = pairs.iter().map(pair_key).collect();
+    let limit = fingerprints.len().min(signatures.len());
+    for left in 0..limit {
+        add_cross_language_signature_pairs_for_left(
+            pairs,
+            &mut existing,
+            fingerprints,
+            signatures,
+            file_languages,
+            left,
+            limit,
+        );
+    }
+}
+
+/// Adds direct cross-language signature matches for one left endpoint.
+fn add_cross_language_signature_pairs_for_left<S: BuildHasher>(
+    pairs: &mut Vec<CandidatePair>,
+    existing: &mut BTreeSet<(usize, usize)>,
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    file_languages: &HashMap<FileId, &'static str, S>,
+    left: usize,
+    limit: usize,
+) {
+    for right in (left.saturating_add(1))..limit {
+        maybe_add_cross_language_signature_pair(
+            pairs,
+            existing,
+            fingerprints,
+            signatures,
+            file_languages,
+            left,
+            right,
+        );
+    }
+}
+
+/// Adds one direct cross-language signature pair when it is above threshold.
+fn maybe_add_cross_language_signature_pair<S: BuildHasher>(
+    pairs: &mut Vec<CandidatePair>,
+    existing: &mut BTreeSet<(usize, usize)>,
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    file_languages: &HashMap<FileId, &'static str, S>,
+    left: usize,
+    right: usize,
+) {
+    let key = order(left, right);
+    if existing.contains(&key) || same_language_indexes(left, right, fingerprints, file_languages) {
+        return;
+    }
+    let Some(left_signature) = signatures.get(left) else {
+        return;
+    };
+    let Some(right_signature) = signatures.get(right) else {
+        return;
+    };
+    let token_jaccard = estimate_jaccard(left_signature, right_signature);
+    if token_jaccard < CROSS_LANGUAGE_MIN_JACCARD {
+        return;
+    }
+    pairs.push(cross_language_signature_pair(
+        fingerprints,
+        left,
+        right,
+        token_jaccard,
+    ));
+    let _inserted = existing.insert(key);
+}
+
+/// Builds an LSH-only candidate from direct cross-language signature evidence.
+fn cross_language_signature_pair(
+    fingerprints: &[Fingerprint],
+    left: usize,
+    right: usize,
+    token_jaccard: f64,
+) -> CandidatePair {
+    CandidatePair {
+        left,
+        right,
+        min_node_count: min_node_count(fingerprints, left, right).max(LSH_ONLY_MIN_NODE_COUNT),
+        lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
+        fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
+        score: PairScore {
+            structural: 0.0,
+            token_jaccard,
+            embedding_cos: 0.0,
+        },
+    }
+}
+
+/// Returns a pair's order-insensitive key.
+fn pair_key(pair: &CandidatePair) -> (usize, usize) {
+    order(pair.left, pair.right)
 }
 
 /// Returns true when both pair endpoints resolve to the same language id.
@@ -159,10 +303,20 @@ fn same_language_pair<S: BuildHasher>(
     fingerprints: &[Fingerprint],
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> bool {
-    let Some(left) = fingerprints.get(pair.left) else {
+    same_language_indexes(pair.left, pair.right, fingerprints, file_languages)
+}
+
+/// Returns true when both fingerprint indexes resolve to the same language id.
+fn same_language_indexes<S: BuildHasher>(
+    left_index: usize,
+    right_index: usize,
+    fingerprints: &[Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> bool {
+    let Some(left) = fingerprints.get(left_index) else {
         return false;
     };
-    let Some(right) = fingerprints.get(pair.right) else {
+    let Some(right) = fingerprints.get(right_index) else {
         return false;
     };
     match (
@@ -213,10 +367,10 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
     }
 }
 
-/// Adds embedding ANN pairs. Structural scoring is unchanged; pairs
-/// gain an entry in `cosines` that [`finalise_pairs`] folds into the
-/// final [`PairScore`]. Pairs already surfaced by the structural or
-/// LSH passes still benefit from the embedding cosine being recorded.
+/// Adds embedding ANN pairs that structural hash and token LSH did not
+/// already surface. Embedding evidence is credited only when it adds
+/// unique recall, so LSH-visible Type-3 pairs do not get re-routed into
+/// the Type-4 bucket just because they were also close in embedding space.
 fn add_embedding_pairs(
     embedding_pairs: &[EmbeddingPair],
     scores: &mut HashMap<(usize, usize), f64>,
@@ -224,7 +378,10 @@ fn add_embedding_pairs(
 ) {
     for pair in embedding_pairs {
         let key = order(pair.left, pair.right);
-        let _previous_score = scores.entry(key).or_insert(0.0_f64);
+        if scores.contains_key(&key) {
+            continue;
+        }
+        let _previous_score = scores.insert(key, 0.0_f64);
         // HNSW's top-K search already produces at most one pair per
         // ordered (left, right); `or_insert` keeps the first cosine
         // rather than re-ranking duplicates we never see.
@@ -247,6 +404,8 @@ fn finalise_pairs(
             left,
             right,
             min_node_count: min_node_count(fingerprints, left, right),
+            lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
+            fused_min_score: FUSED_THRESHOLD,
             score: PairScore {
                 structural,
                 token_jaccard: jaccard_for(signatures, left, right),
@@ -285,23 +444,88 @@ fn order(a: usize, b: usize) -> (usize, usize) {
     (a.min(b), a.max(b))
 }
 
-/// Applies the compound "survives clustering?" decision to a single pair.
-/// Exact structural pairs (`structural == 1.0`) always survive when they
-/// clear [`FUSED_THRESHOLD`]. LSH-only pairs additionally have to clear
-/// [`LSH_ONLY_MIN_JACCARD`] so tiny sibling-window collisions do not
-/// merge thousands of unrelated fingerprints via transitive closure.
-fn is_surviving(pair: &CandidatePair) -> bool {
-    if pair.score.fused() < FUSED_THRESHOLD {
-        return false;
+/// Reason one candidate pair did or did not enter transitive closure.
+enum PairSurvival {
+    /// Pair entered the fused cluster graph.
+    Survived,
+    /// Pair failed the global fused-confidence threshold.
+    DroppedBelowFused,
+    /// LSH-only pair failed the token-Jaccard floor.
+    DroppedLshOnlyJaccard,
+    /// LSH-only pair failed the endpoint node-count floor.
+    DroppedLshOnlyNodeCount,
+}
+
+/// Counts GH#45 pair survival outcomes for structured observability.
+#[derive(Default)]
+struct SurvivalStats {
+    /// Candidate pairs admitted to transitive closure.
+    survived: usize,
+    /// Candidate pairs dropped below [`FUSED_THRESHOLD`].
+    dropped_below_fused: usize,
+    /// LSH-only pairs dropped below [`LSH_ONLY_MIN_JACCARD`].
+    dropped_lsh_only_jaccard: usize,
+    /// LSH-only pairs dropped below [`LSH_ONLY_MIN_NODE_COUNT`].
+    dropped_lsh_only_node_count: usize,
+}
+
+impl SurvivalStats {
+    /// Classifies every pair and returns the surviving subset.
+    fn collect(pairs: &[CandidatePair]) -> (Self, Vec<&CandidatePair>) {
+        let mut stats = Self::default();
+        let mut surviving: Vec<&CandidatePair> = Vec::new();
+        for pair in pairs {
+            stats.push(pair, &mut surviving);
+        }
+        (stats, surviving)
     }
-    let lsh_only = pair.score.structural <= 0.0;
-    if lsh_only && pair.score.token_jaccard < LSH_ONLY_MIN_JACCARD {
-        return false;
+
+    /// Records one pair's outcome.
+    fn push<'a>(&mut self, pair: &'a CandidatePair, surviving: &mut Vec<&'a CandidatePair>) {
+        match survival_decision(pair) {
+            PairSurvival::Survived => {
+                self.survived = self.survived.saturating_add(1);
+                surviving.push(pair);
+            }
+            PairSurvival::DroppedBelowFused => {
+                self.dropped_below_fused = self.dropped_below_fused.saturating_add(1);
+            }
+            PairSurvival::DroppedLshOnlyJaccard => {
+                self.dropped_lsh_only_jaccard = self.dropped_lsh_only_jaccard.saturating_add(1);
+            }
+            PairSurvival::DroppedLshOnlyNodeCount => {
+                self.dropped_lsh_only_node_count =
+                    self.dropped_lsh_only_node_count.saturating_add(1);
+            }
+        }
+    }
+
+    /// Emits the structured GH#45 pair-survival summary.
+    fn log(self, total: usize) {
+        tracing::info!(
+            total,
+            survived = self.survived,
+            dropped_below_fused = self.dropped_below_fused,
+            dropped_lsh_only_jaccard = self.dropped_lsh_only_jaccard,
+            dropped_lsh_only_node_count = self.dropped_lsh_only_node_count,
+            "pair survival outcome",
+        );
+    }
+}
+
+/// Applies the compound "survives clustering?" decision to a single pair.
+fn survival_decision(pair: &CandidatePair) -> PairSurvival {
+    if pair.score.fused() < pair.fused_min_score {
+        return PairSurvival::DroppedBelowFused;
+    }
+    let lsh_only = pair.score.structural <= 0.0 && pair.score.embedding_cos <= 0.0;
+    if lsh_only && pair.score.token_jaccard < pair.lsh_only_min_jaccard {
+        return PairSurvival::DroppedLshOnlyJaccard;
     }
     if lsh_only && pair.min_node_count < LSH_ONLY_MIN_NODE_COUNT {
-        return false;
+        return PairSurvival::DroppedLshOnlyNodeCount;
     }
-    true
+    PairSurvival::Survived
 }
 
 /// Filters `pairs` by the fused threshold and returns the connected
@@ -309,7 +533,8 @@ fn is_surviving(pair: &CandidatePair) -> bool {
 /// ascending so the final output is deterministic.
 #[must_use]
 pub fn cluster_by_transitive_closure(pairs: &[CandidatePair]) -> Vec<FusedCluster> {
-    let surviving: Vec<&CandidatePair> = pairs.iter().filter(|pair| is_surviving(pair)).collect();
+    let (stats, surviving) = SurvivalStats::collect(pairs);
+    stats.log(pairs.len());
     if surviving.is_empty() {
         return Vec::new();
     }

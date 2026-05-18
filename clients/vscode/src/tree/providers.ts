@@ -4,6 +4,7 @@
 // file mode per [VSIX-TOP-OFFENDERS-GROUPING].
 
 import * as vscode from "vscode";
+import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
@@ -105,11 +106,12 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
     protected readonly store: ReportStore,
     protected readonly ticker: StatusTicker,
   ) {
-    this.disposables.push(store.onDidChange(() => this.onLifecycleMaybeChanged()));
+    // effect() tracks store.lifecycle (read inside onLifecycleMaybeChanged).
+    // Runs immediately for the initial state, then on every lifecycle change.
+    this.disposables.push({ dispose: effect(() => this.onLifecycleMaybeChanged()) });
     this.disposables.push(ticker.onTick(() => {
       if (this.needsAnimation()) this.emitter.fire();
     }));
-    this.onLifecycleMaybeChanged();
   }
 
   private onLifecycleMaybeChanged(): void {
@@ -123,8 +125,11 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 
   private needsAnimation(): boolean {
-    const phase = this.store.current.lifecycle.kind;
-    return phase === "starting" || phase === "analysing";
+    // Spinner gating reads canonical: animate while no LSP report exists yet,
+    // regardless of dirty-set masking. The visible projection only matters
+    // for the row content, not for whether the data has loaded.
+    const { lifecycle, report } = this.store.current;
+    return (lifecycle.kind === "starting" || lifecycle.kind === "analysing") && !report;
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
@@ -160,19 +165,29 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     if (node instanceof FileNode) return getFileNodeChildren(node);
     if (node instanceof BucketGroupNode) return getBucketGroupChildren(node);
     if (node instanceof ClusterNode) {
-      return node.cluster.occurrences.map((o) => new OccurrenceNode(o));
+      return node.cluster.occurrences.map((o, i) =>
+        new OccurrenceNode(o, node.cluster, node.rank, i),
+      );
     }
     if (node) return [];
-    const { report, lifecycle } = this.store.current;
-    const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
-    if (status) return [status];
-    if (!report || report.clusters.length === 0) {
+    // [VSIX-STATE-DIRTY]: tree rows render from the visible projection so a
+    // file the user is mid-edit drops out instantly. Lifecycle still gates
+    // the spinner via the canonical signal in needsAnimation().
+    const { visibleReport, lifecycle } = this.store.current;
+    // Show spinner only before first report arrives, or on error. During
+    // re-analysis the existing report stays visible — stale > blank.
+    if (lifecycle.kind === "failed" || !visibleReport) {
+      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
+      if (status) return [status];
+    }
+    if (!visibleReport || visibleReport.clusters.length === 0) {
       return [new StatusNode("No duplication detected", "info")];
     }
-    const severities = indexedSeverity(report.clusters);
-    return readGroupBy() === "file"
-      ? buildFileMode(report.clusters, severities)
-      : buildClusterMode(report.clusters, severities);
+    const severities = indexedSeverity(visibleReport.clusters);
+    const rows = readGroupBy() === "file"
+      ? buildFileMode(visibleReport.clusters, severities)
+      : buildClusterMode(visibleReport.clusters, severities);
+    return rows;
   }
 }
 
@@ -186,25 +201,28 @@ export class FocusedFileProvider extends LifecycleAwareProvider {
 
   getChildren(node?: Node): Node[] {
     if (node instanceof ClusterNode) {
-      return node.cluster.occurrences.map((o) => new OccurrenceNode(o));
+      return node.cluster.occurrences.map((o, i) =>
+        new OccurrenceNode(o, node.cluster, node.rank, i),
+      );
     }
     if (node) return [];
-    const { report, lifecycle } = this.store.current;
+    // [VSIX-STATE-DIRTY]: focused-file tree is a surface — render visible.
+    const { visibleReport, lifecycle } = this.store.current;
     if (lifecycle.kind === "failed") {
       const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
       if (status) return [status];
     }
     const editor = vscode.window.activeTextEditor;
     if (!editor) return [new StatusNode("No active editor", "info")];
-    if (!report) return [];
+    if (!visibleReport) return [];
     const activePath = editor.document.uri.fsPath;
-    const overlapping = report.clusters.filter((c) =>
+    const overlapping = visibleReport.clusters.filter((c) =>
       c.occurrences.some((o) => sameFile(o.path, activePath)),
     );
     if (overlapping.length === 0) return [new StatusNode("No clusters in this file", "info")];
-    const severities = indexedSeverity(report.clusters);
+    const severities = indexedSeverity(visibleReport.clusters);
     return overlapping.map((cluster) => {
-      const rank = report.clusters.findIndex((c) => c.id === cluster.id) + 1;
+      const rank = visibleReport.clusters.findIndex((c) => c.id === cluster.id) + 1;
       const severity = severities.get(cluster.id) ?? "faint";
       return new ClusterNode(cluster, rank, severity);
     });
@@ -224,8 +242,12 @@ export class SessionProvider extends LifecycleAwareProvider {
     if (node) return [];
     const { report, lifecycle, pendingEmbeddingModel, embeddingProgress } =
       this.store.current;
-    const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
-    if (status) return [status];
+    // Show spinner only before first report arrives, or on error. During
+    // re-analysis the existing session data stays visible — stale > blank.
+    if (lifecycle.kind === "failed" || !report) {
+      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
+      if (status) return [status];
+    }
     if (!report) return [new StatusNode("No session yet", "info")];
     const activeModel =
       report.embedding_provenance?.model_id ?? "Select model to enable AI matches";
@@ -243,7 +265,6 @@ export class SessionProvider extends LifecycleAwareProvider {
     rows.push(
       new SessionFieldNode("Cache", cache),
       new SessionFieldNode("Files analysed", String(report.files_analysed)),
-      new SessionFieldNode("Schema version", String(report.report_schema_version)),
       new SessionFieldNode("State", state),
     );
     return rows;
@@ -255,7 +276,7 @@ function formatProgress(progress: {
   done: number;
   total: number;
   model_id: string;
-  message?: string | null;
+  message: string | undefined;
 }): string {
   const done = progress.done.toLocaleString();
   const total = progress.total.toLocaleString();

@@ -26,12 +26,22 @@ function fakeCtx(version: unknown): vscode.ExtensionContext {
   } as unknown as vscode.ExtensionContext;
 }
 
-function argValue(args: string[], flag: string): string {
-  const index = args.indexOf(flag);
-  assert.ok(index >= 0, `missing ${flag} in ${JSON.stringify(args)}`);
-  const value = args[index + 1];
-  assert.ok(value, `missing value for ${flag} in ${JSON.stringify(args)}`);
-  return value;
+const LEGACY_LSP_FLAGS = [
+  "--min-nodes",
+  "--embeddings",
+  "--embedding-provider",
+  "--embedding-model",
+  "--embedding-endpoint",
+] as const;
+
+function assertNoLegacyLspFlags(args: string[]): void {
+  for (const flag of LEGACY_LSP_FLAGS) {
+    assert.equal(
+      args.includes(flag),
+      false,
+      `issue #83: buildServerArgs must not pass legacy ${flag}: ${JSON.stringify(args)}`,
+    );
+  }
 }
 
 suite("extension internals", () => {
@@ -104,40 +114,46 @@ suite("extension internals", () => {
     }
   });
 
-  test("buildServerArgs forwards embedding mode off for fresh VSIX sessions", async () => {
-    // [LSP-EMBEDDING-CONSENT] The VSIX must launch a fresh LSP with
-    // embeddings disabled until the user selects a model.
+  test("buildServerArgs keeps issue #83 legacy flags out of fresh VSIX sessions", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("embedding.mode", "off", vscode.ConfigurationTarget.Global);
     await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
     await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
     await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
     const args = buildServerArgs("/tmp/deslop-workspace", false);
-    assert.equal(args[0], "/tmp/deslop-workspace");
-    assert.equal(argValue(args, "--min-nodes"), "30");
-    assert.equal(argValue(args, "--embeddings"), "off");
-    assert.equal(argValue(args, "--embedding-provider"), "ollama");
-    assert.equal(argValue(args, "--embedding-model"), "nomic-embed-text");
-    assert.equal(argValue(args, "--embedding-endpoint"), "http://127.0.0.1:11434");
-    assert.equal(args.includes("--debug"), false);
+    assert.deepEqual(args, ["/tmp/deslop-workspace"]);
+    assertNoLegacyLspFlags(args);
   });
 
-  test("buildServerArgs forwards persisted selected embedding model", async () => {
-    // [LSP-EMBEDDING-CONSENT] After model selection, persisted config
-    // is what makes the next LSP startup begin embeddings immediately.
+  test("buildServerArgs keeps issue #83 legacy flags out of debug VSIX sessions", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "stub", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "blake3-stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
     await cfg.update("embedding.endpoint", "http://127.0.0.1:11434", vscode.ConfigurationTarget.Global);
     const args = buildServerArgs("/tmp/deslop-workspace", true);
-    assert.equal(args[0], "/tmp/deslop-workspace");
-    assert.ok(args.includes("--debug"), `debug launch must include --debug: ${JSON.stringify(args)}`);
-    assert.equal(argValue(args, "--min-nodes"), "30");
-    assert.equal(argValue(args, "--embeddings"), "auto");
-    assert.equal(argValue(args, "--embedding-provider"), "stub");
-    assert.equal(argValue(args, "--embedding-model"), "blake3-stub");
-    assert.equal(argValue(args, "--embedding-endpoint"), "http://127.0.0.1:11434");
+    assert.deepEqual(args, ["/tmp/deslop-workspace", "--debug"]);
+    assertNoLegacyLspFlags(args);
+  });
+
+  test("buildServerArgs forwards issue #28 LSP throttle settings", async () => {
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("lsp.workerThreads", 2, vscode.ConfigurationTarget.Global);
+    await cfg.update("lsp.nice", 5, vscode.ConfigurationTarget.Global);
+    try {
+      const args = buildServerArgs("/tmp/deslop-workspace", false);
+      assert.deepEqual(args, [
+        "/tmp/deslop-workspace",
+        "--worker-threads",
+        "2",
+        "--nice",
+        "5",
+      ]);
+      assertNoLegacyLspFlags(args);
+    } finally {
+      await cfg.update("lsp.workerThreads", 0, vscode.ConfigurationTarget.Global);
+      await cfg.update("lsp.nice", 0, vscode.ConfigurationTarget.Global);
+    }
   });
 
   test("wireNotifications registers handlers without throwing", () => {
@@ -155,8 +171,8 @@ suite("extension internals", () => {
   test("syncEmbeddingSettingsToLsp forwards shared workspace settings", async () => {
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("embedding.mode", "auto", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.provider", "stub", vscode.ConfigurationTarget.Global);
-    await cfg.update("embedding.model", "blake3-stub", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.provider", "ollama", vscode.ConfigurationTarget.Global);
+    await cfg.update("embedding.model", "nomic-embed-text", vscode.ConfigurationTarget.Global);
     const calls: Array<{ method: string; params: unknown }> = [];
     const client = {
       sendRequest: (method: string, params: unknown) => {
@@ -170,13 +186,13 @@ suite("extension internals", () => {
       {
         method: "deslop/embeddingSetModel",
         params: {
-          provider_id: "stub",
-          model_id: "blake3-stub",
+          provider_id: "ollama",
+          model_id: "nomic-embed-text",
           endpoint: "http://127.0.0.1:11434",
         },
       },
     ]);
-    assert.equal(store.current.pendingEmbeddingModel, "blake3-stub");
+    assert.equal(store.current.pendingEmbeddingModel, "nomic-embed-text");
   });
 
   test("wireNotifications embeddingProgress handler pushes the payload into the store", () => {
@@ -219,7 +235,6 @@ suite("extension internals", () => {
       sendRequest: (name: string) => {
         requests.push(name);
         return Promise.resolve({
-          report_schema_version: 1,
           tool_version: "v",
           min_nodes: 30,
           files_analysed: 7,
@@ -235,6 +250,7 @@ suite("extension internals", () => {
           },
           schema_doc: "",
           action_hints: [],
+          boilerplate_hints: [],
           embedding_provenance: {
             provider_id: "ollama",
             model_id: "nomic-embed-text",
@@ -300,7 +316,6 @@ suite("extension internals", () => {
     const store = new ReportStore();
     store.setSnapshot(
       {
-        report_schema_version: 1,
         tool_version: "v0",
         min_nodes: 30,
         files_analysed: 0,
@@ -316,7 +331,8 @@ suite("extension internals", () => {
         },
         schema_doc: "",
         action_hints: [],
-        embedding_provenance: null,
+        boilerplate_hints: [],
+        embedding_provenance: undefined,
         clusters: [],
       },
       0,
@@ -337,7 +353,6 @@ suite("extension internals", () => {
         requests.push(name);
         if (name === "deslop/reportDelta") return Promise.resolve(null);
         return Promise.resolve({
-          report_schema_version: 1,
           tool_version: "x",
           min_nodes: 30,
           files_analysed: 0,
@@ -353,7 +368,8 @@ suite("extension internals", () => {
           },
           schema_doc: "",
           action_hints: [],
-          embedding_provenance: null,
+          boilerplate_hints: [],
+          embedding_provenance: undefined,
           clusters: [],
         });
       },
@@ -368,7 +384,6 @@ suite("extension internals", () => {
     const client = {
       sendRequest: () =>
         Promise.resolve({
-          report_schema_version: 1,
           tool_version: "v",
           min_nodes: 30,
           files_analysed: 2,
@@ -384,7 +399,8 @@ suite("extension internals", () => {
           },
           schema_doc: "",
           action_hints: [],
-          embedding_provenance: null,
+          boilerplate_hints: [],
+          embedding_provenance: undefined,
           clusters: [],
         }),
     } as unknown as LanguageClient;

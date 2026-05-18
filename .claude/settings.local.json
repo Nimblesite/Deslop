@@ -119,7 +119,15 @@
       "Bash(ps -eo pid,pcpu,etime,comm,args)",
       "Bash(grep -E \"deslop-\\(lsp|mcp|$\\)\")",
       "Skill(fix-bug)",
-      "Skill(fix-bug:*)"
+      "Skill(fix-bug:*)",
+      "Bash(cp crates/deslop-core/src/wire_generated.rs /tmp/wire_generated_baseline.rs)",
+      "Bash(cp clients/vscode/src/types/wire-generated.ts /tmp/wire_generated_baseline.ts)",
+      "Read(//private/tmp/**)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop log --oneline deployment -5)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop branch --list)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop worktree list)",
+      "Bash(git -C /Users/christianfindlay/Documents/Code/Deslop status --short)",
+      "Bash(make typediagram-gen *)"
     ]
   },
   "autoMemoryEnabled": false

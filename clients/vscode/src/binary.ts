@@ -1,6 +1,6 @@
 // Manifest-backed binary resolver for the VS Code host.
 // Contract source:
-// https://github.com/MelbourneDeveloper/deployment_toolkit/blob/main/docs/specs/ide-extension-deployment.md#required-startup-behavior
+// https://github.com/Nimblesite/Shipwright/blob/main/docs/specs/ide-extension-deployment.md#required-startup-behavior
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 
 export type BinaryKind = "lsp" | "mcp" | "cli";
 
-export type BinarySource = "user-setting" | "env-path" | "env-dir" | "bundled" | "path";
+export type BinarySource = "user-setting" | "env-path" | "env-dir" | "bundled";
 
 export type Platform =
   | "darwin-arm64"
@@ -138,7 +138,7 @@ function resolveComponent(
 ): ResolvedBinary {
   let skippedPath: Candidate | undefined;
   for (const candidate of candidates(extensionPath, component, settings, env)) {
-    const resolved = verifyCandidate(component, candidate, env);
+    const resolved = verifyCandidate(component, candidate);
     if (resolved) return resolved;
     skippedPath = candidate;
   }
@@ -148,16 +148,14 @@ function resolveComponent(
 function verifyCandidate(
   component: DeploymentComponent,
   candidate: Candidate,
-  env: NodeJS.ProcessEnv,
 ): ResolvedBinary | undefined {
   if (!fs.existsSync(candidate.path)) return handleMissing(candidate, component);
   const probe = versionProbe(candidate.path);
   if (probe.name === component.id && probe.version === component.expectedVersion) {
-    if (candidate.source === "bundled") prependToPath(env, path.dirname(candidate.path));
     return resolvedBinary(component, candidate, probe.version);
   }
   if (!candidate.hardFailure) return undefined;
-  throw new BinaryVerificationError(component, candidate, foundVersion(probe));
+  throw new BinaryVerificationError(component, candidate, probeVersion(probe));
 }
 
 function handleMissing(candidate: Candidate, component?: DeploymentComponent): undefined {
@@ -179,7 +177,6 @@ function candidates(
     ...envPathCandidate(component, env),
     ...envDirCandidate(component, env),
     bundledCandidate(extensionPath, component),
-    pathCandidate(component, env),
   ].filter((candidate): candidate is Candidate => Boolean(candidate));
 }
 
@@ -214,14 +211,6 @@ function bundledCandidate(
     path: path.join(extensionPath, interpolateBundlePath(bundlePath, component)),
     hardFailure: true,
   };
-}
-
-function pathCandidate(
-  component: DeploymentComponent,
-  env: NodeJS.ProcessEnv,
-): Candidate | undefined {
-  const found = findOnPath(nameWithSuffix(component), env);
-  return found ? { source: "path", path: found, hardFailure: false } : undefined;
 }
 
 function candidateFromDir(
@@ -261,15 +250,6 @@ function firstLine(text: string): string {
   return line.endsWith("\r") ? line.slice(0, -1) : line;
 }
 
-function findOnPath(binName: string, env: NodeJS.ProcessEnv): string | undefined {
-  const pathValue = env["PATH"] ?? env["Path"] ?? "";
-  return pathValue
-    .split(path.delimiter)
-    .filter(Boolean)
-    .map((dir) => path.join(dir, binName))
-    .find((candidate) => fs.existsSync(candidate));
-}
-
 function interpolateBundlePath(template: string, component: DeploymentComponent): string {
   return template
     .replace("${platform}", currentPlatform())
@@ -298,9 +278,9 @@ function requireComponent(manifest: DeploymentManifest, id: string): DeploymentC
 }
 
 function deploymentManifestPath(extensionPath: string): string {
-  const packagedPath = path.join(extensionPath, "deployment-toolkit.json");
+  const packagedPath = path.join(extensionPath, "shipwright.json");
   if (fs.existsSync(packagedPath)) return packagedPath;
-  return path.resolve(extensionPath, "..", "..", "deployment-toolkit.json");
+  return path.resolve(extensionPath, "..", "..", "shipwright.json");
 }
 
 function throwMissing(component: DeploymentComponent, skipped?: Candidate): never {
@@ -308,7 +288,7 @@ function throwMissing(component: DeploymentComponent, skipped?: Candidate): neve
   throw new Error(`No matching ${component.id} ${component.expectedVersion} binary found.${suffix}`);
 }
 
-function foundVersion(probe: VersionProbe): string {
+function probeVersion(probe: VersionProbe): string {
   return probe.name && probe.version ? `${probe.name} ${probe.version}` : probe.raw || "not found";
 }
 
@@ -319,17 +299,10 @@ function mismatchMessage(
 ): string {
   return [
     `Deslop cannot start: ${component.id} version mismatch.`,
-    `Expected ${component.expectedVersion} from deployment-toolkit.json.`,
+    `Expected ${component.expectedVersion} from shipwright.json.`,
     `Found ${found} at ${candidate.path} from ${candidate.source}.`,
     "Use a matching binary or clear the configured override.",
   ].join(" ");
-}
-
-function prependToPath(env: NodeJS.ProcessEnv, dir: string): void {
-  const key = process.platform === "win32" ? "Path" : "PATH";
-  const existing = env[key] ?? "";
-  if (existing.split(path.delimiter).includes(dir)) return;
-  env[key] = existing ? `${dir}${path.delimiter}${existing}` : dir;
 }
 
 function nameWithSuffix(component: DeploymentComponent): string {

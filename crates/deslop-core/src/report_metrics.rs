@@ -11,36 +11,17 @@ use std::{
     hash::BuildHasher,
 };
 
-use serde::{Deserialize, Serialize};
-
 use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
     state::{FileId, FileRegistry},
 };
 
-/// Repo-wide duplication metrics, embedded at `Report.metrics`.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct RepoMetrics {
-    /// Physical lines across every file in `files_analysed`.
-    pub analysed_loc: u64,
-    /// Lines covered by `>= 2` non-hidden clone occurrences,
-    /// deduplicated per file so overlapping sibling-extension ranges
-    /// count once.
-    pub duplicated_loc: u64,
-    /// `100.0 * duplicated_loc / analysed_loc`, clamped into
-    /// `[0.0, 100.0]`. Zero when `analysed_loc == 0`.
-    pub duplication_percent: f64,
-    /// Count of clusters contributing to `duplicated_loc` (non-hidden,
-    /// size `>= 2` after hiding).
-    pub clusters_total: usize,
-    /// Count of files containing at least one non-hidden clone
-    /// occurrence. Upper-bounded by `files_analysed`.
-    pub duplicated_files: usize,
-    /// Resolved fail-over threshold. Always present; `source == "none"`
-    /// when no threshold is configured.
-    pub threshold: ThresholdSummary,
-}
+// `RepoMetrics`, `ThresholdSummary`, and `ThresholdSource` are generated
+// from `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The
+// data shapes live in `crate::wire_generated`; the constructors and
+// `Default` impl below stay here.
+pub use crate::wire_generated::{RepoMetrics, ThresholdSource, ThresholdSummary};
 
 impl RepoMetrics {
     /// Returns an empty metrics block (all counters zero, threshold
@@ -71,19 +52,6 @@ impl Default for RepoMetrics {
     }
 }
 
-/// Threshold verdict carried on [`RepoMetrics`] so renderers don't
-/// re-derive the pass/fail state.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct ThresholdSummary {
-    /// Active threshold as a percentage. `0.0` when `source == "none"`.
-    pub percent: f64,
-    /// True when `duplication_percent > percent` and `source` is not
-    /// `"none"`.
-    pub breached: bool,
-    /// Where the threshold came from: `"cli"`, `"config"`, or `"none"`.
-    pub source: ThresholdSource,
-}
-
 impl ThresholdSummary {
     /// Build the verdict from a resolved threshold and the measured
     /// duplication percentage.
@@ -106,19 +74,6 @@ impl ThresholdSummary {
             source: ThresholdSource::None,
         }
     }
-}
-
-/// Origin of the active fail-over threshold.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum ThresholdSource {
-    /// Threshold passed via `--fail-over`.
-    Cli,
-    /// Threshold loaded from `[threshold] max_duplication_percent`.
-    Config,
-    /// No threshold configured (or explicitly cleared via
-    /// `--no-fail-over`).
-    None,
 }
 
 /// Per-file analysed-line counts captured at file-read time on the

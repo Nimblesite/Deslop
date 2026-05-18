@@ -15,11 +15,35 @@ Build:
 make jetbrains-build
 ```
 
-Verify plugin metadata:
+Verify plugin metadata and structure:
 
 ```bash
 make jetbrains-verify
 ```
+
+Build the release zip and run all local package gates:
+
+```bash
+make jetbrains-package
+```
+
+Run resolver tests:
+
+```bash
+make jetbrains-test
+```
+
+Run resolver tests AND prove the resolver accepts the real released
+`deslop-lsp` binary plus rejects manifest drift:
+
+```bash
+make jetbrains-real-binary-test
+```
+
+Gradle is invoked via the checked-in wrapper at `clients/jetbrains/gradlew`
+(or `gradlew.bat` on Windows). A fresh checkout only needs a JDK on PATH —
+the wrapper downloads its own Gradle distribution. Override the binary by
+setting `GRADLE=/path/to/gradle` if you need a different runtime.
 
 Local Rider smoke path:
 

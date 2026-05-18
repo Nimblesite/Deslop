@@ -35,17 +35,16 @@ enum Audience {
 /// Builds the hover response for `cluster`.
 #[must_use]
 pub fn build_for_cluster(cluster: &ReportCluster) -> Hover {
-    hover_from_markdown(human_markdown(std::slice::from_ref(cluster), &[], None))
+    hover_from_markdown(human_markdown(std::slice::from_ref(cluster), None))
 }
 
 /// Builds the hover response for the clusters under the cursor.
 #[must_use]
 pub fn build_for_clusters_with_root(
     clusters: &[ReportCluster],
-    ranked_clusters: &[ReportCluster],
     workspace_root: &Path,
 ) -> Option<Hover> {
-    let value = human_markdown(clusters, ranked_clusters, Some(workspace_root));
+    let value = human_markdown(clusters, Some(workspace_root));
     (!value.is_empty()).then(|| hover_from_markdown(value))
 }
 
@@ -65,32 +64,24 @@ fn hover_from_markdown(value: String) -> Hover {
 /// LSP protocol see the same evidence as the JSON report.
 #[must_use]
 pub fn markdown_for(cluster: &ReportCluster) -> String {
-    render_clusters(std::slice::from_ref(cluster), &[], None, Audience::Agent)
+    render_clusters(std::slice::from_ref(cluster), None, Audience::Agent)
 }
 
 /// Renders the agent-facing hover markdown for multiple clusters.
 #[must_use]
-pub fn markdown_for_clusters(
-    clusters: &[ReportCluster],
-    ranked_clusters: &[ReportCluster],
-) -> String {
-    render_clusters(clusters, ranked_clusters, None, Audience::Agent)
+pub fn markdown_for_clusters(clusters: &[ReportCluster]) -> String {
+    render_clusters(clusters, None, Audience::Agent)
 }
 
 /// Renders human-visible hover markdown without raw signal details.
-fn human_markdown(
-    clusters: &[ReportCluster],
-    ranked_clusters: &[ReportCluster],
-    workspace_root: Option<&Path>,
-) -> String {
-    render_clusters(clusters, ranked_clusters, workspace_root, Audience::Human)
+fn human_markdown(clusters: &[ReportCluster], workspace_root: Option<&Path>) -> String {
+    render_clusters(clusters, workspace_root, Audience::Human)
 }
 
 /// Core rendering entry point; branches on `audience` to keep or drop
 /// the signal sentence.
 fn render_clusters(
     clusters: &[ReportCluster],
-    ranked_clusters: &[ReportCluster],
     workspace_root: Option<&Path>,
     audience: Audience,
 ) -> String {
@@ -98,15 +89,7 @@ fn render_clusters(
     let mut out = String::new();
     write_list_header(&mut out, clusters.len());
     for cluster in clusters {
-        let rank = rank_for(cluster, ranked_clusters);
-        write_cluster_block(
-            &mut out,
-            cluster,
-            rank,
-            workspace_root,
-            &mut cache,
-            audience,
-        );
+        write_cluster_block(&mut out, cluster, workspace_root, &mut cache, audience);
     }
     out
 }
@@ -122,16 +105,15 @@ fn write_list_header(out: &mut String, count: usize) {
 fn write_cluster_block(
     out: &mut String,
     cluster: &ReportCluster,
-    rank: Option<usize>,
     workspace_root: Option<&Path>,
     cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
     audience: Audience,
 ) {
-    let _ = writeln!(out, "- **{}**", cluster_summary(cluster, rank));
+    let _ = writeln!(out, "- **{}**", cluster_summary(cluster));
     if audience == Audience::Agent {
         let _ = writeln!(out, "  - {}", signal_sentence(cluster));
+        write_occurrences(out, cluster, workspace_root, cache);
     }
-    write_occurrences(out, cluster, workspace_root, cache);
     let _ = writeln!(out);
 }
 
@@ -147,14 +129,6 @@ fn write_occurrences(
         let location = occurrence_display_label(occurrence, workspace_root, cache);
         let _ = writeln!(out, "    - {location}");
     }
-}
-
-/// Finds the one-based global impact rank for a cluster.
-fn rank_for(cluster: &ReportCluster, ranked_clusters: &[ReportCluster]) -> Option<usize> {
-    ranked_clusters
-        .iter()
-        .position(|ranked| ranked.id == cluster.id)
-        .map(|index| index.saturating_add(1))
 }
 
 /// Formats one occurrence without exposing byte offsets.
@@ -216,12 +190,16 @@ mod tests {
                     path: PathBuf::from("Alpha.cs"),
                     start_byte: 10,
                     end_byte: 40,
+                    start_line: 1,
+                    end_line: 1,
                     hidden: false,
                 },
                 ReportOccurrence {
                     path: PathBuf::from("Beta.cs"),
                     start_byte: 5,
                     end_byte: 35,
+                    start_line: 1,
+                    end_line: 1,
                     hidden: false,
                 },
             ],
@@ -329,6 +307,37 @@ mod tests {
     }
 
     #[test]
+    fn human_hover_omits_occurrence_list() -> Result<()> {
+        // [LSP-HOVER] Human audience: compact summary only — the giant
+        // occurrence list belongs in agent-facing markdown, not in the
+        // card a human sees while coding.
+        let cluster = make_cluster();
+        let hover = build_for_cluster(&cluster);
+        let HoverContents::Markup(markup) = hover.contents else {
+            return Err(anyhow!(
+                "expected HoverContents::Markup, got a different variant"
+            ));
+        };
+        assert!(
+            !markup.value.contains("Occurrences:"),
+            "human hover must not dump the occurrence list: {}",
+            markup.value
+        );
+        assert!(
+            !markup.value.contains("Alpha.cs"),
+            "human hover must not list individual occurrence paths: {}",
+            markup.value
+        );
+        // Summary still carries the count phrase.
+        assert!(
+            markup.value.contains("occurrences"),
+            "human hover must still state the total count: {}",
+            markup.value
+        );
+        Ok(())
+    }
+
+    #[test]
     fn markdown_for_cluster_falls_back_to_size_when_total_is_missing() {
         let mut cluster = make_cluster();
         cluster.size = 35;
@@ -368,26 +377,31 @@ mod tests {
     }
 
     #[test]
-    fn markdown_for_clusters_lists_every_cluster_with_rank() {
-        let first = make_cluster();
+    fn markdown_for_clusters_lists_every_cluster_with_slug() {
+        let mut first = make_cluster();
+        first.id = "abcdef0123456789".into();
         let mut second = make_cluster();
-        second.id = "def456".into();
+        second.id = "fedcba9876543210".into();
         second.bucket = "nearly_identical".into();
         second.signals.structural = 0.33;
         second.signals.token_jaccard = 0.96;
         second.interpretation = "Nearly identical code. Review both.".into();
-        let body = markdown_for_clusters(&[first.clone(), second.clone()], &[second, first]);
+        let body = markdown_for_clusters(&[first, second]);
         assert!(
             body.contains("Deslop clusters at this location (2)"),
             "multi-cluster hover must include a list heading: {body}"
         );
         assert!(
-            body.contains("- **#1 Nearly identical code"),
-            "cluster rank must be rendered from global ordering: {body}"
+            body.contains("- **abcdef0 Identical code"),
+            "first cluster headline must lead with its slug: {body}"
         );
         assert!(
-            body.contains("- **#2 Identical code"),
-            "all overlapping clusters must render: {body}"
+            body.contains("- **fedcba9 Nearly identical code"),
+            "second cluster headline must lead with its slug: {body}"
+        );
+        assert!(
+            !body.contains("- **#"),
+            "headlines must not lead with rank-as-id: {body}"
         );
         assert!(
             !body.contains("Type-"),

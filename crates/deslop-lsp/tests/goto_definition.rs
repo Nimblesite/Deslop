@@ -19,7 +19,7 @@ const DEFINITION: &str = "textDocument/definition";
 #[test]
 fn definition_capability_is_advertised_on_initialize() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let init = handshake(&mut stdin, &mut stdout)?;
 
@@ -38,7 +38,7 @@ fn definition_capability_is_advertised_on_initialize() -> Result<()> {
 fn definition_jumps_to_canonical_occurrence_in_sibling_file() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;
@@ -79,7 +79,7 @@ fn definition_returns_none_for_a_file_with_no_clone() -> Result<()> {
         &lonely,
         "namespace Lonely { public class Unique { public int Seven() { return 7; } } }\n",
     )?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;

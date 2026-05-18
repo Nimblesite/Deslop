@@ -20,7 +20,7 @@ const REPORT_GET: &str = "deslop/reportGet";
 #[test]
 fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
@@ -45,7 +45,7 @@ fn virtual_document_schema_returns_non_empty_markdown() -> Result<()> {
 #[test]
 fn virtual_document_report_returns_canonical_text() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;
@@ -59,8 +59,17 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
     let body = result_string(&response)?;
     assert!(!body.is_empty(), "report text must not be empty");
     assert!(
-        body.contains("deslop") && body.contains("schema"),
-        "expected render_text header line; got: {body}"
+        body.lines().next().is_some_and(|line| {
+            line.starts_with("deslop ")
+                && line.contains(" file(s), ")
+                && line.contains(" cluster(s), ")
+                && line.contains(" hidden")
+        }),
+        "expected render_text summary header; got: {body}"
+    );
+    assert!(
+        body.contains("\nrepo: ") && body.contains("\n-- action hints --\n"),
+        "expected canonical report sections from render_text; got: {body}"
     );
     let _ = child.kill();
     Ok(())
@@ -69,7 +78,7 @@ fn virtual_document_report_returns_canonical_text() -> Result<()> {
 #[test]
 fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path())?;
@@ -98,7 +107,7 @@ fn virtual_document_cluster_returns_cluster_markdown() -> Result<()> {
 #[test]
 fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 
@@ -124,7 +133,7 @@ fn virtual_document_rejects_malformed_uri_with_invalid_params() -> Result<()> {
 #[test]
 fn virtual_document_rejects_unknown_cluster_id() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
 

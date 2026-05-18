@@ -37,9 +37,8 @@ Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries i
 ### [OUTPUT-SCHEMA-JSON] Canonical JSON schema
 JSON is the canonical report format ([PRINCIPLES-AUDIENCE-AGENT]). Text and HTML are derived from it — nothing lives in two places. Text is terse and AI-readable (ASCII, line-oriented, no colour). HTML is single-file, inline-CSS, human-readable, and embeds the same `schema_doc` and `action_hints` the JSON carries so a human opening the file cold understands what they are looking at.
 
-Top level at `report_schema_version = 2`:
+Top level:
 
-- `report_schema_version: u32` — bumped on breaking change.
 - `tool_version: String` — producer binary version.
 - `min_nodes: u32` — subtree size floor used for the run.
 - `files_analysed: usize` — count of files actually parsed.
@@ -70,7 +69,7 @@ One honest number, computed deterministically from the same cluster set the repo
 - `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
 - `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric.
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
-- `clusters_total: usize` — count of clusters contributing to `duplicated_loc` (i.e. non-hidden clusters with ≥ 2 occurrences). Matches `clusters.len()` at `report_schema_version = 3` but is carried explicitly so downstream consumers don't re-derive it.
+- `clusters_total: usize` — count of clusters contributing to `duplicated_loc` (i.e. non-hidden clusters with ≥ 2 occurrences). Matches `clusters.len()` but is carried explicitly so downstream consumers don't re-derive it.
 - `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
 
 Deliberate non-metrics:
@@ -90,7 +89,7 @@ Exit codes:
 - `0` — analysis succeeded; `duplication_percent ≤ threshold` (or no threshold was set).
 - `1` — unexpected runtime error (parse failure, I/O error, cache corruption that couldn't be recovered). Pre-existing behaviour; unchanged by this spec.
 - `2` — invalid CLI invocation (bad flag, incompatible combination, missing required argument). Pre-existing behaviour; unchanged.
-- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis. The report is still written to disk in full so CI can surface the offenders. Added at `report_schema_version = 3`.
+- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis. The report is still written to disk in full so CI can surface the offenders.
 
 Threshold sources, highest precedence first:
 
@@ -134,7 +133,7 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 7. **Embedding pass (pluggable provider, local-by-default):** embed every AST subtree from step 3 through the configured `EmbeddingProvider`. Provider (`--embedding-provider`, default `ollama`) and model (`--embedding-model`, default `nomic-embed-code`) are runtime-selectable — never hard-coded. Index via HNSW (`usearch` or `instant-distance`, both pure Rust). For each subtree, retrieve top-k neighbors above a cosine threshold. Catches Type-3 and Type-4 the prior passes miss. **First-class pipeline stage, not optional.**
 8. **Candidate union + fusion:** union the pairs produced by steps 4, 6, 7. Drop pairs whose fingerprints come from different language ids unless [CONFIG-CROSS-LANGUAGE] is explicitly enabled. For each remaining pair compute `(structural_sim, token_jaccard, embedding_cos)`, normalize, combine via **max-normalized sum** (per ensemble-LLM 2025). Cluster by transitive closure above a threshold.
 9. **Ranking score:** `weight = clone_node_count × (cluster_size − 1) × log(total_spanned_loc) × fusion_score`. Sort descending. `cluster_size − 1` ensures singletons score zero.
-10. **Output (agent-first):** JSON is canonical; text is a pretty-printer over the same struct. Stable schema with `report_schema_version`. Each cluster: exact byte ranges, file paths, canonical representative snippet, per-signal scores (structural / LSH / embedding), a short agent-oriented `summary`, and a refactor hint where reliably inferrable. ASCII-only text format; no colour codes, no paging. See "Audience for the report" above.
+10. **Output (agent-first):** JSON is canonical; text is a pretty-printer over the same struct. Each cluster: exact byte ranges, file paths, canonical representative snippet, per-signal scores (structural / LSH / embedding), a short agent-oriented `summary`, and a refactor hint where reliably inferrable. ASCII-only text format; no colour codes, no paging. See "Audience for the report" above.
 11. **Incremental cache:** `(file_content_hash, provider_id, model_id, model_version) → (parse_tree, subtree_fingerprints, embeddings)`. Re-runs with unchanged files skip all inference. v1 uses this to make batch runs cheap; v2 uses the same keys for a watcher-driven update loop. Switching embedding provider/model invalidates only the embedding layer, not the structural/LSH caches.
 12. **Library vs binary split:** `deslop-core` owns the pipeline. `deslop` binary is a thin shell. An MCP/LSP daemon binary is a later sibling shell over the same crate — no pipeline code moves.
 13. **Incremental update entry point from day one:** `deslop-core` exposes `update_files(changed: &[FileId]) -> ReportDelta` as a first-class API, even though v1's only caller is `main`. This is the function the future file watcher will call.

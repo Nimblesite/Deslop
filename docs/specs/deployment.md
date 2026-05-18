@@ -6,7 +6,7 @@ GitHub issues #37, #38, #39, #40, and #41.
 
 ### [DEPLOY-MANIFEST] Manifest authority
 
-`deployment-toolkit.json` at the repository root is the single source of truth
+`shipwright.json` at the repository root is the single source of truth
 for deployable components, expected versions, host startup checks, package
 contents, and CI release gates.
 
@@ -74,7 +74,7 @@ JSON version output, or protocol metadata drift apart.
 
 ### [DEPLOY-RESOLVER] Host resolver contract
 
-IDE hosts must load `deployment-toolkit.json` before reporting ready or
+IDE hosts must load `shipwright.json` before reporting ready or
 starting required integrations. The host then reads its
 `activationVerifies` list and verifies every required component for the current
 platform.
@@ -88,7 +88,8 @@ For Deslop's migration issues, mismatch behavior is:
 - An explicit user setting mismatch is a hard activation error.
 - `DESLOP_LSP_PATH`, `DESLOP_MCP_PATH`, and `DESLOP_BINARY_DIR` mismatches are
   hard activation errors for required components.
-- A mismatched PATH candidate is skipped when a matching bundled binary exists.
+- VS Code does not probe PATH for activation binaries. It resolves explicit
+  user/env overrides or the bundled path under the installed extension.
 - A mismatched bundled binary is a package/release failure and blocks
   activation.
 
@@ -97,17 +98,51 @@ found version or `not found`, candidate path/source, and the next action.
 
 ### [DEPLOY-VSIX-PACKAGE] VSIX package contract
 
-The VSIX artifact must include:
+Each platform-specific VSIX artifact must be built with `vsce package --target`
+for the target platform and must include:
 
-- `extension/deployment-toolkit.json`.
-- `deslop`, `deslop-lsp`, and `deslop-mcp` for the target platform under
+- `extension/shipwright.json`.
+- `deslop`, `deslop-lsp`, and `deslop-mcp` for exactly one target platform under
   `extension/bin/<platform>/`.
 - No undeclared executable under `extension/bin/<platform>/`.
+- No binaries for any other platform.
 
 Package tests must inspect the produced `.vsix`, not only the staging
 directory. They must fail on a missing manifest, missing binary, extra binary,
 non-executable binary where executability is meaningful, or wrong-version
 binary.
+
+### [DEPLOY-EXTERNAL-MCP-CONSUMER] External MCP clients consume the VSIX-bundled binary
+
+Every MCP client that runs outside the VS Code host process — Claude Code (CLI),
+Claude Desktop, Codex, Cursor, Continue — must reference `deslop-mcp` by an
+**absolute path into the unpacked VSIX**:
+
+```
+~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+```
+
+The unpacked VSIX is the canonical distribution surface per [DEPLOY-VSIX-PACKAGE].
+Pointing an MCP client at any other binary breaks [DEPLOY-VERSION-CONTRACT] +
+[DEPLOY-PROTOCOL-VERSION]: a locally-built `target/release/deslop-mcp` would
+shadow the shipright-versioned bundle and silently drift the agent's analysis
+off the extension's wire contract. The only PATH-resolved form Deslop supports
+is for users who installed the CLI via Homebrew or Scoop, because those package
+managers version the binary lock-step with the release.
+
+Consequences for this repo:
+
+- The Makefile must not provide a target that puts source-built `deslop`,
+  `deslop-lsp`, or `deslop-mcp` binaries onto the user's `PATH`. There is no
+  `make install-binary` target. `cargo install --path crates/deslop-*` is
+  forbidden.
+- `make delete-path-binaries` is invoked from every `vsix-*` and `test` target
+  so a developer machine that previously leaked binaries onto `PATH` is
+  scrubbed before tests run, and the rule is verifiable on a fresh checkout.
+- Every doc that shows an MCP wiring snippet (`README.md`,
+  `clients/vscode/README.md`, `docs/snippets/agents-md-recipe.md`,
+  `site/src/docs/ai-integration.md`) leads with the absolute VSIX path and
+  documents the brew/scoop PATH form as the only secondary alternative.
 
 ### [DEPLOY-EXTENSION-BUNDLED-TESTS] Extension tests must use bundled binaries
 
@@ -129,7 +164,7 @@ masked by a developer machine install.
 
 ### [DEPLOY-JETBRAINS-PACKAGE] JetBrains package contract
 
-The JetBrains plugin package must include `deployment-toolkit.json` at plugin
+The JetBrains plugin package must include `shipwright.json` at plugin
 root and verify `deslop-lsp` before creating or starting the LSP descriptor.
 
 If the package bundles native helpers under plugin-root `bin/<platform>/`, each
@@ -143,7 +178,7 @@ CI and release jobs must fail fast on deployment drift.
 
 Required gates:
 
-- Validate `deployment-toolkit.json` with the Deployment Toolkit schema.
+- Validate `shipwright.json` with the Deployment Toolkit schema.
 - Verify `deslop`, `deslop-lsp`, and `deslop-mcp` plain and JSON version
   output after release binaries are built.
 - Verify LSP and MCP initialize metadata against the manifest version.
@@ -156,9 +191,10 @@ them directly. Until then, product-local tests must prove the same behavior.
 ### [DEPLOY-PRIVATE-DTK-DOCS] Private Deployment Toolkit docs
 
 Deployment Toolkit documentation and fixtures live in the private
-`MelbourneDeveloper/deployment_toolkit` repository. Agents working these issues
-must use authenticated `gh` access to read the docs and fixtures; they must not
-rely on local absolute paths or assume the GitHub URLs are public.
+`Nimblesite/Shipwright` repository (formerly `MelbourneDeveloper/deployment_toolkit`).
+Agents working these issues must use authenticated `gh` access to read the docs
+and fixtures; they must not rely on local absolute paths or assume the GitHub
+URLs are public.
 
 Relevant private docs include:
 

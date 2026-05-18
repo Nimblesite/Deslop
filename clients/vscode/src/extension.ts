@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
+  Middleware,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
@@ -30,6 +31,7 @@ import {
   SessionProvider,
   StatusTicker,
 } from "./tree/providers";
+import { ClusterHoverProvider } from "./decorations/clusterHoverProvider";
 import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
@@ -46,6 +48,29 @@ import {
 let client: LanguageClient | undefined;
 let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
+let activeReportStore: ReportStore | undefined;
+
+const ANALYSED_DOCUMENTS = [
+  { language: "csharp", scheme: "file" },
+  { language: "rust", scheme: "file" },
+  { language: "python", scheme: "file" },
+];
+
+const PRODUCTION_EMBEDDING_PROVIDER = "ollama";
+const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
+const DEFAULT_EMBEDDING_ENDPOINT = "http://127.0.0.1:11434";
+const DEFAULT_EMBEDDING_MODE = "off";
+
+const HOVER_SUPPRESSING_MIDDLEWARE = {
+  provideHover: () => null,
+} satisfies Middleware;
+
+interface EmbeddingSettings {
+  readonly provider: typeof PRODUCTION_EMBEDDING_PROVIDER;
+  readonly model: string;
+  readonly endpoint: string;
+  readonly mode: string;
+}
 
 /// Public API returned by `activate()`. Lets tests reach the live
 /// LanguageClient without parallel activation or command-surface hacks.
@@ -53,9 +78,12 @@ export interface ExtensionApi {
   readonly client: LanguageClient | undefined;
   readonly resolvedLsp: ResolvedBinary | undefined;
   readonly resolvedMcp: ResolvedBinary | undefined;
+  readonly reportStore: ReportStore | undefined;
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<ExtensionApi> {
+export async function activate(
+  context: vscode.ExtensionContext,
+): Promise<ExtensionApi> {
   initOutputChannel();
   log("extension activating", {
     extensionPath: context.extensionPath,
@@ -65,7 +93,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   });
 
   const reportStore = new ReportStore();
+  activeReportStore = reportStore;
   context.subscriptions.push(reportStore);
+  context.subscriptions.push({
+    dispose: () => {
+      activeReportStore = undefined;
+    },
+  });
   registerClusterDocumentProvider(context, reportStore);
 
   const ticker = new StatusTicker();
@@ -86,7 +120,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     vscode.window.registerTreeDataProvider("deslop.topOffenders", topOffenders),
     vscode.window.registerTreeDataProvider("deslop.focusedFile", focusedFile),
     vscode.window.registerTreeDataProvider("deslop.session", session),
-    vscode.commands.registerCommand("deslop.revealLog", () => initOutputChannel().show(true)),
+    vscode.commands.registerCommand("deslop.revealLog", () =>
+      initOutputChannel().show(true),
+    ),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("deslop.topOffenders.groupBy")) return;
       syncTopOffendersGroupByContext();
@@ -122,8 +158,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
     return currentApi();
   }
 
+  context.subscriptions.push(wireDirtyDocuments(reportStore));
+
   const decorations = new DecorationManager(reportStore);
   context.subscriptions.push(decorations);
+
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      ANALYSED_DOCUMENTS,
+      new ClusterHoverProvider(reportStore),
+    ),
+  );
 
   const bubble = new LiveBubble(reportStore, () => client);
   context.subscriptions.push(bubble);
@@ -151,8 +196,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<Extens
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("deslop.embedding")) return;
-      syncEmbeddingSettingsToLsp(reportStore, () => client).catch((err: unknown) =>
-        logError(err, "sync embedding settings to LSP"),
+      syncEmbeddingSettingsToLsp(reportStore, () => client).catch(
+        (err: unknown) => logError(err, "sync embedding settings to LSP"),
       );
     }),
   );
@@ -168,9 +213,18 @@ export async function deactivate(): Promise<void> {
 
 function currentApi(): ExtensionApi {
   return {
-    get client() { return client; },
-    get resolvedLsp() { return resolvedLsp; },
-    get resolvedMcp() { return resolvedMcp; },
+    get client() {
+      return client;
+    },
+    get resolvedLsp() {
+      return resolvedLsp;
+    },
+    get resolvedMcp() {
+      return resolvedMcp;
+    },
+    get reportStore() {
+      return activeReportStore;
+    },
   };
 }
 
@@ -204,20 +258,23 @@ function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
   }
   const serverOptions: ServerOptions = {
     run: { command: lsp.path, transport: TransportKind.stdio, args: runArgs },
-    debug: { command: lsp.path, transport: TransportKind.stdio, args: debugArgs },
+    debug: {
+      command: lsp.path,
+      transport: TransportKind.stdio,
+      args: debugArgs,
+    },
   };
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [
-      { language: "csharp", scheme: "file" },
-      { language: "rust", scheme: "file" },
-      { language: "python", scheme: "file" },
-    ],
+    documentSelector: ANALYSED_DOCUMENTS,
     synchronize: {
       configurationSection: "deslop",
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{cs,rs,py}"),
     },
     outputChannel: initOutputChannel(),
     initializationOptions: currentInitializationOptions(),
+    // The TypeScript ClusterHoverProvider owns the editor hover card.
+    // Suppress the LSP textDocument/hover so they don't stack in the popup.
+    middleware: HOVER_SUPPRESSING_MIDDLEWARE,
   };
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }
@@ -226,20 +283,18 @@ export function buildServerArgs(
   workspaceRoot: string | undefined,
   debug: boolean,
 ): string[] {
-  // [LSP-EMBEDDING-CONSENT] Fresh settings pass `--embeddings off`;
-  // the picker persists `auto` only after explicit model selection.
   if (!workspaceRoot) return debug ? ["--debug"] : [];
-  const cfg = vscode.workspace.getConfiguration("deslop");
   const args = [workspaceRoot];
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const workerThreads = cfg.get<number>("lsp.workerThreads", 0);
+  if (Number.isInteger(workerThreads) && workerThreads > 0) {
+    args.push("--worker-threads", String(workerThreads));
+  }
+  const nice = cfg.get<number>("lsp.nice", 0);
+  if (Number.isInteger(nice) && nice !== 0) {
+    args.push("--nice", String(Math.max(-20, Math.min(19, nice))));
+  }
   if (debug) args.push("--debug");
-  args.push("--min-nodes", String(cfg.get<number>("minNodes", 30)));
-  args.push("--embeddings", cfg.get<string>("embedding.mode", "off"));
-  args.push("--embedding-provider", cfg.get<string>("embedding.provider", "ollama"));
-  args.push("--embedding-model", cfg.get<string>("embedding.model", "nomic-embed-text"));
-  args.push(
-    "--embedding-endpoint",
-    cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434"),
-  );
   return args;
 }
 
@@ -252,16 +307,39 @@ export function resolveWorkspaceRoot(): string | undefined {
 
 export function currentInitializationOptions(): Record<string, unknown> {
   const cfg = vscode.workspace.getConfiguration("deslop");
+  const embedding = embeddingSettingsFromConfiguration(cfg);
   return {
     minNodes: cfg.get<number>("minNodes", 30),
-    embedding: {
-      provider: cfg.get<string>("embedding.provider", "ollama"),
-      model: cfg.get<string>("embedding.model", "nomic-embed-text"),
-      endpoint: cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434"),
-      mode: cfg.get<string>("embedding.mode", "off"),
-    },
+    embedding,
     incremental: cfg.get<boolean>("incremental", true),
     configPath: cfg.get<string>("configPath", ""),
+  };
+}
+
+function embeddingSettingsFromConfiguration(
+  cfg: vscode.WorkspaceConfiguration,
+): EmbeddingSettings {
+  const provider = cfg.get<string>(
+    "embedding.provider",
+    PRODUCTION_EMBEDDING_PROVIDER,
+  );
+  const endpoint = cfg.get<string>(
+    "embedding.endpoint",
+    DEFAULT_EMBEDDING_ENDPOINT,
+  );
+  if (provider !== PRODUCTION_EMBEDDING_PROVIDER) {
+    return {
+      provider: PRODUCTION_EMBEDDING_PROVIDER,
+      model: DEFAULT_EMBEDDING_MODEL,
+      endpoint,
+      mode: DEFAULT_EMBEDDING_MODE,
+    };
+  }
+  return {
+    provider: PRODUCTION_EMBEDDING_PROVIDER,
+    model: cfg.get<string>("embedding.model", DEFAULT_EMBEDDING_MODEL),
+    endpoint,
+    mode: cfg.get<string>("embedding.mode", DEFAULT_EMBEDDING_MODE),
   };
 }
 
@@ -271,7 +349,10 @@ async function refreshAfterChange(
   payload: ReportChangedNotification,
 ): Promise<void> {
   const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
-  if (delta) {
+  // applyDelta silently bails when no current report exists, which would
+  // strand the notification during the startup window before
+  // seedInitialReport completes. Fall back to the full snapshot in that case.
+  if (delta && store.current.report) {
     store.applyDelta(delta);
     return;
   }
@@ -279,39 +360,65 @@ async function refreshAfterChange(
   store.setSnapshot(snapshot, payload.generation);
 }
 
-async function refreshAfterEmbedding(c: LanguageClient, store: ReportStore): Promise<void> {
+async function refreshAfterEmbedding(
+  c: LanguageClient,
+  store: ReportStore,
+): Promise<void> {
   const snapshot = await c.sendRequest<Report>("deslop/reportGet");
   store.setSnapshot(snapshot, store.current.generation + 1);
 }
 
 export function wireNotifications(c: LanguageClient, store: ReportStore): void {
-  c.onNotification("deslop/reportChanged", (payload: ReportChangedNotification) => {
-    store.notifyChange(payload.summary);
-    refreshAfterChange(c, store, payload).catch((err: unknown) =>
-      logError(err, "refresh report after change"),
-    );
-  });
+  c.onNotification(
+    "deslop/reportChanged",
+    (payload: ReportChangedNotification) => {
+      refreshAfterChange(c, store, payload).catch((err: unknown) =>
+        logError(err, "refresh report after change"),
+      );
+    },
+  );
   c.onNotification("deslop/analysisState", (state: AnalysisState) => {
     log("analysis state", { state });
-    if (state === "running") store.setLifecycle({ kind: "analysing" });
-    else if (state === "idle") store.setLifecycle({ kind: "ready" });
-    else if (state === "errored") {
+    if (state.state === "running") store.setLifecycle({ kind: "analysing" });
+    else if (state.state === "idle") store.setLifecycle({ kind: "ready" });
+    else if (state.state === "errored") {
       store.setLifecycle({
         kind: "failed",
-        message: "Analysis failed — see the Deslop log for details.",
+        message: state.message,
       });
     }
   });
-  c.onNotification("deslop/embeddingProgress", (progress: EmbeddingProgress) => {
-    if (progress.phase === "complete") {
-      store.setEmbeddingProgress(null);
-      refreshAfterEmbedding(c, store).catch((err: unknown) =>
-        logError(err, "refresh report after embedding"),
-      );
-    } else {
-      store.setEmbeddingProgress(progress);
-    }
+  c.onNotification(
+    "deslop/embeddingProgress",
+    (progress: EmbeddingProgress) => {
+      if (progress.phase === "complete") {
+        store.setEmbeddingProgress(null);
+        refreshAfterEmbedding(c, store).catch((err: unknown) =>
+          logError(err, "refresh report after embedding"),
+        );
+      } else {
+        store.setEmbeddingProgress(progress);
+      }
+    },
+  );
+}
+
+export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {
+  // [VSIX-STATE-DIRTY]: text edits add to the dirty set so the visible
+  // projection elides their occurrences; saves remove the file from the set
+  // so the LSP's next reportChanged converges both views again.
+  const onChange = vscode.workspace.onDidChangeTextDocument((event) => {
+    store.markFileDirty(event.document.uri.fsPath);
   });
+  const onSave = vscode.workspace.onDidSaveTextDocument((doc) => {
+    store.clearFileDirty(doc.uri.fsPath);
+  });
+  return {
+    dispose: () => {
+      onChange.dispose();
+      onSave.dispose();
+    },
+  };
 }
 
 export async function syncEmbeddingSettingsToLsp(
@@ -321,11 +428,8 @@ export async function syncEmbeddingSettingsToLsp(
   const c = clientOf();
   if (!c) return;
   const cfg = vscode.workspace.getConfiguration("deslop");
-  const mode = cfg.get<string>("embedding.mode", "off");
+  const { provider, model, endpoint, mode } = embeddingSettingsFromConfiguration(cfg);
   if (mode === "off") return;
-  const provider = cfg.get<string>("embedding.provider", "ollama");
-  const model = cfg.get<string>("embedding.model", "nomic-embed-text");
-  const endpoint = cfg.get<string>("embedding.endpoint", "http://127.0.0.1:11434");
   if (store.current.pendingEmbeddingModel === model) return;
   const active = store.current.report?.embedding_provenance;
   if (active?.provider_id === provider && active.model_id === model) return;
@@ -342,7 +446,10 @@ export async function syncEmbeddingSettingsToLsp(
   }
 }
 
-export async function seedInitialReport(c: LanguageClient, store: ReportStore): Promise<void> {
+export async function seedInitialReport(
+  c: LanguageClient,
+  store: ReportStore,
+): Promise<void> {
   try {
     const snapshot = await c.sendRequest<Report>("deslop/reportGet");
     store.setSnapshot(snapshot, 0);
@@ -378,11 +485,16 @@ function requireResolved(
   componentId: string,
 ): ResolvedBinary {
   const binary = resolved[componentId];
-  if (!binary) throw new Error(`Required Deslop component ${componentId} did not resolve.`);
+  if (!binary)
+    throw new Error(
+      `Required Deslop component ${componentId} did not resolve.`,
+    );
   return binary;
 }
 
-export function currentExtensionVersion(context: vscode.ExtensionContext): string {
+export function currentExtensionVersion(
+  context: vscode.ExtensionContext,
+): string {
   const raw = context.extension.packageJSON as { version?: unknown };
   return typeof raw.version === "string" ? raw.version : "0.0.0";
 }
@@ -399,7 +511,9 @@ export function revealActiveBinary(
       ? `deslop-mcp → ${mcp.path}  [${mcp.source}, version=${mcp.version ?? "unknown"}]`
       : "deslop-mcp → not bundled",
   ];
-  vscode.window.showInformationMessage(lines.join("\n"), { modal: true });
+  void vscode.window
+    .showInformationMessage(lines.join("\n"), { modal: true })
+    .then(undefined, (err) => logError(err, "show active binary dialog"));
 }
 
 export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
@@ -413,12 +527,10 @@ export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
       ? err.message
       : "Deslop failed to start its analysis server. See the Deslop output channel.";
   store?.setLifecycle({ kind: "failed", message });
-  vscode.window
-    .showErrorMessage(message, "Reveal log")
-    .then(
-      (choice) => {
-        if (choice === "Reveal log") initOutputChannel().show();
-      },
-      (uiErr) => logError(uiErr, "showErrorMessage"),
-    );
+  vscode.window.showErrorMessage(message, "Reveal log").then(
+    (choice) => {
+      if (choice === "Reveal log") initOutputChannel().show();
+    },
+    (uiErr) => logError(uiErr, "showErrorMessage"),
+  );
 }

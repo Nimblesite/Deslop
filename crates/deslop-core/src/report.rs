@@ -7,29 +7,29 @@
 //! [EXCLUSION-CONFIG] — hidden occurrences are flagged per-occurrence,
 //! hidden-only clusters are dropped and counted in `clusters_hidden`.
 
-use std::{
-    collections::HashMap,
-    hash::BuildHasher,
-    path::{Path, PathBuf},
-};
-
-use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, hash::BuildHasher, path::Path};
 
 use crate::{
-    ast::ByteRange,
     boilerplate::BoilerplateRange,
-    buckets::{bucket_labels, classify_signals, ClusterKind},
+    buckets::{classify, ClusterKind},
     cluster::Cluster,
+    cluster_filters::is_noise_pattern,
     config::ExclusionConfig,
-    fingerprint::Fingerprint,
     pair::PairScore,
-    report_boilerplate::{build_boilerplate_hints, ReportBoilerplateHint},
-    report_location::format_occurrence,
-    report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs, RepoMetrics},
+    report_boilerplate::build_boilerplate_hints,
+    report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
+    report_render::cluster_to_report,
     state::{FileId, FileRegistry},
 };
 
+// `Report`, `CacheStats`, `EmbeddingProvenance`, `ReportCluster`,
+// `ReportSignals`, and `ReportOccurrence` are generated from
+// `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The data
+// shapes live in `crate::wire_generated`; the impls below stay here.
 pub use crate::report_hints::{default_action_hints, ActionHint};
+pub use crate::wire_generated::{
+    CacheStats, EmbeddingProvenance, Report, ReportCluster, ReportOccurrence, ReportSignals,
+};
 
 /// Default occurrence cap applied by [`Report::truncate_for_wire`].
 /// Chosen so a pathological 26k-occurrence cluster (real-world alembic
@@ -38,61 +38,10 @@ pub use crate::report_hints::{default_action_hints, ActionHint};
 /// via `cluster/byId` on the non-live transport.
 pub const LIVE_WIRE_OCCURRENCE_CAP: usize = 100;
 
-/// Current report schema version.
-///
-/// Pinned at `1` for the life of the pre-stable development period.
-/// The report shape is still in flux and MAY change between releases
-/// while the tool is in its early stages; consumers should treat any
-/// pre-1.0 report as best-effort. Once the tool stabilises this will
-/// adopt semantic versioning and start bumping on breaking changes.
-/// Until then: do **not** bump this constant.
-pub const REPORT_SCHEMA_VERSION: u32 = 1;
-
 /// Markdown explaining the report schema. Embedded via `include_str!`
 /// from the single source of truth in `docs/specs/REPORTING-CONTEXT.md`
 /// so the JSON can never drift from the human-readable description.
 pub const SCHEMA_DOC: &str = include_str!("../../../docs/specs/REPORTING-CONTEXT.md");
-
-/// A complete analysis report.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Report {
-    /// Stable schema version so agent consumers can parse defensively.
-    pub report_schema_version: u32,
-    /// Binary / library version that produced the report.
-    pub tool_version: String,
-    /// Minimum subtree node count used for clustering.
-    pub min_nodes: u32,
-    /// Number of files analysed.
-    pub files_analysed: usize,
-    /// Number of clusters hidden from `clusters` because every member
-    /// matched a [EXCLUSION-CONFIG] `report_hide` pattern. Makes the
-    /// volume of suppressed duplication visible without leaking
-    /// contents.
-    pub clusters_hidden: usize,
-    /// Incremental-cache hit / miss counters for this run
-    /// ([PIPELINE-INCREMENTAL]). Defaults to zero when deserialising
-    /// older reports that pre-date the field.
-    #[serde(default)]
-    pub cache_stats: CacheStats,
-    /// Repo-wide duplication totals ([METRICS-REPO]). Deserialises as
-    /// empty when older (schema v2) reports pre-date the field so
-    /// `--from-report` still round-trips them.
-    #[serde(default)]
-    pub metrics: RepoMetrics,
-    /// Markdown schema explanation; see [`SCHEMA_DOC`].
-    pub schema_doc: String,
-    /// Short agent-oriented playbook; see [`default_action_hints`].
-    pub action_hints: Vec<ActionHint>,
-    /// Optional import/prologue hygiene hints from [PIPELINE-BOILERPLATE-FILTER].
-    #[serde(default)]
-    pub boilerplate_hints: Vec<ReportBoilerplateHint>,
-    /// Which embedding provider / model / version produced the
-    /// `embedding_cos` signals in this report, if any. `None` when
-    /// the embedding pass was disabled or failed ([FUSION-EMBED-PROVIDER]).
-    pub embedding_provenance: Option<EmbeddingProvenance>,
-    /// Ordered clusters, worst offenders first.
-    pub clusters: Vec<ReportCluster>,
-}
 
 impl Report {
     /// Projects this report into its live-wire shape: caps every
@@ -120,148 +69,6 @@ impl Report {
     }
 }
 
-/// Per-run incremental-cache telemetry. `hits + misses` equals the
-/// number of files that reached the parse stage — counters are raw
-/// so downstream tooling can compute rates itself. Zero-zero means
-/// the pass ran with `incremental: false` (or discovered no files).
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
-pub struct CacheStats {
-    /// Files resolved from the on-disk fingerprint cache.
-    pub hits: usize,
-    /// Files parsed from scratch because the cache entry was absent,
-    /// stale, or unreadable.
-    pub misses: usize,
-}
-
-/// Provenance block pinning the `(provider_id, model_id, model_version)`
-/// triple used when the embedding pass ran. Serialised into the report
-/// header per [FUSION-EMBED-PROVIDER] so switching providers/models and
-/// degraded embedding coverage are visible to consumers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmbeddingProvenance {
-    /// Registry key of the provider (e.g. `"ollama"`).
-    pub provider_id: String,
-    /// Human-readable model identifier.
-    pub model_id: String,
-    /// Opaque model version / digest reported by the provider.
-    pub model_version: String,
-    /// Embedding dimensionality the provider returned.
-    pub dimensions: usize,
-    /// Number of subtree embeddings requested or served from cache.
-    #[serde(default)]
-    pub attempted_subtrees: usize,
-    /// Number of unique successful subtree embeddings fed into ANN.
-    #[serde(default)]
-    pub indexed_subtrees: usize,
-    /// Number of subtree embeddings rejected by the provider. Rejected
-    /// subtrees are excluded from the embedding signal, never represented
-    /// as zero vectors.
-    #[serde(default)]
-    pub failed_subtrees: usize,
-}
-
-/// One cluster as it appears in the rendered report.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReportCluster {
-    /// Stable short id for cross-referencing.
-    pub id: String,
-    /// Ranking weight (higher = worse). See [PIPELINE-RANK-WORST-FIRST].
-    pub weight: f64,
-    /// Size of the cluster (count of cloned occurrences).
-    pub size: usize,
-    /// AST node count of one canonical member.
-    pub canonical_node_count: usize,
-    /// Per-cluster signal breakdown so agent consumers can tell **why**
-    /// the cluster was flagged ([PRINCIPLES-AUDIENCE-AGENT],
-    /// [FUSION-STRATEGY-MAX-SUM]).
-    pub signals: ReportSignals,
-    /// Canonical bucket ([CLONE-BUCKETS]) the cluster falls into.
-    /// One of `"identical" | "nearly_identical" | "loosely_similar" |
-    /// "same_behavior"`. Every consumer (renderer, MCP tool, webview)
-    /// reads this field instead of re-deriving routing from the signal
-    /// triple. `#[serde(default)]` lets `--from-report` keep
-    /// round-tripping older reports that pre-date the field; the
-    /// renderer re-routes when empty.
-    #[serde(default)]
-    pub bucket: String,
-    /// Every occurrence of the clone. On the live wire this vector is
-    /// capped by [`Report::truncate_for_wire`]; [`occurrences_total`]
-    /// and [`occurrences_truncated`] record the original length so
-    /// clients can page via `cluster/byId` if they need the rest.
-    pub occurrences: Vec<ReportOccurrence>,
-    /// Total number of occurrences before wire truncation. Equals
-    /// [`size`] on a full CLI report; set explicitly so live callers
-    /// can surface "N of M" without fetching the full cluster.
-    /// `#[serde(default)]` lets older reports (pre-cap) round-trip —
-    /// callers fall back to `size` when 0.
-    #[serde(default)]
-    pub occurrences_total: usize,
-    /// True when [`occurrences`] was truncated for the wire. False on
-    /// CLI reports and on older reports (`#[serde(default)]`).
-    #[serde(default)]
-    pub occurrences_truncated: bool,
-    /// Agent-oriented one-line synthesis (see
-    /// [PRINCIPLES-AUDIENCE-AGENT]). Blanked by
-    /// [`Report::truncate_for_wire`] because every client re-derives
-    /// it from `bucket` + `occurrences` + `signals`.
-    pub summary: String,
-    /// Derived one-line interpretation; blanked by
-    /// [`Report::truncate_for_wire`] because clients re-derive it.
-    pub interpretation: String,
-}
-
-/// Recomputes each cluster's ranking weight from non-hidden
-/// occurrences only, then re-sorts the slice worst-first. Applied
-/// after `render_report` has materialised occurrences with their
-/// `hidden` flags so a mixed cluster cannot ride hidden volume into
-/// the top of Top Offenders ([#140 EXCLUSION-CONFIG]).
-fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster]) {
-    for cluster in &mut *clusters {
-        let visible = visible_occurrence_count(cluster);
-        cluster.weight = visible_rank_weight(cluster.canonical_node_count, visible);
-    }
-    clusters.sort_by(|left, right| {
-        right
-            .weight
-            .partial_cmp(&left.weight)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.id.cmp(&right.id))
-    });
-}
-
-/// Counts non-hidden occurrences on a rendered cluster. Hidden
-/// occurrences still travel with the cluster so consumers retain the
-/// "regular code duplicates generated code" context, but ranking
-/// ignores them.
-fn visible_occurrence_count(cluster: &ReportCluster) -> usize {
-    cluster
-        .occurrences
-        .iter()
-        .filter(|occurrence| !occurrence.hidden)
-        .count()
-}
-
-/// Mirrors [PIPELINE-RANK-WORST-FIRST] but feeds it the visible
-/// occurrence count. Empty visible sets score zero so a cluster that
-/// is technically not all-hidden but has only one actionable copy
-/// sinks below cleaner clusters with more refactorable duplication.
-fn visible_rank_weight(canonical_node_count: usize, visible_size: usize) -> f64 {
-    if visible_size < 2 {
-        return 0.0;
-    }
-    let nodes = lossless_u32_to_f64(canonical_node_count.max(1));
-    let size_minus_one = lossless_u32_to_f64(visible_size.saturating_sub(1));
-    nodes * size_minus_one
-}
-
-/// Converts a `usize` to `f64` losslessly. Values past `u32::MAX` are
-/// clamped — cluster cardinalities never reach that range in
-/// practice but the clamp keeps the math precision-safe under the
-/// workspace's `cast_precision_loss` lint.
-fn lossless_u32_to_f64(value: usize) -> f64 {
-    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
-}
-
 /// Returns the authoritative occurrence count for user-facing copy.
 #[must_use]
 pub fn occurrence_count(cluster: &ReportCluster) -> usize {
@@ -273,22 +80,6 @@ pub fn occurrence_count(cluster: &ReportCluster) -> usize {
     total.max(cluster.occurrences.len())
 }
 
-/// Per-cluster signal breakdown; mirrors
-/// [`crate::pair::PairScore`] but kept separate so the report schema is
-/// decoupled from the internal struct.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct ReportSignals {
-    /// Mean structural signal across the pairs that formed the cluster.
-    pub structural: f64,
-    /// Mean token Jaccard estimate across the pairs.
-    pub token_jaccard: f64,
-    /// Mean embedding cosine similarity across the pairs. 0.0 until
-    /// the P5 embedding pass lands.
-    pub embedding_cos: f64,
-    /// Unit-bounded fused confidence from the three components.
-    pub fused: f64,
-}
-
 impl From<PairScore> for ReportSignals {
     fn from(score: PairScore) -> Self {
         Self {
@@ -298,23 +89,6 @@ impl From<PairScore> for ReportSignals {
             fused: score.fused(),
         }
     }
-}
-
-/// A single clone occurrence — a specific `(file, byte_range)`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReportOccurrence {
-    /// Absolute path of the source file, relative to the scan root when
-    /// possible.
-    pub path: PathBuf,
-    /// Byte offset of the clone within the file (inclusive).
-    pub start_byte: usize,
-    /// Byte offset of the end of the clone (exclusive).
-    pub end_byte: usize,
-    /// True when this occurrence's file matches a [EXCLUSION-CONFIG]
-    /// `report_hide` pattern. Hidden occurrences still appear in the
-    /// report as long as the cluster has at least one non-hidden
-    /// member.
-    pub hidden: bool,
 }
 
 /// Parameters accepted by [`render_report`]. Grouped because the
@@ -380,9 +154,24 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // causing these to rank as #1 offenders despite containing no
             // actionable duplication. Exclude them from the human-facing ranked
             // output; the raw analysis data remains available via the pipeline.
-            let loosely_similar =
-                classify_signals(report_cluster.signals) == ClusterKind::LooselySimilar;
-            let all_hidden = loosely_similar
+            let loosely_similar = classify(&report_cluster) == ClusterKind::LooselySimilar;
+            // GH #120/#122: embedding can pull broad, module-level same-topic
+            // regions into one giant Type-4 component. Near-zero structure,
+            // high semantic score, large size, and a large canonical span is
+            // the observed signature of those report-dominating false positives.
+            let low_structure_embedding_mega_cluster =
+                is_low_structure_embedding_mega_cluster(&report_cluster);
+            let cross_language_audit = inputs.exclusion.allows_cross_language_comparison()
+                && spans_multiple_languages(&cluster.members, inputs.file_languages);
+            // Issues #69, #70, #71, #72: re-parse cluster member sources
+            // and drop known noise patterns (polymorphic interface
+            // implementations, test-data variation, REST endpoint shape,
+            // monkeypatch.setenv scaffolding) that survive Type-2
+            // normalisation but are not real duplication.
+            let noise = is_noise_pattern(&cluster.members, inputs.sources, inputs.file_languages);
+            let all_hidden = ((loosely_similar || low_structure_embedding_mega_cluster)
+                && !cross_language_audit)
+                || noise
                 || (!report_cluster.occurrences.is_empty()
                     && report_cluster.occurrences.iter().all(|occ| occ.hidden));
             (report_cluster, all_hidden)
@@ -393,16 +182,8 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
-    // [#140 EXCLUSION-CONFIG]: in mixed clusters (some hidden, some
-    // visible) the original `weight` reflects every occurrence,
-    // including hidden ones, so a cluster with one actionable copy
-    // and many generated copies still ranks above a fully-visible
-    // cluster with fewer total but more actionable occurrences.
-    // Recompute weight from the visible occurrence count and re-sort
-    // so Top Offenders reflects how much actionable duplication a
-    // human can fix, not how much generated noise the cluster
-    // contains.
     reweigh_by_visible_occurrences(&mut visible_clusters);
+    log_bucket_distribution(&visible_clusters, clusters_hidden);
     let metrics = compute_repo_metrics(&MetricsInputs {
         clusters: inputs.clusters,
         sources: inputs.sources,
@@ -418,7 +199,6 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         inputs.exclusion,
     );
     Report {
-        report_schema_version: REPORT_SCHEMA_VERSION,
         tool_version: crate::version().to_owned(),
         min_nodes: inputs.min_nodes,
         files_analysed: inputs.files_analysed,
@@ -433,175 +213,134 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     }
 }
 
-/// Converts one internal [`Cluster`] to a [`ReportCluster`].
-fn cluster_to_report<S: BuildHasher>(
-    cluster: &Cluster,
-    registry: &FileRegistry,
-    file_languages: &HashMap<FileId, &'static str, S>,
-    scan_root: &Path,
-    exclusion: &ExclusionConfig,
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> ReportCluster {
-    let canonical_node_count = cluster
-        .members
-        .first()
-        .map(|member| member.node_count)
-        .unwrap_or_default();
-    let occurrences: Vec<ReportOccurrence> = cluster
-        .members
-        .iter()
-        .map(|member| {
-            occurrence(
-                member.file_id,
-                member.byte_range,
-                registry,
-                file_languages,
-                scan_root,
-                exclusion,
-            )
-        })
-        .collect();
-    let signals: ReportSignals = cluster.signals.into();
-    let summary = summarise(
-        cluster.members.len(),
-        canonical_node_count,
-        &cluster.members,
-        &occurrences,
-        sources,
-        signals,
-    );
-    let interpretation = interpret(signals, &cluster.members, sources);
-    let bucket = classify_signals(signals).wire_label().to_owned();
-    let occurrences_total = occurrences.len();
-    ReportCluster {
-        id: cluster.id.clone(),
-        weight: cluster.weight,
-        size: cluster.members.len(),
-        canonical_node_count,
-        signals,
-        bucket,
-        occurrences,
-        occurrences_total,
-        occurrences_truncated: false,
-        summary,
-        interpretation,
+/// Re-ranks visible clusters by non-hidden occurrence count so mixed
+/// clusters dominated by `report_hide` paths cannot push fully-visible
+/// clusters down the ranking ([#140 EXCLUSION-CONFIG],
+/// [PIPELINE-RANK-WORST-FIRST]). Hidden occurrences still travel on
+/// each cluster for downstream context.
+fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster]) {
+    for cluster in &mut *clusters {
+        let visible = visible_occurrence_count(cluster);
+        cluster.weight = visible_rank_weight(cluster.canonical_node_count, visible);
     }
-}
-
-/// Builds an [`ReportOccurrence`] for a single fingerprint member.
-fn occurrence<S: BuildHasher>(
-    file_id: FileId,
-    byte_range: ByteRange,
-    registry: &FileRegistry,
-    file_languages: &HashMap<FileId, &'static str, S>,
-    scan_root: &Path,
-    exclusion: &ExclusionConfig,
-) -> ReportOccurrence {
-    let absolute = registry.path(file_id).map(Path::to_path_buf);
-    let language = file_languages.get(&file_id).copied().unwrap_or("");
-    let hidden = absolute
-        .as_deref()
-        .is_some_and(|abs| exclusion.is_report_hidden(abs, language));
-    let path = absolute.map_or_else(PathBuf::new, |abs| {
-        abs.strip_prefix(scan_root)
-            .map_or_else(|_| abs.clone(), Path::to_path_buf)
+    clusters.sort_by(|left, right| {
+        right
+            .weight
+            .partial_cmp(&left.weight)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.id.cmp(&right.id))
     });
-    ReportOccurrence {
-        path,
-        start_byte: byte_range.start,
-        end_byte: byte_range.end,
-        hidden,
-    }
 }
 
-/// Produces a short, agent-readable one-line summary for the cluster.
-/// Includes the per-signal breakdown so a downstream agent can tell
-/// whether the cluster fired on structure, tokens, or both
-/// ([PRINCIPLES-AUDIENCE-AGENT]).
-fn summarise(
-    size: usize,
-    canonical_node_count: usize,
-    members: &[crate::fingerprint::Fingerprint],
-    occurrences: &[ReportOccurrence],
-    sources: &HashMap<FileId, Vec<u8>>,
-    signals: ReportSignals,
-) -> String {
-    let locations: Vec<String> = occurrences
+/// Counts non-hidden occurrences on a rendered cluster. Hidden
+/// occurrences still travel with the cluster so consumers retain the
+/// "regular code duplicates generated code" context, but ranking
+/// ignores them.
+fn visible_occurrence_count(cluster: &ReportCluster) -> usize {
+    cluster
+        .occurrences
         .iter()
-        .zip(members)
-        .take(3)
-        .map(|(occurrence, member)| source_location(occurrence, member.file_id, sources))
-        .collect();
-    let suffix = if occurrences.len() > locations.len() {
-        format!(
-            " (+{} more)",
-            occurrences.len().saturating_sub(locations.len())
-        )
-    } else {
-        String::new()
-    };
-    format!(
-        "{size} copies of a {canonical_node_count}-node subtree at {locs}{suffix} \
-         [structural={structural:.2}, token_jaccard={token:.2}, embedding_cos={embed:.2}]",
-        locs = locations.join(", "),
-        structural = signals.structural,
-        token = signals.token_jaccard,
-        embed = signals.embedding_cos,
-    )
+        .filter(|occurrence| !occurrence.hidden)
+        .count()
 }
 
-/// Maps the signal triple onto a one-line interpretation for AI agents.
-/// JSON `cluster.interpretation` is an AI-only surface per
-/// [CLONE-BUCKETS-DUAL-LABEL]. The Type-1/Type-2 distinction additionally
-/// checks raw source slices so Type-2 clusters never receive Type-1 extract
-/// guidance ([AUTOFIX-EXTRACT-DEPENDENCIES]).
-fn interpret(
-    signals: ReportSignals,
-    members: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> String {
-    let kind = classify_signals(signals);
-    if kind == ClusterKind::Identical && !source_slices_are_identical(members, sources) {
-        return "Identical code. Same structure after identifier/literal normalization; \
-                extract only after choosing parameters. (Type-2 renamed clone)"
-            .to_owned();
+/// Mirrors [PIPELINE-RANK-WORST-FIRST] but feeds it the visible
+/// occurrence count. Empty visible sets score zero so a cluster that
+/// is technically not all-hidden but has only one actionable copy
+/// sinks below cleaner clusters with more refactorable duplication.
+fn visible_rank_weight(canonical_node_count: usize, visible_size: usize) -> f64 {
+    if visible_size < 2 {
+        return 0.0;
     }
-    bucket_labels(kind).agent_summary()
+    let nodes = lossless_u32_to_f64(canonical_node_count.max(1));
+    let size_minus_one = lossless_u32_to_f64(visible_size.saturating_sub(1));
+    nodes * size_minus_one
 }
 
-/// Returns true when every cluster member maps to the same raw source bytes.
-fn source_slices_are_identical(
-    members: &[Fingerprint],
-    sources: &HashMap<FileId, Vec<u8>>,
+/// Converts a `usize` to `f64` losslessly. Values past `u32::MAX` are
+/// clamped — cluster cardinalities never reach that range in
+/// practice but the clamp keeps the math precision-safe under the
+/// workspace's `cast_precision_loss` lint.
+fn lossless_u32_to_f64(value: usize) -> f64 {
+    u32::try_from(value).map_or(f64::from(u32::MAX), f64::from)
+}
+
+/// Returns true for embedding-dominant mega-clusters that are too broad
+/// to be actionable. Keeps small Type-4 pairs available while suppressing
+/// the real-world "all pytest modules are related" closure failure.
+fn is_low_structure_embedding_mega_cluster(cluster: &ReportCluster) -> bool {
+    cluster.signals.structural < 0.10
+        && cluster.signals.embedding_cos >= 0.80
+        && cluster.size > 10
+        && cluster.canonical_node_count > 500
+}
+
+/// Returns true when a cluster contains more than one parser language id.
+fn spans_multiple_languages<S: BuildHasher>(
+    members: &[crate::fingerprint::Fingerprint],
+    file_languages: &HashMap<FileId, &'static str, S>,
 ) -> bool {
-    let Some(first) = members
-        .first()
-        .and_then(|member| source_slice(member, sources))
-    else {
+    let mut languages = members
+        .iter()
+        .filter_map(|member| file_languages.get(&member.file_id).copied());
+    let Some(first) = languages.next() else {
         return false;
     };
-    members
-        .iter()
-        .skip(1)
-        .all(|member| source_slice(member, sources).is_some_and(|slice| slice == first))
+    languages.any(|language| language != first)
 }
 
-/// Borrows the source bytes covered by one fingerprint range.
-fn source_slice<'a>(
-    member: &Fingerprint,
-    sources: &'a HashMap<FileId, Vec<u8>>,
-) -> Option<&'a [u8]> {
-    sources
-        .get(&member.file_id)?
-        .get(member.byte_range.start..member.byte_range.end)
+/// Bucket totals emitted for GH#45 classification observability.
+#[derive(Default)]
+struct BucketDistribution {
+    /// Visible identical-code clusters.
+    identical: usize,
+    /// Visible nearly-identical clusters.
+    nearly_identical: usize,
+    /// Visible loosely-similar clusters.
+    loosely_similar: usize,
+    /// Visible same-behavior clusters.
+    same_behavior: usize,
 }
 
-/// Formats one occurrence through the shared human-location renderer.
-fn source_location(
-    occurrence: &ReportOccurrence,
-    file_id: FileId,
-    sources: &HashMap<FileId, Vec<u8>>,
-) -> String {
-    let source = sources.get(&file_id).map(Vec::as_slice);
-    format_occurrence(&occurrence.path, occurrence.start_byte, source)
+impl BucketDistribution {
+    /// Counts visible report clusters by canonical bucket.
+    fn from_clusters(clusters: &[ReportCluster]) -> Self {
+        let mut distribution = Self::default();
+        for cluster in clusters {
+            distribution.add(classify(cluster));
+        }
+        distribution
+    }
+
+    /// Increments one bucket.
+    fn add(&mut self, kind: ClusterKind) {
+        match kind {
+            ClusterKind::Identical => self.identical = self.identical.saturating_add(1),
+            ClusterKind::NearlyIdentical => {
+                self.nearly_identical = self.nearly_identical.saturating_add(1);
+            }
+            ClusterKind::LooselySimilar => {
+                self.loosely_similar = self.loosely_similar.saturating_add(1);
+            }
+            ClusterKind::SameBehavior => self.same_behavior = self.same_behavior.saturating_add(1),
+        }
+    }
+
+    /// Emits the structured classification distribution.
+    fn log(self, visible: usize, hidden: usize) {
+        tracing::info!(
+            visible,
+            hidden,
+            identical = self.identical,
+            nearly_identical = self.nearly_identical,
+            loosely_similar = self.loosely_similar,
+            same_behavior = self.same_behavior,
+            "bucket distribution",
+        );
+    }
+}
+
+/// Logs the visible cluster bucket distribution after classification.
+fn log_bucket_distribution(clusters: &[ReportCluster], hidden: usize) {
+    BucketDistribution::from_clusters(clusters).log(clusters.len(), hidden);
 }

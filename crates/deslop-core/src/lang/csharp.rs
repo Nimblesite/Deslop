@@ -71,14 +71,23 @@ fn normalise_kind(raw: &str) -> Option<&'static str> {
     match raw {
         "comment" => None,
         "identifier" | "predefined_type" | "type_parameter" => Some(IDENTIFIER_KIND),
-        "string_literal"
-        | "verbatim_string_literal"
-        | "interpolated_string_text"
-        | "integer_literal"
-        | "real_literal"
-        | "character_literal"
-        | "boolean_literal"
-        | "null_literal" => Some(LITERAL_KIND),
+        raw if is_literal_kind(raw) => Some(LITERAL_KIND),
         other => Some(intern_kind(other)),
     }
+}
+
+/// Returns true when `raw` is a C# literal node collapsed by normalisation.
+#[must_use]
+pub(crate) fn is_literal_kind(raw: &str) -> bool {
+    matches!(
+        raw,
+        "string_literal"
+            | "verbatim_string_literal"
+            | "interpolated_string_text"
+            | "integer_literal"
+            | "real_literal"
+            | "character_literal"
+            | "boolean_literal"
+            | "null_literal"
+    )
 }

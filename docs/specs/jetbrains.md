@@ -9,7 +9,7 @@ Official platform constraints: JetBrains' LSP API is exposed through `com.intell
 1. **One engine.** The plugin launches `deslop-lsp` and consumes standard LSP diagnostics, hover, code lens, document links, and commands. No clone detection, ranking, byte-range conversion, or bucket routing lives in Kotlin.
 2. **Rider first, platform always.** The plugin is tested first in Rider because C# users are the immediate market, but source code must avoid Rider-only APIs unless a spec section explicitly allows them.
 3. **Native first.** JetBrains users should see Deslop through familiar IDE surfaces: editor highlighting, Problems, hover, code lens, status widget, and later a Tool Window. The plugin does not import the VSIX webview UI.
-4. **Offline install.** Public plugin zips must include `deployment-toolkit.json` and the `deslop-lsp` binary for every supported OS/architecture, because JetBrains Marketplace cannot publish OS-specific plugin zips and activation must not download executable code.
+4. **Offline install.** Public plugin zips must include `shipwright.json` and the `deslop-lsp` binary for every supported OS/architecture, because JetBrains Marketplace cannot publish OS-specific plugin zips and activation must not download executable code.
 5. **No silent model work.** Startup embeddings follow [LSP-EMBEDDING-CONSENT]. Fresh installs launch with `--embeddings off`; model selection is a user action.
 
 ### [JETBRAINS-TARGET] Supported products
@@ -31,7 +31,9 @@ The plugin descriptor depends on `com.intellij.modules.lsp` and `com.intellij.mo
 The descriptor launches:
 
 ```text
-deslop-lsp <workspace-root> --min-nodes <n> --embeddings off
+deslop-lsp <workspace-root> --min-nodes <n> --embeddings <mode>
+  --embedding-provider <provider> --embedding-model <model>
+  --embedding-endpoint <endpoint>
 ```
 
 Initial scope:
@@ -44,7 +46,7 @@ The plugin must not parse hover markdown to recover structured data. Native Tool
 
 ### [JETBRAINS-BINARY] Binary resolution
 
-The plugin loads `deployment-toolkit.json` from the plugin root before it registers or starts the LSP descriptor. `hosts.jetbrains.activationVerifies` is the authority for required startup components; the first public build verifies `deslop-lsp` for the current platform before any LSP process is launched.
+The plugin loads `shipwright.json` from the plugin root before it registers or starts the LSP descriptor. `hosts.jetbrains.activationVerifies` is the authority for required startup components; the first public build verifies `deslop-lsp` for the current platform before any LSP process is launched.
 
 Resolver inputs mirror [DEPLOY-RESOLVER] and [VSIX-BINARY-VERSIONING]:
 
@@ -70,7 +72,9 @@ Release packaging must stage:
 
 ### [JETBRAINS-SETTINGS] Settings contract
 
-The first scaffold hard-codes `min_nodes = 30` and `embeddings = off`. The user-facing settings page must later mirror the VSIX settings names so workspace state stays portable:
+The plugin persists project-level Deslop settings through `DeslopSettings` and
+validates them before building the `deslop-lsp` launch command. The stored
+contract mirrors the VSIX setting names so workspace state stays portable:
 
 - `deslop.minNodes`
 - `deslop.embedding.provider`
@@ -78,6 +82,11 @@ The first scaffold hard-codes `min_nodes = 30` and `embeddings = off`. The user-
 - `deslop.embedding.endpoint`
 - `deslop.embedding.mode`
 - `deslop.incremental`
+
+Fresh installs keep `deslop.embedding.mode = off`; the model picker or a future
+settings UI must be the user action that flips it to `auto` or `required`.
+Invalid `minNodes`, provider ids, endpoint URLs, blank model ids, and embedding
+modes must block startup before the LSP process is launched.
 
 When the plugin adds model selection, it must persist the same workspace embedding settings described in [LSP-EMBEDDING-CONSENT]. The LSP and MCP must still converge through one setting contract.
 
@@ -111,7 +120,7 @@ The JetBrains plugin does not embed MCP in v1. Agents inside Rider can use `desl
 deslop-jetbrains-<version>.zip
 ```
 
-The plugin zip includes `deployment-toolkit.json` at the plugin root and any native helpers only under manifest-approved `bin/<platform>/` directories. Package verification must prove the manifest is present, required binaries exist for each shipped platform, no undeclared executable is present under `bin/<platform>/`, and each binary reports the manifest `expectedVersion`.
+The plugin zip includes `shipwright.json` at the plugin root and any native helpers only under manifest-approved `bin/<platform>/` directories. Package verification must prove the manifest is present, required binaries exist for each shipped platform, no undeclared executable is present under `bin/<platform>/`, and each binary reports the manifest `expectedVersion`.
 
 The version is lock-step with the Rust binaries and VSIX. Marketplace publishing is manual until publisher credentials, signing, package verification, and approval flow are set up.
 

@@ -20,7 +20,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use assert_cmd::Command;
 
 fn fixture(name: &str) -> PathBuf {
@@ -82,6 +82,74 @@ fn cluster_bucket(cluster: &serde_json::Value) -> String {
         .to_owned()
 }
 
+fn occurrence_slices(cluster: &serde_json::Value, scan_root: &Path) -> Result<Vec<Vec<u8>>> {
+    let Some(occurrences) = cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Ok(Vec::new());
+    };
+    occurrences
+        .iter()
+        .map(|occurrence| occurrence_slice(occurrence, scan_root))
+        .collect()
+}
+
+fn occurrence_slice(occurrence: &serde_json::Value, scan_root: &Path) -> Result<Vec<u8>> {
+    let path = occurrence_text(occurrence, "path")?;
+    let start = occurrence_byte(occurrence, "start_byte")?;
+    let end = occurrence_byte(occurrence, "end_byte")?;
+    let source = fs::read(scan_root.join(path))?;
+    Ok(source.get(start..end).context("occurrence range")?.to_vec())
+}
+
+fn occurrence_text<'a>(occurrence: &'a serde_json::Value, key: &str) -> Result<&'a str> {
+    occurrence
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .with_context(|| format!("missing occurrence {key}"))
+}
+
+fn occurrence_byte(occurrence: &serde_json::Value, key: &str) -> Result<usize> {
+    let value = occurrence
+        .get(key)
+        .and_then(serde_json::Value::as_u64)
+        .with_context(|| format!("missing occurrence {key}"))?;
+    usize::try_from(value).with_context(|| format!("occurrence {key} too large"))
+}
+
+fn non_identical_source_slices(slices: &[Vec<u8>]) -> bool {
+    slices
+        .split_first()
+        .is_some_and(|(first, rest)| rest.iter().any(|slice| slice != first))
+}
+
+fn identical_clusters_with_different_source(
+    report: &serde_json::Value,
+    scan_root: &Path,
+) -> Result<Vec<String>> {
+    let clusters = report
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut offenders = Vec::new();
+    for cluster in clusters
+        .iter()
+        .filter(|cluster| cluster_bucket(cluster) == "identical")
+    {
+        let slices = occurrence_slices(cluster, scan_root)?;
+        if non_identical_source_slices(&slices) {
+            offenders.push(format!(
+                "cluster {} spans {:?}",
+                cluster_id(cluster),
+                cluster_paths(cluster)
+            ));
+        }
+    }
+    Ok(offenders)
+}
+
 // Issue #44 acceptance: unrelated C# xUnit test classes must not
 // merge into a single "Nearly identical code" cluster. Three
 // completely unrelated test files share only generic xUnit
@@ -114,6 +182,23 @@ fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
         offenders.is_empty(),
         "unrelated C# xUnit test classes must not form a 'Nearly identical' \
          cross-class cluster (issue #44). Offending clusters: {offenders:#?}"
+    );
+    Ok(())
+}
+
+// [CLONE-BUCKETS] Issue #64: assertion blocks with different literal values
+// currently normalise to the same C# AST shape and get labelled as `Identical
+// code`. A user-facing identical bucket must only contain byte-identical slices.
+#[test]
+fn csharp_assertion_blocks_with_different_literals_are_not_identical() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = fixture("csharp-unrelated-xunit-tests");
+    let report = run_report(tmp.path(), &scan_root)?;
+    let offenders = identical_clusters_with_different_source(&report, &scan_root)?;
+    assert!(
+        offenders.is_empty(),
+        "C# assertion blocks with different literals must not be labelled \
+         identical (issue #64). Offending clusters: {offenders:#?}"
     );
     Ok(())
 }

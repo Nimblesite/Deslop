@@ -1,17 +1,17 @@
 //! `deslop-mcp` binary — MCP server over stdio.
 //!
 //! Thin shell over [`deslop_mcp::McpServer`]: parse CLI args,
-//! configure tracing, construct the [`PipelineSessionBackend`], and
-//! drive the server against stdin / stdout.
+//! configure tracing, construct the [`LiveBackend`], and drive
+//! the server against stdin / stdout.
 
 use std::{env, io, path::PathBuf, sync::Arc};
 
+#[cfg(unix)]
+use std::{thread, time::Duration};
+
 use clap::Parser;
-use deslop_core::{
-    embedding::{DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL},
-    version_contract_output, ComponentKind, EmbeddingMode, DEFAULT_PROVIDER_ID,
-};
-use deslop_mcp::{McpServer, PipelineSessionBackend, SessionBackendConfig};
+use deslop_core::{version_contract_output, ComponentKind};
+use deslop_mcp::{LiveBackend, McpServer, SessionBackendConfig};
 use tracing::error;
 use tracing_subscriber::EnvFilter;
 
@@ -27,30 +27,6 @@ struct Cli {
     /// Workspace root to analyse. Defaults to the current directory.
     #[arg(long, default_value = ".")]
     root: PathBuf,
-
-    /// Minimum AST subtree node count for clustering.
-    #[arg(long, default_value_t = 30)]
-    min_nodes: u32,
-
-    /// Enable the on-disk fingerprint cache.
-    #[arg(long, default_value_t = false)]
-    incremental: bool,
-
-    /// Embedding-pass mode: `off`, `auto`, or `required`.
-    #[arg(long, default_value = "off")]
-    embeddings: String,
-
-    /// Embedding provider id (`stub`, `ollama`).
-    #[arg(long, default_value = DEFAULT_PROVIDER_ID)]
-    embedding_provider: String,
-
-    /// Embedding model id (meaningful for the `ollama` provider).
-    #[arg(long, default_value = DEFAULT_OLLAMA_MODEL)]
-    embedding_model: String,
-
-    /// Embedding endpoint override (Ollama only).
-    #[arg(long, default_value = DEFAULT_OLLAMA_ENDPOINT)]
-    embedding_endpoint: String,
 
     /// Optional `.deslop.toml` override path.
     #[arg(long)]
@@ -84,15 +60,14 @@ fn main() {
 /// transport loop.
 fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     install_tracing();
+    start_parent_monitor();
     let cli = Cli::parse_from(args);
-    let mode: EmbeddingMode = cli.embeddings.parse()?;
-    // [#141 MCP-SAFETY] Canonicalise the workspace root immediately so
-    // `--root .` (the default) cannot bind a session to whatever
-    // directory the agent harness happened to launch the binary
-    // from. Surfacing a stable absolute path here means session-config
-    // and every report path is anchored to a known location — without
-    // it, a client thinks it asked about workspace A while MCP scans
-    // workspace B.
+    // [#141 MCP-SAFETY] Canonicalise `--root` at startup so a relative
+    // path or a symlinked path resolves to a single stable filesystem
+    // identity. `--root .` (the default) cannot bind a session to
+    // whatever directory the agent harness happened to launch the
+    // binary from. Mis-typed roots fail fast with a clear error
+    // instead of silently scanning the launch CWD.
     let canonical_root = std::fs::canonicalize(&cli.root).map_err(|err| {
         format!(
             "--root {} could not be canonicalised: {err}",
@@ -101,20 +76,76 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     })?;
     let config = SessionBackendConfig {
         root: canonical_root,
-        min_nodes: cli.min_nodes,
-        incremental: cli.incremental,
-        embedding_mode: mode,
-        embedding_provider: cli.embedding_provider,
-        embedding_model: cli.embedding_model,
-        embedding_endpoint: cli.embedding_endpoint,
         config_path: cli.config,
     };
-    let backend = Arc::new(PipelineSessionBackend::initialise(config)?);
+    let backend = Arc::new(LiveBackend::initialise(config)?);
     let server = McpServer::new(backend);
     let stdin = io::stdin();
-    let stdout = io::stdout();
-    server.run(stdin.lock(), stdout.lock())?;
+    // io::Stdout is Write + Send + 'static; StdoutLock<'_> is not Send,
+    // so we pass the unlocked handle so background threads can push
+    // notifications through the shared NotificationSender.
+    server.run(stdin.lock(), io::stdout())?;
     Ok(())
+}
+
+/// Poll interval for detecting when the MCP launcher disappears.
+#[cfg(unix)]
+const PARENT_MONITOR_INTERVAL_MS: u64 = 250;
+
+/// Starts a detached monitor that exits MCP when its launcher dies.
+#[cfg(unix)]
+fn start_parent_monitor() {
+    let Some(parent_process_id) = current_parent_process_id() else {
+        return;
+    };
+    match thread::Builder::new()
+        .name("deslop-mcp-parent-process-monitor".to_owned())
+        .spawn(move || monitor_parent(parent_process_id))
+    {
+        Ok(handle) => drop(handle),
+        Err(error) => tracing::warn!(
+            %error,
+            parent_process_id,
+            "failed to start mcp parent process monitor",
+        ),
+    }
+}
+
+/// Keeps MCP startup portable on platforms without parent-id probing.
+#[cfg(not(unix))]
+fn start_parent_monitor() {}
+
+/// Polls the original parent until it disappears, then exits MCP.
+#[cfg(unix)]
+fn monitor_parent(parent_process_id: u32) -> ! {
+    loop {
+        if current_parent_process_id() != Some(parent_process_id)
+            || !process_exists(parent_process_id)
+        {
+            tracing::warn!(parent_process_id, "mcp parent process disappeared; exiting",);
+            std::process::exit(0);
+        }
+        thread::sleep(Duration::from_millis(PARENT_MONITOR_INTERVAL_MS));
+    }
+}
+
+/// Returns the current parent process id when it is monitorable.
+#[cfg(unix)]
+fn current_parent_process_id() -> Option<u32> {
+    let raw = nix::unistd::getppid().as_raw();
+    u32::try_from(raw).ok().filter(|pid| *pid > 1)
+}
+
+/// Returns whether `process_id` currently resolves to a live process.
+#[cfg(unix)]
+fn process_exists(process_id: u32) -> bool {
+    let Ok(pid_raw) = i32::try_from(process_id) else {
+        return false;
+    };
+    match nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid_raw), None) {
+        Err(nix::errno::Errno::ESRCH) => false,
+        Ok(()) | Err(_) => true,
+    }
 }
 
 /// Installs `tracing_subscriber` against stderr so log lines never

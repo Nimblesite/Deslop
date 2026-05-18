@@ -1,0 +1,96 @@
+//! Regression test for issue #135.
+//!
+//! Inside one MCP session, the `generation` returned by `rescan` must
+//! match the `generation` returned by the immediately following
+//! `report-get` and `session-config`. Agents use this counter to detect
+//! stale results — three different counters in the same session means
+//! they cannot tell which MCP result reflects the current codebase.
+
+#![cfg(unix)]
+
+use anyhow::{anyhow, ensure, Context, Result};
+use serde_json::{json, Value};
+
+mod common;
+use common::{
+    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
+    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
+};
+
+/// Issue #135: `rescan`, `session-config`, and `report-get` must all
+/// report the same `generation` for the same report state.
+#[test]
+fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let beta = workspace.path().join("Beta.cs");
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let _lsp_guard = ChildKillOnDrop(lsp);
+
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
+
+    let mut mcp = initialized_mcp(workspace.path())?;
+
+    // Edit Beta.cs so the LSP must do at least one re-analysis when
+    // rescan asks it to refresh. This bumps the LSP-internal generation
+    // counter past the MCP backend's local counter, exposing the bug.
+    std::fs::write(
+        &beta,
+        b"namespace Solo { class Only { public int Go() => 1; } }\n",
+    )?;
+
+    let rescan = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "rescan",
+            "arguments": {
+                "paths": [beta.to_string_lossy().into_owned()],
+                "n": 1
+            }
+        }),
+    )?;
+    let rescan_structured = structured_content(&rescan, "rescan")?;
+    let rescan_generation = read_generation(&rescan_structured, "rescan", &rescan)?;
+
+    let session = mcp.request(
+        "tools/call",
+        &json!({ "name": "session-config", "arguments": {} }),
+    )?;
+    let session_structured = structured_content(&session, "session-config")?;
+    let session_generation = read_generation(&session_structured, "session-config", &session)?;
+
+    let report = call_report_get(&mut mcp)?;
+    let report_structured = structured_content(&report, "report-get")?;
+    let report_generation = read_generation(&report_structured, "report-get", &report)?;
+
+    ensure!(
+        rescan_generation == session_generation,
+        "issue #135: rescan generation ({rescan_generation}) must match the next session-config generation ({session_generation}); rescan={rescan_structured} session={session_structured}"
+    );
+    ensure!(
+        rescan_generation == report_generation,
+        "issue #135: rescan generation ({rescan_generation}) must match the next report-get generation ({report_generation}); rescan={rescan_structured} report={report_structured}"
+    );
+    Ok(())
+}
+
+fn call_report_get(mcp: &mut McpHandle) -> Result<Value> {
+    mcp.request(
+        "tools/call",
+        &json!({
+            "name": "report-get",
+            "arguments": { "offset": 0, "limit": 0 }
+        }),
+    )
+}
+
+fn read_generation(structured: &Value, tool: &str, response: &Value) -> Result<u64> {
+    structured
+        .get("generation")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            anyhow!("{tool} structured content missing numeric generation: structured={structured} response={response}")
+        })
+}

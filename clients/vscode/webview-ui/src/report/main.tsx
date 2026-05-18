@@ -14,6 +14,7 @@ import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
   bucketLabels,
+  clusterSlug,
   occurrenceCount,
   resolveBucket,
   type Severity,
@@ -53,7 +54,7 @@ function ReportApp() {
           class="label"
           style={{ fontFamily: FONT.mono, color: COLOR.onSurfaceMuted }}
         >
-          DESLOP · REPORT · v{snapshot.report_schema_version} · {snapshot.tool_version}
+          DESLOP · REPORT · {snapshot.tool_version}
         </div>
         <div
           style={{
@@ -147,6 +148,7 @@ function ReportApp() {
       <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
         {rows.map((cluster, i) => {
           const severity = severityByClusterId.value.get(cluster.id) ?? "faint";
+          const slug = clusterSlug(cluster);
           return (
             <li
               key={cluster.id}
@@ -172,7 +174,7 @@ function ReportApp() {
                   i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface)
               }
             >
-              <SeverityBadge severity={severity} label={`#${i + 1}`} />
+              <SeverityBadge severity={severity} label={`${slug}`} />
               <div>
                 <div
                   style={{

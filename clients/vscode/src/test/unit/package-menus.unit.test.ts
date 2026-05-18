@@ -63,4 +63,45 @@ suite("package menu contributions", () => {
     );
     assert.ok(!occurrenceItems.some((item) => item.command === "deslop.openOccurrence"));
   });
+
+  test("compare with canonical menus are hidden for canonical-only rows (#14)", () => {
+    const pkg = extensionPackage();
+    const contextItems = pkg.contributes.menus["view/item/context"];
+    assert.ok(contextItems, "view/item/context menu must be contributed");
+
+    const clusterCompareItems = contextItems.filter(
+      (item) =>
+        item.when === "viewItem == deslop.clusterComparable" &&
+        item.command === "deslop.compareWithCanonical",
+    );
+    assert.equal(commandTitle(pkg, "deslop.compareWithCanonical"), "Compare With Canonical");
+    assert.deepEqual(
+      clusterCompareItems.map((item) => item.group),
+      ["navigation@4"],
+    );
+    assert.ok(
+      !contextItems.some(
+        (item) =>
+          item.command === "deslop.compareWithCanonical" &&
+          item.when?.includes("clusterSingle"),
+      ),
+      "single-occurrence cluster rows must not expose compare with canonical",
+    );
+    assert.ok(
+      !contextItems.some(
+        (item) =>
+          item.command === "deslop.compareOccurrenceWithCanonical" &&
+          item.when?.includes("occurrenceCanonical"),
+      ),
+      "canonical occurrence rows must not expose compare with canonical",
+    );
+  });
+
+  test("CPU report command is contributed for issue #29 diagnostics", () => {
+    const pkg = extensionPackage();
+    assert.equal(
+      commandTitle(pkg, "deslop.revealCpuReport"),
+      "Deslop: Reveal CPU Report",
+    );
+  });
 });

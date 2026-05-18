@@ -257,6 +257,95 @@ pub(super) fn stub_model_info() -> EmbeddingModelInfo {
     }
 }
 
+/// [LIVE-CACHE-SEED] Default name of the cache file the LSP writes
+/// after every analysis pass. The MCP and any cache-seed startup path
+/// read from this same file.
+pub(super) const STATE_FILE_NAME: &str = "live-report.json";
+
+/// [LIVE-SEED-CACHE] Writes `bytes` to `{dir}/live-report.json` via an
+/// atomic tmp-then-rename so readers never see a partial file.
+pub(super) fn atomic_write_json(dir: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let tmp = dir.join("live-report.json.tmp");
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, dir.join(STATE_FILE_NAME))
+}
+
+/// [LIVE-SEED-CACHE] Atomically writes `report` to
+/// `{root}/.deslop-cache/live-report.json`. Best-effort: failures are
+/// logged at `warn` and never propagated.
+pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) {
+    let cache_dir = root.join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+    if let Err(error) = std::fs::create_dir_all(&cache_dir) {
+        tracing::warn!(%error, "state_file_dir_create_failed");
+        return;
+    }
+    match serde_json::to_vec(report) {
+        Err(error) => tracing::warn!(%error, "state_file_serialize_failed"),
+        Ok(bytes) => {
+            if let Err(error) = atomic_write_json(&cache_dir, &bytes) {
+                tracing::warn!(%error, "state_file_atomic_write_failed");
+            } else {
+                tracing::info!(generation, "state_file_written");
+            }
+        }
+    }
+}
+
+/// [LIVE-CACHE-SEED] Best-effort load of `{root}/.deslop-cache/live-report.json`.
+/// Returns `None` for a missing file (cold start) and for any parse or
+/// I/O failure (the caller falls back to running a fresh full pass).
+pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
+    let path = root
+        .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME)
+        .join(STATE_FILE_NAME);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(%error, path = %path.display(), "cached_report_read_failed");
+            }
+            return None;
+        }
+    };
+    match serde_json::from_slice::<Report>(&bytes) {
+        Ok(mut report) => {
+            normalize_cache_seed_stats(&mut report);
+            Some(report)
+        }
+        Err(error) => {
+            tracing::warn!(%error, path = %path.display(), "cached_report_parse_failed");
+            delete_incompatible_cached_report(&path);
+            None
+        }
+    }
+}
+
+/// Removes a cached report that failed compatibility or schema parsing.
+fn delete_incompatible_cached_report(path: &Path) {
+    match std::fs::remove_file(path) {
+        Ok(()) => tracing::warn!(path = %path.display(), "cached_report_incompatible_deleted"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            tracing::warn!(%error, path = %path.display(), "cached_report_delete_failed");
+        }
+    }
+}
+
+/// Folds any cache misses recorded during the cold pass into the hits
+/// counter when seeding from a cached report. Cache-seeded sessions
+/// surface as "all hits" to the editor — the misses were paid by the
+/// CLI run that wrote the cache, not by this session.
+fn normalize_cache_seed_stats(report: &mut Report) {
+    if report.cache_stats.misses == 0 {
+        return;
+    }
+    report.cache_stats.hits = report
+        .cache_stats
+        .hits
+        .saturating_add(report.cache_stats.misses);
+    report.cache_stats.misses = 0;
+}
+
 /// Translates the Ollama tag list into [`EmbeddingModelInfo`] entries.
 pub(super) fn append_ollama_models(
     out: &mut Vec<EmbeddingModelInfo>,
@@ -271,5 +360,36 @@ pub(super) fn append_ollama_models(
             recommended: entry.is_embedding_model,
             reachable: true,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::try_load_cached_report;
+
+    #[test]
+    fn incompatible_cached_report_is_deleted_when_cache_seed_fails(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let cache_dir = temp
+            .path()
+            .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+        std::fs::create_dir_all(&cache_dir)?;
+        let state_path = cache_dir.join(super::STATE_FILE_NAME);
+        std::fs::write(&state_path, br#"{"tool_version":"stale","clusters":[]}"#)?;
+
+        assert!(
+            state_path.exists(),
+            "test setup must start with an incompatible state file"
+        );
+        assert!(
+            try_load_cached_report(temp.path()).is_none(),
+            "incompatible cached state must not seed a live session"
+        );
+        assert!(
+            !state_path.exists(),
+            "incompatible cached state must be deleted so startup runs a fresh scan"
+        );
+        Ok(())
     }
 }

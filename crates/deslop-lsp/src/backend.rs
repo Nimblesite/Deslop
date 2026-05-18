@@ -1,61 +1,41 @@
-//! `tower-lsp` backend wiring `Deslop` live analysis into the
-//! Language Server Protocol ([LSP-CAPABILITIES]).
-//!
-//! Keeps the protocol surface narrow: `initialize`, `initialized`,
-//! `shutdown`, `textDocument/didChange`, `textDocument/diagnostic`,
-//! and the custom `deslop/*` namespace ([LSP-CUSTOM-METHODS]).
-
-use std::{
-    path::PathBuf,
-    sync::Arc,
-    task::{Context, Poll},
-};
-
+//! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
 use deslop_core::{
     embedding::{
-        EmbeddingMode, EmbeddingProvider, OllamaProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
+        EmbeddingMode, EmbeddingProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
         DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
     },
     live::{
-        AnalysisSession, ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi,
-        LiveError, LiveService, ReportChangedNotification,
+        ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveError,
+        LiveService, ReportChangedNotification,
     },
 };
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
-use tower::Service;
 use tower_lsp::{
-    jsonrpc::{Request, Response, Result as LspResult},
+    jsonrpc::Result as LspResult,
     lsp_types::{
         CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
         DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
-        DocumentDiagnosticReport, DocumentDiagnosticReportResult, FileEvent,
+        DocumentDiagnosticReport, DocumentDiagnosticReportResult, ExecuteCommandParams, FileEvent,
         FullDocumentDiagnosticReport, GotoDefinitionParams, GotoDefinitionResponse, Hover,
         HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
         InitializedParams, Location, MessageType, OneOf, Range,
         RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
         TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
-    Client, ExitedError, LanguageServer, LspService, Server,
+    Client, LanguageServer,
 };
 
-use crate::{code_lens, custom_methods, diagnostics, hover, position};
+use crate::notifications::{EmbeddingProgressNotification, ReportChangedLspNotification};
+use crate::observability::Observability;
+use crate::{code_lens, commands, diagnostics, hover, position};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "deslop-lsp";
 
-/// Diagnostic `source` + provider `identifier` surfaced to the client.
-/// Must match the `source` field stamped by
-/// [`crate::diagnostics::build_for_file`] so clients can filter by it.
+/// Diagnostic `source` + provider `identifier` surfaced to clients.
 pub const DIAGNOSTIC_SOURCE: &str = "deslop";
-
-/// Method name for the `deslop/embeddingProgress` custom notification
-/// pushed around a model swap ([VSIX-SESSION-PROGRESS]).
-pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
-
-/// Method name for the `deslop/reportChanged` custom notification
-/// pushed after an analysis generation changes.
-pub const REPORT_CHANGED: &str = "deslop/reportChanged";
 
 /// [LSP-EMBEDDING-CONSENT] Embedding startup settings supplied by the client after the user
 /// has explicitly selected a model. `Off` means no startup embedding
@@ -97,7 +77,7 @@ fn build_startup_provider(
     }
     match embedding.provider_id.as_str() {
         STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
-        DEFAULT_PROVIDER_ID => connect_ollama_or_fallback(embedding),
+        DEFAULT_PROVIDER_ID => Ok(connect_ollama_or_fallback(embedding)),
         other => Err(deslop_core::live::LiveError::UnsupportedProvider {
             requested: other.to_owned(),
             registered: vec![STUB_PROVIDER_ID.to_owned(), DEFAULT_PROVIDER_ID.to_owned()],
@@ -105,49 +85,40 @@ fn build_startup_provider(
     }
 }
 
-/// Connects Ollama with auto-mode fallback. On `Auto` + provider
-/// unreachable we log a warning and return [`StubProvider`] so the
-/// LSP keeps answering requests. On `Required` we propagate the
-/// error so the editor surfaces "start ollama and retry".
-fn connect_ollama_or_fallback(
-    embedding: &LspEmbeddingConfig,
-) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
-    match connect_ollama_provider(embedding) {
-        Ok(provider) => Ok(provider),
-        Err(error) if matches!(embedding.mode, EmbeddingMode::Auto) => {
-            tracing::warn!(
-                %error,
-                endpoint = %embedding.endpoint,
-                model = %embedding.model_id,
-                "ollama embedding provider unreachable; falling back to stub so the LSP stays alive"
-            );
-            Ok(Arc::new(StubProvider::new()))
-        }
-        Err(error) => Err(error),
-    }
-}
-
-/// Connects to Ollama and maps provider errors into live errors.
-fn connect_ollama_provider(
-    embedding: &LspEmbeddingConfig,
-) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
-    let provider =
-        OllamaProvider::connect(&embedding.endpoint, &embedding.model_id).map_err(|err| {
-            deslop_core::live::LiveError::ProviderUnreachable {
-                endpoint: embedding.endpoint.clone(),
-                message: err.to_string(),
-            }
-        })?;
-    Ok(Arc::new(provider))
+/// Connects Ollama, falling back to a stub via the shared core function.
+/// Both `Auto` and `Required` survive — the LSP must never crash-loop
+/// VS Code per issue #35. Log level differs: warn for Auto, error for Required.
+fn connect_ollama_or_fallback(embedding: &LspEmbeddingConfig) -> Arc<dyn EmbeddingProvider> {
+    deslop_core::embedding::connect_or_stub(
+        embedding.mode,
+        &embedding.endpoint,
+        &embedding.model_id,
+    )
 }
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
+///
+/// The backend owns the [`LiveWatcher`] and [`Scheduler`] so that they
+/// stay alive for the entire server session. Dropping either stops the
+/// watcher loop and terminates background analysis.
 #[derive(Debug)]
 pub struct LspBackend {
     /// LSP client handle for sending notifications back to the editor.
     client: Client,
     /// Shared live service.
     service: Arc<LiveService>,
+    /// Filesystem watcher kept alive here — dropping it stops the OS
+    /// watch ([LIVE-WATCHER]).
+    _watcher: deslop_core::live::LiveWatcher,
+    /// Scheduler kept alive so its broadcast channels remain open
+    /// ([LIVE-SCHEDULER]).
+    _scheduler: deslop_core::live::Scheduler,
+    /// IPC socket server that exposes `duplicates/findSimilar` and
+    /// `embedding/listModels` to the MCP server ([LSP-IPC]).
+    /// `None` when the socket could not be bound (non-fatal).
+    _ipc: Option<crate::ipc::IpcServer>,
+    /// CPU/work observability recorder for `deslop/cpuReport`.
+    observability: Observability,
 }
 
 impl LspBackend {
@@ -179,21 +150,48 @@ impl LspBackend {
         embedding: &LspEmbeddingConfig,
     ) -> Result<Self, deslop_core::live::LiveError> {
         let provider = build_startup_provider(embedding)?;
-        let mut session = if matches!(embedding.mode, EmbeddingMode::Off) {
-            AnalysisSession::new(workspace_root, min_nodes, true, None, provider)?
-        } else {
-            AnalysisSession::new_with_mode(
-                workspace_root,
-                min_nodes,
-                true,
-                None,
-                provider,
-                embedding.mode,
-            )?
-        };
+        let observability = Observability::default();
+        let (mut session, seeded_from_cache) = crate::cache_seed::open_session(
+            workspace_root,
+            min_nodes,
+            true,
+            None,
+            Arc::clone(&provider),
+            embedding.mode,
+        )?;
         session.set_embedding_progress_reporter(Some(progress_reporter(&client)));
-        let service = Arc::new(LiveService::new(Arc::new(Mutex::new(session))));
-        Ok(Self { client, service })
+        // Capture the root before moving the session into the Arc.
+        let root = session.root().to_path_buf();
+        let session = Arc::new(Mutex::new(session));
+        let service = Arc::new(LiveService::new(Arc::clone(&session)));
+        let (watcher, scheduler) =
+            crate::file_watch::start(&root, None, Arc::clone(&session), client.clone())?;
+        let report_changed = scheduler.report_changed_sender();
+        let ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service), report_changed.clone())
+            .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
+            .ok();
+        if seeded_from_cache {
+            crate::cache_seed::spawn_refresh(crate::cache_seed::RefreshTask {
+                session: Arc::clone(&session),
+                service: Arc::clone(&service),
+                client: client.clone(),
+                root: root.clone(),
+                min_nodes,
+                incremental: true,
+                config_path: None,
+                provider,
+                mode: embedding.mode,
+                report_changed,
+            });
+        }
+        Ok(Self {
+            client,
+            service,
+            _watcher: watcher,
+            _scheduler: scheduler,
+            _ipc: ipc,
+            observability,
+        })
     }
 
     /// Returns the LSP client handle. Exposed so request handlers can
@@ -207,6 +205,12 @@ impl LspBackend {
     #[must_use]
     pub fn service(&self) -> Arc<LiveService> {
         Arc::clone(&self.service)
+    }
+
+    /// Returns the CPU/work observability recorder.
+    #[must_use]
+    pub fn observability(&self) -> &Observability {
+        &self.observability
     }
 
     /// Re-runs analysis for changed paths when VS Code sends file
@@ -254,7 +258,8 @@ impl LspBackend {
 
 #[tower_lsp::async_trait]
 impl LanguageServer for LspBackend {
-    async fn initialize(&self, _params: InitializeParams) -> LspResult<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        crate::parent_process::start_monitor(params.process_id);
         Ok(InitializeResult {
             server_info: Some(ServerInfo {
                 name: SERVER_NAME.to_owned(),
@@ -277,6 +282,7 @@ impl LanguageServer for LspBackend {
                     resolve_provider: Some(false),
                 }),
                 definition_provider: Some(OneOf::Left(true)),
+                execute_command_provider: Some(commands::provider()),
                 ..ServerCapabilities::default()
             },
         })
@@ -295,11 +301,14 @@ impl LanguageServer for LspBackend {
     async fn did_change_configuration(&self, _params: DidChangeConfigurationParams) {}
 
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
+        self.observability
+            .record_handler("did_change_watched_files");
         let paths = paths_from_file_events(&params.changes);
         self.apply_changed_paths(&paths).await;
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        self.observability.record_handler("did_open");
         if let Some(path) = url_to_path(&params.text_document.uri) {
             self.apply_changed_paths(&[path]).await;
         }
@@ -308,6 +317,7 @@ impl LanguageServer for LspBackend {
     async fn did_close(&self, _params: DidCloseTextDocumentParams) {}
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        self.observability.record_handler("did_change");
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return;
         };
@@ -318,11 +328,11 @@ impl LanguageServer for LspBackend {
         &self,
         params: DocumentDiagnosticParams,
     ) -> LspResult<DocumentDiagnosticReportResult> {
+        self.observability.record_handler("diagnostic");
         let path = url_to_path(&params.text_document.uri).unwrap_or_default();
         let file_report = self.service.report_for_file(&path).await;
-        let global_weights = self.service.all_cluster_weights().await;
         let workspace_root = self.service.session_config().await.workspace_root;
-        let items = diagnostics::build_for_file(&file_report, &global_weights, &workspace_root);
+        let items = diagnostics::build_for_file(&file_report, &workspace_root);
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                 related_documents: None,
@@ -335,6 +345,7 @@ impl LanguageServer for LspBackend {
     }
 
     async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+        self.observability.record_handler("hover");
         let Some(path) = url_to_path(&params.text_document_position_params.text_document.uri)
         else {
             return Ok(None);
@@ -351,11 +362,9 @@ impl LanguageServer for LspBackend {
         if clusters.is_empty() {
             return Ok(None);
         }
-        let ranked = self.service.report_get().await;
         let workspace_root = self.service.session_config().await.workspace_root;
         Ok(hover::build_for_clusters_with_root(
             &clusters,
-            &ranked.clusters,
             &workspace_root,
         ))
     }
@@ -372,6 +381,7 @@ impl LanguageServer for LspBackend {
         &self,
         params: GotoDefinitionParams,
     ) -> LspResult<Option<GotoDefinitionResponse>> {
+        self.observability.record_handler("definition");
         let td_params = params.text_document_position_params;
         let Some(path) = url_to_path(&td_params.text_document.uri) else {
             return Ok(None);
@@ -403,6 +413,13 @@ impl LanguageServer for LspBackend {
             uri,
             range: Range { start, end },
         })))
+    }
+
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> LspResult<Option<serde_json::Value>> {
+        commands::execute(self, params).await
     }
 }
 
@@ -463,166 +480,4 @@ fn progress_reporter(client: &Client) -> EmbeddingProgressReporter {
                 .await;
         });
     })
-}
-
-/// Type-only marker so `tower_lsp::Client::send_notification` can
-/// dispatch our custom method.
-#[derive(Debug)]
-pub enum EmbeddingProgressNotification {}
-
-impl tower_lsp::lsp_types::notification::Notification for EmbeddingProgressNotification {
-    type Params = EmbeddingProgress;
-    const METHOD: &'static str = EMBEDDING_PROGRESS;
-}
-
-/// Type-only marker so `tower_lsp::Client::send_notification` can
-/// dispatch `deslop/reportChanged`.
-#[derive(Debug)]
-pub enum ReportChangedLspNotification {}
-
-impl tower_lsp::lsp_types::notification::Notification for ReportChangedLspNotification {
-    type Params = ReportChangedNotification;
-    const METHOD: &'static str = REPORT_CHANGED;
-}
-
-/// Boots the LSP server over stdio. Used by the binary entry point
-/// and by E2E tests that drive the binary as a black box.
-///
-/// # Errors
-///
-/// Returns `Err` when the backend fails to construct.
-pub async fn run_stdio(
-    workspace_root: PathBuf,
-    min_nodes: u32,
-    embedding: LspEmbeddingConfig,
-) -> anyhow::Result<()> {
-    tracing::info!(
-        workspace_root = %workspace_root.display(),
-        exists = workspace_root.exists(),
-        is_dir = workspace_root.is_dir(),
-        min_nodes,
-        "run_stdio booting backend",
-    );
-    let workspace_root_for_builder = workspace_root;
-    let (service, socket) = LspService::build(move |client| {
-        match LspBackend::new_with_config(
-            client,
-            workspace_root_for_builder.clone(),
-            min_nodes,
-            &embedding,
-        ) {
-            Ok(backend) => backend,
-            Err(error) => report_init_failure(&error),
-        }
-    })
-    .custom_method(custom_methods::REPORT_GET, custom_methods::report_get)
-    .custom_method(custom_methods::REPORT_DELTA, custom_methods::report_delta)
-    .custom_method(
-        custom_methods::REPORT_FOR_FILE,
-        custom_methods::report_for_file,
-    )
-    .custom_method(
-        custom_methods::REPORT_FOR_RANGE,
-        custom_methods::report_for_range,
-    )
-    .custom_method(custom_methods::CLUSTER_BY_ID, custom_methods::cluster_by_id)
-    .custom_method(custom_methods::FIND_SIMILAR, custom_methods::find_similar)
-    .custom_method(
-        custom_methods::LIST_MODELS,
-        custom_methods::embedding_list_models,
-    )
-    .custom_method(
-        custom_methods::SET_MODEL,
-        custom_methods::embedding_set_model,
-    )
-    .custom_method(
-        custom_methods::SESSION_CONFIG,
-        custom_methods::session_config,
-    )
-    .custom_method(
-        custom_methods::REPORT_SCHEMA_DOC,
-        custom_methods::report_schema_doc,
-    )
-    .custom_method(
-        custom_methods::VIRTUAL_DOCUMENT,
-        custom_methods::virtual_document,
-    )
-    .finish();
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
-    Server::new(stdin, stdout, socket)
-        .serve(NormaliseParams::new(service))
-        .await;
-    Ok(())
-}
-
-/// Methods that accept an empty-object `params` payload and must also
-/// accept a missing `params` field — some JSON-RPC clients omit it for
-/// no-arg calls, and tower-lsp's router rejects the request with
-/// `-32602 Missing params field` before the handler runs.
-const NO_PARAM_METHODS: &[&str] = &[
-    custom_methods::REPORT_GET,
-    custom_methods::REPORT_DELTA,
-    custom_methods::LIST_MODELS,
-    custom_methods::SESSION_CONFIG,
-    custom_methods::REPORT_SCHEMA_DOC,
-];
-
-/// Service adapter that injects an empty-object `params` value on
-/// selected custom methods when the incoming request omitted it.
-#[derive(Debug)]
-struct NormaliseParams<S> {
-    /// Wrapped service that receives the normalised request.
-    inner: S,
-}
-
-impl<S> NormaliseParams<S> {
-    /// Wraps `inner` so incoming requests are normalised before reaching it.
-    fn new(inner: S) -> Self {
-        Self { inner }
-    }
-}
-
-impl<S> Service<Request> for NormaliseParams<S>
-where
-    S: Service<Request, Response = Option<Response>, Error = ExitedError>,
-{
-    type Response = Option<Response>;
-    type Error = ExitedError;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request) -> Self::Future {
-        let normalised = if req.params().is_none()
-            && NO_PARAM_METHODS
-                .iter()
-                .any(|method| *method == req.method())
-        {
-            rebuild_with_empty_params(req)
-        } else {
-            req
-        };
-        self.inner.call(normalised)
-    }
-}
-
-/// Rebuilds `req` with a `params: {}` payload. Preserves method and id.
-fn rebuild_with_empty_params(req: Request) -> Request {
-    let (method, id, _params) = req.into_parts();
-    let mut builder = Request::build(method).params(serde_json::json!({}));
-    if let Some(id) = id {
-        builder = builder.id(id);
-    }
-    builder.finish()
-}
-
-/// Aborts the process with a structured diagnostic when the backend
-/// cannot construct. The editor surfaces this through the standard
-/// "server crashed" UX.
-fn report_init_failure(error: &deslop_core::live::LiveError) -> ! {
-    tracing::error!(%error, "deslop-lsp backend failed to initialise");
-    std::process::exit(1)
 }

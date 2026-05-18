@@ -9,7 +9,7 @@
 //! counters, embedding provenance), not a label-variant toggle.
 
 use deslop_core::{
-    buckets::{bucket_labels, classify_signals, ClusterKind},
+    buckets::{bucket_labels, classify, ClusterKind},
     report::ReportCluster,
     report::ReportOccurrence,
     Report,
@@ -246,7 +246,7 @@ fn write_next_steps(theme: &Theme) {
 }
 
 /// Counts of clusters in each [CLONE-BUCKETS] bucket. Routing goes
-/// through `buckets::classify_signals` so the CLI, HTML, and JSON
+/// through `buckets::classify` so the CLI, HTML, and JSON
 /// `interpret()` never disagree.
 #[derive(Debug, Default, Clone, Copy)]
 struct ClusterBreakdown {
@@ -276,7 +276,7 @@ impl From<&Report> for ClusterBreakdown {
     fn from(report: &Report) -> Self {
         let mut out = Self::default();
         for cluster in &report.clusters {
-            match classify_signals(cluster.signals) {
+            match classify(cluster) {
                 ClusterKind::Identical => {
                     out.identical = out.identical.saturating_add(1);
                 }
@@ -302,7 +302,7 @@ impl From<&Report> for ClusterBreakdown {
 /// immediately. Technical mode tacks on the signal triple for expert
 /// operators.
 fn render_cluster(theme: &Theme, index: usize, cluster: &ReportCluster, technical: bool) {
-    let kind = classify_signals(cluster.signals);
+    let kind = classify(cluster);
     let labels = bucket_labels(kind);
     let signal_color = bucket_colour(theme, kind);
     let files = summarise_files(&cluster.occurrences);

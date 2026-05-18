@@ -21,6 +21,7 @@ function cluster(
     weight: 42,
     size: occurrences.length,
     canonical_node_count: 12,
+    bucket: "identical",
     signals: {
       structural: 0.5,
       token_jaccard: 0.6,
@@ -28,6 +29,8 @@ function cluster(
       fused: 0.8,
     },
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };

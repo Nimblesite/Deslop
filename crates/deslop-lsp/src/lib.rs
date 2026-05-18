@@ -6,12 +6,23 @@
 //! spawning the binary, but the production path is always the
 //! `deslop-lsp` binary defined in `src/main.rs`.
 
+pub mod app;
 pub mod backend;
+mod cache_seed;
 pub mod code_lens;
+pub mod commands;
 pub mod custom_methods;
 pub mod diagnostics;
+pub mod file_watch;
 pub mod hover;
+pub mod ipc;
+pub mod notifications;
+pub mod observability;
+mod parent_process;
 pub mod position;
 pub mod presentation;
+mod profiling;
+pub mod server;
 
-pub use backend::{run_stdio, LspBackend};
+pub use backend::LspBackend;
+pub use server::run_stdio;

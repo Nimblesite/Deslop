@@ -151,6 +151,46 @@ function stringCorpus(root: ts.SourceFile): string {
   return parts.join("\n");
 }
 
+function templateText(node: ts.TemplateLiteral): string {
+  if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+  const parts: string[] = [node.head.text];
+  for (const span of node.templateSpans) {
+    parts.push("${", span.expression.getText(), "}", span.literal.text);
+  }
+  return parts.join("");
+}
+
+function severityBadgeLabelTemplates(root: ts.Node): string[] {
+  const out: string[] = [];
+  function visit(node: ts.Node): void {
+    if (
+      (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
+      ts.isIdentifier(node.tagName) &&
+      node.tagName.text === "SeverityBadge"
+    ) {
+      for (const attr of node.attributes.properties) {
+        if (
+          ts.isJsxAttribute(attr) &&
+          attr.name.getText() === "label" &&
+          attr.initializer &&
+          ts.isJsxExpression(attr.initializer) &&
+          attr.initializer.expression
+        ) {
+          const expr = attr.initializer.expression;
+          if (ts.isTemplateExpression(expr)) {
+            out.push(templateText(expr));
+          } else if (ts.isNoSubstitutionTemplateLiteral(expr)) {
+            out.push(expr.text);
+          }
+        }
+      }
+    }
+    node.forEachChild(visit);
+  }
+  visit(root);
+  return out;
+}
+
 suite("cluster webview occurrence locations", () => {
   test("renders occurrence file, line, and column for human readers", () => {
     // [VSIX-WEBVIEW] / issue #8: cluster detail occurrence rows must
@@ -250,6 +290,38 @@ suite("cluster webview occurrence locations", () => {
     const sourceText = parseClusterWebview().getFullText();
     assert.match(sourceText, /DocTextLink/, "cluster panel must render docs links");
     assert.match(sourceText, /topic="cluster-id"/, "cluster id must link to its docs section");
+  });
+
+  test("severity badge label leads with the stable slug, not the volatile #N rank (#146)", () => {
+    // [VSIX-TOP-OFFENDERS-CLUSTER-ID] applies to every cluster-row surface,
+    // including the cluster detail webview. Rank is volatile (re-numbered on
+    // every snapshot); the slug is stable. Both humans and AI agents reading
+    // the rendered panel must see the same slug everywhere
+    // ([VSIX-CLUSTER-ID-CONSISTENCY]) so cross-message references survive
+    // re-analysis.
+    const root = parseClusterWebview();
+    const badgeLabels = severityBadgeLabelTemplates(root);
+    assert.ok(
+      badgeLabels.length > 0,
+      "cluster panel must render a SeverityBadge in the header",
+    );
+    for (const label of badgeLabels) {
+      assert.doesNotMatch(
+        label,
+        /^#\$\{rank/,
+        `severity badge must not lead with the volatile #\${rank}, got: ${label}`,
+      );
+      assert.doesNotMatch(
+        label,
+        /^#\d/,
+        `severity badge must not lead with a literal #N, got: ${label}`,
+      );
+      assert.match(
+        label,
+        /\bslug\b/i,
+        `severity badge must reference the cluster slug, got: ${label}`,
+      );
+    }
   });
 
   test("signal strip hover copy explains every score", () => {

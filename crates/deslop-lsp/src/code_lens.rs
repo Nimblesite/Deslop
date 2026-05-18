@@ -8,9 +8,11 @@
 use std::path::Path;
 
 use deslop_core::live::FileReport;
-use deslop_core::report::{ReportCluster, ReportOccurrence};
+use deslop_core::report::ReportCluster;
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
+
+use crate::diagnostics::occurrence_matches_path;
 
 /// Command id forwarded back to the client for "jump to next occurrence".
 pub const JUMP_COMMAND: &str = "deslop.jumpToNextOccurrence";
@@ -35,12 +37,6 @@ fn lenses_for_cluster(cluster: &ReportCluster, path: &Path) -> Vec<CodeLens> {
         .filter(|(_, occurrence)| occurrence_matches_path(occurrence, path))
         .map(|(index, _occurrence)| lens_for_occurrence(cluster, index))
         .collect()
-}
-
-/// Matches occurrence paths against the report path with the usual
-/// relative/absolute skew tolerance.
-fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path) -> bool {
-    occurrence.path == path || occurrence.path.ends_with(path) || path.ends_with(&occurrence.path)
 }
 
 /// Builds a code lens at column zero of the cluster's first line for
@@ -117,6 +113,8 @@ mod tests {
             path: PathBuf::from(path),
             start_byte: start,
             end_byte: end,
+            start_line: 1,
+            end_line: 1,
             hidden: false,
         }
     }
@@ -132,9 +130,11 @@ mod tests {
                 occurrence("Other.cs", 10, 20),
             ],
         );
+        let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
             clusters: vec![cluster],
+            total_occurrences,
         };
         let lenses = build_for_file(&report);
         assert_eq!(
@@ -215,9 +215,11 @@ mod tests {
     #[test]
     fn build_for_file_with_no_matching_cluster_returns_empty_vec() {
         let cluster = make_cluster("c", 2, vec![occurrence("Other.cs", 0, 5)]);
+        let total_occurrences = cluster.occurrences.len();
         let report = FileReport {
             path: PathBuf::from("Alpha.cs"),
             clusters: vec![cluster],
+            total_occurrences,
         };
         let lenses = build_for_file(&report);
         assert!(lenses.is_empty(), "nothing from a non-matching cluster");

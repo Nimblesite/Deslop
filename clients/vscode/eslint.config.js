@@ -34,6 +34,85 @@ function propertyName(member) {
   return null;
 }
 
+function normalizedFilename(context) {
+  const filename =
+    typeof context.getFilename === "function" ? context.getFilename() : context.filename;
+  return String(filename).replaceAll("\\", "/");
+}
+
+function isProductionVsixSource(context) {
+  const filename = normalizedFilename(context);
+  return filename.includes("/src/") && !filename.includes("/src/test/");
+}
+
+function walkNode(node, visit) {
+  if (!node || typeof node.type !== "string") return;
+  visit(node);
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "parent") continue;
+    if (Array.isArray(value)) {
+      for (const child of value) walkNode(child, visit);
+    } else if (value && typeof value.type === "string") {
+      walkNode(value, visit);
+    }
+  }
+}
+
+function containsStringLiteral(node, value) {
+  let found = false;
+  walkNode(node, (candidate) => {
+    if (candidate.type === "Literal" && candidate.value === value) found = true;
+  });
+  return found;
+}
+
+function containsMemberCall(node, memberNames) {
+  let found = false;
+  walkNode(node, (candidate) => {
+    if (
+      candidate.type === "CallExpression" &&
+      candidate.callee?.type === "MemberExpression" &&
+      memberNames.has(propertyName(candidate.callee))
+    ) {
+      found = true;
+    }
+  });
+  return found;
+}
+
+function expressionName(node) {
+  if (!node) return "";
+  if (node.type === "Identifier") return node.name;
+  if (node.type === "MemberExpression") {
+    const object = expressionName(node.object);
+    const property = propertyName(node);
+    return property ? `${object}.${property}` : object;
+  }
+  if (node.type === "TSQualifiedName") {
+    const left = expressionName(node.left);
+    const right = expressionName(node.right);
+    return right ? `${left}.${right}` : left;
+  }
+  if (node.type === "TSExpressionWithTypeArguments") return expressionName(node.expression);
+  return "";
+}
+
+function implementsTreeDataProvider(node) {
+  return (node.implements ?? []).some((entry) =>
+    expressionName(entry.expression ?? entry).endsWith("TreeDataProvider"),
+  );
+}
+
+function containsSignalEffect(node) {
+  let found = false;
+  walkNode(node, (candidate) => {
+    if (candidate.type === "CallExpression" && expressionName(candidate.callee) === "effect") {
+      found = true;
+    }
+  });
+  return found;
+}
+
 function isQuickPickFactoryCall(node) {
   return (
     node?.type === "CallExpression" &&
@@ -115,6 +194,91 @@ const quickPickLifecyclePlugin = {
         };
       },
     },
+    "no-report-get-outside-extension-bootstrap": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Keep deslop/reportGet calls on the extension bootstrap/notification path only.",
+        },
+        messages: {
+          reportGet:
+            "Do not call deslop/reportGet from this source file; read from ReportStore signals instead.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const filename = normalizedFilename(context);
+        if (!isProductionVsixSource(context) || filename.endsWith("/src/extension.ts")) {
+          return {};
+        }
+        return {
+          Literal(node) {
+            if (node.value === "deslop/reportGet") {
+              context.report({ node, messageId: "reportGet" });
+            }
+          },
+        };
+      },
+    },
+    "no-timer-driven-report-refresh": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban setTimeout/setInterval refresh paths that mutate or refetch the report store.",
+        },
+        messages: {
+          timer:
+            "Do not refresh or refetch report state from a timer; derive UI refresh from ReportStore signals.",
+        },
+        schema: [],
+      },
+      create(context) {
+        if (!isProductionVsixSource(context)) return {};
+        return {
+          CallExpression(node) {
+            const callee = expressionName(node.callee);
+            if (callee !== "setTimeout" && callee !== "setInterval") return;
+            const callback = node.arguments?.[0];
+            if (
+              containsStringLiteral(callback, "deslop/reportGet") ||
+              containsMemberCall(
+                callback,
+                new Set(["applyDelta", "setSnapshot", "refreshAfterChange", "refreshAfterEmbedding"]),
+              )
+            ) {
+              context.report({ node, messageId: "timer" });
+            }
+          },
+        };
+      },
+    },
+    "tree-provider-requires-signal-effect": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require TreeDataProvider implementations to subscribe through @preact/signals-core effect().",
+        },
+        messages: {
+          missingEffect:
+            "TreeDataProvider implementations must subscribe through effect() so tree refresh follows ReportStore signals.",
+        },
+        schema: [],
+      },
+      create(context) {
+        if (!isProductionVsixSource(context)) return {};
+        return {
+          ClassDeclaration(node) {
+            if (!implementsTreeDataProvider(node)) return;
+            if (!containsSignalEffect(node.body)) {
+              context.report({ node, messageId: "missingEffect" });
+            }
+          },
+        };
+      },
+    },
   },
 };
 
@@ -168,6 +332,9 @@ module.exports = tseslint.config(
       "@typescript-eslint/require-await": "error",
       "@typescript-eslint/return-await": ["error", "always"],
       "deslop-local/quick-pick-hide-before-await": "error",
+      "deslop-local/no-report-get-outside-extension-bootstrap": "error",
+      "deslop-local/no-timer-driven-report-refresh": "error",
+      "deslop-local/tree-provider-requires-signal-effect": "error",
 
       // === Tier 2: type-safety escape hatches (all elevated from warn) ===
       "@typescript-eslint/no-unsafe-argument": "error",

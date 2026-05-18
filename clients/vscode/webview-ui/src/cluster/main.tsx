@@ -21,7 +21,7 @@ import {
   helpCopy,
   type HelpTopic,
 } from "../components/HelpBubble";
-import { bucketLabels, occurrenceCount, resolveBucket } from "../../../src/types/report";
+import { bucketLabels, clusterSlug, occurrenceCount, resolveBucket } from "../../../src/types/report";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
 const focusedOccurrenceIndex = signal(0);
@@ -32,6 +32,7 @@ function ClusterApp() {
   const list = clusters.value;
   const rank = cluster ? list.findIndex((c) => c.id === cluster.id) + 1 : 0;
   const severity = cluster ? severityByClusterId.value.get(cluster.id) ?? "faint" : "faint";
+  const slug = cluster ? clusterSlug(cluster) : "";
 
   useEffect(() => {
     focusedOccurrenceIndex.value = 0;
@@ -161,7 +162,7 @@ function ClusterApp() {
           <span class="with-help" style={{ justifyContent: "flex-end" }}>
             <SeverityBadge
               severity={severity}
-              label={`#${rank || "?"}`}
+              label={`${slug}`}
               title={rankTitle(rank, list.length, severity)}
             />
             <HelpBubble topic="rank" />

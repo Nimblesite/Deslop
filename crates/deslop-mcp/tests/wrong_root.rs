@@ -4,39 +4,140 @@
 //! hanging on `session-config` are the two failure shapes the issue
 //! tracks; the fixes are: canonicalise `--root` at start-up and
 //! refuse to scan vendored Cargo cache trees.
+//!
+//! Under [MCP-IPC-CLIENT] every read tool call delegates to the LSP
+//! over a unix socket, so each test spawns a companion `deslop-lsp`
+//! against the same workspace before driving the MCP child.
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    time::Duration,
+    thread,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Context, Result};
+use assert_cmd::cargo::cargo_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
+
+const SOCKET_TIMEOUT: Duration = Duration::from_secs(20);
+const POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Kill-on-drop guard for the companion LSP child so per-test
+/// workspaces can be reclaimed without leaking sockets when the test
+/// panics.
+struct LspGuard(Child);
+
+impl Drop for LspGuard {
+    fn drop(&mut self) {
+        let _killed = self.0.kill();
+        let _waited = self.0.wait();
+    }
+}
+
+fn spawn_lsp(root: &Path) -> Result<LspGuard> {
+    let bin = cargo_bin("deslop-lsp");
+    let mut child = Command::new(bin)
+        .arg(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("spawn deslop-lsp")?;
+    let mut stdin = child.stdin.take().context("lsp stdin")?;
+    let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
+    lsp_handshake(&mut stdin, &mut stdout).context("lsp handshake")?;
+    child.stdin = Some(stdin);
+    child.stdout = Some(stdout.into_inner());
+    Ok(LspGuard(child))
+}
+
+fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) -> Result<()> {
+    let init = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": { "processId": null, "rootUri": null, "capabilities": {} }
+    });
+    write_lsp_frame(stdin, &serde_json::to_string(&init)?)?;
+    let _response = read_lsp_frame(stdout)?;
+    let initialized = json!({
+        "jsonrpc": "2.0",
+        "method": "initialized",
+        "params": {}
+    });
+    write_lsp_frame(stdin, &serde_json::to_string(&initialized)?)
+}
+
+fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
+    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
+    stdin.write_all(header.as_bytes())?;
+    stdin.write_all(payload.as_bytes())?;
+    stdin.flush()?;
+    Ok(())
+}
+
+fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
+    let mut content_length: Option<usize> = None;
+    loop {
+        let mut line = String::new();
+        let _bytes = reader.read_line(&mut line)?;
+        if line == "\r\n" {
+            break;
+        }
+        if let Some(rest) = line.strip_prefix("Content-Length: ") {
+            content_length = Some(rest.trim().parse::<usize>()?);
+        }
+    }
+    let length = content_length.ok_or_else(|| anyhow!("missing Content-Length"))?;
+    let mut buf = vec![0_u8; length];
+    reader.read_exact(&mut buf)?;
+    Ok(serde_json::from_slice(&buf)?)
+}
+
+fn wait_for_socket(path: &Path) -> Result<()> {
+    let started = Instant::now();
+    loop {
+        if path.exists() {
+            return Ok(());
+        }
+        if started.elapsed() >= SOCKET_TIMEOUT {
+            return Err(anyhow!(
+                "timed out waiting for socket at {}",
+                path.display()
+            ));
+        }
+        thread::sleep(POLL_INTERVAL);
+    }
+}
 
 struct McpChild {
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: i64,
+    /// Companion LSP. Reaped on drop so each test tears down both
+    /// processes before the workspace tempdir is reclaimed.
+    _lsp: LspGuard,
 }
 
 impl McpChild {
     fn spawn_with_cwd(cwd: &Path, root_arg: &str) -> Result<Self> {
+        let lsp = spawn_lsp(cwd)?;
+        let socket = cwd.join(".deslop-cache").join("deslop.sock");
+        wait_for_socket(&socket)?;
         let binary = env!("CARGO_BIN_EXE_deslop-mcp");
         let mut cmd = Command::new(binary);
         let _ = cmd
             .arg("--root")
             .arg(root_arg)
-            .arg("--min-nodes")
-            .arg("15")
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::null());
         let mut child = cmd.spawn().context("spawn deslop-mcp binary")?;
         let stdin = child.stdin.take().context("child stdin")?;
         let stdout = child.stdout.take().context("child stdout")?;
@@ -45,6 +146,7 @@ impl McpChild {
             stdin,
             stdout: BufReader::new(stdout),
             next_id: 0,
+            _lsp: lsp,
         })
     }
 
@@ -85,12 +187,12 @@ impl McpChild {
 
     fn finish(mut self) {
         drop(self.stdin);
-        let started = std::time::Instant::now();
+        let started = Instant::now();
         while started.elapsed() < Duration::from_secs(10) {
             if self.child.try_wait().ok().flatten().is_some() {
                 return;
             }
-            std::thread::sleep(Duration::from_millis(50));
+            thread::sleep(Duration::from_millis(50));
         }
         let _ = self.child.kill();
         let _ = self.child.wait();
@@ -171,9 +273,9 @@ fn issue_141_relative_root_resolves_to_canonical_workspace() -> Result<()> {
 #[test]
 fn issue_141_cargo_cache_under_root_is_not_analysed() -> Result<()> {
     let workspace = TempDir::new()?;
-    seed_one_csharp_file(workspace.path())?;
-    let cargo_checkouts = workspace
-        .path()
+    let canonical_workspace = fs::canonicalize(workspace.path())?;
+    seed_one_csharp_file(&canonical_workspace)?;
+    let cargo_checkouts = canonical_workspace
         .join(".cargo")
         .join("git")
         .join("checkouts")
@@ -187,11 +289,10 @@ fn issue_141_cargo_cache_under_root_is_not_analysed() -> Result<()> {
         )?;
     }
 
-    let workspace_str = workspace
-        .path()
+    let workspace_str = canonical_workspace
         .to_str()
         .ok_or_else(|| anyhow!("workspace path is not UTF-8"))?;
-    let mut child = McpChild::spawn_with_cwd(workspace.path(), workspace_str)?;
+    let mut child = McpChild::spawn_with_cwd(&canonical_workspace, workspace_str)?;
     init(&mut child)?;
     let response = child.request(
         "tools/call",

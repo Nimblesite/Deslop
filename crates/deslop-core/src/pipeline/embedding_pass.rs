@@ -12,16 +12,25 @@ use std::{
 
 use crate::{
     embedding::{
-        cache::DEFAULT_CACHE_DIR_NAME, content_hash, embedding_pairs, EmbeddingCache,
-        EmbeddingMode, EmbeddingPair, EmbeddingProvider, EmbeddingSpec,
+        cache::DEFAULT_CACHE_DIR_NAME, content_hash, EmbeddingCache, EmbeddingMode, EmbeddingPair,
+        EmbeddingProvider, EmbeddingSpec, ProviderError,
     },
     error::CoreError,
-    fingerprint::Fingerprint,
     report::EmbeddingProvenance,
-    state::FileId,
 };
 
-use super::{config::PipelineConfig, corpus::FingerprintCorpus};
+use super::{
+    config::PipelineConfig,
+    corpus::FingerprintCorpus,
+    embedding_batch::{
+        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
+        PendingEmbedding,
+    },
+    embedding_observability::{token_count, EmbeddingObserver},
+};
+
+/// Maximum source characters sent to any embedding provider.
+const MAX_PROVIDER_INPUT_CHARS: usize = 6_000;
 
 /// Outcome of the embedding pass. Empty `pairs` + `None` provenance
 /// means the pass was skipped or failed gracefully.
@@ -86,6 +95,7 @@ fn embed_corpus(
         "embedding pass starting",
     );
     let cache = open_cache(&config.root, &spec)?;
+    let mut observer = EmbeddingObserver::new(corpus.fingerprints.len());
     let batch = compute_embeddings(
         provider,
         &cache,
@@ -93,19 +103,15 @@ fn embed_corpus(
         spec.dimensions,
         config.embedding.batch_yield,
         config.embedding.progress,
+        &mut observer,
     );
     let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
-    tracing::info!(
-        pair_count = pairs.len(),
-        embedded = batch.vectors.len(),
-        failed = batch.failures,
-        "embedding pass complete"
-    );
+    observer.log_final(pairs.len(), batch.vectors.len(), batch.failures);
     Ok(EmbeddingOutcome {
         pairs,
         provenance: Some(provenance_from(
             spec,
-            corpus.fingerprints.len(),
+            attempted_subtrees(corpus.fingerprints.len(), &batch),
             batch.vectors.len(),
             batch.failures,
         )),
@@ -122,9 +128,7 @@ fn open_cache(scan_root: &Path, spec: &EmbeddingSpec) -> Result<EmbeddingCache, 
     })
 }
 
-/// Produces embedding vectors for fingerprints whose provider request
-/// succeeds. Cache hits short-circuit the provider call; misses invoke
-/// the provider and persist the result for subsequent runs.
+/// Produces embedding vectors for fingerprints whose provider request succeeds.
 fn compute_embeddings(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
@@ -132,44 +136,22 @@ fn compute_embeddings(
     dimensions: usize,
     batch_yield: Option<Duration>,
     progress: Option<&dyn Fn(usize)>,
+    observer: &mut EmbeddingObserver,
 ) -> EmbeddingBatch {
     let mut batch = EmbeddingBatch::with_capacity(corpus.fingerprints.len());
-    let mut indexed_hashes: HashSet<String> = HashSet::new();
-    let mut pending_positions: HashMap<String, usize> = HashMap::new();
-    let mut pending: Vec<PendingEmbedding> = Vec::new();
-    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
-        let snippet = snippet_for(fingerprint, &corpus.sources);
-        let snippet_hash = content_hash(&snippet);
-        if indexed_hashes.contains(&snippet_hash) {
-            continue;
-        }
-        if let Some(position) = pending_positions.get(&snippet_hash).copied() {
-            if let Some(queued) = pending.get_mut(position) {
-                queued.occurrences = queued.occurrences.saturating_add(1);
-            }
-            continue;
-        }
-        if let Some(cached) = cache.get(&snippet) {
-            let _inserted = indexed_hashes.insert(snippet_hash);
-            batch.push(index, cached);
-            continue;
-        }
-        let _previous = pending_positions.insert(snippet_hash.clone(), pending.len());
-        pending.push(PendingEmbedding {
-            fingerprint_index: index,
-            snippet,
-            snippet_hash,
-            occurrences: 1,
-        });
-    }
+    let pending = lookup_phase(corpus, cache, &mut batch, observer);
+    observer.log_cache_phase(pending.len());
     process_pending_embeddings(
-        provider,
-        cache,
+        PendingDispatch {
+            provider,
+            cache,
+            dimensions,
+            batch_yield,
+            progress,
+            observer,
+        },
         &mut batch,
         &pending,
-        dimensions,
-        batch_yield,
-        progress,
     );
     if batch.failures > 0 {
         tracing::warn!(
@@ -181,33 +163,221 @@ fn compute_embeddings(
     batch
 }
 
+/// Walks the corpus once, loading cache hits and queuing unique misses.
+fn lookup_phase(
+    corpus: &FingerprintCorpus,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    observer: &mut EmbeddingObserver,
+) -> Vec<PendingEmbedding> {
+    let mut indexed_hashes: HashSet<String> = HashSet::new();
+    let mut pending_positions: HashMap<String, usize> = HashMap::new();
+    let mut pending: Vec<PendingEmbedding> = Vec::new();
+    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
+        let snippet = snippet_for(fingerprint, &corpus.sources);
+        if snippet.chars().count() > MAX_PROVIDER_INPUT_CHARS {
+            record_oversized_input(batch, index, snippet);
+            continue;
+        }
+        classify_snippet(
+            ClassifyContext {
+                index,
+                snippet,
+                cache,
+                batch,
+                observer,
+            },
+            &mut indexed_hashes,
+            &mut pending_positions,
+            &mut pending,
+        );
+    }
+    pending
+}
+
+/// Inputs for [`classify_snippet`].
+struct ClassifyContext<'a> {
+    /// Position of the fingerprint inside the corpus.
+    index: usize,
+    /// Source slice extracted for this fingerprint.
+    snippet: String,
+    /// Embedding cache consulted for warm-cache short-circuits.
+    cache: &'a EmbeddingCache,
+    /// Mutable batch where cache hits are recorded immediately.
+    batch: &'a mut EmbeddingBatch,
+    /// Pass-level observer updated on hit, miss, or duplicate.
+    observer: &'a mut EmbeddingObserver,
+}
+
+/// Routes one snippet onto cache-hit, dedup-merge, or queue-pending.
+fn classify_snippet(
+    ctx: ClassifyContext<'_>,
+    indexed_hashes: &mut HashSet<String>,
+    pending_positions: &mut HashMap<String, usize>,
+    pending: &mut Vec<PendingEmbedding>,
+) {
+    let snippet_hash = content_hash(&ctx.snippet);
+    if indexed_hashes.contains(&snippet_hash) {
+        ctx.observer.record_duplicate();
+        return;
+    }
+    if let Some(position) = pending_positions.get(&snippet_hash).copied() {
+        if let Some(queued) = pending.get_mut(position) {
+            queued.occurrences = queued.occurrences.saturating_add(1);
+        }
+        ctx.observer.record_duplicate();
+        return;
+    }
+    if let Some(cached) = ctx.cache.get(&ctx.snippet) {
+        let _inserted = indexed_hashes.insert(snippet_hash);
+        ctx.batch.push(ctx.index, cached, 1);
+        ctx.observer.record_cache_hit();
+        return;
+    }
+    ctx.observer.record_cache_miss();
+    let _previous = pending_positions.insert(snippet_hash.clone(), pending.len());
+    pending.push(PendingEmbedding {
+        fingerprint_index: ctx.index,
+        snippet: ctx.snippet,
+        snippet_hash,
+        occurrences: 1,
+    });
+}
+
+/// Pending provider-dispatch dependencies.
+struct PendingDispatch<'a> {
+    /// Embedding provider receiving each batch.
+    provider: &'a dyn EmbeddingProvider,
+    /// On-disk cache that absorbs successful vectors.
+    cache: &'a EmbeddingCache,
+    /// Provider-spec embedding dimensionality.
+    dimensions: usize,
+    /// Optional cooperative yield between batches.
+    batch_yield: Option<Duration>,
+    /// Optional live progress callback.
+    progress: Option<&'a dyn Fn(usize)>,
+    /// Pass-level structured observer.
+    observer: &'a mut EmbeddingObserver,
+}
+
+/// Returns the provenance denominator for this embedding pass.
+fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usize {
+    if batch.failures == 0 {
+        return total_fingerprints;
+    }
+    batch.vectors.len().saturating_add(batch.failures)
+}
+
+/// Counts an oversized snippet as skipped before provider dispatch.
+fn record_oversized_input(batch: &mut EmbeddingBatch, fingerprint_index: usize, snippet: String) {
+    let snippet_hash = content_hash(&snippet);
+    let item = PendingEmbedding {
+        fingerprint_index,
+        snippet,
+        snippet_hash,
+        occurrences: 1,
+    };
+    record_failed_pending(
+        batch,
+        &item,
+        &format!("exceeds {MAX_PROVIDER_INPUT_CHARS} chars"),
+    );
+}
+
 /// Dispatches pending embedding requests in provider-sized chunks.
 fn process_pending_embeddings(
+    dispatch: PendingDispatch<'_>,
+    batch: &mut EmbeddingBatch,
+    pending: &[PendingEmbedding],
+) {
+    let PendingDispatch {
+        provider,
+        cache,
+        dimensions,
+        batch_yield,
+        progress,
+        observer,
+    } = dispatch;
+    let max_batch_size = provider.max_batch_size().max(1);
+    let total_batches = pending.len().div_ceil(max_batch_size);
+    for (index, chunk) in pending.chunks(max_batch_size).enumerate() {
+        let batch_index = index.saturating_add(1);
+        let tokens = provider_batch_tokens(chunk);
+        observer.provider_batch(batch_index, total_batches, chunk.len(), tokens, || {
+            embed_chunk(provider, cache, batch, chunk, dimensions);
+        });
+        report_progress(progress, batch);
+        maybe_yield_between_batches(batch_yield, index, total_batches);
+    }
+}
+
+/// Returns the approximate token count for one provider batch.
+fn provider_batch_tokens(chunk: &[PendingEmbedding]) -> usize {
+    chunk.iter().fold(0, |total, item| {
+        total.saturating_add(token_count(&item.snippet))
+    })
+}
+
+/// Embeds one chunk, splitting failed multi-input requests so a
+/// context error on an aggregate Ollama request does not discard small
+/// snippets that succeed on their own.
+fn embed_chunk(
     provider: &dyn EmbeddingProvider,
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
-    pending: &[PendingEmbedding],
+    chunk: &[PendingEmbedding],
     dimensions: usize,
-    batch_yield: Option<Duration>,
-    progress: Option<&dyn Fn(usize)>,
 ) {
-    let max_batch_size = provider.max_batch_size().max(1);
-    for (index, chunk) in pending.chunks(max_batch_size).enumerate() {
-        let inputs: Vec<String> = chunk.iter().map(|item| item.snippet.clone()).collect();
-        match provider.embed_batch(&inputs) {
-            Ok(vectors) if vectors.len() == chunk.len() => {
-                for (item, vector) in chunk.iter().zip(vectors) {
-                    push_fresh_embedding(cache, batch, item, vector, dimensions);
-                }
-            }
-            Ok(vectors) => {
-                let message = format!("expected {} embeddings, got {}", chunk.len(), vectors.len());
-                record_failed_chunk(batch, chunk, &message);
-            }
-            Err(source) => record_failed_chunk(batch, chunk, &source),
+    let inputs: Vec<String> = chunk.iter().map(|item| item.snippet.clone()).collect();
+    match provider.embed_batch(&inputs) {
+        Ok(vectors) if vectors.len() == chunk.len() => {
+            push_fresh_embeddings(cache, batch, chunk, vectors, dimensions);
         }
-        report_progress(progress, batch);
-        maybe_yield_between_batches(batch_yield, index, pending.len(), max_batch_size);
+        Ok(vectors) => record_bad_vector_count(batch, chunk, vectors.len()),
+        Err(source) if chunk.len() > 1 => {
+            split_and_retry(provider, cache, batch, chunk, dimensions, &source);
+        }
+        Err(source) => record_failed_chunk(batch, chunk, &source),
+    }
+}
+
+/// Stores all successful vectors from one provider response.
+fn push_fresh_embeddings(
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    chunk: &[PendingEmbedding],
+    vectors: Vec<Vec<f32>>,
+    dimensions: usize,
+) {
+    for (item, vector) in chunk.iter().zip(vectors) {
+        push_fresh_embedding(cache, batch, item, vector, dimensions);
+    }
+}
+
+/// Records a malformed response that did not preserve batch arity.
+fn record_bad_vector_count(batch: &mut EmbeddingBatch, chunk: &[PendingEmbedding], actual: usize) {
+    let message = format!("expected {} embeddings, got {actual}", chunk.len());
+    record_failed_chunk(batch, chunk, &message);
+}
+
+/// Bisects a failed provider batch and retries both halves.
+fn split_and_retry(
+    provider: &dyn EmbeddingProvider,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    chunk: &[PendingEmbedding],
+    dimensions: usize,
+    source: &ProviderError,
+) {
+    tracing::debug!(
+        error = %source,
+        inputs = chunk.len(),
+        "embedding batch failed; retrying smaller chunks"
+    );
+    let mid = chunk.len() / 2;
+    if let (Some(left), Some(right)) = (chunk.get(..mid), chunk.get(mid..)) {
+        embed_chunk(provider, cache, batch, left, dimensions);
+        embed_chunk(provider, cache, batch, right, dimensions);
     }
 }
 
@@ -223,14 +393,13 @@ fn report_progress(progress: Option<&dyn Fn(usize)>, batch: &EmbeddingBatch) {
 fn maybe_yield_between_batches(
     batch_yield: Option<Duration>,
     chunk_index: usize,
-    pending_len: usize,
-    max_batch_size: usize,
+    total_batches: usize,
 ) {
     let Some(delay) = batch_yield.filter(|delay| !delay.is_zero()) else {
         return;
     };
     let next_chunk = chunk_index.saturating_add(1);
-    if next_chunk < pending_len.div_ceil(max_batch_size) {
+    if next_chunk < total_batches {
         thread::sleep(delay);
     }
 }
@@ -251,7 +420,7 @@ fn push_fresh_embedding(
     if let Err(error) = cache.store(&item.snippet, &vector) {
         tracing::warn!(%error, content_hash = %item.snippet_hash, "embedding cache write failed");
     }
-    batch.push(item.fingerprint_index, vector);
+    batch.push(item.fingerprint_index, vector, item.occurrences);
 }
 
 /// Records every pending item in a failed provider batch.
@@ -279,121 +448,4 @@ fn record_failed_pending<E: std::fmt::Display>(
         content_hash = %item.snippet_hash,
         "embedding provider rejected subtree — skipping embedding signal"
     );
-}
-
-#[derive(Debug)]
-/// Accumulates successful vectors and rejected occurrence counts.
-struct EmbeddingBatch {
-    /// Successful vectors keyed by original fingerprint index.
-    vectors: Vec<IndexedEmbedding>,
-    /// Logical occurrences skipped because the provider rejected them.
-    failures: usize,
-}
-
-impl EmbeddingBatch {
-    /// Creates an empty batch with space for expected successes.
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            vectors: Vec::with_capacity(capacity),
-            failures: 0,
-        }
-    }
-
-    /// Adds one successful embedding vector.
-    fn push(&mut self, fingerprint_index: usize, vector: Vec<f32>) {
-        self.vectors.push(IndexedEmbedding {
-            fingerprint_index,
-            vector,
-        });
-    }
-
-    /// Returns successful vectors plus rejected occurrences.
-    fn processed(&self) -> usize {
-        self.vectors.len().saturating_add(self.failures)
-    }
-}
-
-#[derive(Debug)]
-/// Provider request waiting to be embedded.
-struct PendingEmbedding {
-    /// Original fingerprint index represented by this request.
-    fingerprint_index: usize,
-    /// Source text sent to the provider.
-    snippet: String,
-    /// Stable content hash used for cache writes and diagnostics.
-    snippet_hash: String,
-    /// Logical duplicate occurrences represented by this snippet.
-    occurrences: usize,
-}
-
-#[derive(Debug)]
-/// Successful vector tied to its original fingerprint index.
-struct IndexedEmbedding {
-    /// Original fingerprint index.
-    fingerprint_index: usize,
-    /// Provider-returned vector.
-    vector: Vec<f32>,
-}
-
-/// Builds ANN pairs from successfully embedded snippets.
-fn pairs_from_successful_embeddings(
-    fingerprints: &[Fingerprint],
-    indexed: &[IndexedEmbedding],
-) -> Vec<EmbeddingPair> {
-    let successful_fingerprints: Vec<Fingerprint> = indexed
-        .iter()
-        .filter_map(|item| fingerprints.get(item.fingerprint_index).cloned())
-        .collect();
-    let vectors: Vec<Vec<f32>> = indexed.iter().map(|item| item.vector.clone()).collect();
-    embedding_pairs(&successful_fingerprints, &vectors)
-        .into_iter()
-        .filter_map(|pair| remap_pair(pair, indexed))
-        .collect()
-}
-
-/// Maps pair indices from the compact embedded set back to the full
-/// fingerprint list.
-fn remap_pair(pair: EmbeddingPair, indexed: &[IndexedEmbedding]) -> Option<EmbeddingPair> {
-    let left = indexed.get(pair.left)?.fingerprint_index;
-    let right = indexed.get(pair.right)?.fingerprint_index;
-    Some(EmbeddingPair {
-        left,
-        right,
-        cosine: pair.cosine,
-    })
-}
-
-/// Returns the source slice for `fingerprint` as a `String`. Invalid
-/// byte ranges (impossible in the current pipeline) collapse to an
-/// empty string, which the provider then embeds as a constant vector
-/// — keeps the helper total without a branch in the caller.
-fn snippet_for(fingerprint: &Fingerprint, sources: &HashMap<FileId, Vec<u8>>) -> String {
-    let Some(bytes) = sources.get(&fingerprint.file_id) else {
-        return String::new();
-    };
-    let start = fingerprint.byte_range.start.min(bytes.len());
-    let end = fingerprint.byte_range.end.min(bytes.len());
-    bytes
-        .get(start..end)
-        .map(|slice| String::from_utf8_lossy(slice).into_owned())
-        .unwrap_or_default()
-}
-
-/// Lifts an [`EmbeddingSpec`] into the report-facing
-/// [`EmbeddingProvenance`] struct.
-fn provenance_from(
-    spec: EmbeddingSpec,
-    attempted_subtrees: usize,
-    indexed_subtrees: usize,
-    failed_subtrees: usize,
-) -> EmbeddingProvenance {
-    EmbeddingProvenance {
-        provider_id: spec.provider_id,
-        model_id: spec.model_id,
-        model_version: spec.model_version,
-        dimensions: spec.dimensions,
-        attempted_subtrees,
-        indexed_subtrees,
-        failed_subtrees,
-    }
 }

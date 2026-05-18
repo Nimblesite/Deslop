@@ -2,13 +2,14 @@
 //! to AI agents over JSON-RPC 2.0 / stdio.
 //!
 //! Implements [mcp.md]: peer of the LSP shell ([lsp.md]), thin wrapper
-//! around [`deslop_core::pipeline::PipelineSession`] (swapping to
-//! `deslop_core::live::LiveApi` once P7 lands is a one-line change
-//! inside [`backend`]).
+//! around the LSP IPC socket via [`backend::LiveBackend`]. Every read
+//! and compute call delegates to the LSP's in-memory `latest_report`
+//! over `.deslop-cache/deslop.sock` — the LSP is the single source of
+//! truth and there is no on-disk staleness window between MCP and LSP.
 //!
 //! Implements:
 //! - [MCP-CAPABILITIES] — tools + resources + notifications surface.
-//! - [MCP-TOOLS] — nine agent-facing tools with JSON schemas.
+//! - [MCP-TOOLS] — eleven agent-facing tools with JSON schemas.
 //! - [MCP-TOOL-FINDSIMILAR] — keystone `find-similar` tool with two
 //!   input variants and explicit error paths.
 //! - [MCP-TOOL-REPORT-PAGINATION] — `report-get` returns slim
@@ -25,6 +26,7 @@
 //!   LLM planner, not a human reader.
 
 pub mod backend;
+pub mod notify;
 pub mod page;
 pub mod protocol;
 pub mod resources;
@@ -32,7 +34,8 @@ pub mod safety;
 pub mod server;
 pub mod tools;
 
-pub use backend::{McpBackend, PipelineSessionBackend, SessionBackendConfig};
+pub use backend::{LiveBackend, McpBackend, SessionBackendConfig};
+pub use notify::NotificationSender;
 pub use protocol::{ErrorCode, JsonRpcError, JsonRpcRequest, JsonRpcResponse, RequestId};
 pub use safety::{resolve_within_root, PathResolutionError};
 pub use server::{McpServer, ServerError};

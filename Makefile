@@ -5,9 +5,8 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release install-binary delete-path-binaries deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries kill-deslop-processes deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
 
-GRADLE ?= gradle
 JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
@@ -19,9 +18,14 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
+  # No gradlew wrapper is checked in: callers (devs + CI) must provide
+  # `gradle` on PATH or override `GRADLE=...`. CI sets `GRADLE=gradle`
+  # via the gradle/actions/setup-gradle@v4 install.
+  GRADLE ?= gradle
 else
   RM = rm -rf
   MKDIR = mkdir -p
+  GRADLE ?= gradle
 endif
 
 # ---------------------------------------------------------------------------
@@ -39,6 +43,16 @@ build:
 	@echo "==> Building..."
 	cargo build --release --workspace
 
+## typediagram-gen: Regenerate wire-format Rust IPC models from
+##                  `docs/models/*.td` via the typediagram CLI. The
+##                  generated file is gitignored; cargo's build.rs
+##                  invokes this same script automatically, so manual
+##                  invocation is only needed when iterating on the
+##                  .td spec or the generator script itself.
+typediagram-gen:
+	@echo "==> typediagram-gen: regenerating IPC models from docs/models/live-ipc.td"
+	node scripts/typediagram-gen.mjs
+
 ## test: Fail-fast tests + coverage + per-crate threshold enforcement.
 ##       See REPO-STANDARDS-SPEC [TEST-RULES] and [COVERAGE-THRESHOLDS-JSON].
 ##       Does NOT require Ollama — tests whose names contain `ollama_`
@@ -49,7 +63,7 @@ build:
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `scripts/coverage-check.sh` enforces
 ##       each one independently — no workspace roll-up masking.
-test: delete-path-binaries
+test: delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
@@ -63,13 +77,19 @@ test: delete-path-binaries
 ##       ([CLONE-BUCKETS-DUAL-LABEL]): every product-facing `Type-N`
 ##       mention in site/src and examples must co-locate a canonical
 ##       bucket label.
-lint:
+##       Depends on typediagram-gen so the wire-generated module exists
+##       before clippy parses the workspace on a fresh checkout.
+lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
-fmt:
+##      Depends on typediagram-gen because rustfmt walks the module tree
+##      and refuses to run when `mod wire_generated;` cannot resolve. The
+##      generated file is gitignored per CLAUDE.md, so on a clean CI
+##      checkout it must be produced before fmt walks the sources.
+fmt: typediagram-gen
 	@echo "==> Formatting$(if $(CHECK), (check mode),)..."
 	@_fmt_out=$$(cargo fmt --all$(if $(CHECK), --check,) 2>&1); _fmt_rc=$$?; \
 	 echo "$$_fmt_out" | grep -v "unstable features are only available in nightly channel" || true; \
@@ -94,11 +114,16 @@ ci:
 	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
 
-## setup: Post-create dev environment setup (used by devcontainer)
+## setup: Post-create dev environment setup (used by devcontainer).
+##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
+##        per CLAUDE.md dependency-pinning rules. The CLI is required by
+##        `make typediagram-gen` and the deslop-core `build.rs` on every
+##        cargo build, so a fresh devcontainer needs it on PATH.
 setup:
 	@echo "==> Setting up development environment..."
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
+	npm install -g typediagram@0.5.0
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
@@ -121,31 +146,55 @@ build-release:
 	@echo "==> Building release binary..."
 	cargo build --release --package deslop
 
-## install-binary: Clean, build release, and install all three binaries
-##                 (deslop, deslop-lsp, deslop-mcp) onto the user's PATH.
-##                 Deletes the installed binaries and runs `cargo clean` first
-##                 so a stale build artifact can never shadow the source on disk.
-install-binary:
-	@for _bin in deslop deslop-lsp deslop-mcp; do \
-	  echo "==> Removing previously installed $$_bin binary..."; \
-	  cargo uninstall $$_bin 2>/dev/null || true; \
-	  $(RM) "$(HOME)/.cargo/bin/$$_bin"; \
-	done
-	@echo "==> Cleaning build artifacts..."
-	cargo clean --release --package deslop --package deslop-lsp --package deslop-mcp
-	@echo "==> Building release binaries from clean state..."
-	cargo build --release --package deslop --package deslop-lsp --package deslop-mcp
-	@for _crate in deslop deslop-lsp deslop-mcp; do \
-	  echo "==> Installing $$_crate binary..."; \
-	  cargo install --locked --path crates/$$_crate --force; \
-	done
+## kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
+##                        `deslop-lsp` and `deslop-mcp` process so a stale
+##                        child from a previous VSCode/Cursor session can't
+##                        shadow the freshly-installed VSIX bundle, and so
+##                        socket-bound integration tests don't get starved
+##                        by a runaway analyser on another workspace.
+##                        Matches by process name (not full cmdline) so it
+##                        will not accidentally kill `cargo build -p deslop-lsp`
+##                        or similar parent commands. Idempotent — exits 0
+##                        when no matching process exists. Invoked by every
+##                        `vsix-*` and `test` target via `delete-path-binaries`.
+kill-deslop-processes:
+	@echo "==> Killing any running deslop-lsp / deslop-mcp processes..."
+	@_initial_lsp=$$(pgrep -x deslop-lsp 2>/dev/null || true); \
+	 _initial_mcp=$$(pgrep -x deslop-mcp 2>/dev/null || true); \
+	 _initial="$$_initial_lsp $$_initial_mcp"; \
+	 _initial=$$(echo "$$_initial" | tr ' ' '\n' | sort -u | grep -v '^$$' || true); \
+	 if [ -z "$$_initial" ]; then echo "    (none running)"; exit 0; fi; \
+	 echo "    initial PIDs: $$(echo $$_initial | tr '\n' ' ')"; \
+	 pkill -x deslop-lsp 2>/dev/null || true; \
+	 pkill -x deslop-mcp 2>/dev/null || true; \
+	 sleep 1; \
+	 _survivors=""; \
+	 for _pid in $$_initial; do \
+	   if kill -0 "$$_pid" 2>/dev/null; then _survivors="$$_survivors $$_pid"; fi; \
+	 done; \
+	 if [ -n "$$_survivors" ]; then \
+	   echo "    SIGKILL on holdouts:$$_survivors"; \
+	   for _pid in $$_survivors; do kill -9 "$$_pid" 2>/dev/null || true; done; \
+	   sleep 1; \
+	   _final=""; \
+	   for _pid in $$_survivors; do \
+	     if kill -0 "$$_pid" 2>/dev/null; then _final="$$_final $$_pid"; fi; \
+	   done; \
+	   if [ -n "$$_final" ]; then echo "FAIL: PIDs alive after SIGKILL:$$_final"; exit 1; fi; \
+	 fi; \
+	 echo "    all targeted processes are dead (VSCode may auto-respawn — that is fine)"
 
-## delete-path-binaries: Remove cargo-installed Deslop binaries before tests so
-##                       extension tests cannot accidentally pass by resolving
-##                       PATH instead of the extension bundle. VS Code extension
-##                       directories in PATH are skipped — the resolver's bundled
-##                       candidate (clients/vscode/bin/<platform>/) always wins
-##                       because it is evaluated before the path candidate.
+## delete-path-binaries: Remove any Deslop binaries that have leaked onto the
+##                       user's PATH (e.g. from a stray `cargo install`). The
+##                       VSIX is the only legitimate distribution surface — the
+##                       VS Code extension, Claude Code MCP, Codex MCP, and any
+##                       other host MUST resolve `deslop`, `deslop-lsp`, and
+##                       `deslop-mcp` from the unpacked VSIX `bin/<platform>/`
+##                       directory by absolute path. PATH resolution would let
+##                       a locally-built binary shadow the shipright-versioned
+##                       bundle. This target is invoked by every `vsix-*` and
+##                       `test` target so a developer machine that previously
+##                       ran `cargo install` is automatically scrubbed.
 delete-path-binaries:
 	@echo "==> Removing cargo-installed Deslop binaries from PATH..."
 	@for _bin in deslop deslop-lsp deslop-mcp; do \
@@ -153,21 +202,25 @@ delete-path-binaries:
 	  $(RM) "$(HOME)/.cargo/bin/$$_bin" "$(HOME)/.cargo/bin/$$_bin.exe"; \
 	  _found=$$(command -v $$_bin 2>/dev/null || true); \
 	  if [ -n "$$_found" ]; then \
-	    case "$$_found" in \
-	      */.vscode/extensions/*|*/.vscode-server/extensions/*|*/.cursor/extensions/*) \
-	        echo "SKIP: $$_bin at $$_found is a VS Code extension bundle — not a PATH install" ;; \
-	      *) \
-	        echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
-	        echo "Remove it before running tests; extension tests must use bundled binaries."; \
-	        exit 1 ;; \
-	    esac; \
+	    echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
+	    echo "Remove it before running tests; extension tests must use bundled binaries by absolute path."; \
+	    exit 1; \
 	  fi; \
 	done
 
 ## deployment-verify: Validate deployment manifest and built binary contracts.
+##                    Also runs the verifier proof suite which builds fake
+##                    binaries and plugin zips violating each Shipwright
+##                    contract rule and asserts every verifier rejects them.
+##                    Without this, a silently-broken verifier could let a
+##                    drifted binary ship.
 deployment-verify: build
-	node scripts/verify-deployment-manifest.mjs deployment-toolkit.json
-	node scripts/verify-deployment-binaries.mjs deployment-toolkit.json target/release
+	node scripts/verify-deployment-manifest.mjs shipwright.json
+	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
+	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
+	node scripts/test-release-workflow-contract.mjs
+	node scripts/test-release-version-stamping.mjs
+	node scripts/test-verifiers.mjs
 
 ## vsix-install: Install Node deps for clients/vscode + webview-ui
 vsix-install:
@@ -176,8 +229,10 @@ vsix-install:
 
 ## vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
 ##             Depends on `vsix-install` so a cold CI checkout has the
-##             webview-ui + extension Node deps needed for esbuild bundling.
-vsix-build: vsix-install
+##             webview-ui + extension Node deps needed for esbuild bundling,
+##             and on `typediagram-gen` so the gitignored wire-generated.ts
+##             exists before tsc runs.
+vsix-build: vsix-install typediagram-gen
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
@@ -200,8 +255,8 @@ vsix-coverage: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-
 
 ## vsix-package: Build the .vsix artifact (does not publish).
 ##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
-##               binaries into clients/vscode/bin/<platform>/ so the installed
-##               extension can resolve them via the bundled path
+##               binaries into clients/vscode/bin/<platform>/ and produces a
+##               platform-specific VSIX via `vsce package --target`
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
 vsix-package: delete-path-binaries vsix-install vsix-build _vsix-stage-and-package
@@ -219,14 +274,14 @@ _vsix-stage-bundled-binaries:
 	 case "$$_platform" in win32-*) _ext=.exe ;; *) _ext= ;; esac; \
 	 _dest=clients/vscode/bin/$$_platform; \
 	 echo "==> Staging bundled binaries into $$_dest"; \
-	 $(RM) "$$_dest"; $(MKDIR) "$$_dest"; \
+	 $(RM) clients/vscode/bin; $(MKDIR) "$$_dest"; \
 	 for _bin in deslop-lsp deslop-mcp deslop; do \
 	   _src=target/release/$$_bin$$_ext; \
 	   if [ ! -f "$$_src" ]; then echo "FAIL: $$_src missing (vsix-build should have produced it)"; exit 1; fi; \
 	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
 	   chmod +x "$$_dest/$$_bin$$_ext"; \
 	 done
-	cp deployment-toolkit.json clients/vscode/deployment-toolkit.json
+	cp shipwright.json clients/vscode/shipwright.json
 
 _vsix-stage-and-package: _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run package
@@ -242,7 +297,8 @@ vsix-clean:
 	$(RM) clients/vscode/out
 	$(RM) clients/vscode/dist
 	$(RM) clients/vscode/deslop-vscode.vsix
-	$(RM) clients/vscode/deployment-toolkit.json
+	$(RM) clients/vscode/deslop-vscode-*.vsix
+	$(RM) clients/vscode/shipwright.json
 	$(RM) clients/vscode/coverage
 
 ## vsix-install-code: Install the packaged clients/vscode/deslop-vscode.vsix
@@ -250,10 +306,12 @@ vsix-clean:
 ##                    `code` isn't on PATH.
 vsix-install-code:
 	@if command -v code >/dev/null 2>&1; then \
-	  echo "==> Installing clients/vscode/deslop-vscode.vsix into the VS Code CLI..."; \
-	  code --install-extension clients/vscode/deslop-vscode.vsix --force; \
+	  _vsix=$$(ls clients/vscode/deslop-vscode-*.vsix 2>/dev/null | head -n1); \
+	  if [ -z "$$_vsix" ]; then echo "FAIL: no clients/vscode/deslop-vscode-*.vsix found"; exit 1; fi; \
+	  echo "==> Installing $$_vsix into the VS Code CLI..."; \
+	  code --install-extension "$$_vsix" --force; \
 	else \
-	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-vscode.vsix"; \
+	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-vscode-<target>.vsix"; \
 	fi
 
 ## vsix-rebuild: Nuke every build artifact (cargo target/, staged bin/, node_modules,
@@ -264,6 +322,7 @@ vsix-install-code:
 ##               showing up" strikes. Composes existing targets — does not duplicate
 ##               their logic.
 vsix-rebuild:
+	@$(MAKE) kill-deslop-processes
 	@$(MAKE) clean
 	@$(MAKE) vsix-clean
 	@$(MAKE) vsix-package
@@ -273,9 +332,8 @@ vsix-rebuild:
 	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
 ## jetbrains-build: Build the JetBrains plugin zip.
-##                 JetBrains archive verification is deferred to GitHub #55
-##                 while the local Gradle validation path is tracked in #56.
 jetbrains-build:
+	$(RM) $(JETBRAINS_DIR)/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
 
@@ -283,8 +341,24 @@ jetbrains-build:
 jetbrains-verify:
 	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
 
-## jetbrains-package: Alias for the JetBrains plugin package artifact.
+## jetbrains-package: Build and verify the JetBrains plugin package artifact.
 jetbrains-package: jetbrains-build
+	@$(MAKE) jetbrains-verify
+	node scripts/verify-jetbrains-package.mjs
+
+## jetbrains-test: Run the JetBrains resolver unit tests via the wrapper.
+jetbrains-test:
+	cd $(JETBRAINS_DIR) && $(GRADLE) test --no-daemon
+
+## jetbrains-real-binary-test: Run the resolver tests AND the real-binary
+##                             contract test, which copies target/release/deslop-lsp
+##                             into a synthetic plugin root and proves the
+##                             resolver accepts it AND rejects manifest drift.
+##                             Requires a release build of deslop-lsp.
+jetbrains-real-binary-test:
+	cargo build --release -p deslop-lsp
+	cd $(JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
+	  $(GRADLE) test --no-daemon --rerun-tasks
 
 ## help: List all available targets
 help:
@@ -302,7 +376,7 @@ help:
 	@echo "  test-ollama    - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  ci-ollama      - make ci plus make test-ollama"
 	@echo "  build-release  - Build the release binary for the deslop CLI"
-	@echo "  install-binary - Build release and install binary onto PATH"
+	@echo "  delete-path-binaries - Scrub Deslop binaries off PATH (VSIX bundle is canonical)"
 	@echo "  vsix-install   - Install Node deps for clients/vscode + webview-ui"
 	@echo "  vsix-build     - Build LSP + MCP + VSIX bundle + webview UI"
 	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"
@@ -312,4 +386,4 @@ help:
 	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"
 	@echo "  jetbrains-build - Build the JetBrains plugin zip"
 	@echo "  jetbrains-verify - Verify JetBrains plugin configuration and structure"
-	@echo "  jetbrains-package - Alias for jetbrains-build"
+	@echo "  jetbrains-package - Build and verify the JetBrains plugin zip"

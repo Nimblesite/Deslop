@@ -98,8 +98,11 @@ function cluster(file: string, startByte: number): ReportCluster {
     weight: 1,
     size: 1,
     canonical_node_count: 1,
+    bucket: "identical",
     signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
     occurrences: [{ path: file, start_byte: startByte, end_byte: startByte + 9, hidden: false }],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };
@@ -107,7 +110,6 @@ function cluster(file: string, startByte: number): ReportCluster {
 
 function report(clusters: ReportCluster[]): Report {
   return {
-    report_schema_version: 1,
     tool_version: "test",
     min_nodes: 1,
     files_analysed: 1,
@@ -123,7 +125,8 @@ function report(clusters: ReportCluster[]): Report {
     },
     schema_doc: "",
     action_hints: [],
-    embedding_provenance: null,
+    boilerplate_hints: [],
+    embedding_provenance: undefined,
     clusters,
   };
 }

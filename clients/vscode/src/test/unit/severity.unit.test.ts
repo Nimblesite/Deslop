@@ -14,8 +14,11 @@ function cluster(id: string): ReportCluster {
     weight: 0,
     size: 0,
     canonical_node_count: 0,
+    bucket: "identical",
     signals: { structural: 0, token_jaccard: 0, embedding_cos: 0, fused: 0 },
     occurrences: [],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "",
   };

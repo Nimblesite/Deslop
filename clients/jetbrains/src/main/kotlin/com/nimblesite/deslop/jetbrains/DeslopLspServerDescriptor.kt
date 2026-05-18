@@ -1,6 +1,7 @@
 package com.nimblesite.deslop.jetbrains
 
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.ProjectWideLspServerDescriptor
@@ -9,6 +10,7 @@ import java.nio.file.Path
 internal class DeslopLspServerDescriptor(
     project: Project,
     private val binary: DeslopResolvedBinary,
+    private val settings: DeslopLaunchSettings = project.service<DeslopSettings>().launchSettings(),
 ) :
     ProjectWideLspServerDescriptor(project, "Deslop") {
 
@@ -19,7 +21,7 @@ internal class DeslopLspServerDescriptor(
     override fun createCommandLine(): GeneralCommandLine {
         val workspaceRoot = workspaceRoot()
         return GeneralCommandLine(binary.path.toString())
-            .withParameters(workspaceRoot.toString(), "--min-nodes", "30", "--embeddings", "off")
+            .withParameters(buildLspParameters(workspaceRoot, settings))
             .withWorkDirectory(workspaceRoot.toFile())
     }
 
@@ -27,4 +29,11 @@ internal class DeslopLspServerDescriptor(
         val basePath = project.basePath ?: System.getProperty("user.dir")
         return Path.of(basePath)
     }
+}
+
+internal fun buildLspParameters(
+    workspaceRoot: Path,
+    @Suppress("UNUSED_PARAMETER") settings: DeslopLaunchSettings,
+): List<String> {
+    return listOf(workspaceRoot.toString())
 }

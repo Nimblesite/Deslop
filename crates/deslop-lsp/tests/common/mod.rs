@@ -40,12 +40,10 @@ pub fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
 }
 
 /// Spawns the LSP binary against `workspace_root`.
-pub fn spawn_lsp(workspace_root: &Path, min_nodes: u32) -> Result<Child> {
+pub fn spawn_lsp(workspace_root: &Path) -> Result<Child> {
     let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
     Ok(Command::new(bin)
         .arg(workspace_root)
-        .arg("--min-nodes")
-        .arg(min_nodes.to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

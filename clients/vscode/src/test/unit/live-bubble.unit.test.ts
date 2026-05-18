@@ -18,6 +18,7 @@ function cluster(
     weight,
     size: occurrenceTotal ?? 2,
     canonical_node_count: 4,
+    bucket: "identical",
     signals: {
       structural: 1,
       token_jaccard: 1,
@@ -28,6 +29,8 @@ function cluster(
       { path: "/tmp/A.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/tmp/B.cs", start_byte: 0, end_byte: 10, hidden: false },
     ],
+    occurrences_total: 0,
+    occurrences_truncated: false,
     summary: "",
     interpretation: "interp",
   };
@@ -37,7 +40,6 @@ function cluster(
 
 function report(): Report {
   return {
-    report_schema_version: 1,
     tool_version: "v",
     min_nodes: 30,
     files_analysed: 2,
@@ -53,7 +55,8 @@ function report(): Report {
     },
     schema_doc: "",
     action_hints: [],
-    embedding_provenance: null,
+    boilerplate_hints: [],
+    embedding_provenance: undefined,
     clusters: [cluster("c-a", 10, 0.95, 5)],
   };
 }
@@ -165,6 +168,57 @@ suite("LiveBubble render", () => {
     // fused below FUSED_THRESHOLD (0.85)
     bubble.render(editor, range, [cluster("y", 1, 0.5)]);
     bubble.dispose();
+  });
+
+  test("store delta removing the active cluster clears the bubble", async () => {
+    // [VSIX-LIVE-BUBBLE] A removed cluster must clear its bubble immediately
+    // on the delta — the bubble must never outlive the cluster in the report.
+    const store = new ReportStore();
+    store.setSnapshot(report(), 1);
+    const cfg = vscode.workspace.getConfiguration("deslop");
+    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
+    const calls: (readonly unknown[])[] = [];
+    const document = {
+      uri: vscode.Uri.file("/tmp/A.cs"),
+      lineAt: () => ({
+        range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 10)),
+      }),
+    } as unknown as vscode.TextDocument;
+    const editor = {
+      document,
+      setDecorations: (_type: vscode.TextEditorDecorationType, options: readonly unknown[]) => {
+        calls.push(options);
+      },
+    } as unknown as vscode.TextEditor;
+    const bubble = new LiveBubble(store, () => undefined);
+
+    try {
+      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
+      bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
+      assert.ok(
+        calls.some((options) => options.length > 0),
+        "fixture must start with an active inline bubble",
+      );
+
+      const beforeDelta = calls.length;
+      store.applyDelta({
+        from_generation: 1,
+        to_generation: 2,
+        clusters_added: [],
+        clusters_removed: ["c-a"],
+        clusters_updated: [],
+        cache_stats: { hits: 0, misses: 0 },
+        tool_version: "v2",
+      });
+      const deltaCalls = calls.slice(beforeDelta);
+
+      assert.ok(
+        deltaCalls.some((options) => options.length === 0),
+        "reportChanged removal must clear a bubble for a removed cluster",
+      );
+    } finally {
+      bubble.dispose();
+    }
   });
 
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {

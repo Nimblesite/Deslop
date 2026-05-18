@@ -12,6 +12,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.jetbrains.intellij.platform.gradle.tasks.BuildPluginTask
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
 plugins {
@@ -56,6 +57,11 @@ intellijPlatform {
 
 tasks.test {
     useJUnitPlatform()
+    // The real-binary contract test (DeslopRealBinaryContractTest) is opt-in
+    // via this system property. It depends on a release build of deslop-lsp
+    // existing at target/release/. CI sets DESLOP_LSP_REAL_BINARY to the
+    // built path; locally `make jetbrains-real-binary-test` runs it.
+    System.getenv("DESLOP_LSP_REAL_BINARY")?.let { systemProperty("deslop.lsp.realBinary", it) }
 }
 
 val hostPlatformName = hostPlatform()
@@ -64,7 +70,7 @@ val binaryDirectory = System.getenv("DESLOP_BINARY_DIR")?.let(::File)
     ?: rootProject.layout.projectDirectory.dir("../../target/release").asFile
 val lspBinaryFile = binaryDirectory.resolve(lspBinaryName)
 val deploymentManifestFile = rootProject.layout.projectDirectory
-    .file("../../deployment-toolkit.json")
+    .file("../../shipwright.json")
     .asFile
 
 abstract class CopyLspArtifactsToSandbox : DefaultTask() {
@@ -94,7 +100,7 @@ abstract class CopyLspArtifactsToSandbox : DefaultTask() {
         Files.createDirectories(targetDir)
         Files.copy(
             deploymentManifest.get().asFile.toPath(),
-            pluginRoot.resolve("deployment-toolkit.json"),
+            pluginRoot.resolve("shipwright.json"),
             StandardCopyOption.REPLACE_EXISTING,
         )
         Files.copy(binaryFile.toPath(), targetBinary, StandardCopyOption.REPLACE_EXISTING)
@@ -111,8 +117,13 @@ val copyLspArtifactsToSandbox = tasks.register<CopyLspArtifactsToSandbox>("copyL
     hostPlatform.set(hostPlatformName)
 }
 
-tasks.named("buildPlugin") {
+tasks.named<BuildPluginTask>("buildPlugin") {
     dependsOn(copyLspArtifactsToSandbox)
+    eachFile {
+        if (!isDirectory && path.contains("/bin/")) {
+            permissions { unix("rwxr-xr-x") }
+        }
+    }
 }
 
 fun hostPlatform(): String {

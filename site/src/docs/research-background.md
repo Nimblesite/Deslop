@@ -1,6 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: Research Background
+title: Research Background — Code-clone detection algorithms
+description: Deslop's research lineage — Baxter 1998, Chilowicz 2009 Merkle fingerprints, Broder 1997 MinHash, Indyk-Motwani 1998 LSH, SSCD 2024 HNSW. Each pinned to a real file.
 eleventyNavigation:
   key: Research Background
   order: 5
@@ -22,11 +23,11 @@ Code clones were already a maintenance risk before AI coding assistants. The est
 
 Recent research supports that risk model:
 
-- **LLM code repetition**: *Code Copycat Conundrum: Demystifying Repetition in LLM-based Code Generation* studies 19 code LLMs and reports that repetition appears across character, statement, and block levels, including structurally redundant code. The paper also evaluates a repetition-mitigation technique in open-source and industrial settings.
-- **LLM-generated clones**: *Unveiling the potential of large language models in generating semantic and cross-language clones* evaluates GPT-3's ability to generate semantic and cross-language clone variants, which is directly relevant to Type-4 and cross-language duplicate detection.
-- **Commercial AI code generators**: *An Empirical Study of Code Clones from Commercial AI Code Generators* reports Type-1 and Type-2 clone rates up to 7.50% for studied commercial generators, and discusses copyright, bug propagation, and vulnerability propagation risks.
-- **AI-era clone detection**: *Are Classical Clone Detectors Good Enough For the AI Era?* evaluates nine clone detectors on GPTCloneBench and traditional clone benchmarks, highlighting why normalization and semantic variation matter when clones are AI-generated.
-- **Technical debt in production repositories**: *Debt Behind the AI Boom: A Large-Scale Empirical Study of AI-Generated Code in the Wild* analyzes verified AI-authored commits and tracks static-analysis issues introduced by those commits. It is broader than duplication, but it supports treating AI-generated code as a technical-debt source that needs repository-level appraisal.
+- **LLM code repetition**: [*Code Copycat Conundrum: Demystifying Repetition in LLM-based Code Generation*](https://arxiv.org/abs/2504.12608) studies 19 code LLMs and reports that repetition appears across character, statement, and block levels, including structurally redundant code. The paper also evaluates a repetition-mitigation technique in open-source and industrial settings.
+- **LLM-generated clones**: [*Unveiling the potential of large language models in generating semantic and cross-language clones*](https://arxiv.org/abs/2309.06424) evaluates GPT-3's ability to generate semantic and cross-language clone variants, which is directly relevant to Type-4 and cross-language duplicate detection.
+- **Commercial AI code generators**: [*An Empirical Study of Code Clones from Commercial AI Code Generators*](https://dl.acm.org/doi/10.1145/3729397) (FSE 2025) reports Type-1 and Type-2 clone rates up to 7.50% for studied commercial generators, and discusses copyright, bug propagation, and vulnerability propagation risks.
+- **AI-era clone detection**: [*Are Classical Clone Detectors Good Enough For the AI Era?*](https://arxiv.org/abs/2509.25754) evaluates nine clone detectors on GPTCloneBench and traditional clone benchmarks, highlighting why normalization and semantic variation matter when clones are AI-generated.
+- **Technical debt in production repositories**: [*Debt Behind the AI Boom: A Large-Scale Empirical Study of AI-Generated Code in the Wild*](https://arxiv.org/abs/2603.28592) analyzes verified AI-authored commits and tracks static-analysis issues introduced by those commits. It is broader than duplication, but it supports treating AI-generated code as a technical-debt source that needs repository-level appraisal.
 
 The business claim Deslop makes is therefore conservative: duplicate logic is a compounding maintenance liability, and AI can increase the production rate of that liability. Deslop measures the liability so teams and agents can decide whether to extract, reuse, hide, or explicitly accept a clone.
 
@@ -45,14 +46,25 @@ The public report buckets are implemented in `crates/deslop-core/src/buckets.rs`
 
 ## Algorithm foundations
 
-| Research line | What Deslop takes from it | Implementation pointer |
+Each row pairs a research line with the file that implements it (✅), the plan that tracks it (⏳), or notes that we surveyed but did not adopt it (🚫).
+
+| Research line | What Deslop takes from it | Status & implementation pointer |
 | --- | --- | --- |
-| Baxter-style AST clone detection | Parse code into syntax trees, normalize irrelevant spelling, and compare tree structure rather than raw text. | `crates/deslop-core/src/lang/shared.rs`, `crates/deslop-core/src/lang/csharp.rs`, `crates/deslop-core/src/lang/rust_lang.rs`, `crates/deslop-core/src/lang/python.rs` |
-| Syntax tree fingerprinting | Hash subtrees so exact structural clones become equal fingerprints; extend coverage with sibling sequences for near-miss clones. | `crates/deslop-core/src/fingerprint.rs`, `crates/deslop-core/src/sibling.rs` |
-| SourcererCC-style token similarity | Use token k-grams and Jaccard similarity to find near-miss candidates without comparing every pair exactly. | `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/lsh.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
-| Locality-sensitive hashing | Use MinHash signatures and banding to produce scalable candidate pairs. | `crates/deslop-core/src/lsh.rs::minhash_signature`, `crates/deslop-core/src/lsh.rs::band_collisions` |
-| Neural semantic clone detection | Use embeddings as an optional recall layer for behaviorally similar but syntactically different code. | `crates/deslop-core/src/embedding/*`, `crates/deslop-core/src/pipeline/embedding_pass.rs` |
-| Hybrid clone detection | Union independent candidate sources, fuse scores, and cluster surviving pairs. | `crates/deslop-core/src/pair.rs`, `crates/deslop-core/src/cluster.rs` |
+| [Baxter et al. 1998 — AST clone detection](https://ieeexplore.ieee.org/document/738528) | Parse code into syntax trees, normalize irrelevant spelling, and compare tree structure rather than raw text. | ✅ `crates/deslop-core/src/lang/shared.rs`, `lang/csharp.rs`, `lang/rust_lang.rs`, `lang/python.rs` (registered through `pipeline/corpus.rs::default_parsers`) |
+| Chilowicz et al. 2009 — syntax-tree fingerprinting | Hash subtrees so exact structural clones become equal fingerprints; extend coverage with sibling sequences for near-miss clones. | ✅ Bottom-up BLAKE3 Merkle in `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` and width-2..8 sibling windows in `crates/deslop-core/src/sibling.rs::collect_non_boilerplate_sibling_fingerprints` |
+| [SourcererCC (Sajnani et al. 2016)](https://arxiv.org/abs/1512.06448) | Token k-grams and Jaccard similarity for scalable near-miss detection. | ✅ Adapted to **normalized AST-kind k-grams** rather than raw source tokens: `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
+| [MinHash (Broder 1997)](https://ieeexplore.ieee.org/document/666900) | Estimates Jaccard from compact signatures. | ✅ 128-value signatures in `crates/deslop-core/src/lsh.rs::minhash_signature`; Jaccard estimated by `estimate_jaccard` |
+| LSH banding (Indyk & Motwani 1998) | Bucket similar fingerprints in sub-linear time. | ✅ 32 bands × 4 rows in `crates/deslop-core/src/lsh.rs::band_collisions` |
+| In Defense of MinHash Over SimHash (Shrivastava & Li 2014) | Use MinHash, not SimHash, for binarized features. | ✅ MinHash chosen; SimHash and Winnowing not used |
+| Neural semantic clone detection (CodeBERT, GraphCodeBERT, UniXCoder) | Use embeddings as a recall layer for Type-4 clones. | ✅ `EmbeddingProvider` trait in `crates/deslop-core/src/embedding/provider.rs`; Ollama provider in `embedding/ollama.rs`; default model `nomic-embed-text` |
+| [SSCD (Ahmed et al., Wiley 2024) — BERT + ANN at scale](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) | HNSW ANN over BERT-style embeddings as the Type-3/4 recall path. | ✅ `instant-distance` HNSW with deterministic seed, top-k retrieval, cosine threshold 0.80: `crates/deslop-core/src/embedding/pairs.rs` |
+| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum fusion](https://arxiv.org/abs/2510.15480) | Average hurts; max and sum help when fusing signals. | ✅ Three-signal max-normalized sum in `crates/deslop-core/src/pair.rs::PairScore::fused`, clamped to `[0,1]`. Multi-model embedding ensembling is **not** implemented (single embedding model today; provider trait keeps it open) |
+| Hybrid clone detection (no pure-RAG paper recommends pure embeddings) | Union structural + token + embedding pairs, fuse, cluster. | ✅ `crates/deslop-core/src/pair.rs::candidate_pairs`, transitive closure in `crates/deslop-core/src/cluster.rs` |
+| Boilerplate filtering (mature-tool convention) | Drop import / namespace / decorator clones before fingerprinting; re-surface as low-noise hints. | ✅ `crates/deslop-core/src/boilerplate.rs` and `report_boilerplate.rs` |
+| HyClone 2025 (arXiv 2508.01357) — execution-validated Type-4 | Generate test inputs and validate semantically equivalent pairs. | 🚫 Not implemented; Python-specific in the original paper |
+| Rator 2025 (Springer) — node degrees-of-freedom encoding | Encode subtrees by node DoF; fine-grained Top-2/Top-3 localization. | 🚫 Not implemented; LSH covers our recall budget today |
+| Autofix `refactor.extract` (LSP code action) | Rewrite Type-1 clusters into a single shared method. | ⏳ Tracked in [`docs/plans/autofix-extract-method-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-method-plan.md); blocked on the Type-1/Type-2 bucket split (gh #42) |
+| AI-assisted Extract (MCP `extract-method-plan` / `-apply`) | Type-2/3 extraction with agent assistance. | ⏳ Tracked in [`docs/plans/autofix-extract-ai-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-ai-plan.md); blocked on the Type-1 path landing |
 
 ## Implemented pipeline
 
@@ -152,7 +164,7 @@ This is not a LOC formula. LOC is used for repository metrics, but rank weight c
 
 ### 10. Report rendering
 
-The canonical report is `Report` in `crates/deslop-core/src/report.rs`. The current `REPORT_SCHEMA_VERSION` constant is `1`. `render_report` applies `report_hide`, computes repository metrics, includes embedded schema documentation from `docs/specs/REPORTING-CONTEXT.md`, and attaches action hints and embedding provenance.
+The canonical report is `Report` in `crates/deslop-core/src/report.rs`. `render_report` applies `report_hide`, computes repository metrics, includes embedded schema documentation from `docs/specs/REPORTING-CONTEXT.md`, and attaches action hints and embedding provenance.
 
 Repository-wide metrics are computed in `crates/deslop-core/src/report_metrics.rs`. `duplicated_loc` is derived from non-hidden clone occurrence line ranges and deduplicated per file so overlapping sibling-window ranges do not inflate the numerator.
 
@@ -174,9 +186,7 @@ Live analysis is implemented under `crates/deslop-core/src/live/`:
 
 The LSP server in `crates/deslop-lsp/src/backend.rs` wraps `LiveService` and exposes diagnostics, hover, code lens, and custom `deslop/*` methods. LSP embeddings start in `EmbeddingMode::Off` unless explicitly configured by the client.
 
-The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and protects filesystem inputs with `crates/deslop-mcp/src/safety.rs::resolve_within_root`.
-
-One current MCP limitation is worth auditing carefully: `crates/deslop-mcp/src/backend.rs::find_similar_snippet` parses a snippet and checks that its normalized tree reaches `min_nodes`, but then returns the current top-N report clusters. It does not yet perform the same snippet-hash matching as `crates/deslop-core/src/live/session.rs::find_similar_for_snippet`. Auditors should treat MCP snippet search as a coarse report query until that function changes.
+The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and protects filesystem inputs with `crates/deslop-mcp/src/safety.rs::resolve_within_root`. `find-similar` calls are forwarded over a Unix-domain socket (`.deslop-cache/deslop.sock`) to the LSP's live `AnalysisSession`, so snippet matching runs against the running corpus rather than a stale state file. Plain report queries (`top-offenders`, `report-get`, `report-for-file`, `report-for-range`) are served from the in-memory cache the MCP keeps over `.deslop-cache/live-report.json`; the MCP reloads that cache and pushes `resources/updated` + `deslop/reportChanged` whenever the LSP rewrites the file.
 
 ## Auditor verification map
 
@@ -190,7 +200,6 @@ One current MCP limitation is worth auditing carefully: `crates/deslop-mcp/src/b
 | Embedding neighbours are filtered by HNSW cosine threshold. | `crates/deslop-core/src/embedding/pairs.rs` | `cargo test -p deslop-core --test embedding_pairs` |
 | Fused score is bounded. | `crates/deslop-core/src/pair.rs::PairScore::fused` | `cargo test -p deslop --test fused_score_bounds` |
 | Cross-language comparison is disabled unless configured. | `crates/deslop-core/src/config.rs`, `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` | `cargo test -p deslop --test cross_language` |
-| Report schema version is currently `1`. | `crates/deslop-core/src/report.rs::REPORT_SCHEMA_VERSION` | `cargo test -p deslop-core --test report_api` |
 | Live/LSP paths use `LiveService` over `PipelineSession`. | `crates/deslop-core/src/live/`, `crates/deslop-lsp/src/backend.rs` | `cargo test -p deslop-lsp --test notifications` |
 | MCP tools are stdio JSON-RPC wrappers with root safety checks. | `crates/deslop-mcp/src/server.rs`, `crates/deslop-mcp/src/tools.rs`, `crates/deslop-mcp/src/safety.rs` | `cargo test -p deslop-mcp --test cli` |
 
@@ -204,7 +213,7 @@ For a targeted code review, these searches show the core algorithm path:
 
 ```bash
 rg -n "fn render|candidate_pairs_for_language_policy|cluster_by_transitive_closure|build_ranked_fused_clusters|render_report" crates/deslop-core/src
-rg -n "REPORT_SCHEMA_VERSION|default_parsers|EmbeddingMode::Off|DEFAULT_OLLAMA_MODEL|rank_weight" crates/deslop-core/src crates/deslop/src
+rg -n "default_parsers|EmbeddingMode::Off|DEFAULT_OLLAMA_MODEL|rank_weight" crates/deslop-core/src crates/deslop/src
 rg -n "find_similar_snippet|find_similar_for_snippet|resolve_within_root" crates/deslop-mcp/src crates/deslop-core/src/live
 ```
 

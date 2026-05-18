@@ -8,17 +8,29 @@ const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
 const vsixArg = process.argv[2] ?? "deslop-vscode.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
-const platform = currentPlatform();
-const manifestEntry = "extension/deployment-toolkit.json";
+const targetPlatform = process.argv[3] ?? currentPlatform();
+const manifestEntry = "extension/shipwright.json";
 
 const entries = unzipText(["-Z1", vsixPath]).split("\n").filter(Boolean);
 assertEntry(entries, manifestEntry);
+assertNoEntryPrefix(entries, "extension/out/");
+assertNoEntryPrefix(entries, "extension/node_modules/");
+assertNoEntryPrefix(entries, "extension/--stdio/");
 
 const manifest = JSON.parse(unzipText(["-p", vsixPath, manifestEntry]));
 const components = executableComponents(manifest);
 const activationIds = new Set(manifest.hosts?.vscode?.activationVerifies ?? []);
-const binPrefix = `extension/bin/${platform}/`;
+const binRoot = "extension/bin/";
+const binPrefix = `${binRoot}${targetPlatform}/`;
+const allBinEntries = entries.filter((entry) => entry.startsWith(binRoot) && !entry.endsWith("/"));
 const binEntries = entries.filter((entry) => entry.startsWith(binPrefix) && !entry.endsWith("/"));
+const foreignBinEntries = allBinEntries.filter((entry) => !entry.startsWith(binPrefix));
+
+if (foreignBinEntries.length > 0) {
+  throw new Error(
+    `Platform-specific VSIX for ${targetPlatform} must contain only ${binPrefix} binaries; found ${foreignBinEntries.join(", ")}`,
+  );
+}
 
 for (const component of components.filter((item) => activationIds.has(item.id))) {
   assertEntry(entries, `${binPrefix}${nameWithSuffix(component)}`);
@@ -27,7 +39,7 @@ for (const entry of binEntries) {
   verifyBundledEntry(entry, componentForEntry(entry, components));
 }
 
-console.log(`Verified deployment manifest and ${binEntries.length} ${platform} VSIX binaries`);
+console.log(`Verified deployment manifest and ${binEntries.length} ${targetPlatform} VSIX binaries`);
 
 function verifyBundledEntry(entry, component) {
   if (!component) throw new Error(`Undeclared executable in VSIX: ${entry}`);
@@ -48,15 +60,23 @@ function componentForEntry(entry, components) {
 }
 
 function assertVersion(binaryPath, component) {
-  const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 1500 });
-  if (result.status !== 0) throw new Error(`${binaryPath} --version failed`);
+  if (targetPlatform !== currentPlatform()) return;
+  // macOS security scanning of freshly compiled binaries can take ~500 ms under load;
+  // 10 s is generous enough to survive a heavy parallel build without false failures.
+  const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 10_000 });
+  if (result.status !== 0 || result.signal != null) {
+    const detail = result.signal != null
+      ? `killed by signal ${result.signal}`
+      : `exit ${result.status}`;
+    throw new Error(`${binaryPath} --version failed (${detail})\nstderr: ${result.stderr}`);
+  }
   const first = firstLine(String(result.stdout));
   const expected = `${component.id} ${component.expectedVersion}`;
   if (first !== expected) throw new Error(`${binaryPath} reported ${first}; expected ${expected}`);
 }
 
 function assertExecutable(binaryPath) {
-  if (platform.startsWith("win32")) return;
+  if (targetPlatform.startsWith("win32")) return;
   if ((statSync(binaryPath).mode & 0o111) === 0) {
     throw new Error(`${binaryPath} is not executable`);
   }
@@ -72,6 +92,11 @@ function assertEntry(entries, entry) {
   if (!entries.includes(entry)) throw new Error(`Missing ${entry} in ${vsixPath}`);
 }
 
+function assertNoEntryPrefix(entries, prefix) {
+  const matches = entries.filter((entry) => entry.startsWith(prefix));
+  if (matches.length > 0) throw new Error(`${vsixPath} must not include ${prefix}`);
+}
+
 function unzipText(args) {
   const result = spawnSync("unzip", args, { encoding: "utf8" });
   if (result.status !== 0) {
@@ -81,7 +106,7 @@ function unzipText(args) {
 }
 
 function nameWithSuffix(component) {
-  return `${component.binaryName}${platform.startsWith("win32") ? ".exe" : ""}`;
+  return `${component.binaryName}${targetPlatform.startsWith("win32") ? ".exe" : ""}`;
 }
 
 function firstLine(text) {

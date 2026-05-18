@@ -1,0 +1,329 @@
+//! Incremental pipeline session used by the daemon ([LIVE-STATE]).
+//!
+//! A [`PipelineSession`] keeps the last run's normalised trees,
+//! fingerprints, and source bytes live in memory keyed by [`FileId`].
+//! [`PipelineSession::update_files`] accepts a list of changed paths,
+//! re-parses (or drops) just those files, splices the updated entries
+//! into the in-memory corpus, and re-runs the deterministic-plus-
+//! optional-embedding clustering pipeline. The embedding + fingerprint
+//! caches on disk are shared with the batch path ([PIPELINE-INCREMENTAL]).
+
+mod change;
+mod render;
+
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
+
+use crate::{
+    boilerplate::BoilerplateRange,
+    config::ExclusionConfig,
+    discover::{discover_files, DiscoveryResult},
+    error::CoreError,
+    fpcache::CachedFile,
+    lang::LanguageParser,
+    report::{CacheStats, Report},
+    report_metrics::AnalysedLines,
+    state::{FileId, FileRegistry},
+};
+
+use super::{
+    config::{EmbeddingSettings, PipelineConfig},
+    corpus::{build_extension_map, default_parsers, fingerprint_corpus},
+};
+
+/// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
+///
+/// The session owns the [`FileRegistry`] used by its fingerprints, so
+/// `FileId`s issued by a session are only meaningful within that
+/// session — moving a fingerprint between sessions is never valid and
+/// is structurally prevented by the `FileRegistry` invariant.
+#[derive(Debug)]
+pub struct PipelineSession {
+    /// Workspace root pinned at [`PipelineSession::initialise`].
+    pub(super) root: PathBuf,
+    /// Subtree-size floor used throughout the session.
+    pub(super) min_nodes: u32,
+    /// Whether to consult the on-disk fingerprint cache.
+    pub(super) incremental: bool,
+    /// Optional override pointing at a `.deslop.toml` outside the
+    /// workspace root. `None` = discover inside `root`.
+    pub(super) config_path: Option<PathBuf>,
+    /// Materialised registered parsers kept for the session lifetime
+    /// so repeated `update_files` calls don't reload grammars.
+    pub(super) parsers: Vec<Box<dyn LanguageParser>>,
+    /// Cached extension → language-id lookup built from `parsers`.
+    pub(super) extension_to_language: HashMap<String, &'static str>,
+    /// Exclusion config loaded at [`PipelineSession::initialise`] and
+    /// re-loaded by [`PipelineSession::reload_exclusion`] when the
+    /// daemon detects a config change.
+    pub(super) exclusion: ExclusionConfig,
+    /// File registry shared across the whole session. New files
+    /// register on their first `update_files` sighting; removed files
+    /// keep their [`FileId`] slot (nothing ever gets unregistered) so
+    /// old diagnostics retain stable handles.
+    pub(super) registry: FileRegistry,
+    /// Per-`FileId` cached tree + fingerprints. Keys here are the
+    /// single source of truth for "which files are currently part of
+    /// the corpus."
+    pub(super) per_file: HashMap<FileId, CachedFile>,
+    /// Per-`FileId` source bytes so the embedding pass can read the
+    /// exact snippet covered by a fingerprint without re-reading
+    /// from disk.
+    pub(super) sources: HashMap<FileId, Vec<u8>>,
+    /// Per-`FileId` absolute path. Kept separately from the registry
+    /// because the registry is append-only — we also need to know
+    /// which ids are *currently* part of the corpus.
+    pub(super) live_paths: HashMap<FileId, PathBuf>,
+    /// Per-`FileId` language id, mirrored into render inputs.
+    pub(super) file_languages: HashMap<FileId, &'static str>,
+    /// Running cache-hit telemetry. Accumulates across updates so
+    /// subscribers can track long-term cache utility.
+    pub(super) cumulative_stats: CacheStats,
+    /// Per-file analysed-line counts. Updated in place on each
+    /// [`Self::update_files`] call so [METRICS-REPO] never re-reads
+    /// sources from disk.
+    pub(super) analysed_lines: AnalysedLines,
+    /// Import/prologue ranges suppressed from clone ranking.
+    pub(super) boilerplate_ranges: Vec<BoilerplateRange>,
+    /// Files analysed in the most recent generation.
+    pub(super) files_analysed: usize,
+}
+
+impl PipelineSession {
+    /// Runs the first full analysis against `root` and returns the
+    /// session plus the initial [`Report`]. The session is then ready
+    /// to accept [`Self::update_files`] calls.
+    ///
+    /// # Errors
+    ///
+    /// Propagates every error variant the batch [`super::run::run`]
+    /// would produce: [`CoreError::Io`] on unreadable sources,
+    /// [`CoreError::ConfigParse`] / [`CoreError::ConfigPattern`] for
+    /// malformed exclusion configs, and parser errors from
+    /// [`crate::lang::LanguageParser::parse_and_normalize`].
+    pub fn initialise(
+        root: PathBuf,
+        min_nodes: u32,
+        incremental: bool,
+        config_path: Option<PathBuf>,
+        embedding: EmbeddingSettings<'_>,
+    ) -> Result<(Self, Report), CoreError> {
+        let parsers = default_parsers();
+        let extension_to_language = build_extension_map(&parsers);
+        // [#141 MCP-SAFETY] Canonicalise the root so the registry,
+        // exclusion matchers and watcher inputs all share one
+        // filesystem identity. Without this the macOS `/var/...` →
+        // `/private/var/...` symlink pair leaves the registry holding
+        // one form while the canonical root sits on the other, and
+        // every later path comparison silently misses.
+        let root = std::fs::canonicalize(&root).unwrap_or(root);
+        tracing::info!(
+            root = %root.display(),
+            root_exists = root.exists(),
+            root_is_dir = root.is_dir(),
+            min_nodes,
+            incremental,
+            supported_extensions = ?extension_to_language.keys().collect::<Vec<_>>(),
+            "pipeline session initialising",
+        );
+        let exclusion = load_exclusion(&root, config_path.as_deref())?;
+        let discovery = discover_files(&root, &extension_to_language, &exclusion);
+        log_discovery_summary(&discovery, &root);
+        let config = PipelineConfig {
+            root: root.clone(),
+            min_nodes,
+            config_path: config_path.clone(),
+            embedding,
+            incremental,
+        };
+        let corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
+        let mut live_paths: HashMap<FileId, PathBuf> = HashMap::new();
+        let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
+        for discovered in &discovery.files {
+            let _prev = live_paths.insert(discovered.file_id, discovered.path.clone());
+            let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
+        }
+        let files_analysed = discovery.files.len();
+        let mut session = Self {
+            root,
+            min_nodes,
+            incremental,
+            config_path,
+            parsers,
+            extension_to_language,
+            exclusion,
+            registry: discovery.registry,
+            per_file: corpus.per_file,
+            sources: corpus.sources,
+            live_paths,
+            file_languages,
+            cumulative_stats: corpus.cache_stats,
+            analysed_lines: corpus.analysed_lines,
+            boilerplate_ranges: corpus.boilerplate_ranges,
+            files_analysed,
+        };
+        let report = session.render(&config, corpus.cache_stats)?;
+        Ok((session, report))
+    }
+
+    /// Re-parses (or drops) each path in `changed` and returns the
+    /// refreshed [`Report`]. A `changed` entry that no longer exists
+    /// on disk is treated as a deletion. Paths outside the workspace
+    /// root or with unsupported extensions are silently skipped — a
+    /// watcher can fire on any file, not only interesting ones.
+    ///
+    /// # Errors
+    ///
+    /// Same error surface as [`Self::initialise`].
+    pub fn update_files(
+        &mut self,
+        changed: &[PathBuf],
+        embedding: EmbeddingSettings<'_>,
+    ) -> Result<Report, CoreError> {
+        let mut stats = CacheStats::default();
+        for path in changed {
+            self.apply_one_change(path, &mut stats, &embedding)?;
+        }
+        self.cumulative_stats.hits = self.cumulative_stats.hits.saturating_add(stats.hits);
+        self.cumulative_stats.misses = self.cumulative_stats.misses.saturating_add(stats.misses);
+        let config = self.pipeline_config(embedding);
+        self.render(&config, stats)
+    }
+
+    /// Returns the workspace root this session is analysing.
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Returns the active subtree-size floor.
+    #[must_use]
+    pub const fn min_nodes(&self) -> u32 {
+        self.min_nodes
+    }
+
+    /// Updates whether future change passes consult the fingerprint cache.
+    pub fn set_incremental(&mut self, enabled: bool) {
+        self.incremental = enabled;
+    }
+
+    /// Returns the total fingerprint count across every live file.
+    /// Callers use this to size embedding-progress notifications
+    /// before re-running the pass.
+    #[must_use]
+    pub fn fingerprint_count(&self) -> usize {
+        self.per_file
+            .values()
+            .map(|cached| cached.fingerprints.len())
+            .sum()
+    }
+
+    /// Returns the path associated with `file_id`, if the session has
+    /// seen it.
+    #[must_use]
+    pub fn path_for(&self, file_id: FileId) -> Option<&Path> {
+        self.live_paths.get(&file_id).map(PathBuf::as_path)
+    }
+
+    /// Resolves an absolute or workspace-relative path to a live
+    /// [`FileId`]. Returns `None` when the path is not currently part
+    /// of the corpus (e.g. the file was deleted or never matched an
+    /// extension).
+    #[must_use]
+    pub fn file_id_for(&self, path: &Path) -> Option<FileId> {
+        let target = self.canonicalise_reference(path);
+        self.live_paths
+            .iter()
+            .find(|(_, registered)| **registered == target)
+            .map(|(id, _)| *id)
+    }
+
+    /// Returns a reference to the session's file registry. Exposed so
+    /// daemon-layer consumers (query API, notifications) can resolve
+    /// [`FileId`]s without cloning the map.
+    #[must_use]
+    pub fn registry(&self) -> &FileRegistry {
+        &self.registry
+    }
+
+    /// Returns the per-file language map in the same shape the
+    /// renderer consumes.
+    #[must_use]
+    pub fn file_languages(&self) -> &HashMap<FileId, &'static str> {
+        &self.file_languages
+    }
+
+    /// Returns the language parsers registered with this session.
+    #[must_use]
+    pub fn parsers(&self) -> &[Box<dyn LanguageParser>] {
+        &self.parsers
+    }
+
+    /// Returns the currently-loaded exclusion config.
+    #[must_use]
+    pub const fn exclusion(&self) -> &ExclusionConfig {
+        &self.exclusion
+    }
+
+    /// Returns the cumulative cache-hit telemetry since session start.
+    #[must_use]
+    pub const fn cumulative_cache_stats(&self) -> CacheStats {
+        self.cumulative_stats
+    }
+
+    /// Returns the number of files in the corpus at the most recent
+    /// generation.
+    #[must_use]
+    pub const fn files_analysed(&self) -> usize {
+        self.files_analysed
+    }
+
+    /// Reloads the exclusion config from disk. Called by the daemon
+    /// when `.deslop.toml` itself changes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CoreError::ConfigParse`] or [`CoreError::ConfigPattern`]
+    /// when the new config is malformed. The session keeps the old
+    /// config on failure so a bad edit does not brick the daemon.
+    pub fn reload_exclusion(&mut self) -> Result<(), CoreError> {
+        self.exclusion = load_exclusion(&self.root, self.config_path.as_deref())?;
+        Ok(())
+    }
+}
+
+/// Resolves the exclusion config using the session's override path or
+/// falling back to the workspace default.
+fn load_exclusion(root: &Path, override_path: Option<&Path>) -> Result<ExclusionConfig, CoreError> {
+    if let Some(explicit) = override_path {
+        return ExclusionConfig::load_for_root(explicit, root);
+    }
+    ExclusionConfig::discover(root)
+}
+
+/// Emits an info-level summary of what file discovery found, grouped by
+/// language. When the count is zero, also logs a warning — this is the
+/// most common "why is the report empty?" failure mode.
+fn log_discovery_summary(discovery: &DiscoveryResult, root: &Path) {
+    let total = discovery.files.len();
+    let mut by_language: HashMap<&'static str, usize> = HashMap::new();
+    for file in &discovery.files {
+        let entry = by_language.entry(file.language).or_insert(0);
+        *entry = entry.saturating_add(1);
+    }
+    tracing::info!(
+        root = %root.display(),
+        total_files = total,
+        by_language = ?by_language,
+        "file discovery complete",
+    );
+    if total == 0 {
+        tracing::warn!(
+            root = %root.display(),
+            root_exists = root.exists(),
+            "no source files discovered — check workspace root and language support",
+        );
+    }
+}

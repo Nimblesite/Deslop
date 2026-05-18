@@ -22,20 +22,18 @@ use crate::common::{call, copy_fixture, handshake, notification, spawn_lsp, take
 const HOVER: &str = "textDocument/hover";
 const REPORT_GET: &str = "deslop/reportGet";
 
-/// Audience: HUMAN. Issue #31 at the LSP hover layer.
+/// Audience: HUMAN. Issue #31 / redesign at the LSP hover layer.
 ///
-/// When a human hovers a duplicated region, the LSP hover card has a
-/// positive shape: one bold title (the clone verdict + the action
-/// sentence + the occurrence count), then a single `Occurrences:`
-/// sub-bullet with one-line-per-location pointers. Anything else in
-/// between — most commonly a `signals: structural X.XX, jaccard Y.YY,
-/// ...` dump — is raw AI scaffolding leaking into the human panel and
-/// must be moved to an agent-only surface.
+/// The human hover card is intentionally minimal: one bold title
+/// (clone verdict + action sentence + occurrence count). The occurrence
+/// list and signal scores are agent-only content and must NOT appear in
+/// the human panel — they belong in `deslop/reportGet`, diagnostic
+/// `data`, and Copy-for-AI commands.
 #[test]
-fn hover_body_contains_only_the_title_and_occurrences_list_for_humans() -> Result<()> {
+fn hover_body_is_compact_title_only_for_humans() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
-    let mut child = spawn_lsp(workspace.path(), 15)?;
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
     open_fixture_files(&mut stdin, workspace.path(), &["Alpha.cs", "Beta.cs"])?;
@@ -53,11 +51,17 @@ fn hover_body_contains_only_the_title_and_occurrences_list_for_humans() -> Resul
     let markdown = hover_markdown(&response)?;
 
     let sub_bullets = top_level_sub_bullets(&markdown);
-    assert_eq!(
-        sub_bullets,
-        vec!["Occurrences:".to_owned()],
-        "human hover body must have exactly one sub-bullet labelled `Occurrences:` \
-         so the reader sees the verdict and the places to look — nothing else. Got: {markdown}"
+    assert!(
+        sub_bullets.is_empty(),
+        "human hover must have no sub-bullets — occurrence list is agent-only. Got: {markdown}"
+    );
+    assert!(
+        markdown.contains("occurrences"),
+        "human hover must still state the total occurrence count. Got: {markdown}"
+    );
+    assert!(
+        !markdown.contains("structural"),
+        "human hover must not expose raw signal scores. Got: {markdown}"
     );
 
     let _ = child.kill();
@@ -76,18 +80,27 @@ fn hover_body_contains_only_the_title_and_occurrences_list_for_humans() -> Resul
 /// of the same duplication.
 #[test]
 fn hover_surfaces_one_card_even_when_multiple_clusters_overlap_the_cursor() -> Result<()> {
-    let workspace = copy_fixture("csharp-type3")?;
-    let epsilon = workspace.path().join("Epsilon.cs");
-    // `min_nodes = 5` exposes sibling-window fingerprints that sit
-    // inside larger method-body fingerprints, reliably producing
-    // overlapping clusters on csharp-type3.
-    let mut child = spawn_lsp(workspace.path(), 5)?;
+    let workspace = copy_fixture("csharp-unrelated-xunit-tests")?;
+    let endpoint = workspace.path().join("EndpointWorkflowTests.cs");
+    // EndpointWorkflowTests exposes a broad request/response workflow
+    // clone plus narrower nested clones under the documented
+    // min_nodes=30 default, so the test does not rely on removed startup
+    // config.
+    let mut child = spawn_lsp(workspace.path())?;
     let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    open_fixture_files(&mut stdin, workspace.path(), &["Delta.cs", "Epsilon.cs"])?;
+    open_fixture_files(
+        &mut stdin,
+        workspace.path(),
+        &[
+            "EndpointWorkflowTests.cs",
+            "GenerateEndpointTests.cs",
+            "ProgramConfigTests.cs",
+        ],
+    )?;
 
     let (cursor, overlap_count) =
-        cursor_inside_overlapping_clusters(&mut stdin, &mut stdout, &epsilon)?;
+        cursor_inside_overlapping_clusters(&mut stdin, &mut stdout, &endpoint)?;
     assert!(
         overlap_count >= 2,
         "fixture must reproduce the overlapping-cluster case so the test is meaningful; got overlap={overlap_count}"
@@ -98,7 +111,7 @@ fn hover_surfaces_one_card_even_when_multiple_clusters_overlap_the_cursor() -> R
         &mut stdout,
         HOVER,
         &json!({
-            "textDocument": { "uri": file_uri(&epsilon)? },
+            "textDocument": { "uri": file_uri(&endpoint)? },
             "position": cursor,
         }),
     )?;
@@ -273,9 +286,8 @@ fn hover_markdown(response: &Value) -> Result<String> {
 }
 
 /// Returns the text of every two-space-indented top-level sub-bullet
-/// under the hover's single outer bullet. For a clean human card the
-/// list is exactly `["Occurrences:"]`; anything else (e.g.
-/// `"signals: structural …"`) is raw AI content in the human surface.
+/// under the hover's outer bullet. For the human card the list must be
+/// empty — occurrence lists and signal scores are agent-only content.
 fn top_level_sub_bullets(markdown: &str) -> Vec<String> {
     markdown
         .lines()

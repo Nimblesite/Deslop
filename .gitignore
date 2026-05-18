@@ -82,6 +82,18 @@ site/_site/
 clients/vscode/out/
 
 .deslop-cache/
+# Test fixtures need their pre-baked state file + embeddings checked in so
+# StateFileBackend has data to serve on a fresh CI checkout. Re-include the
+# directory and its contents.
+!crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
+!crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/**
+
+# typeDiagram-generated IPC model code (source of truth: docs/models/*.td).
+# Per CLAUDE.md the generated wire types must NOT be committed; they are
+# regenerated on every cargo build by `crates/deslop-core/build.rs` and
+# on every `make vsix-build` via the `typediagram-gen` Makefile target.
+crates/deslop-core/src/wire_generated.rs
+clients/vscode/src/types/wire-generated.ts
 
 
 
@@ -92,6 +104,7 @@ clients/vscode/out/
 
 .ghissues/
 clients/vscode/bin/
-clients/vscode/deployment-toolkit.json
 
 clients/vscode/media/webview/
+
+crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
