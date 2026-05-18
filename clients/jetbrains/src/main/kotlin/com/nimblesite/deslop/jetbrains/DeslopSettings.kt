@@ -36,7 +36,8 @@ internal object DeslopSettingsDefaults {
 internal class DeslopSettingsException(message: String) : RuntimeException(message)
 
 internal object DeslopSettingsValidator {
-    private val providers = setOf("ollama", "stub")
+    // [REMOVE-STUB] Production allows only the Ollama provider.
+    private val providers = setOf("ollama")
     private val modes = setOf("off", "auto", "required")
 
     fun snapshot(state: DeslopSettingsState): DeslopLaunchSettings {

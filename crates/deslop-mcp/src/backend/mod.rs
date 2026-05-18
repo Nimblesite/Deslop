@@ -53,8 +53,16 @@ pub enum BackendError {
     #[error("backend state mutex poisoned; analysis aborted")]
     MutexPoisoned,
     /// The LSP server is not running — its IPC socket is absent.
-    #[error("LSP is not running — start deslop-lsp to enable this tool")]
-    LspNotRunning,
+    /// Includes the absolute socket path so users hit by `--root .`
+    /// resolving against the wrong cwd ([Deslop#151]) can immediately
+    /// see the directory mismatch instead of guessing.
+    #[error(
+        "LSP is not running — start deslop-lsp to enable this tool. MCP looked for the IPC socket at {socket_path:?}. If a deslop-lsp process is running elsewhere, MCP was launched against a different --root than the LSP."
+    )]
+    LspNotRunning {
+        /// Absolute path the MCP backend tried to connect to.
+        socket_path: PathBuf,
+    },
     /// IPC transport / parse failure. Catch-all for malformed wire
     /// frames, broken pipes, and protocol drift between LSP and MCP.
     /// Variant name retained for backwards binary compatibility with
@@ -134,9 +142,11 @@ pub trait McpBackend: Send + Sync {
     /// the current report.
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError>;
 
-    /// Enumerates embedding models available on the host. The list
-    /// always begins with the built-in `stub` provider; Ollama being
-    /// unreachable is not an error ([MCP-CAPABILITIES]).
+    /// Enumerates embedding models available on the host. Returns
+    /// the models reported by every registered production provider
+    /// (today: `ollama` only). An unreachable Ollama is not an error —
+    /// callers see an empty list and the VSIX renders the "Ollama not
+    /// detected" hint ([MCP-CAPABILITIES]).
     ///
     /// # Errors
     ///

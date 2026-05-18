@@ -382,7 +382,9 @@ suite("embeddingPicker helpers", () => {
     }
   });
 
-  test("buildItems marks the deterministic stub entry active in test builds", () => {
+  test("buildItems never exposes the deterministic stub row in production", () => {
+    // [REMOVE-STUB] Even if the wire payload accidentally carries a
+    // stub-provider row, the picker must never surface it to the user.
     const items = buildItems(
       [model("stub", "stub", { dimensions: 64 })],
       newStore({
@@ -391,11 +393,11 @@ suite("embeddingPicker helpers", () => {
         model_version: "0",
         dimensions: 64,
       }),
-      { includeTestStub: true },
     );
-    const stub = items.find((i) => i.label?.includes("stub"));
-    assert.ok(stub, "stub entry should exist");
-    assert.match(stub.label, /active/);
+    const stubRow = items.find((item) =>
+      /\bstub\b/i.test(`${item.label ?? ""} ${item.description ?? ""} ${item.detail ?? ""}`),
+    );
+    assert.equal(stubRow, undefined, "picker must hide every stub row from end users");
   });
 
   test("setModel handles non-Error rejections", async () => {

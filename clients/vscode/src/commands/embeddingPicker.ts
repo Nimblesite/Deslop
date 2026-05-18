@@ -22,9 +22,6 @@ interface Entry extends vscode.QuickPickItem {
   model?: EmbeddingModelInfo;
 }
 
-interface BuildItemsOptions {
-  includeTestStub?: boolean;
-}
 
 export async function pickEmbeddingModel(
   store: ReportStore,
@@ -76,13 +73,15 @@ export async function pickEmbeddingModel(
   }
   if (disposed) return;
   quickPick.busy = false;
-  quickPick.items = buildItems(models, store, { includeTestStub: isTestBuild() });
+  quickPick.items = buildItems(models, store);
 }
 
+// [REMOVE-STUB] Production picker rows are derived strictly from
+// `embedding/listModels`. The deterministic stub provider is test
+// infrastructure, never shown to users.
 export function buildItems(
   models: EmbeddingModelInfo[],
   store: ReportStore,
-  options: BuildItemsOptions = {},
 ): Entry[] {
   const active = store.current.report?.embedding_provenance;
   const items: Entry[] = [];
@@ -104,7 +103,6 @@ export function buildItems(
   });
 
   const ollama = models.filter((m) => m.provider_id === "ollama");
-  const stub = models.find((m) => m.provider_id === "stub");
 
   if (ollama.length === 0) {
     items.push({
@@ -137,23 +135,6 @@ export function buildItems(
     }
   }
 
-  if (options.includeTestStub) {
-    items.push({
-      entryKind: "model",
-      label: `$(circuit-board) stub${isActive(active, stub) ? "  ✓ active" : ""}`,
-      description: "deterministic · 64-dim · CI-friendly",
-      detail: "Turns off semantic recall. Keeps identical, nearly identical, and loosely similar detection.",
-      model: stub ?? {
-        provider_id: "stub",
-        model_id: "stub",
-        model_version: "0",
-        dimensions: 64,
-        recommended: false,
-        reachable: true,
-      },
-    });
-  }
-
   items.push(
     { entryKind: "pull", label: "$(cloud-download) Pull a new model…", description: "ollama.com/library" },
     { entryKind: "refresh", label: "$(refresh) Refresh list", description: "Re-query Ollama" },
@@ -182,7 +163,6 @@ async function switchModel(
   store?: ReportStore,
 ): Promise<void> {
   try {
-    if (!(await confirmStubModel(model))) return;
     store?.setPendingEmbeddingModel(model.model_id);
     await requestModelSwitch(client, model);
     await persistModelConfig(model);
@@ -218,18 +198,6 @@ async function turnEmbeddingsOff(client: LanguageClient, store: ReportStore): Pr
   }
 }
 
-async function confirmStubModel(model: EmbeddingModelInfo): Promise<boolean> {
-  if (model.provider_id === "stub") {
-    const confirm = await vscode.window.showWarningMessage(
-      "The stub provider is deterministic but not semantically meaningful. \"Same behavior, different code\" (AI) recall is disabled.",
-      { modal: true },
-      "Use stub anyway",
-    );
-    return confirm === "Use stub anyway";
-  }
-  return true;
-}
-
 function requestModelSwitch(
   client: LanguageClient,
   model: EmbeddingModelInfo,
@@ -250,10 +218,6 @@ async function persistModelConfig(model: EmbeddingModelInfo): Promise<void> {
 async function persistOffConfig(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   await cfg.update("embedding.mode", "off", vscode.ConfigurationTarget.Workspace);
-}
-
-function isTestBuild(): boolean {
-  return process.env["DESLOP_TEST_FIXTURE"] !== undefined;
 }
 
 export function isActive(

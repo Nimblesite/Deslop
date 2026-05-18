@@ -9,58 +9,50 @@
 //! per [PIPELINE-LANG-TRAIT]-style "single surface" design, and every
 //! other file in this module is a concrete collaborator implementing
 //! that surface (provider implementation, on-disk cache, ANN index).
+//!
+//! The deterministic BLAKE3 shim formerly known as `StubProvider`
+//! lives under [`test_support`] now and is gated behind the
+//! `test-support` Cargo feature so it never ships in the production
+//! VSIX, LSP, or MCP binaries.
 
 pub mod cache;
 pub mod mode;
+pub mod noop;
 pub mod ollama;
 pub mod pairs;
 pub mod provider;
-pub mod stub;
+pub mod registry;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 pub use cache::{content_hash, EmbeddingCache};
 pub use mode::{EmbeddingMode, ParseModeError};
+pub use noop::{NoopProvider, NOOP_PROVIDER_ID};
 pub use ollama::{
     list_models as list_ollama_models, OllamaModelInfo, OllamaProvider, DEFAULT_OLLAMA_ENDPOINT,
     DEFAULT_OLLAMA_MODEL,
 };
 pub use pairs::{embedding_pairs, EmbeddingPair};
 pub use provider::{EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_PROVIDER_ID};
-pub use stub::{StubProvider, PROVIDER_ID as STUB_PROVIDER_ID};
+pub use registry::{ProviderRegistry, RegistryError};
 
 use std::sync::Arc;
 
-/// Attempts to connect to Ollama, always returning a usable provider.
+/// Attempts to connect to Ollama. Returns `Some(provider)` when Ollama
+/// is reachable and `None` otherwise so callers can fall through to
+/// the "no embeddings" code path without crash-looping.
 ///
-/// For interactive server processes (LSP, MCP) embeddings must never
-/// cause a crash-loop — the server must stay alive regardless of mode
-/// ([LSP-EMBEDDING-CONSENT], issue #35). `Required` logs at error level
-/// so the user knows their explicit opt-in was not fulfilled; `Auto`
-/// logs at warn. The CLI batch tool enforces hard-fail semantics via its
-/// own code path where `Required` is genuinely terminal.
-pub fn connect_or_stub(
-    mode: EmbeddingMode,
-    endpoint: &str,
-    model: &str,
-) -> Arc<dyn EmbeddingProvider> {
+/// For interactive server processes (LSP, MCP) embeddings are optional
+/// per [LSP-EMBEDDING-CONSENT] / issue #35 — the server must stay alive
+/// regardless of mode. The caller decides how to log the failure
+/// (`error` for `Required`, `warn` for `Auto`).
+#[must_use]
+pub fn try_connect_ollama(endpoint: &str, model: &str) -> Option<Arc<dyn EmbeddingProvider>> {
     match OllamaProvider::connect(endpoint, model) {
-        Ok(provider) => Arc::new(provider),
-        Err(err) if matches!(mode, EmbeddingMode::Required) => {
-            tracing::error!(
-                %err,
-                endpoint,
-                model,
-                "ollama_unreachable_required_mode_falling_back_to_stub"
-            );
-            Arc::new(StubProvider::new())
-        }
+        Ok(provider) => Some(Arc::new(provider)),
         Err(err) => {
-            tracing::warn!(
-                %err,
-                endpoint,
-                model,
-                "ollama_unreachable_falling_back_to_stub"
-            );
-            Arc::new(StubProvider::new())
+            tracing::warn!(%err, endpoint, model, "ollama_unreachable");
+            None
         }
     }
 }

@@ -1,8 +1,8 @@
 //! `tower-lsp` backend wiring `Deslop` into LSP ([LSP-CAPABILITIES]).
 use deslop_core::{
     embedding::{
-        EmbeddingMode, EmbeddingProvider, StubProvider, DEFAULT_OLLAMA_ENDPOINT,
-        DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+        EmbeddingMode, EmbeddingProvider, NoopProvider, ProviderRegistry, RegistryError,
+        DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID,
     },
     live::{
         ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveError,
@@ -63,37 +63,66 @@ impl Default for LspEmbeddingConfig {
     }
 }
 
-/// Builds the provider used when the LSP backend starts. For
-/// `EmbeddingMode::Auto`, unreachable Ollama endpoints fall back to
-/// [`StubProvider`] with a warning log so the editor keeps working
-/// — embeddings are optional per issue #35. `EmbeddingMode::Required`
-/// preserves hard-fail semantics because the user explicitly opted
-/// into embeddings.
-fn build_startup_provider(
+/// Resolves the startup `(provider, mode)` pair for the LSP backend.
+///
+/// For `EmbeddingMode::Off` the LSP installs a [`NoopProvider`] and
+/// keeps mode `Off` — embeddings stay disabled until the user picks a
+/// model. For `Auto` / `Required` we ask the production
+/// [`ProviderRegistry`] for the requested provider. When the provider
+/// is unreachable, we install [`NoopProvider`] and downgrade the mode
+/// to `Off` so the editor keeps working without semantic recall — the
+/// LSP must never crash-loop VS Code per issue #35. The log level
+/// reflects intent: `error` when the user opted into `Required` and
+/// `warn` when `Auto` silently degraded.
+fn resolve_startup_provider(
     embedding: &LspEmbeddingConfig,
-) -> Result<Arc<dyn EmbeddingProvider>, deslop_core::live::LiveError> {
+) -> Result<(Arc<dyn EmbeddingProvider>, EmbeddingMode), LiveError> {
     if matches!(embedding.mode, EmbeddingMode::Off) {
-        return Ok(Arc::new(StubProvider::new()));
+        return Ok((Arc::new(NoopProvider::new()), EmbeddingMode::Off));
     }
-    match embedding.provider_id.as_str() {
-        STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
-        DEFAULT_PROVIDER_ID => Ok(connect_ollama_or_fallback(embedding)),
-        other => Err(deslop_core::live::LiveError::UnsupportedProvider {
-            requested: other.to_owned(),
-            registered: vec![STUB_PROVIDER_ID.to_owned(), DEFAULT_PROVIDER_ID.to_owned()],
+    let registry = ProviderRegistry::production();
+    match registry.build(
+        &embedding.provider_id,
+        &embedding.model_id,
+        Some(&embedding.endpoint),
+    ) {
+        Ok(provider) => Ok((provider, embedding.mode)),
+        Err(RegistryError::Unsupported {
+            requested,
+            registered,
+        }) => Err(LiveError::UnsupportedProvider {
+            requested,
+            registered,
         }),
+        Err(RegistryError::Provider(provider_error)) => {
+            log_provider_unreachable(embedding, &provider_error);
+            Ok((Arc::new(NoopProvider::new()), EmbeddingMode::Off))
+        }
     }
 }
 
-/// Connects Ollama, falling back to a stub via the shared core function.
-/// Both `Auto` and `Required` survive — the LSP must never crash-loop
-/// VS Code per issue #35. Log level differs: warn for Auto, error for Required.
-fn connect_ollama_or_fallback(embedding: &LspEmbeddingConfig) -> Arc<dyn EmbeddingProvider> {
-    deslop_core::embedding::connect_or_stub(
-        embedding.mode,
-        &embedding.endpoint,
-        &embedding.model_id,
-    )
+/// Emits the appropriate log when the configured provider is not
+/// reachable. `Required` users opted in explicitly so the failure is
+/// surfaced at `error`; `Auto` users get a `warn`.
+fn log_provider_unreachable(
+    embedding: &LspEmbeddingConfig,
+    error: &deslop_core::embedding::ProviderError,
+) {
+    if matches!(embedding.mode, EmbeddingMode::Required) {
+        tracing::error!(
+            %error,
+            endpoint = %embedding.endpoint,
+            model = %embedding.model_id,
+            "lsp_embedding_required_provider_unreachable",
+        );
+    } else {
+        tracing::warn!(
+            %error,
+            endpoint = %embedding.endpoint,
+            model = %embedding.model_id,
+            "lsp_embedding_auto_provider_unreachable",
+        );
+    }
 }
 
 /// `tower-lsp` backend backed by a live [`LiveService`].
@@ -122,14 +151,15 @@ pub struct LspBackend {
 }
 
 impl LspBackend {
-    /// Constructs a backend rooted at `workspace_root` using the stub
-    /// embedding provider.
+    /// Constructs a backend rooted at `workspace_root` with embeddings
+    /// disabled. Used by callers that have not yet wired the
+    /// embedding-config plumbing through the editor surface.
     ///
     /// # Errors
     ///
     /// Propagates [`deslop_core::live::LiveError`] when the
     /// underlying session cannot initialise.
-    pub fn new_with_stub(
+    pub fn new_with_defaults(
         client: Client,
         workspace_root: PathBuf,
         min_nodes: u32,
@@ -149,7 +179,7 @@ impl LspBackend {
         min_nodes: u32,
         embedding: &LspEmbeddingConfig,
     ) -> Result<Self, deslop_core::live::LiveError> {
-        let provider = build_startup_provider(embedding)?;
+        let (provider, resolved_mode) = resolve_startup_provider(embedding)?;
         let observability = Observability::default();
         let (mut session, seeded_from_cache) = crate::cache_seed::open_session(
             workspace_root,
@@ -157,7 +187,7 @@ impl LspBackend {
             true,
             None,
             Arc::clone(&provider),
-            embedding.mode,
+            resolved_mode,
         )?;
         session.set_embedding_progress_reporter(Some(progress_reporter(&client)));
         // Capture the root before moving the session into the Arc.
@@ -180,7 +210,7 @@ impl LspBackend {
                 incremental: true,
                 config_path: None,
                 provider,
-                mode: embedding.mode,
+                mode: resolved_mode,
                 report_changed,
             });
         }

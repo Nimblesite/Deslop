@@ -299,8 +299,8 @@ suite("ReportStore", () => {
     const store = new ReportStore();
     store.setEmbeddingProgress({
       phase: "complete",
-      provider_id: "stub",
-      model_id: "blake3-stub",
+      provider_id: "ollama",
+      model_id: "nomic-embed-text",
       done: 64,
       total: 64,
       message: undefined,

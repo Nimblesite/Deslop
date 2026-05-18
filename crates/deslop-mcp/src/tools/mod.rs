@@ -3,7 +3,12 @@
 //! Each entry binds a [`ToolDefinition`] — schema + agent-facing
 //! description — to a dispatch function that forwards to the active
 //! [`McpBackend`]. The [MCP-AGENT-PROMPT-GUIDANCE] descriptions are
-//! authored for an LLM planner, not a human reader.
+//! authored for an LLM planner, not a human reader. Per issue #136,
+//! every description is one-sentence-short (≤200 chars) so the full
+//! `tools/list` payload stays well under the wire budgets of stricter
+//! MCP clients (Codex's `rmcp_client` in particular). Long-form
+//! rationale and worked examples live in the `deslop://schema`
+//! resource — agents fetch it on demand via `schema-doc`.
 
 use serde_json::{json, Value};
 
@@ -11,6 +16,7 @@ use crate::backend::McpBackend;
 use crate::protocol::{jsonrpc_error, JsonRpcError};
 
 mod handlers;
+mod limits;
 mod schemas;
 
 use handlers::{
@@ -18,6 +24,7 @@ use handlers::{
     call_report_for_range, call_report_get, call_report_query, call_rescan, call_schema_doc,
     call_session_config, call_set_embedding_model, call_top_offenders,
 };
+use limits::cap_tool_result;
 use schemas::{
     schema_cluster_by_id, schema_empty, schema_find_similar, schema_report_for_file,
     schema_report_for_range, schema_report_get, schema_report_query, schema_rescan,
@@ -35,29 +42,20 @@ pub struct ToolDefinition {
     pub input_schema: fn() -> Value,
 }
 
-/// Suffix appended to action-driving tool descriptions so agents know
-/// detector output is not infallible and have a one-step reporting
-/// path for clear misclassifications.
-macro_rules! fp_warn {
-    () => {
-        " False positives and mistakes possible — verify before acting. Log clear FPs and other bugs with `gh issue create -R Nimblesite/Deslop` or ask the user to file one at https://github.com/Nimblesite/Deslop/issues."
-    };
-}
-
 /// Static tool registry. `top-offenders` is the primary entry point.
+/// Descriptions stay ≤200 chars (issue #136) — detail belongs in the
+/// `deslop://schema` resource, not the `tools/list` payload.
 const TOOLS: [ToolDefinition; 12] = [
     ToolDefinition {
         name: "top-offenders",
-        description: concat!(
-            "Top N duplicate clusters with full data (occurrences, interpretation, signals, bucket, score). Default n=5. Capped by max_occurrences (default 15) total across returned clusters — when the budget is hit, the overrunning cluster is truncated and following clusters are dropped. Result reports total_occurrences (unfiltered count) plus per-cluster occurrences_truncated. Use cluster-by-id to fetch the full occurrence list of any one cluster.",
-            fp_warn!(),
-        ),
+        description:
+            "Worst N duplicate clusters with full data (default n=5). Capped by max_occurrences (default 15). Verify before acting. See deslop://schema.",
         input_schema: schema_top_offenders,
     },
     ToolDefinition {
         name: "rescan",
         description:
-            "Synchronously reload the latest LSP state after edits, then return fresh top offenders. Same n/max_occurrences semantics as top-offenders. Use when watcher lag or stale ranges are suspected.",
+            "Reload latest LSP state and return fresh top offenders. Same n/max_occurrences as top-offenders. Use when watcher lag is suspected.",
         input_schema: schema_rescan,
     },
     ToolDefinition {
@@ -89,10 +87,8 @@ const TOOLS: [ToolDefinition; 12] = [
     },
     ToolDefinition {
         name: "find-similar",
-        description: concat!(
-            "Call BEFORE writing new code to PREVENT duplication: find existing clusters similar to a byte range or snippet, reuse the canonical, and avoid introducing new clones.",
-            fp_warn!(),
-        ),
+        description:
+            "Call BEFORE writing new code to PREVENT duplication: find similar clusters by byte range or snippet, reuse the canonical, avoid introducing new clones. Verify before acting.",
         input_schema: schema_find_similar,
     },
     ToolDefinition {
@@ -151,12 +147,32 @@ pub fn wrap_tool_result(payload: &Value) -> Value {
 
 /// Dispatches a `tools/call` request by name.
 ///
+/// The returned [`Value`] is passed through [`cap_tool_result`] so a
+/// pathological payload (multi-MB top-offenders on a huge monorepo)
+/// can never blow out a strict MCP client (Codex's `rmcp_client` in
+/// particular — see issue #136). The cap is silent on small results
+/// and adds a `truncated` flag plus pointer to `report-get` on large
+/// ones.
+///
 /// # Errors
 ///
 /// Returns a [`JsonRpcError`] ready to serialise into the response
 /// envelope on schema violations, backend failures, and unknown
 /// tool names.
 pub fn dispatch_tool_call(
+    backend: &dyn McpBackend,
+    name: &str,
+    arguments: &Value,
+) -> Result<Value, JsonRpcError> {
+    let payload = dispatch_inner(backend, name, arguments)?;
+    Ok(cap_tool_result(name, payload))
+}
+
+/// Inner dispatch table — kept separate from [`dispatch_tool_call`]
+/// so the cap pass is one wrapping line in production code and
+/// trivially bypassable in unit tests that target individual
+/// handlers.
+fn dispatch_inner(
     backend: &dyn McpBackend,
     name: &str,
     arguments: &Value,

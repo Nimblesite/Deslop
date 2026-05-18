@@ -134,6 +134,60 @@ suite("cluster navigation", () => {
     assert.ok(modified.getText().trim().length > 0, "right compare document must be populated");
   });
 
+  // [VSIX-STATE-DIRTY] (#130): editing one peer of a 2-occurrence cluster used
+  // to drop the cluster from the canonical store, which made command-by-id
+  // lookups silently no-op. The store now splits canonical (LSP-authored) from
+  // the visible projection — the diff command must still resolve through
+  // canonical even while the file is dirty.
+  test("Compare with Canonical works on a cluster whose file is edited but unsaved (#130)", async () => {
+    assert.ok(api.client, "extension must expose the real LanguageClient");
+    const cluster = await waitForRelativePathCluster(api.client);
+    const dirtyOccurrence = cluster.occurrences[0];
+    assert.ok(dirtyOccurrence, "cluster must have a peer to edit");
+
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    const fixture = process.env["DESLOP_TEST_FIXTURE"];
+    assert.ok(fixture, "fixture path must be set");
+    const dirtyUri = path.isAbsolute(dirtyOccurrence.path)
+      ? vscode.Uri.file(dirtyOccurrence.path)
+      : vscode.Uri.file(path.join(fixture, dirtyOccurrence.path));
+    const doc = await vscode.workspace.openTextDocument(dirtyUri);
+    const editor = await vscode.window.showTextDocument(doc);
+
+    try {
+      // Insert a single character to mark the file dirty client-side. The LSP
+      // is not notified (no save), so the canonical report still carries the
+      // cluster. The visible projection elides it — that is the test's whole
+      // point.
+      await editor.edit((b) => b.insert(new vscode.Position(0, 0), " "));
+      assert.ok(doc.isDirty, "dirty marker must be set after edit");
+
+      await vscode.commands.executeCommand("deslop.compareWithCanonical", cluster.id);
+      const diff = await waitForDiffTab();
+
+      assert.equal(diff.original.scheme, "deslop-compare");
+      assert.equal(diff.modified.scheme, "deslop-compare");
+      const original = await vscode.workspace.openTextDocument(diff.original);
+      const modified = await vscode.workspace.openTextDocument(diff.modified);
+      assert.ok(
+        original.getText().trim().length > 0,
+        "left compare document must populate from the canonical report even when a peer file is dirty",
+      );
+      assert.ok(
+        modified.getText().trim().length > 0,
+        "right compare document must populate from the canonical report even when a peer file is dirty",
+      );
+    } finally {
+      // Always restore the buffer so the dirty set does not leak into later
+      // tests in this suite. The diff command may close the source editor —
+      // reopen the source document explicitly so the edit call can target it.
+      const restored = await vscode.window.showTextDocument(doc, { preview: false });
+      await restored.edit((b) =>
+        b.delete(new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 1))),
+      );
+    }
+  });
+
   test("bubble inline render triggered by edit", async () => {
     const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture);

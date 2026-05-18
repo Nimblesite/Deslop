@@ -158,13 +158,15 @@ async function activateExtension(): Promise<ExtensionExports> {
 
 async function setProvider(
   client: LanguageClient,
-  providerId: "ollama" | "stub",
-): Promise<SetModelResponse> {
-  return await client.sendRequest<SetModelResponse>(
+  providerId: "ollama" | "off",
+): Promise<SetModelResponse | null> {
+  // [REMOVE-STUB] Production accepts `ollama` and the pseudo-provider
+  // `off` for disabling. There is no stub fallback any more.
+  return await client.sendRequest<SetModelResponse | null>(
     "deslop/embeddingSetModel",
     {
       provider_id: providerId,
-      model_id: providerId === "ollama" ? OLLAMA_MODEL : "stub-embedder",
+      model_id: providerId === "ollama" ? OLLAMA_MODEL : "off",
       endpoint: providerId === "ollama" ? OLLAMA_ENDPOINT : null,
     },
   );
@@ -298,13 +300,16 @@ suite("ollama semantic clone detection (real Ollama)", () => {
         `embeddingListModels must include real Ollama model '${bareId}'; got ${JSON.stringify(listedOllamaIds)}`,
       );
     }
-    assert.ok(
+    // [REMOVE-STUB] Production payloads must not include the
+    // deterministic test stub alongside real Ollama models.
+    assert.equal(
       listed.some((model) => model.provider_id === "stub"),
-      "embeddingListModels must keep the deterministic stub alongside real Ollama models",
+      false,
+      "embeddingListModels must never expose the deterministic stub provider",
     );
   });
 
-  test("embeddingSetModel(stub) drops the cross-file cluster and flips provenance", async function () {
+  test("embeddingSetModel(off) drops the cross-file cluster and flips provenance", async function () {
     this.timeout(120_000);
 
     // Snapshot the Ollama-era cluster so we can prove it was there.
@@ -320,58 +325,46 @@ suite("ollama semantic clone detection (real Ollama)", () => {
       `pre-swap embedding_cos must exceed floor, got ${beforeCluster.signals.embedding_cos}`,
     );
 
-    // Swap to stub via the real RPC. Response shape falsifies the
-    // "config write no-op" path: the LSP MUST return new provenance or
-    // throw. `embedding/setModel` re-runs analysis before returning.
-    const stubProvenance = await setProvider(client, "stub");
-    assert.equal(
-      stubProvenance.provider_id,
-      "stub",
-      "swap response must reflect stub",
-    );
-    assert.notEqual(
-      stubProvenance.model_id,
-      OLLAMA_MODEL,
-      "swap response must no longer report nomic-embed-text",
-    );
+    // [REMOVE-STUB] Turning embeddings off is the production-supported
+    // way to disable the semantic recall layer. The LSP acknowledges
+    // the request (Option<EmbeddingProvenance>) and re-runs analysis
+    // without the embedding pass.
+    await setProvider(client, "off");
 
-    // `embedding/setModel` drives a full pipeline re-run before it
-    // returns, so the next `reportGet` reflects the stub-era signals.
-    // Poll briefly in case the re-run propagation is asynchronous.
+    // After embeddings are off, the next reportGet reflects the
+    // structural/token-only signals. Poll briefly in case the re-run
+    // propagation is asynchronous.
     const afterReport = await waitForReport(
       client,
       30_000,
-      (r) =>
-        r.embedding_provenance?.provider_id === "stub" ||
-        r.embedding_provenance === null,
+      (r) => r.embedding_provenance === null,
     );
     const afterCluster = crossFileType4Cluster(afterReport);
 
-    // Two acceptable stub outcomes:
-    //   1. Cluster drops entirely (stub can't see the semantic match).
+    // Two acceptable outcomes when embeddings are disabled:
+    //   1. Cluster drops entirely (no semantic recall = no Type-4).
     //   2. Cluster survives via a non-embedding signal, but
     //      embedding_cos collapses below the Ollama-era value.
-    // Both prove that swapping to stub genuinely disabled the
-    // Ollama-produced similarity.
     if (afterCluster === undefined) {
-      // Outcome 1: cluster gone; stub could not match Type-4.
+      // Outcome 1: cluster gone; structural/token alone could not match Type-4.
       return;
     }
     assert.ok(
       afterCluster.signals.embedding_cos < beforeCluster.signals.embedding_cos,
-      `stub embedding_cos (${afterCluster.signals.embedding_cos}) must be strictly below Ollama-era (${beforeCluster.signals.embedding_cos})`,
+      `off-mode embedding_cos (${afterCluster.signals.embedding_cos}) must be strictly below Ollama-era (${beforeCluster.signals.embedding_cos})`,
     );
     assert.ok(
       afterCluster.signals.embedding_cos <= COS_FLOOR,
-      `stub provider must drop embedding_cos to <= ${COS_FLOOR}, got ${afterCluster.signals.embedding_cos}`,
+      `off-mode must drop embedding_cos to <= ${COS_FLOOR}, got ${afterCluster.signals.embedding_cos}`,
     );
   });
 
   test("embeddingSetModel(ollama) restores the cross-file cluster", async function () {
     this.timeout(120_000);
-    const restored = await setProvider(client, "ollama");
-    assert.equal(restored.provider_id, "ollama");
-    assert.equal(restored.model_id, OLLAMA_MODEL);
+    // [REMOVE-STUB] `embedding/setModel` returns `Option<EmbeddingProvenance>` —
+    // the LSP acknowledges the queued swap with `null` and the new
+    // provenance is observed via `reportGet` once the refresh commits.
+    await setProvider(client, "ollama");
     // And the Type-4 cluster comes back.
     const report = await waitForReport(client, 60_000, (r) => {
       const c = crossFileType4Cluster(r);

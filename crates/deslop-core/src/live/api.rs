@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     delta::ReportDelta,
-    embedding::{EmbeddingProvider, OllamaProvider, StubProvider},
+    embedding::{EmbeddingProvider, ProviderRegistry, RegistryError},
     report::{EmbeddingProvenance, Report, ReportCluster},
 };
 
@@ -330,39 +330,35 @@ fn report_background_error(failure: &super::embedding_refresh::FailedEmbeddingRe
 }
 
 /// Constructs an [`EmbeddingProvider`] from a `(provider_id, model_id,
-/// endpoint?)` tuple.
+/// endpoint?)` tuple via the production [`ProviderRegistry`].
 fn build_provider(
     provider_id: &str,
     model_id: &str,
     endpoint: Option<&str>,
 ) -> Result<Arc<dyn EmbeddingProvider>, LiveError> {
-    match provider_id {
-        crate::embedding::STUB_PROVIDER_ID => Ok(Arc::new(StubProvider::new())),
-        crate::embedding::DEFAULT_PROVIDER_ID => connect_ollama(model_id, endpoint),
-        other => Err(LiveError::UnsupportedProvider {
-            requested: other.to_owned(),
-            registered: vec![
-                crate::embedding::STUB_PROVIDER_ID.to_owned(),
-                crate::embedding::DEFAULT_PROVIDER_ID.to_owned(),
-            ],
-        }),
-    }
+    let registry = ProviderRegistry::production();
+    registry
+        .build(provider_id, model_id, endpoint)
+        .map_err(|err| registry_error_to_live(err, endpoint))
 }
 
-/// Connects to an Ollama provider, lifting transport errors into the
-/// live module's error type.
-fn connect_ollama(
-    model_id: &str,
-    endpoint: Option<&str>,
-) -> Result<Arc<dyn EmbeddingProvider>, LiveError> {
-    let endpoint = endpoint.unwrap_or(crate::embedding::DEFAULT_OLLAMA_ENDPOINT);
-    let provider = OllamaProvider::connect(endpoint, model_id).map_err(|err| {
-        LiveError::ProviderUnreachable {
-            endpoint: endpoint.to_owned(),
-            message: err.to_string(),
-        }
-    })?;
-    Ok(Arc::new(provider))
+/// Lifts a [`RegistryError`] into the live module's error type.
+fn registry_error_to_live(error: RegistryError, endpoint: Option<&str>) -> LiveError {
+    match error {
+        RegistryError::Unsupported {
+            requested,
+            registered,
+        } => LiveError::UnsupportedProvider {
+            requested,
+            registered,
+        },
+        RegistryError::Provider(provider_error) => LiveError::ProviderUnreachable {
+            endpoint: endpoint
+                .unwrap_or(crate::embedding::DEFAULT_OLLAMA_ENDPOINT)
+                .to_owned(),
+            message: provider_error.to_string(),
+        },
+    }
 }
 
 /// Convenience constructor that wraps `session` in a [`LiveService`].

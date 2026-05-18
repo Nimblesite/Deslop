@@ -37,8 +37,10 @@ pub fn ipc_call(socket_path: &Path, method: &str, params: &Value) -> Result<Valu
     }
     #[cfg(not(unix))]
     {
-        let _ = (socket_path, method, params);
-        Err(BackendError::LspNotRunning)
+        let _ = (method, params);
+        Err(BackendError::LspNotRunning {
+            socket_path: socket_path.to_path_buf(),
+        })
     }
 }
 
@@ -62,7 +64,9 @@ mod unix {
             if err.kind() == std::io::ErrorKind::NotFound
                 || err.kind() == std::io::ErrorKind::ConnectionRefused
             {
-                BackendError::LspNotRunning
+                BackendError::LspNotRunning {
+                    socket_path: socket_path.to_path_buf(),
+                }
             } else {
                 BackendError::StateFileCorrupt(format!("ipc connect failed: {err}"))
             }

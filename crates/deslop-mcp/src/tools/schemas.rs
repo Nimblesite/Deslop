@@ -139,7 +139,7 @@ pub(super) fn schema_set_embedding_model() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "provider_id": { "type": "string", "enum": ["stub", "ollama"] },
+            "provider_id": { "type": "string", "enum": ["ollama"] },
             "model_id": { "type": "string", "minLength": 1 },
             "endpoint": { "type": "string", "description": "Optional override (Ollama only)." },
             "user_initiated": {
