@@ -32,11 +32,19 @@
 //!   token alphabet while intentionally checking different concrete values.
 //! - **#121** — async `SQLAlchemy` row-building pytest fixtures repeat the
 //!   same add/commit/refresh/return setup idiom by design.
+//! - **#150** — `mod e0001;` / `use foo::Bar;` top-level declarations
+//!   cluster across registries because Rust module statements cannot be
+//!   macro-generated. They are language scaffolding, not logic.
+//! - **#147** — `xs.iter().map(|x| x.field.as_str()).collect()` is a
+//!   pure language idiom that clusters across unrelated element types.
+//!   Extracting it would require a cross-crate trait, not deduplication.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
 //! member sources cannot be parsed (missing language plug-in, partial
 //! source bytes) falls through unchanged.
+
+mod rust;
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -70,6 +78,8 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         || is_python_all_exports_cluster(&snippets)
         || is_python_assertion_only_cluster(&snippets)
         || is_pytest_fixture_boilerplate_cluster(&snippets)
+        || rust::is_rust_top_level_decl_cluster(&snippets)
+        || rust::is_rust_iter_collect_idiom_cluster(&snippets)
 }
 
 /// Detects **issue #121**: pytest fixture functions that create ORM rows
@@ -557,15 +567,15 @@ fn python_node_text_equals(node: Node<'_>, source: &[u8], needle: &[u8]) -> bool
 /// inside `source` that the fingerprint covered, and the originating
 /// [`FileId`] so cross-file uniqueness checks do not depend on
 /// pointer identity.
-struct Snippet<'a> {
+pub(super) struct Snippet<'a> {
     /// Language id used to select the tree-sitter grammar.
-    language: &'static str,
+    pub(super) language: &'static str,
     /// Full file source bytes for the member.
-    source: &'a [u8],
+    pub(super) source: &'a [u8],
     /// Byte range covered by the member fingerprint.
-    range: ByteRange,
+    pub(super) range: ByteRange,
     /// Registry id of the source file containing this member.
-    file_id: FileId,
+    pub(super) file_id: FileId,
 }
 
 /// Returns a single language id when every member shares it.
@@ -988,7 +998,7 @@ fn has_differing_string_literals(calls: &[CallShape]) -> bool {
 
 /// Walks `root` looking for the smallest descendant of `kinds` whose
 /// byte range encloses `range`.
-fn enclosing_kind<'tree>(
+pub(super) fn enclosing_kind<'tree>(
     root: Node<'tree>,
     range: ByteRange,
     kinds: &[&str],
@@ -1013,7 +1023,7 @@ fn enclosing_kind<'tree>(
 /// Parses the snippet's full source so we can walk a real tree-sitter
 /// CST instead of the normalised one. Returns `None` when the language
 /// has no registered grammar here.
-fn parse_for(snippet: &Snippet<'_>) -> Option<tree_sitter::Tree> {
+pub(super) fn parse_for(snippet: &Snippet<'_>) -> Option<tree_sitter::Tree> {
     let language = grammar_for(snippet.language)?;
     parse_source(snippet.language, &language, snippet.source).ok()
 }

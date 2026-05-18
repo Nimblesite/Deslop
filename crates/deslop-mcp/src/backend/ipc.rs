@@ -26,7 +26,10 @@ use super::BackendError;
 /// `error` envelope. (`StateFileCorrupt` doubles as the catch-all
 /// transport-failure variant — IPC failures are reported the same way
 /// as a corrupt state file because both indicate the LSP and MCP have
-/// drifted out of sync.)
+/// drifted out of sync.) JSON-RPC `-32601 method not found` from the
+/// LSP is surfaced with a version-mismatch hint so agents diagnose
+/// stale bundled binaries instead of generic "ipc rpc error" noise
+/// ([Deslop#148]).
 pub fn ipc_call(socket_path: &Path, method: &str, params: &Value) -> Result<Value, BackendError> {
     #[cfg(unix)]
     {
@@ -87,6 +90,11 @@ mod unix {
             BackendError::StateFileCorrupt(format!("ipc response not valid JSON: {err}"))
         })?;
         if let Some(error) = response.get("error") {
+            if error.get("code").and_then(Value::as_i64) == Some(-32_601) {
+                return Err(BackendError::StateFileCorrupt(format!(
+                    "LSP rejected {method:?} with method-not-found (-32601). The LSP and MCP binaries are from different Deslop releases — reinstall the Deslop VSIX so both come from the same bundle. See https://github.com/Nimblesite/Deslop/issues/148."
+                )));
+            }
             return Err(BackendError::StateFileCorrupt(format!(
                 "ipc rpc error: {error}"
             )));

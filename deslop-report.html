@@ -1,0 +1,121 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deslop report — 3 duplicate group(s) across 3 file(s)</title><style>@import url("base.css");
+@import url("home.css");
+@import url("content.css");
+@import url("blog.css");
+@import url("syntax.css");
+.report-shell{max-width:80rem;margin-inline:auto;padding:var(--space-12) var(--space-6);}.report-shell h1{font-size:clamp(2rem,4vw,3rem);font-weight:800;margin-bottom:var(--space-3);letter-spacing:-0.04em;}.report-shell .lede{color:var(--on-surface-variant);max-width:48rem;margin-bottom:var(--space-4);}.metrics-banner{font-family:var(--font-mono);font-size:0.875rem;padding:var(--space-3) var(--space-4);border-radius:var(--radius-sm);margin:0 0 var(--space-10);border-left:4px solid var(--secondary-container);background:var(--surface-container-low);color:var(--on-surface);}.metrics-banner--ok{border-left-color:var(--primary-container);color:var(--primary);}.metrics-banner--breached{border-left-color:var(--error,#ff6464);color:var(--error,#ff6464);}.metrics-banner--neutral{border-left-color:var(--secondary-container);color:var(--on-surface-variant);}.report-shell h2{font-size:1.5rem;font-weight:700;margin:var(--space-12) 0 var(--space-6);letter-spacing:-0.02em;}.report-shell .empty{color:var(--on-surface-variant);font-style:italic;}.cluster-card{background:var(--surface-container-low);padding:var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-sm);border-left:4px solid var(--primary-container);}.cluster-card.kind-identical{border-left-color:var(--primary-container);}.cluster-card.kind-nearly-identical{border-left-color:var(--tertiary-container);}.cluster-card.kind-loosely-similar{border-left-color:var(--secondary-container);}.cluster-card.kind-same-behavior{border-left-color:var(--secondary);}.cluster-card__ai-badge{font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:var(--secondary-container);color:var(--on-secondary-container);padding:0.125rem var(--space-2);border-radius:var(--radius-sm);white-space:nowrap;align-self:center;}.cluster-card__head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4);margin-bottom:var(--space-3);flex-wrap:wrap;}.cluster-card__title{font-family:var(--font-head);font-size:1.125rem;font-weight:700;color:var(--on-surface);letter-spacing:-0.01em;margin:0;}.cluster-card__cost{font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary-fixed-dim);text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap;}.cluster-card__action{color:var(--on-surface-variant);font-size:0.9375rem;margin:0 0 var(--space-4);}.cluster-card__example{font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary-fixed-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2);}.snippet{background:var(--surface-container-lowest);color:var(--on-surface);padding:var(--space-4);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.8125rem;line-height:1.55;overflow-x:auto;margin:0 0 var(--space-4);}.snippet .ln{display:inline-block;width:3em;color:var(--secondary-fixed-dim);user-select:none;text-align:right;padding-right:var(--space-3);}.snippet-missing{color:var(--secondary-fixed-dim);font-style:italic;margin:0 0 var(--space-4);}.tok-keyword{color:var(--primary);}.tok-type{color:var(--tertiary);}.tok-string{color:var(--on-surface-variant);}.tok-number{color:var(--tertiary);}.tok-comment{color:var(--secondary-fixed-dim);font-style:italic;}.tok-function{color:var(--primary);}.tok-attribute{color:var(--tertiary);}.tok-operator{color:var(--on-surface);}.tok-punctuation{color:var(--secondary);}.tok-identifier{color:var(--on-surface);}.also-list{list-style:none;padding:0;margin:0;display:grid;gap:var(--space-1);}.also-list li{font-family:var(--font-mono);font-size:0.8125rem;color:var(--on-surface-variant);}.also-list li.is-hidden{color:var(--secondary-fixed-dim);}.also-list .also-loc{color:var(--secondary-fixed-dim);margin-left:var(--space-2);}.also-toggle{margin-top:var(--space-2);}.also-toggle>summary{cursor:pointer;font-family:var(--font-mono);font-size:0.75rem;color:var(--primary);text-transform:uppercase;letter-spacing:0.08em;list-style:none;}.also-toggle>summary::-webkit-details-marker{display:none;}.run-details{margin-top:var(--space-16);background:var(--surface-container-low);padding:var(--space-4) var(--space-6);border-radius:var(--radius-sm);}.run-details>summary{cursor:pointer;font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary-fixed-dim);text-transform:uppercase;letter-spacing:0.1em;list-style:none;}.run-details>summary::-webkit-details-marker{display:none;}.run-details dl{display:grid;grid-template-columns:max-content 1fr;gap:var(--space-2) var(--space-4);margin:var(--space-4) 0 0;font-family:var(--font-mono);font-size:0.8125rem;}.run-details dt{color:var(--secondary-fixed-dim);}.run-details dd{margin:0;color:var(--on-surface);}.run-details pre{margin-top:var(--space-4);}</style></head><body><main class="report-shell"><h1>Deslop report</h1><p class="lede">Scanned 3 file(s) and found 3 group(s) of duplicated code. Breakdown: 1 identical code · 2 nearly identical code. Worst offenders are listed first — each card shows one example with syntax highlighting and tells you where else the same code appears. (5 group(s) were hidden by your config.)</p><p class="metrics-banner metrics-banner--neutral">repo: 71.7% duplicated (38 / 53 LOC, 8 clusters across 3 files)</p><section><h2>Duplicate groups</h2><article class="cluster-card kind-nearly-identical"><header class="cluster-card__head"><h3 class="cluster-card__title">Nearly identical code in 6 places</h3><span class="cluster-card__cost">~23 AST nodes per copy</span></header><p class="cluster-card__action">Review the locations — small differences may matter.</p><p class="cluster-card__example">Example — package_info.rs:9:28</p><pre class="snippet"><span class="ln">9</span> <span class="tok-identifier">packages</span><span class="tok-punctuation">.</span>iter<span class="tok-punctuation">(</span><span class="tok-punctuation">)</span><span class="tok-punctuation">.</span>map<span class="tok-punctuation">(</span><span class="tok-operator">|</span><span class="tok-identifier">package</span><span class="tok-operator">|</span> <span class="tok-identifier">package</span><span class="tok-punctuation">.</span>name<span class="tok-punctuation">.</span>as_str<span class="tok-punctuation">(</span><span class="tok-punctuation">)</span><span class="tok-punctuation">)</span><span class="tok-punctuation">.</span>collect<span class="tok-punctuation">(</span><span class="tok-punctuation">)</span>
+</pre><p class="cluster-card__example">Also found in:</p><ul class="also-list"><li class="">package_info.rs:14:33<span class="also-loc"></span></li><li class="">function_info.rs:9:28<span class="also-loc"></span></li><li class="">function_info.rs:14:33<span class="also-loc"></span></li><li class="">class_info.rs:9:28<span class="also-loc"></span></li><li class="">class_info.rs:14:5<span class="also-loc"></span></li></ul></article><article class="cluster-card kind-identical"><header class="cluster-card__head"><h3 class="cluster-card__title">Identical code in 3 places</h3><span class="cluster-card__cost">~4 AST nodes per copy</span></header><p class="cluster-card__action">Safe to extract — every copy is the same.</p><p class="cluster-card__example">Example — package_info.rs:13:42</p><pre class="snippet"><span class="ln">13</span> <span class="tok-type">Vec</span><span class="tok-operator">&lt;</span><span class="tok-type">String</span><span class="tok-operator">&gt;</span>
+</pre><p class="cluster-card__example">Also found in:</p><ul class="also-list"><li class="">package_info.rs:14:19<span class="also-loc"></span></li><li class="">class_info.rs:5:18<span class="also-loc"></span></li></ul></article><article class="cluster-card kind-nearly-identical"><header class="cluster-card__head"><h3 class="cluster-card__title">Nearly identical code in 2 places</h3><span class="cluster-card__cost">~5 AST nodes per copy</span></header><p class="cluster-card__action">Review the locations — small differences may matter.</p><p class="cluster-card__example">Example — package_info.rs:14:9</p><pre class="snippet"><span class="ln">14</span> <span class="tok-identifier">versions</span><span class="tok-punctuation">:</span> <span class="tok-type">Vec</span><span class="tok-operator">&lt;</span><span class="tok-type">String</span><span class="tok-operator">&gt;</span>
+</pre><p class="cluster-card__example">Also found in:</p><ul class="also-list"><li class="">class_info.rs:5:9<span class="also-loc"></span></li></ul></article></section><details class="run-details"><summary>Run details, signals, and schema reference</summary><dl><dt>Tool</dt><dd>0.0.0-dev</dd><dt>Files analysed</dt><dd>3</dd><dt>Visible groups</dt><dd>3</dd><dt>Hidden groups</dt><dd>5</dd><dt>Embeddings</dt><dd>embeddings: off</dd></dl><h3>Per-group signals</h3><pre>group  structural  token_jaccard  embedding_cos  fused
+016b5feeba3b398a        1.00           1.00           0.00   1.00
+b1d11e5565e3dac6        1.00           0.00           0.00   1.00
+0edce36c12f6099f        1.00           0.00           0.00   1.00
+</pre><h3>Action hints</h3><ul><li><code>bucket=identical</code> — Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)</li><li><code>bucket=nearly-identical</code> — Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)</li><li><code>bucket=loosely-similar</code> — Loosely similar code. Loose textual overlap. Treat as a hint. (weak LSH-only signal (sub-Type-3))</li><li><code>bucket=same-behavior</code> — Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))</li></ul><h3>Schema reference</h3><pre># Deslop Report Context
+
+## What this is
+
+You are being given a code-duplication report from **Deslop**, a static analysis tool that detects duplicated code using a hybrid pipeline of AST fingerprinting + token MinHash/LSH. The report lists **worst offenders first** — clusters ranked by a duplication-impact score, not just count.
+
+## How it works (so you know what the signals mean)
+
+The pipeline normalizes each source file's AST (collapsing identifier names, literals, and comments so renamed-identifier clones hash the same), then finds clones through three complementary passes:
+
+1. **Structural (Merkle AST hash)** — bottom-up `blake3` hash of every AST subtree ≥ `min-nodes`. Detects Type-1 (identical) and Type-2 (renamed-identifier) clones. `structural=1.0` means &quot;these subtrees are identical after normalization.&quot;
+2. **Sibling-extension** — contiguous sibling windows under a common parent are hashed as groups. Catches near-miss clones where the same sequence of statements appears in different enclosing contexts.
+3. **Token LSH (MinHash over k=5 k-grams of normalized node kinds)** — catches Type-3 clones where structure diverged but the token bag is close. `token_jaccard` is the estimated Jaccard similarity in `[0.0, 1.0]`.
+
+Candidate pairs from all three passes are unioned, filtered to same-language endpoints by default, then transitively closed into clusters. `.deslop.toml` can opt back into cross-language comparison with `[analysis] allow_cross_language_comparison = true`. Boilerplate-only ranges such as imports, C# `using` directives, namespace/package headers, Python route decorators, and equivalent module prologues are filtered before they become clone clusters. Repeated C# `using` directives may appear as a style/action hint suggesting `global using`; they should not be interpreted as duplicate business logic.
+
+## Clone buckets (canonical)
+
+Every cluster in this report belongs to exactly one of four buckets. The human label is what end-users see in the CLI / HTML / VS Code UI; the academic `Type-N` label is retained here because agents often read the literature. Both labels refer to the **same** bucket.
+
+| Bucket            | Human label                              | Academic ref     | Meaning                                                                                  |
+|-------------------|------------------------------------------|------------------|------------------------------------------------------------------------------------------|
+| `Identical`       | Identical code                           | Type-1, Type-2   | Identical after normalization (ignoring whitespace, comments, renamed identifiers).      |
+| `NearlyIdentical` | Nearly identical code                    | Type-3           | Type-2 + added/removed/modified statements. Small differences may matter — review both.  |
+| `LooselySimilar`  | Loosely similar code                     | weak LSH-only    | Loose textual overlap below the near-miss bar. Treat as a hint, not a directive.         |
+| `SameBehavior`    | Same behavior, different code *(AI)*     | Type-4           | Semantically equivalent, syntactically different. Requires the embedding pass.           |
+
+`SameBehavior` is populated only when the embedding pass ran. If `embedding_cos` is `0.00` across the whole report, the pass was disabled and the `SameBehavior` bucket is empty — structural / token-based clusters (`Identical`, `NearlyIdentical`, `LooselySimilar`) are unaffected.
+
+Full canonical definition including routing thresholds: [taxonomy.md §[CLONE-BUCKETS]](taxonomy.md).
+
+## How to read the report format
+
+Each line starts with `#N` (rank, lower = worse) and looks like:
+
+```
+#1 [abc123def4567890] weight=271716.65 size=20 nodes=825
+  20 copies of a 825-node subtree at path/A.cs:230-5843, path/B.cs:195-5843, path/C.cs:0-5844 (+17 more) [structural=0.00, token_jaccard=0.97, embedding_cos=0.00]
+```
+
+Fields:
+
+| Field | Meaning |
+|---|---|
+| `#N` | Rank. `#1` is the worst offender. |
+| `[abc123…]` | Stable 16-char cluster id (hex). Same clone across runs → same id. |
+| `weight` | Ranking score: `node_count × (cluster_size − 1) × log2(1 + total_spanned_bytes)`. Higher = more impact. |
+| `size` | How many copies of this subtree exist. `size=20` means the same pattern appears 20 times. |
+| `nodes` | AST node count of one canonical copy. Bigger subtree = more meaningful clone. |
+| `path:line:column` | Human-readable occurrence location in text/HTML/hover summaries. JSON keeps `start_byte` / `end_byte` for machine navigation. |
+| `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |
+| `token_jaccard` | `[0, 1]`. Estimated Jaccard of normalized k-gram token sets. |
+| `embedding_cos` | `[0, 1]` cosine similarity from the semantic-embedding pass, or `0.00` if that pass was disabled for this run. |
+| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `attempted_subtrees` when duplicate snippets collapse before indexing. |
+| `embedding_provenance.failed_subtrees` | Count of subtree embeddings the provider rejected. Rejected subtrees are excluded from embedding ANN rather than substituted with zero vectors. |
+| `boilerplate_hints[]` | Optional low-severity import/prologue hygiene hints emitted only when `.deslop.toml` sets `boilerplate.imports = &quot;report&quot;`. These carry suppressed byte ranges but are not clone clusters and do not affect `weight` or metrics. |
+
+Byte ranges come from `tree-sitter` and remain in JSON/tool payloads. Human-facing summaries derive line and column from the same source bytes so users do not have to read raw byte offsets.
+
+## Reading the signals together
+
+| `structural` | `token_jaccard` | `embedding_cos` | Bucket → human label | What it means |
+|---|---|---|---|---|
+| `1.00` | `1.00` | any | `Identical` → **Identical code** *(Type-1/2)* | Safe candidate for extraction into a shared function/method. |
+| `1.00` | `&lt;1.00` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Same AST shape but slightly different token k-grams. Usually overlapping sibling-extension ranges. |
+| `0.00` | `≥ 0.90` | `&lt;0.80` or disabled | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Similar token content, different structure. Review before merging — may differ in a semantically important way (loop vs recursion, added guard, etc.). |
+| `&lt;0.50` | any | `≥ 0.80` | `SameBehavior` → **Same behavior, different code** *(Type-4, AI match)* | The embedding pass noticed these do the same thing written two syntactically distinct ways. Read both before merging. |
+| `0.00` | `0.70 – 0.90` | `&lt;0.80` or disabled | `LooselySimilar` → **Loosely similar code** | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |
+| `0.20 – 0.80` | `≥ 0.95` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Fused cluster spanning multiple exact-clone bands. Transitive closure merged several smaller exact clusters via near-miss links. Usually genuine duplication across a family of variants. |
+
+`SameBehavior` is tested before `NearlyIdentical` when the embedding pass is enabled, so a strong semantic signal on syntactically divergent code gets the AI-match label rather than being absorbed into near-miss. Full routing table: [taxonomy.md §[CLONE-BUCKETS-ROUTING]](taxonomy.md).
+
+## Repo-wide duplication metric
+
+The report header carries one honest number: `metrics.duplication_percent = 100 × duplicated_loc / analysed_loc`.
+
+- `duplicated_loc` = lines covered by ≥ 2 non-hidden clone occurrences, deduplicated per file so overlapping sibling-extension ranges count once.
+- `analysed_loc` = physical lines across every file in `files_analysed`.
+- Hidden occurrences (built-in generated-code defaults or `.deslop.toml` `report_hide`) are excluded so they cannot inflate the metric.
+- CI gating: `--fail-over &lt;percent&gt;` (or `[threshold] max_duplication_percent` in `.deslop.toml`) exits `3` when `duplication_percent &gt; threshold`. No threshold → no gate. Use this, not the `weight` column, for pass/fail decisions.
+
+## Thresholds (typical defaults)
+
+- `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
+- `FUSED_THRESHOLD = 0.85` — a pair must score ≥ this on the fused signal (combination of `structural`, `token_jaccard`, `embedding_cos`) to enter a cluster.
+- `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
+- Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
+
+## What to do with this report
+
+1. **Start at #1 and work down.** The weight formula already prioritises by impact.
+2. **Check if it's generated code.** Generated files (e.g. `.g.cs`, `.generated.cs`, OpenAPI clients, protobuf output) are hidden by default because they duplicate by design; visible generated-handwritten overlap is still worth reviewing.
+3. **Treat import/using-only repetition as hygiene, not duplication.** For C#, the preferred remediation is usually a shared `GlobalUsings.cs` or project-file `&lt;Using Include=&quot;...&quot; /&gt;`, not extraction.
+4. **Check byte ranges for overlap.** Adjacent/overlapping ranges in the same file mean the sibling-extension pass is firing on several enclosing contexts of the same physical code — count it as one logical clone, not N.
+5. **For `structural=1.00` clusters** — safe to extract. Identical subtree after normalization.
+6. **For `structural=0.00, token_jaccard≥0.95` clusters** — Type-3 candidate. Read both occurrences. The differences are meaningful. Decide whether to (a) unify via a parameter / strategy, or (b) accept them as intentionally divergent.
+7. **Ignore clusters where `weight` is low and `size` is 2 and node counts are tiny.** Those are usually boilerplate (constructors, test setup, property accessors) that don't reward extraction.
+
+## Things to keep in mind when interpreting a report
+
+- **Type-4 detection may be disabled.** If `embedding_cos` is `0.00` across the entire report, the semantic-embedding pass was not run — semantically equivalent but syntactically different code (iterative vs recursive, LINQ vs foreach) will not appear.
+- **Overlapping byte ranges** are expected. The sibling-extension pass emits fingerprints for nested windows of the same physical code. Same cluster id → same clone; different cluster ids over the same bytes → different granularities of the same match.
+- **Only supported languages are analyzed.** Files in languages the tool does not support are skipped silently. The report header lists which languages were active for this run.
+
+## Tool metadata
+
+- Tool: `deslop`. The report header states the tool version.
+- The text report is a pretty-printer over the canonical JSON schema. For machine consumption prefer `--format json`, which includes full `occurrences[]` arrays, per-cluster `signals { structural, token_jaccard, embedding_cos, fused }`, and an agent-oriented `summary` string per cluster.
+</pre></details></main></body></html>
