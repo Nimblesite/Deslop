@@ -108,3 +108,7 @@ clients/vscode/bin/
 clients/vscode/media/webview/
 
 crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
+
+# Local deslop runs - never commit
+deslop-*.log
+deslop-report.*
