@@ -10,7 +10,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use deslop_core::{embedding::StubProvider, live::AnalysisSession, report::ReportCluster};
+use deslop_core::{
+    embedding::test_support::StubProvider, live::AnalysisSession, report::ReportCluster,
+};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

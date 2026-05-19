@@ -375,7 +375,11 @@ fn ipc_socket_handles_find_similar_request() -> Result<()> {
 }
 
 /// [LSP-IPC] The IPC socket must respond to `embedding/listModels`
-/// with a non-empty array of available model entries.
+/// with a JSON array. Under the stub-removal plan, production lists
+/// only the models reachable from the registered providers (Ollama).
+/// The array is empty when Ollama is unreachable (CI default) and
+/// non-empty otherwise. Every entry, when present, must carry the
+/// `provider_id`, `model_id`, and `dimensions` keys the picker reads.
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_list_models_request() -> Result<()> {
@@ -406,10 +410,23 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
         .pointer("/result")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| anyhow!("listModels result must be an array: {response}"))?;
-    ensure!(
-        !models.is_empty(),
-        "listModels must return at least one model entry"
-    );
+    for entry in models {
+        ensure!(
+            entry.get("provider_id").and_then(serde_json::Value::as_str) == Some("ollama"),
+            "every listed model must carry provider_id=ollama (stub removed): {entry}"
+        );
+        ensure!(
+            entry
+                .get("model_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|id| !id.is_empty()),
+            "every listed model must carry a non-empty model_id: {entry}"
+        );
+        ensure!(
+            entry.get("dimensions").is_some(),
+            "every listed model must expose a dimensions field (may be null until probed): {entry}"
+        );
+    }
     Ok(())
 }
 

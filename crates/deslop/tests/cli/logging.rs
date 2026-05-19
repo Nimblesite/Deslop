@@ -295,11 +295,12 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
 
 // Implements [UX-TECHNICAL-EMBEDDINGS]: `--technical` with a live
 // embedding provider prints the provenance triple
-// `provider/model@version (N-d)` on stderr. The stub provider is
-// deterministic so the test doesn't depend on Ollama being
-// installed.
+// `provider/model@version (N-d)` on stderr. [REMOVE-STUB] Uses a mock
+// Ollama HTTP server so the test exercises the production ollama
+// provider end-to-end without depending on a real install.
 #[test]
 fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
+    let server = crate::mock_ollama::MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
@@ -311,7 +312,11 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-provider")
-        .arg("stub")
+        .arg("ollama")
+        .arg("--embedding-model")
+        .arg("nomic-embed-text")
+        .arg("--embedding-endpoint")
+        .arg(server.endpoint())
         .arg("--technical")
         .arg("--no-color")
         .arg("--output")
@@ -320,7 +325,7 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
     assert!(
-        stderr.contains("embeddings: stub/blake3-stub@v1"),
+        stderr.contains("embeddings: ollama/nomic-embed-text@"),
         "--technical must surface the provenance triple on stderr: {stderr}"
     );
     Ok(())

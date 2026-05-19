@@ -12,7 +12,7 @@ use std::{
 
 use crate::{
     cluster::encode_short_id,
-    embedding::{EmbeddingMode, EmbeddingProvider, OllamaModelInfo, StubProvider},
+    embedding::{EmbeddingMode, EmbeddingProvider, OllamaModelInfo},
     fingerprint::collect_fingerprints,
     lang::LanguageParser,
     pipeline::{EmbeddingSettings, PipelineSession},
@@ -239,22 +239,6 @@ pub(super) fn cluster_matches_any_hash(
     snippet_hashes
         .iter()
         .any(|hash| encode_short_id(*hash) == cluster.id)
-}
-
-/// Returns the hard-coded model info for the built-in stub provider.
-pub(super) fn stub_model_info() -> EmbeddingModelInfo {
-    let dimensions = StubProvider::new()
-        .embed("")
-        .map(|vector| vector.len())
-        .ok();
-    EmbeddingModelInfo {
-        provider_id: crate::embedding::STUB_PROVIDER_ID.to_owned(),
-        model_id: "blake3-stub".to_owned(),
-        model_version: Some("v1".to_owned()),
-        dimensions,
-        recommended: false,
-        reachable: true,
-    }
 }
 
 /// [LIVE-CACHE-SEED] Default name of the cache file the LSP writes

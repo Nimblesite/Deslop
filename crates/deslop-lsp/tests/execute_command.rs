@@ -153,18 +153,26 @@ fn execute_command_dispatches_refresh_models_and_incremental_toggle() -> Result<
         models.pointer("/result/command").and_then(Value::as_str),
         Some("deslop.lsp.pickEmbeddingModel")
     );
-    let first = models
-        .pointer("/result/models/0")
-        .ok_or_else(|| anyhow!("model list is empty: {models}"))?;
-    assert_eq!(
-        first.get("provider_id").and_then(Value::as_str),
-        Some("stub")
-    );
-    assert_eq!(
-        first.get("model_id").and_then(Value::as_str),
-        Some("blake3-stub")
-    );
-    assert_eq!(first.get("reachable").and_then(Value::as_bool), Some(true));
+    // [REMOVE-STUB] Production listing only carries Ollama-provided
+    // entries — when Ollama is unreachable the list is empty, when it
+    // is running every row reports `provider_id == "ollama"`. Either
+    // way no `stub` row may appear.
+    let models_array = models
+        .pointer("/result/models")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("models field missing: {models}"))?;
+    for entry in models_array {
+        assert_ne!(
+            entry.get("provider_id").and_then(Value::as_str),
+            Some("stub"),
+            "production payload must not include the deterministic stub: {entry}",
+        );
+        assert_eq!(
+            entry.get("provider_id").and_then(Value::as_str),
+            Some("ollama"),
+            "production listing must only expose ollama-provided models: {entry}",
+        );
+    }
 
     let _ = child.kill();
     Ok(())
@@ -261,8 +269,25 @@ async fn assert_pick_embedding_model_command(
     )
     .await?;
     assert!(shows.is_empty(), "model picker must not open documents");
-    assert_json_str(&response, "/models/0/provider_id", "stub");
-    assert_json_bool(&response, "/models/0/reachable", true);
+    // [REMOVE-STUB] When Ollama is unreachable in CI the models list
+    // is empty; when Ollama is reachable every row reports `provider_id
+    // == "ollama"`. The deterministic stub must never appear.
+    let models = response
+        .pointer("/models")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("/models field missing: {response}"))?;
+    for entry in models {
+        assert_ne!(
+            entry.get("provider_id").and_then(Value::as_str),
+            Some("stub"),
+            "pickEmbeddingModel response must not include the stub: {entry}",
+        );
+        assert_eq!(
+            entry.get("provider_id").and_then(Value::as_str),
+            Some("ollama"),
+            "pickEmbeddingModel response must only expose ollama rows: {entry}",
+        );
+    }
     Ok(())
 }
 
@@ -355,7 +380,7 @@ fn assert_json_bool(value: &Value, pointer: &str, expected: bool) {
 fn in_process_lsp(workspace_root: &std::path::Path) -> (LspService<LspBackend>, ClientSocket) {
     let root = workspace_root.to_path_buf();
     LspService::build(
-        move |client| match LspBackend::new_with_stub(client, root.clone(), 30) {
+        move |client| match LspBackend::new_with_defaults(client, root.clone(), 30) {
             Ok(backend) => backend,
             Err(error) => {
                 tracing::error!(%error, "in-process lsp test backend failed to initialise");

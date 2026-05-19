@@ -16,7 +16,7 @@ export const CORE_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { dimensions: "Option<usize>" },
     fieldDocs: {
-      provider_id: "Provider registry key (`ollama`, `stub`).",
+      provider_id: "Provider registry key (`ollama`).",
       model_id: "Human-readable model id.",
       model_version: "Optional opaque version string.",
       dimensions: "Optional dimensionality, when known.",
@@ -138,7 +138,7 @@ export const CORE_TYPE_CONFIG = {
     fieldOverrides: { done: "u64", total: "u64" },
     fieldDocs: {
       phase: "Lifecycle phase.",
-      provider_id: "Provider id the swap targets (`ollama`, `stub`).",
+      provider_id: "Provider id the swap targets (`ollama`).",
       model_id: "Model id the swap targets.",
       done: "Subtrees embedded so far.",
       total: "Total subtrees in the current corpus.",

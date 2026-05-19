@@ -1,0 +1,57 @@
+//! E2E regression for GH #150: `pub(crate) mod e0001;` /
+//! `pub use foo::bar;` top-level declarations cluster across registries
+//! because Rust requires literal module statements. These are scaffolding,
+//! not actionable duplication, and must never surface in the report.
+//! Spec: [CLONE-NOISE-RUST-DECL].
+
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use anyhow::Result;
+use assert_cmd::Command;
+use serde_json::Value;
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+fn run_report(fixture_name: &str) -> Result<Value> {
+    let tmp = tempfile::tempdir()?;
+    let output = tmp.path().join("report");
+    let _assertion = Command::cargo_bin("deslop")?
+        .arg(fixture(fixture_name))
+        .arg("--min-nodes")
+        .arg("3")
+        .arg("--embeddings")
+        .arg("off")
+        .arg("--output")
+        .arg(&output)
+        .assert()
+        .success();
+    let body = fs::read_to_string(output.with_extension("json"))?;
+    Ok(serde_json::from_str(&body)?)
+}
+
+fn cluster_count(report: &Value) -> usize {
+    report
+        .get("clusters")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len)
+}
+
+#[test]
+fn rust_mod_and_use_declarations_do_not_cluster_as_duplicates() -> Result<()> {
+    let report = run_report("rust-issue-150-mod-declarations")?;
+    let count = cluster_count(&report);
+    assert_eq!(
+        count, 0,
+        "pub(crate) mod / pub use declarations are language scaffolding \
+         and must not surface as duplicate clusters: {report:#}"
+    );
+    Ok(())
+}

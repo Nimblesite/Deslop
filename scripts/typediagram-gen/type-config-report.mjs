@@ -276,7 +276,7 @@ export const REPORT_TYPE_CONFIG = {
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: { dimensions: "usize" },
     fieldDocs: {
-      provider_id: "Provider registry key (`ollama`, `stub`).",
+      provider_id: "Provider registry key (`ollama`).",
       model_id: "Human-readable model identifier.",
       model_version: "Opaque version string reported by the provider.",
       dimensions: "Embedding dimensionality.",

@@ -1,24 +1,29 @@
-//! Deterministic in-process embedding provider.
+//! Test-only embedding fixtures ([FUSION-EMBED-PROVIDER]).
 //!
-//! Implements the `stub` slot reserved by [FUSION-EMBED-PROVIDER] — a
-//! local, zero-dependency provider that turns any input string into a
-//! fixed-dimensional vector via BLAKE3. The vector is stable (same
-//! input ⇒ same vector across machines), cheap (one hash per call),
-//! and similarity-preserving at the byte level, which is enough to
-//! exercise the HNSW pair generator and the three-signal fusion path
-//! without requiring a live embedding service.
+//! Hosts the deterministic BLAKE3 embedding shim used by core unit
+//! tests. The shim is **not** a product provider — it does not appear
+//! in the production [`crate::embedding::registry::ProviderRegistry`],
+//! is not exported from the production prelude, and is gated behind
+//! the `test-support` feature so it cannot be linked into the shipped
+//! VSIX, LSP, or MCP binaries.
 //!
-//! **Not a replacement for a real embedder.** The stub does not
-//! produce semantically-meaningful vectors; it only guarantees that
-//! the plumbing works end-to-end so CI can verify [FUSION-EMBED-PROVIDER]
-//! without Ollama.
+//! Black-box binary tests must not depend on this module; they should
+//! drive analysis through a mock Ollama HTTP server instead so the
+//! production code paths exercised in the tests match what ships.
 
 use blake3::Hasher;
 
 use crate::embedding::provider::{EmbeddingProvider, EmbeddingSpec, ProviderError};
 
-/// Provider registry key.
+/// Provider id reported by the deterministic BLAKE3 shim. Kept stable
+/// so existing core tests that assert against the field continue to
+/// work after the move.
 pub const PROVIDER_ID: &str = "stub";
+/// Stable `model_id` reported by the shim.
+pub const MODEL_ID: &str = "blake3-stub";
+/// Stable `model_version` reported by the shim.
+pub const MODEL_VERSION: &str = "v1";
+
 /// Fixed vector length. Small enough that the HNSW / cache paths
 /// stay cheap on every `cargo test` run, large enough that distinct
 /// inputs produce visibly distinct vectors.
@@ -26,15 +31,9 @@ const DIMENSIONS: usize = 64;
 /// Stub embeddings are CPU-local and cheap, so let the pipeline
 /// amortise cache and dispatch overhead across larger chunks.
 const MAX_BATCH_SIZE: usize = 1024;
-/// Stable `model_id` reported to consumers. Kept separate from
-/// `PROVIDER_ID` so the two identity fields answer different
-/// questions ("which provider?" vs "which model?").
-const MODEL_ID: &str = "blake3-stub";
-/// Stable `model_version`. Bumping this invalidates every cache
-/// built against the stub, same as swapping a real model.
-const MODEL_VERSION: &str = "v1";
 
-/// Deterministic BLAKE3-derived embedding provider. See module docs.
+/// Deterministic BLAKE3-derived embedding provider. Test infrastructure
+/// only — see module docs.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct StubProvider;
 

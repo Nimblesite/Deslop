@@ -1804,10 +1804,11 @@ fn cluster_by_id_unknown_returns_error() -> Result<()> {
 }
 
 #[test]
-fn list_embedding_models_always_includes_stub() -> Result<()> {
-    // [MCP-IPC-CLIENT] list-embedding-models delegates to the
-    // companion LSP via IPC. The stub provider is always available
-    // even when Ollama is unreachable.
+fn list_embedding_models_excludes_stub_when_ollama_unreachable() -> Result<()> {
+    // [REMOVE-STUB] list-embedding-models delegates to the companion
+    // LSP via IPC. When Ollama is unreachable in CI the production
+    // listing must come back empty — the deterministic stub is test
+    // infrastructure and never appears in production payloads.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
@@ -1822,26 +1823,27 @@ fn list_embedding_models_always_includes_stub() -> Result<()> {
         .iter()
         .any(|model| model.get("provider_id") == Some(&json!("stub")));
     assert!(
-        has_stub,
-        "list-embedding-models must always include the stub provider: {response}",
+        !has_stub,
+        "list-embedding-models must never include the stub provider: {response}",
     );
     let _ = child.finish();
     Ok(())
 }
 
 #[test]
-fn set_embedding_model_to_stub_succeeds() -> Result<()> {
-    // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+fn set_embedding_model_rejects_stub_provider() -> Result<()> {
+    // [REMOVE-STUB] The MCP `set-embedding-model` schema enum is
+    // `["ollama"]` — submitting `provider_id: "stub"` is rejected
+    // before the call reaches any backend.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
         &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true } }),
     )?;
-    assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "set-embedding-model without LSP must return BackendError: {response}"
+    assert!(
+        response.get("error").is_some(),
+        "stub provider must be rejected by the MCP schema: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -1850,16 +1852,17 @@ fn set_embedding_model_to_stub_succeeds() -> Result<()> {
 #[test]
 fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
     // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    // [REMOVE-STUB] Stub provider removed from production payloads;
+    // exercise the same plumbing through the ollama provider.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
-        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "stub", "model_id": "blake3-stub", "endpoint": "http://127.0.0.1:11434", "user_initiated": true } }),
+        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "ollama", "model_id": "nomic-embed-text", "endpoint": "http://127.0.0.1:1", "user_initiated": true } }),
     )?;
-    assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "set-embedding-model without LSP must return BackendError: {response}"
+    assert!(
+        response.get("error").is_some(),
+        "set-embedding-model without LSP must return an error envelope: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -1876,8 +1879,8 @@ fn set_embedding_model_fails_when_shared_settings_cannot_be_written() -> Result<
         &json!({
             "name": "set-embedding-model",
             "arguments": {
-                "provider_id": "stub",
-                "model_id": "blake3-stub",
+                "provider_id": "ollama",
+                "model_id": "nomic-embed-text",
                 "user_initiated": true
             }
         }),
@@ -2153,16 +2156,17 @@ fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
 #[test]
 fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
     // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    // [REMOVE-STUB] Use the ollama provider id since stub is no longer
+    // accepted by the production MCP schema.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
         "tools/call",
-        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "stub", "model_id": "blake3-stub", "user_initiated": true } }),
+        &json!({ "name": "set-embedding-model", "arguments": { "provider_id": "ollama", "model_id": "nomic-embed-text", "endpoint": "http://127.0.0.1:1", "user_initiated": true } }),
     )?;
-    assert_eq!(
-        value_get(&response, "/error/code")?.as_i64(),
-        Some(-32_004),
-        "set-embedding-model without LSP must return BackendError: {response}"
+    assert!(
+        response.get("error").is_some(),
+        "set-embedding-model without LSP must return an error envelope: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -2392,7 +2396,7 @@ fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
         "tools/call",
         &json!({
             "name": "set-embedding-model",
-            "arguments": { "provider_id": "stub", "user_initiated": true }
+            "arguments": { "provider_id": "ollama", "user_initiated": true }
         }),
     )?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
@@ -2408,7 +2412,7 @@ fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Resul
         "tools/call",
         &json!({
             "name": "set-embedding-model",
-            "arguments": { "provider_id": "stub", "model_id": "blake3-stub" }
+            "arguments": { "provider_id": "ollama", "model_id": "nomic-embed-text" }
         }),
     )?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
@@ -2482,8 +2486,10 @@ fn path_in_nonexistent_subdirectory_is_rejected_as_io_failure() -> Result<()> {
 }
 
 #[test]
-fn binary_starts_with_stub_embeddings_auto_mode() -> Result<()> {
-    // StateFileBackend reads provenance from the state file; no --embeddings arg needed.
+fn binary_starts_with_default_embedding_config() -> Result<()> {
+    // [REMOVE-STUB] StateFileBackend reads provenance from the state
+    // file; with stub removed, provenance may be null when no real
+    // provider is selected. The key must still be present.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
@@ -2498,8 +2504,12 @@ fn binary_starts_with_stub_embeddings_auto_mode() -> Result<()> {
 }
 
 #[test]
-fn binary_starts_with_ollama_auto_falls_back_to_stub() -> Result<()> {
-    // StateFileBackend reads provenance from the state file; Ollama is not contacted.
+fn binary_starts_without_ollama_returns_provenance_field() -> Result<()> {
+    // [REMOVE-STUB] StateFileBackend reads provenance from the state
+    // file; Ollama is not contacted. Production no longer falls back
+    // to a stub provider when Ollama is unreachable, but the
+    // provenance key must always be present so the editor can detect
+    // the disabled state.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let result = call_tool(&mut child, "session-config", &json!({}))?;
@@ -2843,9 +2853,11 @@ fn files_changed_pushes_resources_updated_and_report_changed_notifications() -> 
 }
 
 #[test]
-fn list_embedding_models_response_shape_includes_metadata() -> Result<()> {
-    // [MCP-IPC-CLIENT] / issue #87 — every model row carries the
-    // generated metadata fields and avoids the legacy ones.
+fn list_embedding_models_response_omits_legacy_keys_and_stub() -> Result<()> {
+    // [MCP-IPC-CLIENT] / issue #87 / [REMOVE-STUB] — the response array
+    // (empty under unreachable Ollama, populated when Ollama responds)
+    // never exposes the legacy keys and never includes the stub
+    // provider. Production payloads must not leak test infrastructure.
     let mut child = McpChild::spawn(fixture_root(), &[])?;
     let _ = init_session(&mut child)?;
     let response = child.request(
@@ -2856,45 +2868,26 @@ fn list_embedding_models_response_shape_includes_metadata() -> Result<()> {
         .as_array()
         .cloned()
         .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
-    let stub = models
+    let has_stub = models
         .iter()
-        .find(|model| model.get("provider_id") == Some(&json!("stub")))
-        .ok_or_else(|| anyhow!("stub row missing: {response}"))?;
-    assert_eq!(
-        stub.get("model_id"),
-        Some(&json!("blake3-stub")),
-        "stub row must use generated model_id: {stub}",
-    );
-    assert_eq!(
-        stub.get("model_version"),
-        Some(&json!("v1")),
-        "stub row must carry model_version: {stub}",
-    );
+        .any(|model| model.get("provider_id") == Some(&json!("stub")));
     assert!(
-        stub.get("dimensions").and_then(Value::as_u64).is_some(),
-        "stub row must carry numeric dimensions: {stub}",
+        !has_stub,
+        "list-embedding-models must never include the stub provider: {response}",
     );
-    assert_eq!(
-        stub.get("recommended"),
-        Some(&json!(false)),
-        "stub row must carry recommended flag: {stub}",
-    );
-    assert_eq!(
-        stub.get("reachable"),
-        Some(&json!(true)),
-        "stub row must carry reachable flag: {stub}",
-    );
-    for legacy_key in [
-        "name",
-        "bare_id",
-        "digest",
-        "size_bytes",
-        "is_embedding_model",
-    ] {
-        assert!(
-            stub.get(legacy_key).is_none(),
-            "issue #87: stub row must not expose legacy key {legacy_key}: {stub}",
-        );
+    for model in &models {
+        for legacy_key in [
+            "name",
+            "bare_id",
+            "digest",
+            "size_bytes",
+            "is_embedding_model",
+        ] {
+            assert!(
+                model.get(legacy_key).is_none(),
+                "issue #87: model row must not expose legacy key {legacy_key}: {model}",
+            );
+        }
     }
     let _ = child.finish();
     Ok(())

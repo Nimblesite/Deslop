@@ -19,8 +19,8 @@ use clap::Parser;
 use deslop_core::{
     debug_ast_dump, validate_threshold_percent, version_contract_output, ComponentKind,
     EmbeddingMode, EmbeddingSettings, ExclusionConfig, OllamaProvider, PipelineSession, Report,
-    ReportDelta, StubProvider, ThresholdSource, ThresholdSummary, DEFAULT_OLLAMA_ENDPOINT,
-    DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID, STUB_PROVIDER_ID,
+    ReportDelta, ThresholdSource, ThresholdSummary, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL,
+    DEFAULT_PROVIDER_ID,
 };
 use tracing::Level;
 
@@ -225,6 +225,7 @@ fn run_cli() -> Result<()> {
     if let Some(file) = args.debug_ast.as_deref() {
         return run_debug_ast(file);
     }
+    validate_scan_path(&args.path)?;
     let formats = FormatSelection::from_args(&args)?;
     let output = OutputPaths::new(args.output.as_deref());
     let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
@@ -327,6 +328,47 @@ fn resolve_config_threshold(args: &Cli) -> Result<Option<f64>> {
             .with_context(|| format!("discover config in {}", args.path.display()))?,
     };
     Ok(config.fail_over_percent())
+}
+
+/// Names that look like CLI subcommands but are actually MCP tool
+/// names or VSIX panel labels. When a user types `deslop top-offenders`
+/// (as some agent recipes wrongly suggest), clap parses the word as
+/// the positional `PATH`, the path resolves to a non-existent directory,
+/// and the pipeline cheerfully reports zero clones ([Deslop#132]).
+const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
+    "top-offenders",
+    "find-similar",
+    "rescan",
+    "report-get",
+    "report-query",
+    "report-for-file",
+    "report-for-range",
+    "cluster-by-id",
+    "list-embedding-models",
+    "set-embedding-model",
+    "session-config",
+    "schema-doc",
+];
+
+/// Refuses to scan a path that does not exist or matches a known MCP
+/// tool name. Without this guard, `deslop top-offenders` silently
+/// "succeeds" with a clean-looking report against a non-existent
+/// directory ([Deslop#132]).
+fn validate_scan_path(path: &std::path::Path) -> Result<()> {
+    if let Some(name) = path.to_str() {
+        if KNOWN_NON_CLI_TOOL_NAMES.contains(&name) {
+            bail!(
+                "{name:?} is an MCP tool name / UI label, not a CLI subcommand or directory. To scan the current workspace run `deslop .` (or `deslop <path>`); the MCP tool form is exposed via the deslop-mcp server, not the CLI.",
+            );
+        }
+    }
+    if !path.exists() {
+        bail!(
+            "scan path {} does not exist. Pass a real directory (or no argument to scan the current working directory).",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// Parses `file` and writes the normalised AST dump to stdout.
@@ -450,7 +492,6 @@ fn configured_provider(
     }
     match args.embedding_provider.as_str() {
         DEFAULT_PROVIDER_ID => build_ollama_provider(args, mode),
-        STUB_PROVIDER_ID => Ok(Some(Box::new(StubProvider::new()))),
         other => bail!("unknown embedding provider {other:?}"),
     }
 }

@@ -55,8 +55,8 @@ internal class DeslopSettingsTest {
             Path.of("/workspace"),
             DeslopLaunchSettings(
                 minNodes = 42,
-                embeddingProvider = "stub",
-                embeddingModel = "blake3-stub",
+                embeddingProvider = "ollama",
+                embeddingModel = "nomic-embed-text",
                 embeddingEndpoint = "https://ollama.example.test",
                 embeddingMode = "auto",
                 incremental = false,

@@ -9,6 +9,7 @@
 
 pub mod api;
 pub mod clock;
+pub mod cluster_lookup;
 pub mod debouncer;
 pub mod embedding_refresh;
 pub mod errors;

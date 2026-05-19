@@ -19,13 +19,14 @@ use crate::{
 };
 
 use super::{
+    cluster_lookup::resolve_cluster_by_id_prefix,
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
         cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
         initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
-        stub_model_info, truncate, try_load_cached_report,
+        truncate, try_load_cached_report,
     },
     wire::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
@@ -464,18 +465,20 @@ impl AnalysisSession {
         collapse_overlapping_clusters_for_range(clusters, path, start_byte, end_byte)
     }
 
-    /// Looks up a cluster by its stable id.
+    /// Looks up a cluster by its stable id ([Deslop#149]).
+    ///
+    /// Accepts either the full 16-hex canonical id or any prefix of at
+    /// least 7 hex characters — the same slug the VSIX shows in hover
+    /// bubbles and tree rows via `clusterSlug()`. Falls back to the
+    /// shared [`resolve_cluster_by_id_prefix`] helper so the truncated-id
+    /// behaviour stays consistent across the live API and the MCP wire.
     ///
     /// # Errors
     ///
-    /// Returns [`LiveError::UnknownCluster`] when no cluster matches.
+    /// Returns [`LiveError::UnknownCluster`] when no cluster matches, the
+    /// prefix is shorter than the slug floor, or the prefix is ambiguous.
     pub fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError> {
-        self.latest_report
-            .clusters
-            .iter()
-            .find(|cluster| cluster.id == id)
-            .cloned()
-            .ok_or_else(|| LiveError::UnknownCluster { id: id.to_owned() })
+        resolve_cluster_by_id_prefix(&self.latest_report.clusters, id).cloned()
     }
 
     /// Queues a selected-model embedding refresh and returns the
@@ -530,13 +533,21 @@ impl AnalysisSession {
     }
 
     /// Lists embedding models available to the session.
+    ///
+    /// Returns models from every registered production provider. When
+    /// no production provider is reachable (e.g. Ollama not running),
+    /// returns an empty list — the VSIX surfaces the "Ollama not
+    /// detected" empty state without a stub fallback.
     #[must_use]
     pub fn list_embedding_models(endpoint: &str) -> Vec<EmbeddingModelInfo> {
-        let mut out = vec![stub_model_info()];
+        let mut out: Vec<EmbeddingModelInfo> = Vec::new();
         match crate::embedding::list_ollama_models(endpoint) {
             Ok(models) => append_ollama_models(&mut out, models),
             Err(error) => {
-                tracing::info!(%error, "ollama unreachable; returning stub-only model list");
+                tracing::info!(
+                    %error,
+                    "ollama_unreachable_no_models_returned",
+                );
             }
         }
         out

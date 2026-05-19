@@ -187,7 +187,7 @@ fn live_batch_yield(mode: EmbeddingMode) -> Option<Duration> {
 mod tests {
     use std::{path::Path, sync::Arc};
 
-    use deslop_core::{embedding::StubProvider, live::LiveService};
+    use deslop_core::{embedding::test_support::StubProvider, live::LiveService};
     use futures::StreamExt as _;
     use serde_json::{json, Value};
     use tower::Service as _;

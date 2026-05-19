@@ -10,6 +10,10 @@ description = "Deslop analysis engine — AST fingerprinting, clustering, rankin
 [features]
 default = []
 live = ["dep:notify", "dep:tokio", "dep:futures", "dep:async-trait"]
+# Enables `embedding::test_support::StubProvider` for downstream test
+# crates. Never enable in production binaries — the deterministic
+# BLAKE3 shim is not a product provider.
+test-support = []
 
 [dependencies]
 thiserror.workspace = true

@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use anyhow::{anyhow, bail, Context, Result};
 use deslop_core::{
-    embedding::{EmbeddingMode, StubProvider},
+    embedding::{test_support::StubProvider, EmbeddingMode},
     live::{
         AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest, LiveApi,
         LiveError, LiveService, LiveWatcher, Scheduler,
@@ -622,8 +622,14 @@ async fn exercise_error_paths(service: &LiveService, _first_id: &str) {
 
 /// Verifies the embedding model swap surface.
 async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
+    // Production listing returns no models when Ollama is unreachable.
+    // CI never has Ollama running, so the list must be empty (no stub
+    // fallback in production).
     let models = service.embedding_list_models().await;
-    assert!(models.iter().all(|m| m.provider_id == "stub"));
+    assert!(
+        models.is_empty(),
+        "production embedding listing must be empty when Ollama unreachable: {models:?}"
+    );
     // Install a progress reporter to verify Starting/Complete events
     // fire around the swap. The shared Vec records every event the
     // session emits through the reporter.
@@ -645,12 +651,13 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
         let mut guard = session_lock.lock().await;
         guard.set_embedding_progress_reporter(Some(reporter));
     }
-    let provenance = service
-        .embedding_set_model("stub", "blake3-stub", None)
-        .await?;
+    // Swap mechanism is exercised via the test-only `embedding_set_provider`
+    // hook (production callers use the registry-backed `embedding_set_model`).
+    let stub_provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
+    let provenance = service.embedding_set_provider(stub_provider).await?;
     assert!(
         provenance.is_none(),
-        "embedding_set_model must acknowledge queued work, not block until provenance exists"
+        "embedding_set_provider must acknowledge queued work, not block until provenance exists"
     );
     tokio::time::timeout(Duration::from_secs(5), completed.notified())
         .await
@@ -693,6 +700,22 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
         unknown,
         Err(LiveError::UnsupportedProvider { .. })
     ));
+    // [REMOVE-STUB] The deterministic BLAKE3 stub is not a production
+    // provider — selecting it via the production set-model surface
+    // must surface UnsupportedProvider.
+    let rejected_stub = service
+        .embedding_set_model("stub", "blake3-stub", None)
+        .await;
+    match rejected_stub {
+        Err(LiveError::UnsupportedProvider {
+            requested,
+            registered,
+        }) => {
+            assert_eq!(requested, "stub");
+            assert_eq!(registered, vec!["ollama".to_owned()]);
+        }
+        other => bail!("expected UnsupportedProvider for stub, got {other:?}"),
+    }
     Ok(())
 }
 
@@ -785,7 +808,10 @@ async fn exercise_path_resolution(service: &LiveService) -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn embedding_list_models_falls_back_to_stub_when_ollama_unreachable() -> Result<()> {
+async fn embedding_list_models_returns_empty_when_ollama_unreachable() -> Result<()> {
+    // [REMOVE-STUB] Production model listing must not include the stub
+    // fallback. When Ollama is unreachable the list is empty and the
+    // VSIX shows its "Ollama not detected" empty state.
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
     let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
@@ -795,12 +821,8 @@ async fn embedding_list_models_falls_back_to_stub_when_ollama_unreachable() -> R
     service.set_ollama_endpoint("http://127.0.0.1:1".to_owned());
     let models = service.embedding_list_models().await;
     assert!(
-        models.iter().any(|m| m.provider_id == "stub"),
-        "stub must always be in the list"
-    );
-    assert!(
-        models.iter().all(|m| m.provider_id == "stub"),
-        "ollama unreachable: only stub should appear"
+        models.is_empty(),
+        "production model list must be empty when Ollama unreachable: {models:?}"
     );
     Ok(())
 }
@@ -1046,9 +1068,11 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
         let mut guard = session.lock().await;
         guard.set_embedding_progress_reporter(Some(reporter));
     }
-    let _queued = service
-        .embedding_set_model("stub", "blake3-stub", None)
-        .await?;
+    // [REMOVE-STUB] The stub is no longer registered as a production
+    // provider, so swap it in directly via the test-only set-provider
+    // hook instead of going through `embedding_set_model`.
+    let stub_provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
+    let _queued = service.embedding_set_provider(stub_provider).await?;
     tokio::time::timeout(Duration::from_secs(10), completed.notified())
         .await
         .context("embedding refresh completion")?;

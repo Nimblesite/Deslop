@@ -1,6 +1,13 @@
 //! End-to-end regression coverage for issue #6's deterministic
 //! embedding-pass waste: duplicate subtree snippets must not all enter
 //! the ANN index.
+//!
+//! [REMOVE-STUB] The original test used the deterministic stub
+//! provider. Production no longer ships the stub, so we drive the
+//! same code path through an inline mock Ollama HTTP server.
+
+#[path = "cli/mock_ollama.rs"]
+mod mock_ollama;
 
 use std::{
     fs,
@@ -11,8 +18,11 @@ use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::Value;
 
+use crate::mock_ollama::MockOllama;
+
 #[test]
 fn duplicate_subtree_embeddings_are_collapsed_before_ann() -> Result<()> {
+    let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     write_duplicate_fixture(&scan_root, 8)?;
@@ -26,7 +36,11 @@ fn duplicate_subtree_embeddings_are_collapsed_before_ann() -> Result<()> {
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-provider")
-        .arg("stub")
+        .arg("ollama")
+        .arg("--embedding-model")
+        .arg("nomic-embed-text")
+        .arg("--embedding-endpoint")
+        .arg(server.endpoint())
         .assert()
         .success();
     let provenance = embedding_provenance(tmp.path())?;

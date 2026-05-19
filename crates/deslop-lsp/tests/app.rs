@@ -167,7 +167,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
         nice: 0,
         embedding: LspEmbeddingConfig {
             mode: EmbeddingMode::Required,
-            provider_id: "stub".to_owned(),
+            provider_id: "ollama".to_owned(),
             model_id: "async-model".to_owned(),
             endpoint: "http://127.0.0.1:1234".to_owned(),
         },
@@ -189,7 +189,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
     assert_eq!(observed.workspace_root, PathBuf::from("/tmp/deslop-async"));
     assert_eq!(observed.min_nodes, 11);
     assert_eq!(observed.embedding.mode, EmbeddingMode::Required);
-    assert_eq!(observed.embedding.provider_id, "stub");
+    assert_eq!(observed.embedding.provider_id, "ollama");
     assert_eq!(observed.embedding.model_id, "async-model");
     assert_eq!(observed.embedding.endpoint, "http://127.0.0.1:1234");
     Ok(())
@@ -243,7 +243,7 @@ fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
         "unsupported LSP startup flag",
     )?;
     assert_error_contains(
-        ["deslop-lsp", "/tmp/ws", "--embedding-provider", "stub"],
+        ["deslop-lsp", "/tmp/ws", "--embedding-provider", "ollama"],
         "unsupported LSP startup flag",
     )?;
     assert_error_contains(

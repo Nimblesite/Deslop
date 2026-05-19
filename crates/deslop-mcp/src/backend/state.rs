@@ -315,7 +315,9 @@ impl McpBackend for LiveBackend {
         _model_id: &str,
         _endpoint: Option<&str>,
     ) -> Result<EmbeddingSpec, BackendError> {
-        Err(BackendError::LspNotRunning)
+        Err(BackendError::LspNotRunning {
+            socket_path: self.ipc_socket.clone(),
+        })
     }
 
     fn session_config(&self) -> Result<SessionConfigSnapshot, BackendError> {
@@ -333,7 +335,7 @@ impl McpBackend for LiveBackend {
     fn mark_changed(&self, _paths: &[PathBuf]) -> Result<RescanProgress, BackendError> {
         let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
             Ok(result) => result,
-            Err(BackendError::LspNotRunning) => {
+            Err(BackendError::LspNotRunning { .. }) => {
                 return Ok(empty_rescan_progress(
                     self.generation.load(Ordering::Relaxed),
                 ))
