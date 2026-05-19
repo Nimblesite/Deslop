@@ -52,6 +52,28 @@
 //! - **#147** — `xs.iter().map(|x| x.field.as_str()).collect()` is a
 //!   pure language idiom that clusters across unrelated element types.
 //!   Extracting it would require a cross-crate trait, not deduplication.
+//! - **#115a** [CLONE-NOISE-PY-STRENUM-CLASS-SHAPE] — `class X(StrEnum)`
+//!   declarations carry an identical docstring + assignment body shape
+//!   but each enum is a closed discriminator with distinct vocabulary.
+//! - **#115b** [CLONE-NOISE-PY-PYDANTIC-PARTIAL] — Pydantic's
+//!   `XCreate` / `XUpdate` mirror is mandated by the framework's lack
+//!   of a native `PartialModel`.
+//! - **#115c** [CLONE-NOISE-PY-WORKSPACE-LOCAL-MIRROR] — out of scope
+//!   for a generic filter. The cross-tree duplication between
+//!   `src/agent_backend/api/schemas.py` and a sandboxed
+//!   `workspaces/.../dispatcher.py` is mandated by the workspace's
+//!   inability to import from the backend. The architectural intent
+//!   is invisible to the analyser, so users suppress the FP via
+//!   `.deslop.toml` `[language.python] exclude = ["workspaces/.../*"]`
+//!   (the existing config exclude already supports this).
+//! - **#97**  [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] — `def
+//!   test_register_<variant>()` tests that vary only by enum-member
+//!   access tokens are spec assertions, not extractable duplication.
+//! - **#154** [CLONE-NOISE-SIGNATURE-ONLY] — every cluster member's
+//!   matched subtree is the *signature* (parameter list, return type) of
+//!   a function, never the body. After normalisation these collapse to
+//!   identical shape but the bodies are unrelated. Token Jaccard cannot
+//!   refute the match because identifiers normalise away too.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -60,6 +82,7 @@
 
 mod calls;
 mod python;
+mod python_class_shapes;
 mod python_idioms;
 mod python_orm;
 mod rust;
@@ -88,6 +111,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         return false;
     };
     is_polymorphic_signature_cluster(&snippets)
+        || is_signature_only_cluster(&snippets)
         || rust::is_rust_language_parser_adapter_cluster(&snippets)
         || python_idioms::is_generated_template_output_cluster(&snippets)
         || python_idioms::is_jwt_hmac_independent_verifier_cluster(&snippets)
@@ -100,6 +124,9 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         || python_orm::is_sqlalchemy_mapped_column_cluster(&snippets)
         || python::is_test_dict_literal_cluster(&snippets)
         || python::is_pytest_fixture_boilerplate_cluster(&snippets)
+        || python_class_shapes::is_strenum_class_shape_cluster(&snippets)
+        || python_class_shapes::is_pydantic_partial_update_cluster(&snippets)
+        || python::is_parametric_invariant_test_cluster(&snippets)
         || rust::is_rust_top_level_decl_cluster(&snippets)
         || rust::is_rust_iter_collect_idiom_cluster(&snippets)
 }
@@ -218,6 +245,72 @@ fn collect_snippets<'a>(
             })
         })
         .collect()
+}
+
+/// Detects **issue #154** [CLONE-NOISE-SIGNATURE-ONLY]: every cluster
+/// member's matched subtree sits entirely inside a function/method
+/// signature — it does not overlap the body. After identifier and
+/// literal normalisation, `fn check_foo(ctx: &mut Ctx)` collapses to
+/// the same shape as `fn check_bar(ctx: &mut Ctx)`, so the structural
+/// fingerprint is 1.0 but the function bodies are unrelated. Token
+/// Jaccard cannot refute the match because identifier normalisation
+/// erases the distinguishing tokens too.
+///
+/// We suppress these clusters only when at least two of the enclosing
+/// function bodies differ in raw source bytes. A real Type-2 clone
+/// where two functions share the same signature and body would have
+/// identical body bytes, so this check keeps genuine duplication.
+fn is_signature_only_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 {
+        return false;
+    }
+    let shapes: Option<Vec<Vec<String>>> = snippets
+        .iter()
+        .map(snippet_body_shape_when_signature_only)
+        .collect();
+    let Some(shapes) = shapes else { return false };
+    let Some(first) = shapes.first() else {
+        return false;
+    };
+    shapes.iter().any(|shape| shape != first)
+}
+
+/// Returns the enclosing function body's AST node-kind sequence when
+/// `snippet.range` lies entirely inside that function's signature
+/// (before the body) — the signature-only match condition for
+/// [CLONE-NOISE-SIGNATURE-ONLY]. The node-kind sequence is the
+/// flattened, ordered list of every named descendant's kind so two
+/// bodies that share AST shape (and differ only by literals/identifiers)
+/// compare equal — i.e. a legitimate near-miss cluster keeps clustering.
+/// Returns `None` when the snippet is not contained in a function, when
+/// the function has no `body` field, or when the range intersects the
+/// body in any way.
+fn snippet_body_shape_when_signature_only(snippet: &Snippet<'_>) -> Option<Vec<String>> {
+    let tree = parse_for(snippet)?;
+    let function = enclosing_kind(
+        tree.root_node(),
+        snippet.range,
+        function_kinds(snippet.language),
+    )?;
+    let body = function.child_by_field_name("body")?;
+    if snippet.range.end > body.start_byte() {
+        return None;
+    }
+    let mut kinds: Vec<String> = Vec::new();
+    collect_named_kinds(body, &mut kinds);
+    Some(kinds)
+}
+
+/// Pushes every named descendant's `kind` into `kinds` in source order.
+/// Used by [`snippet_body_shape_when_signature_only`] so cluster members
+/// whose bodies share AST shape compare equal regardless of literal or
+/// identifier divergence.
+fn collect_named_kinds(node: Node<'_>, kinds: &mut Vec<String>) {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        kinds.push(child.kind().to_owned());
+        collect_named_kinds(child, kinds);
+    }
 }
 
 /// Detects **issue #69**: every cluster member is a function definition
