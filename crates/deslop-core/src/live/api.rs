@@ -173,13 +173,15 @@ impl LiveService {
 #[async_trait]
 impl LiveApi for LiveService {
     async fn report_get(&self) -> Arc<Report> {
-        let guard = self.inner.lock().await;
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
         guard.report()
     }
 
     async fn report_delta(&self, since: u64) -> Option<ReportDelta> {
         let (current_gen, current_report) = {
-            let guard = self.inner.lock().await;
+            let mut guard = self.inner.lock().await;
+            guard.refresh_if_stale();
             (guard.generation(), guard.report())
         };
         if since == current_gen {
@@ -198,7 +200,8 @@ impl LiveApi for LiveService {
     }
 
     async fn report_for_file(&self, path: &Path) -> FileReport {
-        let guard = self.inner.lock().await;
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
         guard.report_for_file(path)
     }
 
@@ -208,12 +211,14 @@ impl LiveApi for LiveService {
         start_byte: usize,
         end_byte: usize,
     ) -> Vec<ReportCluster> {
-        let guard = self.inner.lock().await;
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
         guard.report_for_range(path, start_byte, end_byte)
     }
 
     async fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError> {
-        let guard = self.inner.lock().await;
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
         guard.cluster_by_id(id)
     }
 
@@ -221,7 +226,8 @@ impl LiveApi for LiveService {
         &self,
         request: &FindSimilarRequest,
     ) -> Result<FindSimilarResult, LiveError> {
-        let guard = self.inner.lock().await;
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
         guard.find_similar(request)
     }
 

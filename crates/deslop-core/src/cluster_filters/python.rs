@@ -13,6 +13,8 @@
 //! - **#112** [CLONE-NOISE-PY-DICT-FIXTURE] — small nested-dict literals
 //!   across pytest fixture files.
 //! - **#121** [CLONE-NOISE-PY-PYTEST-FIXTURE] — pytest fixture boilerplate.
+//! - **#97**  [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] — `test_*`
+//!   bodies that vary only by enum-member access (`X.K8S` vs `X.DOCKER`).
 
 use std::collections::BTreeSet;
 
@@ -380,4 +382,122 @@ fn dict_literal_key_sets_differ(shapes: &[DictLiteralShape]) -> bool {
         return false;
     };
     shapes.iter().any(|shape| shape.keys != first.keys)
+}
+
+/// Detects **issue #97**: every cluster occurrence is fully enclosed by
+/// a `test_*` pytest function AND every occurrence contains at least
+/// one `Capitalised.UPPER_SNAKE` enum-member access token. Each test
+/// name records a distinct spec assertion; collapsing the cluster would
+/// silently lose coverage granularity even when the Type-2 normalised
+/// bodies are identical across unrelated discriminators.
+pub(super) fn is_parametric_invariant_test_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+        return false;
+    }
+    snippets.iter().all(snippet_inside_parametric_test)
+}
+
+/// Returns true when `snippet` lives inside a pytest `test_*` function
+/// AND its byte range carries at least one `Capitalised.UPPER_SNAKE`
+/// enum-member access token. The enum signal guards against suppressing
+/// genuine non-parametric copy-paste inside test files.
+fn snippet_inside_parametric_test(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
+    let Some(function) = enclosing_kind(tree.root_node(), range, &["function_definition"]) else {
+        return false;
+    };
+    if !python_function_name_starts_with(function, snippet.source, b"test_") {
+        return false;
+    }
+    let Some(text) = snippet.source.get(range.start..range.end) else {
+        return false;
+    };
+    contains_enum_member_access_token(text)
+}
+
+/// Returns true when `text` contains at least one `Capitalised.UPPER_SNAKE`
+/// token (e.g. `Kind.K8S`). Scans bytes only — never regex on source.
+fn contains_enum_member_access_token(text: &[u8]) -> bool {
+    (0..text.len()).any(|index| consume_enum_access_at(text, index).is_some())
+}
+
+/// Tries to consume a `Capitalised.UPPER_SNAKE` token at `index`,
+/// returning the number of bytes consumed when matched.
+fn consume_enum_access_at(body: &[u8], index: usize) -> Option<usize> {
+    if !at_token_boundary(body, index) {
+        return None;
+    }
+    let prefix_len = identifier_run_len(body, index)?;
+    if !ident_starts_capitalised(body, index) {
+        return None;
+    }
+    let dot = index.checked_add(prefix_len)?;
+    if body.get(dot).copied() != Some(b'.') {
+        return None;
+    }
+    let suffix_start = dot.checked_add(1)?;
+    let suffix_len = identifier_run_len(body, suffix_start)?;
+    if !ident_is_upper_snake(body, suffix_start, suffix_len) {
+        return None;
+    }
+    prefix_len.checked_add(1)?.checked_add(suffix_len)
+}
+
+/// Returns true when the previous byte is not an identifier-continuation
+/// byte — i.e. `index` sits at the start of a fresh token.
+fn at_token_boundary(body: &[u8], index: usize) -> bool {
+    if index == 0 {
+        return true;
+    }
+    let previous = index.checked_sub(1).and_then(|prev| body.get(prev));
+    previous.is_some_and(|byte| !is_ident_cont(*byte))
+}
+
+/// Returns the length of the contiguous identifier-byte run starting at
+/// `start`, or `None` when no identifier byte sits there.
+fn identifier_run_len(body: &[u8], start: usize) -> Option<usize> {
+    if start >= body.len() {
+        return None;
+    }
+    let first = *body.get(start)?;
+    if !is_ident_start(first) {
+        return None;
+    }
+    let mut end = start.checked_add(1)?;
+    while end < body.len() && body.get(end).is_some_and(|byte| is_ident_cont(*byte)) {
+        end = end.checked_add(1)?;
+    }
+    end.checked_sub(start)
+}
+
+/// ASCII identifier-start predicate (letters and `_`).
+fn is_ident_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+/// ASCII identifier-continuation predicate (letters, digits, `_`).
+fn is_ident_cont(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Returns true when the identifier byte at `start` is an ASCII
+/// uppercase letter.
+fn ident_starts_capitalised(body: &[u8], start: usize) -> bool {
+    body.get(start).is_some_and(u8::is_ascii_uppercase)
+}
+
+/// Returns true when the identifier at `[start, start+len)` consists of
+/// uppercase ASCII letters, digits, or underscores, with at least one
+/// uppercase letter present.
+fn ident_is_upper_snake(body: &[u8], start: usize, len: usize) -> bool {
+    let Some(slice) = body.get(start..start.saturating_add(len)) else {
+        return false;
+    };
+    slice.iter().any(u8::is_ascii_uppercase)
+        && slice
+            .iter()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || *byte == b'_')
 }

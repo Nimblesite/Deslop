@@ -22,6 +22,7 @@ use super::{
     cluster_lookup::resolve_cluster_by_id_prefix,
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
+    freshness::FreshnessTracker,
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
         cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
@@ -92,6 +93,11 @@ pub struct AnalysisSession {
     embedding_progress_reporter: Option<EmbeddingProgressReporter>,
     /// Monotonic id for queued embedding refreshes.
     embedding_refresh_revision: u64,
+    /// Mtime ledger consulted before every IPC read
+    /// ([LIVE-READ-FRESHNESS], [Deslop#153], [Deslop#156]). Refreshed
+    /// after every analysis pass so a stale-mtime read forces a
+    /// synchronous `apply_changes` ahead of serving the response.
+    freshness: FreshnessTracker,
 }
 
 impl std::fmt::Debug for AnalysisSession {
@@ -209,6 +215,11 @@ impl AnalysisSession {
         self.pipeline = Some(pipeline);
         self.generation = self.generation.saturating_add(1);
         self.latest_report = Arc::new(report);
+        // [LIVE-READ-FRESHNESS] / [Deslop#153] Record the on-disk mtime
+        // of every file in the freshly-installed report so the next
+        // read does not falsely refire a refresh.
+        self.freshness
+            .record_from_report(&self.root, &self.latest_report);
         let pending = std::mem::take(&mut self.pending_changes);
         if !pending.is_empty() {
             let _delta = self.apply_changes(&pending)?;
@@ -276,6 +287,8 @@ impl AnalysisSession {
 
     /// Assembles the session struct.
     fn finalise(init: SessionInit) -> Self {
+        let mut freshness = FreshnessTracker::new();
+        freshness.record_from_report(&init.root, &init.report);
         Self {
             root: init.root,
             min_nodes: init.min_nodes,
@@ -289,6 +302,7 @@ impl AnalysisSession {
             config_path: init.config_path,
             embedding_progress_reporter: None,
             embedding_refresh_revision: 0,
+            freshness,
         }
     }
 
@@ -376,6 +390,10 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.latest_report = Arc::clone(&next_arc);
+        // [LIVE-READ-FRESHNESS] Refresh the mtime ledger so a follow-up
+        // read of the same files does not re-trigger this same pass.
+        self.freshness
+            .record_from_report(&self.root, &self.latest_report);
         // Per-keystroke writes were the dominant source of inotify
         // chatter on large workspaces. The seed-cache file is now
         // persisted only on cold-pass install ([LIVE-SEED-CACHE]); the
@@ -385,6 +403,43 @@ impl AnalysisSession {
             self.generation,
             &next_arc,
         ))
+    }
+
+    /// [LIVE-READ-FRESHNESS] / [Deslop#153] / [Deslop#156].
+    ///
+    /// Detects files whose on-disk mtime is newer than what the
+    /// analyser last observed, and runs a synchronous
+    /// [`Self::apply_changes`] pass for those paths before any IPC
+    /// read serves cluster occurrences. The cost is one `stat` per
+    /// occurrence path per read — well under a millisecond even on
+    /// monorepo-scale workspaces — and it eliminates the stale-data
+    /// window between a synchronous edit and the next debounced
+    /// watcher tick.
+    ///
+    /// Failures are logged but never propagated: a stale-data read
+    /// is bad, but a failed read is worse. The caller continues with
+    /// whatever the previous pass produced.
+    pub fn refresh_if_stale(&mut self) {
+        let stale = self
+            .freshness
+            .detect_stale_paths(&self.root, &self.latest_report);
+        if stale.is_empty() {
+            return;
+        }
+        tracing::debug!(
+            stale_count = stale.len(),
+            "live_read_freshness_apply_changes",
+        );
+        match self.apply_changes(&stale) {
+            Ok(_delta) => {}
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    stale_count = stale.len(),
+                    "live_read_freshness_refresh_failed; serving prior snapshot",
+                );
+            }
+        }
     }
 
     /// Resolves a `find_similar` request.
@@ -523,6 +578,10 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.latest_report = Arc::new(report);
+        // [LIVE-READ-FRESHNESS] keep the mtime ledger aligned with the
+        // freshly-committed report so reads do not loop-refire.
+        self.freshness
+            .record_from_report(&self.root, &self.latest_report);
         // Embedding refresh writes are still per-pass and noisy; seed
         // cache only updates on cold-pass install.
         Some(CommittedEmbeddingRefresh {

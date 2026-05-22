@@ -13,6 +13,7 @@ pub mod cluster_lookup;
 pub mod debouncer;
 pub mod embedding_refresh;
 pub mod errors;
+pub mod freshness;
 pub mod notifications;
 pub mod scheduler;
 pub mod session;
