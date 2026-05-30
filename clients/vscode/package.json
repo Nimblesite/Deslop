@@ -33,9 +33,11 @@
     "onLanguage:csharp",
     "onLanguage:rust",
     "onLanguage:python",
+    "onLanguage:dart",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
-    "workspaceContains:**/*.py"
+    "workspaceContains:**/*.py",
+    "workspaceContains:**/*.dart"
   ],
   "contributes": {
     "commands": [
