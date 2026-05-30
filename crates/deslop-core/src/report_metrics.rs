@@ -189,7 +189,13 @@ fn occurrence_is_hidden<S: BuildHasher>(file_id: FileId, inputs: &MetricsInputs<
         return false;
     };
     let language = inputs.file_languages.get(&file_id).copied().unwrap_or("");
-    inputs.exclusion.is_report_hidden(path, language)
+    if inputs.exclusion.is_report_hidden(path, language) {
+        return true;
+    }
+    inputs
+        .sources
+        .get(&file_id)
+        .is_some_and(|source| crate::config::has_generated_header(source))
 }
 
 /// Converts a half-open `[start, end)` byte range into a closed

@@ -7,11 +7,18 @@
 //!   - Type-2 renamed clones reach `structural = 1.0` AND
 //!     `token_jaccard = 1.0` (identical k-gram sets after Dart
 //!     normalisation collapse identifiers/literals).
-//!   - A whole-function near-miss still produces a cross-file cluster
-//!     with `token_jaccard > 0` via the shared sub-structures — proving
-//!     the `MinHash` signature path is wired for Dart tokens.
+//!   - A whole-function near-miss still produces a genuine cross-file
+//!     cluster with `structural = 1.0` on the shared sub-structures —
+//!     proving the Dart structural fingerprint path detects Type-3
+//!     near-misses across files, while the signature-only sibling match
+//!     is correctly suppressed ([CLONE-NOISE-SIGNATURE-ONLY], #154).
 //!   - `token_jaccard` is bit-identical across process restarts
 //!     (deterministic signatures).
+//!   - False-positive regression guards proving the language-agnostic
+//!     filters are wired for Dart: generated `*.g.dart`/`*.freezed.dart`
+//!     self-duplication is hidden (#95) while hand-written clones still
+//!     surface, `export`/`import` barrels are not flagged (#96/#150/#155),
+//!     and signature-only structural matches are suppressed (#154).
 
 use std::{fs, path::Path, path::PathBuf};
 
@@ -121,34 +128,45 @@ fn dart_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
     Ok(())
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] Two Dart functions sharing structural
-// subtrees (`_ = _ + _`, `if (_ < _) return _;`) must produce a
-// cross-file cluster with `token_jaccard > 0`.
+// [FUSION-SIGNALS-THREE-LAYER] Two Dart functions sharing control-flow
+// sub-structure (`if (_ < _) { return _; }`, `for (...) { _ = _ + _; }`)
+// but differing in body length are a genuine Type-3 near-miss. The shared
+// subtrees must surface as a cross-file cluster with `structural = 1.0`,
+// proving the Dart structural fingerprint path detects near-misses across
+// files.
 //
 // delta.dart: accumulate() runs `running + step` AND `running + 2` per
 // iteration. epsilon.dart: aggregate() runs only `accumulator + cursor`.
-// Despite the whole-function structural difference, the shared
-// sub-structures are compared via the Dart MinHash signature path — a
-// broken signature pipeline (garbage output or wrong per-file tree)
-// would collapse the cross-file cluster or zero its Jaccard.
+// The signature-only sibling match — the two `int f(int)` headers, whose
+// bodies differ — is a known false positive ([CLONE-NOISE-SIGNATURE-ONLY],
+// #154) and is correctly suppressed; it must NOT be what carries the
+// cluster, so we require a genuine `structural = 1.0` body match.
 #[test]
-fn dart_multi_file_corpus_produces_cross_file_cluster_with_positive_token_jaccard() -> Result<()> {
+fn dart_near_miss_produces_genuine_cross_file_structural_cluster() -> Result<()> {
     let report = run_cli("dart-type3", 8)?;
     let clusters = clusters(&report);
     let cross_file = clusters
         .iter()
-        .find(|cluster| spans_both(cluster, "delta.dart", "epsilon.dart") && signal(cluster, "token_jaccard") > 0.0);
+        .find(|cluster| spans_both(cluster, "delta.dart", "epsilon.dart"));
     let Some(cluster) = cross_file else {
         anyhow::bail!(
-            "dart-type3 must produce a cross-file cluster spanning delta.dart and epsilon.dart \
-             with token_jaccard > 0; got clusters: {clusters:#?}"
+            "dart-type3 must produce a cross-file cluster spanning delta.dart and \
+             epsilon.dart; got clusters: {clusters:#?}"
         );
     };
-    let token_jaccard = signal(cluster, "token_jaccard");
+    let structural = signal(cluster, "structural");
     assert!(
-        token_jaccard > 0.0,
-        "cross-file Dart cluster must have token_jaccard > 0.0 (the MinHash signature path \
-         must produce meaningful signatures for shared Dart subtrees), got {token_jaccard}",
+        is_exact_one(structural),
+        "the cross-file Dart near-miss cluster must reach structural = 1.0 on the shared \
+         subtree (genuine Type-3 detection via the structural path), got {structural}",
+    );
+    let occurrences = cluster
+        .pointer("/occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    assert!(
+        occurrences >= 2,
+        "a clone cluster must have at least two occurrences, got {occurrences}",
     );
     Ok(())
 }
@@ -193,6 +211,106 @@ fn dart_token_jaccard_is_deterministic_across_runs() -> Result<()> {
     assert_eq!(
         jaccards1, jaccards2,
         "token_jaccard values must be bit-identical across runs on the same Dart corpus",
+    );
+    Ok(())
+}
+
+/// True when any cluster in the report spans both named files. Hidden
+/// clusters are dropped before serialisation, so every cluster here is
+/// one a human is actually shown.
+fn any_cluster_spans(report: &serde_json::Value, left: &str, right: &str) -> bool {
+    clusters(report)
+        .iter()
+        .any(|cluster| spans_both(cluster, left, right))
+}
+
+/// Count of clusters the renderer analysed but hid from the ranked report.
+fn clusters_hidden(report: &serde_json::Value) -> u64 {
+    report
+        .pointer("/clusters_hidden")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
+}
+
+// [EXCLUSION-CONFIG] #95 — Dart code generators (`*.g.dart`,
+// `*.freezed.dart`, …) emit near-identical serialisation blocks that
+// self-duplicate across every annotated type. They must be hidden from the
+// ranked report (still analysed, never surfaced). The suppression must stay
+// targeted: `dart-generated-files` pairs two identical `.g.dart` files with
+// two identical hand-written parsers — only the generated pair may vanish.
+#[test]
+fn dart_generated_files_are_hidden_but_handwritten_clones_surface() -> Result<()> {
+    let report = run_cli("dart-generated-files", 10)?;
+    assert!(
+        !any_cluster_spans(&report, "serializers.g.dart", "models.g.dart"),
+        "generated `.g.dart` files must not surface as a ranked duplicate cluster",
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the generated-file cluster must be actively hidden, not merely absent",
+    );
+    assert!(
+        any_cluster_spans(&report, "parser_alpha.dart", "parser_beta.dart"),
+        "hand-written duplicates must still surface even when generated files are hidden",
+    );
+    Ok(())
+}
+
+// [PIPELINE-BOILERPLATE-FILTER] #96 / #150 / #155 — Dart `export`/`import`
+// barrel files are top-level scaffolding, never duplicate logic. Two
+// export-only barrels share the identical directive shape but must never be
+// reported as a clone of one another.
+#[test]
+fn dart_export_barrels_are_not_flagged_as_duplicates() -> Result<()> {
+    let report = run_cli("dart-export-barrel", 8)?;
+    assert!(
+        !any_cluster_spans(&report, "widgets.dart", "models.dart"),
+        "Dart export barrels are import scaffolding and must not cluster as duplicates",
+    );
+    Ok(())
+}
+
+// [CLONE-NOISE-SIGNATURE-ONLY] #154 — after identifier/literal
+// normalisation two functions with the same parameter shape collapse to the
+// same signature even when their bodies are unrelated. Such a signature-only
+// match (bodies differ in raw bytes) is a false positive and must be
+// suppressed. `dart-signature-only` shares the header
+// `int computeScore(Map<String, int>, List<String>)` across two functions
+// with entirely different bodies.
+#[test]
+fn dart_signature_only_match_with_differing_bodies_is_suppressed() -> Result<()> {
+    let report = run_cli("dart-signature-only", 8)?;
+    assert!(
+        !any_cluster_spans(&report, "alpha.dart", "beta.dart"),
+        "a signature-only structural match with differing bodies must be suppressed for Dart",
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the signature-only match must be actively suppressed (#154), not merely absent",
+    );
+    Ok(())
+}
+
+// [EXCLUSION-CONFIG] #95 — generators that emit no stable file suffix
+// (ffigen/jnigen name FFI output `*_bindings.dart`) are still recognised by
+// the machine-generated banner in the file head and hidden. Both fixture
+// files are byte-identical generated code carrying `AUTO GENERATED FILE,
+// DO NOT EDIT.` but no `.g.dart` suffix, so only the header check can hide
+// them — exactly the dart-lang/http FFI-binding case from the real-repo sweep.
+#[test]
+fn dart_generated_header_files_are_hidden_without_a_suffix() -> Result<()> {
+    let report = run_cli("dart-generated-header", 8)?;
+    assert!(
+        !any_cluster_spans(
+            &report,
+            "native_alpha_bindings.dart",
+            "native_beta_bindings.dart"
+        ),
+        "banner-marked generated files (no `.g.dart` suffix) must still be hidden",
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the banner-marked generated clone must be actively hidden, not merely absent",
     );
     Ok(())
 }

@@ -81,10 +81,10 @@ suite("TopOffendersProvider", () => {
     const descriptions = nodes.map((node) => String(node.description ?? ""));
 
     assert.equal(nodes.length, 4, "one top-level row must render per cluster");
-    assert.ok(labels[0]?.startsWith("1111aaa "), `worst row leads with its slug, got: ${labels[0]}`);
-    assert.ok(labels[1]?.startsWith("2222aaa "), `row 2 leads with its slug, got: ${labels[1]}`);
-    assert.ok(labels[2]?.startsWith("3333aaa "), `row 3 leads with its slug, got: ${labels[2]}`);
-    assert.ok(labels[3]?.startsWith("4444aaa "), `row 4 leads with its slug, got: ${labels[3]}`);
+    assert.ok(labels[0]?.startsWith("1111aaa "), `worst row leads with its slug, got: ${labels[0] ?? "<missing>"}`);
+    assert.ok(labels[1]?.startsWith("2222aaa "), `row 2 leads with its slug, got: ${labels[1] ?? "<missing>"}`);
+    assert.ok(labels[2]?.startsWith("3333aaa "), `row 3 leads with its slug, got: ${labels[2] ?? "<missing>"}`);
+    assert.ok(labels[3]?.startsWith("4444aaa "), `row 4 leads with its slug, got: ${labels[3] ?? "<missing>"}`);
     assert.match(labels[0] ?? "", /Beta\.cs/, "row label must show the file");
     assert.match(labels[1] ?? "", /Alpha\.cs/);
     assert.match(labels[2] ?? "", /Alpha\.cs/);

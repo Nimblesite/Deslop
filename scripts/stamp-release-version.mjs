@@ -11,6 +11,12 @@ const nodeProjects = [
   "clients/vscode/webview-ui",
   "site",
 ];
+// The VS Code Marketplace forbids SemVer prerelease/build suffixes in the
+// extension version field, so the VSIX package (clients/vscode/package.json
+// and its lockfile) carries the core MAJOR.MINOR.PATCH only. Every other
+// project keeps the full version; prerelease status is conveyed by the
+// `--pre-release` flag at publish time. Spec: [DEPLOY-VSCE-MARKETPLACE].
+const marketplaceProjects = new Set(["clients/vscode"]);
 const stagedDeploymentManifests = ["clients/vscode/shipwright.json"];
 
 const { root, version } = parseArgs(process.argv.slice(2));
@@ -26,7 +32,12 @@ export function stampReleaseVersion(rootPath, versionValue) {
     const manifestPath = join(rootPath, manifest);
     if (existsSync(manifestPath)) stampDeploymentManifest(manifestPath, versionValue);
   }
-  for (const project of nodeProjects) stampNodeProject(join(rootPath, project), versionValue);
+  for (const project of nodeProjects) {
+    const projectVersion = marketplaceProjects.has(project)
+      ? marketplaceVersion(versionValue)
+      : versionValue;
+    stampNodeProject(join(rootPath, project), projectVersion);
+  }
 }
 
 function stampCargoToml(filePath, versionValue) {
@@ -116,6 +127,10 @@ function readJson(filePath) {
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function marketplaceVersion(versionValue) {
+  return versionValue.split(/[-+]/, 1)[0];
 }
 
 function assertSemver(value) {

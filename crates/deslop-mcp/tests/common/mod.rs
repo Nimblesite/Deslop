@@ -29,7 +29,16 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// Copies the C# MCP fixture into a writable temp dir so the LSP can
 /// write to `.deslop-cache/`.
 pub fn copied_fixture() -> Result<TempDir> {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/csharp-mcp");
+    copied_fixture_named("csharp-mcp")
+}
+
+/// Copies the named `tests/fixtures/<name>` directory into a writable temp
+/// dir so the LSP can write to `.deslop-cache/`. Lets MCP wire tests run
+/// against any language fixture, not just the C# one.
+pub fn copied_fixture_named(name: &str) -> Result<TempDir> {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name);
     let dst = TempDir::new()?;
     copy_dir(&src, dst.path())?;
     let cache = dst.path().join(".deslop-cache");

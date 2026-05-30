@@ -57,21 +57,9 @@
       },
       "sources": [
         "user-setting",
-        "env",
-        "bundled",
-        "path",
-        "cargo-bin",
-        "github-release"
+        "bundled"
       ],
       "userSetting": "deslop.lspPath",
-      "env": {
-        "pathVar": "DESLOP_LSP_PATH",
-        "dirVar": "DESLOP_BINARY_DIR"
-      },
-      "githubRelease": {
-        "repo": "Nimblesite/Deslop",
-        "assetPattern": "deslop-lsp-${version}-${platform}.tar.gz"
-      },
       "verifyStartup": true,
       "versionCheckStrategy": "version-flag",
       "required": true
@@ -95,21 +83,9 @@
       },
       "sources": [
         "user-setting",
-        "env",
-        "bundled",
-        "path",
-        "cargo-bin",
-        "github-release"
+        "bundled"
       ],
       "userSetting": "deslop.mcpPath",
-      "env": {
-        "pathVar": "DESLOP_MCP_PATH",
-        "dirVar": "DESLOP_BINARY_DIR"
-      },
-      "githubRelease": {
-        "repo": "Nimblesite/Deslop",
-        "assetPattern": "deslop-mcp-${version}-${platform}.tar.gz"
-      },
       "verifyStartup": true,
       "versionCheckStrategy": "version-flag",
       "required": true

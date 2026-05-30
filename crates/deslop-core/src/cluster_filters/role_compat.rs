@@ -98,6 +98,12 @@ const fn type_kinds(language: &str) -> &'static [&'static str] {
             "impl_item",
             "union_item",
         ],
+        b"dart" => &[
+            "class_declaration",
+            "mixin_declaration",
+            "enum_declaration",
+            "extension_declaration",
+        ],
         _ => &[],
     }
 }

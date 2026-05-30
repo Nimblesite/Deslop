@@ -54,3 +54,35 @@ gh repo view Nimblesite/Shipwright --json nameWithOwner,isPrivate,url,defaultBra
 When Deslop changes its deployment contract, update the private toolkit fixtures
 for `fixtures/manifests/deslop.json` and the Rust version-output fixtures in the
 same release workflow.
+
+## Distribution channels
+
+A `v*` tag fans out to every channel from one workflow
+(`.github/workflows/release.yml`):
+
+- **VS Code Marketplace** — `publish-marketplace` runs one `vsce publish` per
+  platform-specific VSIX. The PAT lives in the `VSCE_PAT` secret (Marketplace →
+  Manage scope). The Marketplace forbids a SemVer prerelease suffix in the
+  version field, so `stamp-release-version.mjs` stamps the VSIX
+  (`clients/vscode/package.json` + lockfile) with the core `MAJOR.MINOR.PATCH`
+  while every other project keeps the full tag version; a hyphenated tag is
+  published with `--pre-release`.
+- **Homebrew tap** — `publish-homebrew` renders `Formula/deslop.rb` and pushes
+  to `Nimblesite/homebrew-tap` (secret `HOMEBREW_TAP_TOKEN`).
+- **Scoop bucket** — `publish-scoop` renders `bucket/deslop.json` and pushes to
+  `Nimblesite/scoop-bucket` (secret `SCOOP_BUCKET_TOKEN`).
+- **GitHub release** — `release` uploads every platform archive, the VSIXes, and
+  `SHA256SUMS`.
+
+## Binary resolution — bundled, no fallback
+
+The VSIX bundles `deslop`, `deslop-lsp`, and `deslop-mcp` per platform under
+`bin/<platform>/`. The editor host resolves `deslop-lsp`/`deslop-mcp` from
+exactly two sources, in order: the user override
+(`deslop.lspPath` / `deslop.mcpPath`) and then the bundled binary. There is no
+PATH, env-var, cargo-bin, package-manager, or GitHub-release fallback — the
+extension runs the binary it shipped with, or the one the user explicitly
+pointed at, or activation fails loudly. This is the `["user-setting", "bundled"]`
+source list in `shipwright.json` and `VSIX_HOST_SOURCES` in
+`clients/vscode/src/deployment/sources.ts`. See ADR-0002 (no silent PATH
+fallback) and [DEPLOY-RESOLVE-SOURCES].

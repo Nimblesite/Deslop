@@ -170,6 +170,10 @@ const fn call_kinds(language: &str) -> &'static [&'static str] {
         b"python" => &["call"],
         b"csharp" => &["invocation_expression"],
         b"rust" => &["call_expression", "macro_invocation"],
+        // Dart `call_expression` exposes a `function` field; the
+        // `constructor_invocation` node does not, so it is intentionally
+        // excluded from literal-variation comparison.
+        b"dart" => &["call_expression"],
         _ => &[],
     }
 }
