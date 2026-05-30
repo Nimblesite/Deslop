@@ -243,8 +243,11 @@ pub(super) fn cluster_matches_any_hash(
 
 /// [LIVE-CACHE-SEED] Default name of the cache file the LSP writes
 /// after every analysis pass. The MCP and any cache-seed startup path
-/// read from this same file.
-pub(super) const STATE_FILE_NAME: &str = "live-report.json";
+/// read from this same file. Re-exported as
+/// [`crate::live::LIVE_REPORT_FILE_NAME`] so the MCP can name the
+/// on-disk fallback in its `LspNotRunning` recovery payload without
+/// duplicating the literal ([Deslop#157]).
+pub const STATE_FILE_NAME: &str = "live-report.json";
 
 /// [LIVE-SEED-CACHE] Writes `bytes` to `{dir}/live-report.json` via an
 /// atomic tmp-then-rename so readers never see a partial file.
