@@ -14,11 +14,18 @@
 //!     is correctly suppressed ([CLONE-NOISE-SIGNATURE-ONLY], #154).
 //!   - `token_jaccard` is bit-identical across process restarts
 //!     (deterministic signatures).
-//!   - False-positive regression guards proving the language-agnostic
-//!     filters are wired for Dart: generated `*.g.dart`/`*.freezed.dart`
-//!     self-duplication is hidden (#95) while hand-written clones still
-//!     surface, `export`/`import` barrels are not flagged (#96/#150/#155),
-//!     and signature-only structural matches are suppressed (#154).
+//!   - False-positive regression guards proving the re-parse filter
+//!     subsystem is fully wired for Dart — Dart previously bypassed it
+//!     entirely because `grammar_for` had no Dart arm, so every member
+//!     re-parse returned `None` and no filter could fire. These guards
+//!     prove each filter now fires on Dart's real CST: generated
+//!     `*.g.dart`/`*.freezed.dart` self-duplication is hidden (#95) while
+//!     hand-written clones still surface, `export`/`import` barrels are
+//!     not flagged (#96/#150/#155), signature-only structural matches are
+//!     suppressed (#154), polymorphic method overrides sharing one name
+//!     are suppressed (#69), and calls varying only in string-literal
+//!     arguments are suppressed (#70) — each paired with a genuine clone
+//!     that must still surface, proving the suppression stays targeted.
 
 use std::{fs, path::Path, path::PathBuf};
 
@@ -311,6 +318,72 @@ fn dart_generated_header_files_are_hidden_without_a_suffix() -> Result<()> {
     assert!(
         clusters_hidden(&report) >= 1,
         "the banner-marked generated clone must be actively hidden, not merely absent",
+    );
+    Ok(())
+}
+
+// #69 — the same method name implemented across several concrete
+// subclasses of one abstract `Shape` clusters on its identical
+// signature/shape after Type-2 normalisation, but each override has a
+// genuinely different body. That is the polymorphic-implementation
+// pattern, not extractable duplication. The three `measure` bodies share
+// AST *shape* (only identifiers/literals differ), so the signature-only
+// filter (#154) deliberately does NOT fire here — only the polymorphic
+// filter (#69) can suppress this, and only once `enclosing_function_name`
+// resolves Dart's nested `signature → function_signature → name`. A
+// genuinely copy-pasted top-level `loadSettings` (byte-identical bodies)
+// must still surface, proving the suppression is targeted.
+#[test]
+fn dart_polymorphic_override_signatures_are_suppressed() -> Result<()> {
+    let report = run_cli("dart-issue-69-polymorphic", 8)?;
+    let measure_pairs = [
+        ("circle.dart", "square.dart"),
+        ("circle.dart", "triangle.dart"),
+        ("square.dart", "triangle.dart"),
+    ];
+    for (left, right) in measure_pairs {
+        assert!(
+            !any_cluster_spans(&report, left, right),
+            "polymorphic `measure` overrides ({left} / {right}) must not surface as \
+             duplication (#69)",
+        );
+    }
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the polymorphic-signature cluster must be actively hidden (#69), not merely absent",
+    );
+    assert!(
+        any_cluster_spans(&report, "repo_alpha.dart", "repo_beta.dart"),
+        "a genuine byte-identical clone must still surface even when polymorphic \
+         overrides are suppressed",
+    );
+    Ok(())
+}
+
+// #70 — `recordEvent("user_login", {...}, "evt-001")` and its sibling
+// differ only in their string-literal arguments. The call-shape clusters
+// across files after normalisation, but varying test data is not
+// duplication. The enclosing functions are differently named (so #69
+// cannot fire) and the matched range is a call body, not a signature (so
+// #154 cannot fire), so only the literal-variation call filter — which
+// re-parses via the now-wired Dart grammar and reads the `call_expression`
+// `function`/`arguments` fields — can suppress it. A byte-identical
+// `summarize` clone must still surface.
+#[test]
+fn dart_literal_variation_calls_are_suppressed() -> Result<()> {
+    let report = run_cli("dart-issue-70-test-data", 8)?;
+    assert!(
+        !any_cluster_spans(&report, "events_alpha.dart", "events_beta.dart"),
+        "calls varying only in string-literal arguments must not surface (#70)",
+    );
+    assert!(
+        clusters_hidden(&report) >= 1,
+        "the literal-variation call cluster must be actively hidden (#70)",
+    );
+    assert!(
+        any_cluster_spans(&report, "summary_alpha.dart", "summary_beta.dart"),
+        "a genuine byte-identical clone must still surface alongside the suppressed \
+         literal-variation cluster",
     );
     Ok(())
 }

@@ -390,10 +390,33 @@ fn enclosing_function_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
         snippet.range,
         function_kinds(snippet.language),
     )?;
-    let name_node = function.child_by_field_name("name")?;
+    let name_node = function_name_node(function)?;
     snippet
         .source
         .get(name_node.start_byte()..name_node.end_byte())
+}
+
+/// Resolves the identifier node that names `function`. Python, C#, and
+/// Rust expose a direct `name` field on the function node. Dart instead
+/// nests it under `signature` — `function_signature.name` for a top-level
+/// `function_declaration`, and `method_signature → function_signature.name`
+/// for a `method_declaration`. Without this descent
+/// [`enclosing_function_name`] returns `None` for every Dart member, so
+/// the polymorphic-signature filter (#69) could never fire on Dart even
+/// though `function_kinds` lists its node kinds.
+fn function_name_node<'tree>(function: Node<'tree>) -> Option<Node<'tree>> {
+    if let Some(name) = function.child_by_field_name("name") {
+        return Some(name);
+    }
+    let signature = function.child_by_field_name("signature")?;
+    if let Some(name) = signature.child_by_field_name("name") {
+        return Some(name);
+    }
+    let mut cursor = signature.walk();
+    let nested = signature
+        .named_children(&mut cursor)
+        .find_map(|child| child.child_by_field_name("name"));
+    nested
 }
 
 /// Returns the set of tree-sitter node kinds that count as function
