@@ -74,6 +74,11 @@
 //!   a function, never the body. After normalisation these collapse to
 //!   identical shape but the bodies are unrelated. Token Jaccard cannot
 //!   refute the match because identifiers normalise away too.
+//! - **#104** [CLONE-NOISE-PY-MODULE-PREAMBLE] — a sibling-window
+//!   fingerprint can span a run of >=2 module-level helper/fixture
+//!   definitions. Two test files whose preambles share that shape cluster
+//!   even though every helper body differs. Suppressed only when no two
+//!   members share identical bodies, so a verbatim/renamed copy survives.
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -84,7 +89,9 @@ mod calls;
 mod python;
 mod python_class_shapes;
 mod python_idioms;
+mod python_module_preamble;
 mod python_orm;
+mod role_compat;
 mod rust;
 
 use std::{
@@ -129,6 +136,29 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         || python::is_parametric_invariant_test_cluster(&snippets)
         || rust::is_rust_top_level_decl_cluster(&snippets)
         || rust::is_rust_iter_collect_idiom_cluster(&snippets)
+        || python_module_preamble::is_module_preamble_sequence_cluster(&snippets)
+}
+
+/// Decides whether an embedding-dominant `same_behavior` cluster pairs
+/// members of incompatible top-level roles — a class/type definition
+/// with a function/method (issue **#119**
+/// [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]). Returns `true` when the
+/// cluster should be hidden. The caller restricts this to the
+/// `same_behavior` bucket so deterministic Type-1/2/3 clusters are
+/// untouched. Falls through to `false` when sources or a uniform
+/// language are unavailable.
+pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, S>,
+) -> bool {
+    let Some(language) = uniform_language(members, file_languages) else {
+        return false;
+    };
+    let Some(snippets) = collect_snippets(members, sources, language) else {
+        return false;
+    };
+    role_compat::is_role_incompatible_embedding_match(&snippets)
 }
 
 /// Trims surrounding ASCII whitespace from a reported snippet range so

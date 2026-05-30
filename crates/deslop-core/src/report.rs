@@ -13,7 +13,7 @@ use crate::{
     boilerplate::BoilerplateRange,
     buckets::{classify, ClusterKind},
     cluster::Cluster,
-    cluster_filters::is_noise_pattern,
+    cluster_filters::{is_embedding_role_mismatch, is_noise_pattern},
     config::ExclusionConfig,
     pair::PairScore,
     report_boilerplate::build_boilerplate_hints,
@@ -154,7 +154,8 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // causing these to rank as #1 offenders despite containing no
             // actionable duplication. Exclude them from the human-facing ranked
             // output; the raw analysis data remains available via the pipeline.
-            let loosely_similar = classify(&report_cluster) == ClusterKind::LooselySimilar;
+            let kind = classify(&report_cluster);
+            let loosely_similar = kind == ClusterKind::LooselySimilar;
             // GH #120/#122: embedding can pull broad, module-level same-topic
             // regions into one giant Type-4 component. Near-zero structure,
             // high semantic score, large size, and a large canonical span is
@@ -169,9 +170,22 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
             // monkeypatch.setenv scaffolding) that survive Type-2
             // normalisation but are not real duplication.
             let noise = is_noise_pattern(&cluster.members, inputs.sources, inputs.file_languages);
+            // GH #119 [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]: an
+            // embedding-dominant `same_behavior` pair must be role/context
+            // compatible (all classes, or all functions) before surfacing.
+            // A class definition paired with a function/method has no safe
+            // extraction, so suppress it. Restricted to the `same_behavior`
+            // bucket so deterministic Type-1/2/3 clusters are untouched.
+            let role_mismatch = kind == ClusterKind::SameBehavior
+                && is_embedding_role_mismatch(
+                    &cluster.members,
+                    inputs.sources,
+                    inputs.file_languages,
+                );
             let all_hidden = ((loosely_similar || low_structure_embedding_mega_cluster)
                 && !cross_language_audit)
                 || noise
+                || role_mismatch
                 || (!report_cluster.occurrences.is_empty()
                     && report_cluster.occurrences.iter().all(|occ| occ.hidden));
             (report_cluster, all_hidden)

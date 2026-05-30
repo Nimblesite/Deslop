@@ -215,6 +215,44 @@ pub fn backend_to_rpc(err: crate::backend::BackendError) -> JsonRpcError {
             ErrorCode::InvalidParams,
             format!("no cluster with id {id:?}"),
         ),
+        BackendError::LspNotRunning { socket_path } => lsp_not_running_rpc(&socket_path),
         other => jsonrpc_error(ErrorCode::BackendError, other.to_string()),
     }
+}
+
+/// Builds the `-32004` error for a missing LSP, attaching a structured
+/// recovery payload so agents can decide whether to retry and where the
+/// on-disk fallback lives ([Deslop#157]). The numeric code and the
+/// human message ([Deslop#151]) are reproduced verbatim for wire
+/// back-compat; only the previously-`null` `data` field is enriched.
+fn lsp_not_running_rpc(socket_path: &std::path::Path) -> JsonRpcError {
+    let message = crate::backend::BackendError::LspNotRunning {
+        socket_path: socket_path.to_path_buf(),
+    }
+    .to_string();
+    JsonRpcError {
+        code: crate::protocol::ErrorCode::BackendError as i32,
+        message,
+        data: Some(lsp_recovery_data(socket_path)),
+    }
+}
+
+/// Assembles the machine-readable recovery payload for a missing LSP.
+/// The cache-fallback path is derived from the socket's parent directory
+/// (the `.deslop-cache` dir) joined with the canonical live-report file
+/// name, so an agent can read the last analysis while the LSP is down.
+fn lsp_recovery_data(socket_path: &std::path::Path) -> Value {
+    let cache_fallback = socket_path
+        .parent()
+        .map(|dir| dir.join(deslop_core::live::LIVE_REPORT_FILE_NAME));
+    json!({
+        "reason": "lsp_not_running",
+        "retry_after_ms": 500,
+        "socket_path": socket_path.display().to_string(),
+        "cache_fallback": {
+            "path": cache_fallback.map(|path| path.display().to_string()),
+            "format": "live-report-json",
+            "note": "If the LSP stays down after retry, read this on-disk live-report cache for the last analysis.",
+        },
+    })
 }

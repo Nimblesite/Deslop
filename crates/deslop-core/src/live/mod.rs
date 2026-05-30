@@ -30,6 +30,7 @@ pub use notifications::{
 };
 pub use scheduler::Scheduler;
 pub use session::{AnalysisSession, EmbeddingProgressReporter};
+pub use session_helpers::STATE_FILE_NAME as LIVE_REPORT_FILE_NAME;
 pub use watcher::LiveWatcher;
 pub use wire::{
     AnalysisState, ChangeSummary, EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress,
