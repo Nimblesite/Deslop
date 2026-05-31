@@ -1,0 +1,6 @@
+# Keep the version-stamped Cargo manifests LF on every platform. GitHub
+# Windows runners default to core.autocrlf=true, which would check these out
+# CRLF and break the exact line matching in scripts/stamp-release-version.mjs
+# (it throws "Cargo.toml is missing [workspace.package] version").
+Cargo.toml text eol=lf
+Cargo.lock text eol=lf
