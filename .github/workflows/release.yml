@@ -347,7 +347,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Nimblesite/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.BREW_SCOOP_PAT }}
           path: homebrew-tap
 
       - name: Commit and push Formula
@@ -422,7 +422,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Nimblesite/scoop-bucket
-          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          token: ${{ secrets.BREW_SCOOP_PAT }}
           path: scoop-bucket
 
       - name: Commit and push manifest
@@ -437,3 +437,51 @@ jobs:
           git diff --staged --quiet && exit 0
           git commit -m "deslop ${{ needs.version.outputs.version }}"
           git push
+
+  publish-marketplace:
+    name: Publish VSIX to VS Code Marketplace
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      # One `vsce publish` per platform-specific VSIX — vsce silently uses only
+      # the first when several are globbed into a single call. The Marketplace
+      # forbids a SemVer prerelease suffix in the version field, so the VSIX is
+      # packaged with the core MAJOR.MINOR.PATCH (see stamp-release-version.mjs)
+      # and prerelease status is conveyed by the --pre-release flag for any
+      # hyphenated tag. Secret: VSCODE_MARKETPLACE_PAT (org secret; Marketplace -> Manage). See
+      # docs/release.md.
+      - name: Publish each platform VSIX
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "::error::VSCE_PAT secret is not set; cannot publish to the Marketplace"
+            exit 1
+          fi
+          shopt -s globstar nullglob
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          fi
+          published=0
+          for vsix in artifacts/**/*.vsix; do
+            echo "Publishing ${vsix}"
+            npx --yes @vscode/vsce publish ${flag} --packagePath "${vsix}"
+            published=$((published + 1))
+          done
+          if [ "${published}" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published ${published} VSIX(es) to the Marketplace"
