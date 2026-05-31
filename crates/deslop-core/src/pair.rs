@@ -142,7 +142,7 @@ pub fn candidate_pairs(
     let mut cosines: HashMap<(usize, usize), f64> = HashMap::new();
     collect_structural_pairs(fingerprints, &mut scores);
     add_lsh_pairs(lsh_pairs, &mut scores);
-    add_embedding_pairs(embedding_pairs, &mut scores, &mut cosines);
+    add_embedding_pairs(embedding_pairs, fingerprints, &mut scores, &mut cosines);
     finalise_pairs(fingerprints, signatures, scores, &cosines)
 }
 
@@ -367,26 +367,57 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
     }
 }
 
-/// Adds embedding ANN pairs that structural hash and token LSH did not
-/// already surface. Embedding evidence is credited only when it adds
-/// unique recall, so LSH-visible Type-3 pairs do not get re-routed into
-/// the Type-4 bucket just because they were also close in embedding space.
+/// Adds embedding ANN pairs. Structural pairs keep their exact-clone
+/// classification. Cross-file LSH-visible pairs keep unique-recall
+/// accounting, while same-file non-structural pairs retain the embedding
+/// cosine so incidental local token overlap cannot erase semantic signal.
 fn add_embedding_pairs(
     embedding_pairs: &[EmbeddingPair],
+    fingerprints: &[Fingerprint],
     scores: &mut HashMap<(usize, usize), f64>,
     cosines: &mut HashMap<(usize, usize), f64>,
 ) {
     for pair in embedding_pairs {
-        let key = order(pair.left, pair.right);
-        if scores.contains_key(&key) {
-            continue;
-        }
-        let _previous_score = scores.insert(key, 0.0_f64);
-        // HNSW's top-K search already produces at most one pair per
-        // ordered (left, right); `or_insert` keeps the first cosine
-        // rather than re-ranking duplicates we never see.
-        let _previous = cosines.entry(key).or_insert(pair.cosine);
+        add_embedding_pair(pair, fingerprints, scores, cosines);
     }
+}
+
+/// Merges one embedding pair into the candidate-score maps.
+fn add_embedding_pair(
+    pair: &EmbeddingPair,
+    fingerprints: &[Fingerprint],
+    scores: &mut HashMap<(usize, usize), f64>,
+    cosines: &mut HashMap<(usize, usize), f64>,
+) {
+    let key = order(pair.left, pair.right);
+    match scores.get(&key).copied() {
+        Some(structural) if structural > 0.0 => {}
+        Some(_) if same_file_pair(key, fingerprints) => record_cosine(key, pair.cosine, cosines),
+        Some(_) => {}
+        None => {
+            let _previous = scores.insert(key, 0.0_f64);
+            record_cosine(key, pair.cosine, cosines);
+        }
+    }
+}
+
+/// Returns true when both endpoints belong to the same source file.
+fn same_file_pair(key: (usize, usize), fingerprints: &[Fingerprint]) -> bool {
+    let Some(left) = fingerprints.get(key.0) else {
+        return false;
+    };
+    let Some(right) = fingerprints.get(key.1) else {
+        return false;
+    };
+    left.file_id == right.file_id
+}
+
+/// Keeps the highest cosine seen for a non-structural pair.
+fn record_cosine(key: (usize, usize), cosine: f64, cosines: &mut HashMap<(usize, usize), f64>) {
+    let _entry = cosines
+        .entry(key)
+        .and_modify(|current| *current = current.max(cosine))
+        .or_insert(cosine);
 }
 
 /// Converts raw `(left, right) → structural_score` map into a sorted
@@ -412,9 +443,29 @@ fn finalise_pairs(
                 embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
             },
         })
+        .filter(|pair| candidate_ranges_are_valid(pair, fingerprints))
         .collect();
     pairs.sort_unstable_by_key(|pair| (pair.left, pair.right));
     pairs
+}
+
+/// Keeps non-structural candidates from connecting nested same-file ranges.
+fn candidate_ranges_are_valid(pair: &CandidatePair, fingerprints: &[Fingerprint]) -> bool {
+    if pair.score.structural > 0.0 {
+        return true;
+    }
+    let Some(left) = fingerprints.get(pair.left) else {
+        return false;
+    };
+    let Some(right) = fingerprints.get(pair.right) else {
+        return false;
+    };
+    left.file_id != right.file_id || !ranges_overlap(left, right)
+}
+
+/// Returns true when two fingerprints overlap within one file.
+fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.byte_range.start < right.byte_range.end && right.byte_range.start < left.byte_range.end
 }
 
 /// Returns the smaller endpoint node count. Defaults to 0 when either

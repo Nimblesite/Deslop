@@ -60,16 +60,29 @@ fn member_role(snippet: &Snippet<'_>) -> Option<MemberRole> {
     let tree = parse_for(snippet)?;
     let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
     let node = enclosing_kind(tree.root_node(), range, &role_kinds(snippet.language))?;
-    Some(role_of(node, snippet.language))
+    role_of(node, snippet.language)
 }
 
 /// Classifies an enclosing construct node into its [`MemberRole`].
-fn role_of(node: Node<'_>, language: &str) -> MemberRole {
+fn role_of(node: Node<'_>, language: &str) -> Option<MemberRole> {
     if function_kinds(language).contains(&node.kind()) {
-        MemberRole::Function
+        Some(MemberRole::Function)
+    } else if type_kinds(language).contains(&node.kind()) {
+        Some(MemberRole::TypeDef)
+    } else if node.kind() == "decorated_definition" {
+        decorated_definition_role(node, language)
     } else {
-        MemberRole::TypeDef
+        None
     }
+}
+
+/// Resolves the role inside a Python decorated definition wrapper.
+fn decorated_definition_role(node: Node<'_>, language: &str) -> Option<MemberRole> {
+    let mut cursor = node.walk();
+    let role = node
+        .named_children(&mut cursor)
+        .find_map(|child| role_of(child, language));
+    role
 }
 
 /// All node kinds that count as a top-level construct for role
@@ -78,6 +91,9 @@ fn role_of(node: Node<'_>, language: &str) -> MemberRole {
 fn role_kinds(language: &str) -> Vec<&'static str> {
     let mut kinds = function_kinds(language).to_vec();
     kinds.extend_from_slice(type_kinds(language));
+    if language == "python" {
+        kinds.push("decorated_definition");
+    }
     kinds
 }
 

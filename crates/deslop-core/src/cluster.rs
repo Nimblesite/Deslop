@@ -370,6 +370,8 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
         // Inner's occurrences all nest inside outer's — outer dominates.
         if outer.signals.structural >= inner.signals.structural {
             PairDecision::DropInner
+        } else if embedding_outer_should_survive(outer, inner) {
+            PairDecision::Keep
         } else if outer_files_covered_by_inner(&inner.members, &outer.members) {
             PairDecision::DropOuter
         } else {
@@ -381,6 +383,18 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
     } else {
         PairDecision::Keep
     }
+}
+
+/// Returns true when a small structural cluster must not erase a larger
+/// embedding-dominant cluster that carries distinct semantic evidence.
+fn embedding_outer_should_survive(outer: &Cluster, inner: &Cluster) -> bool {
+    is_embedding_dominant(outer.signals) && inner.signals.structural > outer.signals.structural
+}
+
+/// Returns true for low-structural clusters created by the embedding pass.
+fn is_embedding_dominant(signals: PairScore) -> bool {
+    signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
+        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.

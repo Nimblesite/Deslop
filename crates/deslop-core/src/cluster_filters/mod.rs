@@ -86,6 +86,7 @@
 //! source bytes) falls through unchanged.
 
 mod calls;
+mod dart;
 mod python;
 mod python_class_shapes;
 mod python_idioms;
@@ -140,6 +141,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
 /// and report-hide gates.
 fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
     match language {
+        "dart" => dart::is_dart_class_field_declaration_cluster(snippets),
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets),
         _ => false,

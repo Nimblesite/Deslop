@@ -146,12 +146,6 @@ fn class_function_role_pairs(report: &Value, scan_root: &Path) -> Result<Vec<Vec
 fn dart_class_function_role_mismatch_does_not_surface() -> Result<()> {
     let scan_root = fixture("dart-issue-119-role-mismatch");
     let report = run_report(&scan_root)?;
-    eprintln!(
-        "DBG-RM hidden={} prov={} clusters={}",
-        clusters_hidden(&report),
-        report.get("embedding_provenance").map(ToString::to_string).unwrap_or_default(),
-        serde_json::to_string(&report.get("clusters")).unwrap_or_default()
-    );
     let offenders = class_function_role_pairs(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),
@@ -185,16 +179,6 @@ fn dart_class_function_role_mismatch_does_not_surface() -> Result<()> {
 fn dart_same_role_function_pair_still_surfaces() -> Result<()> {
     let scan_root = fixture("dart-issue-119-same-role");
     let report = run_report(&scan_root)?;
-    eprintln!(
-        "DBG clusters_hidden={} clusters={}",
-        clusters_hidden(&report),
-        serde_json::to_string_pretty(&report.get("clusters")).unwrap_or_default()
-    );
-    eprintln!(
-        "DBG metrics={} provenance={}",
-        report.get("metrics").map(ToString::to_string).unwrap_or_default(),
-        report.get("embedding_provenance").map(ToString::to_string).unwrap_or_default()
-    );
     let same_behavior: Vec<&Value> = clusters(&report)
         .iter()
         .filter(|cluster| bucket(cluster) == "same_behavior")
