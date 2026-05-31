@@ -1,6 +1,6 @@
 {
-  "name": "deslop",
-  "displayName": "Deslop",
+  "name": "deslop-live",
+  "displayName": "Deslop.live",
   "description": "Live duplicate-code analysis inside VS Code — the reference client for the Deslop LSP server. Inline warnings as you type, worst-offender view, and a live channel your AI agent can consult before it copy-pastes.",
   "version": "0.0.0-dev",
   "publisher": "nimblesite",
