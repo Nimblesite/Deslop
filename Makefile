@@ -18,14 +18,13 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
-  # No gradlew wrapper is checked in: callers (devs + CI) must provide
-  # `gradle` on PATH or override `GRADLE=...`. CI sets `GRADLE=gradle`
-  # via the gradle/actions/setup-gradle@v4 install.
-  GRADLE ?= gradle
+  # The JetBrains wrapper is checked in and is the source of truth.
+  # Override `GRADLE=...` only when deliberately testing another runtime.
+  GRADLE ?= ./gradlew.bat
 else
   RM = rm -rf
   MKDIR = mkdir -p
-  GRADLE ?= gradle
+  GRADLE ?= ./gradlew
 endif
 
 # ---------------------------------------------------------------------------

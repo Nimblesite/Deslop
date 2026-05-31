@@ -376,7 +376,15 @@ function buildVsixZip(work, options) {
     const manifestSource = options.manifest ?? join(repoRoot, "shipwright.json");
     copyFileSync(manifestSource, join(extensionRoot, "shipwright.json"));
   }
+  writeFileSync(
+    join(extensionRoot, "package.json"),
+    JSON.stringify({ publisher: "nimblesite", name: "deslop-vscode" }),
+  );
 
+  writeFakeBinary(join(binDir, "deslop"), {
+    plain: `deslop ${validVersion}`,
+    json: { manifestVersion: 1, name: "deslop", version: validVersion, kind: "cli", language: "rust", product: "deslop" },
+  });
   if (!options.skipBundledLsp) {
     const name = options.lspName ?? "deslop-lsp";
     const version = options.lspVersion ?? validVersion;

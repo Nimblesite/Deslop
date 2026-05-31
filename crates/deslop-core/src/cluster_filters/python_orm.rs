@@ -149,12 +149,39 @@ pub(super) fn is_sqlalchemy_mapped_column_cluster(snippets: &[Snippet<'_>]) -> b
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
         return false;
     }
+    if snippets.iter().all(is_mapped_column_call_snippet) {
+        return true;
+    }
     let shapes: Option<Vec<MappedColumnShape>> = snippets.iter().map(mapped_column_shape).collect();
     let Some(shapes) = shapes else { return false };
     if !shapes.iter().all(|shape| !shape.column_names.is_empty()) {
         return false;
     }
     mapped_column_name_sets_differ(&shapes)
+}
+
+/// Returns true when the reported range is exactly one `mapped_column(...)`
+/// call. Embedding recall can surface call nodes underneath the already
+/// filtered declaration statements; those are the same ORM-schema noise.
+fn is_mapped_column_call_snippet(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
+    let Some(call) = sole_call_in_range(tree.root_node(), range) else {
+        return false;
+    };
+    call_node_function_equals(call, snippet.source, b"mapped_column")
+}
+
+/// Returns the sole Python call fully contained in `range`.
+fn sole_call_in_range(root: Node<'_>, range: ByteRange) -> Option<Node<'_>> {
+    let mut calls = Vec::new();
+    collect_calls_in_range(root, range, &mut calls);
+    let [call] = calls.as_slice() else {
+        return None;
+    };
+    Some(*call)
 }
 
 /// Per-member shape: set of `mapped_column`-bound attribute names
@@ -257,13 +284,16 @@ fn assignment_value_calls(assignment: Node<'_>, source: &[u8], callee: &[u8]) ->
     if right.kind() != "call" {
         return false;
     }
-    let Some(function) = right.child_by_field_name("function") else {
+    call_node_function_equals(right, source, callee)
+}
+
+/// Returns true when a call node invokes an identifier named `callee`.
+fn call_node_function_equals(call: Node<'_>, source: &[u8], callee: &[u8]) -> bool {
+    let Some(function) = call.child_by_field_name("function") else {
         return false;
     };
-    if function.kind() != "identifier" {
-        return false;
-    }
-    source.get(function.start_byte()..function.end_byte()) == Some(callee)
+    function.kind() == "identifier"
+        && source.get(function.start_byte()..function.end_byte()) == Some(callee)
 }
 
 /// Returns true when at least two members declare different column-name

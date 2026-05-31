@@ -55,9 +55,17 @@ pub fn embedding_pairs(
     if embeddings.len() != fingerprints.len() || embeddings.len() < 2 {
         return Vec::new();
     }
+    let ann_pairs = ann_embedding_pairs(embeddings);
     if embeddings.len() <= EXACT_PAIR_LIMIT {
-        return exact_embedding_pairs(embeddings);
+        let mut pairs = ann_pairs;
+        pairs.extend(exact_embedding_pairs(embeddings));
+        return dedupe(pairs);
     }
+    ann_pairs
+}
+
+/// Retrieves top-k ANN neighbours for every embedding.
+fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
     let points: Vec<CosinePoint> = embeddings
         .iter()
         .map(|vector| CosinePoint::new(vector))
@@ -89,8 +97,14 @@ fn exact_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
 
 /// Appends exact embedding candidates for one left endpoint.
 fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec<EmbeddingPair>) {
+    let Some(left_point) = points.get(left) else {
+        return;
+    };
     for right in left.saturating_add(1)..points.len() {
-        let cosine = cosine_between(&points[left], &points[right]);
+        let Some(right_point) = points.get(right) else {
+            continue;
+        };
+        let cosine = cosine_between(left_point, right_point);
         if cosine >= MIN_COSINE {
             pairs.push(EmbeddingPair {
                 left,

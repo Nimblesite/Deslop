@@ -406,7 +406,7 @@ fn enclosing_function_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
 /// [`enclosing_function_name`] returns `None` for every Dart member, so
 /// the polymorphic-signature filter (#69) could never fire on Dart even
 /// though `function_kinds` lists its node kinds.
-fn function_name_node<'tree>(function: Node<'tree>) -> Option<Node<'tree>> {
+fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
     if let Some(name) = function.child_by_field_name("name") {
         return Some(name);
     }

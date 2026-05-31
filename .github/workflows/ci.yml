@@ -196,8 +196,6 @@ jobs:
       - name: jetbrains-real-binary-test
         run: make jetbrains-real-binary-test
 
-      # `setup-gradle@v4` provisions `gradle` on PATH; the Makefile's
-      # default `GRADLE=./gradlew` would only resolve if the wrapper were
-      # checked in (it isn't), so route through the action-provided binary.
+      # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
-        run: make jetbrains-package GRADLE=gradle
+        run: make jetbrains-package
