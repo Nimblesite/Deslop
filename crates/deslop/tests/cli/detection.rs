@@ -65,6 +65,84 @@ fn detects_type2_clone_in_python_fixture() -> Result<()> {
     Ok(())
 }
 
+// Implements [PIPELINE-LANG-TRAIT] for Dart ([LANG-CAND-DART]): Type-2
+// renamed-clone detection. `alpha.dart` and `beta.dart` are the same
+// accumulate loop with every identifier renamed; Dart normalisation
+// collapses identifiers/literals so the two functions fingerprint
+// identically and cluster at structural = 1.0.
+#[test]
+fn detects_type2_clone_in_dart_fixture() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(fixture("dart-small"))
+        .arg("--min-nodes")
+        .arg("10")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    assert!(json.contains("\"files_analysed\": 2"));
+    assert!(json.contains("alpha.dart"));
+    assert!(json.contains("beta.dart"));
+    assert!(json.contains("\"structural\": 1.0"));
+    Ok(())
+}
+
+// Audience: HUMAN. Zero-false-positive guard for Dart ([LANG-CAND-DART]).
+// `tally()` builds a map inside a for-each loop; `describe()` is a chain
+// of `if (code …) return …` early exits. The two share no real shape, so
+// a human reading the report must never see them paired as duplicates.
+// Positive bound: every cluster's occurrences come from a single file.
+#[test]
+fn dissimilar_dart_functions_across_files_stay_in_separate_clusters() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(fixture("dart-dissimilar-functions"))
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .assert()
+        .success();
+    let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for (index, cluster) in clusters.iter().enumerate() {
+        let occurrences = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for occurrence in &occurrences {
+            let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let basename = Path::new(path).file_name().map_or_else(
+                || path.to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            let _inserted = files.insert(basename);
+        }
+        assert_eq!(
+            files.len(),
+            1,
+            "cluster #{index} spans multiple files {files:?}; the two Dart functions \
+             are structurally unrelated and must not be reported as duplicates",
+        );
+    }
+    Ok(())
+}
+
 // Audience: HUMAN. Issue #34. When a human opens two Python test
 // files whose functions are structurally unrelated — one synchronous
 // test calling `registry.has(...)` in a for-loop assertion block,

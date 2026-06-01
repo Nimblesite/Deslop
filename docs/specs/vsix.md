@@ -2,7 +2,7 @@
 
 The VSIX is the **polished reference client** for the Deslop daemon. Every other editor can wire up the LSP ([lsp.md](lsp.md)) and get a competent experience; the VSIX is where we prove what a genuinely beautiful duplication-surfacing UI looks like.
 
-Distribution: one platform-specific `.vsix` per VS Code target attached to each GitHub Release — see [.github/workflows/release.yml](../../.github/workflows/release.yml). Extension id: `nimblesite.deslop-vscode`. Install via `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, or from the Marketplace/OpenVSX once we set up publisher accounts.
+Distribution: one platform-specific `.vsix` per VS Code target attached to each GitHub Release — see [.github/workflows/release.yml](../../.github/workflows/release.yml). Extension id: `nimblesite.deslop-live`. Install via `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, or from the Marketplace/OpenVSX once we set up publisher accounts.
 
 ### [VSIX-PRINCIPLES] UX principles
 
@@ -74,15 +74,12 @@ The VSIX ships:
 
 **Manifest-backed activation.** On activation, the extension loads `shipwright.json` from the extension root and reads `hosts.vscode.activationVerifies`. Required components, currently `deslop-lsp` and `deslop-mcp`, must be resolved and version-checked before the LSP client, MCP integration, file watchers, workspace parsing, or live analysis starts. The manifest's `expectedVersion`, component id, binary name, platform map, and required flag are authoritative; `package.json` must not become a second source of truth for executable compatibility.
 
-**Overrides are resolver inputs.** User settings and environment variables select candidate locations; they never bypass manifest verification. Supported inputs are:
+**Overrides are resolver inputs.** Resolution is manifest-driven: the resolver tries each source the component declares, in order, and verifies every candidate against the manifest before use. Deslop's shipped manifest declares exactly two sources for `deslop-lsp` and `deslop-mcp`:
 
-- `deslop.lspPath` and `deslop.mcpPath` per-component absolute paths.
-- `DESLOP_LSP_PATH` and `DESLOP_MCP_PATH` per-component environment paths.
-- `DESLOP_BINARY_DIR` as a directory containing manifest-named binaries.
-- Bundled binaries under `${extensionPath}/bin/${platform}/`.
-- `PATH` lookup as the final external fallback.
+1. `deslop.lspPath` / `deslop.mcpPath` — an absolute path the user sets deliberately (the override).
+2. The binary bundled under `${extensionPath}/bin/${platform}/`.
 
-An explicitly configured path or environment path that resolves to the wrong component, wrong version, or non-executable file blocks activation with a visible error. A stale `PATH` binary is ignored when a matching bundled binary exists. A bundled binary mismatch blocks activation because the package itself is corrupt. Missing required binaries block activation; optional components may degrade only when the manifest marks them optional.
+Nothing else is consulted — no `PATH` search, no environment variable, no cargo-bin, package-manager, or download fallback. The extension runs the binary it shipped with, or the one the user explicitly pointed at, or activation fails loudly. An override that resolves to the wrong component, wrong version, or a non-executable file blocks activation with a visible error instead of silently falling through to the bundle. A bundled binary mismatch blocks activation because the package itself is corrupt. Missing required binaries block activation; optional components may degrade only when the manifest marks them optional. The resolver library additionally supports manifest-declared environment inputs (`env.pathVar` / `env.dirVar`) for other hosts, but Deslop's manifest does not enable them.
 
 If the verified bundled directory is selected, the extension may prepend that directory to the current VS Code process's `PATH` so integrated terminals, task runners, and Run/Debug can invoke `deslop` directly. This change is process-local — the extension never modifies `~/.bashrc`, `~/.zshrc`, PowerShell profiles, or `launchctl` environment. A user who wants the CLI available outside VS Code should install via `brew install nimblesite/tap/deslop` (Homebrew) or `scoop install deslop` (Scoop, after adding the [Nimblesite bucket](https://github.com/Nimblesite/scoop-bucket)); the VSIX does not try to be a system package manager.
 
@@ -388,7 +385,7 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.
 - Cluster webview renders interpretation, signals, and occurrences.
 - Full-report webview refreshes on daemon notification.
-- Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` fallback, missing binary, component-name mismatch, and version mismatch.
+- Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` candidates ignored when the bundle is present, missing binary, component-name mismatch, and version mismatch.
 - VSIX archive package tests prove `extension/shipwright.json` exists, `deslop`, `deslop-lsp`, and `deslop-mcp` are under the single target `extension/bin/<platform>/`, no other platform binary directory is present, no undeclared executable is present there, and every host-executable bundled binary reports the manifest `expectedVersion`.
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.

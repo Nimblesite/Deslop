@@ -16,9 +16,9 @@ Deslop is a **live duplicate-code analysis server** — LSP + MCP, running in yo
 
 ## Install (preferred) — VS Code extension
 
-1. Grab `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
-2. `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix` — or use **Extensions panel → `…` menu → Install from VSIX…**.
-3. Open a `.cs` / `.rs` / `.py` file. The live bubble is active immediately; the **Top Offenders** tree populates as the file watcher fires; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
+1. Grab `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+2. `code --install-extension deslop-live-X.Y.Z-<target>.vsix` — or use **Extensions panel → `…` menu → Install from VSIX…**.
+3. Open a `.cs` / `.rs` / `.py` / `.dart` file. The live bubble is active immediately; the **Top Offenders** tree populates as the file watcher fires; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
 
 The VSIX ships binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64`.
 

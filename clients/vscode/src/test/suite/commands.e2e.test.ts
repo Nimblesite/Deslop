@@ -7,7 +7,7 @@ import { sleep } from "./helpers";
 
 suite("commands", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
     assert.ok(ext, "extension should be registered");
     await ext.activate();
     // Give the LSP a beat to produce the initial report.

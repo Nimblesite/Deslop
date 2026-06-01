@@ -18,14 +18,13 @@ ifeq ($(OS),Windows_NT)
   RM = Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
   MKDIR = New-Item -ItemType Directory -Force
   HOME ?= $(USERPROFILE)
-  # No gradlew wrapper is checked in: callers (devs + CI) must provide
-  # `gradle` on PATH or override `GRADLE=...`. CI sets `GRADLE=gradle`
-  # via the gradle/actions/setup-gradle@v4 install.
-  GRADLE ?= gradle
+  # The JetBrains wrapper is checked in and is the source of truth.
+  # Override `GRADLE=...` only when deliberately testing another runtime.
+  GRADLE ?= ./gradlew.bat
 else
   RM = rm -rf
   MKDIR = mkdir -p
-  GRADLE ?= gradle
+  GRADLE ?= ./gradlew
 endif
 
 # ---------------------------------------------------------------------------
@@ -296,22 +295,22 @@ vsix-clean:
 	$(RM) clients/vscode/webview-ui/node_modules
 	$(RM) clients/vscode/out
 	$(RM) clients/vscode/dist
-	$(RM) clients/vscode/deslop-vscode.vsix
-	$(RM) clients/vscode/deslop-vscode-*.vsix
+	$(RM) clients/vscode/deslop-live.vsix
+	$(RM) clients/vscode/deslop-live-*.vsix
 	$(RM) clients/vscode/shipwright.json
 	$(RM) clients/vscode/coverage
 
-## vsix-install-code: Install the packaged clients/vscode/deslop-vscode.vsix
+## vsix-install-code: Install the packaged clients/vscode/deslop-live.vsix
 ##                    into the local `code` CLI. Skips with a warning if
 ##                    `code` isn't on PATH.
 vsix-install-code:
 	@if command -v code >/dev/null 2>&1; then \
-	  _vsix=$$(ls clients/vscode/deslop-vscode-*.vsix 2>/dev/null | head -n1); \
-	  if [ -z "$$_vsix" ]; then echo "FAIL: no clients/vscode/deslop-vscode-*.vsix found"; exit 1; fi; \
+	  _vsix=$$(ls clients/vscode/deslop-live-*.vsix 2>/dev/null | head -n1); \
+	  if [ -z "$$_vsix" ]; then echo "FAIL: no clients/vscode/deslop-live-*.vsix found"; exit 1; fi; \
 	  echo "==> Installing $$_vsix into the VS Code CLI..."; \
 	  code --install-extension "$$_vsix" --force; \
 	else \
-	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-vscode-<target>.vsix"; \
+	  echo "WARN: 'code' CLI not on PATH — skipping install. VSIX is at clients/vscode/deslop-live-<target>.vsix"; \
 	fi
 
 ## vsix-rebuild: Nuke every build artifact (cargo target/, staged bin/, node_modules,

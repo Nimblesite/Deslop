@@ -6,12 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
-const vsixArg = process.argv[2] ?? "deslop-vscode.vsix";
+const vsixArg = process.argv[2] ?? "deslop-live.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
 const targetPlatform = process.argv[3] ?? currentPlatform();
+const packageEntry = "extension/package.json";
 const manifestEntry = "extension/shipwright.json";
 
 const entries = unzipText(["-Z1", vsixPath]).split("\n").filter(Boolean);
+assertPackageIdentity(entries);
 assertEntry(entries, manifestEntry);
 assertNoEntryPrefix(entries, "extension/out/");
 assertNoEntryPrefix(entries, "extension/node_modules/");
@@ -19,7 +21,6 @@ assertNoEntryPrefix(entries, "extension/--stdio/");
 
 const manifest = JSON.parse(unzipText(["-p", vsixPath, manifestEntry]));
 const components = executableComponents(manifest);
-const activationIds = new Set(manifest.hosts?.vscode?.activationVerifies ?? []);
 const binRoot = "extension/bin/";
 const binPrefix = `${binRoot}${targetPlatform}/`;
 const allBinEntries = entries.filter((entry) => entry.startsWith(binRoot) && !entry.endsWith("/"));
@@ -32,7 +33,7 @@ if (foreignBinEntries.length > 0) {
   );
 }
 
-for (const component of components.filter((item) => activationIds.has(item.id))) {
+for (const component of components) {
   assertEntry(entries, `${binPrefix}${nameWithSuffix(component)}`);
 }
 for (const entry of binEntries) {
@@ -40,6 +41,16 @@ for (const entry of binEntries) {
 }
 
 console.log(`Verified deployment manifest and ${binEntries.length} ${targetPlatform} VSIX binaries`);
+
+function assertPackageIdentity(entries) {
+  assertEntry(entries, packageEntry);
+  const packageJson = JSON.parse(unzipText(["-p", vsixPath, packageEntry]));
+  if (packageJson.publisher !== "nimblesite" || packageJson.name !== "deslop-live") {
+    throw new Error(
+      `${vsixPath} extension id must be nimblesite.deslop-live; found ${packageJson.publisher}.${packageJson.name}`,
+    );
+  }
+}
 
 function verifyBundledEntry(entry, component) {
   if (!component) throw new Error(`Undeclared executable in VSIX: ${entry}`);

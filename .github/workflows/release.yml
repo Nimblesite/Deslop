@@ -225,11 +225,11 @@ jobs:
 
       - name: Package target VSIX
         working-directory: clients/vscode
-        run: npm run package -- --target ${{ matrix.vsix_target }} --out deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix
+        run: npm run package -- --target ${{ matrix.vsix_target }} --out deslop-live-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix
 
       - name: Verify target VSIX
         working-directory: clients/vscode
-        run: node ./scripts/verify-vsix-package.mjs deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix ${{ matrix.vsix_target }}
+        run: node ./scripts/verify-vsix-package.mjs deslop-live-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix ${{ matrix.vsix_target }}
 
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
@@ -246,7 +246,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vsix-${{ matrix.vsix_target }}
-          path: clients/vscode/deslop-vscode-*.vsix
+          path: clients/vscode/deslop-live-*.vsix
           if-no-files-found: error
 
   release:
@@ -280,6 +280,20 @@ jobs:
           files: release-files/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  deploy-pages:
+    name: Deploy website to GitHub Pages
+    needs: release
+    # Only stable tags publish the site. SemVer prerelease tags
+    # (v0.1.0-rc.1, v0.1.0-beta, …) contain a hyphen and are skipped, so a
+    # prerelease never overwrites the live site. Triggered by the v* tag —
+    # never by a push to main.
+    if: ${{ !contains(github.ref_name, '-') }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml
 
   publish-homebrew:
     name: Publish Homebrew formula

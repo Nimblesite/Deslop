@@ -20,7 +20,7 @@ External MCP clients that run *outside* VS Code's process — Claude Code (CLI),
 After installing this VSIX, the binary lives at:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 Where `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`, and `<VERSION>` matches the installed extension. Bump `<VERSION>` whenever you update the extension.
@@ -29,7 +29,7 @@ Example — Claude Code:
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-vscode-0.1.0/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -37,7 +37,7 @@ Example — Codex (`~/.codex/config.toml`):
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-0.1.0/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 
@@ -49,7 +49,7 @@ Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic insp
 
 ## Install
 
-- Download the platform-specific `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`.
+- Download the platform-specific `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-live-X.Y.Z-<target>.vsix`.
 - CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`.
 
 ## Settings

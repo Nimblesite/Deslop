@@ -13,7 +13,7 @@ use crate::{
     boilerplate::BoilerplateRange,
     buckets::{classify, ClusterKind},
     cluster::Cluster,
-    cluster_filters::{is_embedding_role_mismatch, is_noise_pattern},
+    cluster_filters::{is_embedding_role_mismatch, is_noise_pattern, ParseCache},
     config::ExclusionConfig,
     pair::PairScore,
     report_boilerplate::build_boilerplate_hints,
@@ -135,6 +135,9 @@ pub struct ReportInputs<'a, S: BuildHasher> {
 /// instead of `clusters`.
 #[must_use]
 pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
+    // Parse each source file at most once for the whole render, shared
+    // across every cluster's noise/role checks ([CLONE-NOISE-REPARSE-CACHE]).
+    let parse_cache = ParseCache::new();
     let materialised: Vec<(ReportCluster, bool)> = inputs
         .clusters
         .iter()
@@ -147,47 +150,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
                 inputs.exclusion,
                 inputs.sources,
             );
-            // [#58 FUSION-STRATEGY-GATE-NO-TOKEN-ONLY]: LooselySimilar clusters
-            // carry only token-overlap signal with no structural or semantic
-            // anchor. Token-only matches (test boilerplate, import scaffolding)
-            // push token_jaccard near 1.0 while structural stays near 0,
-            // causing these to rank as #1 offenders despite containing no
-            // actionable duplication. Exclude them from the human-facing ranked
-            // output; the raw analysis data remains available via the pipeline.
-            let kind = classify(&report_cluster);
-            let loosely_similar = kind == ClusterKind::LooselySimilar;
-            // GH #120/#122: embedding can pull broad, module-level same-topic
-            // regions into one giant Type-4 component. Near-zero structure,
-            // high semantic score, large size, and a large canonical span is
-            // the observed signature of those report-dominating false positives.
-            let low_structure_embedding_mega_cluster =
-                is_low_structure_embedding_mega_cluster(&report_cluster);
-            let cross_language_audit = inputs.exclusion.allows_cross_language_comparison()
-                && spans_multiple_languages(&cluster.members, inputs.file_languages);
-            // Issues #69, #70, #71, #72: re-parse cluster member sources
-            // and drop known noise patterns (polymorphic interface
-            // implementations, test-data variation, REST endpoint shape,
-            // monkeypatch.setenv scaffolding) that survive Type-2
-            // normalisation but are not real duplication.
-            let noise = is_noise_pattern(&cluster.members, inputs.sources, inputs.file_languages);
-            // GH #119 [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]: an
-            // embedding-dominant `same_behavior` pair must be role/context
-            // compatible (all classes, or all functions) before surfacing.
-            // A class definition paired with a function/method has no safe
-            // extraction, so suppress it. Restricted to the `same_behavior`
-            // bucket so deterministic Type-1/2/3 clusters are untouched.
-            let role_mismatch = kind == ClusterKind::SameBehavior
-                && is_embedding_role_mismatch(
-                    &cluster.members,
-                    inputs.sources,
-                    inputs.file_languages,
-                );
-            let all_hidden = ((loosely_similar || low_structure_embedding_mega_cluster)
-                && !cross_language_audit)
-                || noise
-                || role_mismatch
-                || (!report_cluster.occurrences.is_empty()
-                    && report_cluster.occurrences.iter().all(|occ| occ.hidden));
+            let all_hidden = cluster_is_hidden(cluster, &report_cluster, &inputs, &parse_cache);
             (report_cluster, all_hidden)
         })
         .collect();
@@ -225,6 +188,54 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
     }
+}
+
+/// Decides whether a cluster must be dropped from the ranked report.
+///
+/// The cheap test runs first: a cluster whose every occurrence sits in a
+/// report-hidden path (e.g. all members in generated `*.g.dart` /
+/// `*.freezed.dart` files) is dropped regardless of the expensive
+/// re-parse checks below, so those are skipped. Without this a large
+/// generated file is re-walked once per cluster only to be hidden anyway,
+/// dominating analysis time on codegen-heavy Dart/Flutter repos
+/// ([CLONE-NOISE-REPARSE-CACHE]). The remaining rules:
+/// - `#58`: `LooselySimilar` clusters carry only token overlap, no
+///   structural/semantic anchor — token-only boilerplate, not duplication.
+/// - `#120/#122`: low-structure embedding mega-clusters are report-dominating
+///   `Type-4` false positives.
+/// - `#69/#70/#71/#72`: re-parsed noise patterns (polymorphic interface
+///   impls, test-data variation, REST shape, scaffolding).
+/// - `#119`: embedding-dominant `same_behavior` pairs of incompatible roles.
+fn cluster_is_hidden<S: BuildHasher>(
+    cluster: &Cluster,
+    report_cluster: &ReportCluster,
+    inputs: &ReportInputs<'_, S>,
+    parse_cache: &ParseCache,
+) -> bool {
+    let occurrences_all_hidden = !report_cluster.occurrences.is_empty()
+        && report_cluster.occurrences.iter().all(|occ| occ.hidden);
+    if occurrences_all_hidden {
+        return true;
+    }
+    let kind = classify(report_cluster);
+    let token_only_or_mega = (kind == ClusterKind::LooselySimilar
+        || is_low_structure_embedding_mega_cluster(report_cluster))
+        && !(inputs.exclusion.allows_cross_language_comparison()
+            && spans_multiple_languages(&cluster.members, inputs.file_languages));
+    let noise = is_noise_pattern(
+        &cluster.members,
+        inputs.sources,
+        inputs.file_languages,
+        parse_cache,
+    );
+    let role_mismatch = kind == ClusterKind::SameBehavior
+        && is_embedding_role_mismatch(
+            &cluster.members,
+            inputs.sources,
+            inputs.file_languages,
+            parse_cache,
+        );
+    token_only_or_mega || noise || role_mismatch
 }
 
 /// Re-ranks visible clusters by non-hidden occurrence count so mixed

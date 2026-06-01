@@ -24,7 +24,11 @@
     "clone detection",
     "refactoring",
     "code quality",
-    "DRY"
+    "DRY",
+    "csharp",
+    "rust",
+    "python",
+    "dart"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -33,9 +37,11 @@
     "onLanguage:csharp",
     "onLanguage:rust",
     "onLanguage:python",
+    "onLanguage:dart",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
-    "workspaceContains:**/*.py"
+    "workspaceContains:**/*.py",
+    "workspaceContains:**/*.dart"
   ],
   "contributes": {
     "commands": [

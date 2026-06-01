@@ -33,10 +33,10 @@ Deslop was designed from the first commit with coding agents as a first-class au
 
 `deslop-mcp` ships **inside the VS Code extension VSIX**. After you install the extension, every external MCP client (Claude Code, Claude Desktop, Codex, Cursor, Continue) should reference the unpacked VSIX binary by absolute path so the agent runs the exact binary the extension ships — version-locked to the VSIX, no `PATH` drift.
 
-After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+After `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, the binary lives at:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`. `<VERSION>` is the installed extension version — bump it whenever you update the VSIX.
@@ -45,7 +45,7 @@ After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary l
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -53,7 +53,7 @@ claude mcp add deslop -s user -- \
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 
@@ -63,7 +63,7 @@ args    = ["--root", "."]
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "/absolute/path/to/your/repo"]
     }
   }
@@ -90,12 +90,12 @@ The headline workflow is reactive, not batch:
 For a CLI-only loop (CI gates, cold-cache audits, or agents without MCP), the workflow degrades to:
 
 1. Agent proposes code changes.
-2. Agent (or harness) runs `deslop . --output report.json`.
+2. Agent (or harness) runs `deslop . --output report` (writes `report.json`/`.txt`/`.html`).
 3. Agent reads the top `N` clusters from `report.json`.
 4. For every cluster above threshold, the agent has three choices: extract to a shared function, reuse the existing implementation, or accept the duplication and annotate why.
 5. Agent re-runs Deslop. The top cluster should be different or smaller.
 
-The incremental cache (`--incremental`) means step 5 only pays the cost of parsing files the agent actually touched. On a 1M-LOC monorepo, the warm-cache run returns in single-digit seconds.
+The incremental cache (`--incremental`) means step 5 only pays the cost of parsing files the agent actually touched — unchanged files skip tree-sitter entirely, so a warm pass stays proportional to the size of the change, not the size of the repo.
 
 ## Reading the JSON
 
@@ -103,25 +103,31 @@ Every report begins with an embedded `schema_doc` explaining the shape to the ag
 
 ```json
 {
+  "tool_version": "0.0.0-dev",
   "schema_doc": "…inline description of every field…",
-  "summary": { "clusters_total": 142, "above_threshold": 17, "scan_time_ms": 27110 },
+  "metrics": { "analysed_loc": 1832044, "duplicated_loc": 48120, "duplication_percent": 2.63, "clusters_total": 142, "duplicated_files": 318 },
+  "action_hints": [
+    { "pattern": "bucket=identical", "recommendation": "Identical code. Safe to extract — every copy is the same." }
+  ],
   "clusters": [
     {
-      "id": "cl_01HZABC…",
-      "score": 2184,
-      "bucket": "identical",
-      "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91 },
+      "id": "0362505641efe3c7",
+      "weight": 2184.0,
+      "bucket": "nearly_identical",
+      "size": 3,
+      "canonical_node_count": 42,
+      "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91, "fused": 0.99 },
       "summary": "3 near-identical copies of a 42-node method across UserRepository.cs:120-180, ProductRepository.cs:58-118, OrderRepository.cs:40-102 — safe to extract.",
-      "suggestion": "extract_shared_function",
-      "members": [
-        { "path": "UserRepository.cs", "byte_range": [3104, 4820], "lines": [120, 180] }
+      "interpretation": "Nearly identical code. Review the locations — small differences may matter.",
+      "occurrences": [
+        { "path": "UserRepository.cs", "start_byte": 3104, "end_byte": 4820, "start_line": 120, "end_line": 180 }
       ]
     }
   ]
 }
 ```
 
-`summary` is pre-written for an agent reader. It states what was found, where, and — when the signals agree — whether the duplication is safe to extract. The `suggestion` field is filled when the inference is reliable, never guessed.
+`summary` and `interpretation` are pre-written for an agent reader: they state what was found, where, and — when the signals agree — whether the duplication is safe to extract. Repository-level remediation guidance lives in the top-level `action_hints`, keyed by `bucket`; it is derived from the signals, never guessed.
 
 ## Byte ranges, not line numbers
 
@@ -129,7 +135,7 @@ Deslop's source of truth is `[byte_start, byte_end)`. Line numbers are derived a
 
 ## Stable IDs
 
-Cluster IDs are ULIDs generated from the cluster's content fingerprint plus the report timestamp. Feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
+Cluster IDs are short hex digests of the cluster's content fingerprint — the first 8 bytes of the canonical member's BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). They carry no timestamp, so feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
 
 ## MCP and LSP — shipping
 
@@ -152,6 +158,6 @@ The JetBrains plugin in `clients/jetbrains/` registers an IntelliJ Platform `lsp
 ## What Deslop deliberately does not do
 
 - It does not rewrite your code. Extraction is your call.
-- It does not fail CI unless you wire `--fail-on score>N` yourself.
+- It does not fail CI unless you set `--fail-over <percent>` yourself — a repo-wide duplication-percentage gate that exits `3` when exceeded.
 - It does not assume "near-miss = bug." Some duplication is intentional (test fixtures, bootstrapping). Deslop reports; you decide.
 - It does not talk to the network unless you explicitly pick a remote embedding model.

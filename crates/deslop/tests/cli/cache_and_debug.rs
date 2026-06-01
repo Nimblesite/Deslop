@@ -429,6 +429,17 @@ fn debug_ast_dump_matches_committed_golden_python() -> Result<()> {
     assert_ast_golden("ast-golden-python", "Sample.py")
 }
 
+// [LANG-CAND-DART] golden: Sample.dart exercises identifier collapse,
+// every Dart literal form (string interpolation, int, double, bool,
+// `null`), comment + doc-comment drop, and the Dart-3 structural forms
+// most likely to shift between grammar patch releases (records, switch
+// expression with record/variable/wildcard patterns + guard). Any
+// grammar bump or `normalise_kind` edit trips this byte-for-byte check.
+#[test]
+fn debug_ast_dump_matches_committed_golden_dart() -> Result<()> {
+    assert_ast_golden("ast-golden-dart", "Sample.dart")
+}
+
 // Implements [PIPELINE-NORMALIZE-AST] unsupported-extension: running
 // `--debug-ast` on a file whose extension no parser claims must exit
 // non-zero with a clear error, not panic or emit an empty dump.

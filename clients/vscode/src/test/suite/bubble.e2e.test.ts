@@ -18,7 +18,7 @@ interface ExtensionExports {
 
 suite("live bubble (real LSP)", () => {
   test("extension spawns bundled Deslop binaries", async () => {
-    const ext = vscode.extensions.getExtension<ExtensionExports>("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension<ExtensionExports>("nimblesite.deslop-live");
     assert.ok(ext, "extension must be installed");
     const api = await ext.activate();
     assert.ok(ext.isActive, "extension must be active against the real LSP");

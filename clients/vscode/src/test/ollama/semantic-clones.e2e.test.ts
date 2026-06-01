@@ -29,7 +29,7 @@ import type {
 } from "../../types/report";
 import { sleep } from "../suite/helpers";
 
-const EXT_ID = "nimblesite.deslop-vscode";
+const EXT_ID = "nimblesite.deslop-live";
 const OLLAMA_ENDPOINT = "http://127.0.0.1:11434";
 const OLLAMA_MODEL = "nomic-embed-text";
 const COS_FLOOR = 0.3;

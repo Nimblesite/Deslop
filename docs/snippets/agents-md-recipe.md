@@ -12,19 +12,19 @@ The MCP rules below assume your client can actually call `deslop-mcp`. Configure
 
 **The binary you wire up is the one bundled inside the installed VSIX**, not a `cargo install` build. Building Deslop from source produces `target/release/deslop-mcp` for testing only — it is deliberately not installed onto `PATH`. Point your MCP client at the unpacked VSIX path so the agent talks to the exact binary the extension ships and stays version-locked to it.
 
-After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+After `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, the binary lives at:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`. `<VERSION>` is the installed extension version — update it when you update the VSIX.
 
-- **Claude Code:** `claude mcp add deslop -s user -- ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp --root .`
+- **Claude Code:** `claude mcp add deslop -s user -- ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp --root .`
 - **Codex (`~/.codex/config.toml`):**
   ```toml
   [mcp_servers.deslop]
-  command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+  command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
   args    = ["--root", "."]
   ```
 - **Claude Desktop, Cursor, Continue:** same idea — set `command` to the absolute VSIX path, set `args` to `["--root", "<absolute repo path>"]`.

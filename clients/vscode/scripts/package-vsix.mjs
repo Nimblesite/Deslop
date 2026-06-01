@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const target = argValue("--target") ?? currentTarget();
-const output = argValue("--out") ?? `deslop-vscode-${target}.vsix`;
+const output = argValue("--out") ?? `deslop-live-${target}.vsix`;
 
 run("npm", ["run", "build"]);
 run("npx", ["vsce", "package", "--no-dependencies", "--target", target, "-o", output]);

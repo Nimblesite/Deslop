@@ -253,11 +253,14 @@ pub fn parser_for_language<'a>(
 /// (implements [PIPELINE-LANG-TRAIT]).
 #[must_use]
 pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
-    use crate::lang::{csharp::CSharpParser, python::PythonParser, rust_lang::RustParser};
+    use crate::lang::{
+        csharp::CSharpParser, dart::DartParser, python::PythonParser, rust_lang::RustParser,
+    };
     vec![
         Box::new(CSharpParser::new()),
         Box::new(RustParser::new()),
         Box::new(PythonParser::new()),
+        Box::new(DartParser::new()),
     ]
 }
 

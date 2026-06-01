@@ -4,7 +4,7 @@ title: Duplication is the tax LLMs charge for speed
 date: 2026-04-20
 author: Christian Findlay
 tags: posts
-description: Coding agents generate plausible code faster than humans can review it — and duplicate it faster too. Deslop treats that as the defining problem of the era. Why the live LSP + MCP server matters more than another batch CLI.
+description: Coding agents duplicate code faster than humans can review it. Why Deslop's live LSP + MCP server treats duplication as the defining problem of the AI era.
 excerpt: Coding agents generate plausible code faster than humans can review it. They also duplicate it faster. Here's why Deslop treats that as the defining problem of the era, not a side-effect.
 ---
 
@@ -25,7 +25,7 @@ Deslop rebuilds from both assumptions. Output is ranked by the weighted impact o
 
 The feature that matters most is not the breadth of languages, not the precision of same-behavior detection (Type-4), not the cleverness of the fusion. It is **time to first useful signal**. A duplicate that surfaces three commits after it lands is a duplicate you will not refactor. A duplicate that surfaces while the agent is still holding the file open is a duplicate you fix before the next message.
 
-So the entire pipeline is tuned for that. The cache is keyed so unchanged files are free. The parser is tree-sitter, which is fast enough to handle a 2M-LOC repo cold. The ranking is cheap — one multiplication and a logarithm per cluster. The LSP shell ships today and lights duplication up in the editor at the speed of a spellchecker; the MCP shell exposes the same live analysis to Claude, Cursor, and Copilot before the agent even types the duplicate.
+So the entire pipeline is tuned for that. The cache is keyed so unchanged files are free, so a warm pass only re-parses the files you just touched. The ranking is cheap — one multiplication and a logarithm per cluster. The LSP shell ships today and lights duplication up in the editor at the speed of a spellchecker; the MCP shell exposes the same live analysis to Claude, Cursor, and Copilot before the agent even types the duplicate.
 
 Speed is not a feature of Deslop. Speed is the whole point.
 

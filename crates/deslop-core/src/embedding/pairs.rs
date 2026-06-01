@@ -14,6 +14,12 @@ use crate::fingerprint::Fingerprint;
 /// the pair stream is later unioned with the structural + LSH pairs;
 /// recall comes from the union, not from the ANN fan-out alone.
 const TOP_K: usize = 5;
+/// Maximum corpus size where exact pair scoring is cheaper and more
+/// reliable than ANN recall. Small fixture and edited-file runs can have
+/// many near-tied subtree embeddings; exact scoring prevents top-k
+/// neighbour truncation from dropping the only declaration-level Type-4
+/// pair.
+const EXACT_PAIR_LIMIT: usize = 256;
 /// Minimum cosine similarity required for a pair to count as an
 /// embedding candidate. The fused threshold in [`crate::pair`] still
 /// applies; this gate keeps noisy low-cosine neighbours out of the
@@ -49,6 +55,17 @@ pub fn embedding_pairs(
     if embeddings.len() != fingerprints.len() || embeddings.len() < 2 {
         return Vec::new();
     }
+    let ann_pairs = ann_embedding_pairs(embeddings);
+    if embeddings.len() <= EXACT_PAIR_LIMIT {
+        let mut pairs = ann_pairs;
+        pairs.extend(exact_embedding_pairs(embeddings));
+        return dedupe(pairs);
+    }
+    ann_pairs
+}
+
+/// Retrieves top-k ANN neighbours for every embedding.
+fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
     let points: Vec<CosinePoint> = embeddings
         .iter()
         .map(|vector| CosinePoint::new(vector))
@@ -62,6 +79,45 @@ pub fn embedding_pairs(
         collect_neighbours(&map, &probe, query_index, &mut search, &mut pairs);
     }
     dedupe(pairs)
+}
+
+/// Scores every pair exactly for small corpora where ANN top-k recall is
+/// more fragile than the quadratic work is expensive.
+fn exact_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
+    let points: Vec<CosinePoint> = embeddings
+        .iter()
+        .map(|vector| CosinePoint::new(vector))
+        .collect();
+    let mut pairs = Vec::new();
+    for left in 0..points.len() {
+        collect_exact_pairs_from(left, &points, &mut pairs);
+    }
+    pairs
+}
+
+/// Appends exact embedding candidates for one left endpoint.
+fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec<EmbeddingPair>) {
+    let Some(left_point) = points.get(left) else {
+        return;
+    };
+    for right in left.saturating_add(1)..points.len() {
+        let Some(right_point) = points.get(right) else {
+            continue;
+        };
+        let cosine = cosine_between(left_point, right_point);
+        if cosine >= MIN_COSINE {
+            pairs.push(EmbeddingPair {
+                left,
+                right,
+                cosine,
+            });
+        }
+    }
+}
+
+/// Returns cosine similarity for two already-normalised points.
+fn cosine_between(left: &CosinePoint, right: &CosinePoint) -> f64 {
+    cosine_from_distance(f64::from(left.distance(right)))
 }
 
 /// Runs a single HNSW query and appends any surviving pairs to `out`.

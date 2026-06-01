@@ -6,6 +6,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 interface PackageContribution {
+  name: string;
+  publisher: string;
   activationEvents: string[];
   contributes: {
     commands: CommandContribution[];
@@ -35,6 +37,12 @@ function commandTitle(pkg: PackageContribution, command: string): string | undef
 }
 
 suite("package menu contributions", () => {
+  test("extension id stays aligned with the released VSIX id", () => {
+    const pkg = extensionPackage();
+    assert.equal(pkg.publisher, "nimblesite");
+    assert.equal(pkg.name, "deslop-live");
+  });
+
   test("activationEvents includes onStartupFinished so analysis begins at VS Code startup", () => {
     const pkg = extensionPackage();
     assert.ok(

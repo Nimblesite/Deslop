@@ -30,6 +30,7 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
         "csharp" => csharp_carrier(kind),
         "python" => python_carrier(kind),
         "rust" => rust_carrier(kind),
+        "dart" => dart_carrier(kind),
         _ => false,
     }
 }
@@ -104,6 +105,14 @@ fn python_carrier(kind: &str) -> bool {
 /// Rust import/prologue carriers.
 fn rust_carrier(kind: &str) -> bool {
     matches!(kind, "use_declaration" | "extern_crate_declaration")
+}
+
+/// Dart import/export/part directives. `import_or_export` is the umbrella
+/// node wrapping `library_import`, `library_export`, and `part`/`part of`
+/// directives — all top-level scaffolding, never duplicate logic
+/// (issues #96 / #150 / #155 carried over to Dart export-barrel files).
+fn dart_carrier(kind: &str) -> bool {
+    matches!(kind, "import_or_export")
 }
 
 /// Language-specific wrappers whose children encode prologue-only syntax.

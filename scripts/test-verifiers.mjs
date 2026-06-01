@@ -376,7 +376,15 @@ function buildVsixZip(work, options) {
     const manifestSource = options.manifest ?? join(repoRoot, "shipwright.json");
     copyFileSync(manifestSource, join(extensionRoot, "shipwright.json"));
   }
+  writeFileSync(
+    join(extensionRoot, "package.json"),
+    JSON.stringify({ publisher: "nimblesite", name: "deslop-live" }),
+  );
 
+  writeFakeBinary(join(binDir, "deslop"), {
+    plain: `deslop ${validVersion}`,
+    json: { manifestVersion: 1, name: "deslop", version: validVersion, kind: "cli", language: "rust", product: "deslop" },
+  });
   if (!options.skipBundledLsp) {
     const name = options.lspName ?? "deslop-lsp";
     const version = options.lspVersion ?? validVersion;
@@ -453,7 +461,7 @@ function writeReleaseWorkflow(work, options) {
     lines.push("      - run: npx vsce package --no-dependencies -o deslop.vsix");
     lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
   } else if (!options.skipVsixGate) {
-    lines.push("      - run: cd clients/vscode && npm run package -- --target ${{ matrix.vsix_target }} --out deslop-vscode-0.1.0-${{ matrix.vsix_target }}.vsix");
+    lines.push("      - run: cd clients/vscode && npm run package -- --target ${{ matrix.vsix_target }} --out deslop-live-0.1.0-${{ matrix.vsix_target }}.vsix");
     lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
   } else {
     lines.push("      - run: echo skipped");

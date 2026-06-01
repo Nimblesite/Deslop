@@ -80,6 +80,7 @@ pub(super) fn pairs_from_successful_embeddings(
     embedding_pairs(&successful_fingerprints, &vectors)
         .into_iter()
         .filter_map(|pair| remap_pair(pair, indexed))
+        .filter(|pair| ranges_do_not_overlap(pair, fingerprints))
         .collect()
 }
 
@@ -123,4 +124,19 @@ fn remap_pair(pair: EmbeddingPair, indexed: &[IndexedEmbedding]) -> Option<Embed
         right,
         cosine: pair.cosine,
     })
+}
+
+/// Keeps semantic edges from joining nested same-file subtrees into one
+/// transitive component. Cross-file pairs and disjoint same-file pairs are
+/// valid clone evidence; ancestor/descendant ranges are not.
+fn ranges_do_not_overlap(pair: &EmbeddingPair, fingerprints: &[Fingerprint]) -> bool {
+    let Some(left) = fingerprints.get(pair.left) else {
+        return false;
+    };
+    let Some(right) = fingerprints.get(pair.right) else {
+        return false;
+    };
+    left.file_id != right.file_id
+        || left.byte_range.end <= right.byte_range.start
+        || right.byte_range.end <= left.byte_range.start
 }

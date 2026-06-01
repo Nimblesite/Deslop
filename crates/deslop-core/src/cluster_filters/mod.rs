@@ -86,6 +86,7 @@
 //! source bytes) falls through unchanged.
 
 mod calls;
+mod dart;
 mod python;
 mod python_class_shapes;
 mod python_idioms;
@@ -93,6 +94,7 @@ mod python_module_preamble;
 mod python_orm;
 mod role_compat;
 mod rust;
+mod snippets;
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -101,7 +103,10 @@ use std::{
 
 use tree_sitter::Node;
 
-use crate::{ast::ByteRange, fingerprint::Fingerprint, lang::shared::parse_source, state::FileId};
+pub(crate) use snippets::ParseCache;
+use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
+
+use crate::{ast::ByteRange, fingerprint::Fingerprint, state::FileId};
 
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns `true` when the cluster should be
@@ -110,33 +115,63 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
 ) -> bool {
     let Some(language) = uniform_language(members, file_languages) else {
         return false;
     };
-    let Some(snippets) = collect_snippets(members, sources, language) else {
+    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
         return false;
     };
+    // Generic, language-agnostic noise checks run for every language (they
+    // key off per-language kind maps). The language-specific idiom filters
+    // only fire for their own language, so gate them by `language` rather
+    // than walking every Dart/C# cluster's CST through Python/Rust matchers
+    // that can never match — that wasted walk dominated analysis time on
+    // large codegen-heavy repos ([CLONE-NOISE-REPARSE-CACHE]).
     is_polymorphic_signature_cluster(&snippets)
         || is_signature_only_cluster(&snippets)
-        || rust::is_rust_language_parser_adapter_cluster(&snippets)
-        || python_idioms::is_generated_template_output_cluster(&snippets)
-        || python_idioms::is_jwt_hmac_independent_verifier_cluster(&snippets)
         || calls::is_literal_variation_call_cluster(&snippets)
-        || python_idioms::is_monkeypatch_scaffolding_literal_cluster(&snippets)
-        || python_idioms::is_python_all_exports_cluster(&snippets)
-        || python::is_python_assertion_only_cluster(&snippets)
-        || python::is_chained_dict_assert_cluster(&snippets)
-        || python_orm::is_kwargs_only_constructor_cluster(&snippets)
-        || python_orm::is_sqlalchemy_mapped_column_cluster(&snippets)
-        || python::is_test_dict_literal_cluster(&snippets)
-        || python::is_pytest_fixture_boilerplate_cluster(&snippets)
-        || python_class_shapes::is_strenum_class_shape_cluster(&snippets)
-        || python_class_shapes::is_pydantic_partial_update_cluster(&snippets)
-        || python::is_parametric_invariant_test_cluster(&snippets)
-        || rust::is_rust_top_level_decl_cluster(&snippets)
-        || rust::is_rust_iter_collect_idiom_cluster(&snippets)
-        || python_module_preamble::is_module_preamble_sequence_cluster(&snippets)
+        || language_specific_noise(language, &snippets)
+}
+
+/// Language-specific idiom filters, dispatched by language so a cluster is
+/// only walked by matchers that can fire for it. C# and Dart have no
+/// idiom filters today — they rely on the generic checks plus the fusion
+/// and report-hide gates.
+fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
+    match language {
+        "dart" => dart::is_dart_class_field_declaration_cluster(snippets),
+        "python" => python_noise(snippets),
+        "rust" => rust_noise(snippets),
+        _ => false,
+    }
+}
+
+/// All Python idiom noise filters (issues #96/#97/#99/#100/#104/#105/#107/
+/// #112/#114/#115/#121/#126 and monkeypatch scaffolding).
+fn python_noise(snippets: &[Snippet<'_>]) -> bool {
+    python_idioms::is_generated_template_output_cluster(snippets)
+        || python_idioms::is_jwt_hmac_independent_verifier_cluster(snippets)
+        || python_idioms::is_monkeypatch_scaffolding_literal_cluster(snippets)
+        || python_idioms::is_python_all_exports_cluster(snippets)
+        || python::is_python_assertion_only_cluster(snippets)
+        || python::is_chained_dict_assert_cluster(snippets)
+        || python_orm::is_kwargs_only_constructor_cluster(snippets)
+        || python_orm::is_sqlalchemy_mapped_column_cluster(snippets)
+        || python::is_test_dict_literal_cluster(snippets)
+        || python::is_pytest_fixture_boilerplate_cluster(snippets)
+        || python_class_shapes::is_strenum_class_shape_cluster(snippets)
+        || python_class_shapes::is_pydantic_partial_update_cluster(snippets)
+        || python::is_parametric_invariant_test_cluster(snippets)
+        || python_module_preamble::is_module_preamble_sequence_cluster(snippets)
+}
+
+/// All Rust idiom noise filters (issues #75/#147/#150/#155).
+fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
+    rust::is_rust_language_parser_adapter_cluster(snippets)
+        || rust::is_rust_top_level_decl_cluster(snippets)
+        || rust::is_rust_iter_collect_idiom_cluster(snippets)
 }
 
 /// Decides whether an embedding-dominant `same_behavior` cluster pairs
@@ -151,11 +186,12 @@ pub(crate) fn is_embedding_role_mismatch<S: BuildHasher>(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
 ) -> bool {
     let Some(language) = uniform_language(members, file_languages) else {
         return false;
     };
-    let Some(snippets) = collect_snippets(members, sources, language) else {
+    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
         return false;
     };
     role_compat::is_role_incompatible_embedding_match(&snippets)
@@ -224,57 +260,6 @@ pub(super) fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
         .position(|byte| !byte.is_ascii_whitespace())
         .unwrap_or(bytes.len());
     bytes.get(first..).unwrap_or_default()
-}
-
-/// One re-parsed cluster member: language, raw bytes, the byte range
-/// inside `source` that the fingerprint covered, and the originating
-/// [`FileId`] so cross-file uniqueness checks do not depend on
-/// pointer identity.
-pub(super) struct Snippet<'a> {
-    /// Language id used to select the tree-sitter grammar.
-    pub(super) language: &'static str,
-    /// Full file source bytes for the member.
-    pub(super) source: &'a [u8],
-    /// Byte range covered by the member fingerprint.
-    pub(super) range: ByteRange,
-    /// Registry id of the source file containing this member.
-    pub(super) file_id: FileId,
-}
-
-/// Returns a single language id when every member shares it.
-fn uniform_language<S: BuildHasher>(
-    members: &[Fingerprint],
-    file_languages: &HashMap<FileId, &'static str, S>,
-) -> Option<&'static str> {
-    let first = file_languages.get(&members.first()?.file_id)?;
-    if members
-        .iter()
-        .all(|member| file_languages.get(&member.file_id) == Some(first))
-    {
-        Some(*first)
-    } else {
-        None
-    }
-}
-
-/// Collects `(language, source, range)` tuples for every member, returning
-/// `None` if any member's source bytes are unavailable.
-fn collect_snippets<'a>(
-    members: &[Fingerprint],
-    sources: &'a HashMap<FileId, Vec<u8>>,
-    language: &'static str,
-) -> Option<Vec<Snippet<'a>>> {
-    members
-        .iter()
-        .map(|member| {
-            sources.get(&member.file_id).map(|source| Snippet {
-                language,
-                source: source.as_slice(),
-                range: member.byte_range,
-                file_id: member.file_id,
-            })
-        })
-        .collect()
 }
 
 /// Detects **issue #154** [CLONE-NOISE-SIGNATURE-ONLY]: every cluster
@@ -407,10 +392,33 @@ fn enclosing_function_name<'a>(snippet: &'a Snippet<'_>) -> Option<&'a [u8]> {
         snippet.range,
         function_kinds(snippet.language),
     )?;
-    let name_node = function.child_by_field_name("name")?;
+    let name_node = function_name_node(function)?;
     snippet
         .source
         .get(name_node.start_byte()..name_node.end_byte())
+}
+
+/// Resolves the identifier node that names `function`. Python, C#, and
+/// Rust expose a direct `name` field on the function node. Dart instead
+/// nests it under `signature` — `function_signature.name` for a top-level
+/// `function_declaration`, and `method_signature → function_signature.name`
+/// for a `method_declaration`. Without this descent
+/// [`enclosing_function_name`] returns `None` for every Dart member, so
+/// the polymorphic-signature filter (#69) could never fire on Dart even
+/// though `function_kinds` lists its node kinds.
+fn function_name_node(function: Node<'_>) -> Option<Node<'_>> {
+    if let Some(name) = function.child_by_field_name("name") {
+        return Some(name);
+    }
+    let signature = function.child_by_field_name("signature")?;
+    if let Some(name) = signature.child_by_field_name("name") {
+        return Some(name);
+    }
+    let mut cursor = signature.walk();
+    let nested = signature
+        .named_children(&mut cursor)
+        .find_map(|child| child.child_by_field_name("name"));
+    nested
 }
 
 /// Returns the set of tree-sitter node kinds that count as function
@@ -420,6 +428,10 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
         b"python" => &["function_definition"],
         b"csharp" => &["method_declaration", "local_function_statement"],
         b"rust" => &["function_item"],
+        // Dart `function_declaration`/`method_declaration` both expose a
+        // `body` field, so the signature-only filter (#154) can compare
+        // bodies after a signature-only structural match.
+        b"dart" => &["function_declaration", "method_declaration"],
         _ => &[],
     }
 }
@@ -459,22 +471,4 @@ pub(super) fn enclosing_kind<'tree>(
         }
     }
     best
-}
-
-/// Parses the snippet's full source so we can walk a real tree-sitter
-/// CST instead of the normalised one. Returns `None` when the language
-/// has no registered grammar here.
-pub(super) fn parse_for(snippet: &Snippet<'_>) -> Option<tree_sitter::Tree> {
-    let language = grammar_for(snippet.language)?;
-    parse_source(snippet.language, &language, snippet.source).ok()
-}
-
-/// Maps a language id to its tree-sitter grammar.
-fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
-    match language {
-        "python" => Some(tree_sitter_python::LANGUAGE.into()),
-        "csharp" => Some(tree_sitter_c_sharp::LANGUAGE.into()),
-        "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
-        _ => None,
-    }
 }

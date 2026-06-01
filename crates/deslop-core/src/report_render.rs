@@ -110,7 +110,8 @@ pub(crate) fn occurrence<S: BuildHasher>(
     let language = file_languages.get(&file_id).copied().unwrap_or("");
     let hidden = absolute
         .as_deref()
-        .is_some_and(|abs| exclusion.is_report_hidden(abs, language));
+        .is_some_and(|abs| exclusion.is_report_hidden(abs, language))
+        || source.is_some_and(crate::config::has_generated_header);
     let (start_line, end_line) = source.map_or((0, 0), |bytes| {
         byte_range_to_line_range(bytes, byte_range.start, byte_range.end)
     });

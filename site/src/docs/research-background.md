@@ -50,7 +50,7 @@ Each row pairs a research line with the file that implements it (✅), the plan 
 
 | Research line | What Deslop takes from it | Status & implementation pointer |
 | --- | --- | --- |
-| [Baxter et al. 1998 — AST clone detection](https://ieeexplore.ieee.org/document/738528) | Parse code into syntax trees, normalize irrelevant spelling, and compare tree structure rather than raw text. | ✅ `crates/deslop-core/src/lang/shared.rs`, `lang/csharp.rs`, `lang/rust_lang.rs`, `lang/python.rs` (registered through `pipeline/corpus.rs::default_parsers`) |
+| [Baxter et al. 1998 — AST clone detection](https://ieeexplore.ieee.org/document/738528) | Parse code into syntax trees, normalize irrelevant spelling, and compare tree structure rather than raw text. | ✅ `crates/deslop-core/src/lang/shared.rs`, `lang/csharp.rs`, `lang/rust_lang.rs`, `lang/python.rs`, `lang/dart.rs` (registered through `pipeline/corpus.rs::default_parsers`) |
 | Chilowicz et al. 2009 — syntax-tree fingerprinting | Hash subtrees so exact structural clones become equal fingerprints; extend coverage with sibling sequences for near-miss clones. | ✅ Bottom-up BLAKE3 Merkle in `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` and width-2..8 sibling windows in `crates/deslop-core/src/sibling.rs::collect_non_boilerplate_sibling_fingerprints` |
 | [SourcererCC (Sajnani et al. 2016)](https://arxiv.org/abs/1512.06448) | Token k-grams and Jaccard similarity for scalable near-miss detection. | ✅ Adapted to **normalized AST-kind k-grams** rather than raw source tokens: `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
 | [MinHash (Broder 1997)](https://ieeexplore.ieee.org/document/666900) | Estimates Jaccard from compact signatures. | ✅ 128-value signatures in `crates/deslop-core/src/lsh.rs::minhash_signature`; Jaccard estimated by `estimate_jaccard` |
@@ -74,7 +74,7 @@ The batch CLI and live services both run through `PipelineSession`. The batch en
 
 `crates/deslop-core/src/discover.rs::discover_files` walks the target root with the `ignore` crate, applies standard ignore filters, does not follow symlinks, filters by registered language extensions, applies `.deslop.toml` exclusion rules, and registers surviving files in a `FileRegistry`.
 
-Supported language parsers are currently registered by `crates/deslop-core/src/pipeline/corpus.rs::default_parsers`: C#, Rust, and Python. TypeScript, JavaScript, Go, and other languages are not registered in the current core pipeline.
+Supported language parsers are currently registered by `crates/deslop-core/src/pipeline/corpus.rs::default_parsers`: C#, Rust, Python, and Dart. TypeScript, JavaScript, Go, and other languages are not registered in the current core pipeline.
 
 ### 2. Parse and normalize
 
@@ -85,6 +85,7 @@ Normalization is language-specific:
 - C#: `crates/deslop-core/src/lang/csharp.rs`
 - Rust: `crates/deslop-core/src/lang/rust_lang.rs`
 - Python: `crates/deslop-core/src/lang/python.rs`
+- Dart: `crates/deslop-core/src/lang/dart.rs`
 
 The shared constants are `__ident__` for identifier-like nodes and `__literal__` for literal-like nodes. Comments and trivia are dropped by returning `None` from the language-specific normalizer. This is the mechanism that makes renamed Type-2 clones hash together.
 
@@ -192,7 +193,7 @@ The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and
 
 | Claim | Verify in code | Useful tests |
 | --- | --- | --- |
-| Only C#, Rust, and Python are registered today. | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_rust_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_python_fixture` |
+| C#, Rust, Python, and Dart are registered today. | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_rust_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_python_fixture` |
 | Type-2 normalization collapses identifiers and literals. | `crates/deslop-core/src/lang/shared.rs`, language parser files | `cargo test -p deslop --test cli debug_ast_dump_matches_committed_golden` |
 | Structural clones are BLAKE3 Merkle subtree hashes. | `crates/deslop-core/src/fingerprint.rs` | `cargo test -p deslop --test sibling_dedup` |
 | Type-3 recall uses sibling windows and MinHash LSH. | `crates/deslop-core/src/sibling.rs`, `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/lsh.rs` | `cargo test -p deslop --test sibling_ranking` |
@@ -201,7 +202,7 @@ The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and
 | Fused score is bounded. | `crates/deslop-core/src/pair.rs::PairScore::fused` | `cargo test -p deslop --test fused_score_bounds` |
 | Cross-language comparison is disabled unless configured. | `crates/deslop-core/src/config.rs`, `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` | `cargo test -p deslop --test cross_language` |
 | Live/LSP paths use `LiveService` over `PipelineSession`. | `crates/deslop-core/src/live/`, `crates/deslop-lsp/src/backend.rs` | `cargo test -p deslop-lsp --test notifications` |
-| MCP tools are stdio JSON-RPC wrappers with root safety checks. | `crates/deslop-mcp/src/server.rs`, `crates/deslop-mcp/src/tools.rs`, `crates/deslop-mcp/src/safety.rs` | `cargo test -p deslop-mcp --test cli` |
+| MCP tools are stdio JSON-RPC wrappers with root safety checks. | `crates/deslop-mcp/src/server.rs`, `crates/deslop-mcp/src/tools/mod.rs`, `crates/deslop-mcp/src/safety.rs` | `cargo test -p deslop-mcp --test cli` |
 
 For a broad local audit, run the repository's CI target:
 

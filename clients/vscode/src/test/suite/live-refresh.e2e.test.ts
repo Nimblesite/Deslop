@@ -13,7 +13,7 @@ import * as vscode from "vscode";
 import type { ExtensionApi } from "../../extension";
 
 async function getApi(): Promise<ExtensionApi> {
-  const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+  const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
   assert.ok(ext, "extension must be installed");
   return await (ext.activate() as Promise<ExtensionApi>);
 }

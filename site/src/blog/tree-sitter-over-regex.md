@@ -4,7 +4,7 @@ title: Regex on source code is illegal
 date: 2026-04-10
 author: Christian Findlay
 tags: posts
-description: Deslop parses every language with tree-sitter — no regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with, and why it survives reformatting and identifier renaming.
+description: Deslop parses every language with tree-sitter — no regex, no line-matching. Why that constraint matters, and how it survives reformatting and identifier renaming.
 excerpt: Deslop parses every language with tree-sitter. No regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with.
 ---
 
@@ -42,6 +42,6 @@ Tree-sitter is not a convenience in Deslop — it is the entire foundation. Ever
 
 - **Rename refactors do not hide duplication.** A cluster survives an identifier rename because the fingerprint runs on the normalized AST.
 - **Formatting changes do not create false positives.** Reformatting a file with `rustfmt` does not change what Deslop sees.
-- **Language parity is real.** The same fingerprinting logic runs on C#, Rust, Python, and every language added later. Cross-language comparisons (when they make sense) use the same math.
+- **Language parity is real.** The same fingerprinting logic runs on C#, Rust, Python, Dart, and every language added later. Cross-language comparisons (when they make sense) use the same math.
 
 Line-matching is a 1990s compromise with hardware that no longer exists. Tree-sitter is the upgrade. Deslop ships the upgrade as the baseline, not a premium tier.

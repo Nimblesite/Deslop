@@ -17,7 +17,7 @@ async function openFixture(name: string): Promise<vscode.TextEditor> {
 
 suite("surfaces", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
     assert.ok(ext, "extension must be installed");
     await ext.activate();
     await sleep(1500);
@@ -94,7 +94,7 @@ suite("surfaces", () => {
 
   test("inlay hints provider is registered for C#", () => {
     // Registration happens at activation — if activation succeeded the provider is live.
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
     assert.ok(ext?.isActive);
   });
 });

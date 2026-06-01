@@ -11,6 +11,7 @@ use tree_sitter::Language;
 use crate::{ast::NormalizedNode, error::CoreError, state::FileId};
 
 pub mod csharp;
+pub mod dart;
 pub mod python;
 pub mod rust_lang;
 pub mod shared;

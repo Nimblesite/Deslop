@@ -4,7 +4,7 @@
 
 This is not a batch scanner. It is a long-running server with a file watcher, a debouncer, an incremental cache, and atomic state writes. Every editor surface and every MCP tool reads the same live state on every keystroke.
 
-[VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-vscode) · [Latest release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
+[VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) · [Latest release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
 
 ---
 
@@ -49,7 +49,7 @@ The CLI is the **cold-cache fallback** for one-shot audits and CI gates. Every o
 - **VS Code extension** — bundles the LSP + MCP binaries; surfaces the live bubble, **Top Offenders** tree, focused-file view, session panel, cluster webview, status bar, hover, code lens, decorations, and a Compare action.
 - **CLI (`deslop`)** — cold-cache fallback. Same engine, emits `.json`, `.txt`, `.html` reports for CI gates and bulk audits.
 
-**Languages today:** C#, Rust, Python — all tree-sitter grammars. **No regex on source. Ever.** TypeScript / JavaScript and Go are on the roadmap.
+**Languages today:** C#, Rust, Python, Dart — all tree-sitter grammars. **No regex on source. Ever.** TypeScript / JavaScript and Go are on the roadmap.
 
 **IDE extensions in development:**
 
@@ -68,8 +68,8 @@ Every detection algorithm in the table below is a real file, not a future plan:
 
 | Research line | What it implements | Code |
 | --- | --- | --- |
-| Tree-sitter parsing (Baxter 1998) | C# / Rust / Python AST per language | [`crates/deslop-core/src/lang/`](crates/deslop-core/src/lang/) |
-| AST normalization | Type-2 collapse: `__id__` / `__lit__` + comment/trivia drop | [`lang/shared.rs`](crates/deslop-core/src/lang/shared.rs) |
+| Tree-sitter parsing (Baxter 1998) | C# / Rust / Python / Dart AST per language | [`crates/deslop-core/src/lang/`](crates/deslop-core/src/lang/) |
+| AST normalization | Type-2 collapse: `__ident__` / `__literal__` + comment/trivia drop | [`lang/shared.rs`](crates/deslop-core/src/lang/shared.rs) |
 | Merkle subtree fingerprints (Chilowicz 2009) | Bottom-up BLAKE3 over normalized AST | [`fingerprint.rs`](crates/deslop-core/src/fingerprint.rs) |
 | Sibling-window extension | Type-3 recall over widths 2–8 | [`sibling.rs`](crates/deslop-core/src/sibling.rs) |
 | MinHash + LSH (Broder 1997 / Indyk-Motwani 1998 / SourcererCC 2016) | 128-value MinHash, 32 × 4 banding over normalized k-grams | [`tokens.rs`](crates/deslop-core/src/tokens.rs), [`lsh.rs`](crates/deslop-core/src/lsh.rs) |
@@ -86,11 +86,11 @@ Full research → code map: [docs/specs/SPEC.md §Algorithm implementation statu
 
 **The VSIX is the one install that gives you everything**: the live bubble, the LSP server, the MCP server, and the `deslop` CLI all at once. The bundled binaries are the canonical ones — every MCP client below points at them by absolute path so you stay version-locked to the extension.
 
-1. Grab `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+1. Grab `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
 2. Install it:
 
    ```bash
-   code --install-extension deslop-vscode-X.Y.Z-<target>.vsix
+   code --install-extension deslop-live-X.Y.Z-<target>.vsix
    ```
 
    Or: **Extensions panel → `…` menu → Install from VSIX…**
@@ -166,12 +166,12 @@ Deslop ships `deslop-mcp` — an MCP server exposing the live workspace analysis
 
 The VS Code extension bundles `deslop-mcp` alongside the LSP, **and that bundled binary is the canonical one for every external MCP client too** (Claude Code, Claude Desktop, Codex, Cursor, Continue). The MCP config snippets below use an absolute path into the unpacked VSIX so the agent runs the exact binary the extension ships — version-locked to the VSIX, no PATH drift, no stale `cargo install` shadowing the release.
 
-After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+After `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, the binary lives at:
 
 | Platform | Path |
 | --- | --- |
-| macOS / Linux | `~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp` |
-| Windows | `%USERPROFILE%\.vscode\extensions\nimblesite.deslop-vscode-<VERSION>\bin\win32-x64\deslop-mcp.exe` |
+| macOS / Linux | `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp` |
+| Windows | `%USERPROFILE%\.vscode\extensions\nimblesite.deslop-live-<VERSION>\bin\win32-x64\deslop-mcp.exe` |
 
 `<platform>` is one of `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`. `<VERSION>` is the installed extension version — bump it whenever you update the VSIX.
 
@@ -185,7 +185,7 @@ Paste-ready snippet for your project's `AGENTS.md` / `CLAUDE.md` / `.cursorrules
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -195,7 +195,7 @@ Or edit `~/.claude.json` directly:
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "."]
     }
   }
@@ -212,7 +212,7 @@ Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "/absolute/path/to/your/repo"]
     }
   }
@@ -227,7 +227,7 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 

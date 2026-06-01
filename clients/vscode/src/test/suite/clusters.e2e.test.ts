@@ -14,7 +14,7 @@ interface ExtensionExports {
 }
 
 async function waitForReport(): Promise<ExtensionExports> {
-  const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+  const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
   assert.ok(ext, "extension must be installed");
   const api = await ext.activate() as ExtensionExports;
   // Initial report seeding takes time over stdio.

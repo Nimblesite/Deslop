@@ -67,7 +67,7 @@ plan is complete; this roadmap keeps the durable baseline.
 | tree-sitter-ruby             | 0.23.1         | ^0.1       | ✅               |
 | tree-sitter-bash             | 0.25.1         | ^0.1       | ✅               |
 | tree-sitter-php              | 0.24.2         | ^0.1       | ✅               |
-| tree-sitter-dart (nielsenko) | 0.1.0          | ^0.1       | ✅ (spike first) |
+| tree-sitter-dart (nielsenko) | 0.2.0          | ^0.1       | ✅ SHIPPED (=0.2.0) |
 | tree-sitter-swift            | 0.7.1          | *(ts ^0.23)* | ⚠ generated-file workaround |
 | tree-sitter-kotlin (fwcd)    | 0.3.8          | *(ts 0.21–0.22)* | ❌ incompatible |
 
@@ -352,14 +352,57 @@ code + e2e fixture + AST golden + grammar pin in `Cargo.toml`,
 - [ ] `crates/deslop-core/src/lang/go.rs`.
 - [ ] Fixture + golden.
 
-### Phase P-LANG-4 — Dart (SPIKE FIRST)
+### Phase P-LANG-4 — Dart (SPIKE FIRST) — COMPLETE, SPIKE GREEN
 
-- [ ] `[LANG-CAND-DART-SPIKE]` — 1-day grammar audit per
-      [LANG-CAND-DART]. Document outcome in this file under
-      `[LANG-CAND-DART-RESULT]`.
-- [ ] If spike passes: add `tree-sitter-dart = "=<pin>"`, implement
-      plugin, ship fixtures.
-- [ ] If spike fails: mark `[LANG-CAND-DART-PARKED]` and move on.
+- [x] `[LANG-CAND-DART-SPIKE]` — grammar audit per [LANG-CAND-DART].
+      Outcome documented under `[LANG-CAND-DART-RESULT]`.
+- [x] Spike passed: added `tree-sitter-dart = "=0.2.0"`, implemented
+      [`dart.rs`](../../crates/deslop-core/src/lang/dart.rs), shipped
+      fixtures (`dart-small`, `dart-type3`, `dart-dissimilar-functions`,
+      `ast-golden-dart`) and e2e tests.
+- [x] `[LANG-CAND-DART-PARKED]` not needed — the grammar cleared every
+      spike gate.
+
+### [LANG-CAND-DART-RESULT] Spike outcome (2026-05-30) — GREEN
+
+The nielsenko `tree-sitter-dart` grammar shipped **`0.2.0`** on
+2026-04-26 (after the 2026-04-23 research above), superseding the
+`0.1.0` the roadmap evaluated. `0.2.0` declares `tree-sitter ^0.26` in
+its dev-dependencies and exposes the modern `LANGUAGE` (`LanguageFn`)
+constant via `tree-sitter-language ^0.1`, so it loads natively against
+Deslop's `=0.26.8` runtime (ABI v15, 483 node kinds) — no
+binding-version hacks, removing the `0.1.0` yellow flag.
+
+Spike gates (all passed against an isolated `tree-sitter 0.26.8`
+harness):
+
+1. **Zero `ERROR`/`MISSING` nodes** across 11 Dart-3 samples: records
+   (`(int, int)`), every pattern form (record / list / map / variable /
+   constant / wildcard / rest, plus `when` guards), `sealed` / `base` /
+   `final` class modifiers, extension types, enhanced enums, typedefs,
+   all nine string-quote variants (single/double/triple/raw +
+   interpolation), getters/setters/operators/factory ctors, cascades
+   (`..`), spreads (`...`), collection-`if`/`for`, generic bounds, and
+   `async*` / `sync*` generators.
+2. **Records and patterns round-trip** structurally (verified in the
+   AST golden `Sample.dart`).
+3. **Null-aware operators / nullable types** (`?.`, `??`, `T?`,
+   null-aware elements `[?x]`) parse cleanly.
+4. **`LanguageFn` surface matches `tree-sitter ^0.26`** with no
+   workaround.
+
+`normalise_kind` was derived from the full 221-kind named-and-visible
+grammar vocabulary (not just the sampled subset): identifier leaves
+(`identifier`, `identifier_dollar_escaped`, `type_identifier`) collapse
+to `__ident__`; every numeric/boolean/`null`/symbol literal and every
+string-quote variant plus its `template_chars_*` text chunks collapse
+to `__literal__` (so `'x'` and `"x"` fingerprint identically while
+`template_substitution` interpolation expressions stay structural);
+`comment` / `block_comment` / `documentation_block_comment` drop.
+End-to-end: Type-2 renamed clones reach `structural = 1.0` and
+`token_jaccard = 1.0`; a whole-function near-miss yields a cross-file
+cluster with `token_jaccard > 0`; structurally-unrelated functions
+never cluster across files.
 
 ### Phase P-LANG-5 — Java
 

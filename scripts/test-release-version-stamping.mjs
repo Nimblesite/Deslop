@@ -61,8 +61,14 @@ function stamperSetsEveryProjectVersion(work) {
   assertIncludes(read(work, "Cargo.lock"), `name = "deslop-lsp"\nversion = "${version}"`);
   assertJsonVersion(work, "shipwright.json", version);
   assertJsonVersion(work, "clients/vscode/shipwright.json", version);
-  assertJsonVersion(work, "clients/vscode/package.json", version);
-  assertJsonVersion(work, "clients/vscode/package-lock.json", version);
+  // The VSIX package version is the Marketplace-legal core MAJOR.MINOR.PATCH;
+  // every other project keeps the full version including the prerelease suffix.
+  const marketplace = version.split(/[-+]/, 1)[0];
+  if (marketplace === version) {
+    throw new Error("test version must carry a prerelease suffix to exercise marketplace stamping");
+  }
+  assertJsonVersion(work, "clients/vscode/package.json", marketplace);
+  assertJsonVersion(work, "clients/vscode/package-lock.json", marketplace);
   assertJsonVersion(work, "clients/vscode/webview-ui/package.json", version);
   assertJsonVersion(work, "clients/vscode/webview-ui/package-lock.json", version);
   assertJsonVersion(work, "site/package.json", version);

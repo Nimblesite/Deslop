@@ -1,0 +1,54 @@
+name: Deploy GitHub Pages
+
+# Reusable site deploy. It deliberately has NO `push` trigger — the live site
+# only updates as part of a release. release.yml calls this after the stable
+# GitHub Release is created (a release made with the default GITHUB_TOKEN does
+# not emit a `release: published` event that can start another workflow, so the
+# release pipeline invokes this one directly). `workflow_dispatch` allows a
+# manual redeploy. Nothing here fires on a push to main.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Build site
+        working-directory: site
+        run: npm run build
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/_site
+
+      - uses: actions/deploy-pages@v4
+        id: deploy
