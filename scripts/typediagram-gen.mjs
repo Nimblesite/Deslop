@@ -9,8 +9,12 @@ import { postprocess } from "./typediagram-gen/rust-postprocess.mjs";
 import { postprocessTs, TS_HEADER, tsImports } from "./typediagram-gen/ts-postprocess.mjs";
 
 function runTypediagram(target) {
+  // On Windows the global npm install exposes `typediagram` as a `.cmd`
+  // shim; execFileSync only resolves that through a shell (it does not
+  // append PATHEXT itself). Unix resolves the bare binary directly.
   const stdout = execFileSync("typediagram", ["--to", target, TD_PATH], {
     encoding: "utf8",
+    shell: process.platform === "win32",
   });
   return stdout;
 }

@@ -11,16 +11,22 @@
 //! pipeline; CI/one-shot use the `deslop` CLI.
 
 use std::{
-    io::{BufRead, BufReader},
+    io::BufReader,
     path::{Path, PathBuf},
     sync::{atomic::AtomicU64, atomic::Ordering, Arc, Mutex},
 };
+// `BufRead::read_line` is only reached on the Unix subscribe path below;
+// on non-Unix targets the subscribe functions are stubbed out.
+#[cfg(unix)]
+use std::io::BufRead;
+// `ReportChangedNotification` is only referenced by the Unix subscribe reader.
+#[cfg(unix)]
+use deslop_core::live::wire::ReportChangedNotification;
 
 use deslop_core::{
     live::wire::{
         ChangeSummary, EmbeddingModelInfo as WireEmbeddingModelInfo,
-        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, ReportChangedNotification,
-        SessionConfig,
+        FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, SessionConfig,
     },
     report::ReportCluster,
     EmbeddingSpec, Report,
@@ -172,6 +178,7 @@ fn spawn_subscribe_reader(
 
 /// Parses one `report/changed` notification frame, returning `None`
 /// when the line is not a recognisable notification.
+#[cfg(unix)]
 fn parse_report_changed(line: &str) -> Option<ReportChangedNotification> {
     let frame: Value = serde_json::from_str(line.trim()).ok()?;
     if frame.get("method").and_then(Value::as_str) != Some("report/changed") {
@@ -183,6 +190,7 @@ fn parse_report_changed(line: &str) -> Option<ReportChangedNotification> {
 
 /// Reads the `generation` field from the `report/subscribe` ack so
 /// the MCP can sync its counter without an extra IPC round-trip.
+#[cfg(unix)]
 fn parse_subscribe_ack_generation(line: &str) -> Option<u64> {
     let frame: Value = serde_json::from_str(line.trim()).ok()?;
     frame

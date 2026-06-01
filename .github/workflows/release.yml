@@ -86,6 +86,14 @@ jobs:
         with:
           node-version: "22.x"
 
+      # `typediagram` CLI is the wire-format generator invoked by the
+      # deslop-core build.rs on every `cargo build`. It must be installed
+      # before any cargo build step (matching .github/workflows/ci.yml),
+      # else build.rs fails with `spawnSync typediagram ENOENT`. Pinned to
+      # keep CI / devcontainer / Makefile in sync per CLAUDE.md.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.8.0
+
       - name: Stamp release version
         run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
 
@@ -104,17 +112,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-release-
 
-      - name: Install cross (for cross-compiled targets)
+      # linux-arm64 cross-compiles with the GNU aarch64 toolchain as the
+      # linker and the cc-crate C compiler (tree-sitter grammars are C/C++),
+      # NOT the `cross` Docker tool. `cross` runs cargo — and therefore the
+      # deslop-core build.rs / typediagram codegen — inside a container with
+      # no Node or `typediagram`, which fails the build. Native cross-linking
+      # keeps build.rs on the host where typediagram is installed (matches the
+      # Basilisk release workflow).
+      - name: Install aarch64 cross toolchain
         if: matrix.cross
-        run: cargo install cross --locked --version 0.2.5
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          {
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc"
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc"
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++"
+          } >> "$GITHUB_ENV"
 
-      - name: Build release binaries (native)
-        if: ${{ !matrix.cross }}
+      - name: Build release binaries
         run: cargo build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
-
-      - name: Build release binaries (cross)
-        if: matrix.cross
-        run: cross build --release --locked --target ${{ matrix.target }} -p deslop -p deslop-lsp -p deslop-mcp
 
       # Shipwright binary version contract (DTK-MIG-DESLOP-CI-GATES, #41).
       # Skipped for cross-compiled targets because the foreign-arch binary
@@ -347,7 +364,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Nimblesite/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.BREW_SCOOP_PAT }}
           path: homebrew-tap
 
       - name: Commit and push Formula
@@ -422,7 +439,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Nimblesite/scoop-bucket
-          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          token: ${{ secrets.BREW_SCOOP_PAT }}
           path: scoop-bucket
 
       - name: Commit and push manifest
