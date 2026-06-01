@@ -184,7 +184,7 @@ Rendered in monospace, 1px bordered, transparent background. Chips are informati
 The primary call-to-install is the **VS Code extension** — it bundles the LSP server, the MCP server, and the CLI together, and that's the only install that unlocks the live bubble. A single black-on-cream (or cream-on-black in dark mode) block with the install command, a copy affordance, and no marketing prose around it:
 
 ```
-code --install-extension deslop-vscode-*.vsix
+code --install-extension deslop-live-*.vsix
 ```
 
 …sourced from the latest [GitHub release](https://github.com/Nimblesite/Deslop/releases/latest). A secondary, smaller line offers the CLI-only paths:

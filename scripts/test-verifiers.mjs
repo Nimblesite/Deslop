@@ -461,7 +461,7 @@ function writeReleaseWorkflow(work, options) {
     lines.push("      - run: npx vsce package --no-dependencies -o deslop.vsix");
     lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
   } else if (!options.skipVsixGate) {
-    lines.push("      - run: cd clients/vscode && npm run package -- --target ${{ matrix.vsix_target }} --out deslop-vscode-0.1.0-${{ matrix.vsix_target }}.vsix");
+    lines.push("      - run: cd clients/vscode && npm run package -- --target ${{ matrix.vsix_target }} --out deslop-live-0.1.0-${{ matrix.vsix_target }}.vsix");
     lines.push("      - run: node clients/vscode/scripts/verify-vsix-package.mjs");
   } else {
     lines.push("      - run: echo skipped");

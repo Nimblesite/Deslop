@@ -90,7 +90,7 @@ function releaseBuildsPlatformSpecificVsixArtifacts() {
   );
   assertIncludes(
     workflow,
-    "deslop-vscode-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix",
+    "deslop-live-${{ needs.version.outputs.version }}-${{ matrix.vsix_target }}.vsix",
     "release VSIX filenames must include the release version and platform target",
   );
   assertAbsent(

@@ -4,6 +4,7 @@ import syntaxHighlight from "@11ty/eleventy-plugin-syntaxhighlight";
 const BLOG_INDEX_OVERRIDE = `---
 layout: layouts/base.njk
 title: Blog
+description: Field notes on duplicate-code detection for AI coding agents — ranking, tree-sitter parsing, the MCP and LSP servers, and why prevention beats cleanup.
 permalink: /blog/
 ---
 <div class="blog-container">

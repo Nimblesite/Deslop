@@ -12,7 +12,7 @@ The MCP rules below assume your client can actually call `deslop-mcp`. Configure
 
 **The binary you wire up is the one bundled inside the installed VSIX**, not a `cargo install` build. Building Deslop from source produces `target/release/deslop-mcp` for testing only — it is deliberately not installed onto `PATH`. Point your MCP client at the unpacked VSIX path so the agent talks to the exact binary the extension ships and stays version-locked to it.
 
-After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+After `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, the binary lives at:
 
 ```
 ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp

@@ -7,7 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const vsixRoot = path.resolve(here, "..");
 const repoRoot = path.resolve(vsixRoot, "..", "..");
 const sourcePath = path.resolve(repoRoot, "docs", "specs", "REPORTING-CONTEXT.md");
-const vsixArg = process.argv[2] ?? "deslop-vscode.vsix";
+const vsixArg = process.argv[2] ?? "deslop-live.vsix";
 const vsixPath = path.isAbsolute(vsixArg) ? vsixArg : path.resolve(vsixRoot, vsixArg);
 const entryPath = "extension/dist/schema_doc.md";
 

@@ -86,11 +86,11 @@ Full research → code map: [docs/specs/SPEC.md §Algorithm implementation statu
 
 **The VSIX is the one install that gives you everything**: the live bubble, the LSP server, the MCP server, and the `deslop` CLI all at once. The bundled binaries are the canonical ones — every MCP client below points at them by absolute path so you stay version-locked to the extension.
 
-1. Grab `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+1. Grab `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
 2. Install it:
 
    ```bash
-   code --install-extension deslop-vscode-X.Y.Z-<target>.vsix
+   code --install-extension deslop-live-X.Y.Z-<target>.vsix
    ```
 
    Or: **Extensions panel → `…` menu → Install from VSIX…**
@@ -166,7 +166,7 @@ Deslop ships `deslop-mcp` — an MCP server exposing the live workspace analysis
 
 The VS Code extension bundles `deslop-mcp` alongside the LSP, **and that bundled binary is the canonical one for every external MCP client too** (Claude Code, Claude Desktop, Codex, Cursor, Continue). The MCP config snippets below use an absolute path into the unpacked VSIX so the agent runs the exact binary the extension ships — version-locked to the VSIX, no PATH drift, no stale `cargo install` shadowing the release.
 
-After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
+After `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, the binary lives at:
 
 | Platform | Path |
 | --- | --- |

@@ -4,7 +4,7 @@ title: Duplication is the tax LLMs charge for speed
 date: 2026-04-20
 author: Christian Findlay
 tags: posts
-description: Coding agents generate plausible code faster than humans can review it — and duplicate it faster too. Deslop treats that as the defining problem of the era. Why the live LSP + MCP server matters more than another batch CLI.
+description: Coding agents duplicate code faster than humans can review it. Why Deslop's live LSP + MCP server treats duplication as the defining problem of the AI era.
 excerpt: Coding agents generate plausible code faster than humans can review it. They also duplicate it faster. Here's why Deslop treats that as the defining problem of the era, not a side-effect.
 ---
 

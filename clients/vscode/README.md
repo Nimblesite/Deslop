@@ -49,7 +49,7 @@ Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic insp
 
 ## Install
 
-- Download the platform-specific `deslop-vscode-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`.
+- Download the platform-specific `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then run `code --install-extension deslop-live-X.Y.Z-<target>.vsix`.
 - CLI too: `brew install nimblesite/tap/deslop` or `scoop install deslop`.
 
 ## Settings
