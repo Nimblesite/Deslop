@@ -36,8 +36,17 @@ function assertJsonVersion(binaryPath, component) {
 }
 
 function run(binaryPath, args) {
-  const result = spawnSync(binaryPath, args, { encoding: "utf8", timeout: 1500 });
-  if (result.status !== 0) throw new Error(`${binaryPath} ${args.join(" ")} failed`);
+  // macOS Gatekeeper / security scanning of a freshly built binary — and
+  // Rosetta first-exec translation when an x86_64 target is verified on an
+  // arm64 `macos-latest` runner — can take several seconds. The old 1.5s
+  // budget intermittently killed `--version` and flaked the macOS release
+  // targets; 10s matches the headroom in clients/vscode/scripts/verify-vsix-package.mjs.
+  const result = spawnSync(binaryPath, args, { encoding: "utf8", timeout: 10_000 });
+  if (result.status !== 0 || result.signal != null) {
+    const detail =
+      result.signal != null ? `killed by signal ${result.signal}` : `exit ${result.status}`;
+    throw new Error(`${binaryPath} ${args.join(" ")} failed (${detail})\nstderr: ${result.stderr ?? ""}`);
+  }
   return String(result.stdout);
 }
 
