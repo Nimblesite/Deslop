@@ -53,7 +53,7 @@ impl LanguageParser for PythonParser {
         file_id: FileId,
     ) -> Result<NormalizedNode, CoreError> {
         let tree = parse_source(LANGUAGE_ID, &self.grammar(), source)?;
-        Ok(build_normalised_root(&tree, file_id, normalise_kind))
+        build_normalised_root(&tree, file_id, normalise_kind, LANGUAGE_ID)
     }
 }
 

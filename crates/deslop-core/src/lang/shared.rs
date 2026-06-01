@@ -31,6 +31,19 @@ pub const IDENTIFIER_KIND: &str = "__ident__";
 /// constant edits do not perturb the fingerprint.
 pub const LITERAL_KIND: &str = "__literal__";
 
+/// Maximum nesting depth of a normalised AST. Files whose tree-sitter
+/// tree nests deeper than this are rejected with [`CoreError::AstTooDeep`]
+/// so the deep structure never reaches the pipeline's recursive tree
+/// walks (fingerprinting, sibling windows, token extraction), which would
+/// otherwise overflow the stack and abort the whole run (#168).
+///
+/// Real source ASTs are at most low-hundreds deep, so this leaves ample
+/// headroom while staying well under the overflow threshold on both the
+/// CLI's 8 MB main thread and the LSP/MCP server's ~2 MB async worker
+/// threads (the fingerprint walk, the actual overflow site, runs only on
+/// accepted files at depth `< MAX_AST_DEPTH`).
+pub const MAX_AST_DEPTH: usize = 500;
+
 /// Parses `source` with `language` and returns the tree-sitter
 /// [`Tree`]. Wraps the two possible failure modes in [`CoreError`]
 /// variants so language plug-ins never call into `panic!`.
@@ -61,21 +74,27 @@ pub fn parse_source(
 /// wraps the result in a `__file__`-rooted [`NormalizedNode`]. Returns a
 /// complete normalised AST ready for fingerprinting
 /// ([PIPELINE-NORMALIZE-AST]).
-#[must_use]
+///
+/// # Errors
+///
+/// Returns [`CoreError::AstTooDeep`] when the tree nests deeper than
+/// [`MAX_AST_DEPTH`], so a pathologically deep file is skipped rather than
+/// overflowing the pipeline's recursive walks (#168).
 pub fn build_normalised_root(
     tree: &Tree,
     file_id: FileId,
     normalise_kind: fn(&str) -> Option<&'static str>,
-) -> NormalizedNode {
+    language: &'static str,
+) -> Result<NormalizedNode, CoreError> {
     let root = tree.root_node();
     let mut children = Vec::new();
     let mut cursor = root.walk();
     for child in root.named_children(&mut cursor) {
-        if let Some(node) = normalise_node(child, file_id, normalise_kind) {
+        if let Some(node) = normalise_node(child, file_id, normalise_kind, language, 1)? {
             children.push(node);
         }
     }
-    NormalizedNode {
+    Ok(NormalizedNode {
         kind: FILE_KIND,
         children,
         byte_range: ByteRange {
@@ -83,26 +102,45 @@ pub fn build_normalised_root(
             end: root.end_byte(),
         },
         file_id,
-    }
+    })
 }
 
-/// Recursively normalises one tree-sitter [`Node`]. Returns `None` when
-/// `normalise_kind` drops the node (trivia / comments / per-language
-/// noise).
+/// Recursively normalises one tree-sitter [`Node`] at nesting `depth`.
+/// Returns `Ok(None)` when `normalise_kind` drops the node (trivia /
+/// comments / per-language noise) and [`CoreError::AstTooDeep`] when
+/// `depth` exceeds [`MAX_AST_DEPTH`] — the depth guard bounds every
+/// downstream recursive walk by rejecting the file at its single
+/// construction chokepoint.
 fn normalise_node(
     node: Node<'_>,
     file_id: FileId,
     normalise_kind: fn(&str) -> Option<&'static str>,
-) -> Option<NormalizedNode> {
-    let kind = normalise_kind(node.kind())?;
+    language: &'static str,
+    depth: usize,
+) -> Result<Option<NormalizedNode>, CoreError> {
+    if depth > MAX_AST_DEPTH {
+        return Err(CoreError::AstTooDeep {
+            language,
+            limit: MAX_AST_DEPTH,
+        });
+    }
+    let Some(kind) = normalise_kind(node.kind()) else {
+        return Ok(None);
+    };
     let mut children = Vec::new();
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        if let Some(child_node) = normalise_node(child, file_id, normalise_kind) {
+        if let Some(child_node) = normalise_node(
+            child,
+            file_id,
+            normalise_kind,
+            language,
+            depth.saturating_add(1),
+        )? {
             children.push(child_node);
         }
     }
-    Some(NormalizedNode {
+    Ok(Some(NormalizedNode {
         kind,
         children,
         byte_range: ByteRange {
@@ -110,7 +148,7 @@ fn normalise_node(
             end: node.end_byte(),
         },
         file_id,
-    })
+    }))
 }
 
 /// Interns `raw` into a `&'static str` backed by a thread-local cache.

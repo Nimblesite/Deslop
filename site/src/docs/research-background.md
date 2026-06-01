@@ -187,7 +187,7 @@ Live analysis is implemented under `crates/deslop-core/src/live/`:
 
 The LSP server in `crates/deslop-lsp/src/backend.rs` wraps `LiveService` and exposes diagnostics, hover, code lens, and custom `deslop/*` methods. LSP embeddings start in `EmbeddingMode::Off` unless explicitly configured by the client.
 
-The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and protects filesystem inputs with `crates/deslop-mcp/src/safety.rs::resolve_within_root`. `find-similar` calls are forwarded over a Unix-domain socket (`.deslop-cache/deslop.sock`) to the LSP's live `AnalysisSession`, so snippet matching runs against the running corpus rather than a stale state file. Plain report queries (`top-offenders`, `report-get`, `report-for-file`, `report-for-range`) are served from the in-memory cache the MCP keeps over `.deslop-cache/live-report.json`; the MCP reloads that cache and pushes `resources/updated` + `deslop/reportChanged` whenever the LSP rewrites the file.
+The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and protects filesystem inputs with `crates/deslop-mcp/src/safety.rs::resolve_within_root`. Every read tool — `find-similar`, `top-offenders`, `report-get`, `report-for-file`, and `report-for-range` — is forwarded over a Unix-domain socket (`.deslop-cache/deslop.sock`) to the LSP's live `AnalysisSession`, so every answer runs against the running corpus rather than a stale state file. The MCP keeps no on-disk cache of its own; it holds a `report/subscribe` connection to that socket and pushes `resources/updated` + `deslop/reportChanged` to its client whenever the LSP broadcasts a report change.
 
 ## Auditor verification map
 

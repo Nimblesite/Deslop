@@ -79,6 +79,12 @@
 //!   definitions. Two test files whose preambles share that shape cluster
 //!   even though every helper body differs. Suppressed only when no two
 //!   members share identical bodies, so a verbatim/renamed copy survives.
+//! - **#169** — Dart const data registries (`static const Foo NAME =
+//!   Foo(<distinct values>);` icon/colour/token tables) cluster via
+//!   sibling-window fingerprints over runs of field/const declarations.
+//!   They are un-refactorable data, not logic. Suppressed only when the
+//!   members differ in raw bytes (a verbatim copy survives) and none holds
+//!   a closure/lambda initialiser (logic-bearing fields keep clustering).
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -136,9 +142,9 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is
-/// only walked by matchers that can fire for it. C# and Dart have no
-/// idiom filters today — they rely on the generic checks plus the fusion
-/// and report-hide gates.
+/// only walked by matchers that can fire for it. C# has no idiom filter
+/// today; Dart suppresses const-data-registry field clusters (#169). Both
+/// also rely on the generic checks plus the fusion and report-hide gates.
 fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
     match language {
         "dart" => dart::is_dart_class_field_declaration_cluster(snippets),

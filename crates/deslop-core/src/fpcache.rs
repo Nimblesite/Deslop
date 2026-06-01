@@ -4,8 +4,9 @@
 //! cache hit rehydrates both the structural fingerprints and the
 //! normalised AST (kept because downstream token extraction walks it),
 //! skipping tree-sitter entirely for unchanged files. Any mismatch on
-//! the cache key degrades gracefully to a miss — stale blobs cannot
-//! corrupt a run, at worst they waste disk.
+//! the cache key — or a blob whose tree nests past [`MAX_AST_DEPTH`] —
+//! degrades gracefully to a miss, so a stale or corrupt blob cannot
+//! corrupt or crash a run, at worst it wastes disk (#168).
 //!
 //! The on-disk format is a single little-endian binary blob. Nothing
 //! from `serde` — the shape is tight, versioned by a magic header, and
@@ -21,7 +22,7 @@ use crate::{
     ast::{ByteRange, NormalizedNode},
     embedding::content_hash,
     fingerprint::Fingerprint,
-    lang::shared::intern_kind,
+    lang::shared::{intern_kind, MAX_AST_DEPTH},
     state::FileId,
 };
 
@@ -175,7 +176,7 @@ fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
             "fingerprint cache magic mismatch",
         ));
     }
-    let tree = decode_tree(&mut cursor, file_id)?;
+    let tree = decode_tree(&mut cursor, file_id, 1)?;
     let fp_count = u64_to_usize(read_u64(&mut cursor)?)?;
     let mut fingerprints = Vec::with_capacity(fp_count);
     for _ in 0..fp_count {
@@ -185,8 +186,55 @@ fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
 }
 
 /// Reconstructs one [`NormalizedNode`] subtree and all of its
-/// descendants from the cursor.
-fn decode_tree(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<NormalizedNode> {
+/// descendants from the cursor at nesting `depth`. Bounds recursion at
+/// [`MAX_AST_DEPTH`] so a corrupt or pre-cap blob cannot overflow the
+/// stack here — `decode_tree` is the only `NormalizedNode` producer
+/// besides `normalise_node`, so the depth invariant must hold at both
+/// (#168). Over-deep blobs fail decode and are treated as a cache miss,
+/// which re-parses and re-rejects through the normaliser.
+fn decode_tree(
+    cursor: &mut Cursor<&[u8]>,
+    file_id: FileId,
+    depth: usize,
+) -> io::Result<NormalizedNode> {
+    if depth > MAX_AST_DEPTH {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "cached AST nests deeper than the depth limit",
+        ));
+    }
+    let header = decode_node_header(cursor)?;
+    let mut children = Vec::with_capacity(header.child_count);
+    for _ in 0..header.child_count {
+        children.push(decode_tree(&mut *cursor, file_id, depth.saturating_add(1))?);
+    }
+    Ok(NormalizedNode {
+        kind: header.kind,
+        children,
+        byte_range: ByteRange {
+            start: header.start,
+            end: header.end,
+        },
+        file_id,
+    })
+}
+
+/// One node's decoded header: interned kind, byte range, and child count,
+/// read in the encoder's order. Split out of [`decode_tree`] so the
+/// recursive walk stays small after the depth guard was added (#168).
+struct NodeHeader {
+    /// Interned normalised node kind.
+    kind: &'static str,
+    /// Inclusive start byte offset into the source file.
+    start: usize,
+    /// Exclusive end byte offset into the source file.
+    end: usize,
+    /// Number of direct children that follow in the blob.
+    child_count: usize,
+}
+
+/// Reads one node's kind / byte-range / child-count prefix from `cursor`.
+fn decode_node_header(cursor: &mut Cursor<&[u8]>) -> io::Result<NodeHeader> {
     let kind_len = u32_to_usize(read_u32(&mut *cursor)?);
     let mut kind_bytes = vec![0_u8; kind_len];
     cursor.read_exact(&mut kind_bytes)?;
@@ -196,15 +244,11 @@ fn decode_tree(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<Normal
     let start = u64_to_usize(read_u64(&mut *cursor)?)?;
     let end = u64_to_usize(read_u64(&mut *cursor)?)?;
     let child_count = u32_to_usize(read_u32(&mut *cursor)?);
-    let mut children = Vec::with_capacity(child_count);
-    for _ in 0..child_count {
-        children.push(decode_tree(&mut *cursor, file_id)?);
-    }
-    Ok(NormalizedNode {
+    Ok(NodeHeader {
         kind,
-        children,
-        byte_range: ByteRange { start, end },
-        file_id,
+        start,
+        end,
+        child_count,
     })
 }
 

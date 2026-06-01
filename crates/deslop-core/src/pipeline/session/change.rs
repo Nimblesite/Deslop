@@ -14,7 +14,7 @@ use crate::{
 use super::{
     super::{
         config::{EmbeddingSettings, PipelineConfig},
-        corpus::{parse_one_file, parser_for_language},
+        corpus::{log_skip_too_deep, parse_one_file, parser_for_language},
     },
     PipelineSession,
 };
@@ -46,7 +46,19 @@ impl PipelineSession {
             .file_id_for(&absolute)
             .unwrap_or_else(|| self.registry.register(absolute.clone()));
         let config = self.pipeline_config_with_mode(embedding);
-        let (cached, source, lines) = parse_one_file(file_id, &absolute, parser, &config, stats)?;
+        let (cached, source, lines) =
+            match parse_one_file(file_id, &absolute, parser, &config, stats) {
+                Ok(parsed) => parsed,
+                // A pathologically deep file must not crash the long-lived
+                // server (#168): drop it and keep serving, the same way an
+                // excluded path is handled above. Real parser errors propagate.
+                Err(CoreError::AstTooDeep { language, limit }) => {
+                    log_skip_too_deep(language, limit);
+                    self.drop_path(&absolute);
+                    return Ok(());
+                }
+                Err(other) => return Err(other),
+            };
         let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
         self.replace_boilerplate_ranges(file_id, ranges);
         let _prev_lines = self.analysed_lines.insert(file_id, lines);
