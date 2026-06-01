@@ -474,11 +474,11 @@ jobs:
       # forbids a SemVer prerelease suffix in the version field, so the VSIX is
       # packaged with the core MAJOR.MINOR.PATCH (see stamp-release-version.mjs)
       # and prerelease status is conveyed by the --pre-release flag for any
-      # hyphenated tag. Secret: VSCE_PAT (Marketplace -> Manage). See
+      # hyphenated tag. Secret: VSCODE_MARKETPLACE_PAT (org secret; Marketplace -> Manage). See
       # docs/release.md.
       - name: Publish each platform VSIX
         env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
         run: |
           set -euo pipefail
           if [ -z "${VSCE_PAT:-}" ]; then
