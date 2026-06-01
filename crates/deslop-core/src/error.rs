@@ -96,4 +96,19 @@ pub enum CoreError {
         /// Offending path.
         path: PathBuf,
     },
+
+    /// A source file's AST nests deeper than
+    /// [`crate::lang::shared::MAX_AST_DEPTH`]. Pathological or
+    /// machine-generated nesting (e.g. thousands of nested collection
+    /// literals) would overflow the pipeline's recursive tree walks, so
+    /// the file is rejected and skipped rather than aborting the whole
+    /// run or crashing the long-lived LSP/MCP server (#168). Carries no
+    /// path so it is safe to log as a structured field.
+    #[error("{language} source nests deeper than the {limit}-level AST depth limit")]
+    AstTooDeep {
+        /// Language id whose file exceeded the depth limit.
+        language: &'static str,
+        /// The configured maximum normalised-AST depth.
+        limit: usize,
+    },
 }

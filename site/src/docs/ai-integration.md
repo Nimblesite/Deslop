@@ -33,7 +33,7 @@ Deslop was designed from the first commit with coding agents as a first-class au
 
 `deslop-mcp` ships **inside the VS Code extension VSIX**. After you install the extension, every external MCP client (Claude Code, Claude Desktop, Codex, Cursor, Continue) should reference the unpacked VSIX binary by absolute path so the agent runs the exact binary the extension ships — version-locked to the VSIX, no `PATH` drift.
 
-After `code --install-extension deslop-live-X.Y.Z-<target>.vsix`, the binary lives at:
+Once the extension is installed from the Marketplace, the binary lives at:
 
 ```
 ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp

@@ -10,17 +10,23 @@ icon: rocket_launch
 
 # Getting Started
 
-Deslop is a **live duplicate-code analysis server** — LSP + MCP, running in your workspace, streaming real-time clone signals to Claude Code, Cursor, Copilot, Continue, Codex, and your editor *as code is being written*. The preferred way to install it is the **VS Code extension** — the VSIX bundles the LSP server, the MCP server, **and** the CLI in one download.
+Deslop is a **live duplicate-code analysis server** — LSP + MCP, running in your workspace, streaming real-time clone signals to Claude Code, Cursor, Copilot, Continue, Codex, and your editor *as code is being written*. The preferred way to install it is the **VS Code extension** — the extension bundles the LSP server, the MCP server, **and** the CLI in one install.
 
 > The **JetBrains plugin** (Rider first, then IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion) is in active development. Zed and Neovim are on the roadmap. Until those ship, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
 
 ## Install (preferred) — VS Code extension
 
-1. Grab `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
-2. `code --install-extension deslop-live-X.Y.Z-<target>.vsix` — or use **Extensions panel → `…` menu → Install from VSIX…**.
-3. Open a `.cs` / `.rs` / `.py` / `.dart` file. The live bubble is active immediately; the **Top Offenders** tree populates as the file watcher fires; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
+Install straight from the **VS Code Marketplace**. Nothing to download, no files to manage — pick whichever is closest to hand:
 
-The VSIX ships binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64`.
+- **In VS Code:** open **Extensions** (`⇧⌘X` / `Ctrl+Shift+X`), search **Deslop**, click **Install**.
+- **Command line:** `code --install-extension nimblesite.deslop-live`
+- **Browser:** open the [Deslop.live Marketplace page](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) and hit **Install**.
+
+Then open a `.cs` / `.rs` / `.py` / `.dart` file. The live bubble is active immediately; the **Top Offenders** tree populates as the file watcher fires; `deslop`, `deslop-lsp`, and `deslop-mcp` are on your VS Code integrated-terminal `PATH` for the session.
+
+The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64` — the right one is selected for you automatically.
+
+> **Offline or air-gapped?** Grab the `.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) and install it via **Extensions panel → `…` menu → Install from VSIX…**.
 
 ## Install the CLI only (Homebrew / Scoop)
 
