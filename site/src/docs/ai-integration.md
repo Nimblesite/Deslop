@@ -10,7 +10,7 @@ icon: smart_toy
 
 # AI Integration
 
-Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI. Every MCP tool response is computed against the **live** workspace state — the LSP file watcher rewrites `.deslop-cache/live-report.json` atomically on every change (250 ms debounce, 2 s cap), and the MCP server reads that file on the next tool call. There is no batch step. There is no stale cache.
+Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI. Every MCP tool response is computed against the **live** workspace state — the LSP holds the live report in memory and refreshes it on every change (250 ms debounce, 2 s cap), and the MCP server reads that live state over a Unix-domain socket (`.deslop-cache/deslop.sock`) on the next tool call. There is no batch step. There is no stale cache.
 
 ## Twelve MCP tools, all live
 
@@ -84,7 +84,7 @@ The headline workflow is reactive, not batch:
 
 1. Agent proposes a change. Before it writes the new code, it calls `find-similar` over the proposed snippet via MCP.
 2. If `find-similar` returns a cluster above the configured similarity floor, the agent reuses the canonical or rewrites the call site.
-3. As the agent edits files, the LSP file watcher fires `deslop/reportChanged`. The MCP server reads the freshly written `.deslop-cache/live-report.json` and serves the new state on the next tool call.
+3. As the agent edits files, the LSP file watcher fires `deslop/reportChanged`. The MCP server queries the LSP's freshly refreshed report over the IPC socket and serves the new state on the next tool call.
 4. The agent re-queries `top-offenders` or `report-for-file` to confirm the cluster is gone. No re-run, no flag, no batch CLI invocation.
 
 For a CLI-only loop (CI gates, cold-cache audits, or agents without MCP), the workflow degrades to:
@@ -135,13 +135,13 @@ Deslop's source of truth is `[byte_start, byte_end)`. Line numbers are derived a
 
 ## Stable IDs
 
-Cluster IDs are short hex digests of the cluster's content fingerprint — the first 8 bytes of the canonical member's BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). They carry no timestamp, so feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
+Cluster IDs are short hex digests of the cluster's content fingerprint — the first 8 bytes of the cluster's smallest member BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). They carry no timestamp, so feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
 
 ## MCP and LSP — shipping
 
 The `deslop-core` crate owns the entire pipeline. Three shells consume it:
 
-- **MCP server (`deslop-mcp`)** — the agent surface. Twelve tools (see the table above). The server reads `.deslop-cache/live-report.json` (atomically rewritten by the LSP after every pass) and delegates `find-similar` to the LSP over a Unix-domain socket so snippet matching runs against the live corpus, not a stale cache.
+- **MCP server (`deslop-mcp`)** — the agent surface. Twelve tools (see the table above). The server delegates every read — `top-offenders`, `report-get`, `report-for-file`, `find-similar`, and the rest — to the running LSP over a Unix-domain socket (`.deslop-cache/deslop.sock`), so every response is computed against the LSP's live in-memory corpus, not a stale on-disk cache. When the LSP isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
 - **LSP server (`deslop-lsp`)** — the editor surface. Diagnostics, hover, code lens, `textDocument/definition`, virtual `deslop://` documents, and custom `deslop/*` methods (`reportGet`, `reportDelta`, `reportForFile`, `reportForRange`, `clusterById`, `duplicatesFindSimilar`, `embeddingListModels`, `embeddingSetModel`, `sessionConfig`, `reportSchemaDoc`, `virtualDocument`, `cpuReport`). Fires `deslop/reportChanged`, `deslop/analysisState`, and `deslop/embeddingProgress` notifications. Owns the file watcher, the debouncer (250 ms quiet, 2 s cap), and the analysis scheduler.
 - **CLI (`deslop`)** — the cold-cache fallback for CI gates and one-shot audits.
 
@@ -149,7 +149,7 @@ All three reuse the same cache layout (`.deslop-cache/fingerprints/`, `.deslop-c
 
 ### Push notifications
 
-The LSP fires `deslop/reportChanged` over the LSP wire and `resources/updated` + `deslop/reportChanged` over the MCP wire as soon as a watcher pass completes. Editor surfaces, agent caches, and webviews all observe the new report in the same microtask. Stale UI is a correctness bug per the [LIVE-IS-REACTIVE](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/principles.md#principles-live-is-reactive) invariant.
+The LSP fires `deslop/reportChanged` over the LSP wire and `resources/updated` + `deslop/reportChanged` over the MCP wire as soon as a watcher pass completes. Editor surfaces, agent caches, and webviews all observe the new report as soon as the pass commits. Stale UI is a correctness bug per the [LIVE-IS-REACTIVE](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/principles.md#principles-live-is-reactive) invariant.
 
 ## JetBrains plugin (in development)
 

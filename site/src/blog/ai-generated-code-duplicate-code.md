@@ -66,7 +66,7 @@ Line-based duplicate-code tools are good at finding obvious copy-paste. They are
 - a helper is copied but moved into a different class.
 - the same validation rule is rewritten with a different branch order.
 
-That is why Deslop starts from parsed syntax trees rather than raw text. It uses tree-sitter, normalizes identifiers and literals, fingerprints AST subtrees, expands near-miss coverage with sibling windows and MinHash LSH, and can add optional embeddings for semantic matches. The short version: it compares code structure first, not lines first.
+That is why Deslop starts from parsed syntax trees rather than raw text. It parses each file with tree-sitter, then strips out identifier and literal names so renamed copies still match. It fingerprints the tree structure, widens the net to near-duplicates with sibling windows and MinHash, and can optionally add embeddings for same-behavior matches. The short version: it compares code structure first, not lines first.
 
 The full audit trail is in [How It Works](/docs/how-it-works/) and [Research Background](/docs/research-background/).
 

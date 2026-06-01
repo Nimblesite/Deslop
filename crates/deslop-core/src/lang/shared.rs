@@ -130,8 +130,13 @@ fn normalise_node(
     let mut children = Vec::new();
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        if let Some(child_node) = normalise_node(child, file_id, normalise_kind, language, depth + 1)?
-        {
+        if let Some(child_node) = normalise_node(
+            child,
+            file_id,
+            normalise_kind,
+            language,
+            depth.saturating_add(1),
+        )? {
             children.push(child_node);
         }
     }

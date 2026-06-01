@@ -98,7 +98,7 @@ pub fn fingerprint_corpus(
             // would otherwise overflow the recursive walks and abort the
             // whole batch run (#168). Genuine parser errors still propagate.
             Err(CoreError::AstTooDeep { language, limit }) => {
-                tracing::warn!(language, limit, "skipping file: AST nests too deep");
+                log_skip_too_deep(language, limit);
                 continue;
             }
             Err(other) => return Err(other),
@@ -238,6 +238,14 @@ fn fingerprints_for(
         normalised, min_nodes, language,
     ));
     fingerprints
+}
+
+/// Logs that a pathologically deep file is being skipped (#168). Shared by
+/// the batch corpus loop and the live session ([`super::session`]) so the
+/// "skip, don't crash" decision carries one message. Logs only the language
+/// id and depth limit — never a path, per the project logging rules.
+pub fn log_skip_too_deep(language: &'static str, limit: usize) {
+    tracing::warn!(language, limit, "skipping file: AST nests too deep");
 }
 
 /// Reads a source file into bytes.

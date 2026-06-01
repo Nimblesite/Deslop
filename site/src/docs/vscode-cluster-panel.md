@@ -53,7 +53,7 @@ Size is the number of cloned AST members represented by the cluster. A larger si
 
 ## Occurrence Count
 
-The occurrence count is the number of editor locations in this cluster. It may be larger than the rows shown when the live wire has truncated a very large cluster.
+The occurrence count is the number of editor locations in this cluster. It may be larger than the number of rows shown, because Deslop caps how many occurrences a single very large cluster sends to the panel.
 
 ## Canonical
 

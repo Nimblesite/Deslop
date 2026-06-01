@@ -21,7 +21,7 @@ Every stage maps to a research line; the file pointers are in [Research Backgrou
 
 ## Discover
 
-`.gitignore` is honoured. Binary files are skipped by extension and by magic bytes. Symlinks are not followed. Each candidate file is hashed (`blake3(content)`) and that hash becomes the cache key for every downstream stage.
+`.gitignore` is honoured. Only files whose extension maps to a supported-language grammar are analysed — everything else, binaries included, is skipped. Symlinks are not followed. Each candidate file's content is hashed with BLAKE3, and that hash is one component of the composite cache key each stage uses, so an unchanged file is skipped.
 
 ## Parse
 
@@ -94,10 +94,19 @@ Three renderers read the same materialized view:
 
 - **JSON** — canonical and strictly typed. Carries the embedded `schema_doc`, `action_hints`, repo-wide `metrics`, and `embedding_provenance`.
 - **TXT** — ASCII, line-oriented, no ANSI. Pipeable into `head`, `grep`, `awk`.
-- **HTML** — standalone, inlined CSS, zero network dependencies. Default mode embeds source snippets with tree-sitter-driven syntax highlighting; `--human=off` falls back to terse byte-offset HTML.
+- **HTML** — standalone, inlined CSS, zero network dependencies. It embeds source snippets with tree-sitter-driven syntax highlighting; when a file's source is no longer available, the card falls back to a path-only summary without snippets.
 
 Agents consume JSON. Humans read TXT in the terminal or open the HTML in a browser. Every claim the TXT or HTML makes is also present in the JSON.
 
 ## Live = reactive
 
-Everything above also runs incrementally inside the LSP server (`crates/deslop-core/src/live/`). A file watcher with a 250 ms debounce and a 2 s cap drives `PipelineSession::update_files`; the LSP atomically writes `.deslop-cache/live-report.json`, broadcasts `deslop/reportChanged` over the LSP wire, and exposes a Unix-domain IPC socket so the bundled MCP server can `find-similar` against the running corpus without re-parsing. The CLI is the cold-cache fallback for CI gates; every other surface — VS Code bubble, Top Offenders tree, status bar, hover, code lens, agent MCP queries — reflects the new state in the same microtask the watcher fires.
+Everything above also runs incrementally inside the LSP server (`crates/deslop-core/src/live/`).
+
+A file watcher batches edits (250 ms debounce, 2 s cap) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
+
+- broadcasts `deslop/reportChanged` over the LSP wire, and
+- serves the running corpus over a Unix-domain IPC socket (`.deslop-cache/deslop.sock`), so the bundled MCP server answers `find-similar` without re-parsing.
+
+`.deslop-cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
+
+Every VS Code surface — bubble, Top Offenders tree, status bar, hover, code lens — and every agent MCP query reads from that same in-memory report. The CLI is the cold-cache fallback for CI gates.

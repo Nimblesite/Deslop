@@ -24,7 +24,7 @@ Implemented in [`crates/deslop-core/src/cluster.rs::rank_weight`](https://github
 
 **`log2(1 + spanned_bytes)`** — payoff scale, in bytes, dampened by `log2`. The byte total tracks how much code an extraction would actually move; the logarithm prevents a single 5000-line vendored file from dominating four genuine 50-line method copies. Bytes (not lines) are the source of truth because Deslop addresses occurrences by `[byte_start, byte_end)` everywhere — line numbers are render-time only.
 
-Multiplying the three gives a number that is dimensionally sensible (effort × repetition × blast radius) and monotonic in every argument. Doubling the node count doubles the weight; doubling the cluster size more than doubles it (the `−1` is sub-linear at small sizes, near-linear at large ones); doubling the bytes adds one to the log term.
+Multiplying the three gives a number that is dimensionally sensible (effort × repetition × blast radius) and monotonic in every argument. Doubling the node count doubles the weight; doubling the cluster size more than doubles it — the boost is biggest for small clusters (going from two copies to four triples the `size − 1` term) and settles toward an exact doubling as clusters grow; doubling the bytes adds one to the log term.
 
 ## What the formula deliberately excludes
 

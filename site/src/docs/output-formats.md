@@ -43,21 +43,17 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 `deslop-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colors, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
 
 ```
-Deslop 0.0.0-dev  —  142 clusters, 17 above threshold
-──────────────────────────────────────────────────────────────────────
-
-  SCORE  KIND                FILE                            SPAN
-──────── ─────────────────── ─────────────────────────────── ──────────
-▲  2184  Nearly identical    UserRepository.cs               120–180
-▲  2184  Nearly identical      ProductRepository.cs          58–118
-▲  2184  Nearly identical      OrderRepository.cs            40–102
-
-  Signals: structural=1.00  token_jaccard=0.97  embedding_cos=0.91
-  Summary: 3 near-identical copies — safe to extract.
-──────────────────────────────────────────────────────────────────────
+deslop 0.0.0-dev -- 840 file(s), 142 cluster(s), 0 hidden
+repo: 2.6% duplicated (48120 / 1832044 LOC, 142 clusters across 318 files)
+embeddings: off
+-- action hints --
+  [identical] Extract the shared code into one definition and call it from every duplicate site.
+#1 [0362505641efe3c7] weight=1252.80 size=3 nodes=58
+  3 near-identical copies — safe to extract.
+  :: Nearly identical across UserRepository.cs, ProductRepository.cs, OrderRepository.cs.
 ```
 
-The leading `▲` marks the representative (first) member of a cluster; indented rows are additional members. This format survives every terminal, every SSH session, and every CI log.
+Each cluster is a numbered block — `#1` is the worst offender — with its weight, size, and node count, followed by a plain-English summary and a one-line interpretation. Clusters are listed worst-first. This format survives every terminal, every SSH session, and every CI log.
 
 ## HTML — portable
 
@@ -65,9 +61,9 @@ The leading `▲` marks the representative (first) member of a cluster; indented
 
 The HTML renderer uses the same ranking and the same cluster summaries as JSON and TXT. It adds:
 
-- collapsible cluster cards
-- side-by-side diff panels for each pair of members
-- a signals strip per cluster
+- syntax-highlighted example snippets, with long snippets and extra locations folded into collapsible toggles
+- an "AI match" badge and an impact chip on each duplicate group
+- a per-group signals table (structural / token / embedding / fused) in a collapsible "Run details" footer
 
 It does not add: scores not in the JSON, commentary beyond the `summary` field, or links to external services.
 
@@ -84,7 +80,7 @@ It does not add: scores not in the JSON, commentary beyond the `summary` field, 
 
 ## Logging vs. reports
 
-Diagnostics go to `stderr` via `tracing` with structured fields; the human-readable preamble and summary are written to `stderr` too. The reports themselves are written to files — `deslop-report.json`/`.txt`/`.html` by default, or the prefix you pass to `--output`. To emit only the JSON report, suppress the other two formats:
+By default, diagnostics go to a timestamped log file (`deslop-<timestamp>.log`) via `tracing` with structured fields; pass `--log-to-console` to send them to `stderr` instead. The human-readable preamble and summary always go to `stderr`. The reports themselves are written to files — `deslop-report.json`/`.txt`/`.html` by default, or the prefix you pass to `--output`. To emit only the JSON report, suppress the other two formats:
 
 ```bash
 deslop . --notext --nohtml      # writes deslop-report.json

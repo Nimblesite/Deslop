@@ -34,7 +34,7 @@ The pipeline this enables is linear, deterministic, and cheap. No heuristics. No
 
 ## Why "no regex" is written into the rulebook
 
-The `CLAUDE.md` for this repo says it plainly: **regex on source code is illegal.** Not "avoid," not "prefer parsers" — illegal. That rule exists because regex-on-source is a slippery slope. The first one handles a niche case a parser cannot easily express. The second one fixes a bug in the first. By the fifth, the codebase has a regex layer shadowing a parser layer and nobody can reason about which one fires first.
+The `CLAUDE.md` for this repo says it plainly: **regex on source code is prohibited.** Not "avoid," not "prefer parsers" — illegal. That rule exists because regex-on-source is a slippery slope. The first one handles a niche case a parser cannot easily express. The second one fixes a bug in the first. By the fifth, the codebase has a regex layer shadowing a parser layer and nobody can reason about which one fires first.
 
 Tree-sitter is not a convenience in Deslop — it is the entire foundation. Every clone type the tool detects, every signal it fuses, every byte range it emits comes from the AST. Removing tree-sitter would not cost a feature; it would leave no tool behind.
 

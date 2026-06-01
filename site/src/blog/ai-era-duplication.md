@@ -25,7 +25,7 @@ Deslop rebuilds from both assumptions. Output is ranked by the weighted impact o
 
 The feature that matters most is not the breadth of languages, not the precision of same-behavior detection (Type-4), not the cleverness of the fusion. It is **time to first useful signal**. A duplicate that surfaces three commits after it lands is a duplicate you will not refactor. A duplicate that surfaces while the agent is still holding the file open is a duplicate you fix before the next message.
 
-So the entire pipeline is tuned for that. The cache is keyed so unchanged files are free, so a warm pass only re-parses the files you just touched. The ranking is cheap — one multiplication and a logarithm per cluster. The LSP shell ships today and lights duplication up in the editor at the speed of a spellchecker; the MCP shell exposes the same live analysis to Claude, Cursor, and Copilot before the agent even types the duplicate.
+So the entire pipeline is tuned for that. The cache is keyed so unchanged files are free, so a warm pass only re-parses the files you just touched. The ranking is cheap — two multiplications and a logarithm per cluster. The LSP shell ships today and lights duplication up in the editor at the speed of a spellchecker; the MCP shell exposes the same live analysis to Claude, Cursor, and Copilot before the agent even types the duplicate.
 
 Speed is not a feature of Deslop. Speed is the whole point.
 
@@ -33,7 +33,7 @@ Speed is not a feature of Deslop. Speed is the whole point.
 
 A cluster in a Deslop report is a decision, not a verdict. The tool reports; you decide. Broadly there are three paths:
 
-- **Extract.** The fragments are identical enough, and share enough of a call graph, that a shared function is the clear answer. The `suggestion` field in the JSON flags these.
+- **Extract.** The fragments are identical enough, and share enough of a call graph, that a shared function is the clear answer. The `action_hints` in the JSON flag these.
 - **Reuse.** One of the fragments is the "real" implementation and the others should call into it. Pick the one with the best tests and delete the others.
 - **Accept.** Some duplication is intentional — test fixtures, bootstrapping, two things that look alike today but will diverge. Annotate and move on. Deslop does not judge; it just keeps score.
 
@@ -41,7 +41,7 @@ The only wrong move is to ignore the top of the report. That is where the money 
 
 ## Where this goes
 
-Deslop today is the live server. One process, a file watcher, an LSP shell, an MCP shell, and twelve MCP tools the agent can call mid-generation. Same pipeline, same schema, same cache as the CLI — the CLI is now the cold-cache fallback for CI gates. The VS Code extension bundles all of it (LSP, MCP, CLI) in a single VSIX. JetBrains is next.
+Deslop today is the live server. Two cooperating processes — a file watcher and LSP shell in one, an MCP shell in the other, talking over a local IPC socket — plus twelve MCP tools the agent can call mid-generation. Same pipeline, same schema, same cache as the CLI — the CLI is now the cold-cache fallback for CI gates. The VS Code extension bundles all of it (LSP, MCP, CLI) in a single VSIX. JetBrains is next.
 
 The primary user of the server is not you. It is the agent you are pair-programming with. Which is as it should be: agents generate duplication; agents should fix it — and, with `find-similar` in their inner loop, agents should prevent it.
 

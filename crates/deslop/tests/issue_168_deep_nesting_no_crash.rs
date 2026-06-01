@@ -14,6 +14,15 @@ use std::{
 
 use anyhow::Result;
 use assert_cmd::Command;
+use serde_json::Value;
+
+fn clusters(report: &Value) -> &[Value] {
+    report
+        .get("clusters")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
@@ -55,12 +64,9 @@ fn deeply_nested_dart_file_is_skipped_not_crashed() -> Result<()> {
         .success();
 
     let body = fs::read_to_string(&report)?;
-    let json: serde_json::Value = serde_json::from_str(&body)?;
-    let clusters = json["clusters"]
-        .as_array()
-        .expect("report must carry a clusters array");
+    let json: Value = serde_json::from_str(&body)?;
     assert!(
-        !clusters.is_empty(),
+        !clusters(&json).is_empty(),
         "the duplicated alpha/beta helper must still cluster after the \
          deep file is skipped: {body}"
     );

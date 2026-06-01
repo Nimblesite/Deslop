@@ -1100,3 +1100,46 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
     );
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> Result<()> {
+    // #168: a pathologically deep file applied as a live change must be
+    // dropped, never crash the long-lived server. Exercises the session's
+    // apply_one_change skip arm on a ~2 MB tokio worker stack — the same
+    // stack class the LSP/MCP server analyses on.
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    let provider = Arc::new(StubProvider::new());
+    let helper = b"int combine(int a, int b) { final t = a + b; return t * t; }\n";
+    fs::write(tmp.path().join("keep.dart"), helper).context("write keep")?;
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 5, false, None, provider)
+        .context("session")?;
+
+    let deep = tmp.path().join("deep.dart");
+    let nested = format!("var x = {}{};\n", "[".repeat(5000), "]".repeat(5000));
+    fs::write(&deep, nested).context("write deep")?;
+    // Must return Ok (graceful skip), not panic / abort the process.
+    let _delta = session.apply_changes(&[deep]).context("apply deep")?;
+
+    let report = session.report();
+    assert!(
+        report.clusters.iter().all(|cluster| cluster
+            .occurrences
+            .iter()
+            .all(|occ| !occ.path.ends_with("deep.dart"))),
+        "the pathologically deep file must not appear in any cluster: {:?}",
+        report.clusters,
+    );
+
+    // The session stays usable: a later duplicate of the helper still
+    // clusters, proving the skip did not corrupt session state.
+    let twin = tmp.path().join("twin.dart");
+    fs::write(&twin, helper).context("write twin")?;
+    let _delta2 = session.apply_changes(&[twin]).context("apply twin")?;
+    let after = session.report();
+    assert!(
+        !after.clusters.is_empty(),
+        "after skipping the deep file a genuine duplicate must still cluster: {:?}",
+        after.clusters,
+    );
+    Ok(())
+}

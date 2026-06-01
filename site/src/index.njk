@@ -23,7 +23,7 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
     "Live LSP server with 250 ms reactive file watcher",
     "MCP server with 12 tools including find-similar for the agent inner loop",
     "Tree-sitter parsing for C#, Rust, Python, Dart",
-    "Clone detection across all four buckets: Type-1 identical code, Type-2 nearly identical code, Type-3 loosely similar code, Type-4 same behavior different code",
+    "Clone detection across all four buckets: identical code [Type-1/2], nearly identical code [Type-3], loosely similar code [weak LSH], same behavior different code [Type-4]",
     "VS Code extension bundling LSP, MCP server, and CLI",
     "JetBrains plugin in active development (Rider, IntelliJ, PyCharm, WebStorm, RustRover, CLion)"
   ],
@@ -135,7 +135,7 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
             <span class="bento__label">Watcher → Editor → Agent</span>
             <span class="bento__value bento__value--hero">250<span class="unit">ms</span></span>
           </div>
-          <p class="bento__panorama-note">File-watcher debounce. 2 s hard cap. Incremental parse, atomic state rewrite, <code>deslop/reportChanged</code> fans out to every editor surface and MCP client in the same microtask. Stale UI is a correctness bug.</p>
+          <p class="bento__panorama-note">File-watcher debounce. 2 s hard cap. Incremental parse, then <code>deslop/reportChanged</code> fans out to every editor surface and MCP client at once. Stale UI is a correctness bug.</p>
         </div>
       </div>
     </div>

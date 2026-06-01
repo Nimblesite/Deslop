@@ -39,8 +39,7 @@ fn cluster_spans(cluster: &Value, left: &str, right: &str) -> bool {
         .iter()
         .filter_map(|occ| occ.get("path").and_then(Value::as_str))
         .collect();
-    paths.iter().any(|path| path.ends_with(left))
-        && paths.iter().any(|path| path.ends_with(right))
+    paths.iter().any(|path| path.ends_with(left)) && paths.iter().any(|path| path.ends_with(right))
 }
 
 #[test]
@@ -54,13 +53,25 @@ fn dart_automatically_generated_banner_is_hidden() -> Result<()> {
     // were the header not recognised.
     let header = "// This file has been automatically generated. \
         Please do not edit it manually.\n";
-    let body = "String formatLabel(int value) {\n  \
+    let dup_body = "String formatLabel(int value) {\n  \
         final doubled = value * 2;\n  \
         final label = 'item-$doubled';\n  \
         return label.toUpperCase();\n}\n";
-    let file = format!("{header}{body}");
-    fs::write(src.join("messages_en.dart"), &file)?;
-    fs::write(src.join("messages_fr.dart"), &file)?;
+    fs::write(src.join("messages_en.dart"), format!("{header}{dup_body}"))?;
+    fs::write(src.join("messages_fr.dart"), format!("{header}{dup_body}"))?;
+
+    // Positive control: a DIFFERENT duplicated body, header-less, must
+    // still cluster — proving the engine detects clones at --min-nodes 5
+    // and that the banner pair's absence is due to the header, not a setup
+    // error that produced no clusters at all. A distinct body keeps this a
+    // separate cluster from the banner pair (whose body is normalised
+    // identically regardless of the comment).
+    let control_body = "int blendChannels(int base, int overlay) {\n  \
+        final mixed = base + overlay;\n  \
+        final clamped = mixed - base;\n  \
+        return clamped * overlay;\n}\n";
+    fs::write(src.join("plain_a.dart"), control_body)?;
+    fs::write(src.join("plain_b.dart"), control_body)?;
 
     let report = report_path(tmp.path());
     let mut cmd = Command::cargo_bin("deslop")?;
@@ -79,6 +90,14 @@ fn dart_automatically_generated_banner_is_hidden() -> Result<()> {
 
     let body = fs::read_to_string(&report)?;
     let json: Value = serde_json::from_str(&body)?;
+    assert!(
+        clusters(&json).iter().any(|cluster| cluster_spans(
+            cluster,
+            "plain_a.dart",
+            "plain_b.dart"
+        )),
+        "positive control: the header-less duplicate body must still cluster: {body}"
+    );
     let leaked = clusters(&json)
         .iter()
         .any(|cluster| cluster_spans(cluster, "messages_en.dart", "messages_fr.dart"));
