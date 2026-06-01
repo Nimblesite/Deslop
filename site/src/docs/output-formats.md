@@ -18,14 +18,15 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 
 ```json
 {
-  "generator": { "name": "deslop", "version": "0.0.0-dev" },
+  "tool_version": "0.0.0-dev",
   "schema_doc": "…",
-  "summary": {
+  "metrics": {
+    "analysed_loc": 1832044,
+    "duplicated_loc": 48120,
+    "duplication_percent": 2.63,
     "clusters_total": 142,
-    "above_threshold": 17,
-    "files_scanned": 4812,
-    "loc_scanned": 1832044,
-    "scan_time_ms": 27110
+    "duplicated_files": 318,
+    "threshold": { "…": "--fail-over verdict" }
   },
   "clusters": [ { "…": "see AI Integration" } ]
 }
@@ -34,7 +35,7 @@ Every Deslop run emits three reports. The JSON is the product; the text and HTML
 ### Guarantees
 
 - Fields marked `optional` in the schema may be absent. Fields marked `required` are always present.
-- Clusters are sorted by `score` descending. `clusters[0]` is always the worst offender.
+- Clusters are sorted by `weight` descending. `clusters[0]` is always the worst offender.
 - UTF-8. No BOM. LF line endings.
 
 ## TXT — terminal
@@ -74,17 +75,17 @@ It does not add: scores not in the JSON, commentary beyond the `summary` field, 
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Ran successfully. |
-| `1` | Ran successfully, but at least one cluster was above `--fail-on` threshold. |
-| `2` | Usage error — bad flag, missing path. |
-| `3` | Pipeline error — parser crash, I/O failure. Never a panic. |
+| `0` | Completed. Duplication was below the `--fail-over` threshold, or no threshold was set. |
+| `1` | Runtime error — nonexistent scan path, analysis failure, I/O error, or a `required` embedding provider that was unreachable. Never a panic. |
+| `2` | Usage error — unknown flag or an invalid argument value, rejected before the run starts. |
+| `3` | Duplication percentage exceeded the `--fail-over` gate. |
 
-`deslop` never panics on user input. Errors are surfaced through exit codes and a structured error object in the JSON.
+`deslop` never panics on user input. Failures surface through these exit codes and a structured error on `stderr`.
 
 ## Logging vs. reports
 
-Diagnostics go to `stderr` via `tracing` with structured fields. Reports go to `stdout` (or `--output`) via the renderer. They are different streams. Piping only the report:
+Diagnostics go to `stderr` via `tracing` with structured fields; the human-readable preamble and summary are written to `stderr` too. The reports themselves are written to files — `deslop-report.json`/`.txt`/`.html` by default, or the prefix you pass to `--output`. To emit only the JSON report, suppress the other two formats:
 
 ```bash
-deslop . --format=json > report.json
+deslop . --notext --nohtml      # writes deslop-report.json
 ```

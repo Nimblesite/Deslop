@@ -69,7 +69,7 @@ Every detection algorithm in the table below is a real file, not a future plan:
 | Research line | What it implements | Code |
 | --- | --- | --- |
 | Tree-sitter parsing (Baxter 1998) | C# / Rust / Python / Dart AST per language | [`crates/deslop-core/src/lang/`](crates/deslop-core/src/lang/) |
-| AST normalization | Type-2 collapse: `__id__` / `__lit__` + comment/trivia drop | [`lang/shared.rs`](crates/deslop-core/src/lang/shared.rs) |
+| AST normalization | Type-2 collapse: `__ident__` / `__literal__` + comment/trivia drop | [`lang/shared.rs`](crates/deslop-core/src/lang/shared.rs) |
 | Merkle subtree fingerprints (Chilowicz 2009) | Bottom-up BLAKE3 over normalized AST | [`fingerprint.rs`](crates/deslop-core/src/fingerprint.rs) |
 | Sibling-window extension | Type-3 recall over widths 2–8 | [`sibling.rs`](crates/deslop-core/src/sibling.rs) |
 | MinHash + LSH (Broder 1997 / Indyk-Motwani 1998 / SourcererCC 2016) | 128-value MinHash, 32 × 4 banding over normalized k-grams | [`tokens.rs`](crates/deslop-core/src/tokens.rs), [`lsh.rs`](crates/deslop-core/src/lsh.rs) |

@@ -24,7 +24,11 @@
     "clone detection",
     "refactoring",
     "code quality",
-    "DRY"
+    "DRY",
+    "csharp",
+    "rust",
+    "python",
+    "dart"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [

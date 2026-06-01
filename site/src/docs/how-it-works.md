@@ -32,6 +32,7 @@ Each language ships a grammar via tree-sitter:
 | C# | v1 |
 | Rust | v1 |
 | Python | v1 |
+| Dart | v1 |
 | TypeScript / JavaScript | roadmap |
 | Go | roadmap |
 
@@ -41,8 +42,8 @@ A parser produces an AST. No source-level regex touches this pipeline — ever.
 
 Identical code can differ only in identifiers and literals (Type-2 renaming). Deslop strips:
 
-- identifier names (rewritten to `__id__`)
-- string / number / char literals (rewritten to `__lit__`)
+- identifier names (rewritten to `__ident__`)
+- string / number / char literals (rewritten to `__literal__`)
 - comments, whitespace, trivia
 
 Per-language normalization rules, identical output format across languages. A renamed copy of a method hashes to the same fingerprint as the original.

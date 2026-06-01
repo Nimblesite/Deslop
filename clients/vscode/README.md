@@ -29,7 +29,7 @@ Example — Claude Code:
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-live-0.1.0/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -37,7 +37,7 @@ Example — Codex (`~/.codex/config.toml`):
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-0.1.0/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 

@@ -1,12 +1,12 @@
 # Deslop JetBrains Plugin
 
-IntelliJ Platform plugin for Deslop. Rider is the first product target, but the implementation stays on the platform LSP API so IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion can follow.
+IntelliJ Platform plugin for Deslop. Rider is the first product target, but the implementation stays on the platform LSP API so IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion can follow (commercial Ultimate-tier IDEs only — the plugin depends on `com.intellij.modules.ultimate`, so Community editions cannot load it).
 
 Current slice:
 
 - Registers a `com.intellij.platform.lsp.serverSupportProvider`.
 - Starts `deslop-lsp` for `.cs`, `.rs`, and `.py` files.
-- Resolves the binary from `${DESLOP_BINARY_DIR}`, `PATH`, bundled plugin `bin/<platform>/`, then bare `deslop-lsp`.
+- Resolves the `deslop-lsp` binary from the bundled plugin `bin/<platform>/` directory first, then falls back to `PATH`. (`DESLOP_BINARY_DIR` is a build-time staging variable used to embed the binary into the plugin zip, not a runtime resolver source.)
 - Launches with embeddings off until a settings page and picker land.
 
 Build:
