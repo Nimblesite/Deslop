@@ -12,7 +12,7 @@ extension's bundled `PATH`. They must be configured with an **absolute path
 into the unpacked VSIX**:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 This is the same binary the VS Code extension launches for its in-process MCP

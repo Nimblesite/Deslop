@@ -148,7 +148,7 @@ function fakeCtx(): vscode.ExtensionContext {
 
 suite("register command implementations", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
     assert.ok(ext, "extension must be discoverable in the test host");
     await ext.activate();
   });
@@ -666,7 +666,7 @@ suite("tree menu renderers", () => {
 
 suite("tree menu handlers", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
     assert.ok(ext, "extension must be discoverable in the test host");
     await ext.activate();
   });

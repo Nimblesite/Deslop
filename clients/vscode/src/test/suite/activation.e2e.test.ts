@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 
 suite("activation", () => {
   test("extension activates on a C# fixture workspace", async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-vscode");
+    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
     assert.ok(ext, "extension should be registered");
     await ext.activate();
     assert.ok(ext.isActive, "extension should be active");

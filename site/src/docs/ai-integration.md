@@ -36,7 +36,7 @@ Deslop was designed from the first commit with coding agents as a first-class au
 After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary lives at:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`. `<VERSION>` is the installed extension version — bump it whenever you update the VSIX.
@@ -45,7 +45,7 @@ After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary l
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -53,7 +53,7 @@ claude mcp add deslop -s user -- \
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 
@@ -63,7 +63,7 @@ args    = ["--root", "."]
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "/absolute/path/to/your/repo"]
     }
   }

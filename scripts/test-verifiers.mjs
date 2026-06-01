@@ -378,7 +378,7 @@ function buildVsixZip(work, options) {
   }
   writeFileSync(
     join(extensionRoot, "package.json"),
-    JSON.stringify({ publisher: "nimblesite", name: "deslop-vscode" }),
+    JSON.stringify({ publisher: "nimblesite", name: "deslop-live" }),
   );
 
   writeFakeBinary(join(binDir, "deslop"), {

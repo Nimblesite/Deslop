@@ -119,7 +119,7 @@ Claude Desktop, Codex, Cursor, Continue — must reference `deslop-mcp` by an
 **absolute path into the unpacked VSIX**:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 The unpacked VSIX is the canonical distribution surface per [DEPLOY-VSIX-PACKAGE].

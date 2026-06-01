@@ -40,7 +40,7 @@ suite("package menu contributions", () => {
   test("extension id stays aligned with the released VSIX id", () => {
     const pkg = extensionPackage();
     assert.equal(pkg.publisher, "nimblesite");
-    assert.equal(pkg.name, "deslop-vscode");
+    assert.equal(pkg.name, "deslop-live");
   });
 
   test("activationEvents includes onStartupFinished so analysis begins at VS Code startup", () => {

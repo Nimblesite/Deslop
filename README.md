@@ -4,7 +4,7 @@
 
 This is not a batch scanner. It is a long-running server with a file watcher, a debouncer, an incremental cache, and atomic state writes. Every editor surface and every MCP tool reads the same live state on every keystroke.
 
-[VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-vscode) · [Latest release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
+[VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) · [Latest release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
 
 ---
 
@@ -170,8 +170,8 @@ After `code --install-extension deslop-vscode-X.Y.Z-<target>.vsix`, the binary l
 
 | Platform | Path |
 | --- | --- |
-| macOS / Linux | `~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp` |
-| Windows | `%USERPROFILE%\.vscode\extensions\nimblesite.deslop-vscode-<VERSION>\bin\win32-x64\deslop-mcp.exe` |
+| macOS / Linux | `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp` |
+| Windows | `%USERPROFILE%\.vscode\extensions\nimblesite.deslop-live-<VERSION>\bin\win32-x64\deslop-mcp.exe` |
 
 `<platform>` is one of `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `win32-x64`. `<VERSION>` is the installed extension version — bump it whenever you update the VSIX.
 
@@ -185,7 +185,7 @@ Paste-ready snippet for your project's `AGENTS.md` / `CLAUDE.md` / `.cursorrules
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -195,7 +195,7 @@ Or edit `~/.claude.json` directly:
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "."]
     }
   }
@@ -212,7 +212,7 @@ Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "/absolute/path/to/your/repo"]
     }
   }
@@ -227,7 +227,7 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 

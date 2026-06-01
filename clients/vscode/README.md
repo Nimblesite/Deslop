@@ -20,7 +20,7 @@ External MCP clients that run *outside* VS Code's process — Claude Code (CLI),
 After installing this VSIX, the binary lives at:
 
 ```
-~/.vscode/extensions/nimblesite.deslop-vscode-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
 ```
 
 Where `<platform>` is `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `win32-x64`, and `<VERSION>` matches the installed extension. Bump `<VERSION>` whenever you update the extension.
@@ -29,7 +29,7 @@ Example — Claude Code:
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-vscode-0.1.0/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-0.1.0/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -37,7 +37,7 @@ Example — Codex (`~/.codex/config.toml`):
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-vscode-0.1.0/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-0.1.0/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 
