@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
-const vsixArg = process.argv[2] ?? "deslop-vscode.vsix";
+const vsixArg = process.argv[2] ?? "deslop-live.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
 const targetPlatform = process.argv[3] ?? currentPlatform();
 const packageEntry = "extension/package.json";
@@ -45,9 +45,9 @@ console.log(`Verified deployment manifest and ${binEntries.length} ${targetPlatf
 function assertPackageIdentity(entries) {
   assertEntry(entries, packageEntry);
   const packageJson = JSON.parse(unzipText(["-p", vsixPath, packageEntry]));
-  if (packageJson.publisher !== "nimblesite" || packageJson.name !== "deslop-vscode") {
+  if (packageJson.publisher !== "nimblesite" || packageJson.name !== "deslop-live") {
     throw new Error(
-      `${vsixPath} extension id must be nimblesite.deslop-vscode; found ${packageJson.publisher}.${packageJson.name}`,
+      `${vsixPath} extension id must be nimblesite.deslop-live; found ${packageJson.publisher}.${packageJson.name}`,
     );
   }
 }
