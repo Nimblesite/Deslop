@@ -12,7 +12,7 @@ import {
   syncEmbeddingSettingsToLsp,
   wireNotifications,
 } from "../../extension";
-import { ReportStore } from "../../reportStore";
+import { LifecyclePhase, ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
 
 function reportWithEmbedding(
@@ -31,6 +31,7 @@ function reportWithEmbedding(
       clusters_total: 0,
       duplicated_files: 0,
       threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
     },
     schema_doc: "",
     action_hints: [],
@@ -126,14 +127,27 @@ suite("extension coverage branches", () => {
     const store = new ReportStore();
 
     wireNotifications(client, store);
+    // [VSIX reactivity] The LSP now sends the tagged AnalysisState object
+    // ({state:"running",…}); the handler reads `state.state`, so every
+    // branch must drive the lifecycle. The previous bare-string payload
+    // left `state.state` undefined and silently disabled all of this.
+    // Each transition is captured into its own const so the assertions
+    // don't collapse the shared discriminant to `never`.
+    stateCb?.({ state: "running", started_at_ms: 1 });
+    const running: LifecyclePhase = store.current.lifecycle;
+    assert.equal(running.kind, "analysing");
+
     stateCb?.({ state: "idle" });
-    assert.equal(store.current.lifecycle.kind, "ready");
+    const idle: LifecyclePhase = store.current.lifecycle;
+    assert.equal(idle.kind, "ready");
 
     stateCb?.({ state: "errored", message: "Analysis failed: bad fixture" });
-    const failedLifecycle = store.current.lifecycle;
-    assert.equal(failedLifecycle.kind, "failed");
-    assert.ok("message" in failedLifecycle);
-    assert.match(String(failedLifecycle.message), /Analysis failed/);
+    const failed: LifecyclePhase = store.current.lifecycle;
+    assert.equal(failed.kind, "failed");
+    assert.ok(
+      failed.kind === "failed" && /Analysis failed/.test(failed.message),
+      "errored analysis state must surface its message on the failed lifecycle",
+    );
   });
 
   test("syncEmbeddingSettingsToLsp skips when no client or embeddings are off", async () => {

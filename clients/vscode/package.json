@@ -138,6 +138,40 @@
         "command": "deslop.topOffenders.showByFile",
         "title": "Deslop: Group Top Offenders by File",
         "icon": "$(list-flat)"
+      },
+      {
+        "command": "deslop.topOffenders.showByFolder",
+        "title": "Deslop: Group Top Offenders by Folder",
+        "icon": "$(folder)"
+      },
+      {
+        "command": "deslop.topOffenders.sortByImpact",
+        "title": "Deslop: Sort Top Offenders by Impact",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "deslop.topOffenders.sortByPath",
+        "title": "Deslop: Sort Top Offenders by Path",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "deslop.topOffenders.toggleSplitByLanguage",
+        "title": "Deslop: Toggle Split Top Offenders by Language",
+        "icon": "$(symbol-namespace)"
+      },
+      {
+        "command": "deslop.topOffenders.expandAll",
+        "title": "Deslop: Expand All Top Offenders",
+        "icon": "$(expand-all)"
+      },
+      {
+        "command": "deslop.refresh",
+        "title": "Deslop: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "deslop.openDuplicationReport",
+        "title": "Deslop: Open Duplication Report"
       }
     ],
     "menus": {
@@ -149,13 +183,53 @@
       ],
       "view/title": [
         {
-          "command": "deslop.topOffenders.showByCluster",
+          "command": "deslop.topOffenders.showByFile",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'cluster'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.topOffenders.showByFolder",
           "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'file'",
           "group": "navigation@1"
         },
         {
-          "command": "deslop.topOffenders.showByFile",
-          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'cluster'",
+          "command": "deslop.topOffenders.showByCluster",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.topOffenders.sortByPath",
+          "when": "view == deslop.topOffenders && deslop.topOffendersSortBy == 'impact'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.topOffenders.sortByImpact",
+          "when": "view == deslop.topOffenders && deslop.topOffendersSortBy == 'path'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "deslop.topOffenders.toggleSplitByLanguage",
+          "when": "view == deslop.topOffenders",
+          "group": "navigation@3"
+        },
+        {
+          "command": "deslop.topOffenders.expandAll",
+          "when": "view == deslop.topOffenders",
+          "group": "navigation@4"
+        },
+        {
+          "command": "deslop.refresh",
+          "when": "view == deslop.topOffenders",
+          "group": "navigation@5"
+        },
+        {
+          "command": "deslop.refresh",
+          "when": "view == deslop.metrics",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.refresh",
+          "when": "view == deslop.session",
           "group": "navigation@1"
         }
       ],
@@ -238,8 +312,8 @@
           "name": "Top Offenders"
         },
         {
-          "id": "deslop.focusedFile",
-          "name": "Focused File"
+          "id": "deslop.metrics",
+          "name": "Duplication"
         },
         {
           "id": "deslop.session",
@@ -298,11 +372,28 @@
           "type": "string",
           "enum": [
             "cluster",
-            "file"
+            "file",
+            "folder"
           ],
           "default": "cluster",
           "scope": "window",
-          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+        },
+        "deslop.topOffenders.sortBy": {
+          "type": "string",
+          "enum": [
+            "impact",
+            "path"
+          ],
+          "default": "impact",
+          "scope": "window",
+          "description": "Top Offenders sort order in file and folder modes. 'impact' is worst-first; 'path' is alphabetical by file/folder path. See [VSIX-TOP-OFFENDERS-SORT] in docs/specs/vsix.md."
+        },
+        "deslop.topOffenders.splitByLanguage": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "description": "Split the Top Offenders tree into per-language groups, composed on top of the grouping mode. See [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] in docs/specs/vsix.md."
         },
         "deslop.configPath": {
           "type": "string",
@@ -373,6 +464,7 @@
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
     "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"
   },

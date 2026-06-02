@@ -52,6 +52,7 @@ function report(): Report {
       clusters_total: 1,
       duplicated_files: 2,
       threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
     },
     schema_doc: "",
     action_hints: [],

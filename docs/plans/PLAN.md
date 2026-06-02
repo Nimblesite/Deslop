@@ -49,7 +49,6 @@ Implemented work intentionally not repeated here:
 ## Remaining Plan Files
 
 - [Language roadmap](LANG-ROADMAP.md) — future parser/plugin rollout. P-LANG-0 is complete; TypeScript/TSX is the next planned language slice.
-- [Remove stub provider from production VSIX](remove-stub-provider-from-production-vsix.md) — move `blake3-stub` to test support and keep production provider surfaces Ollama-only.
 - [JetBrains native UX](jetbrains-ux-plan.md) — Tool Window and embedding picker over the existing LSP custom methods.
 - [JetBrains E2E](jetbrains-e2e-plan.md) — real Rider / IntelliJ tests with the real `deslop-lsp` binary.
 - [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) — LSP `refactor.extract` code action. Blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42) (Type-1 / Type-2 bucket split).
@@ -61,8 +60,8 @@ Implemented work intentionally not repeated here:
 ### 🟡 Remaining features
 
 - [ ] Continue [Language roadmap](LANG-ROADMAP.md) with TypeScript/TSX.
+- [ ] **Cluster grouping + Duplication panel** — Top Offenders gains folder-tree grouping ([vsix.md §VSIX-TOP-OFFENDERS-FOLDER-MODE](../specs/vsix.md#vsix-top-offenders-folder-mode)), an impact/path sort axis ([§VSIX-TOP-OFFENDERS-SORT](../specs/vsix.md#vsix-top-offenders-sort)), a per-language split ([§VSIX-TOP-OFFENDERS-LANGUAGE-GROUP](../specs/vsix.md#vsix-top-offenders-language-group), [#162](https://github.com/Nimblesite/Deslop/issues/162)), and collapse/expand/refresh toolbar actions ([§VSIX-TOP-OFFENDERS-TOOLBAR](../specs/vsix.md#vsix-top-offenders-toolbar), [#60](https://github.com/Nimblesite/Deslop/issues/60)). The Focused File panel is replaced by the Duplication panel ([§VSIX-METRICS-PANEL](../specs/vsix.md#vsix-metrics-panel)) + report webview ([§VSIX-METRICS-REPORT](../specs/vsix.md#vsix-metrics-report), [#159](https://github.com/Nimblesite/Deslop/issues/159)), backed by new `RepoMetrics.per_file` ([pipeline.md §METRICS-REPO](../specs/pipeline.md#metrics-repo)). The HTML report gains optional per-language sections ([pipeline.md §OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS](../specs/pipeline.md#output-human-html-language-sections), [#163](https://github.com/Nimblesite/Deslop/issues/163)).
 - [ ] Add `deslop.diagnostics.scope` (`"open-files"` | `"workspace"`) so Problems can mirror the Top Offenders tree even with no tabs open. Spec: [lsp.md §LSP-DIAGNOSTICS-SCOPE](../specs/lsp.md#lsp-diagnostics-scope) + [vsix.md §VSIX-SETTINGS](../specs/vsix.md#vsix-settings). Issue: [#129](https://github.com/Nimblesite/Deslop/issues/129).
-- [ ] Finish [Remove stub provider from production VSIX](remove-stub-provider-from-production-vsix.md).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
 - [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
@@ -71,6 +70,7 @@ Implemented work intentionally not repeated here:
 
 ### ✅ Done
 
+- **Remove stub provider from production VSIX**: the deterministic `blake3-stub` BLAKE3 shim is now `test-support`-feature-gated test infrastructure only (`crates/deslop-core/src/embedding/test_support.rs`); production registers `ollama` exclusively via `ProviderRegistry::production`. No production `src/` path, settings enum, picker row, MCP/LSP/CLI selection, or shipped VSIX asset exposes `stub`. A packaging acceptance gate (`assertNoStubProvider` in `clients/vscode/scripts/verify-vsix-package.mjs`) fails the `.vsix` build if any shipped `package.json` setting enum or `dist/*.{js,json,md}` asset carries `stub`/`blake3-stub`/`StubProvider` — proven against the real artifact plus three tamper cases. Stale `deslop.embedding.provider = "stub"` settings are ignored in memory without rewriting user config. Spec: [fusion.md §FUSION-EMBED-PROVIDER](../specs/fusion.md#fusion-embed-provider) + [vsix.md §VSIX-EMBED-PICKER](../specs/vsix.md#vsix-embed-picker); the gate is proven by `clients/vscode/scripts/stub-gate.test.mjs` (16 cases, run in `make lint`).
 - **VSIX reactivity**: `@preact/signals-core` wired to `ReportStore`; tree providers, `DecorationManager`, `StatusBar`, `LiveBubble`, and `wirePanel` refresh from signal-driven effects. ESLint now guards the invariant against ad-hoc `reportGet`, timer-driven report refresh, and tree providers without signal subscriptions.
 - **Deployment Toolkit migration**: binary version contracts, manifest-backed VS Code and JetBrains startup verification, VSIX package verification, JetBrains package verification, and release gate docs are implemented. `make jetbrains-package` builds the plugin, runs Gradle project/structure checks, and verifies the generated zip with `scripts/verify-jetbrains-package.mjs`.
 - **JetBrains settings and packaging**: persistent project settings, validation, settings-derived LSP launch arguments, binary version checks, bundled binary staging, package verification, and local development docs are implemented.

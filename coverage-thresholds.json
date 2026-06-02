@@ -12,7 +12,7 @@
     }
   },
   "vsix": {
-    "default_threshold": 90,
+    "default_threshold": 95,
     "exclude": [
       "src/logging.ts"
     ]

@@ -108,7 +108,7 @@ suite("SessionProvider", () => {
   });
 
   test("failed lifecycle renders a Stopped error status node with a revealLog command", () => {
-    // Exercises renderLifecycle's failed branch (StatusNode kind=error).
+    // Exercises scanStatus's failed branch (StatusNode kind=error).
     const store = new ReportStore();
     store.setLifecycle({ kind: "failed", message: "binary missing" });
     const provider = new SessionProvider(store, new StatusTicker(), () => undefined);

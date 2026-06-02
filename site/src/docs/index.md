@@ -94,6 +94,7 @@ See [How It Works](/docs/how-it-works/) for the fusion math.
 Generated code and build outputs are filtered by default. Add `.deslop.toml` only for project-specific dependencies, migrations, or training-set code:
 
 ```toml
+[defaults]
 exclude = [
   "**/bin/**",
   "**/obj/**",
@@ -109,9 +110,26 @@ report_hide = [
 
 `exclude` skips parsing entirely. `report_hide` parses but omits from the final ranking — useful for training-set code you still want in the cache.
 
+## Gate CI on a duplication threshold
+
+By default `deslop` exits `0` no matter how much duplication it finds — it reports, it does not judge, so it never breaks a build you did not ask it to gate. Opt into a gate and it exits `3` (failing the build) when repo-wide duplication crosses your ceiling. Pass a flag for a one-off, or commit the ceiling so local runs, CI, and agents all share one number:
+
+```bash
+deslop . --fail-over 5.0          # exit 3 if more than 5% of analysed LOC is duplicated
+```
+
+```toml
+# .deslop.toml
+[threshold]
+max_duplication_percent = 5.0
+```
+
+`--fail-over` overrides the config key; `--fail-over 0` fails on any duplication; `--no-fail-over` clears the gate for a single local run. The full exit-code table lives in [Output Formats](/docs/output-formats/#exit-codes), and a ready-to-paste GitHub Actions job is in [For AI](/docs/for-ai/#run-in-ci).
+
 ## What to do next
 
 1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula and the live pipeline.
 2. Read [AI Integration](/docs/ai-integration/) to wire `deslop-mcp` into Claude Code, Claude Desktop, Cursor, Continue, or Codex.
 3. Read [Output Formats](/docs/output-formats/) before parsing the JSON yourself.
 4. Read [VS Code Cluster Panel](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
+5. Read [For AI](/docs/for-ai/) if you are (or are configuring) a coding agent — the operating manual for `.deslop.toml`, CI gating, and parsing the JSON report.

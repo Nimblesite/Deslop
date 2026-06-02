@@ -6,6 +6,7 @@ const ctx = await esbuild.context({
   entryPoints: {
     cluster: "src/cluster/main.tsx",
     report: "src/report/main.tsx",
+    duplication: "src/duplication/main.tsx",
   },
   bundle: true,
   outdir: "../media/webview",

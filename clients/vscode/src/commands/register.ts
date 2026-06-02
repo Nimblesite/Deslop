@@ -6,8 +6,13 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore } from "../reportStore";
-import { openClusterPanel, openReportPanel } from "../webview/panels";
+import { openClusterPanel, openDuplicationReportPanel, openReportPanel } from "../webview/panels";
 import { pickEmbeddingModel } from "./embeddingPicker";
+import {
+  setTopOffendersGroupBy,
+  setTopOffendersSortBy,
+  toggleTopOffendersSplitByLanguage,
+} from "./topOffendersView";
 import { Report, ReportCluster, ReportOccurrence } from "../types/report";
 import { buildCompareUri } from "../compare/provider";
 import { ClusterNode, OccurrenceNode } from "../tree/providers";
@@ -56,6 +61,11 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.openClusterDetails", run: ({ context, store }, node) => openClusterDetails(context, store, node as ClusterNode | OccurrenceNode) },
   { id: "deslop.topOffenders.showByCluster", run: () => setTopOffendersGroupBy("cluster") },
   { id: "deslop.topOffenders.showByFile", run: () => setTopOffendersGroupBy("file") },
+  { id: "deslop.topOffenders.showByFolder", run: () => setTopOffendersGroupBy("folder") },
+  { id: "deslop.topOffenders.sortByImpact", run: () => setTopOffendersSortBy("impact") },
+  { id: "deslop.topOffenders.sortByPath", run: () => setTopOffendersSortBy("path") },
+  { id: "deslop.topOffenders.toggleSplitByLanguage", run: () => toggleTopOffendersSplitByLanguage() },
+  { id: "deslop.openDuplicationReport", run: ({ context, store }) => openDuplicationReportPanel(context, store) },
   { id: "deslop.copyContextForAI", run: ({ store }, node) => copyContextForAI(node as ClusterNode | OccurrenceNode, store) },
   { id: "deslop.copyClusterContextById", run: ({ store }, id) => copyClusterContextById(store, id) },
   { id: "deslop.copyHumanLocation", run: (_deps, node) => copyHumanLocation(node as OccurrenceNode) },
@@ -79,26 +89,26 @@ export function registerCommands(
   }
 }
 
-function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
+export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
   return clientOf()?.sendRequest("workspace/executeCommand", {
     command: LSP_REFRESH_REPORT_COMMAND,
     arguments: [],
   });
 }
 
-async function toggleShowAllLenses(): Promise<void> {
+export async function toggleShowAllLenses(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   const next = !cfg.get<boolean>("showAllLenses", false);
   await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
 }
 
-async function openOccurrenceTarget(target: unknown): Promise<void> {
+export async function openOccurrenceTarget(target: unknown): Promise<void> {
   const occurrence = occurrenceFromCommandTarget(target);
   if (occurrence) await openOccurrence(occurrence);
   else void vscode.window.showInformationMessage("Deslop: no occurrence resolved for this command.");
 }
 
-async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
+export async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
   const clusterId = typeof id === "string" ? id : String(id);
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster) return;
@@ -107,7 +117,7 @@ async function copyClusterContextById(store: ReportStore, id: unknown): Promise<
   void vscode.window.showInformationMessage("Copied AI context to clipboard");
 }
 
-function openClusterDetails(
+export function openClusterDetails(
   context: vscode.ExtensionContext,
   store: ReportStore,
   node: ClusterNode | OccurrenceNode,
@@ -115,15 +125,6 @@ function openClusterDetails(
   const id = clusterIdForTreeNode(node, store);
   if (id) openClusterPanel(context, store, id);
   else void vscode.window.showInformationMessage("Deslop: no cluster resolved for this tree row.");
-}
-
-async function setTopOffendersGroupBy(value: "cluster" | "file"): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration("deslop");
-  await cfg.update(
-    "topOffenders.groupBy",
-    value,
-    vscode.ConfigurationTarget.Workspace,
-  );
 }
 
 export async function openCanonicalOccurrence(node: ClusterNode): Promise<void> {

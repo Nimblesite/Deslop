@@ -22,6 +22,8 @@ mod embedding_stub;
 mod from_report;
 #[path = "cli/invocation.rs"]
 mod invocation;
+#[path = "cli/language_sections.rs"]
+mod language_sections;
 #[path = "cli/logging.rs"]
 mod logging;
 #[path = "cli/metrics.rs"]

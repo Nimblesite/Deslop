@@ -82,6 +82,8 @@ lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
+	@echo "==> VSIX stub-provider packaging gate (unit)..."
+	@node --test clients/vscode/scripts/stub-gate.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree

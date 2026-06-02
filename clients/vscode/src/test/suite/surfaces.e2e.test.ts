@@ -32,7 +32,7 @@ suite("surfaces", () => {
     assert.ok(cmds.includes("deslop.openCluster"));
   });
 
-  test("opening a fixture editor fires FocusedFile tree refresh + decorations", async () => {
+  test("opening a fixture editor drives the decoration redraw pipeline", async () => {
     await openFixture("Alpha.cs");
     await sleep(500);
   });

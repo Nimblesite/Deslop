@@ -64,7 +64,7 @@ pub fn build_page(
         clusters_hidden: report.clusters_hidden,
         embedding_provenance: report.embedding_provenance.clone(),
         cache_stats: report.cache_stats,
-        metrics: report.metrics,
+        metrics: report.metrics.clone(),
         action_hints: report.action_hints.clone(),
         total_clusters,
         page: ReportPageInfo {

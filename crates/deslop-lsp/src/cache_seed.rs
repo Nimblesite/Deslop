@@ -1,12 +1,19 @@
 //! Cache-seeded LSP startup for GH #73.
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use deslop_core::{
     embedding::{EmbeddingMode, EmbeddingProvider},
     live::{
-        broadcast_report_changed, AnalysisSession, ChangeSummary, LiveError, LiveService,
-        ReportChangedNotification, ReportChangedSender,
+        broadcast_report_changed, AnalysisSession, AnalysisState, ChangeSummary, Clock, LiveError,
+        LiveService, ReportChangedNotification, ReportChangedSender, SystemClock,
     },
     EmbeddingSettings, PipelineSession, ReportDelta,
 };
@@ -47,8 +54,20 @@ pub(crate) fn open_session(
 /// Starts the cold analysis pass without blocking cache-backed queries.
 pub(crate) fn spawn_refresh(task: RefreshTask) {
     let _join = tokio::spawn(async move {
-        push_state(&task.client, "running").await;
-        match initialise_in_background(&task).await {
+        push_state(
+            &task.client,
+            AnalysisState::Running {
+                started_at_ms: now_ms(),
+            },
+        )
+        .await;
+        let result = initialise_in_background(&task).await;
+        // The cold pass is about to commit or error. Clear the in-flight
+        // flag before the terminal idle/errored push so a freshly
+        // connected editor reading it in `initialized()` sees the settled
+        // state instead of a phantom Running ([VSIX reactivity]).
+        task.cold_pass_active.store(false, Ordering::SeqCst);
+        match result {
             Ok((pipeline, report)) => commit_refresh(task, pipeline, report).await,
             Err(error) => report_refresh_error(&task.client, &error).await,
         }
@@ -79,6 +98,10 @@ pub(crate) struct RefreshTask {
     /// subscribers see the cache-seed cold-pass commit alongside
     /// scheduler-driven passes.
     pub(crate) report_changed: ReportChangedSender,
+    /// Shared "cold pass still running" flag. Set true while this pass
+    /// is in flight and cleared as it commits, so `initialized()` can
+    /// report the correct startup state to a late-connecting editor.
+    pub(crate) cold_pass_active: Arc<AtomicBool>,
 }
 
 /// Runs `PipelineSession::initialise` on a blocking thread so the
@@ -155,22 +178,51 @@ async fn commit_refresh(task: RefreshTask, pipeline: PipelineSession, report: de
     task.client
         .send_notification::<ReportChangedLspNotification>(notification)
         .await;
-    push_state(&task.client, "idle").await;
+    push_state(&task.client, AnalysisState::Idle).await;
 }
 
 /// Logs the refresh failure and pushes an `errored` analysis-state
 /// notification so the editor surfaces the failure.
 async fn report_refresh_error(client: &Client, error: &LiveError) {
     tracing::error!(%error, "cache_seed_refresh_failed");
-    push_state(client, "errored").await;
+    push_state(
+        client,
+        AnalysisState::Errored {
+            message: error.to_string(),
+        },
+    )
+    .await;
 }
 
-/// Pushes a `deslop/analysisState` notification carrying `state`
-/// (`running`, `idle`, `errored`).
-async fn push_state(client: &Client, state: &str) {
+/// Pushes the current [`AnalysisState`] to a freshly-connected editor
+/// from `initialized()`. Closes the startup race where the cold pass's
+/// `running`/`idle` broadcasts predate the VSIX notification handlers:
+/// a fresh (non-seeded) session has already finished its blocking scan,
+/// so it reports `Idle`; a seeded session still running its cold pass
+/// reports `Running` ([VSIX reactivity]).
+pub(crate) async fn push_initial_state(client: &Client, cold_pass_active: &AtomicBool) {
+    let state = if cold_pass_active.load(Ordering::SeqCst) {
+        AnalysisState::Running {
+            started_at_ms: now_ms(),
+        }
+    } else {
+        AnalysisState::Idle
+    };
+    push_state(client, state).await;
+}
+
+/// Pushes a `deslop/analysisState` notification carrying the tagged
+/// [`AnalysisState`] object (`running`, `idle`, `errored`).
+async fn push_state(client: &Client, state: AnalysisState) {
     client
-        .send_notification::<AnalysisStateLspNotification>(state.to_owned())
+        .send_notification::<AnalysisStateLspNotification>(state)
         .await;
+}
+
+/// Milliseconds since the UNIX epoch via the production clock, reused so
+/// the cold-pass `started_at_ms` matches the scheduler's timestamps.
+fn now_ms() -> u64 {
+    SystemClock::new().now_ms()
 }
 
 /// Returns the per-batch sleep yield for the embedding pipeline. `None`
@@ -279,6 +331,7 @@ mod tests {
             provider,
             mode: EmbeddingMode::Off,
             report_changed,
+            cold_pass_active: Arc::new(AtomicBool::new(true)),
         };
         let (pipeline, report) = initialise_in_background(&task).await?;
 
@@ -303,10 +356,15 @@ mod tests {
             Some(ANALYSIS_STATE),
             "commit must publish the idle analysis state after the report: {second}"
         );
+        assert!(
+            second.pointer("/params").is_some_and(Value::is_object),
+            "analysisState params must be the tagged AnalysisState object, not a bare \
+             string the VSIX reads as `state.state === undefined`: {second}"
+        );
         assert_eq!(
-            second.pointer("/params").and_then(Value::as_str),
+            second.pointer("/params/state").and_then(Value::as_str),
             Some("idle"),
-            "analysis state notification must carry the idle string: {second}"
+            "the tagged object must carry state=idle so the editor settles to ready: {second}"
         );
         Ok(())
     }
@@ -329,9 +387,51 @@ mod tests {
             "refresh errors must publish analysis-state changes: {frame}"
         );
         assert_eq!(
-            frame.pointer("/params").and_then(Value::as_str),
+            frame.pointer("/params/state").and_then(Value::as_str),
             Some("errored"),
-            "refresh errors must surface the errored state: {frame}"
+            "refresh errors must surface the errored state as a tagged object: {frame}"
+        );
+        assert!(
+            frame
+                .pointer("/params/message")
+                .and_then(Value::as_str)
+                .is_some(),
+            "the errored analysis state must carry a human-readable message: {frame}"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn initial_state_is_running_while_cold_pass_active(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (client, mut socket) = initialized_loopback_client().await?;
+        push_initial_state(&client, &AtomicBool::new(true)).await;
+
+        let frame = next_client_frame(&mut socket).await?;
+        assert_eq!(
+            frame.pointer("/method").and_then(Value::as_str),
+            Some(ANALYSIS_STATE),
+            "initialized() must publish the startup analysis state: {frame}"
+        );
+        assert_eq!(
+            frame.pointer("/params/state").and_then(Value::as_str),
+            Some("running"),
+            "a late-connecting editor must see Running while the cold pass is still in flight: {frame}"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn initial_state_is_idle_once_the_scan_has_settled(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (client, mut socket) = initialized_loopback_client().await?;
+        push_initial_state(&client, &AtomicBool::new(false)).await;
+
+        let frame = next_client_frame(&mut socket).await?;
+        assert_eq!(
+            frame.pointer("/params/state").and_then(Value::as_str),
+            Some("idle"),
+            "a settled (fresh or committed) session must report Idle so the panel can reach ready: {frame}"
         );
         Ok(())
     }

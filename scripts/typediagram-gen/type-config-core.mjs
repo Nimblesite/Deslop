@@ -187,14 +187,32 @@ export const CORE_TYPE_CONFIG = {
       source: "Provenance of the threshold value.",
     },
   },
+  FileMetric: {
+    docs: "Per-file duplication breakdown carried on `RepoMetrics.per_file`. One entry per analysed file; clean files appear with `duplicated_loc == 0` so percentage denominators stay exact. Consumers roll up per-folder totals by summing entries under a path prefix.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    fieldOverrides: {
+      path: "PathBuf",
+      analysed_loc: "u64",
+      duplicated_loc: "u64",
+    },
+    fieldDocs: {
+      path: "Source path, relative to the scan root when possible.",
+      analysed_loc: "Physical lines in this file.",
+      duplicated_loc: "Lines in this file covered by `>= 2` non-hidden clone occurrences.",
+      duplication_percent: "Clamped `100.0 * duplicated_loc / analysed_loc` for this file.",
+    },
+  },
   RepoMetrics: {
     docs: "Repo-wide duplication metrics, embedded at `Report.metrics`.",
-    derives: ["Debug", "Clone", "Copy", "Serialize", "Deserialize"],
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     fieldOverrides: {
       analysed_loc: "u64",
       duplicated_loc: "u64",
       clusters_total: "usize",
       duplicated_files: "usize",
+    },
+    fieldSerdeAttrs: {
+      per_file: ["default"],
     },
     fieldDocs: {
       analysed_loc: "Physical lines across every analysed file.",
@@ -203,6 +221,7 @@ export const CORE_TYPE_CONFIG = {
       clusters_total: "Count of clusters contributing to `duplicated_loc`.",
       duplicated_files: "Count of files with at least one non-hidden clone occurrence.",
       threshold: "Resolved fail-over threshold.",
+      per_file: "Per-file duplication breakdown, worst-first. Empty on reports produced before this field existed.",
     },
   },
   ReportBoilerplateOccurrence: {

@@ -19,6 +19,7 @@ function emptyReport(overrides: Partial<Report> = {}): Report {
       clusters_total: 0,
       duplicated_files: 0,
       threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
     },
     schema_doc: "",
     action_hints: [],
@@ -63,6 +64,39 @@ suite("ReportStore", () => {
     store.setSnapshot(emptyReport(), 7);
     assert.equal(fired, 1);
     assert.equal(store.current.generation, 7);
+  });
+
+  // [VSIX reactivity] An empty report may be a cache seed or a mid-scan
+  // snapshot, so it must NOT settle the lifecycle to "ready" — otherwise
+  // the panel declares "No duplication detected" while a scan is still
+  // running. Only the server's analysisState idle signal settles it.
+  test("setSnapshot leaves an in-flight lifecycle alone when the report is empty", () => {
+    const store = new ReportStore();
+    store.setLifecycle({ kind: "analysing" });
+    store.setSnapshot(emptyReport(), 7);
+    assert.equal(
+      store.current.lifecycle.kind,
+      "analysing",
+      "an empty report must not prematurely declare the scan complete",
+    );
+  });
+
+  test("setSnapshot settles the lifecycle to ready when the report carries findings", () => {
+    const store = new ReportStore();
+    store.setLifecycle({ kind: "analysing" });
+    store.setSnapshot(
+      emptyReport({
+        clusters: [
+          cluster("c", 10, [occurrence("/repo/A.cs", 0, 10), occurrence("/repo/B.cs", 0, 10)]),
+        ],
+      }),
+      7,
+    );
+    assert.equal(
+      store.current.lifecycle.kind,
+      "ready",
+      "a report with findings is self-evidently a completed analysis",
+    );
   });
 
   test("applyDelta is a no-op when there is no seeded report", () => {

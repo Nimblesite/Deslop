@@ -8,10 +8,12 @@ import { effect } from "@preact/signals-core";
 
 import { COLOR } from "../design";
 import { reportWithDisplayLocations } from "../locations";
+import { logWarn } from "../logging";
 import { ReportStore } from "../reportStore";
+import { anchorForClusterId, ClusterAnchor, clusterPanelFeed } from "../clusterSelection";
 import { Report, ReportOccurrence } from "../types/report";
 
-type PanelKind = "cluster" | "report";
+type PanelKind = "cluster" | "report" | "duplication";
 
 interface WebviewPanelState {
   panel: vscode.WebviewPanel;
@@ -29,10 +31,9 @@ export function openClusterPanel(
   const key = `cluster:${clusterId}`;
   const existing = activePanels.get(key);
   if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
+  const anchor = anchorForClusterId(store.current.report, clusterId);
   const panel = createPanel(context, "cluster", `Deslop: cluster ${clusterId}`);
-  const unsub = wirePanel(panel, store, "cluster", (webview) => {
-    void webview.postMessage({ kind: "select/cluster", id: clusterId });
-  });
+  const unsub = wirePanel(panel, store, "cluster", { anchor });
   wireMessages(panel, store);
   panel.onDidDispose(() => {
     unsub.dispose();
@@ -53,6 +54,26 @@ export function openReportPanel(context: vscode.ExtensionContext, store: ReportS
     activePanels.delete(key);
   });
   activePanels.set(key, { panel, kind: "report", storeSubscription: unsub });
+}
+
+// [VSIX-METRICS-REPORT] Duplication report — the headline of the
+// Duplication panel opens this. Reuses the report-snapshot push so the
+// webview renders the per-folder/per-file breakdown from the same data.
+export function openDuplicationReportPanel(
+  context: vscode.ExtensionContext,
+  store: ReportStore,
+): void {
+  const key = "duplication";
+  const existing = activePanels.get(key);
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
+  const panel = createPanel(context, "duplication", "Deslop: Duplication");
+  const unsub = wirePanel(panel, store, "duplication");
+  wireMessages(panel, store);
+  panel.onDidDispose(() => {
+    unsub.dispose();
+    activePanels.delete(key);
+  });
+  activePanels.set(key, { panel, kind: "duplication", storeSubscription: unsub });
 }
 
 function createPanel(
@@ -81,37 +102,78 @@ function wireMessages(panel: vscode.WebviewPanel, store: ReportStore): void {
   });
 }
 
+interface ClusterSelection {
+  readonly anchor: ClusterAnchor;
+}
+
 function wirePanel(
   panel: vscode.WebviewPanel,
   store: ReportStore,
   kind: PanelKind,
-  onReady?: (webview: vscode.Webview) => void,
+  selection?: ClusterSelection,
 ): vscode.Disposable {
   void kind;
-  const push = (report: Report | null): void => {
+  const pushReport = (report: Report | null): void => {
     if (!report) return;
     void panel.webview.postMessage({
       kind: "report/snapshot",
       report: reportWithDisplayLocations(report),
     });
   };
+  if (selection) return wireClusterFeed(panel, store, selection.anchor, pushReport);
   // [VSIX-STATE-DIRTY]: webviews mirror the visible projection so an
   // unsaved edit hides occurrences in lock-step with the tree. Commands
   // that need cluster-id lookup go through canonical separately.
-  const sub = { dispose: effect(() => push(store.visibleReport.value)) };
-  if (onReady) {
-    // delay until the webview has mounted and acknowledged via `ready`
-    const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {
-      if (m.kind === "ready") {
-        onReady(panel.webview);
-        once.dispose();
-      }
-    });
-    panel.onDidDispose(() => {
-      once.dispose();
+  return { dispose: effect(() => pushReport(store.visibleReport.value)) };
+}
+
+// The cluster detail panel pins to a stable anchor instead of the volatile
+// content-hash id, re-resolving the live cluster on every generation so the
+// selection survives id churn and dirty elision (#173). Delays the first push
+// until the webview has mounted and acknowledged via `ready`.
+function wireClusterFeed(
+  panel: vscode.WebviewPanel,
+  store: ReportStore,
+  anchor: ClusterAnchor,
+  pushReport: (report: Report | null) => void,
+): vscode.Disposable {
+  let ready = false;
+  const push = (): void => {
+    if (ready) pushClusterFeed(panel, store, anchor, pushReport);
+  };
+  const sub = { dispose: effect(() => { void store.current; push(); }) };
+  const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {
+    if (m.kind !== "ready") return;
+    ready = true;
+    push();
+    once.dispose();
+  });
+  panel.onDidDispose(() => {
+    once.dispose();
+  });
+  return sub;
+}
+
+// Pushes the snapshot + selection so the opened cluster is always resolvable,
+// logging when it has genuinely left the report so the failure is never silent.
+function pushClusterFeed(
+  panel: vscode.WebviewPanel,
+  store: ReportStore,
+  anchor: ClusterAnchor,
+  pushReport: (report: Report | null) => void,
+): void {
+  const canonical = store.current.report;
+  const visible = store.current.visibleReport;
+  if (!canonical || !visible) return;
+  const feed = clusterPanelFeed(canonical, visible, anchor);
+  pushReport(feed.report);
+  void panel.webview.postMessage({ kind: "select/cluster", id: feed.selectedId });
+  if (feed.selectedId === null) {
+    logWarn("cluster no longer exists", {
+      clusterId: anchor.id,
+      generation: store.current.generation,
     });
   }
-  return sub;
 }
 
 function buildHtml(

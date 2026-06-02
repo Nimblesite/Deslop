@@ -4,7 +4,9 @@ import * as assert from "node:assert/strict";
 import {
   resolveBinary,
   resolveHostBinaries,
+  loadDeploymentManifest,
   BundledBinaryMissingError,
+  BinaryMissingError,
   UnsupportedPlatformError,
   BinaryVerificationError,
   type DeploymentManifest,
@@ -165,5 +167,33 @@ suite("binary resolver", () => {
   test("BundledBinaryMissingError exposes path", () => {
     const err = new BundledBinaryMissingError("/nope");
     assert.equal(err.binaryPath, "/nope");
+  });
+
+  test("loadDeploymentManifest reads and parses the packaged shipwright.json", () => {
+    const manifestExt = resolve(tmp, "manifest-ext");
+    mkdirSync(manifestExt, { recursive: true });
+    writeFileSync(resolve(manifestExt, "shipwright.json"), JSON.stringify(manifest()), "utf8");
+
+    const loaded = loadDeploymentManifest(manifestExt);
+    assert.equal(loaded.product.id, "deslop");
+    assert.equal(loaded.hosts["vscode"]?.activationVerifies.includes("deslop-lsp"), true);
+  });
+
+  test("a configured-but-missing override path raises BinaryMissingError", () => {
+    // The user-setting candidate is a hard failure: a path the user named
+    // explicitly that does not exist must abort activation, not silently
+    // fall through to the bundle.
+    assert.throws(
+      () =>
+        resolveBinary(
+          extDir,
+          "lsp",
+          manifest(),
+          { lspPath: resolve(tmp, "nonexistent", "deslop-lsp") },
+          { PATH: "" },
+        ),
+      (err: unknown) =>
+        err instanceof BinaryMissingError && /was not found at/.test(err.message),
+    );
   });
 });

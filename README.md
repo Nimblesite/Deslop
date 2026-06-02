@@ -142,12 +142,6 @@ deslop ~/code/my-repo --output ~/reports/my-repo
 # → my-repo.json, my-repo.txt, my-repo.html
 ```
 
-Fail CI when duplication exceeds a percentage:
-
-```bash
-deslop --fail-over 5.0
-```
-
 Re-render a previous JSON report without re-analysing:
 
 ```bash
@@ -155,6 +149,64 @@ deslop --from-report deslop-report.json
 ```
 
 Full flag reference: `deslop --help`.
+
+---
+
+## Fail CI on a duplication threshold
+
+`deslop` is diagnostic by default — it exits `0` no matter how much duplication it finds, so it never breaks a build you did not ask it to gate. Opt into a CI gate with **one flag** or **one config key**, and the process exits `3` when the repo-wide duplication percentage exceeds your ceiling.
+
+```bash
+deslop . --fail-over 5.0     # exit 3 if more than 5% of analysed LOC is duplicated
+```
+
+Or commit the ceiling so every run — local, CI, and agent — shares it. In `.deslop.toml`:
+
+```toml
+[threshold]
+max_duplication_percent = 5.0
+```
+
+`--fail-over` takes precedence over the config key. `--fail-over 0` fails on *any* duplication. `--no-fail-over` clears the config ceiling for a single local run, so you can scan a repo without tripping its own gate. The percentage must be a finite number in `[0.0, 100.0]`; anything else exits `2`.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Analysis succeeded and duplication was within the threshold (or no threshold was set). |
+| `1` | Runtime error — bad scan path, parse/I-O failure, or an unreachable `required` embedding provider. Never a panic. |
+| `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold value. |
+| `3` | **Duplication threshold breached.** The full report is still written so CI can surface the offenders. |
+
+### GitHub Actions
+
+```yaml
+name: deslop
+on: [push, pull_request]
+
+jobs:
+  duplication-gate:
+    runs-on: ubuntu-latest
+    env:
+      DESLOP_VERSION: "0.1.0"   # pin the tool version — see the Releases page
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the Deslop CLI
+        run: |
+          curl -sSfL "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" | tar -xz
+          echo "$PWD/deslop-${DESLOP_VERSION}-linux-x64" >> "$GITHUB_PATH"
+      - name: Gate on duplication
+        run: deslop . --fail-over 5.0   # or omit --fail-over to use [threshold] in .deslop.toml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deslop-report
+          path: deslop-report.html
+```
+
+Exit code `3` fails the step like any non-zero status. The `if: always()` upload keeps `deslop-report.html` even on a breach so a human can browse the offenders. macOS / Linux runners can `brew install nimblesite/tap/deslop` instead of downloading the archive.
+
+Agents driving CI should read the [For AI](https://deslop.live/docs/for-ai/) guide for the same gate plus how to parse the JSON report.
 
 ---
 

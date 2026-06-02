@@ -83,6 +83,7 @@ export type {
   EmbeddingModelInfo,
   EmbeddingPhase,
   EmbeddingProgress,
+  FileMetric,
   ReportChangedNotification,
   ReportDelta,
   RepoMetrics,

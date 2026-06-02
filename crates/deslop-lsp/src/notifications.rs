@@ -1,6 +1,6 @@
 //! LSP notification marker types for Deslop custom methods.
 
-use deslop_core::live::{EmbeddingProgress, ReportChangedNotification};
+use deslop_core::live::{AnalysisState, EmbeddingProgress, ReportChangedNotification};
 
 /// Method name for model-swap progress ([VSIX-SESSION-PROGRESS]).
 pub const EMBEDDING_PROGRESS: &str = "deslop/embeddingProgress";
@@ -38,7 +38,12 @@ impl tower_lsp::lsp_types::notification::Notification for ReportChangedLspNotifi
 pub enum AnalysisStateLspNotification {}
 
 impl tower_lsp::lsp_types::notification::Notification for AnalysisStateLspNotification {
-    /// Plain string — VSIX checks `state === "running"` etc.
-    type Params = String;
+    /// The generated [`AnalysisState`] tagged object — e.g.
+    /// `{"state":"running","started_at_ms":…}`. The VSIX reads
+    /// `state.state`, so the previous bare-`String` payload silently
+    /// disabled every lifecycle transition (`"running".state` is
+    /// `undefined`). Sending the generated enum keeps this notification
+    /// in lockstep with `crate::wire_generated` ([VSIX reactivity]).
+    type Params = AnalysisState;
     const METHOD: &'static str = ANALYSIS_STATE;
 }

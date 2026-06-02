@@ -3,13 +3,14 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { assertNoStubProvider, PACKAGE_ENTRY } from "./stub-gate.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
 const vsixArg = process.argv[2] ?? "deslop-live.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
 const targetPlatform = process.argv[3] ?? currentPlatform();
-const packageEntry = "extension/package.json";
+const packageEntry = PACKAGE_ENTRY;
 const manifestEntry = "extension/shipwright.json";
 
 const entries = unzipText(["-Z1", vsixPath]).split("\n").filter(Boolean);
@@ -39,6 +40,13 @@ for (const component of components) {
 for (const entry of binEntries) {
   verifyBundledEntry(entry, componentForEntry(entry, components));
 }
+
+const stubScanned = assertNoStubProvider({
+  entries,
+  readText: (entry) => unzipText(["-p", vsixPath, entry]),
+  label: vsixPath,
+});
+console.log(`Verified ${stubScanned.length} packaged assets carry no stub provider strings`);
 
 console.log(`Verified deployment manifest and ${binEntries.length} ${targetPlatform} VSIX binaries`);
 

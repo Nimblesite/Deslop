@@ -106,7 +106,13 @@ export class ReportStore implements vscode.Disposable {
     batch(() => {
       this._report.value = report;
       this._generation.value = generation;
-      this._lifecycle.value = { kind: "ready" };
+      // A report with findings is self-evidently a completed analysis, so
+      // it settles the lifecycle to "ready". An EMPTY report is ambiguous
+      // — it may be a cache seed or a mid-scan snapshot — so the "ready"
+      // verdict is deferred to the server's analysisState idle signal.
+      // This is what stops the panel declaring "No duplication detected"
+      // while a scan is still running ([VSIX reactivity]).
+      if (report.clusters.length > 0) this._lifecycle.value = { kind: "ready" };
       this._pendingEmbeddingModel.value = null;
       this._embeddingProgress.value = null;
     });
@@ -129,7 +135,9 @@ export class ReportStore implements vscode.Disposable {
         tool_version: delta.tool_version,
       };
       this._generation.value = delta.to_generation;
-      this._lifecycle.value = { kind: "ready" };
+      // Same rule as setSnapshot: only a non-empty result settles the
+      // lifecycle; an emptied report waits for the server's idle signal.
+      if (clusters.length > 0) this._lifecycle.value = { kind: "ready" };
       this._pendingEmbeddingModel.value = null;
       this._embeddingProgress.value = null;
     });
