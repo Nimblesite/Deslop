@@ -89,7 +89,10 @@ mod tests {
     #[test]
     fn pick_canonical_prefers_an_occurrence_away_from_the_cursor() {
         let root = Path::new("/repo");
-        let occurrences = vec![occurrence("/repo/A.cs", 0, 10), occurrence("/repo/B.cs", 0, 10)];
+        let occurrences = vec![
+            occurrence("/repo/A.cs", 0, 10),
+            occurrence("/repo/B.cs", 0, 10),
+        ];
         let chosen = pick_canonical(&occurrences, root, Path::new("/repo/A.cs"), 5);
         assert_eq!(
             chosen.map(|occ| occ.path.clone()),
@@ -128,10 +131,11 @@ mod tests {
     }
 
     #[test]
-    fn paths_from_file_events_keeps_file_uris_and_drops_non_file_uris() {
-        let file_a = Url::from_file_path("/repo/A.cs").expect("absolute file path is a valid url");
-        let file_b = Url::from_file_path("/repo/B.cs").expect("absolute file path is a valid url");
-        let non_file = Url::parse("untitled:Untitled-1").expect("non-file url parses");
+    fn paths_from_file_events_keeps_file_uris_and_drops_non_file_uris(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let file_a = Url::from_file_path("/repo/A.cs").map_err(|()| "A.cs is a file url")?;
+        let file_b = Url::from_file_path("/repo/B.cs").map_err(|()| "B.cs is a file url")?;
+        let non_file = Url::parse("untitled:Untitled-1")?;
         let events = vec![
             FileEvent::new(file_a, FileChangeType::CHANGED),
             FileEvent::new(non_file, FileChangeType::CREATED),
@@ -142,5 +146,6 @@ mod tests {
             vec![PathBuf::from("/repo/A.cs"), PathBuf::from("/repo/B.cs")],
             "only file: URIs survive, preserving event order",
         );
+        Ok(())
     }
 }
