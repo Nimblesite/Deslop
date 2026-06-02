@@ -33,7 +33,7 @@ pub fn render_text(report: &Report) -> String {
 /// the threshold line is omitted when no threshold is configured to
 /// keep local runs terse.
 fn write_metrics(out: &mut String, report: &Report) {
-    let metrics = report.metrics;
+    let metrics = &report.metrics;
     let _ = writeln!(
         out,
         "repo: {percent:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",

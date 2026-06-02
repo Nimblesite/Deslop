@@ -118,24 +118,24 @@ On activation: load `shipwright.json`, verify all required VS Code activation co
 
 A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Marketplace listing) opens the **Duplicate Clusters** view container. Inside:
 
-- **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for cluster-vs-file grouping modes. In every mode, cluster rows show:
+- **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for the cluster / file / folder grouping modes, [VSIX-TOP-OFFENDERS-SORT] for the impact-vs-path sort axis, and [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] for the optional per-language split. In every mode, cluster rows show:
   - **Cluster slug** as the leading element of the bold label ([VSIX-TOP-OFFENDERS-CLUSTER-ID]) — the first 7 hex chars of `cluster.id`, identical to the slug used by the LSP hover bubble. The slug is stable across runs.
   - Severity dot ([LSP-SEVERITY]) and short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
   - Grey description tail: `rank #N · N copies`. The literal word **rank** appears on every surface that shows `#N` (description, tooltip, accessibility label, copy-for-AI) so neither humans nor AI agents confuse the volatile rank for the stable id ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`...\``) and in every command argument; only the visible label is shortened.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
-- **Focused File** tree — the cluster subset overlapping the currently open editor. Collapses when no clusters apply.
+- **Duplication** panel ([VSIX-METRICS-PANEL]) — the codebase duplication summary that replaces the former Focused File tree: a headline duplication score over the whole corpus, then a per-folder → per-file breakdown of how much of each is duplicated. The headline opens the full [VSIX-METRICS-REPORT] webview.
 - **Session** panel — compact footer with: active embedding model (linkable, opens the picker), `cache_stats`, `files_analysed`, daemon state (`idle` / `running`).
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
-#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster vs File grouping modes
+#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster / File / Folder grouping modes
 
-The Top Offenders tree exposes two grouping modes. Both order siblings worst-offender first; only the tree shape and what counts as a root differs.
+The Top Offenders tree exposes three grouping modes that change the tree shape and what counts as a root. Two orthogonal axes compose on top of every mode: the sort order ([VSIX-TOP-OFFENDERS-SORT]) and the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
 
-The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"`, default `"cluster"`). VS Code's standard user→workspace precedence applies: a workspace value pinned in `.vscode/settings.json` overrides the user-level default, so a repo team can lock a lens for everyone working in that repo while individuals keep their own machine-wide default elsewhere.
+The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"`, default `"cluster"`). VS Code's standard user→workspace precedence applies: a workspace value pinned in `.vscode/settings.json` overrides the user-level default, so a repo team can lock a lens for everyone working in that repo while individuals keep their own machine-wide default elsewhere. Unknown / missing values fall back to `"cluster"` — never panic.
 
-A view-title toggle in the Top Offenders header switches modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render.
+A view-title toggle in the Top Offenders header cycles modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render. The toolbar also carries collapse / expand / refresh actions ([VSIX-TOP-OFFENDERS-TOOLBAR]) because folder mode can nest deeply.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Cluster mode (default)
 
@@ -148,6 +148,14 @@ Root rows are files. A file's child nodes are bucket groups, one per [CLONE-BUCK
 Files sort by max cluster weight desc (primary — "worst offender first" applied to the file's most-painful cluster), with sum-of-weights desc as the tiebreaker and `localeCompare` of the path as the final stable key. Bucket groups within a file sort by max cluster weight desc. Clusters within a bucket group sort by weight desc.
 
 Cluster row labels in file mode drop the trailing `· <file>` suffix because the parent file row already shows it. The bold label still leads with the cluster slug ([VSIX-TOP-OFFENDERS-CLUSTER-ID]); the rank still lives in the grey description tail. The tooltip is mode-invariant — it always carries the full path so the AI-scrapable hover surface stays stable.
+
+#### [VSIX-TOP-OFFENDERS-FOLDER-MODE] Folder mode
+
+Root rows are the top-level folders of the workspace; each folder is a real tree that expands into its child folders and, at the leaves, the files that contain clusters. A file leaf behaves exactly like a file-mode root ([VSIX-TOP-OFFENDERS-FILE-MODE]): it expands to the bucket groups present in that file, then to clusters, then to occurrences. Single-child intermediate folders are path-compressed into their nearest branching ancestor so a deep `crates/deslop-core/src/...` chain renders as one row, not five.
+
+Because each cluster is single-language ([CONFIG-CROSS-LANGUAGE]) and languages overwhelmingly live in separate directory trees, folder mode already separates most languages without an explicit language split. Each folder row's grey description carries its rolled-up worst weight and the count of files beneath it that contain duplication.
+
+Folder rows, their child folders, and the files within them sort per [VSIX-TOP-OFFENDERS-SORT]. The default — impact — sorts by max cluster weight desc (a folder's worst cluster), sum-of-weights desc tiebreaker, then path `localeCompare`. Global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]) is unchanged: rank #1 is still the repo's worst cluster, wherever it sits in the tree.
 
 #### [VSIX-TOP-OFFENDERS-CLUSTER-ID] Cluster slug leads the row, rank never does
 
@@ -173,6 +181,37 @@ Rank lives in the grey description, not the bold label. The bold label leads wit
 Top Offenders root rows expose the clone bucket with stable theme-aware icon colour metadata. `Identical code`, `Nearly identical code`, `Loosely similar code`, and `Same behavior, different code` must not share the same colour token.
 
 Colour is never the only signal. The category text remains in the visible label, the tooltip carries the hybrid taxonomy label, and the accessibility label includes the category and representative file.
+
+#### [VSIX-TOP-OFFENDERS-SORT] Sort axis (impact vs path)
+
+Sibling order is an axis orthogonal to the grouping mode, persisted via `deslop.topOffenders.sortBy` (`"impact"` | `"path"`, default `"impact"`). A view-title toggle flips it, writing to the workspace target like the grouping toggle; unknown / missing values fall back to `"impact"`.
+
+- **impact** (default) — worst-offender first: files and folders by max cluster weight desc (sum-of-weights desc, then path), clusters by weight desc. This is the product's "worst first" promise ([VSIX-PRINCIPLES] principle 3).
+- **path** — alphabetical by file/folder path (`localeCompare`), so a flat file list or a folder tree reads in filesystem order for navigation.
+
+The sort axis reorders **file mode** and **folder mode** roots and their descendants. **Cluster mode** is by definition the report's worst-first list and always renders in impact order; `sortBy` does not reorder it. Sorting is presentation-only: it never changes a cluster's global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+
+#### [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Per-language split
+
+`deslop.topOffenders.splitByLanguage` (boolean, default `false`) adds an orthogonal outer grouping dimension. When on, top-level rows are one language group per language present, each containing the full cluster / file / folder subtree for that language; when off, languages interleave in one worst-first list (today's behaviour). Folder mode already separates most languages structurally, so the split is most useful with cluster or flat-file grouping in a polyglot tree where one directory mixes languages.
+
+Language is derived from each cluster's representative occurrence path via the shared `languageForPath()` helper, which mirrors the core `language_for_path()` ([OUTPUT-HUMAN-HTML]). A single-language workspace renders exactly one group, so the split adds no noise. Global rank is preserved across and within groups ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]); a language group's description carries its worst weight and cluster count. The setting persists to the workspace target and exposes a view-title toggle like the other two axes.
+
+#### [VSIX-TOP-OFFENDERS-TOOLBAR] Collapse / expand / refresh actions
+
+After the grouping/sort/split toggles (`navigation@1`), the Top Offenders title bar carries three icon actions in `group: navigation`: **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`), **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`), and **Refresh** (`$(refresh)`, `deslop.refresh`). Collapse All uses VS Code's built-in `TreeView.collapseAll()`; Expand All reveals each cluster node one level via `TreeView.reveal(node, { expand: true })`; Refresh forces a full workspace re-scan. They render as toolbar icons — not only the `…` overflow — and work in every grouping mode. The Session panel carries the same Collapse All and Refresh actions for consistency.
+
+#### [VSIX-METRICS-PANEL] Duplication panel
+
+The **Duplication** tree (`deslop.metrics`) replaces the former Focused File panel and answers one question at a glance: *how duplicated is this codebase, and where?* It renders from the last analysed snapshot's repo metrics (`Report.metrics`, [METRICS-REPO]) and refreshes on `deslop/reportChanged`.
+
+- **Headline row** — the overall duplication percentage (`duplication_percent`) as the bold label, with the grey description carrying `analysed_loc`, `duplicated_loc`, `clusters_total`, and `duplicated_files` in plain language. When `metrics.threshold.breached`, the row shows a warning glyph and names the gate it crossed. Activating the row opens the [VSIX-METRICS-REPORT] webview.
+- **Per-folder → per-file breakdown** — below the headline, a tree of folders (rolled up from `metrics.per_file` by path prefix, summing numerator and denominator so each folder percentage is exact) expanding to the files within, each row showing its own duplication percentage in the grey description. Worst-first by percentage, path `localeCompare` tiebreaker; rows with zero duplication are omitted from display. Single-child folder chains are path-compressed, matching folder mode.
+- **Clean / empty** — when there is no duplication, the panel shows a single "No duplication detected" row, honouring [VSIX-PRINCIPLES] principle 2.
+
+#### [VSIX-METRICS-REPORT] Duplication report webview
+
+Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — now carrying `metrics.per_file` — so the webview stays dumb and the extension host owns all data shaping ([VSIX-PRINCIPLES] principle 4).
 
 ### [VSIX-CODE-LENS] Code lens
 

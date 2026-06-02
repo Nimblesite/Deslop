@@ -2,7 +2,7 @@
 // Non-`.test.ts` so the Mocha glob does not load this as a suite.
 
 import * as vscode from "vscode";
-import { Bucket, Report, ReportCluster } from "../../types/report";
+import { Bucket, FileMetric, RepoMetrics, Report, ReportCluster } from "../../types/report";
 
 export function cluster(
   id: string,
@@ -63,7 +63,20 @@ export function tooltipText(item: vscode.TreeItem): string {
   return String(item.tooltip ?? "");
 }
 
-export function report(clusters: ReportCluster[]): Report {
+/** Builds a `FileMetric` with the percentage derived from the counts. */
+export function fileMetric(path: string, analysedLoc: number, duplicatedLoc: number): FileMetric {
+  return {
+    path,
+    analysed_loc: analysedLoc,
+    duplicated_loc: duplicatedLoc,
+    duplication_percent: analysedLoc === 0 ? 0 : (duplicatedLoc / analysedLoc) * 100,
+  };
+}
+
+export function report(
+  clusters: ReportCluster[],
+  metricsOverride: Partial<RepoMetrics> = {},
+): Report {
   return {
     tool_version: "v",
     min_nodes: 30,
@@ -77,6 +90,8 @@ export function report(clusters: ReportCluster[]): Report {
       clusters_total: clusters.length,
       duplicated_files: 2,
       threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
+      ...metricsOverride,
     },
     schema_doc: "docs",
     action_hints: [],
@@ -94,27 +109,28 @@ export function report(clusters: ReportCluster[]): Report {
   };
 }
 
-// Save and restore the persisted Top Offenders grouping mode so a
-// dispatch-style test that flips the setting cannot leak into the
-// next test in the same vscode-test process.
-export async function withGroupBy(
-  value: "cluster" | "file",
+// Save and restore a persisted `deslop.*` setting so a dispatch-style
+// test that flips it cannot leak into the next test in the same
+// vscode-test process. Restores the prior Global value (undefined
+// clears it back to the package default).
+export async function withSetting<T>(
+  key: string,
+  value: T,
   body: () => Promise<void> | void,
 ): Promise<void> {
-  const cfg = vscode.workspace.getConfiguration("deslop");
-  const previous = cfg.get<string>("topOffenders.groupBy", "cluster");
-  await cfg.update(
-    "topOffenders.groupBy",
-    value,
-    vscode.ConfigurationTarget.Global,
-  );
+  const cfg = () => vscode.workspace.getConfiguration("deslop");
+  const previous = cfg().inspect<T>(key)?.globalValue;
+  await cfg().update(key, value, vscode.ConfigurationTarget.Global);
   try {
     await body();
   } finally {
-    await cfg.update(
-      "topOffenders.groupBy",
-      previous === "file" ? "file" : undefined,
-      vscode.ConfigurationTarget.Global,
-    );
+    await cfg().update(key, previous, vscode.ConfigurationTarget.Global);
   }
+}
+
+export function withGroupBy(
+  value: "cluster" | "file" | "folder",
+  body: () => Promise<void> | void,
+): Promise<void> {
+  return withSetting("topOffenders.groupBy", value, body);
 }

@@ -119,6 +119,7 @@ function report(clusters: ReportCluster[]): Report {
       clusters_total: clusters.length,
       duplicated_files: 1,
       threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
     },
     schema_doc: "# docs",
     action_hints: [],

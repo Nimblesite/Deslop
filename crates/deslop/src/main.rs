@@ -71,6 +71,12 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     config: Option<PathBuf>,
 
+    /// Divide the HTML report into one section per language
+    /// ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Also enabled by
+    /// `[report] split_by_language = true` in `.deslop.toml`.
+    #[arg(long)]
+    split_by_language: bool,
+
     /// Output-format suppression flags (`--nojson`, `--notext`,
     /// `--nohtml`).
     #[command(flatten)]
@@ -263,7 +269,8 @@ fn run_cli() -> Result<()> {
     };
     let mut report = outcome.report;
     apply_threshold(&args, &mut report)?;
-    let mut written = emit_all(&report, &formats, &output, &args.path)?;
+    let split_by_language = resolve_split_by_language(&args)?;
+    let mut written = emit_all(&report, &formats, &output, &args.path, split_by_language)?;
     if let Some(delta) = outcome.delta.as_ref() {
         let delta_path = output.path_with_extension("delta.json");
         let payload = serde_json::to_string_pretty(delta).context("serialise delta as JSON")?;
@@ -316,18 +323,34 @@ fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
     Ok(())
 }
 
+/// Loads the effective `.deslop.toml` for this run — an explicit
+/// `--config` path, or discovery next to the scan root. Missing config
+/// is not an error; it yields the empty config.
+fn load_run_config(args: &Cli) -> Result<ExclusionConfig> {
+    match args.config.as_deref() {
+        Some(path) => ExclusionConfig::load_for_root(path, &args.path)
+            .with_context(|| format!("load config {}", path.display())),
+        None => ExclusionConfig::discover(&args.path)
+            .with_context(|| format!("discover config in {}", args.path.display())),
+    }
+}
+
 /// Loads `.deslop.toml` (if any) to surface the
 /// `[threshold] max_duplication_percent` key without mutating the
 /// pipeline path. Returns `None` when no config file exists or the
 /// key is absent.
 fn resolve_config_threshold(args: &Cli) -> Result<Option<f64>> {
-    let config = match args.config.as_deref() {
-        Some(path) => ExclusionConfig::load_for_root(path, &args.path)
-            .with_context(|| format!("load config {}", path.display()))?,
-        None => ExclusionConfig::discover(&args.path)
-            .with_context(|| format!("discover config in {}", args.path.display()))?,
-    };
-    Ok(config.fail_over_percent())
+    Ok(load_run_config(args)?.fail_over_percent())
+}
+
+/// Resolves whether the HTML report splits by language: the CLI
+/// `--split-by-language` flag OR `[report] split_by_language` in
+/// `.deslop.toml` ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]).
+fn resolve_split_by_language(args: &Cli) -> Result<bool> {
+    if args.split_by_language {
+        return Ok(true);
+    }
+    Ok(load_run_config(args)?.split_by_language())
 }
 
 /// Names that look like CLI subcommands but are actually MCP tool

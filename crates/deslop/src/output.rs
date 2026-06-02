@@ -98,17 +98,27 @@ impl OutputPaths {
     }
 }
 
-/// Writes every enabled format for `report`.
+/// Writes every enabled format for `report`. `split_by_language`
+/// divides the HTML report into per-language sections
+/// ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]).
 pub(crate) fn emit_all(
     report: &Report,
     formats: &FormatSelection,
     output: &OutputPaths,
     scan_root: &std::path::Path,
+    split_by_language: bool,
 ) -> Result<Vec<PathBuf>> {
     let mut written: Vec<PathBuf> = Vec::with_capacity(3);
     emit_json(report, formats, output, &mut written)?;
     emit_text(report, formats, output, &mut written)?;
-    emit_html(report, formats, output, scan_root, &mut written)?;
+    emit_html(
+        report,
+        formats,
+        output,
+        scan_root,
+        split_by_language,
+        &mut written,
+    )?;
     Ok(written)
 }
 
@@ -146,10 +156,11 @@ fn emit_html(
     formats: &FormatSelection,
     output: &OutputPaths,
     scan_root: &std::path::Path,
+    split_by_language: bool,
     written: &mut Vec<PathBuf>,
 ) -> Result<()> {
     if formats.html {
-        let html = render_html(report, Some(scan_root));
+        let html = render_html(report, Some(scan_root), split_by_language);
         write_rendered(output, "html", html.as_bytes(), written)?;
     }
     Ok(())

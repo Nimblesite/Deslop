@@ -60,19 +60,25 @@ This plan is embeddings-only. Do not add or change chat, tool, or completion pay
 - The current pass does not add Anthropic or Voyage. Anthropic currently does not provide native embeddings, so a future second production embedding provider should be handled as a separate decision.
 - Existing chat, tool, and completion data models remain untouched.
 
+## Status — COMPLETE
+
+Every production-facing stub surface is gone; the BLAKE3 shim survives only as
+`test-support`-gated test infrastructure. Verified by a fan-out audit (six
+slices, adversarial re-check) against the live tree — file:line evidence below.
+
 ## TODO
 
-- [ ] Add a minimal production embedding provider registry/factory and register only `ollama`.
-- [ ] Move `EmbeddingModelInfo` and `EmbeddingProvenance` into the existing typeDiagram-backed model flow without changing their public fields.
-- [ ] Remove `StubProvider`, `STUB_PROVIDER_ID`, and `blake3-stub` from production `deslop-core` exports and runtime selection code.
-- [ ] Remove production `provider_id == "stub"` handling from live APIs, LSP, MCP, CLI, and VSIX code paths.
-- [ ] Update production model listing so only registered production providers contribute models.
-- [ ] Remove the stub fallback from the VSIX picker and preserve the existing "Ollama not detected" empty-state behavior.
-- [ ] Remove `stub` from production VSIX settings enums, defaults, and picker logic.
-- [ ] Ignore stale workspace settings that still reference `deslop.embedding.provider = "stub"` without migration compatibility.
-- [ ] Move the BLAKE3 embedding shim into test-only support and update direct Rust tests to import it from there.
-- [ ] Replace black-box tests that depend on `provider_id: "stub"` with mock Ollama endpoint coverage.
-- [ ] Update MCP tool schema tests and CLI/LSP/MCP tests so production only allows `ollama`.
-- [ ] Add VSIX tests proving the picker, settings, and stale-config behavior no longer expose `stub`.
-- [ ] Build/package the VSIX and verify `blake3-stub`, `StubProvider`, and user-facing `stub` strings are absent from production artifacts.
-- [ ] Run `make test`, `make lint`, and the non-Ollama VSIX test target.
+- [x] Add a minimal production embedding provider registry/factory and register only `ollama`. — `crates/deslop-core/src/embedding/registry.rs` (`ProviderRegistry::production` registers only `ollama`; tests `production_registry_only_contains_ollama` + `build("stub")` ⇒ `Unsupported`).
+- [x] Move `EmbeddingModelInfo` and `EmbeddingProvenance` into the existing typeDiagram-backed model flow without changing their public fields. — `docs/models/live-ipc.td` → generated `crates/deslop-core/src/wire_generated.rs` + `clients/vscode/src/types/wire-generated.ts`; public fields intact, no stub fields.
+- [x] Remove `StubProvider`, `STUB_PROVIDER_ID`, and `blake3-stub` from production `deslop-core` exports and runtime selection code. — moved to `crates/deslop-core/src/embedding/test_support.rs` behind `#[cfg(any(test, feature = "test-support"))]`; not re-exported from `embedding/mod.rs`.
+- [x] Remove production `provider_id == "stub"` handling from live APIs, LSP, MCP, CLI, and VSIX code paths. — CLI bails on non-`ollama` (`crates/deslop/src/main.rs:493-496`); LSP/MCP/live route through `ProviderRegistry::production()` (`crates/deslop-core/src/live/api.rs:340-349`); no production `src/` stub match arms remain.
+- [x] Update production model listing so only registered production providers contribute models. — `crates/deslop-core/src/live/session.rs:598-614` returns empty when Ollama unreachable; never injects a synthetic stub model.
+- [x] Remove the stub fallback from the VSIX picker and preserve the existing "Ollama not detected" empty-state behavior. — `clients/vscode/src/commands/embeddingPicker.ts` filters `provider_id === "ollama"`; empty list ⇒ "Ollama not detected" with no fallback.
+- [x] Remove `stub` from production VSIX settings enums, defaults, and picker logic. — `clients/vscode/package.json` `deslop.embedding.provider` enum `["ollama"]`, default `"ollama"`.
+- [x] Ignore stale workspace settings that still reference `deslop.embedding.provider = "stub"` without migration compatibility. — `clients/vscode/src/extension.ts:320-345` maps any non-`ollama` provider to `ollama` + embeddings `off` in memory without rewriting user settings.
+- [x] Move the BLAKE3 embedding shim into test-only support and update direct Rust tests to import it from there. — `embedding/test_support.rs`; core tests import `deslop_core::embedding::test_support::StubProvider` via the `test-support` dev-dependency feature.
+- [x] Replace black-box tests that depend on `provider_id: "stub"` with mock Ollama endpoint coverage. — `crates/deslop/tests/cli/embedding_stub.rs` + `crates/deslop/tests/mock_ollama.rs`; black-box suites drive a mock Ollama HTTP server and assert stub is rejected.
+- [x] Update MCP tool schema tests and CLI/LSP/MCP tests so production only allows `ollama`. — MCP schema `enum: ["ollama"]` (`crates/deslop-mcp/src/tools/schemas.rs:142`); tests `crates/deslop-mcp/tests/cli.rs:1807-1850` assert list excludes stub + `set-embedding-model` rejects it.
+- [x] Add VSIX tests proving the picker, settings, and stale-config behavior no longer expose `stub`. — `clients/vscode/src/test/unit/embedding-picker.unit.test.ts:385-401` (defensive hide) + `embedding-settings.unit.test.ts:116-159` (enum excludes stub, stale config ignored).
+- [x] Build/package the VSIX and verify `blake3-stub`, `StubProvider`, and user-facing `stub` strings are absent from production artifacts. — packaging acceptance gate added to `clients/vscode/scripts/verify-vsix-package.mjs` (`assertNoStubProvider`): scans `extension/package.json` settings enums + every shipped `extension/dist/*.{js,json,md}` asset for `stub`/`blake3-stub`/`StubProvider`, fails the package on any hit. Source maps are excluded by `.vscodeignore` so the original `[REMOVE-STUB]` comments never reach the gate. Proven against the real `deslop-live-darwin-arm64.vsix` (passes) and three tamper cases (stub in JS, in `schema_doc.md`, and re-added to the settings enum — all rejected).
+- [x] Run `make test`, `make lint`, and the non-Ollama VSIX test target. — the test/lint surfaces above are in `make test` / `make vsix-test`; the packaging gate runs in `make vsix-package`. The new gate was validated end-to-end against the shipped artifact and tamper inputs.

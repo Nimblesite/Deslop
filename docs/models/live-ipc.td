@@ -115,6 +115,13 @@ type ThresholdSummary {
   source: ThresholdSource
 }
 
+type FileMetric {
+  path: String
+  analysed_loc: Int
+  duplicated_loc: Int
+  duplication_percent: Float
+}
+
 type RepoMetrics {
   analysed_loc: Int
   duplicated_loc: Int
@@ -122,6 +129,7 @@ type RepoMetrics {
   clusters_total: Int
   duplicated_files: Int
   threshold: ThresholdSummary
+  per_file: List<FileMetric>
 }
 
 type ReportBoilerplateOccurrence {

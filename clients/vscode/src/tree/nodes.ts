@@ -12,18 +12,30 @@ import { SEVERITY_DOT } from "../severity";
 import {
   Bucket,
   bucketLabels,
+  FileMetric,
   occurrenceCount,
   ReportCluster,
   ReportOccurrence,
   resolveBucket,
   Severity,
 } from "../types/report";
+import { languageDisplayName } from "./language";
+import { baseName, displayPath, representativePath } from "./paths";
+
+// Re-exported so existing import sites (`../tree/nodes`) keep resolving
+// after the helpers moved to the cycle-free `./paths` leaf module.
+export { displayPath, representativePath } from "./paths";
 
 export type Node =
   | ClusterNode
   | OccurrenceNode
   | FileNode
+  | FolderNode
+  | LanguageGroupNode
   | BucketGroupNode
+  | MetricsHeadlineNode
+  | FolderMetricNode
+  | FileMetricNode
   | SessionFieldNode
   | StatusNode;
 
@@ -39,15 +51,6 @@ export const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
 export function categoryIcon(bucket: Bucket): vscode.ThemeIcon {
   const style = CATEGORY_STYLE[bucket];
   return new vscode.ThemeIcon(style.icon, new vscode.ThemeColor(style.color));
-}
-
-export function representativePath(cluster: ReportCluster): string {
-  return cluster.occurrences[0]?.path ?? cluster.id;
-}
-
-export function displayPath(filePath: string): string {
-  if (!filePath) return "unknown file";
-  return vscode.workspace.asRelativePath(filePath, false);
 }
 
 // [VSIX-TOP-OFFENDERS-CLUSTER-ID] The bold label leads with the cluster's
@@ -190,6 +193,129 @@ export class BucketGroupNode extends vscode.TreeItem {
     this.accessibilityInformation = {
       label: `${labels.plainTitle}, ${clusters.length} clusters`,
       role: "treeitem",
+    };
+  }
+}
+
+// [VSIX-TOP-OFFENDERS-FOLDER-MODE] Folder row in folder mode. Children
+// are pre-built (sub-folders and FileNodes) so the provider returns
+// `node.children` directly. `label` is the compressed segment chain.
+export class FolderNode extends vscode.TreeItem {
+  constructor(
+    readonly folderPath: string,
+    label: string,
+    readonly children: Node[],
+    maxWeight: number,
+    fileCount: number,
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Collapsed);
+    const noun = fileCount === 1 ? "file" : "files";
+    this.description = `worst weight ${maxWeight.toFixed(2)} · ${fileCount} ${noun}`;
+    this.contextValue = "deslop.folderGroup";
+    this.iconPath = vscode.ThemeIcon.Folder;
+    this.tooltip = new vscode.MarkdownString(
+      `\`${folderPath}\`\n\n` +
+        `${fileCount} ${noun} with duplication · worst weight \`${maxWeight.toFixed(2)}\``,
+    );
+    this.accessibilityInformation = {
+      label: `${label}, ${fileCount} duplicated ${noun}`,
+      role: "treeitem",
+    };
+  }
+}
+
+// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Outer per-language group. Wraps a
+// full cluster/file/folder subtree for one language; rank stays global.
+export class LanguageGroupNode extends vscode.TreeItem {
+  constructor(
+    readonly language: string,
+    readonly children: Node[],
+    maxWeight: number,
+    clusterCount: number,
+  ) {
+    super(languageDisplayName(language), vscode.TreeItemCollapsibleState.Expanded);
+    const noun = clusterCount === 1 ? "cluster" : "clusters";
+    this.description = `worst weight ${maxWeight.toFixed(2)} · ${clusterCount} ${noun}`;
+    this.contextValue = "deslop.languageGroup";
+    this.iconPath = new vscode.ThemeIcon("symbol-namespace");
+    this.accessibilityInformation = {
+      label: `${languageDisplayName(language)}, ${clusterCount} ${noun}`,
+      role: "treeitem",
+    };
+  }
+}
+
+/** Formats a duplication percentage for display, one decimal place. */
+export function formatPercent(percent: number): string {
+  return `${percent.toFixed(1)}%`;
+}
+
+// [VSIX-METRICS-PANEL] Headline row of the Duplication panel: the
+// repo-wide duplication percentage. Activating it opens the report
+// webview ([VSIX-METRICS-REPORT]).
+export class MetricsHeadlineNode extends vscode.TreeItem {
+  constructor(percent: number, detail: string, breached: boolean, gateLabel: string) {
+    super(`${formatPercent(percent)} duplicated`, vscode.TreeItemCollapsibleState.None);
+    this.description = breached ? `${detail} · ⚠ over ${gateLabel}` : detail;
+    this.contextValue = "deslop.metricsHeadline";
+    this.iconPath = new vscode.ThemeIcon(
+      breached ? "warning" : "graph",
+      breached ? new vscode.ThemeColor("errorForeground") : undefined,
+    );
+    this.tooltip = new vscode.MarkdownString(
+      `**${formatPercent(percent)} of analysed lines are duplicated.**\n\n${detail}\n\n` +
+        "Open the full duplication report for the per-folder and per-file breakdown.",
+    );
+    this.command = {
+      command: "deslop.openDuplicationReport",
+      title: "Open duplication report",
+    };
+  }
+}
+
+// [VSIX-METRICS-PANEL] Folder row in the Duplication panel. `percent`
+// is the exact rollup over every file beneath it. Children are the
+// dup-bearing sub-folders and files.
+export class FolderMetricNode extends vscode.TreeItem {
+  constructor(
+    readonly folderPath: string,
+    label: string,
+    readonly children: Node[],
+    percent: number,
+    analysedLoc: number,
+    duplicatedLoc: number,
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Collapsed);
+    this.description = `${formatPercent(percent)} duplicated`;
+    this.contextValue = "deslop.folderMetric";
+    this.iconPath = vscode.ThemeIcon.Folder;
+    this.tooltip = new vscode.MarkdownString(
+      `\`${folderPath}\`\n\n${formatPercent(percent)} duplicated · ${duplicatedLoc} / ${analysedLoc} LOC`,
+    );
+    this.accessibilityInformation = {
+      label: `${label}, ${formatPercent(percent)} duplicated`,
+      role: "treeitem",
+    };
+  }
+}
+
+// [VSIX-METRICS-PANEL] File row in the Duplication panel. Activating it
+// opens the file.
+export class FileMetricNode extends vscode.TreeItem {
+  constructor(readonly metric: FileMetric) {
+    super(baseName(displayPath(metric.path)), vscode.TreeItemCollapsibleState.None);
+    this.description = `${formatPercent(metric.duplication_percent)} · ${metric.duplicated_loc}/${metric.analysed_loc} LOC`;
+    this.contextValue = "deslop.fileMetric";
+    this.iconPath = new vscode.ThemeIcon("file");
+    this.resourceUri = vscode.Uri.file(metric.path);
+    this.tooltip = new vscode.MarkdownString(
+      `\`${metric.path}\`\n\n` +
+        `${formatPercent(metric.duplication_percent)} duplicated · ${metric.duplicated_loc} / ${metric.analysed_loc} LOC`,
+    );
+    this.command = {
+      command: "vscode.open",
+      title: "Open file",
+      arguments: [vscode.Uri.file(metric.path)],
     };
   }
 }

@@ -11,7 +11,7 @@ import { reportWithDisplayLocations } from "../locations";
 import { ReportStore } from "../reportStore";
 import { Report, ReportOccurrence } from "../types/report";
 
-type PanelKind = "cluster" | "report";
+type PanelKind = "cluster" | "report" | "duplication";
 
 interface WebviewPanelState {
   panel: vscode.WebviewPanel;
@@ -53,6 +53,26 @@ export function openReportPanel(context: vscode.ExtensionContext, store: ReportS
     activePanels.delete(key);
   });
   activePanels.set(key, { panel, kind: "report", storeSubscription: unsub });
+}
+
+// [VSIX-METRICS-REPORT] Duplication report — the headline of the
+// Duplication panel opens this. Reuses the report-snapshot push so the
+// webview renders the per-folder/per-file breakdown from the same data.
+export function openDuplicationReportPanel(
+  context: vscode.ExtensionContext,
+  store: ReportStore,
+): void {
+  const key = "duplication";
+  const existing = activePanels.get(key);
+  if (existing) return existing.panel.reveal(vscode.ViewColumn.Active);
+  const panel = createPanel(context, "duplication", "Deslop: Duplication");
+  const unsub = wirePanel(panel, store, "duplication");
+  wireMessages(panel, store);
+  panel.onDidDispose(() => {
+    unsub.dispose();
+    activePanels.delete(key);
+  });
+  activePanels.set(key, { panel, kind: "duplication", storeSubscription: unsub });
 }
 
 function createPanel(

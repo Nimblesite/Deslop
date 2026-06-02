@@ -19,6 +19,7 @@ function emptyReport(overrides: Partial<Report> = {}): Report {
       clusters_total: 0,
       duplicated_files: 0,
       threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
     },
     schema_doc: "",
     action_hints: [],

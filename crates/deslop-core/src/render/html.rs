@@ -33,9 +33,12 @@ use crate::{
 /// Renders `report` as a single-file HTML document. `scan_root` is the
 /// directory occurrence paths are relative to; pass `None` (e.g. for
 /// `--from-report` when the source is no longer available) and snippet
-/// bodies degrade to a "source unavailable" placeholder.
+/// bodies degrade to a "source unavailable" placeholder. When
+/// `split_by_language` is set the body is divided into one section per
+/// language ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]); otherwise the
+/// output is byte-identical to the single ranked list.
 #[must_use]
-pub fn render_html(report: &Report, scan_root: Option<&Path>) -> String {
+pub fn render_html(report: &Report, scan_root: Option<&Path>, split_by_language: bool) -> String {
     let mut out = String::new();
     let _ = write!(
         out,
@@ -43,9 +46,9 @@ pub fn render_html(report: &Report, scan_root: Option<&Path>) -> String {
     );
     write_head(&mut out, report);
     let _ = write!(out, "</head><body><main class=\"report-shell\">");
-    write_intro(&mut out, report);
+    write_intro(&mut out, report, split_by_language);
     let mut snippets = SnippetLoader::new(scan_root);
-    write_clusters(&mut out, report, &mut snippets);
+    write_clusters(&mut out, report, &mut snippets, split_by_language);
     write_run_details(&mut out, report, escape);
     let _ = write!(out, "</main></body></html>");
     out
@@ -130,12 +133,22 @@ fn write_head(out: &mut String, report: &Report) {
 }
 
 /// Writes the page title and a one-paragraph plain-English summary
-/// telling the reader what the report is and how to read it.
-fn write_intro(out: &mut String, report: &Report) {
+/// telling the reader what the report is and how to read it. When
+/// `split_by_language` is set the lede gains a per-language breakdown
+/// ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]); otherwise it is unchanged.
+fn write_intro(out: &mut String, report: &Report, split_by_language: bool) {
+    let mut lede = intro_summary(report);
+    if split_by_language {
+        let breakdown = language_breakdown(report);
+        if !breakdown.is_empty() {
+            lede.push(' ');
+            lede.push_str(&breakdown);
+        }
+    }
     let _ = write!(
         out,
         "<h1>Deslop report</h1><p class=\"lede\">{summary}</p>",
-        summary = escape(&intro_summary(report)),
+        summary = escape(&lede),
     );
     write_metrics_banner(out, report);
 }
@@ -145,7 +158,7 @@ fn write_intro(out: &mut String, report: &Report) {
 /// themes override it cleanly:
 /// `metrics-banner--ok` (green) / `--breached` (red) / `--neutral`.
 fn write_metrics_banner(out: &mut String, report: &Report) {
-    let metrics = report.metrics;
+    let metrics = &report.metrics;
     let variant = match (metrics.threshold.source, metrics.threshold.breached) {
         (ThresholdSource::None, _) => "neutral",
         (_, true) => "breached",
@@ -162,7 +175,7 @@ fn write_metrics_banner(out: &mut String, report: &Report) {
 /// banner. Kept as text (not HTML) so escaping is uniform with the
 /// rest of the intro.
 fn metrics_banner_text(report: &Report) -> String {
-    let metrics = report.metrics;
+    let metrics = &report.metrics;
     let head = format!(
         "repo: {pct:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         pct = metrics.duplication_percent,
@@ -259,8 +272,26 @@ fn kind_action(kind: ClusterKind) -> &'static str {
     bucket_labels(kind).action_sentence
 }
 
-/// Writes the section heading and every cluster card.
-fn write_clusters(out: &mut String, report: &Report, snippets: &mut SnippetLoader<'_>) {
+/// Dispatches between the single ranked list and the per-language
+/// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). The flat path is
+/// used for an empty report so the "no duplication" message is
+/// identical in both modes.
+fn write_clusters(
+    out: &mut String,
+    report: &Report,
+    snippets: &mut SnippetLoader<'_>,
+    split_by_language: bool,
+) {
+    if split_by_language && !report.clusters.is_empty() {
+        write_clusters_by_language(out, report, snippets);
+    } else {
+        write_clusters_flat(out, report, snippets);
+    }
+}
+
+/// Writes the single "Duplicate groups" section with every cluster card
+/// in global worst-first order.
+fn write_clusters_flat(out: &mut String, report: &Report, snippets: &mut SnippetLoader<'_>) {
     let _ = write!(out, "<section><h2>Duplicate groups</h2>");
     if report.clusters.is_empty() {
         let _ = write!(out, "<p class=\"empty\">No duplication detected.</p>");
@@ -269,6 +300,84 @@ fn write_clusters(out: &mut String, report: &Report, snippets: &mut SnippetLoade
         write_cluster_card(out, cluster, snippets);
     }
     let _ = write!(out, "</section>");
+}
+
+/// Writes one `<section>` per language, each headed by the language
+/// display name and its group count. Sections are ordered by worst
+/// cluster weight (first-seen in the globally worst-first list) and
+/// clusters keep their worst-first order within each section.
+fn write_clusters_by_language(out: &mut String, report: &Report, snippets: &mut SnippetLoader<'_>) {
+    for (language, clusters) in group_clusters_by_language(&report.clusters) {
+        let _ = write!(
+            out,
+            "<section><h2>{name} — {count} group(s)</h2>",
+            name = escape(language_display_name(language)),
+            count = clusters.len(),
+        );
+        for cluster in clusters {
+            write_cluster_card(out, cluster, snippets);
+        }
+        let _ = write!(out, "</section>");
+    }
+}
+
+/// Buckets clusters by their canonical occurrence's language, preserving
+/// the input worst-first order within each bucket. The returned order is
+/// first-seen — and because the input is globally worst-first, the
+/// first language seen owns the worst cluster, so sections come out
+/// ordered by worst weight desc.
+fn group_clusters_by_language(
+    clusters: &[ReportCluster],
+) -> Vec<(&'static str, Vec<&ReportCluster>)> {
+    let mut order: Vec<&'static str> = Vec::new();
+    let mut buckets: HashMap<&'static str, Vec<&ReportCluster>> = HashMap::new();
+    for cluster in clusters {
+        let language = canonical_language(cluster);
+        let bucket = buckets.entry(language).or_insert_with(|| {
+            order.push(language);
+            Vec::new()
+        });
+        bucket.push(cluster);
+    }
+    order
+        .into_iter()
+        .filter_map(|language| buckets.remove(language).map(|list| (language, list)))
+        .collect()
+}
+
+/// Language id of a cluster's canonical (first) occurrence, or
+/// `"unknown"` when it has none.
+fn canonical_language(cluster: &ReportCluster) -> &'static str {
+    cluster
+        .occurrences
+        .first()
+        .map_or("unknown", |occurrence| language_for_path(&occurrence.path))
+}
+
+/// One-line per-language count clause for the intro lede, worst-first.
+fn language_breakdown(report: &Report) -> String {
+    let groups = group_clusters_by_language(&report.clusters);
+    if groups.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<String> = groups
+        .iter()
+        .map(|(language, clusters)| {
+            format!("{} ({})", language_display_name(language), clusters.len())
+        })
+        .collect();
+    format!("By language: {}.", parts.join(" · "))
+}
+
+/// Human display name for a language id used in section headings.
+fn language_display_name(language: &str) -> &'static str {
+    match language {
+        "csharp" => "C#",
+        "rust" => "Rust",
+        "python" => "Python",
+        "dart" => "Dart",
+        _ => "Other",
+    }
 }
 
 /// Writes a single cluster as a Terminal Card: title + action sentence
@@ -477,6 +586,7 @@ fn language_for_path(path: &Path) -> &'static str {
         Some("cs") => "csharp",
         Some("rs") => "rust",
         Some("py") => "python",
+        Some("dart") => "dart",
         _ => "unknown",
     }
 }

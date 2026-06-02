@@ -7,7 +7,7 @@
 //! a noisy generated-code tier cannot inflate the metric.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
 };
 
@@ -21,7 +21,7 @@ use crate::{
 // from `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The
 // data shapes live in `crate::wire_generated`; the constructors and
 // `Default` impl below stay here.
-pub use crate::wire_generated::{RepoMetrics, ThresholdSource, ThresholdSummary};
+pub use crate::wire_generated::{FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary};
 
 impl RepoMetrics {
     /// Returns an empty metrics block (all counters zero, threshold
@@ -36,6 +36,7 @@ impl RepoMetrics {
             clusters_total: 0,
             duplicated_files: 0,
             threshold: ThresholdSummary::none(),
+            per_file: Vec::new(),
         }
     }
 
@@ -137,7 +138,54 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         clusters_total: contributing_clusters,
         duplicated_files,
         threshold: ThresholdSummary::none(),
+        per_file: per_file_metrics(&per_file_lines, inputs),
     }
+}
+
+/// Builds the per-file duplication breakdown ([METRICS-REPO]
+/// `RepoMetrics.per_file`). The universe is every analysed file unioned
+/// with every file carrying duplicated lines, so clean files keep exact
+/// percentage denominators. Sorted worst-first by percentage, path
+/// tiebreaker, so the wire order is deterministic.
+fn per_file_metrics<S: BuildHasher>(
+    per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
+    inputs: &MetricsInputs<'_, S>,
+) -> Vec<FileMetric> {
+    let mut universe: HashSet<FileId> = inputs.analysed_lines.keys().copied().collect();
+    universe.extend(per_file_lines.keys().copied());
+    let mut rows: Vec<FileMetric> = universe
+        .into_iter()
+        .filter_map(|file_id| file_metric(file_id, per_file_lines, inputs))
+        .collect();
+    rows.sort_by(|left, right| {
+        right
+            .duplication_percent
+            .partial_cmp(&left.duplication_percent)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.path.cmp(&right.path))
+    });
+    rows
+}
+
+/// Projects one file's analysed and duplicated line counts into a
+/// [`FileMetric`]. Returns `None` when the registry cannot resolve the
+/// file path — a metric row with no location is useless to consumers.
+fn file_metric<S: BuildHasher>(
+    file_id: FileId,
+    per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
+    inputs: &MetricsInputs<'_, S>,
+) -> Option<FileMetric> {
+    let path = inputs.registry.path(file_id)?.to_path_buf();
+    let analysed_loc = inputs.analysed_lines.get(&file_id).copied().unwrap_or(0);
+    let duplicated_loc = per_file_lines
+        .get(&file_id)
+        .map_or(0, |lines| u64::try_from(lines.len()).unwrap_or(u64::MAX));
+    Some(FileMetric {
+        path,
+        analysed_loc,
+        duplicated_loc,
+        duplication_percent: percent(duplicated_loc, analysed_loc),
+    })
 }
 
 /// Projects every non-hidden occurrence of `cluster` onto per-file line

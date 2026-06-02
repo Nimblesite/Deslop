@@ -12,6 +12,8 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import {
   FileNode,
+  FolderNode,
+  LanguageGroupNode,
   TopOffendersProvider,
   StatusTicker,
 } from "../../tree/providers";
@@ -25,6 +27,7 @@ import {
   report,
   tooltipText,
   withGroupBy,
+  withSetting,
 } from "./tree.helpers";
 import { CATEGORY_STYLE } from "../../tree/nodes";
 
@@ -837,5 +840,98 @@ suite("TopOffendersProvider", () => {
     const labels = nodes.map(labelText);
     assert.ok(labels.some((l) => /A\.cs/i.test(l) || /c1/i.test(l)), "A.cs cluster must stay visible");
     assert.ok(labels.some((l) => /B\.cs/i.test(l) || /c2/i.test(l)), "B.cs cluster must stay visible");
+  });
+
+  // [VSIX-TOP-OFFENDERS-FOLDER-MODE] Folder mode nests files under a
+  // path-compressed folder tree; file leaves expand like file-mode roots
+  // and global rank is preserved.
+  test("folder mode builds a folder tree, impact-sorted, with global ranks", async () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("worst", 100, "/repo/src/a/Alpha.cs"),
+        cluster("mid", 80, "/repo/src/b/Beta.cs"),
+        cluster("least", 60, "/repo/src/a/Gamma.cs"),
+      ]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    await withGroupBy("folder", () => {
+      const roots = provider.getChildren();
+      assert.equal(roots.length, 1, "single-child chain compresses to one root");
+      const [srcFolder] = roots;
+      assert.ok(srcFolder instanceof FolderNode, "folder mode roots are FolderNodes");
+      assert.equal(labelText(srcFolder), "repo/src", "path compression merges repo/src");
+      const [folderA, folderB] = provider.getChildren(srcFolder);
+      assert.ok(folderA && folderB, "src expands to folders a and b");
+      assert.equal(labelText(folderA), "a", "folder a (worst weight 100) sorts before b (80)");
+      assert.equal(labelText(folderB), "b");
+      const [alphaFile] = provider.getChildren(folderA);
+      assert.ok(alphaFile instanceof FileNode, "folder leaves are FileNodes");
+      assert.match(labelText(alphaFile), /Alpha\.cs/);
+      const [bucket] = provider.getChildren(alphaFile);
+      assert.ok(bucket);
+      const [topCluster] = provider.getChildren(bucket);
+      assert.match(
+        String(topCluster?.description ?? ""),
+        /rank #1/,
+        "Alpha's cluster keeps its global worst-first rank in folder mode",
+      );
+    });
+  });
+
+  // [VSIX-TOP-OFFENDERS-SORT] The sort axis reorders file/folder roots:
+  // impact is worst-first, path is alphabetical.
+  test("file mode sort axis: impact is worst-first, path is alphabetical", async () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([cluster("heavy", 100, "/repo/z.cs"), cluster("light", 50, "/repo/a.cs")]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    await withGroupBy("file", async () => {
+      const [impactFirst] = provider.getChildren();
+      assert.ok(impactFirst);
+      assert.match(labelText(impactFirst), /z\.cs/, "impact: heaviest file first");
+      await withSetting("topOffenders.sortBy", "path", () => {
+        const [pathFirst] = provider.getChildren();
+        assert.ok(pathFirst);
+        assert.match(labelText(pathFirst), /a\.cs/, "path: alphabetically first file first");
+      });
+    });
+  });
+
+  // [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] The split wraps the subtree in one
+  // worst-first LanguageGroupNode per language; global rank is preserved.
+  test("split by language groups clusters under per-language nodes", async () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([
+        cluster("rust1", 100, "/repo/src/a.rs"),
+        cluster("dart1", 80, "/repo/lib/a.dart"),
+        cluster("rust2", 60, "/repo/src/b.rs"),
+      ]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    await withSetting("topOffenders.splitByLanguage", true, () => {
+      const roots = provider.getChildren();
+      assert.ok(
+        roots.every((node) => node instanceof LanguageGroupNode),
+        "split-on: every root is a language group",
+      );
+      assert.deepEqual(
+        roots.map(labelText),
+        ["Rust", "Dart"],
+        "languages ordered worst-first: Rust (100) before Dart (80)",
+      );
+      const rustChildren = provider.getChildren(roots[0]);
+      assert.equal(rustChildren.length, 2, "the Rust group holds both Rust clusters");
+      assert.match(
+        String(rustChildren[0]?.description ?? ""),
+        /rank #1/,
+        "global rank survives the language split",
+      );
+    });
   });
 });

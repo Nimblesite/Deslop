@@ -71,6 +71,7 @@ One honest number, computed deterministically from the same cluster set the repo
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
 - `clusters_total: usize` — count of clusters contributing to `duplicated_loc` (i.e. non-hidden clusters with ≥ 2 occurrences). Matches `clusters.len()` but is carried explicitly so downstream consumers don't re-derive it.
 - `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
+- `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **Folders are not carried on the wire** — per-folder rollups are derived by consumers (the VSIX [VSIX-METRICS-PANEL], the HTML report) by summing the `analysed_loc` and `duplicated_loc` of every file under a path prefix, which keeps both numerator and denominator exact. Powers the per-folder/per-file breakdown in [VSIX-METRICS-PANEL].
 
 Deliberate non-metrics:
 
@@ -121,6 +122,10 @@ Zero-zero stats indicate the pass ran without the cache (`--incremental` not pas
 ### [OUTPUT-HUMAN-HTML] Human-readable HTML mode
 
 The default HTML renderer embeds, for each occurrence, the source bytes covered by `[start_byte, end_byte)` inside a collapsible `<details>` panel with line numbers and tree-sitter-driven syntax highlighting (server-side, no JS). Snippets are computed at render time from the source tree — not added to the JSON schema. `--human=off` falls back to the terse byte-offset-only HTML.
+
+#### [OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS] Per-language sections
+
+`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single flat "Duplicate groups" list. With the flag **off** the output is byte-identical to the single-list form — a hard no-regression invariant. With it **on**, `write_clusters` groups clusters by their canonical occurrence's `language_for_path(...)`, emits one `<h2>` per language carrying the language's display name and its group count, preserves worst-first order within each section, and orders sections by their worst cluster weight. The intro summary line ([OUTPUT-HUMAN-HTML]) gains a per-language breakdown. Each cluster is single-language ([CONFIG-CROSS-LANGUAGE]), so every group lands in exactly one section.
 
 ## Pipeline summary (numbered)
 

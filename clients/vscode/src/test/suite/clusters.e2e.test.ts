@@ -89,15 +89,10 @@ suite("cluster navigation", () => {
     await sleep(300);
   });
 
-  test("Focused File tree populates when an editor is active", async () => {
-    const fixture = process.env["DESLOP_TEST_FIXTURE"];
-    assert.ok(fixture, "fixture path must be set");
-    const doc = await vscode.workspace.openTextDocument(
-      vscode.Uri.file(`${fixture}/Beta.cs`),
-    );
-    await vscode.window.showTextDocument(doc);
+  test("Duplication report webview opens from the command surface", async () => {
+    // [VSIX-METRICS-REPORT] The Duplication panel headline opens this.
+    await vscode.commands.executeCommand("deslop.openDuplicationReport");
     await sleep(400);
-    // Trigger a re-render via active-editor change
     await vscode.commands.executeCommand("workbench.action.closeActiveEditor");
     await sleep(200);
   });

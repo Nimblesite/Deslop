@@ -27,7 +27,7 @@ import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
 import {
   TopOffendersProvider,
-  FocusedFileProvider,
+  MetricsProvider,
   SessionProvider,
   StatusTicker,
 } from "./tree/providers";
@@ -106,27 +106,58 @@ export async function activate(
   const ticker = new StatusTicker();
   context.subscriptions.push(ticker);
 
-  // [VSIX-TOP-OFFENDERS-GROUPING] Seed the context key synchronously
-  // BEFORE the tree provider is registered so the title-bar toggle
-  // button has a `when`-clause value to match against on cold start.
-  syncTopOffendersGroupByContext();
+  // [VSIX-TOP-OFFENDERS-GROUPING] / [VSIX-TOP-OFFENDERS-SORT] /
+  // [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Seed the context keys
+  // synchronously BEFORE the tree view is created so the title-bar
+  // toggles have `when`-clause values to match against on cold start.
+  syncTopOffendersContext();
 
   const topOffenders = new TopOffendersProvider(reportStore, ticker);
-  const focusedFile = new FocusedFileProvider(reportStore, ticker);
+  const metrics = new MetricsProvider(reportStore, ticker);
   const session = new SessionProvider(reportStore, ticker, () => client);
+  // [VSIX-TOP-OFFENDERS-TOOLBAR] createTreeView with showCollapseAll
+  // gives the built-in Collapse All button; Expand All reveals each root
+  // one level.
+  const topOffendersView = vscode.window.createTreeView("deslop.topOffenders", {
+    treeDataProvider: topOffenders,
+    showCollapseAll: true,
+  });
   context.subscriptions.push(
     topOffenders,
-    focusedFile,
+    metrics,
     session,
-    vscode.window.registerTreeDataProvider("deslop.topOffenders", topOffenders),
-    vscode.window.registerTreeDataProvider("deslop.focusedFile", focusedFile),
-    vscode.window.registerTreeDataProvider("deslop.session", session),
+    topOffendersView,
+    vscode.window.createTreeView("deslop.metrics", {
+      treeDataProvider: metrics,
+      showCollapseAll: true,
+    }),
+    vscode.window.createTreeView("deslop.session", {
+      treeDataProvider: session,
+      showCollapseAll: true,
+    }),
     vscode.commands.registerCommand("deslop.revealLog", () =>
       initOutputChannel().show(true),
     ),
+    vscode.commands.registerCommand("deslop.topOffenders.expandAll", () => {
+      for (const root of topOffenders.getChildren()) {
+        void topOffendersView.reveal(root, { expand: true }).then(undefined, () => undefined);
+      }
+    }),
+    vscode.commands.registerCommand("deslop.refresh", () => {
+      topOffenders.refresh();
+      metrics.refresh();
+      session.refresh();
+      void vscode.commands.executeCommand("deslop.refreshReport");
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (!event.affectsConfiguration("deslop.topOffenders.groupBy")) return;
-      syncTopOffendersGroupByContext();
+      if (
+        !event.affectsConfiguration("deslop.topOffenders.groupBy") &&
+        !event.affectsConfiguration("deslop.topOffenders.sortBy") &&
+        !event.affectsConfiguration("deslop.topOffenders.splitByLanguage")
+      ) {
+        return;
+      }
+      syncTopOffendersContext();
       topOffenders.refresh();
     }),
   );
@@ -229,19 +260,23 @@ function currentApi(): ExtensionApi {
   };
 }
 
-// [VSIX-TOP-OFFENDERS-GROUPING] Mirror the persisted setting onto a
-// VS Code context key so the title-bar toggle's mutually exclusive
-// `when` clauses can render the right button. Unknown / missing
-// values fall back to "cluster" — the spec's default.
-function syncTopOffendersGroupByContext(): void {
-  const raw = vscode.workspace
-    .getConfiguration("deslop")
-    .get<string>("topOffenders.groupBy", "cluster");
-  const value = raw === "file" ? "file" : "cluster";
+// [VSIX-TOP-OFFENDERS-GROUPING] / [VSIX-TOP-OFFENDERS-SORT] /
+// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Mirror the three persisted view
+// axes onto context keys so the title-bar toggles' mutually exclusive
+// `when` clauses can render the right buttons. Unknown / missing values
+// fall back to the spec defaults — never throws.
+function syncTopOffendersContext(): void {
+  const cfg = vscode.workspace.getConfiguration("deslop");
+  const rawGroup = cfg.get<string>("topOffenders.groupBy", "cluster");
+  const groupBy = rawGroup === "file" ? "file" : rawGroup === "folder" ? "folder" : "cluster";
+  const sortBy = cfg.get<string>("topOffenders.sortBy", "impact") === "path" ? "path" : "impact";
+  const splitByLanguage = cfg.get<boolean>("topOffenders.splitByLanguage", false) === true;
+  void vscode.commands.executeCommand("setContext", "deslop.topOffendersGroupBy", groupBy);
+  void vscode.commands.executeCommand("setContext", "deslop.topOffendersSortBy", sortBy);
   void vscode.commands.executeCommand(
     "setContext",
-    "deslop.topOffendersGroupBy",
-    value,
+    "deslop.topOffendersSplitByLanguage",
+    splitByLanguage,
   );
 }
 

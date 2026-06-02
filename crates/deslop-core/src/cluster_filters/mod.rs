@@ -85,6 +85,14 @@
 //!   They are un-refactorable data, not logic. Suppressed only when the
 //!   members differ in raw bytes (a verbatim copy survives) and none holds
 //!   a closure/lambda initialiser (logic-bearing fields keep clustering).
+//! - **#133** [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE] — a Python module that
+//!   is just a run of module-level `NAME = <literal>` constant assignments
+//!   (SQL query strings, registry/config values) normalises to the same
+//!   subtree as any other such table after identifier/literal/comment
+//!   stripping, so two unrelated tables cluster at `structural=1.00`. A
+//!   table of distinct named constants is data, not extractable logic.
+//!   Suppressed only when the members differ in raw bytes (a verbatim copy
+//!   survives).
 //!
 //! The filter is purely additive: it never re-routes a `nearly_identical`
 //! cluster as `identical`, only suppresses noise. Any cluster whose
@@ -95,6 +103,7 @@ mod calls;
 mod dart;
 mod python;
 mod python_class_shapes;
+mod python_constants;
 mod python_idioms;
 mod python_module_preamble;
 mod python_orm;
@@ -155,7 +164,7 @@ fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
 }
 
 /// All Python idiom noise filters (issues #96/#97/#99/#100/#104/#105/#107/
-/// #112/#114/#115/#121/#126 and monkeypatch scaffolding).
+/// #112/#114/#115/#121/#126/#133 and monkeypatch scaffolding).
 fn python_noise(snippets: &[Snippet<'_>]) -> bool {
     python_idioms::is_generated_template_output_cluster(snippets)
         || python_idioms::is_jwt_hmac_independent_verifier_cluster(snippets)
@@ -171,6 +180,7 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_class_shapes::is_pydantic_partial_update_cluster(snippets)
         || python::is_parametric_invariant_test_cluster(snippets)
         || python_module_preamble::is_module_preamble_sequence_cluster(snippets)
+        || python_constants::is_module_constant_table_cluster(snippets)
 }
 
 /// All Rust idiom noise filters (issues #75/#147/#150/#155).

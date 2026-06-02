@@ -120,6 +120,9 @@ struct RawConfig {
     /// Analysis-wide behavior toggles.
     #[serde(default)]
     analysis: RawAnalysis,
+    /// Report-rendering toggles.
+    #[serde(default)]
+    report: RawReport,
 }
 
 /// Raw on-disk shape of the `[analysis]` section.
@@ -128,6 +131,16 @@ struct RawAnalysis {
     /// Whether candidate pairs may span different parser language ids.
     #[serde(default)]
     allow_cross_language_comparison: bool,
+}
+
+/// Raw on-disk shape of the `[report]` section.
+#[derive(Debug, Default, Clone, Deserialize)]
+struct RawReport {
+    /// Whether the human HTML report divides clusters into per-language
+    /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Off by default;
+    /// the CLI `--split-by-language` flag also enables it.
+    #[serde(default)]
+    split_by_language: bool,
 }
 
 /// Raw on-disk shape of the `[threshold]` section.
@@ -191,6 +204,9 @@ pub struct ExclusionConfig {
     /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
     /// on same-language refactoring.
     allow_cross_language_comparison: bool,
+    /// Whether the HTML report splits clusters into per-language
+    /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Defaults off.
+    split_by_language: bool,
 }
 
 /// Compiled matchers for a single language overlay.
@@ -219,6 +235,7 @@ impl ExclusionConfig {
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
             allow_cross_language_comparison: false,
+            split_by_language: false,
         }
     }
 
@@ -306,6 +323,7 @@ impl ExclusionConfig {
             default_boilerplate_imports,
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
+            split_by_language: raw.report.split_by_language,
         })
     }
 
@@ -329,6 +347,13 @@ impl ExclusionConfig {
     #[must_use]
     pub const fn allows_cross_language_comparison(&self) -> bool {
         self.allow_cross_language_comparison
+    }
+
+    /// Returns whether the HTML report should divide clusters into
+    /// per-language sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]).
+    #[must_use]
+    pub const fn split_by_language(&self) -> bool {
+        self.split_by_language
     }
 
     /// Returns the source path this config was loaded from, or an empty
