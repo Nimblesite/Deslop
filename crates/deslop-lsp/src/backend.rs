@@ -9,7 +9,10 @@ use deslop_core::{
         LiveService, ReportChangedNotification,
     },
 };
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{atomic::AtomicBool, Arc},
+};
 use tokio::sync::Mutex;
 use tower_lsp::{
     jsonrpc::Result as LspResult,
@@ -17,7 +20,7 @@ use tower_lsp::{
         CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
         DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
-        DocumentDiagnosticReport, DocumentDiagnosticReportResult, ExecuteCommandParams, FileEvent,
+        DocumentDiagnosticReport, DocumentDiagnosticReportResult, ExecuteCommandParams,
         FullDocumentDiagnosticReport, GotoDefinitionParams, GotoDefinitionResponse, Hover,
         HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
         InitializedParams, Location, MessageType, OneOf, Range,
@@ -148,6 +151,12 @@ pub struct LspBackend {
     _ipc: Option<crate::ipc::IpcServer>,
     /// CPU/work observability recorder for `deslop/cpuReport`.
     observability: Observability,
+    /// True while the cache-seed cold pass is still running. Read in
+    /// `initialized()` to push the correct startup analysis state to a
+    /// late-connecting editor, closing the race where the cold pass's
+    /// `running`/`idle` broadcasts predate the VSIX notification
+    /// handlers ([VSIX reactivity]).
+    cold_pass_active: Arc<AtomicBool>,
 }
 
 impl LspBackend {
@@ -200,6 +209,11 @@ impl LspBackend {
         let ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service), report_changed.clone())
             .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
             .ok();
+        // A seeded session serves a cached report while a background cold
+        // pass runs; a fresh session has already finished its blocking
+        // scan. `initialized()` reads this to report the right startup
+        // state to the editor ([VSIX reactivity]).
+        let cold_pass_active = Arc::new(AtomicBool::new(seeded_from_cache));
         if seeded_from_cache {
             crate::cache_seed::spawn_refresh(crate::cache_seed::RefreshTask {
                 session: Arc::clone(&session),
@@ -212,6 +226,7 @@ impl LspBackend {
                 provider,
                 mode: resolved_mode,
                 report_changed,
+                cold_pass_active: Arc::clone(&cold_pass_active),
             });
         }
         Ok(Self {
@@ -221,6 +236,7 @@ impl LspBackend {
             _scheduler: scheduler,
             _ipc: ipc,
             observability,
+            cold_pass_active,
         })
     }
 
@@ -322,6 +338,11 @@ impl LanguageServer for LspBackend {
         self.client
             .log_message(MessageType::INFO, "deslop-lsp initialised")
             .await;
+        // Push the current analysis state now that the editor's
+        // notification handlers are registered, so the panel reflects an
+        // in-flight cold pass (or a settled scan) without a window reload
+        // ([VSIX reactivity]).
+        crate::cache_seed::push_initial_state(&self.client, &self.cold_pass_active).await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {
@@ -333,7 +354,7 @@ impl LanguageServer for LspBackend {
     async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
         self.observability
             .record_handler("did_change_watched_files");
-        let paths = paths_from_file_events(&params.changes);
+        let paths = crate::navigation::paths_from_file_events(&params.changes);
         self.apply_changed_paths(&paths).await;
     }
 
@@ -428,11 +449,12 @@ impl LanguageServer for LspBackend {
             return Ok(None);
         };
         let workspace_root = self.service.session_config().await.workspace_root;
-        let Some(canonical) = pick_canonical(&cluster.occurrences, &workspace_root, &path, byte)
+        let Some(canonical) =
+            crate::navigation::pick_canonical(&cluster.occurrences, &workspace_root, &path, byte)
         else {
             return Ok(None);
         };
-        let absolute = absolute_path(&workspace_root, &canonical.path);
+        let absolute = crate::navigation::absolute_path(&workspace_root, &canonical.path);
         let target_source = std::fs::read_to_string(&absolute).unwrap_or_default();
         let start = position::position_for_byte(&target_source, canonical.start_byte);
         let end = position::position_for_byte(&target_source, canonical.end_byte);
@@ -453,50 +475,10 @@ impl LanguageServer for LspBackend {
     }
 }
 
-/// Picks the occurrence the caller should jump to from a cursor at
-/// `(cursor_path, cursor_byte)`. Prefers the first occurrence that is
-/// NOT the one the cursor sits in; falls back to the first occurrence
-/// overall when every member lives in the same byte range. Resolves
-/// relative occurrence paths against `workspace_root` before comparing.
-fn pick_canonical<'a>(
-    occurrences: &'a [deslop_core::report::ReportOccurrence],
-    workspace_root: &std::path::Path,
-    cursor_path: &std::path::Path,
-    cursor_byte: usize,
-) -> Option<&'a deslop_core::report::ReportOccurrence> {
-    occurrences
-        .iter()
-        .find(|occurrence| {
-            let absolute = absolute_path(workspace_root, &occurrence.path);
-            !(absolute == cursor_path
-                && occurrence.start_byte <= cursor_byte
-                && cursor_byte < occurrence.end_byte)
-        })
-        .or_else(|| occurrences.first())
-}
-
-/// Joins `path` onto `workspace_root` when `path` is relative. Returns
-/// `path` unchanged when it is already absolute.
-fn absolute_path(workspace_root: &std::path::Path, path: &std::path::Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        workspace_root.join(path)
-    }
-}
-
 /// Translates an LSP `Url` into a filesystem path.
 #[must_use]
 pub fn url_to_path(url: &Url) -> Option<PathBuf> {
     url.to_file_path().ok()
-}
-
-/// Extracts filesystem paths from watched-file events.
-fn paths_from_file_events(events: &[FileEvent]) -> Vec<PathBuf> {
-    events
-        .iter()
-        .filter_map(|event| url_to_path(&event.uri))
-        .collect()
 }
 
 /// Builds the progress callback that emits LSP notifications.

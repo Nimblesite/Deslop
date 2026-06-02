@@ -3,18 +3,15 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { assertNoStubProvider, PACKAGE_ENTRY } from "./stub-gate.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
 const vsixArg = process.argv[2] ?? "deslop-live.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
 const targetPlatform = process.argv[3] ?? currentPlatform();
-const packageEntry = "extension/package.json";
+const packageEntry = PACKAGE_ENTRY;
 const manifestEntry = "extension/shipwright.json";
-// [REMOVE-STUB] Test-only stub identifiers that must never ship in the VSIX
-// (packaging acceptance gate; see assertNoStubProvider below).
-const stubTokens = [/blake3-stub/, /StubProvider/, /["']stub["']/];
-const stubScanSuffixes = [".js", ".json", ".md"];
 
 const entries = unzipText(["-Z1", vsixPath]).split("\n").filter(Boolean);
 assertPackageIdentity(entries);
@@ -44,7 +41,12 @@ for (const entry of binEntries) {
   verifyBundledEntry(entry, componentForEntry(entry, components));
 }
 
-assertNoStubProvider(entries);
+const stubScanned = assertNoStubProvider({
+  entries,
+  readText: (entry) => unzipText(["-p", vsixPath, entry]),
+  label: vsixPath,
+});
+console.log(`Verified ${stubScanned.length} packaged assets carry no stub provider strings`);
 
 console.log(`Verified deployment manifest and ${binEntries.length} ${targetPlatform} VSIX binaries`);
 
@@ -112,48 +114,6 @@ function assertEntry(entries, entry) {
 function assertNoEntryPrefix(entries, prefix) {
   const matches = entries.filter((entry) => entry.startsWith(prefix));
   if (matches.length > 0) throw new Error(`${vsixPath} must not include ${prefix}`);
-}
-
-// [REMOVE-STUB] The deterministic BLAKE3 stub is test-only embedding
-// infrastructure. This is the packaging acceptance gate from
-// docs/plans/remove-stub-provider-from-production-vsix.md: fail packaging when
-// any shipped asset re-exposes the `stub` provider id, its `blake3-stub` model
-// id, or the `StubProvider` type. Source maps carry the original comments but
-// are excluded by .vscodeignore, so they are never VSIX entries to scan.
-function assertNoStubProvider(entries) {
-  assertSettingsExcludeStub();
-  const scanned = entries.filter(isStubScanEntry);
-  for (const entry of scanned) assertEntryHasNoStubToken(entry);
-  console.log(`Verified ${scanned.length} packaged assets carry no stub provider strings`);
-}
-
-function isStubScanEntry(entry) {
-  if (entry === packageEntry) return true;
-  return entry.startsWith("extension/dist/") && stubScanSuffixes.some((suffix) => entry.endsWith(suffix));
-}
-
-function assertEntryHasNoStubToken(entry) {
-  const content = unzipText(["-p", vsixPath, entry]);
-  const hit = stubTokens.find((token) => token.test(content));
-  if (hit) {
-    throw new Error(`${entry} in ${vsixPath} exposes stub provider string ${hit}; the BLAKE3 stub is test-only and must not ship`);
-  }
-}
-
-function assertSettingsExcludeStub() {
-  const packageJson = JSON.parse(unzipText(["-p", vsixPath, packageEntry]));
-  for (const [key, schema] of Object.entries(configurationProperties(packageJson))) {
-    const values = [...(schema.enum ?? []), schema.default].filter((value) => typeof value === "string");
-    if (values.includes("stub")) {
-      throw new Error(`${packageEntry} setting ${key} offers the stub provider; production settings must exclude it`);
-    }
-  }
-}
-
-function configurationProperties(packageJson) {
-  const configuration = packageJson?.contributes?.configuration ?? {};
-  const blocks = Array.isArray(configuration) ? configuration : [configuration];
-  return Object.assign({}, ...blocks.map((block) => block.properties ?? {}));
 }
 
 function unzipText(args) {

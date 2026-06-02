@@ -89,26 +89,26 @@ export function registerCommands(
   }
 }
 
-function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
+export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | undefined {
   return clientOf()?.sendRequest("workspace/executeCommand", {
     command: LSP_REFRESH_REPORT_COMMAND,
     arguments: [],
   });
 }
 
-async function toggleShowAllLenses(): Promise<void> {
+export async function toggleShowAllLenses(): Promise<void> {
   const cfg = vscode.workspace.getConfiguration("deslop");
   const next = !cfg.get<boolean>("showAllLenses", false);
   await cfg.update("showAllLenses", next, vscode.ConfigurationTarget.Workspace);
 }
 
-async function openOccurrenceTarget(target: unknown): Promise<void> {
+export async function openOccurrenceTarget(target: unknown): Promise<void> {
   const occurrence = occurrenceFromCommandTarget(target);
   if (occurrence) await openOccurrence(occurrence);
   else void vscode.window.showInformationMessage("Deslop: no occurrence resolved for this command.");
 }
 
-async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
+export async function copyClusterContextById(store: ReportStore, id: unknown): Promise<void> {
   const clusterId = typeof id === "string" ? id : String(id);
   const cluster = store.current.report?.clusters.find((c) => c.id === clusterId);
   if (!cluster) return;
@@ -117,7 +117,7 @@ async function copyClusterContextById(store: ReportStore, id: unknown): Promise<
   void vscode.window.showInformationMessage("Copied AI context to clipboard");
 }
 
-function openClusterDetails(
+export function openClusterDetails(
   context: vscode.ExtensionContext,
   store: ReportStore,
   node: ClusterNode | OccurrenceNode,

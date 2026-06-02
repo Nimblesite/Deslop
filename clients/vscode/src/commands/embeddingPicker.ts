@@ -176,7 +176,7 @@ async function switchModel(
   }
 }
 
-async function turnEmbeddingsOff(client: LanguageClient, store: ReportStore): Promise<void> {
+export async function turnEmbeddingsOff(client: LanguageClient, store: ReportStore): Promise<void> {
   try {
     store.setPendingEmbeddingModel(OFF_MODEL_ID);
     await client.sendRequest("deslop/embeddingSetModel", {

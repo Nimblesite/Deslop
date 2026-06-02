@@ -5,7 +5,11 @@
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { handleMessage, openReportPanel } from "../../webview/panels";
+import {
+  handleMessage,
+  openDuplicationReportPanel,
+  openReportPanel,
+} from "../../webview/panels";
 import { ReportStore } from "../../reportStore";
 
 function fakeCtx(): vscode.ExtensionContext {
@@ -32,6 +36,30 @@ suite("panels lifecycle", () => {
       tabsAfterSecond,
       tabsAfterFirst,
       "second openReportPanel call must reveal the existing panel, not open a new tab",
+    );
+  });
+
+  test("openDuplicationReportPanel opens the metrics report and reveals it on a second call", () => {
+    // [VSIX-METRICS-REPORT]: the Duplication panel headline opens this
+    // webview; a second call must reveal the existing tab, not spawn a
+    // duplicate.
+    const store = new ReportStore();
+    const ctx = fakeCtx();
+
+    const tabsBefore = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
+    openDuplicationReportPanel(ctx, store);
+    const tabsAfterFirst = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
+    assert.ok(
+      tabsAfterFirst >= tabsBefore,
+      "first openDuplicationReportPanel must not reduce the open tab count",
+    );
+
+    openDuplicationReportPanel(ctx, store); // hits the existing-panel reveal branch
+    const tabsAfterSecond = vscode.window.tabGroups.all.flatMap((g) => g.tabs).length;
+    assert.equal(
+      tabsAfterSecond,
+      tabsAfterFirst,
+      "second openDuplicationReportPanel call must reveal the existing panel, not open a new tab",
     );
   });
 

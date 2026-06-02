@@ -464,6 +464,7 @@
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
     "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"
   },

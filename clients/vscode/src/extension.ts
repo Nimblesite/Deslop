@@ -243,7 +243,7 @@ export async function deactivate(): Promise<void> {
   }
 }
 
-function currentApi(): ExtensionApi {
+export function currentApi(): ExtensionApi {
   return {
     get client() {
       return client;
@@ -265,7 +265,7 @@ function currentApi(): ExtensionApi {
 // axes onto context keys so the title-bar toggles' mutually exclusive
 // `when` clauses can render the right buttons. Unknown / missing values
 // fall back to the spec defaults — never throws.
-function syncTopOffendersContext(): void {
+export function syncTopOffendersContext(): void {
   const cfg = vscode.workspace.getConfiguration("deslop");
   const rawGroup = cfg.get<string>("topOffenders.groupBy", "cluster");
   const groupBy = rawGroup === "file" ? "file" : rawGroup === "folder" ? "folder" : "cluster";
@@ -280,7 +280,7 @@ function syncTopOffendersContext(): void {
   );
 }
 
-function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
+export function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
   const workspaceRoot = resolveWorkspaceRoot();
   const runArgs = buildServerArgs(workspaceRoot, false);
   const debugArgs = buildServerArgs(workspaceRoot, true);
@@ -508,7 +508,7 @@ export function tryResolveOptional(
   }
 }
 
-function currentBinarySettings(): BinarySettings {
+export function currentBinarySettings(): BinarySettings {
   const cfg = vscode.workspace.getConfiguration("deslop");
   return {
     lspPath: cfg.get<string>("lspPath", ""),
@@ -516,7 +516,7 @@ function currentBinarySettings(): BinarySettings {
   };
 }
 
-function requireResolved(
+export function requireResolved(
   resolved: Record<string, ResolvedBinary>,
   componentId: string,
 ): ResolvedBinary {

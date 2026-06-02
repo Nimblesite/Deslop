@@ -55,12 +55,60 @@ suite("TopOffendersProvider", () => {
     assert.equal(nodes.length, 1);
   });
 
-  test("renders a 'no duplication' placeholder when the report is empty", () => {
+  // [VSIX reactivity] The reported bug: a large codebase shows "No
+  // duplication detected" while it is still being scanned. The terminal
+  // clean verdict must wait until the server confirms it is idle.
+  test("never claims 'No duplication detected' before the scan completes", () => {
     const store = new ReportStore();
+    store.setLifecycle({ kind: "analysing" });
     store.setSnapshot(report([]), 0);
     const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [only] = provider.getChildren();
+    assert.ok(only, "a progress row must render while scanning");
+    assert.equal(only.contextValue, "deslop.status.busy", "mid-scan empty state shows a busy row");
+    assert.doesNotMatch(
+      labelText(only),
+      /No duplication/,
+      "must not declare the codebase clean until the server reports idle",
+    );
+  });
+
+  test("declares 'No duplication detected' only once the server reports idle (ready) with no clusters", () => {
+    const store = new ReportStore();
+    store.setSnapshot(report([]), 0);
+    store.setLifecycle({ kind: "ready" });
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [only] = provider.getChildren();
+    assert.ok(only);
+    assert.equal(only.contextValue, "deslop.status.info");
+    assert.match(labelText(only), /No duplication detected/);
+  });
+
+  // [req: incremental indicator] An edit-triggered re-analysis keeps the
+  // existing clusters on screen (stale > blank) and leads with a busy
+  // badge so the user can see an update is in flight.
+  test("leads with an 'Analysing changes…' badge during incremental re-analysis", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([cluster("c1", 100, "/repo/A.cs"), cluster("c2", 80, "/repo/B.cs")]),
+      0,
+    );
+    store.setLifecycle({ kind: "analysing" });
+    const provider = new TopOffendersProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
-    assert.equal(nodes.length, 1);
+    const [first] = nodes;
+    assert.ok(first, "a badge row leads the list during re-analysis");
+    assert.equal(first.contextValue, "deslop.status.busy", "the badge is a busy row");
+    assert.match(
+      labelText(first),
+      /Analysing changes/,
+      "the badge names the in-flight incremental work",
+    );
+    const labels = nodes.map(labelText);
+    assert.ok(
+      labels.some((l) => /A\.cs/.test(l)),
+      "existing clusters stay visible during re-analysis",
+    );
   });
 
   test("cluster mode (default) lists clusters worst-first with global ranks", () => {

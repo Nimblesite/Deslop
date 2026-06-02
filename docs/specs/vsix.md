@@ -238,7 +238,7 @@ No background highlighting, no border boxes, no emoji markers in the gutter. The
 Rules that fall out of that:
 
 - The LSP's `deslop/reportChanged` notification is the **only** writer of the current report snapshot. The tree view does not call `reportGet` on its own, nor does the webview, nor the status bar — they all observe the store.
-- Settings changes route through the LSP (`workspace/didChangeConfiguration`) and come back through the same store update path, so there's no "UI thinks the model is nomic-embed-text, LSP is actually using stub" drift window.
+- Settings changes route through the LSP (`workspace/didChangeConfiguration`) and come back through the same store update path, so there's no "UI thinks the model is nomic-embed-text, LSP is actually using nomic-embed-code" drift window.
 - When the LSP reconnects, the store is reset and every surface re-renders from empty — no stale colour on a tree node, no stale verdict on the bubble, no stale percentage on the status bar.
 - Disposables are attached to the store, not scattered across provider objects, so extension shutdown tears everything down deterministically.
 
@@ -325,7 +325,7 @@ Flow:
 
 1. Fresh installs keep `deslop.embedding.mode = "off"` and show `Select model to enable AI matches` in the Session panel. The VSIX must not let the LSP start the live embedding pass until the user opens this picker and selects a model.
 2. VSIX calls `embedding/listModels` on the LSP. The daemon queries Ollama's `/api/tags` endpoint and returns every local model with:
-   - `provider_id` (`ollama` / `stub`).
+   - `provider_id` (always `ollama` — the only production-registered provider; the deterministic stub is test-only infrastructure and is never listed).
    - `model_id` (e.g. `nomic-embed-code`, `nomic-embed-text`, `codet5p`, `unixcoder`, user-pulled models).
    - `model_version` (`digest` from Ollama).
    - `dimensions` (if known).
@@ -334,7 +334,6 @@ Flow:
 3. VSIX renders a QuickPick with:
    - A disabled notice that selecting a model starts local embedding calculations, may be slow, and progress remains visible in Session.
    - Each installed model as a primary entry, with a short description of its suitability for code (from a bundled hint table: `nomic-embed-code` → "recommended for code clone detection," `unixcoder` → "alternative; strong on cross-language"), and a dimension/size badge.
-   - The built-in `stub` provider as the last entry, for users who want deterministic CI-style behaviour without Ollama.
    - A separator + "Pull a new model…" action that opens `https://ollama.com/library` in a browser and a second "Refresh list" action.
 4. On selection, VSIX calls `embedding/setModel`, persists `deslop.embedding.mode = "auto"`, and keeps the model id visible as pending until a fresh report arrives. The daemon queues the provider refresh, invalidates the embedding cache layer only ([FUSION-EMBED-PROVIDER]), and re-runs the embedding pass in low-priority background batches. Structural + LSH results remain available while this happens.
 5. MCP uses the same workspace settings contract. An agent-hosted MCP client must not change the model unless the user explicitly initiated that change. If it does switch the model, it must write the same `deslop.embedding.*` settings the VSIX/LSP reads before the switch is accepted. The VSIX treats those settings as authoritative so LSP and MCP model state does not drift.
@@ -348,9 +347,8 @@ During embedding work the panel shows an `Embedding` row with the current phase 
 
 Failure modes:
 
-- Ollama not running / `/api/tags` unreachable → QuickPick shows `stub` only, a disabled info row reads `Ollama not detected — install from ollama.com to use local embedding models`, and a link opens the docs.
+- Ollama not running / `/api/tags` unreachable → QuickPick shows no selectable models; a disabled info row reads `Ollama not detected — install from ollama.com to use local embedding models`, and a link opens the docs. There is no stub fallback — the deterministic BLAKE3 stub is test-only infrastructure and never reaches a production picker.
 - Selected model fails to produce an embedding on probe → VSIX shows the daemon's `EmbeddingProbeError` verbatim, keeps the previous model active.
-- User selects `stub` → confirmation dialog explains `stub` is deterministic but not semantically meaningful, so Type-4 recall is effectively disabled. Honours user choice.
 
 The picker is the flagship customisation of the VSIX. It's the single UI knob that meaningfully changes analysis quality; every other setting is `min-nodes` and exclusion patterns.
 
@@ -386,7 +384,7 @@ Exposed under `deslop.*` in VS Code settings:
 | Setting | Default | Purpose |
 |---|---|---|
 | `deslop.minNodes` | `30` | Forwarded to the LSP at `initialize`. Matches CLI `--min-nodes`. |
-| `deslop.embedding.provider` | `ollama` | `ollama` or `stub`. |
+| `deslop.embedding.provider` | `ollama` | `ollama` is the only production provider; the enum excludes the test-only stub. A stale `"stub"` value persisted by an older build is ignored in memory (treated as `ollama`, embeddings `off`) without rewriting user settings. |
 | `deslop.embedding.model` | `nomic-embed-text` | Selected via picker; this is the persisted value. |
 | `deslop.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
 | `deslop.embedding.mode` | `off` | Fresh live sessions do not run embeddings until the picker persists `auto` after model selection. |
@@ -420,8 +418,9 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Tree view populates with clusters ranked worst-first.
 - Clicking a cluster node opens the occurrence.
 - Editing a buffer updates the tree within 1 s.
-- Embedding picker lists `stub` when Ollama is unreachable.
+- Embedding picker shows the `Ollama not detected` empty state — and never a stub row — when Ollama is unreachable.
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.
+- Packaged `.vsix` carries no `stub` / `blake3-stub` / `StubProvider` strings in its settings enum or shipped `dist/*.{js,json,md}` assets ([FUSION-EMBED-PROVIDER]); enforced by the `stub-gate` packaging check.
 - Cluster webview renders interpretation, signals, and occurrences.
 - Full-report webview refreshes on daemon notification.
 - Manifest-backed activation tests cover configured paths, environment paths, `DESLOP_BINARY_DIR`, bundled success, `PATH` candidates ignored when the bundle is present, missing binary, component-name mismatch, and version mismatch.

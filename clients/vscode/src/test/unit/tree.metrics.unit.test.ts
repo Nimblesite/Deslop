@@ -17,9 +17,12 @@ suite("MetricsProvider", () => {
     assert.equal(first.contextValue, "deslop.status.busy");
   });
 
-  test("renders 'No duplication detected' when the codebase is clean", () => {
+  test("renders 'No duplication detected' when the codebase is clean and the scan has completed", () => {
     const store = new ReportStore();
     store.setSnapshot(report([], { duplicated_loc: 0, duplication_percent: 0 }), 0);
+    // The terminal "clean" verdict is gated on a completed scan: an empty
+    // report alone no longer settles the lifecycle ([VSIX reactivity]).
+    store.setLifecycle({ kind: "ready" });
     const provider = new MetricsProvider(store, new StatusTicker());
     const nodes = provider.getChildren();
     assert.equal(nodes.length, 1);

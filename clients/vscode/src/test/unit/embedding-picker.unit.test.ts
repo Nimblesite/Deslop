@@ -10,9 +10,10 @@ import {
   isActive,
   setModel,
   setModelFromPicker,
+  turnEmbeddingsOff,
 } from "../../commands/embeddingPicker";
 import { ReportStore } from "../../reportStore";
-import { EmbeddingModelInfo } from "../../types/report";
+import { EmbeddingModelInfo, ReportDelta } from "../../types/report";
 
 function newStore(embedding?: {
   provider_id: string;
@@ -76,10 +77,12 @@ interface FakeQuickPick extends vscode.QuickPick<vscode.QuickPickItem> {
   hideHandlerCount: number;
   shown: boolean;
   fireHide(): void;
+  fireAccept(): Promise<void>;
 }
 
 function fakeQuickPick(): FakeQuickPick {
   const hideHandlers: Array<() => void> = [];
+  const acceptHandlers: Array<() => unknown> = [];
   const quickPick = {
     activeItems: [] as readonly vscode.QuickPickItem[],
     busy: false,
@@ -91,6 +94,12 @@ function fakeQuickPick(): FakeQuickPick {
     fireHide() {
       for (const handler of hideHandlers) handler();
     },
+    async fireAccept() {
+      // Fire only the most recently registered handler so a `refresh`
+      // re-entry into pickEmbeddingModel does not re-trigger stale handlers.
+      const handler = acceptHandlers[acceptHandlers.length - 1];
+      if (handler) await handler();
+    },
     hide() {
       quickPick.fireHide();
     },
@@ -100,7 +109,8 @@ function fakeQuickPick(): FakeQuickPick {
     show() {
       quickPick.shown = true;
     },
-    onDidAccept() {
+    onDidAccept(handler: () => unknown) {
+      acceptHandlers.push(handler);
       return { dispose() {} };
     },
     onDidHide(handler: () => void) {
@@ -383,6 +393,54 @@ suite("embeddingPicker helpers", () => {
     }
   });
 
+  test("pickEmbeddingModel dispatches on the accepted entry kind", async () => {
+    const quickPick = fakeQuickPick();
+    const restoreQuickPick = installQuickPick(quickPick);
+    const requests: string[] = [];
+    const client = {
+      sendRequest: (method: string) => {
+        requests.push(method);
+        if (method === "deslop/embeddingListModels") {
+          return Promise.resolve([model("ollama", "nomic-embed-text")]);
+        }
+        return Promise.resolve(null);
+      },
+    } as unknown as LanguageClient;
+    const accept = (entry: Record<string, unknown>): Promise<void> => {
+      quickPick.selectedItems = [entry as unknown as vscode.QuickPickItem];
+      return quickPick.fireAccept();
+    };
+
+    try {
+      const store = newStore();
+      await pickEmbeddingModel(store, () => client);
+      assert.ok(quickPick.items.length > 0, "picker is populated from the live model list");
+
+      // No selection, and the non-actionable separator, both short-circuit.
+      quickPick.selectedItems = [];
+      quickPick.activeItems = [];
+      await quickPick.fireAccept();
+      await accept({ entryKind: "none", label: "info row" });
+
+      // Selecting a model switches it through the LSP.
+      await accept({ entryKind: "model", label: "m", model: model("ollama", "nomic-embed-text") });
+      assert.ok(requests.includes("deslop/embeddingSetModel"), "model selection switches the model");
+
+      // The off row turns embeddings off and asks for the post-switch delta.
+      await accept({ entryKind: "off", label: "off" });
+      assert.ok(requests.includes("deslop/reportDelta"), "the off path requests the post-switch delta");
+
+      // Refresh re-enters the picker (covers the recursion branch).
+      await accept({ entryKind: "refresh", label: "refresh" });
+    } finally {
+      restoreQuickPick();
+      const cfg = vscode.workspace.getConfiguration("deslop");
+      await cfg.update("embedding.mode", undefined, vscode.ConfigurationTarget.Workspace);
+      await cfg.update("embedding.provider", undefined, vscode.ConfigurationTarget.Workspace);
+      await cfg.update("embedding.model", undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+
   test("buildItems never exposes the deterministic stub row in production", () => {
     // [REMOVE-STUB] Even if the wire payload accidentally carries a
     // stub-provider row, the picker must never surface it to the user.
@@ -416,5 +474,80 @@ suite("embeddingPicker helpers", () => {
 
     await setModelFromPicker(client, store, model("ollama", "broken-model"));
     assert.equal(store.current.pendingEmbeddingModel, null);
+  });
+});
+
+function emptyDelta(toGeneration: number): ReportDelta {
+  return {
+    from_generation: 0,
+    to_generation: toGeneration,
+    clusters_added: [],
+    clusters_removed: [],
+    clusters_updated: [],
+    cache_stats: { hits: 0, misses: 0 },
+    tool_version: "x",
+  };
+}
+
+suite("turn embeddings off", () => {
+  teardown(async () => {
+    await vscode.workspace
+      .getConfiguration("deslop")
+      .update("embedding.mode", undefined, vscode.ConfigurationTarget.Workspace);
+  });
+
+  test("turnEmbeddingsOff sends the off request, persists mode=off, and applies the returned delta", async () => {
+    const store = newStore();
+    const calls: Array<{ method: string; params: unknown }> = [];
+    const client = {
+      sendRequest: (method: string, params: unknown) => {
+        calls.push({ method, params });
+        if (method === "deslop/reportDelta") return Promise.resolve(emptyDelta(7));
+        return Promise.resolve(null);
+      },
+    } as unknown as LanguageClient;
+
+    await turnEmbeddingsOff(client, store);
+
+    assert.deepEqual(
+      calls.find((c) => c.method === "deslop/embeddingSetModel")?.params,
+      { provider_id: "off", model_id: "off" },
+      "the LSP must be told to switch the provider off",
+    );
+    assert.equal(
+      vscode.workspace.getConfiguration("deslop").get<string>("embedding.mode"),
+      "off",
+      "embedding.mode must persist as off so the next session stays off",
+    );
+    assert.equal(store.current.generation, 7, "the returned delta settles the new generation");
+  });
+
+  test("turnEmbeddingsOff clears the pending marker when the LSP returns no delta", async () => {
+    const store = newStore();
+    const client = {
+      sendRequest: (method: string) =>
+        method === "deslop/reportDelta" ? Promise.resolve(null) : Promise.resolve(null),
+    } as unknown as LanguageClient;
+
+    await turnEmbeddingsOff(client, store);
+    assert.equal(
+      store.current.pendingEmbeddingModel,
+      null,
+      "no delta means nothing to apply — the optimistic pending marker is cleared",
+    );
+  });
+
+  test("turnEmbeddingsOff reverts the pending marker when the LSP rejects", async () => {
+    const store = newStore();
+    const client = {
+      sendRequest: () => Promise.reject(new Error("backend unavailable")),
+    } as unknown as LanguageClient;
+
+    await turnEmbeddingsOff(client, store);
+    assert.equal(
+      store.current.pendingEmbeddingModel,
+      null,
+      "a failed switch must not strand the UI on a half-applied off state",
+    );
   });
 });

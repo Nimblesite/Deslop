@@ -16,6 +16,7 @@ pub mod diagnostics;
 pub mod file_watch;
 pub mod hover;
 pub mod ipc;
+pub mod navigation;
 pub mod notifications;
 pub mod observability;
 mod parent_process;

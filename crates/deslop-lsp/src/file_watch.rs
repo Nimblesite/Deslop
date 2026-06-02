@@ -34,9 +34,7 @@ use deslop_core::{
 use tokio::sync::{broadcast::Receiver, Mutex};
 use tower_lsp::Client;
 
-use crate::notifications::{
-    AnalysisStateLspNotification, ReportChangedLspNotification, ANALYSIS_STATE,
-};
+use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
 
 /// File extensions the watcher monitors — one entry per supported language.
 const WATCHED_EXTENSIONS: &[&str] = &["cs", "rs", "py"];
@@ -131,16 +129,11 @@ async fn push_report_changed(client: &Client, notification: ReportChangedNotific
         .await;
 }
 
-/// Pushes `deslop/analysisState` as a plain string so the VSIX can
-/// check `state === "running"` directly ([LSP-PUSH-NOTIFICATIONS]).
+/// Pushes `deslop/analysisState` carrying the generated tagged
+/// [`AnalysisState`] object so the VSIX reads `state.state` and drives
+/// its lifecycle ([LSP-PUSH-NOTIFICATIONS], [VSIX reactivity]).
 async fn push_analysis_state(client: &Client, state: AnalysisState) {
-    let _ = ANALYSIS_STATE; // referenced via the notification type, suppress lint
-    let payload = match state {
-        AnalysisState::Idle => "idle".to_owned(),
-        AnalysisState::Running { .. } => "running".to_owned(),
-        AnalysisState::Errored { .. } => "errored".to_owned(),
-    };
     client
-        .send_notification::<AnalysisStateLspNotification>(payload)
+        .send_notification::<AnalysisStateLspNotification>(state)
         .await;
 }

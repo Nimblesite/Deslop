@@ -4,7 +4,7 @@ title: Output Formats — JSON, TXT, HTML
 description: Deslop emits three reports per run — canonical JSON for agents, line-oriented TXT for terminals, and standalone HTML for humans. Same schema, same ranking.
 eleventyNavigation:
   key: Output Formats
-  order: 4
+  order: 5
 icon: description
 ---
 
@@ -77,6 +77,8 @@ It does not add: scores not in the JSON, commentary beyond the `summary` field, 
 | `3` | Duplication percentage exceeded the `--fail-over` gate. |
 
 `deslop` never panics on user input. Failures surface through these exit codes and a structured error on `stderr`.
+
+Exit `3` is the **CI gate**. It only ever fires when you opt in — by passing a `--fail-over` percentage or setting `[threshold] max_duplication_percent` in `.deslop.toml`. See [Gate CI on a duplication threshold](/docs/#gate-ci-on-a-duplication-threshold) for the walkthrough, or [For AI](/docs/for-ai/#run-in-ci) for a ready-to-paste GitHub Actions job.
 
 ## Logging vs. reports
 

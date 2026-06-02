@@ -11,6 +11,7 @@
         { "text": "Getting Started", "url": "/docs/" },
         { "text": "How It Works", "url": "/docs/how-it-works/" },
         { "text": "AI Integration", "url": "/docs/ai-integration/" },
+        { "text": "For AI", "url": "/docs/for-ai/" },
         { "text": "Output Formats", "url": "/docs/output-formats/" },
         { "text": "VS Code Cluster Panel", "url": "/docs/vscode-cluster-panel/" }
       ]

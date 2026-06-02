@@ -56,10 +56,18 @@ export {
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const SPINNER_INTERVAL_MS = 120;
 
-function renderLifecycle(
+// [VSIX reactivity] The busy/error status row for any non-"ready"
+// lifecycle. `hasReport` picks the scan-kind label: the initial cold
+// scan has no report yet ("Scanning workspace…"), while a re-analysis
+// after results exist is an incremental pass ("Analysing changes…").
+// Returns null only when the server has confirmed it is idle ("ready"),
+// which is the SOLE state allowed to render the terminal "No duplication
+// detected" message — the panel must never declare the codebase clean
+// while a scan is still in flight.
+function scanStatus(
   lifecycle: LifecyclePhase,
+  hasReport: boolean,
   frame: number,
-  idleLabel: string,
 ): StatusNode | null {
   if (lifecycle.kind === "ready") return null;
   if (lifecycle.kind === "failed") {
@@ -70,7 +78,12 @@ function renderLifecycle(
     );
   }
   const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "";
-  const label = lifecycle.kind === "starting" ? "Starting" : idleLabel;
+  const label =
+    lifecycle.kind === "starting"
+      ? "Starting"
+      : hasReport
+        ? "Analysing changes"
+        : "Scanning workspace";
   return new StatusNode(`${spinner} ${label}…`, "busy");
 }
 
@@ -140,11 +153,12 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 
   private needsAnimation(): boolean {
-    // Spinner gating reads canonical: animate while no LSP report exists yet,
-    // regardless of dirty-set masking. The visible projection only matters
-    // for the row content, not for whether the data has loaded.
-    const { lifecycle, report } = this.store.current;
-    return (lifecycle.kind === "starting" || lifecycle.kind === "analysing") && !report;
+    // Animate whenever the server reports work in flight, so BOTH the
+    // initial cold-scan spinner and the incremental "Analysing changes…"
+    // badge tick. The animation settles the moment analysisState reports
+    // idle ("ready") — even if clusters are already on screen.
+    const { lifecycle } = this.store.current;
+    return lifecycle.kind === "starting" || lifecycle.kind === "analysing";
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
@@ -205,19 +219,22 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     }
     if (node) return [];
     // [VSIX-STATE-DIRTY]: tree rows render from the visible projection so a
-    // file the user is mid-edit drops out instantly. Lifecycle still gates
-    // the spinner via the canonical signal in needsAnimation().
-    const { visibleReport, lifecycle } = this.store.current;
-    // Show spinner only before first report arrives, or on error. During
-    // re-analysis the existing report stays visible — stale > blank.
-    if (lifecycle.kind === "failed" || !visibleReport) {
-      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
-      if (status) return [status];
-    }
+    // file the user is mid-edit drops out instantly. The canonical report
+    // gates the scan-kind label (cold vs incremental).
+    const { visibleReport, report, lifecycle } = this.store.current;
+    const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
+    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
     if (!visibleReport || visibleReport.clusters.length === 0) {
+      // Never declare the codebase clean until the server confirms a
+      // completed scan ("ready"); while scanning, show progress instead.
+      if (indicator) return [indicator];
       return [new StatusNode("No duplication detected", "info")];
     }
-    return buildRoots(visibleReport.clusters);
+    const roots = buildRoots(visibleReport.clusters);
+    // [req: incremental indicator] Keep clusters visible during a
+    // re-analysis (stale > blank) and lead with a busy badge so the user
+    // sees an update is in flight ([VSIX-REACTIVITY-TREE]).
+    return indicator ? [indicator, ...roots] : roots;
   }
 
   // [VSIX-TOP-OFFENDERS-TOOLBAR] Required by TreeView.reveal for the
@@ -261,14 +278,17 @@ export class MetricsProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
     if (node instanceof FolderMetricNode) return node.children;
     if (node) return [];
-    const { visibleReport, lifecycle } = this.store.current;
-    if (lifecycle.kind === "failed" || !visibleReport) {
-      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
-      if (status) return [status];
+    const { visibleReport, report, lifecycle } = this.store.current;
+    const indicator = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
+    if (lifecycle.kind === "failed") return indicator ? [indicator] : [];
+    if (!visibleReport) {
+      return indicator ? [indicator] : [new StatusNode("No session yet", "info")];
     }
-    if (!visibleReport) return [new StatusNode("No session yet", "info")];
     const metrics = visibleReport.metrics;
     if (metrics.duplicated_loc === 0) {
+      // Same completion gate as Top Offenders: only the server's idle
+      // state may render the terminal "clean" verdict ([VSIX reactivity]).
+      if (indicator) return [indicator];
       return [new StatusNode("No duplication detected", "info")];
     }
     return [metricsHeadline(metrics), ...buildMetricRows(metrics)];
@@ -303,10 +323,11 @@ export class SessionProvider extends LifecycleAwareProvider {
     if (node) return [];
     const { report, lifecycle, pendingEmbeddingModel, embeddingProgress } =
       this.store.current;
-    // Show spinner only before first report arrives, or on error. During
-    // re-analysis the existing session data stays visible — stale > blank.
+    // Show spinner only before first report arrives, or on error. Once
+    // session data exists it stays visible during re-analysis (stale >
+    // blank); the Top Offenders panel carries the in-flight badge.
     if (lifecycle.kind === "failed" || !report) {
-      const status = renderLifecycle(lifecycle, this.ticker.currentFrame, "Analysing");
+      const status = scanStatus(lifecycle, !!report, this.ticker.currentFrame);
       if (status) return [status];
     }
     if (!report) return [new StatusNode("No session yet", "info")];
