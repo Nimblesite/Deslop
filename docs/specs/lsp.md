@@ -20,41 +20,19 @@ Declared in the `initialize` response:
 | `hoverProvider` | On hover over a clone range: show cluster id, signal breakdown, interpretation, and a "jump to occurrence N" list. |
 | `definitionProvider` (overloaded) | "Go to definition" from inside a clone range jumps to the canonical occurrence of that cluster. Users keep the muscle memory. |
 | `executeCommandProvider` | Commands for: toggle daemon, refresh report, open full report, pick embedding model, extract-to-shared-function (future). |
-| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. Severity is determined by clone bucket ([LSP-SEVERITY]) and is fully user-configurable. |
+| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. **Off by default** ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)); when enabled, severity is determined by clone bucket ([LSP-SEVERITY]) and is fully user-configurable. |
 | `workspace/didChangeWatchedFiles` | Register for writes outside the editor (build output, generated files, `git checkout`). |
 | Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS]. |
 
-### [LSP-SEVERITY] Diagnostic severity — two axes
+### [LSP-SEVERITY] Diagnostic severity — the Problems-panel projection
 
-Severity is determined by **two independent axes**, applied in order:
+The LSP is **one consumer** of the Deslop severity model defined in [severity.md §SEVERITY-MODEL](severity.md#severity-model). That file owns the bucket → severity maps; this section owns only how the **diagnostic** projection reaches the Problems panel. Diagnostics are resolved along two axes, applied in order, behind the master gate.
 
-#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket
+#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket — diagnostics default OFF
 
-The clone bucket is the primary determinant. All four buckets default to `Warning` or higher — duplication is always actionable and should never be silent by default. `Identical` code defaults to `Error` because there is no legitimate reason for bit-for-bit duplicates to exist in a codebase.
+Diagnostic publication is **off by default** (`deslop.diagnostics.enabled = false`, the gate in [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). When the user enables it, each bucket publishes at its `deslop.diagnostics.severity.*` level — defaults `Identical → Error`, the other three `→ Warning`, every one configurable to `"error" | "warning" | "information" | "hint" | "none"`. The full default table and the `none`-suppresses-this-bucket semantics live in [severity.md §SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics) and are not duplicated here.
 
-| Bucket | Default severity | Can be configured to |
-|---|---|---|
-| `Identical` | `Error` | `"warning"` · `"information"` · `"hint"` · `"none"` |
-| `NearlyIdentical` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
-| `LooselySimilar` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
-| `SameBehavior` | `Warning` | `"error"` · `"information"` · `"hint"` · `"none"` |
-
-**Every severity is user-configurable** per bucket via VS Code settings. Valid values: `"error" | "warning" | "information" | "hint" | "none"`. Setting `"none"` suppresses diagnostics for that bucket entirely — the cluster stays visible in the tree, code lens, and hover but does not appear in the Problems panel or the squiggle gutter.
-
-```jsonc
-// .vscode/settings.json
-// Loosen: treat all duplication as warning-only, suppress AI matches.
-"deslop.severity.identical":       "warning",
-"deslop.severity.nearlyIdentical": "warning",
-"deslop.severity.looselySimilar":  "information",
-"deslop.severity.sameBehavior":    "none"
-
-// Strict: everything is an error, no exceptions.
-"deslop.severity.identical":       "error",
-"deslop.severity.nearlyIdentical": "error",
-"deslop.severity.looselySimilar":  "error",
-"deslop.severity.sameBehavior":    "error"
-```
+A suppressed or gated-off cluster stays fully visible and **coloured** in the tree, code lens, hover, and live bubble — colour comes from the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), not from this diagnostic projection. Suppression only removes the Problems-panel entry and the squiggle.
 
 #### [LSP-SEVERITY-PERCENTILE] Secondary axis: weight-percentile thresholds
 
@@ -73,7 +51,7 @@ Because severity depends on the global weight set, the diagnostic provider decla
 
 Clusters below their bucket's percentile floor remain visible via code lens, hover, and the VSIX tree — they are not published as diagnostics but are not hidden.
 
-**Severity resolution is stateless per cluster**: `bucket → configured_severity → percentile_check → publish or suppress`. Severity bucketing lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing severity from raw weights.
+**Diagnostic resolution is stateless per cluster**: `gate_enabled → bucket → configured_severity (≠ none) → percentile_check → publish or suppress` ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). Resolution lives in `crates/deslop-lsp/src/diagnostics.rs` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing them from raw weights.
 
 ### [LSP-DIAGNOSTICS] Diagnostic content
 

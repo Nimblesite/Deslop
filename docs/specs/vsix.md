@@ -25,7 +25,7 @@ After every coalesced buffer edit ([LIVE-WATCHER] debounce = 250 ms), the VSIX i
 **What it looks like.**
 A compact floating widget (VS Code `InlayHint` + `Webview`-backed overlay, rendered by a single `DecorationType` whose `after.contentText` is an HTML-safe Unicode glyph, with a hover-triggered richer webview for detail). Anatomy, from left to right:
 
-- **Severity dot** — colour mapped to the cluster's resolved severity per [LSP-SEVERITY-BUCKET]: red (`Error`), amber (`Warning`), blue (`Information`), grey (`Hint`). Defaults: `Identical` → red, all others → amber. Clusters whose bucket is configured to `"none"` are never shown as a bubble.
+- **Severity dot** — colour mapped to the cluster's Deslop severity per [severity.md §SEVERITY-COLOR](severity.md#severity-color): red (`error`), amber (`warning`), blue (`information`), grey (`hint`). Defaults: `Identical` → red, the rest amber / blue / grey. Colour comes from the always-on Deslop-severity map, **not** the diagnostic map — the bubble is fully coloured even when diagnostics are off (`deslop.diagnostics.enabled = false`, the default). The bubble is never hidden by a severity setting; only the dirty projection ([VSIX-STATE-DIRTY]) and silence-when-clean remove it.
 - **Short verdict** — one of: `DUPLICATE` (structural = 1.0), `NEAR-MISS` (token jaccard ≥ 0.90, structural < 1.0), `SEMANTIC MATCH` (embedding cos ≥ 0.90). One word, uppercase, so the user sees it without reading.
 - **Count + location** — `× 4 • UserService.cs:230`. The canonical occurrence of the cluster, linkified to jump on click.
 - **Signal strip** — three 8-pixel bars for structural / jaccard / embedding. Bright = high, dim = low. Lets the user distinguish "identical copy" from "semantic near-miss" at a glance.
@@ -208,9 +208,24 @@ The single deliberate exception is the **Refresh** button (`deslop.refresh` → 
 
 #### [VSIX-TOP-OFFENDERS-TOOLBAR] Collapse / expand / refresh actions
 
-After the grouping/sort/split toggles (`navigation@1`–`@3`), the Top Offenders title bar carries three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@4`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@5`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@6`).
+The **Diagnostics toggle** ([VSIX-SEVERITY-CONTROL]) leads the title bar at `navigation@0`, ahead of everything else, because it is the control the user reaches for most. After it come the grouping/sort/split toggles (`navigation@1`–`@3`), then three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@4`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@5`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@6`).
 
 Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBulkExpansion`): the provider rewrites the collapsible state it returns from `getTreeItem` and fires `onDidChangeTreeData`, so the whole tree expands or collapses **in one shot at every level** — reliable in cluster, file, and folder mode, not just the first level (which is why we do not use the one-level `TreeView.reveal({ expand: true })` or rely on the built-in `showCollapseAll` button, which would render a second, detached collapse action). The override is presentation-only ([VSIX-VIEW-STATE-UI-ONLY]) and is released on the next data change. **Refresh** is the one toolbar action that reaches the engine — it forces a full workspace re-scan. The Session and Duplication panels keep VS Code's built-in Collapse All for consistency.
+
+#### [VSIX-SEVERITY-CONTROL] Diagnostics toggle + severity configuration
+
+Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)), so turning them on must be a **one-click move in a prominent place**, not a hunt through Settings. The control lives in the Top Offenders title bar — the panel the user already has open while triaging duplication.
+
+**The toggle (`navigation@0`).** A single title-bar button bound to `deslop.diagnostics.toggle`, which flips the `deslop.diagnostics.enabled` workspace setting:
+
+- **Off (default):** icon `$(bell-slash)`, title `Deslop: Diagnostics Off — click to publish to Problems`. The view also carries a one-line, dismissible header note `Diagnostics off — Problems panel quiet` so the state is legible without hovering the icon.
+- **On:** icon `$(bell)`, title `Deslop: Diagnostics On — click to silence Problems`.
+
+The two states are selected by a `when` clause on the `deslop:diagnosticsEnabled` context key, which the extension sets from the store whenever the setting changes — never from a second cached copy ([VSIX-STATE]). Writing targets the workspace configuration so the choice persists per-repo, exactly like the grouping/sort toggles ([VSIX-TOP-OFFENDERS-GROUPING]). Flipping it forwards `workspace/didChangeConfiguration` to the LSP, which re-resolves diagnostics for every open file in the same round-trip; there is no re-analysis ([VSIX-VIEW-STATE-UI-ONLY]) — the report is unchanged, only its diagnostic projection.
+
+**Severity configuration (`deslop.severity.configure`).** A companion gear at `navigation@0` (immediately right of the toggle) opens a QuickPick that edits both maps in flow, without leaving the panel. It lists the four buckets, each row showing the bucket's plain title, its current **colour** level (`deslop.severity.*`) and its current **diagnostic** level (`deslop.diagnostics.severity.*`, or `none`). Selecting a bucket opens a second QuickPick to set each axis from `error · warning · information · hint` (plus `none` for the diagnostic axis). The QuickPick is the prominent in-flow editor; the VS Code Settings UI (filtered to `@ext:nimblesite.deslop-live severity`) remains the durable store both write to. Both targets are the workspace, so a team posture pinned in `.vscode/settings.json` wins per [VSIX-SETTINGS] precedence.
+
+The toggle changes only whether diagnostics publish; it never touches the bubble, tree, code-lens, or gutter colour, which are driven by the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)). A status-bar segment ([VSIX-STATUS-BAR]) mirrors the toggle state for users working away from the panel and is itself clickable to flip it.
 
 #### [VSIX-METRICS-PANEL] Duplication panel
 
@@ -234,7 +249,7 @@ Each lens has three actions in its command array:
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
 - **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
 
-The lens is suppressed for clusters whose bucket is configured to `"none"` severity ([LSP-SEVERITY-BUCKET]) or that fall below the configured percentile floor ([LSP-SEVERITY-PERCENTILE]). Users can toggle via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action).
+The lens is coloured by the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action). A bucket's diagnostic map being `"none"` quietens the Problems panel but does **not** remove the lens — the lens is a pure-visual surface.
 
 ### [VSIX-DECORATIONS] Editor decorations
 
@@ -299,6 +314,32 @@ Three hard guarantees, applied to every surface (tree included):
 #### [VSIX-REACTIVITY-INVARIANT] Staleness is a correctness bug
 
 **Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the tree is showing a cluster that was refuted 300 ms ago, we've broken the brand promise. Concrete acceptance test (E2E, against the real LSP binary): open a fixture workspace with N clusters; assert tree, decorations, and bubble all show N. Edit one of the duplicated files to delete a duplicate. After the [LIVE-WATCHER] debounce window plus one scheduler pass, assert tree, decorations, and bubble all show N − 1 **without any user-initiated refresh**. The test fails if any surface still references the removed cluster id. This invariant is enforced via that E2E and via lint rules in `clients/vscode/eslint.config.mjs` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` calls outside the bootstrap path, and `TreeDataProvider` implementations that don't subscribe to a store signal.
+
+### [VSIX-CLUSTER-SYNC] Selected-cluster synchronisation
+
+There is **one** notion of "the cluster the user is looking at," held in a single `selectedClusterId` signal on the [VSIX-STATE] store — the same signal the decorations, bubble, and webview already read ([VSIX-REACTIVITY-DECORATIONS], [VSIX-REACTIVITY-WEBVIEW]). Every surface both **writes** it (when the user acts there) and **reacts** to it (when another surface changes it). No surface keeps a private "current cluster"; selection is never threaded through command arguments as a side channel.
+
+**Writers — anything that focuses a cluster sets the signal:**
+
+- **Editor caret.** `onDidChangeTextEditorSelection` resolves the caret's byte position against the visible projection ([VSIX-STATE-DIRTY]); if it lands inside a clone occurrence, `selectedClusterId` is set to that cluster. Moving out of every clone range clears it. Debounced to coalesce with the bubble's own edit-cycle budget so a drag-select does not thrash the tree.
+- **`deslop.openCluster`.** Opening the cluster webview (from a code-lens "Open cluster", a hover link, a tree row, or the command palette) sets `selectedClusterId` to that id **before** the webview opens, so the selection is already correct when every other surface reacts.
+- **Tree row.** Selecting a Top Offenders row sets the signal; the webview's prev/next arrows set it through the same path ([VSIX-WEBVIEW-ACTIONS-CONTEXT]).
+
+**Reactors — every surface follows the signal in one microtask ([VSIX-REACTIVITY]):**
+
+- **Top Offenders tree.** An `effect()` over `selectedClusterId` calls `TreeView.reveal(node, { select: true, focus: false })` for the row that represents that cluster. This is the headline behaviour: **tapping "view cluster" selects the cluster in the Top Offenders panel**, and so does moving the caret into a duplicate in the editor — the editor and the panel stay locked together. Reveal must work in every grouping mode ([VSIX-TOP-OFFENDERS-GROUPING]), so the provider implements `getParent` (a hard requirement of `TreeView.reveal`) and resolves the cluster's row under whatever cluster/file/folder/language ancestry the current mode produces. If the selected cluster is not present in the active grouping/dirty projection, reveal is a no-op rather than an error. `focus: false` keeps the keyboard in the editor — selecting a row never steals the caret, honouring [VSIX-PRINCIPLES] principle 5.
+- **Decorations, bubble, webview.** Already signal-driven; they highlight / open the selected cluster with no extra wiring.
+
+Selection survives a `deslop/reportChanged` as long as the cluster id still exists (cluster ids are stable across deltas, [LIVE-DELTA]); if the selected cluster is retracted by the LSP, the signal clears in the same microtask the delta applies and no surface keeps a dangling highlight ([VSIX-REACTIVITY-INVARIANT]).
+
+#### [VSIX-CLUSTER-SYNC-TESTS] Acceptance — sync is proven, not assumed
+
+Coarse E2E against the real LSP binary and a real extension host ([VSIX-TESTING]), each asserting the **same cluster id** across surfaces:
+
+- **View cluster → tree selection.** Run `deslop.openCluster` for a known cluster; assert `topOffendersView.selection[0]` is the node whose cluster id equals that cluster — in cluster mode, then again in file and folder modes, proving `getParent`-based reveal under nesting.
+- **Editor caret → tree selection.** Open a fixture file with a known clone; move the selection into the clone range; assert the Top Offenders selection becomes that cluster and that the caret stayed in the editor (`window.activeTextEditor` unchanged). Move the caret to a clean line; assert the selection clears.
+- **Round-trip identity.** With a cluster selected from the editor, assert the open cluster webview's `selectedClusterId` and the tree selection are equal — one signal, three surfaces, no drift.
+- **Retraction.** Select a cluster, then edit the fixture so the duplicate is deleted; after the watcher + scheduler pass, assert no surface still reports that id as selected.
 
 ### [VSIX-WEBVIEW] Cluster detail webview
 
@@ -370,6 +411,7 @@ Right-aligned status bar item reading `dedup · 2040 · #1=TradeService.cs:230 �
 - `dedup` — cluster count in current file (or total if no file open).
 - `#1=…` — shortcut to the worst offender. Click jumps to cluster `#1`.
 - `embed=<model>` — click opens the embedding picker.
+- diagnostics state — a `$(bell-slash)` / `$(bell)` glyph mirroring `deslop.diagnostics.enabled` ([VSIX-SEVERITY-CONTROL]); click runs `deslop.diagnostics.toggle`. Lets users flip the gate without the panel open.
 
 When the daemon is re-analysing, the first section animates to `dedup (analysing…)`. Analysis never blocks the user; this is purely informational.
 
@@ -384,6 +426,8 @@ Every interaction has a command palette entry:
 - `Deslop: Pick Embedding Model`
 - `Deslop: Refresh Report (force full re-analysis)`
 - `Deslop: Toggle Show All Code Lenses`
+- `Deslop: Toggle Diagnostics` (`deslop.diagnostics.toggle` — the gate in [VSIX-SEVERITY-CONTROL])
+- `Deslop: Configure Severity…` (`deslop.severity.configure`)
 - `Deslop: Show Schema Documentation`
 
 VSIX command IDs stay in the `deslop.*` namespace for command palette, menus, and URI links. Any matching LSP `workspace/executeCommand` verb uses the `deslop.lsp.*` namespace so the language client does not double-register VSIX-owned commands during activation.
@@ -401,6 +445,9 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.embedding.mode` | `off` | Fresh live sessions do not run embeddings until the picker persists `auto` after model selection. |
 | `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
 | `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
+| `deslop.diagnostics.enabled` | `false` | Master gate — clone diagnostics are **off by default**. Flip via the prominent Top Offenders toggle ([VSIX-SEVERITY-CONTROL]). See [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate). |
+| `deslop.severity.{identical,nearlyIdentical,looselySimilar,sameBehavior}` | `error · warning · information · hint` | Always-on **colour** map for bubble / tree / lens / gutter. Values `"error" \| "warning" \| "information" \| "hint"`. See [severity.md §SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map). |
+| `deslop.diagnostics.severity.{identical,nearlyIdentical,looselySimilar,sameBehavior}` | `error · warning · warning · warning` | Per-bucket **Problems-panel** severity, only when the gate is on. Adds `"none"` to suppress a bucket. See [severity.md §SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics). |
 | `deslop.diagnostics.scope` | `"open-files"` | `"open-files"` keeps LSP 3.17 pull behaviour (Problems only populated for tabs the editor has open); `"workspace"` makes the LSP push `publishDiagnostics` for every offender file so Problems mirrors the Top Offenders tree even with no tabs open. See [lsp.md §LSP-DIAGNOSTICS-SCOPE](lsp.md#lsp-diagnostics-scope). |
 | `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |
 
@@ -429,6 +476,8 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - Tree view populates with clusters ranked worst-first.
 - Clicking a cluster node opens the occurrence.
 - Editing a buffer updates the tree within 1 s.
+- Diagnostics default off: Problems is empty on open while the tree and bubble are populated and coloured; flipping `deslop.diagnostics.toggle` publishes `Identical → Error` and others `→ Warning`, and flipping it back clears them ([VSIX-SEVERITY-CONTROL], [severity.md §SEVERITY-TESTING](severity.md#severity-testing)).
+- Selected-cluster sync: `deslop.openCluster` selects the cluster's Top Offenders row (in cluster, file, and folder modes); moving the caret into a clone selects the same row without stealing the caret; the tree, webview, and bubble agree on the selected id ([VSIX-CLUSTER-SYNC-TESTS]).
 - Embedding picker shows the `Ollama not detected` empty state — and never a stub row — when Ollama is unreachable.
 - Embedding picker lists Ollama models when a mock Ollama HTTP server is running on `127.0.0.1:11434`.
 - Packaged `.vsix` carries no `stub` / `blake3-stub` / `StubProvider` strings in its settings enum or shipped `dist/*.{js,json,md}` assets ([FUSION-EMBED-PROVIDER]); enforced by the `stub-gate` packaging check.

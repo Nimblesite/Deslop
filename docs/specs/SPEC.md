@@ -88,6 +88,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
 - [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
+- [severity.md](severity.md) — `[SEVERITY-*]` the bucket → severity model: the always-on Deslop-severity colour map, the opt-in diagnostic map, the master `deslop.diagnostics.enabled` gate (diagnostics **off by default**), and the colour-vs-percentile projection consumed by lsp.md and vsix.md.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.

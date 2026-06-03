@@ -16,8 +16,8 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, node_intersects_range, parse_for, spans_multiple_files, trimmed_snippet_range,
-    Snippet,
+    enclosing_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
+    spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::ast::ByteRange;
 
@@ -394,6 +394,85 @@ fn closure_body_matches_field_method(body: Node<'_>, source: &[u8], closure_arg:
         return false;
     };
     field_expression_projects_closure_arg(field_value, source, closure_arg)
+}
+
+/// Detects **issue #176** [CLONE-NOISE-RUST-MATCH-DISPATCH]: clusters
+/// whose every member is a run of `match` arms inside one dispatch
+/// `match`. Each arm routes a distinct pattern (command key) to a
+/// distinct handler, so after identifier and literal normalisation every
+/// arm collapses to the same `<path>::<ident> => Ok(<call>(...))` shape
+/// and the sibling-window pass matches one window of arms against another
+/// within the same `match`. A routing table is not extractable
+/// duplication.
+///
+/// Suppressed only when the matched arm patterns across the cluster are
+/// pairwise distinct (distinct dispatch keys ⇒ a routing table) and at
+/// least two members differ in raw bytes, so a verbatim copy-pasted run
+/// of arms still surfaces as a genuine clone.
+pub(super) fn is_rust_match_dispatch_cluster(snippets: &[Snippet<'_>]) -> bool {
+    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
+        return false;
+    }
+    let patterns: Option<Vec<Vec<Vec<u8>>>> =
+        snippets.iter().map(match_dispatch_arm_patterns).collect();
+    let Some(patterns) = patterns else {
+        return false;
+    };
+    let all: Vec<&[u8]> = patterns.iter().flatten().map(Vec::as_slice).collect();
+    arm_patterns_pairwise_distinct(&all) && raw_snippet_texts_differ(snippets)
+}
+
+/// Returns the pattern bytes of every `match_arm` covered by one cluster
+/// member's range, or `None` when the member is not a contiguous run of
+/// arm siblings under a single `match_block`.
+fn match_dispatch_arm_patterns(snippet: &Snippet<'_>) -> Option<Vec<Vec<u8>>> {
+    let tree = parse_for(snippet)?;
+    let range = trimmed_snippet_range(snippet)?;
+    let mut arms: Vec<Node<'_>> = Vec::new();
+    collect_match_arms(tree.root_node(), range, &mut arms);
+    let first = arms.first()?;
+    let parent = first.parent()?;
+    if parent.kind() != "match_block" || arms.iter().any(|arm| arm.parent() != Some(parent)) {
+        return None;
+    }
+    arms.iter()
+        .map(|arm| arm_pattern_bytes(*arm, snippet.source))
+        .collect()
+}
+
+/// Collects every `match_arm` node intersecting `range`. Does not descend
+/// into an arm body, so a nested `match` inside one arm contributes only
+/// the outer arm, never its inner arms.
+fn collect_match_arms<'tree>(node: Node<'tree>, range: ByteRange, out: &mut Vec<Node<'tree>>) {
+    if !node_intersects_range(node, range) {
+        return;
+    }
+    if node.kind() == "match_arm" {
+        out.push(node);
+        return;
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_match_arms(child, range, out);
+    }
+}
+
+/// Returns the `pattern` field bytes of one `match_arm`.
+fn arm_pattern_bytes(arm: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
+    let pattern = arm.child_by_field_name("pattern")?;
+    source
+        .get(pattern.start_byte()..pattern.end_byte())
+        .map(<[u8]>::to_vec)
+}
+
+/// Returns true when the cluster carries at least two arms and every arm
+/// pattern is distinct — the signal that the `match` is a dispatch table
+/// rather than a run of byte-identical copy-pasted arms.
+fn arm_patterns_pairwise_distinct(patterns: &[&[u8]]) -> bool {
+    if patterns.len() < 2 {
+        return false;
+    }
+    patterns.iter().copied().collect::<BTreeSet<&[u8]>>().len() == patterns.len()
 }
 
 /// Returns true when `node` is `<closure_arg>.<field>` (one field hop).
