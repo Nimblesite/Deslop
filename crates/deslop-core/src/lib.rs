@@ -33,6 +33,7 @@ pub mod live;
 pub mod lsh;
 pub mod pair;
 pub mod pipeline;
+pub mod process;
 pub mod render;
 pub mod report;
 pub mod report_boilerplate;

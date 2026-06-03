@@ -165,6 +165,11 @@
         "icon": "$(expand-all)"
       },
       {
+        "command": "deslop.topOffenders.collapseAll",
+        "title": "Deslop: Collapse All Top Offenders",
+        "icon": "$(collapse-all)"
+      },
+      {
         "command": "deslop.refresh",
         "title": "Deslop: Refresh",
         "icon": "$(refresh)"
@@ -218,9 +223,14 @@
           "group": "navigation@4"
         },
         {
-          "command": "deslop.refresh",
+          "command": "deslop.topOffenders.collapseAll",
           "when": "view == deslop.topOffenders",
           "group": "navigation@5"
+        },
+        {
+          "command": "deslop.refresh",
+          "when": "view == deslop.topOffenders",
+          "group": "navigation@6"
         },
         {
           "command": "deslop.refresh",

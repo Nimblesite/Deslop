@@ -36,6 +36,11 @@ function commandTitle(pkg: PackageContribution, command: string): string | undef
   return pkg.contributes.commands.find((item) => item.command === command)?.title;
 }
 
+function navigationOrder(group?: string): number {
+  const match = /navigation@(\d+)/.exec(group ?? "");
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
 suite("package menu contributions", () => {
   test("extension id stays aligned with the released VSIX id", () => {
     const pkg = extensionPackage();
@@ -102,6 +107,38 @@ suite("package menu contributions", () => {
           item.when?.includes("occurrenceCanonical"),
       ),
       "canonical occurrence rows must not expose compare with canonical",
+    );
+  });
+
+  test("Expand All and Collapse All are adjacent Top Offenders title actions", () => {
+    // [VSIX-TOP-OFFENDERS-TOOLBAR] The two bulk actions must sit next to each
+    // other in the title bar, with no other action between them.
+    const pkg = extensionPackage();
+    const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter((item) =>
+      item.when?.includes("view == deslop.topOffenders"),
+    );
+    const ordered = titleItems
+      .filter((item) => navigationOrder(item.group) !== Number.MAX_SAFE_INTEGER)
+      .slice()
+      .sort((left, right) => navigationOrder(left.group) - navigationOrder(right.group))
+      .map((item) => item.command);
+
+    const expandIndex = ordered.indexOf("deslop.topOffenders.expandAll");
+    const collapseIndex = ordered.indexOf("deslop.topOffenders.collapseAll");
+    assert.ok(expandIndex >= 0, "Expand All must be a Top Offenders title action");
+    assert.ok(collapseIndex >= 0, "Collapse All must be a Top Offenders title action");
+    assert.equal(
+      collapseIndex,
+      expandIndex + 1,
+      `Expand All and Collapse All must be adjacent in the title bar, got order: ${ordered.join(", ")}`,
+    );
+    assert.equal(
+      commandTitle(pkg, "deslop.topOffenders.collapseAll"),
+      "Deslop: Collapse All Top Offenders",
+    );
+    assert.equal(
+      commandTitle(pkg, "deslop.topOffenders.expandAll"),
+      "Deslop: Expand All Top Offenders",
     );
   });
 

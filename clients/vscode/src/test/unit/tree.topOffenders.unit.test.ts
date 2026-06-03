@@ -982,4 +982,145 @@ suite("TopOffendersProvider", () => {
       );
     });
   });
+
+  // [VSIX-TOP-OFFENDERS-SORT] The sort axis reorders cluster-mode rows too —
+  // impact keeps worst-first, path is alphabetical — while the global rank #N
+  // stays pinned to the report's worst-first order.
+  test("cluster mode sort axis reorders clusters: impact worst-first, path alphabetical (rank unchanged)", async () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([cluster("heavy", 100, "/repo/z.cs"), cluster("light", 50, "/repo/a.cs")]),
+      0,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+
+    const impact = provider.getChildren();
+    assert.match(labelText(impact[0] as vscode.TreeItem), /z\.cs/, "impact: heaviest cluster first");
+    assert.match(labelText(impact[1] as vscode.TreeItem), /a\.cs/);
+
+    await withSetting("topOffenders.sortBy", "path", () => {
+      const byPath = provider.getChildren();
+      assert.match(labelText(byPath[0] as vscode.TreeItem), /a\.cs/, "path: alphabetically-first cluster leads");
+      assert.match(labelText(byPath[1] as vscode.TreeItem), /z\.cs/);
+      const aRow = byPath.find((node) => /a\.cs/.test(labelText(node)));
+      assert.match(
+        String(aRow?.description ?? ""),
+        /\brank\s+#2\b/,
+        "the path-sorted display never renumbers the global rank — a.cs's cluster is still rank #2",
+      );
+    });
+  });
+
+  // [VSIX-TOP-OFFENDERS-SORT] Occurrences inside a cluster sort by the axis too,
+  // but the canonical badge follows the occurrence identity (original index 0),
+  // never the display position.
+  test("within-cluster occurrences sort by path; canonical identity stays on the original occurrence", async () => {
+    const multi = withOccurrences(cluster("multi", 10, "/repo/zzz.cs"), [
+      reportOccurrence("/repo/zzz.cs", 0, 9),
+      reportOccurrence("/repo/aaa.cs", 0, 9),
+    ]);
+    const store = new ReportStore();
+    store.setSnapshot(report([multi]), 0);
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const [root] = provider.getChildren();
+    assert.ok(root, "cluster root must exist");
+
+    const impactOccurrences = provider.getChildren(root);
+    assert.match(labelText(impactOccurrences[0] as vscode.TreeItem), /zzz\.cs/, "impact: canonical occurrence first");
+    assert.equal(impactOccurrences[0]?.contextValue, "deslop.occurrenceCanonical");
+
+    await withSetting("topOffenders.sortBy", "path", () => {
+      const pathOccurrences = provider.getChildren(root);
+      assert.match(
+        labelText(pathOccurrences[0] as vscode.TreeItem),
+        /aaa\.cs/,
+        "path: the alphabetically-first occurrence is displayed first",
+      );
+      assert.equal(
+        pathOccurrences[0]?.contextValue,
+        "deslop.occurrence",
+        "the alphabetically-first occurrence is NOT falsely marked canonical",
+      );
+      const canonicalNode = pathOccurrences.find((node) => /zzz\.cs/.test(labelText(node)));
+      assert.equal(
+        canonicalNode?.contextValue,
+        "deslop.occurrenceCanonical",
+        "canonical identity follows the original occurrence (index 0), not the display position",
+      );
+    });
+  });
+
+  // [VSIX-TOP-OFFENDERS-TOOLBAR] Expand All / Collapse All rewrite the collapsible
+  // state the provider returns and release on the next data change.
+  test("Expand All / Collapse All set the collapsible state the provider returns; released on data change", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([cluster("a", 100, "/repo/A.cs"), cluster("b", 80, "/repo/B.cs")]),
+      1,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    let fires = 0;
+    const sub = provider.onDidChangeTreeData(() => {
+      fires += 1;
+    });
+    try {
+      const naturalFirst = provider.getChildren()[0] as vscode.TreeItem;
+      assert.equal(
+        provider.getTreeItem(naturalFirst).collapsibleState,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        "clusters default to collapsed",
+      );
+
+      provider.setBulkExpansion("expand");
+      assert.ok(fires >= 1, "Expand All refreshes the tree");
+      assert.equal(
+        provider.getTreeItem(provider.getChildren()[0] as vscode.TreeItem).collapsibleState,
+        vscode.TreeItemCollapsibleState.Expanded,
+        "Expand All forces every expandable row open",
+      );
+
+      provider.setBulkExpansion("collapse");
+      assert.equal(
+        provider.getTreeItem(provider.getChildren()[0] as vscode.TreeItem).collapsibleState,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        "Collapse All forces every expandable row closed",
+      );
+
+      provider.setBulkExpansion("expand");
+      store.setSnapshot(
+        report([cluster("a", 100, "/repo/A.cs"), cluster("b", 80, "/repo/B.cs")]),
+        2,
+      );
+      assert.equal(
+        provider.getTreeItem(provider.getChildren()[0] as vscode.TreeItem).collapsibleState,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        "a fresh report releases the bulk override back to the natural collapsed state",
+      );
+    } finally {
+      sub.dispose();
+    }
+  });
+
+  // [VSIX-VIEW-STATE-UI-ONLY] Sorting is a pure presentation transform: it reorders
+  // the rows already in the store and never re-fetches — the generation is untouched.
+  test("sorting is UI-only: flipping the axis reorders existing rows without bumping the generation", async () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([cluster("heavy", 100, "/repo/z.cs"), cluster("light", 50, "/repo/a.cs")]),
+      7,
+    );
+    const provider = new TopOffendersProvider(store, new StatusTicker());
+    const impactOrder = provider.getChildren().map(labelText);
+
+    await withSetting("topOffenders.sortBy", "path", () => {
+      const pathOrder = provider.getChildren().map(labelText);
+      assert.notDeepEqual(pathOrder, impactOrder, "the sort axis actually changes the displayed order");
+      assert.match(pathOrder[0] ?? "", /a\.cs/, "path order leads with the alphabetically-first file");
+      assert.equal(
+        store.current.generation,
+        7,
+        "sorting must NOT bump the generation — it re-renders the same store data, never re-fetching from the LSP",
+      );
+    });
+  });
 });

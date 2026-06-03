@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 
 use tree_sitter::Node;
 
-use super::{parse_for, trimmed_snippet_range, Snippet};
+use super::{parse_for, spans_multiple_files, trimmed_snippet_range, Snippet};
 use crate::{ast::ByteRange, state::FileId};
 
 /// Detects **issue #100**: ORM / dataclass / Pydantic constructor calls
@@ -27,11 +27,8 @@ pub(super) fn is_kwargs_only_constructor_cluster(snippets: &[Snippet<'_>]) -> bo
     let shapes: Option<Vec<KwargsCtorShape>> =
         snippets.iter().map(kwargs_constructor_shape).collect();
     let Some(shapes) = shapes else { return false };
-    let mut files = BTreeSet::new();
-    for shape in &shapes {
-        let _inserted = files.insert(shape.file_id);
-    }
-    files.len() >= 2 && kwargs_ctor_shapes_differ(&shapes)
+    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
+        && kwargs_ctor_shapes_differ(&shapes)
 }
 
 /// Per-member shape recorded for kwargs-only constructor clusters.

@@ -107,33 +107,49 @@ suite("DecorationManager redraw", () => {
     manager.dispose();
   });
 
-  test("redraws when onDidChangeTextDocument fires", async () => {
+  test("does NOT schedule a redraw on a document edit — only on report/visibility changes (VSIX-PERF)", async () => {
+    // The core proof that decorations do no work per keystroke: a buffer edit must
+    // schedule ZERO decoration redraws (decorations are file-change driven), while
+    // a fresh report — the file-change-driven analysis update — schedules one.
     const doc = await vscode.workspace.openTextDocument({
-      content: "abc",
+      content: "abcdef",
       language: "plaintext",
     });
     const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
-    const manager = new DecorationManager(store, immediate);
-    store.setSnapshot(report([cluster(doc.uri.fsPath)]), 0);
-    await editor.edit((b) => b.insert(new vscode.Position(0, 0), "z"));
-    manager.dispose();
+    const scheduler = capturingScheduler();
+    const manager = new DecorationManager(store, scheduler.schedule);
+    try {
+      const afterConstruct = scheduler.armed;
+      await editor.edit((builder) => builder.insert(new vscode.Position(0, 0), "z"));
+      await editor.edit((builder) => builder.insert(new vscode.Position(0, 0), "y"));
+      assert.equal(
+        scheduler.armed,
+        afterConstruct,
+        "a document edit must schedule no decoration redraw — decorations react to file changes, not keystrokes",
+      );
+      store.setSnapshot(report([cluster(doc.uri.fsPath)]), 1);
+      assert.ok(
+        scheduler.armed > afterConstruct,
+        "a report change (file-change-driven analysis update) DOES schedule a decoration redraw",
+      );
+    } finally {
+      manager.dispose();
+    }
   });
 
-  test("redraw without a report clears the editor decorations", async () => {
-    // Covers the null-report short-circuit in flush + the clear helper. An editor
-    // edit before any snapshot has landed must route through clear() and produce
-    // empty decoration sets rather than crashing.
+  test("clears decorations through the visibility path when there is no report", async () => {
+    // Covers the null-report short-circuit in flush + the clear helper, driven by a
+    // visible-editor change rather than a keystroke.
     const doc = await vscode.workspace.openTextDocument({
       content: "qwerty",
       language: "plaintext",
     });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     assert.equal(store.current.report, null, "fresh ReportStore starts with a null report");
     const manager = new DecorationManager(store, immediate);
     try {
-      await editor.edit((b) => b.insert(new vscode.Position(0, 0), "!"));
+      await vscode.window.showTextDocument(doc);
     } finally {
       manager.dispose();
     }

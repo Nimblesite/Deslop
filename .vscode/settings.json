@@ -7,5 +7,7 @@
     "titleBar.inactiveForeground": "#ffffffcc"
   },
   "deslop.embedding.provider": "ollama",
-  "deslop.embedding.model": "nomic-embed-text"
+  "deslop.embedding.model": "nomic-embed-text",
+  "deslop.topOffenders.splitByLanguage": false,
+  "deslop.topOffenders.sortBy": "impact"
 }

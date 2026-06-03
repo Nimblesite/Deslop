@@ -8,13 +8,11 @@
 //! - **#126** [CLONE-NOISE-PY-GENERATED-OUTPUT] — generated-output headers
 //!   shared between generator templates and generated files.
 
-use std::collections::BTreeSet;
-
 use tree_sitter::Node;
 
 use super::{
     contains_bytes, enclosing_kind, node_contains_identifier, parse_for, snippet_range_text,
-    source_head, trim_ascii_start, Snippet,
+    source_head, spans_multiple_files, trim_ascii_start, Snippet,
 };
 use crate::state::FileId;
 
@@ -29,11 +27,7 @@ pub(super) fn is_jwt_hmac_independent_verifier_cluster(snippets: &[Snippet<'_>])
     }
     let shapes: Option<Vec<JwtHmacShape>> = snippets.iter().map(jwt_hmac_shape).collect();
     let Some(shapes) = shapes else { return false };
-    let mut files = BTreeSet::new();
-    for shape in &shapes {
-        let _inserted = files.insert(shape.file_id);
-    }
-    files.len() >= 2
+    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
         && shapes.iter().all(|shape| shape.is_hs256_body)
         && shapes.iter().any(|shape| shape.is_test_source)
         && shapes.iter().any(|shape| !shape.is_test_source)
@@ -88,11 +82,7 @@ pub(super) fn is_generated_template_output_cluster(snippets: &[Snippet<'_>]) -> 
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    files.len() >= 2
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
         && snippets.iter().any(is_generated_header_template_snippet)
         && snippets.iter().any(is_generated_output_source)
 }

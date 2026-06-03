@@ -35,6 +35,12 @@ tokio = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 
+# Unix process-existence probe shared by the LSP and MCP parent-process
+# monitors (`crate::process`). `signal` provides `kill(pid, 0)`. Version
+# kept in lockstep with `deslop-lsp` / `deslop-mcp` per CLAUDE.md.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", default-features = false, features = ["signal"] }
+
 [dev-dependencies]
 anyhow.workspace = true
 tokio = { workspace = true }

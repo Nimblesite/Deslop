@@ -1,11 +1,13 @@
 // Editor decorations per [VSIX-DECORATIONS]: gutter severity bar + 1-pixel underline.
 // No background fill, no emoji, no border boxes.
 //
-// [VSIX-PERF] Redraws are coalesced through a trailing debounce and target only the
-// editors that actually changed, so a keystroke burst collapses into a single pass
-// instead of re-decorating every visible editor on every keypress. The document's
-// byte→UTF-16 buffer is built once per editor-redraw, never once per occurrence, and
-// the severity ranking is memoised per report.
+// [VSIX-PERF] Decorations are driven by the analysis report and editor visibility
+// ONLY — never by raw text edits. Deslop reacts to FILE changes (the LSP's file
+// watcher), so decorations repaint when a fresh report lands or when an editor
+// becomes visible, not on every keystroke. Repaints are coalesced through a
+// trailing debounce, the severity ranking is memoised per report, and each
+// editor's byte→UTF-16 buffer is built once per redraw instead of once per
+// occurrence.
 
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
@@ -27,21 +29,20 @@ interface SeverityCache {
 export class DecorationManager implements vscode.Disposable {
   private readonly byKind: Map<Severity, vscode.TextEditorDecorationType>;
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly dirtyPaths = new Set<string>();
-  private allDirty = false;
   private severityCache: SeverityCache | undefined;
-  private readonly flushDecorations: Debounced;
+  private readonly scheduleRedraw: Debounced;
 
   constructor(private readonly store: ReportStore, schedule?: ScheduleFn) {
     this.byKind = new Map(SEVERITIES.map((kind) => [kind, createDecoration(kind)]));
-    this.flushDecorations = debounce(() => this.flush(), REDRAW_DEBOUNCE_MS, schedule);
+    this.scheduleRedraw = debounce(() => this.flush(), REDRAW_DEBOUNCE_MS, schedule);
     this.disposables.push(
-      // Tracks only visibleReport: a report change re-ranks every cluster and so
-      // re-decorates all editors; lifecycle/embedding ticks are ignored.
-      { dispose: effect(() => { void this.store.visibleReport.value; this.scheduleAll(); }) },
-      vscode.window.onDidChangeVisibleTextEditors(() => this.scheduleAll()),
-      vscode.workspace.onDidChangeTextDocument((event) => this.scheduleDocument(event.document)),
-      { dispose: () => this.flushDecorations.cancel() },
+      // Repaint when the report changes (a file-change-driven analysis update — an
+      // unsaved edit reaches this via the dirty projection on visibleReport) or when
+      // the set of visible editors changes. Deliberately NOT subscribed to
+      // onDidChangeTextDocument: decorations do no work per keystroke.
+      { dispose: effect(() => { void this.store.visibleReport.value; this.scheduleRedraw(); }) },
+      vscode.window.onDidChangeVisibleTextEditors(() => this.scheduleRedraw()),
+      { dispose: () => this.scheduleRedraw.cancel() },
     );
   }
 
@@ -50,36 +51,14 @@ export class DecorationManager implements vscode.Disposable {
     for (const dt of this.byKind.values()) dt.dispose();
   }
 
-  // A report or visible-editor change can re-rank every cluster, so all editors
-  // must be re-decorated on the next flush.
-  private scheduleAll(): void {
-    this.allDirty = true;
-    this.flushDecorations();
-  }
-
-  // A text edit only affects decorations in that document's editors.
-  private scheduleDocument(document: vscode.TextDocument): void {
-    this.dirtyPaths.add(document.uri.fsPath);
-    this.flushDecorations();
-  }
-
   private flush(): void {
-    const editors = this.targetEditors();
-    this.allDirty = false;
-    this.dirtyPaths.clear();
     const report = this.store.visibleReport.value;
     if (!report) {
-      for (const editor of editors) this.clear(editor);
+      for (const editor of vscode.window.visibleTextEditors) this.clear(editor);
       return;
     }
     const severities = this.severitiesFor(report);
-    for (const editor of editors) this.redraw(editor, report, severities);
-  }
-
-  private targetEditors(): readonly vscode.TextEditor[] {
-    const visible = vscode.window.visibleTextEditors;
-    if (this.allDirty) return visible;
-    return visible.filter((editor) => this.dirtyPaths.has(editor.document.uri.fsPath));
+    for (const editor of vscode.window.visibleTextEditors) this.redraw(editor, report, severities);
   }
 
   private severitiesFor(report: Report): Map<string, Severity> {
@@ -90,8 +69,9 @@ export class DecorationManager implements vscode.Disposable {
   }
 
   // [VSIX-STATE-DIRTY]: render from the visible projection so decorations vanish
-  // immediately when the user types into a duplicated file. The document buffer is
-  // built lazily and exactly once — only when this editor actually owns an occurrence.
+  // immediately when the user edits a duplicated file (its occurrences are elided
+  // from the projection). The document buffer is built lazily and exactly once —
+  // only when this editor actually owns an occurrence.
   private redraw(editor: vscode.TextEditor, report: Report, severities: Map<string, Severity>): void {
     const activePath = editor.document.uri.fsPath;
     const buckets = new Map<Severity, vscode.DecorationOptions[]>(SEVERITIES.map((kind) => [kind, []]));

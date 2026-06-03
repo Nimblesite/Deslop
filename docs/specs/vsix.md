@@ -186,10 +186,10 @@ Colour is never the only signal. The category text remains in the visible label,
 
 Sibling order is an axis orthogonal to the grouping mode, persisted via `deslop.topOffenders.sortBy` (`"impact"` | `"path"`, default `"impact"`). A view-title toggle flips it, writing to the workspace target like the grouping toggle; unknown / missing values fall back to `"impact"`.
 
-- **impact** (default) — worst-offender first: files and folders by max cluster weight desc (sum-of-weights desc, then path), clusters by weight desc. This is the product's "worst first" promise ([VSIX-PRINCIPLES] principle 3).
-- **path** — alphabetical by file/folder path (`localeCompare`), so a flat file list or a folder tree reads in filesystem order for navigation.
+- **impact** (default) — worst-offender first: clusters by weight desc, files and folders by max cluster weight desc (sum-of-weights desc, then path). This is the product's "worst first" promise ([VSIX-PRINCIPLES] principle 3). Within a cluster, occurrences keep the report's canonical order (canonical occurrence first).
+- **path** — alphabetical by path (`localeCompare`), so a flat file list, a folder tree, or the occurrences inside a cluster read in filesystem order for navigation.
 
-The sort axis reorders **file mode** and **folder mode** roots and their descendants. **Cluster mode** is by definition the report's worst-first list and always renders in impact order; `sortBy` does not reorder it. Sorting is presentation-only: it never changes a cluster's global rank ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
+The sort axis reorders the **display order in every grouping mode** — cluster, file, and folder roots and their descendants, **plus the occurrences inside a cluster**. The global rank #N is read from the report's worst-first order and is never renumbered ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]), so a path-sorted cluster row still shows its true `rank #N`. Sorting is presentation-only — it never re-fetches or re-analyses ([VSIX-VIEW-STATE-UI-ONLY]).
 
 #### [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Per-language split
 
@@ -197,9 +197,20 @@ The sort axis reorders **file mode** and **folder mode** roots and their descend
 
 Language is derived from each cluster's representative occurrence path via the shared `languageForPath()` helper, which mirrors the core `language_for_path()` ([OUTPUT-HUMAN-HTML]). A single-language workspace renders exactly one group, so the split adds no noise. Global rank is preserved across and within groups ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]); a language group's description carries its worst weight and cluster count. The setting persists to the workspace target and exposes a view-title toggle like the other two axes.
 
+#### [VSIX-VIEW-STATE-UI-ONLY] Grouping, sorting, and filtering are UI-only
+
+Grouping ([VSIX-TOP-OFFENDERS-GROUPING]), sorting ([VSIX-TOP-OFFENDERS-SORT]), the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]), Expand All / Collapse All ([VSIX-TOP-OFFENDERS-TOOLBAR]), and the dirty-file projection ([VSIX-STATE-DIRTY]) are **pure presentation transforms over the report already held in the [VSIX-STATE] store**. This is non-negotiable:
+
+- **They never reach the engine.** Flipping a sort axis, changing the grouping mode, expanding the tree, or toggling the language split does **not** send an LSP request, trigger a re-scan, or invalidate the on-disk cache. The provider re-reads the persisted view-state and rebuilds its rows from `store.current.visibleReport` on the next `onDidChangeTreeData` fire. No round-trip means no spinner and no latency — the reorder is instant and synchronous.
+- **They never mutate the canonical report.** The only writers of the canonical report are `setSnapshot` / `applyDelta`, driven by `deslop/reportChanged` — i.e. an actual **file change** picked up by the file watcher, never a view toggle.
+
+The single deliberate exception is the **Refresh** button (`deslop.refresh` → `deslop/refreshReport`): an explicit, user-initiated force of a full re-analysis. Everything else in the toolbar is local. A view toggle that triggers a re-analysis is a correctness bug, not a feature.
+
 #### [VSIX-TOP-OFFENDERS-TOOLBAR] Collapse / expand / refresh actions
 
-After the grouping/sort/split toggles (`navigation@1`), the Top Offenders title bar carries three icon actions in `group: navigation`: **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`), **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`), and **Refresh** (`$(refresh)`, `deslop.refresh`). Collapse All uses VS Code's built-in `TreeView.collapseAll()`; Expand All reveals each cluster node one level via `TreeView.reveal(node, { expand: true })`; Refresh forces a full workspace re-scan. They render as toolbar icons — not only the `…` overflow — and work in every grouping mode. The Session panel carries the same Collapse All and Refresh actions for consistency.
+After the grouping/sort/split toggles (`navigation@1`–`@3`), the Top Offenders title bar carries three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@4`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@5`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@6`).
+
+Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBulkExpansion`): the provider rewrites the collapsible state it returns from `getTreeItem` and fires `onDidChangeTreeData`, so the whole tree expands or collapses **in one shot at every level** — reliable in cluster, file, and folder mode, not just the first level (which is why we do not use the one-level `TreeView.reveal({ expand: true })` or rely on the built-in `showCollapseAll` button, which would render a second, detached collapse action). The override is presentation-only ([VSIX-VIEW-STATE-UI-ONLY]) and is released on the next data change. **Refresh** is the one toolbar action that reaches the engine — it forces a full workspace re-scan. The Session and Duplication panels keep VS Code's built-in Collapse All for consistency.
 
 #### [VSIX-METRICS-PANEL] Duplication panel
 

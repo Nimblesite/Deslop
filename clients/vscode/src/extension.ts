@@ -115,12 +115,12 @@ export async function activate(
   const topOffenders = new TopOffendersProvider(reportStore, ticker);
   const metrics = new MetricsProvider(reportStore, ticker);
   const session = new SessionProvider(reportStore, ticker, () => client);
-  // [VSIX-TOP-OFFENDERS-TOOLBAR] createTreeView with showCollapseAll
-  // gives the built-in Collapse All button; Expand All reveals each root
-  // one level.
+  // [VSIX-TOP-OFFENDERS-TOOLBAR] Expand All / Collapse All are provider-driven
+  // (setBulkExpansion) so they reliably reach every level and sit adjacent in the
+  // title bar — no built-in showCollapseAll, which would render a second,
+  // detached collapse button.
   const topOffendersView = vscode.window.createTreeView("deslop.topOffenders", {
     treeDataProvider: topOffenders,
-    showCollapseAll: true,
   });
   context.subscriptions.push(
     topOffenders,
@@ -139,9 +139,10 @@ export async function activate(
       initOutputChannel().show(true),
     ),
     vscode.commands.registerCommand("deslop.topOffenders.expandAll", () => {
-      for (const root of topOffenders.getChildren()) {
-        void topOffendersView.reveal(root, { expand: true }).then(undefined, () => undefined);
-      }
+      topOffenders.setBulkExpansion("expand");
+    }),
+    vscode.commands.registerCommand("deslop.topOffenders.collapseAll", () => {
+      topOffenders.setBulkExpansion("collapse");
     }),
     vscode.commands.registerCommand("deslop.refresh", () => {
       topOffenders.refresh();

@@ -22,7 +22,7 @@ use tree_sitter::Node;
 
 use super::{
     enclosing_kind, node_contains_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
-    trimmed_snippet_range, Snippet,
+    spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::{ast::ByteRange, state::FileId};
 
@@ -34,11 +34,8 @@ pub(super) fn is_pytest_fixture_boilerplate_cluster(snippets: &[Snippet<'_>]) ->
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    files.len() >= 2 && snippets.iter().all(is_pytest_fixture_snippet)
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
+        && snippets.iter().all(is_pytest_fixture_snippet)
 }
 
 /// Returns true when the snippet belongs to a Python function decorated
@@ -111,11 +108,7 @@ pub(super) fn is_python_assertion_only_cluster(snippets: &[Snippet<'_>]) -> bool
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    files.len() >= 2
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
         && raw_snippet_texts_differ(snippets)
         && snippets.iter().all(is_python_assertion_only_snippet)
 }
@@ -165,11 +158,8 @@ pub(super) fn is_chained_dict_assert_cluster(snippets: &[Snippet<'_>]) -> bool {
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    files.len() >= 2 && snippets.iter().all(is_chained_dict_assert_snippet)
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
+        && snippets.iter().all(is_chained_dict_assert_snippet)
 }
 
 /// Returns true when `snippet` lives inside a pytest `test_*` function
@@ -277,11 +267,8 @@ pub(super) fn is_test_dict_literal_cluster(snippets: &[Snippet<'_>]) -> bool {
     let shapes: Option<Vec<DictLiteralShape>> =
         snippets.iter().map(test_dict_literal_shape).collect();
     let Some(shapes) = shapes else { return false };
-    let mut files = BTreeSet::new();
-    for shape in &shapes {
-        let _inserted = files.insert(shape.file_id);
-    }
-    files.len() >= 2 && dict_literal_key_sets_differ(&shapes)
+    spans_multiple_files(shapes.iter().map(|shape| shape.file_id))
+        && dict_literal_key_sets_differ(&shapes)
 }
 
 /// Per-member shape: the set of string keys declared by the dict

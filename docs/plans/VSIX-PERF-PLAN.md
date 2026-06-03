@@ -2,9 +2,10 @@
 
 **Symptom.** On a large codebase the editor UI slows to a crawl. CPU/memory are *not*
 saturated, which points squarely at synchronous work on the **extension-host thread**
-(the VS Code "main" thread). It is worst *whenever a change happens* — i.e. per
-keystroke — which is the classic signature of an un-debounced edit handler doing
-report-sized work.
+(the VS Code "main" thread). It is worst *whenever a change happens* — the classic
+signature of an un-debounced edit handler doing report-sized work on every document
+edit. Deslop reacts to **file changes** (the LSP's file watcher), so the VSIX must do
+no report-sized work per edit on the UI thread.
 
 **Server is not the bottleneck.** The Rust LSP already coalesces work: a debounce of
 250 ms quiet / 2000 ms cap (`crates/deslop-core/src/live/debouncer.rs`), emits clusters
@@ -17,18 +18,24 @@ The flood is entirely **local to the extension host**.
 
 ## Verified root causes (file:line)
 
-### RC1 — Decoration redraw is the per-keystroke freeze
-- `clients/vscode/src/decorations/manager.ts:25` — `onDidChangeTextDocument(() => this.redrawAll())`
-  fires on **every keystroke in any document**, with **no debounce**.
-- `:34` `redrawAll()` redraws **every visible editor**, not just the changed one.
-- `:38-63` `redraw()` runs `indexedSeverity(report.clusters)` (O(clusters)) **per editor**
-  and iterates **all clusters × all occurrences**.
-- `:87-99` `byteRangeToRange()` — **per occurrence in the active file**: `document.getText()`
-  (whole doc) + `Buffer.from(text)` (whole doc) + 2× `slice().toString()` + 2× `positionAt()`.
-- `redraw()` reads `this.store.current.visibleReport`; `current` touches **every** signal, so the
-  effect also re-fires on lifecycle/embedding ticks.
+### RC1 — Decoration redraw was edit-driven and unbounded
+- `clients/vscode/src/decorations/manager.ts` — `onDidChangeTextDocument(() => this.redrawAll())`
+  fired on **every document edit**, with **no debounce**.
+- `redrawAll()` redrew **every visible editor**, not just the changed one.
+- `redraw()` ran `indexedSeverity(report.clusters)` (O(clusters)) **per editor** and iterated
+  **all clusters × all occurrences**.
+- `byteRangeToRange()` — **per occurrence in the active file**: `document.getText()` (whole doc) +
+  `Buffer.from(text)` (whole doc) + 2× `slice().toString()` + 2× `positionAt()`.
+- `redraw()` read `this.store.current.visibleReport`; `current` touches **every** signal, so the
+  effect also re-fired on lifecycle/embedding ticks.
 
-  → Per keystroke ≈ `O(occurrences-in-file × document-size)` allocations on the main thread.
+  → Per edit ≈ `O(occurrences-in-file × document-size)` allocations on the main thread.
+
+  **Resolution:** decorations no longer subscribe to `onDidChangeTextDocument` at all. They are
+  driven by the report signal (a file-change-driven analysis update — an unsaved edit reaches them
+  via the dirty projection on `visibleReport`) and by editor-visibility changes, coalesced through
+  a trailing debounce, with the document buffer built once per redraw. The VSIX does **zero**
+  report-sized work per edit.
 
 ### RC2 — Webview push does synchronous file I/O per occurrence
 - `clients/vscode/src/locations.ts:44-46` — `readOccurrenceSource()` = `fs.readFileSync` **per

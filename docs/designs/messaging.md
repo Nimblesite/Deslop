@@ -15,7 +15,7 @@ This document is the single source of visual, typographic, and interaction truth
 
 ## Voice & Positioning
 
-Deslop is a **live duplicate-code analysis server** — an LSP + MCP server that runs in the workspace and streams real-time clone signals to the human's editor and the AI coding agent driving that editor (Claude Code, Cursor, Copilot, Continue, Codex…). Coding agents generate plausible code at a rate that outpaces human review; a human reviewer's instinct for "I have seen this before" does not scale past a few hundred thousand tokens of generated surface area, and a batch CI report arrives after the copy-paste has already landed. Deslop restores that instinct at the instant the keystroke happens — mechanically, deterministically, and fed back to both audiences over the same running engine.
+Deslop is a **live duplicate-code analysis server** — an LSP + MCP server that runs in the workspace and streams real-time clone signals to the human's editor and the AI coding agent driving that editor (Claude Code, Cursor, Copilot, Continue, Codex…). Coding agents generate plausible code at a rate that outpaces human review; a human reviewer's instinct for "I have seen this before" does not scale past a few hundred thousand tokens of generated surface area, and a batch CI report arrives after the copy-paste has already landed. A file watcher drives the engine: the moment a file changes, a debounced re-analysis updates the live report. Deslop restores that instinct the moment the duplicate lands — mechanically, deterministically, and fed back to both audiences over the same running engine.
 
 The CLI is the cold-cache fallback. The *server* is the product.
 
@@ -23,7 +23,7 @@ The brand voice is **academic in construction, urgent in tone**. Read it aloud a
 
 ### Primary claims
 
-- **Live server, not a batch scanner.** A long-running process (LSP for editors, MCP for agents) that re-analyses on every keystroke within a debounce budget — not a script that prints a report and exits.
+- **Live server, not a batch scanner.** A long-running process (LSP for editors, MCP for agents), driven by a file watcher that re-analyses on every file change within a debounce budget — not a script that prints a report and exits.
 - **Feeds AI agents mid-generation.** Over MCP, the agent can ask *"is something like this already in the repo?"* before writing a single token. Duplication gets prevented, not audited.
 - **Feeds humans inline.** Over LSP, the editor lights up the cluster at end-of-line while the developer is still typing.
 - **Same engine on every surface.** LSP, MCP, CLI, webview — one `deslop-core` pipeline, one cache, one schema. Cold start and hot-path are the same code.
@@ -35,7 +35,7 @@ The brand voice is **academic in construction, urgent in tone**. Read it aloud a
 
 - "Duplicate-code detector." Too passive — implies a batch scanner. Say *live duplicate-code server* or *live analysis engine*.
 - "Runs on your repo." Implies a one-shot scan. Say *runs in your workspace* or *lives alongside your editor*.
-- "Solves duplication." It reveals duplication, on the keystroke. Acting on the finding is still the developer's or agent's job.
+- "Solves duplication." It reveals duplication, the moment it lands. Acting on the finding is still the developer's or agent's job.
 - "AI-powered." The tool uses embeddings; it is not sold on hype. Lead with the technique, not the buzzword.
 - Exclamation marks in product copy. They undermine authority. Reserve urgency for verbs.
 

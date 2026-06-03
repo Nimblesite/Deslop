@@ -15,7 +15,10 @@ use std::collections::BTreeSet;
 
 use tree_sitter::Node;
 
-use super::{enclosing_kind, parse_for, Snippet};
+use super::{
+    enclosing_kind, node_intersects_range, parse_for, spans_multiple_files, trimmed_snippet_range,
+    Snippet,
+};
 use crate::ast::ByteRange;
 
 /// Detects **issue #75**: the Rust source files that implement the
@@ -27,11 +30,7 @@ pub(super) fn is_rust_language_parser_adapter_cluster(snippets: &[Snippet<'_>]) 
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    if files.len() < 2 {
+    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
     let shapes: Option<Vec<RustImplShape>> = snippets
@@ -166,11 +165,8 @@ pub(super) fn is_rust_iter_collect_idiom_cluster(snippets: &[Snippet<'_>]) -> bo
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    files.len() >= 2 && snippets.iter().all(snippet_contains_iter_collect_idiom)
+    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
+        && snippets.iter().all(snippet_contains_iter_collect_idiom)
 }
 
 /// Per-member signature for the Rust top-level declaration filter.
@@ -184,7 +180,7 @@ struct DeclSignature {
 /// returns `None` when the member is not a single bodiless mod / use.
 fn decl_signature(snippet: &Snippet<'_>) -> Option<DeclSignature> {
     let tree = parse_for(snippet)?;
-    let range = trimmed_range(snippet)?;
+    let range = trimmed_snippet_range(snippet)?;
     let node = top_level_decl_node(tree.root_node(), range)?;
     let identifier = decl_identifier_bytes(node, snippet.source)?;
     Some(DeclSignature { identifier })
@@ -246,7 +242,7 @@ fn snippet_contains_iter_collect_idiom(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
-    let range = match trimmed_range(snippet) {
+    let range = match trimmed_snippet_range(snippet) {
         Some(range) => range,
         None => snippet.range,
     };
@@ -421,20 +417,4 @@ fn field_expression_projects_closure_arg(
     }
     node.child_by_field_name("field")
         .is_some_and(|field| field.kind() == "field_identifier")
-}
-
-/// Returns true when `node` overlaps `range`.
-fn node_intersects_range(node: Node<'_>, range: ByteRange) -> bool {
-    node.start_byte() < range.end && node.end_byte() > range.start
-}
-
-/// Trims ASCII whitespace off both ends of `snippet.range` so a trailing
-/// newline does not push the matched node outside the reported range.
-fn trimmed_range(snippet: &Snippet<'_>) -> Option<ByteRange> {
-    let bytes = snippet.source.get(snippet.range.start..snippet.range.end)?;
-    let leading = bytes.iter().position(|byte| !byte.is_ascii_whitespace())?;
-    let trailing = bytes.iter().rposition(|byte| !byte.is_ascii_whitespace())?;
-    let start = snippet.range.start.checked_add(leading)?;
-    let end = snippet.range.start.checked_add(trailing)?.checked_add(1)?;
-    Some(ByteRange { start, end })
 }
