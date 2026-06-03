@@ -16,7 +16,7 @@ use blake3::Hasher;
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
+    boilerplate::{is_boilerplate, is_import_boilerplate_only_subtree},
     fingerprint::{is_literal_data_item, is_literal_data_subtree, Fingerprint},
 };
 
@@ -223,12 +223,4 @@ fn subtree_hash(node: &NormalizedNode) -> [u8; 32] {
         let _ = hasher.update(&child_hash);
     }
     hasher.finalize().into()
-}
-
-/// Returns true when `node` starts or consists entirely of boilerplate.
-fn is_boilerplate(language: Option<&str>, node: &NormalizedNode) -> bool {
-    language.is_some_and(|lang| {
-        is_import_boilerplate_carrier(lang, node.kind)
-            || is_import_boilerplate_only_subtree(lang, node)
-    })
 }

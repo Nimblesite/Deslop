@@ -230,6 +230,16 @@ pub(super) fn node_intersects_range(node: Node<'_>, range: ByteRange) -> bool {
     node.start_byte() < range.end && node.end_byte() > range.start
 }
 
+/// Returns true when `file_ids` cover at least two distinct files.
+///
+/// Cluster-noise filters require cross-file spread before they fire: a
+/// pattern repeated only within a single file is not the cross-file
+/// duplication they guard against. Centralising the `BTreeSet` count keeps
+/// every per-language filter's "≥ 2 distinct files" gate identical.
+pub(super) fn spans_multiple_files(file_ids: impl IntoIterator<Item = FileId>) -> bool {
+    file_ids.into_iter().collect::<BTreeSet<FileId>>().len() >= 2
+}
+
 /// Returns true when at least two raw reported snippet ranges differ.
 pub(super) fn raw_snippet_texts_differ(snippets: &[Snippet<'_>]) -> bool {
     let Some(first) = snippets.first().and_then(snippet_range_text) else {
@@ -361,11 +371,7 @@ fn is_polymorphic_signature_cluster(snippets: &[Snippet<'_>]) -> bool {
     if !names.iter().all(|name| name == first_name) {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    if files.len() < 2 {
+    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
     enclosing_function_bodies_differ(snippets)

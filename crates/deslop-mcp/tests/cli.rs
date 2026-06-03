@@ -286,6 +286,40 @@ fn wait_for_socket(root: &Path) -> Result<()> {
     ))
 }
 
+/// Polls `tool` (invoked with `args`) until its reported
+/// `/total_clusters` drops below `target`, returning the final
+/// structured result. A `filesChanged` reload is observable over IPC the
+/// instant the analysis pass commits, but the LSP's watcher-driven
+/// scheduler can debounce a second pass for the same edit; under heavy
+/// CI load that pass can land in the window between the synchronous
+/// refresh and the read. This bounded poll waits for the report to
+/// settle to its post-reload state — returning on the first satisfying
+/// read (the common case, no added latency) — so the caller's assertion
+/// observes steady state instead of a transient. On deadline it returns
+/// the last read so a genuine "cluster never removed" regression still
+/// fails the caller's assertion.
+fn poll_total_clusters_below(
+    child: &mut McpChild,
+    tool: &str,
+    args: &Value,
+    target: u64,
+) -> Result<Value> {
+    let started = std::time::Instant::now();
+    let mut latest = Value::Null;
+    while started.elapsed() < Duration::from_secs(30) {
+        latest = structured_tool_result(&call_tool(child, tool, args)?)?;
+        if value_get(&latest, "/total_clusters")?
+            .as_u64()
+            .unwrap_or(u64::MAX)
+            < target
+        {
+            return Ok(latest);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Ok(latest)
+}
+
 trait WaitTimeout {
     fn wait_timeout(
         &mut self,
@@ -2607,12 +2641,15 @@ fn files_changed_notification_triggers_reanalysis() -> Result<()> {
         "notifications/deslop/filesChanged",
         &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
     )?;
-    // mark_changed reloads the state file synchronously; next report-get sees the new data.
-    let after = structured_tool_result(&call_tool(
+    // mark_changed triggers the reload; poll until the report settles to
+    // its post-reload state so the watcher-debounced pass cannot race the
+    // read under heavy CI load (see poll_total_clusters_below).
+    let after = poll_total_clusters_below(
         &mut child,
         "report-get",
         &json!({ "offset": 0, "limit": 100 }),
-    )?)?;
+        before_count,
+    )?;
     let after_count = value_get(&after, "/total_clusters")?.as_u64().unwrap_or(0);
     assert!(
         after_count < before_count,
@@ -2671,11 +2708,12 @@ fn issue_77_session_config_reports_incremental_true_after_mutation_reload() -> R
         &json!({ "paths": [temp.path().join("Two.cs").to_string_lossy().into_owned()] }),
     )?;
 
-    let after_top = structured_tool_result(&call_tool(
+    let after_top = poll_total_clusters_below(
         &mut child,
         "top-offenders",
         &json!({ "n": 100 }),
-    )?)?;
+        before_count,
+    )?;
     let after_count = value_get(&after_top, "/total_clusters")?
         .as_u64()
         .unwrap_or(0);

@@ -120,7 +120,7 @@ fn start_parent_monitor() {}
 fn monitor_parent(parent_process_id: u32) -> ! {
     loop {
         if current_parent_process_id() != Some(parent_process_id)
-            || !process_exists(parent_process_id)
+            || !deslop_core::process::process_is_alive(parent_process_id)
         {
             tracing::warn!(parent_process_id, "mcp parent process disappeared; exiting",);
             std::process::exit(0);
@@ -134,18 +134,6 @@ fn monitor_parent(parent_process_id: u32) -> ! {
 fn current_parent_process_id() -> Option<u32> {
     let raw = nix::unistd::getppid().as_raw();
     u32::try_from(raw).ok().filter(|pid| *pid > 1)
-}
-
-/// Returns whether `process_id` currently resolves to a live process.
-#[cfg(unix)]
-fn process_exists(process_id: u32) -> bool {
-    let Ok(pid_raw) = i32::try_from(process_id) else {
-        return false;
-    };
-    match nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid_raw), None) {
-        Err(nix::errno::Errno::ESRCH) => false,
-        Ok(()) | Err(_) => true,
-    }
 }
 
 /// Installs `tracing_subscriber` against stderr so log lines never

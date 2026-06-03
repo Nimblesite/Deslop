@@ -30,6 +30,7 @@ import {
   getBucketGroupChildren,
   getFileNodeChildren,
   GroupBy,
+  orderedOccurrences,
 } from "./grouping";
 import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
@@ -128,6 +129,7 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   protected readonly emitter = new vscode.EventEmitter<Node | undefined | void>();
   readonly onDidChangeTreeData = this.emitter.event;
   private tickerSub: vscode.Disposable | undefined;
+  private bulkExpansion: "expand" | "collapse" | undefined;
   protected readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -149,6 +151,9 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
       this.tickerSub.dispose();
       this.tickerSub = undefined;
     }
+    // A data change rebuilds rows at their natural collapsed/expanded defaults,
+    // so any one-shot Expand-All / Collapse-All override is released here.
+    this.bulkExpansion = undefined;
     this.emitter.fire();
   }
 
@@ -162,6 +167,15 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
   }
 
   getTreeItem(node: Node): vscode.TreeItem {
+    // [VSIX-TOP-OFFENDERS-TOOLBAR] Apply a pending Expand-All / Collapse-All to
+    // every expandable row. Rows are rebuilt with fresh identity on each fire, so
+    // VS Code honours the collapsible state we hand back here.
+    if (this.bulkExpansion && node.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+      node.collapsibleState =
+        this.bulkExpansion === "expand"
+          ? vscode.TreeItemCollapsibleState.Expanded
+          : vscode.TreeItemCollapsibleState.Collapsed;
+    }
     return node;
   }
 
@@ -169,6 +183,17 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
 
   /** Force a tree rebuild. Used by config-driven view-state changes. */
   refresh(): void {
+    this.emitter.fire();
+  }
+
+  /**
+   * Expand or collapse the whole tree ([VSIX-TOP-OFFENDERS-TOOLBAR]).
+   * Presentation-only: it rewrites the collapsible state the provider hands back
+   * and never touches the report or the LSP ([VSIX-VIEW-STATE-UI-ONLY]). The
+   * override is released on the next data change.
+   */
+  setBulkExpansion(mode: "expand" | "collapse"): void {
+    this.bulkExpansion = mode;
     this.emitter.fire();
   }
 
@@ -213,8 +238,10 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
     if (node instanceof FileNode) return getFileNodeChildren(node);
     if (node instanceof BucketGroupNode) return getBucketGroupChildren(node);
     if (node instanceof ClusterNode) {
-      return node.cluster.occurrences.map((o, i) =>
-        new OccurrenceNode(o, node.cluster, node.rank, i),
+      // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
+      // keeping each one's original index so the canonical badge stays put.
+      return orderedOccurrences(node.cluster, readSortBy()).map(({ occurrence, index }) =>
+        new OccurrenceNode(occurrence, node.cluster, node.rank, index),
       );
     }
     if (node) return [];
@@ -256,7 +283,7 @@ function buildRoots(clusters: ReportCluster[]): Node[] {
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset, severities, rankIndex, sortBy);
     if (groupBy === "folder") return buildFolderMode(subset, severities, rankIndex, sortBy);
-    return buildClusterMode(subset, severities, rankIndex);
+    return buildClusterMode(subset, severities, rankIndex, sortBy);
   };
   if (!readSplitByLanguage()) return build(clusters);
   return groupByLanguage(clusters).map(({ language, clusters: members }) =>

@@ -9,7 +9,7 @@ use blake3::Hasher;
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    boilerplate::{is_import_boilerplate_carrier, is_import_boilerplate_only_subtree},
+    boilerplate::is_boilerplate,
     lang::shared::LITERAL_KIND,
     state::FileId,
 };
@@ -82,12 +82,9 @@ fn hash_and_collect(
     (hash, subtree_node_count)
 }
 
-/// Returns true when `node` should be suppressed from clone fingerprints.
-fn is_boilerplate(language: Option<&str>, node: &NormalizedNode) -> bool {
-    language.is_some_and(|lang| {
-        is_import_boilerplate_carrier(lang, node.kind)
-            || is_import_boilerplate_only_subtree(lang, node)
-    })
+/// Half-open overlap test on two fingerprints' byte ranges.
+pub(crate) fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
+    left.byte_range.start < right.byte_range.end && right.byte_range.start < left.byte_range.end
 }
 
 /// Returns true for one literal-data element inside a literal-only block.

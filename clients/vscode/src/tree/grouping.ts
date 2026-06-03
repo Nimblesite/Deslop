@@ -5,7 +5,7 @@
 // TreeItem construction. Folder-mode building lives in `./folder`,
 // which reuses `groupByFile` / `fileNodeWithChildren` from here.
 
-import { ReportCluster, Severity, resolveBucket, Bucket } from "../types/report";
+import { ReportCluster, ReportOccurrence, Severity, resolveBucket, Bucket } from "../types/report";
 import {
   BucketGroupNode,
   ClusterNode,
@@ -49,18 +49,50 @@ function rankClusters(
   return clusters.map((cluster) => ({ cluster, rank: rankIndex.get(cluster.id) ?? 0 }));
 }
 
-// [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Roots are clusters in worst-first
-// order. Children are occurrences (handled by TopOffendersProvider when
-// a ClusterNode is expanded). Cluster mode ignores the sort axis.
+// [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Roots are clusters. The sort axis
+// orders the DISPLAY: impact keeps the report's worst-first order; path
+// orders by representative file path. The global rank #N is read from
+// rankIndex and stays stable regardless of display order
+// ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]). Sorting is presentation-only — it
+// never re-fetches or re-analyses ([VSIX-VIEW-STATE-UI-ONLY]).
 export function buildClusterMode(
   clusters: ReportCluster[],
   severities: Map<string, Severity>,
   rankIndex: Map<string, number>,
+  sortBy: SortBy,
 ): Node[] {
-  return rankClusters(clusters, rankIndex).map(({ cluster, rank }) => {
+  const ranked = rankClusters(clusters, rankIndex);
+  if (sortBy === "path") {
+    ranked.sort(
+      (left, right) =>
+        representativePath(left.cluster).localeCompare(representativePath(right.cluster)) ||
+        right.cluster.weight - left.cluster.weight,
+    );
+  }
+  return ranked.map(({ cluster, rank }) => {
     const severity = severities.get(cluster.id) ?? "faint";
     return new ClusterNode(cluster, rank, severity, { showFile: true });
   });
+}
+
+// [VSIX-TOP-OFFENDERS-SORT] Orders a cluster's occurrences for display
+// under the active sort axis, preserving each occurrence's ORIGINAL index
+// so the canonical badge (index 0) and "occurrence N of M" labels stay
+// identity-stable. impact keeps the report's canonical order; path orders
+// by file path then byte offset.
+export function orderedOccurrences(
+  cluster: ReportCluster,
+  sortBy: SortBy,
+): { occurrence: ReportOccurrence; index: number }[] {
+  const entries = cluster.occurrences.map((occurrence, index) => ({ occurrence, index }));
+  if (sortBy === "path") {
+    entries.sort(
+      (left, right) =>
+        left.occurrence.path.localeCompare(right.occurrence.path) ||
+        left.occurrence.start_byte - right.occurrence.start_byte,
+    );
+  }
+  return entries;
 }
 
 /** Buckets ranked clusters by their representative file into {@link

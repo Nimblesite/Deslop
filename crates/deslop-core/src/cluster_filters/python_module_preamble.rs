@@ -21,7 +21,7 @@ use std::collections::BTreeSet;
 
 use tree_sitter::Node;
 
-use super::{parse_for, trimmed_snippet_range, Snippet};
+use super::{parse_for, spans_multiple_files, trimmed_snippet_range, Snippet};
 use crate::ast::ByteRange;
 
 /// Top-level definition kinds that make up a Python test-module preamble.
@@ -41,11 +41,7 @@ pub(super) fn is_module_preamble_sequence_cluster(snippets: &[Snippet<'_>]) -> b
     if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
         return false;
     }
-    let mut files = BTreeSet::new();
-    for snippet in snippets {
-        let _inserted = files.insert(snippet.file_id);
-    }
-    if files.len() < 2 {
+    if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
         return false;
     }
     let bodies: Option<Vec<Vec<u8>>> = snippets.iter().map(member_preamble_bodies).collect();

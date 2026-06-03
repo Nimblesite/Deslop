@@ -236,6 +236,41 @@ suite("cluster detail panel selection (#173)", () => {
     });
   });
 
+  test("does not re-push the feed on embedding-progress, lifecycle, or pending-model ticks (VSIX-PERF)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(reportOf([clusterOf("ffffffff", 30, groupOccurrences)]), 1);
+
+    withClusterPanel(store, "ffffffff", (fake) => {
+      const afterReady = fake.messages.length;
+      assert.ok(afterReady >= 1, "the ready handshake pushes the initial feed");
+
+      // Non-report store churn must NOT re-push the (potentially heavy) cluster
+      // feed — the effect tracks only report + visibleReport.
+      store.setEmbeddingProgress({
+        phase: "starting",
+        provider_id: "ollama",
+        model_id: "nomic-embed-text",
+        done: 0,
+        total: 10,
+        message: undefined,
+      });
+      store.setLifecycle({ kind: "analysing" });
+      store.setPendingEmbeddingModel("nomic-embed-text");
+      assert.equal(
+        fake.messages.length,
+        afterReady,
+        "embedding-progress / lifecycle / pending-model ticks do not re-push the feed",
+      );
+
+      // A genuine report change still re-pushes.
+      store.setSnapshot(reportOf([clusterOf("ffffffff", 30, groupOccurrences)]), 2);
+      assert.ok(
+        fake.messages.length > afterReady,
+        "a report change re-pushes the feed",
+      );
+    });
+  });
+
   test("resolveAnchoredCluster falls back to the id when the canonical occurrence has moved", () => {
     const report = reportOf([clusterOf("aaaaaaaa", 30, [occ("/repo/Alpha.cs", 99, 110)])]);
     const anchor = anchorForClusterId(reportOf([clusterOf("aaaaaaaa", 30, groupOccurrences)]), "aaaaaaaa");

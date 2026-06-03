@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     embedding::EmbeddingPair,
-    fingerprint::Fingerprint,
+    fingerprint::{ranges_overlap, Fingerprint},
     lsh::{estimate_jaccard, Signature},
     state::FileId,
 };
@@ -361,11 +361,6 @@ fn candidate_ranges_are_valid(pair: &CandidatePair, fingerprints: &[Fingerprint]
         return false;
     };
     left.file_id != right.file_id || !ranges_overlap(left, right)
-}
-
-/// Returns true when two fingerprints overlap within one file.
-fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
-    left.byte_range.start < right.byte_range.end && right.byte_range.start < left.byte_range.end
 }
 
 /// Returns the smaller endpoint node count. Defaults to 0 when either

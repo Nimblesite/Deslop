@@ -95,7 +95,8 @@ pub fn version_contract_output(
 }
 
 /// Returns whether args request any version output.
-fn requests_version(args: &[String]) -> bool {
+#[must_use]
+pub fn requests_version(args: &[String]) -> bool {
     args.iter()
         .skip(1)
         .any(|arg| matches!(arg.as_str(), "--version" | "-V"))

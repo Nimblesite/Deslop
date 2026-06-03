@@ -8,7 +8,7 @@
 use std::{io::Write, path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
-use deslop_core::{version_contract_output, ComponentKind};
+use deslop_core::{requests_version, version_contract_output, ComponentKind};
 use tokio::runtime::{Builder, Runtime};
 use tracing_subscriber::EnvFilter;
 
@@ -126,13 +126,6 @@ fn version_contract(args: &[String]) -> Result<Option<String>> {
         return Ok(Some(output));
     }
     Ok(requests_version(args).then(String::new))
-}
-
-/// Returns whether argv requests version output.
-fn requests_version(args: &[String]) -> bool {
-    args.iter()
-        .skip(1)
-        .any(|arg| matches!(arg.as_str(), "--version" | "-V"))
 }
 
 /// Parses non-version argv into server startup configuration.

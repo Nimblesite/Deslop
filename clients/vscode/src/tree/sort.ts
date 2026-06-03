@@ -1,8 +1,9 @@
 // Sort axis for the Top Offenders tree ([VSIX-TOP-OFFENDERS-SORT]).
-// Orthogonal to the grouping mode: it reorders file-mode and
-// folder-mode roots and their descendants. Cluster mode always renders
-// the report's global worst-first order and ignores this axis. Sorting
-// is presentation-only — it never changes a cluster's global rank
+// Orthogonal to the grouping mode: it reorders the DISPLAY order in every
+// mode — cluster, file, and folder roots, plus the occurrences inside a
+// cluster. impact is worst-first; path is alphabetical. Sorting is
+// presentation-only ([VSIX-VIEW-STATE-UI-ONLY]): it never re-fetches or
+// re-analyses, and it never changes a cluster's global rank #N
 // ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
 
 export type SortBy = "impact" | "path";
