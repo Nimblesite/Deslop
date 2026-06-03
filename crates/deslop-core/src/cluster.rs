@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    fingerprint::Fingerprint,
+    fingerprint::{ranges_overlap, Fingerprint},
     pair::{FusedCluster, PairScore},
     state::FileId,
 };
@@ -243,11 +243,6 @@ fn collapse_overlapping_single_file(mut bucket: Vec<Fingerprint>) -> Vec<Fingerp
         }
     }
     kept
-}
-
-/// Half-open overlap test on two fingerprints' byte ranges.
-fn ranges_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
-    left.byte_range.start < right.byte_range.end && right.byte_range.start < left.byte_range.end
 }
 
 /// Returns `true` when `inner` lies fully inside `outer` in the same file.

@@ -51,6 +51,16 @@ pub fn is_import_boilerplate_only_subtree(language: &str, node: &NormalizedNode)
             .all(|child| is_import_boilerplate_only_subtree(language, child))
 }
 
+/// Returns true when `node` should be suppressed from clone fingerprints —
+/// it carries, or consists entirely of, import/prologue boilerplate.
+#[must_use]
+pub fn is_boilerplate(language: Option<&str>, node: &NormalizedNode) -> bool {
+    language.is_some_and(|lang| {
+        is_import_boilerplate_carrier(lang, node.kind)
+            || is_import_boilerplate_only_subtree(lang, node)
+    })
+}
+
 /// Collects byte ranges for every import/prologue carrier in `root`.
 #[must_use]
 pub fn collect_import_boilerplate_ranges(

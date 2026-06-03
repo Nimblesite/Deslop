@@ -69,7 +69,7 @@ pub use report_metrics::{
     MetricsInputs, RepoMetrics, ThresholdSource, ThresholdSummary,
 };
 pub use version_contract::{
-    json_version_line, plain_version_line, version_contract_output, ComponentKind,
+    json_version_line, plain_version_line, requests_version, version_contract_output, ComponentKind,
 };
 
 /// Semantic version of the `deslop-core` library.
