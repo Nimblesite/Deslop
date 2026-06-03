@@ -1,5 +1,10 @@
 // Human editor locations for report byte ranges. The core report keeps
 // bytes as the machine contract; VSIX surfaces derive line/column here.
+//
+// [VSIX-PERF] A report enrichment pass reads each source file at most once and
+// reuses it for every occurrence in that file, instead of one synchronous
+// fs.readFileSync per occurrence — the old shape was O(occurrences) blocking
+// reads on the extension-host thread for every webview push.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -14,8 +19,41 @@ import {
 export function occurrenceDisplayLocation(
   occurrence: ReportOccurrence,
 ): OccurrenceDisplayLocation | undefined {
-  const source = readOccurrenceSource(occurrence.path);
-  if (!source) return undefined;
+  return displayLocationFrom(occurrence, readOccurrenceSource(occurrence.path));
+}
+
+// `readSource` is injectable so the per-file memo can be exercised deterministically
+// in tests; production always uses the filesystem read.
+export function reportWithDisplayLocations(
+  report: Report,
+  readSource: (occurrencePath: string) => string | undefined = readOccurrenceSource,
+): Report {
+  const sources = new Map<string, string | undefined>();
+  const sourceFor = (occurrencePath: string): string | undefined => {
+    if (!sources.has(occurrencePath)) sources.set(occurrencePath, readSource(occurrencePath));
+    return sources.get(occurrencePath);
+  };
+  return {
+    ...report,
+    clusters: report.clusters.map((cluster) => ({
+      ...cluster,
+      occurrences: cluster.occurrences.map((occurrence) =>
+        withDisplayLocation(occurrence, sourceFor(occurrence.path)),
+      ),
+    })),
+  };
+}
+
+function withDisplayLocation(occurrence: ReportOccurrence, source: string | undefined): ReportOccurrence {
+  const displayLocation = displayLocationFrom(occurrence, source);
+  return displayLocation ? { ...occurrence, displayLocation } : occurrence;
+}
+
+function displayLocationFrom(
+  occurrence: ReportOccurrence,
+  source: string | undefined,
+): OccurrenceDisplayLocation | undefined {
+  if (source === undefined) return undefined;
   const position = positionForByte(source, occurrence.start_byte);
   return {
     line: position.line,
@@ -24,21 +62,6 @@ export function occurrenceDisplayLocation(
     description: `line ${position.line}, column ${position.column}`,
     commandTitle: `Open ${path.basename(occurrence.path)} at ${position.line}:${position.column}`,
   };
-}
-
-export function reportWithDisplayLocations(report: Report): Report {
-  return {
-    ...report,
-    clusters: report.clusters.map((cluster) => ({
-      ...cluster,
-      occurrences: cluster.occurrences.map(withDisplayLocation),
-    })),
-  };
-}
-
-function withDisplayLocation(occurrence: ReportOccurrence): ReportOccurrence {
-  const displayLocation = occurrenceDisplayLocation(occurrence);
-  return displayLocation ? { ...occurrence, displayLocation } : occurrence;
 }
 
 function readOccurrenceSource(occurrencePath: string): string | undefined {

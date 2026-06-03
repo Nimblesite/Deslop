@@ -82,6 +82,32 @@ suite("occurrence display locations", () => {
     });
     assert.equal(location, undefined);
   });
+
+  test("reads each source file once per pass, not once per occurrence (VSIX-PERF)", () => {
+    const source = "namespace Demo;\n\npublic class ChatProtocol {\n    void Send() {}\n}\n";
+    const file = "/repo/ChatProtocol.cs";
+    const reads = new Map<string, number>();
+    const reader = (occurrencePath: string): string | undefined => {
+      reads.set(occurrencePath, (reads.get(occurrencePath) ?? 0) + 1);
+      return occurrencePath === file ? source : undefined;
+    };
+    const startByte = source.indexOf("void Send");
+    const shared = cluster(file, startByte);
+    // Two occurrences in the SAME file — the old shape read it twice.
+    shared.occurrences = [
+      { path: file, start_byte: startByte, end_byte: startByte + 4, hidden: false },
+      { path: file, start_byte: startByte + 5, end_byte: startByte + 9, hidden: false },
+    ];
+
+    const enriched = reportWithDisplayLocations(report([shared]), reader);
+    const occurrences = enriched.clusters[0]?.occurrences ?? [];
+    assert.equal(occurrences.length, 2, "both occurrences survive the enrichment pass");
+    assert.ok(
+      occurrences.every((occurrence) => occurrence.displayLocation?.label.startsWith(file)),
+      "every occurrence in the shared file is enriched with a display location",
+    );
+    assert.equal(reads.get(file), 1, "the shared source file is read exactly once for the whole pass");
+  });
 });
 
 function writeFixture(): { dir: string; file: string; source: string } {

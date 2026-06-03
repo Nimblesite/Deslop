@@ -4,7 +4,7 @@
 
 import * as vscode from "vscode";
 import * as path from "node:path";
-import { effect } from "@preact/signals-core";
+import { effect, untracked } from "@preact/signals-core";
 
 import { COLOR } from "../design";
 import { reportWithDisplayLocations } from "../locations";
@@ -141,7 +141,14 @@ function wireClusterFeed(
   const push = (): void => {
     if (ready) pushClusterFeed(panel, store, anchor, pushReport);
   };
-  const sub = { dispose: effect(() => { void store.current; push(); }) };
+  // [VSIX-PERF] Track only the report signals. The explicit reads keep the
+  // subscription alive while we wait for `ready`, and they exclude lifecycle /
+  // embedding-progress / pending-model ticks so those no longer re-push the feed.
+  const sub = { dispose: effect(() => {
+    void store.report.value;
+    void store.visibleReport.value;
+    push();
+  }) };
   const once = panel.webview.onDidReceiveMessage((m: { kind?: string }) => {
     if (m.kind !== "ready") return;
     ready = true;
@@ -162,8 +169,8 @@ function pushClusterFeed(
   anchor: ClusterAnchor,
   pushReport: (report: Report | null) => void,
 ): void {
-  const canonical = store.current.report;
-  const visible = store.current.visibleReport;
+  const canonical = store.report.value;
+  const visible = store.visibleReport.value;
   if (!canonical || !visible) return;
   const feed = clusterPanelFeed(canonical, visible, anchor);
   pushReport(feed.report);
@@ -171,7 +178,8 @@ function pushClusterFeed(
   if (feed.selectedId === null) {
     logWarn("cluster no longer exists", {
       clusterId: anchor.id,
-      generation: store.current.generation,
+      // Diagnostic only — read untracked so it doesn't widen the effect's deps.
+      generation: untracked(() => store.current.generation),
     });
   }
 }
