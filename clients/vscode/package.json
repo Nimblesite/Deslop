@@ -474,6 +474,7 @@
     "test:ollama": "vscode-test --config .vscode-test-ollama.mjs",
     "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
+    "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts",
     "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"
@@ -484,6 +485,7 @@
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/mocha": "^10.0.9",
     "@types/node": "^20.12.0",
     "@types/vscode": "^1.90.0",

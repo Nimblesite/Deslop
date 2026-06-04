@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: AI Integration — MCP server for Claude, Cursor, Copilot
-description: Wire deslop-mcp into Claude Code, Claude Desktop, Cursor, Continue, or Codex. Twelve live MCP tools, find-similar prevents the copy-paste before it lands.
+description: Wire deslop-mcp into Claude Code, Claude Desktop, Cursor, Continue, or Codex. A lean, live MCP surface led by find-similar — prevent the copy-paste before it lands.
 eleventyNavigation:
   key: AI Integration
   order: 3
@@ -12,7 +12,9 @@ icon: smart_toy
 
 Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI. Every MCP tool response is computed against the **live** workspace state — the LSP holds the live report in memory and refreshes it on every change (250 ms debounce, 2 s cap), and the MCP server reads that live state over a Unix-domain socket (`.deslop-cache/deslop.sock`) on the next tool call. There is no batch step. There is no stale cache.
 
-## Twelve MCP tools, all live
+## The MCP tools, all live
+
+Only `find-similar` belongs in the authoring inner loop — it's the one call the agent makes before writing new code. Everything else is a read-only report query or a config tool you reach for on demand, so the agent's working context stays lean instead of carrying a wall of tool output.
 
 | Tool | Purpose |
 | --- | --- |
@@ -141,7 +143,7 @@ Cluster IDs are short hex digests of the cluster's content fingerprint — the f
 
 The `deslop-core` crate owns the entire pipeline. Three shells consume it:
 
-- **MCP server (`deslop-mcp`)** — the agent surface. Twelve tools (see the table above). The server delegates every read — `top-offenders`, `report-get`, `report-for-file`, `find-similar`, and the rest — to the running LSP over a Unix-domain socket (`.deslop-cache/deslop.sock`), so every response is computed against the LSP's live in-memory corpus, not a stale on-disk cache. When the LSP isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
+- **MCP server (`deslop-mcp`)** — the agent surface. find-similar plus a focused set of read-only and config tools (see the table above). The server delegates every read — `top-offenders`, `report-get`, `report-for-file`, `find-similar`, and the rest — to the running LSP over a Unix-domain socket (`.deslop-cache/deslop.sock`), so every response is computed against the LSP's live in-memory corpus, not a stale on-disk cache. When the LSP isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
 - **LSP server (`deslop-lsp`)** — the editor surface. Diagnostics, hover, code lens, `textDocument/definition`, virtual `deslop://` documents, and custom `deslop/*` methods (`reportGet`, `reportDelta`, `reportForFile`, `reportForRange`, `clusterById`, `duplicatesFindSimilar`, `embeddingListModels`, `embeddingSetModel`, `sessionConfig`, `reportSchemaDoc`, `virtualDocument`, `cpuReport`). Fires `deslop/reportChanged`, `deslop/analysisState`, and `deslop/embeddingProgress` notifications. Owns the file watcher, the debouncer (250 ms quiet, 2 s cap), and the analysis scheduler.
 - **CLI (`deslop`)** — the cold-cache fallback for CI gates and one-shot audits.
 

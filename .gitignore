@@ -117,3 +117,6 @@ crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
 # Local deslop runs - never commit
 deslop-*.log
 deslop-report.*
+
+
+test-results/
