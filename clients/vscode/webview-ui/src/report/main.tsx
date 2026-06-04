@@ -48,7 +48,7 @@ function ReportApp() {
   }
 
   return (
-    <main style={{ padding: "24px 32px" }}>
+    <main style={{ padding: "24px clamp(16px, 6vw, 32px)" }}>
       <header style={{ display: "grid", gap: "16px", paddingBottom: "24px" }}>
         <div
           class="label"
@@ -59,7 +59,7 @@ function ReportApp() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0,1fr) auto",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
             alignItems: "baseline",
             gap: "24px",
           }}
@@ -85,7 +85,14 @@ function ReportApp() {
               duplicated
             </span>
           </h1>
-          <div style={{ textAlign: "right", fontFamily: FONT.mono, fontSize: "12px" }}>
+          <div
+            style={{
+              textAlign: "right",
+              fontFamily: FONT.mono,
+              fontSize: "12px",
+              minWidth: 0,
+            }}
+          >
             <div>
               {snapshot.metrics.duplicated_loc}/{snapshot.metrics.analysed_loc} LOC
             </div>
@@ -101,7 +108,7 @@ function ReportApp() {
       <section
         style={{
           display: "grid",
-          gridTemplateColumns: "auto auto 1fr auto",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
           gap: "12px",
           paddingBottom: "16px",
         }}
@@ -175,7 +182,7 @@ function ReportApp() {
               }
             >
               <SeverityBadge severity={severity} label={`${slug}`} />
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
                     fontFamily: FONT.ui,
@@ -183,9 +190,13 @@ function ReportApp() {
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
+                    flexWrap: "wrap",
+                    minWidth: 0,
                   }}
                 >
-                  <span style={{ fontWeight: 600 }}>{bucketLabels(resolveBucket(cluster)).plainTitle}</span>
+                  <span style={{ fontWeight: 600, overflowWrap: "anywhere" }}>
+                    {bucketLabels(resolveBucket(cluster)).plainTitle}
+                  </span>
                   {bucketLabels(resolveBucket(cluster)).aiMatch ? (
                     <span
                       style={{

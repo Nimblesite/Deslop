@@ -17,7 +17,7 @@ export function SignalStrip({ signals }: Props) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 120px), 1fr))",
         gap: "16px",
         padding: "16px 0",
       }}

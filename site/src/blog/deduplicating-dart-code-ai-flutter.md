@@ -52,7 +52,7 @@ A useful check does not stop at exact line matches. It should find four levels o
 3. **Near-duplicate code** — mostly the same logic with statements inserted, deleted, or reordered: the same form validation with one extra branch.
 4. **Same behaviour, different code** — two widgets or functions that solve the same problem with different syntax (a `for` loop versus a `map().toList()`).
 
-Classic clone-detection research calls these Type-1 through Type-4. The same taxonomy applies to Dart — token-based and structural clone detectors for Dart exist in the literature, including a [token-based clone detector built specifically for the Dart language](https://techniumscience.com/index.php/technium/article/view/6732) and the cross-language structural work in [Out of Step](https://www.sciencedirect.com/science/article/pii/S0167642324000352), which reports over 80% similarity detection on Dart and Kotlin feature sets.
+Classic clone-detection research calls these Type-1 through Type-4 — in Deslop's terms, identical code, nearly identical code, loosely similar code, and same behavior, different code. The same taxonomy applies to Dart — token-based and structural clone detectors for Dart exist in the literature, including a [token-based clone detector built specifically for the Dart language](https://techniumscience.com/index.php/technium/article/view/6732) and the cross-language structural work in [Out of Step](https://www.sciencedirect.com/science/article/pii/S0167642324000352), which reports over 80% similarity detection on Dart and Kotlin feature sets.
 
 ## Why line matching is not enough for Dart
 

@@ -41,28 +41,39 @@ function ClusterApp() {
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
-      if (event.key === "n" && list.length > 0) {
-        selectNextCluster(list, rank);
+      const currentList = clusters.value;
+      const currentCluster = selectedCluster.value;
+      const currentRank = currentCluster
+        ? currentList.findIndex((c) => c.id === currentCluster.id) + 1
+        : 0;
+      if (event.key === "n" && currentList.length > 0) {
+        event.preventDefault();
+        selectNextCluster(currentList, currentRank);
       }
-      if (event.key === "p" && list.length > 0) {
-        selectPreviousCluster(list, rank);
+      if (event.key === "p" && currentList.length > 0) {
+        event.preventDefault();
+        selectPreviousCluster(currentList, currentRank);
       }
-      if (event.key === "j" && cluster) {
-        moveFocusedOccurrence(cluster, 1);
+      if (event.key === "j" && currentCluster) {
+        event.preventDefault();
+        moveFocusedOccurrence(currentCluster, 1);
       }
-      if (event.key === "k" && cluster) {
-        moveFocusedOccurrence(cluster, -1);
+      if (event.key === "k" && currentCluster) {
+        event.preventDefault();
+        moveFocusedOccurrence(currentCluster, -1);
       }
-      if (event.key === "Enter" && cluster) {
-        openFocusedOccurrence(cluster);
+      if (event.key === "Enter" && currentCluster) {
+        event.preventDefault();
+        openFocusedOccurrence(currentCluster);
       }
       if (event.key === "?") {
+        event.preventDefault();
         shortcutHelpExpanded.value = !shortcutHelpExpanded.value;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [rank, list, cluster]);
+  }, []);
 
   if (!cluster) {
     return (
@@ -79,7 +90,7 @@ function ClusterApp() {
   return (
     <main
       style={{
-        padding: "24px 32px",
+        padding: "24px clamp(16px, 6vw, 32px)",
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
@@ -90,7 +101,7 @@ function ClusterApp() {
       <header
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
           gap: "24px",
           alignItems: "start",
           paddingBottom: "24px",
@@ -106,6 +117,8 @@ function ClusterApp() {
               display: "flex",
               alignItems: "center",
               gap: "8px",
+              flexWrap: "wrap",
+              minWidth: 0,
             }}
           >
             <HelpedText topic="cluster-id" title={clusterIdTitle(cluster.id, rank, list.length)}>
@@ -158,7 +171,7 @@ function ClusterApp() {
             <HelpedText topic="clone-bucket">{bucketInfo.actionSentence}</HelpedText>
           </p>
         </div>
-        <div style={{ textAlign: "right" }}>
+        <div style={{ textAlign: "right", minWidth: 0, overflowWrap: "anywhere" }}>
           <span class="with-help" style={{ justifyContent: "flex-end" }}>
             <SeverityBadge
               severity={severity}
@@ -186,7 +199,12 @@ function ClusterApp() {
           </div>
           {canonical ? (
             <div
-              style={{ fontFamily: FONT.mono, fontSize: "12px", marginTop: "4px" }}
+              style={{
+                fontFamily: FONT.mono,
+                fontSize: "12px",
+                marginTop: "4px",
+                overflowWrap: "anywhere",
+              }}
               title={canonicalTitle(canonical)}
             >
               <HelpedText topic="canonical" title={canonicalTitle(canonical)}>
@@ -219,16 +237,16 @@ function ClusterApp() {
               background: i % 2 === 0 ? COLOR.surfaceContainerLow : COLOR.surface,
               padding: "14px 20px",
               display: "grid",
-              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
               gap: "16px",
               alignItems: "center",
               outline: i === focusedIndex ? `1px solid ${SEVERITY_COLOR[severity]}` : "none",
             }}
           >
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div
                 class="with-help"
-                style={{ fontFamily: FONT.mono, fontSize: "12px" }}
+                style={{ fontFamily: FONT.mono, fontSize: "12px", maxWidth: "100%" }}
                 title={locationTitle(o)}
               >
                 <button
@@ -236,6 +254,7 @@ function ClusterApp() {
                   onClick={() => post({ kind: "open/occurrence", occurrence: o })}
                   title={openTitle(o)}
                   aria-label={openTitle(o)}
+                  style={{ maxWidth: "100%", overflowWrap: "anywhere" }}
                 >
                   {o.displayLocation?.label ?? o.path}
                 </button>
@@ -260,7 +279,7 @@ function ClusterApp() {
                 </HelpedText>
               </div>
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <span class="with-help">
                 <button
                   onClick={() => post({ kind: "open/occurrence", occurrence: o })}
@@ -298,6 +317,7 @@ function ClusterApp() {
             display: "flex",
             gap: "12px",
             justifyContent: "flex-end",
+            flexWrap: "wrap",
           }}
         >
           <span class="with-help">
