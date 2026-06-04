@@ -15,6 +15,7 @@ excerpt: "Coding agents generate Flutter widgets, repositories, and state-manage
 ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.png"
 ogImageWidth: "1200"
 ogImageHeight: "630"
+ogImageAlt: "Deslop — deduplicating Dart code when AI writes your Flutter app. Live LSP and MCP duplicate-code server, worst-offenders ranked."
 ---
 
 If you searched for "Flutter code duplication", "deduplicate Dart code", or "AI-generated Flutter technical debt", the short answer is this: AI does not need to write *wrong* Dart to hurt a Flutter codebase. It only needs to write the same widget, the same repository, or the same validation rule twice — in two slightly different shapes — faster than anyone can notice.

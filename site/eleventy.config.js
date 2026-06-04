@@ -273,8 +273,11 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% endif %}{% endfor %}
   {% if pageOgImage %}
   <meta property="og:image" content="{{ site.url }}{{ pageOgImage }}">
+  <meta property="og:image:secure_url" content="{{ site.url }}{{ pageOgImage }}">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="{{ pageOgImageWidth }}">
   <meta property="og:image:height" content="{{ pageOgImageHeight }}">
+  <meta property="og:image:alt" content="{{ ogImageAlt | default(title | default(site.title)) }}">
   {% endif %}
 
   <meta name="twitter:card" content="summary_large_image">
@@ -283,7 +286,8 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="twitter:description" content="{{ description | default(site.description) }}">
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
-  {% if pageOgImage %}<meta name="twitter:image" content="{{ site.url }}{{ pageOgImage }}">{% endif %}
+  {% if pageOgImage %}<meta name="twitter:image" content="{{ site.url }}{{ pageOgImage }}">
+  <meta name="twitter:image:alt" content="{{ ogImageAlt | default(title | default(site.title)) }}">{% endif %}
 
   <script type="application/ld+json">
   {
