@@ -190,7 +190,7 @@ If the TMC server is available: register on start (name, intent, files), lock fi
 
 ## Migration to `lspkit`
 
-The cross-cutting LSP+MCP scaffolding in this repo is the prime example of the "one engine, two surfaces" pattern. That pattern is being distilled into the generic `lspkit-*` workspace at `/Users/christianfindlay/Documents/Code/lsp_toolkit`. Domain-specific analysis (parsing, fingerprinting, clustering, ranking, embeddings) stays here; the protocol shells are what migrate.
+The cross-cutting LSP+MCP scaffolding in this repo is the prime example of the "one engine, two surfaces" pattern. That pattern is being distilled into the generic `lspkit-*` workspace (a separate sibling repo). Domain-specific analysis (parsing, fingerprinting, clustering, ranking, embeddings) stays here; the protocol shells are what migrate.
 
 **For new LSP/MCP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
 **For changes to existing scaffolding in this repo:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.
