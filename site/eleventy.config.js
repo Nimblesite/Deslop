@@ -152,6 +152,21 @@ layout: layouts/base.njk
   "headline": "{{ title }}",
   "description": "{{ description | default(site.description) }}",
   "datePublished": "{{ date | dateToRfc3339 }}",
+  "dateModified": "{{ (updated | default(date)) | dateToRfc3339 }}",
+  "mainEntityOfPage": "{{ site.url }}{{ page.url }}",
+  "image": "{{ site.url }}{{ ogImage | default(site.ogImage) }}",{% if author %}
+  "author": {
+    "@type": "Person",
+    "name": "{{ author }}"
+  },{% endif %}
+  "publisher": {
+    "@type": "Organization",
+    "name": "{{ site.title }}",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "{{ site.url }}/assets/img/logo.png"
+    }
+  },
   "inLanguage": "{{ lang | default('en') }}"
 }
 </script>
@@ -458,12 +473,85 @@ const LLMS_TXT_OVERRIDE = `---json
 - Source: https://github.com/Nimblesite/Deslop
 `;
 
+// robots.txt override: the plugin default `Disallow: /assets/` blocks every
+// crawler in the `*` group (which includes social-card fetchers like
+// facebookexternalhit, Twitterbot, LinkedInBot, and Slackbot — none are in the
+// named allow-list below) from reading the Open Graph images under
+// /assets/img/, so link previews render without a card. It also hides CSS/JS,
+// which Google's guidance says never to block since Googlebot needs them to
+// render. Static assets carry no crawl risk, so only the search endpoint is
+// disallowed. The named search/AI-crawler groups are kept verbatim.
+const ROBOTS_TXT_OVERRIDE = `---json
+{
+  "permalink": "robots.txt",
+  "eleventyExcludeFromCollections": true
+}
+---
+# {{ site.title | default(site.name) }}
+# {{ site.url }}
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+Disallow: /search?
+
+# AI Crawlers - Welcome!
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Cohere-ai
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: Meta-ExternalFetcher
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+# Sitemaps
+Sitemap: {{ site.url }}/sitemap.xml
+`;
+
 const OVERRIDES = {
   "blog/index.njk": BLOG_INDEX_OVERRIDE,
   "_includes/layouts/base.njk": BASE_LAYOUT_OVERRIDE,
   "_includes/layouts/docs.njk": DOCS_LAYOUT_OVERRIDE,
   "_includes/layouts/blog.njk": BLOG_POST_LAYOUT_OVERRIDE,
   "llms.txt.njk": LLMS_TXT_OVERRIDE,
+  "robots.txt.njk": ROBOTS_TXT_OVERRIDE,
 };
 
 /**
