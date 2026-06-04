@@ -261,6 +261,22 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 }
 .post-list .blog-post:hover { background: var(--surface-container-high); }
 
+.post-thumb {
+  display: block;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+}
+.post-thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.post-list .blog-post:hover .post-thumb img { transform: scale(1.02); }
+
 .post-title {
   font-family: var(--font-head);
   font-size: 1.5rem;
@@ -329,6 +345,22 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   background-size: 100% 1px;
   background-repeat: no-repeat;
   background-position: top;
+}
+
+/* ─────────── Prose hero image (docs + blog post) ─────────── */
+.prose-hero {
+  margin: 0 0 var(--space-10);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+.prose-hero__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
 }
 
 /* ─────────── Shared article typography (.prose) ─────────── */

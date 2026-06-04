@@ -22,6 +22,10 @@ permalink: /blog/
   <div class="post-list">
     {%- for post in collections.posts | sort(true, false, "date") -%}
     <article class="blog-post">
+      <a href="{{ post.url }}" class="post-thumb" tabindex="-1" aria-hidden="true">
+        <img src="{{ post.data.heroImage | default(post.data.ogImage) | default(site.ogImage) }}"
+             alt="" width="1200" height="630" loading="lazy" decoding="async">
+      </a>
       <a href="{{ post.url }}" class="post-title">{{ post.data.title }}</a>
       <div class="post-meta">
         <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat(lang) }}</time>
@@ -102,6 +106,7 @@ layout: layouts/base.njk
 
   <main class="docs-main">
     <article class="docs-article">
+      {% include "partials/prose-hero.njk" %}
       <header class="docs-article__header">
         <div class="docs-breadcrumb">
           <a href="/docs/">Docs</a>
@@ -175,6 +180,7 @@ layout: layouts/base.njk
 {% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
 
 <article class="post-article">
+  {% include "partials/prose-hero.njk" %}
   <header class="post-article__header">
     <div class="docs-breadcrumb">
       <a href="{{ langPrefix }}/blog/">Blog</a>
