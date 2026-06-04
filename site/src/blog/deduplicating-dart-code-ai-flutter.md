@@ -12,6 +12,9 @@ tags:
 category: engineering
 description: "AI writes Dart faster than you can review it, and Flutter's verbose widget trees hide the duplication. How to detect and deduplicate cloned Dart code."
 excerpt: "Coding agents generate Flutter widgets, repositories, and state-management classes at a pace no reviewer can keep up with. Flutter's verbosity hides the copies. Here is what to check, why line-based tools miss it, and how to deduplicate Dart structurally."
+ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.png"
+ogImageWidth: "1200"
+ogImageHeight: "630"
 ---
 
 If you searched for "Flutter code duplication", "deduplicate Dart code", or "AI-generated Flutter technical debt", the short answer is this: AI does not need to write *wrong* Dart to hurt a Flutter codebase. It only needs to write the same widget, the same repository, or the same validation rule twice — in two slightly different shapes — faster than anyone can notice.

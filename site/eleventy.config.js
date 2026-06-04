@@ -233,6 +233,9 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="robots" content="index, follow">
   <meta name="generator" content="Eleventy + techdoc">
   <meta name="theme-color" content="{{ site.themeColor | default('#0066cc') }}">
+  {% set pageOgImage = ogImage | default(site.ogImage) %}
+  {% set pageOgImageWidth = ogImageWidth | default(site.ogImageWidth) | default('1200') %}
+  {% set pageOgImageHeight = ogImageHeight | default(site.ogImageHeight) | default('630') %}
 
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
   <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg">
@@ -253,10 +256,10 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% for langCode in supportedLanguages %}{% if langCode != (lang | default('en')) %}
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
-  {% if site.ogImage %}
-  <meta property="og:image" content="{{ site.url }}{{ site.ogImage }}">
-  <meta property="og:image:width" content="{{ site.ogImageWidth | default('1200') }}">
-  <meta property="og:image:height" content="{{ site.ogImageHeight | default('630') }}">
+  {% if pageOgImage %}
+  <meta property="og:image" content="{{ site.url }}{{ pageOgImage }}">
+  <meta property="og:image:width" content="{{ pageOgImageWidth }}">
+  <meta property="og:image:height" content="{{ pageOgImageHeight }}">
   {% endif %}
 
   <meta name="twitter:card" content="summary_large_image">
@@ -265,7 +268,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="twitter:description" content="{{ description | default(site.description) }}">
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
-  {% if site.ogImage %}<meta name="twitter:image" content="{{ site.url }}{{ site.ogImage }}">{% endif %}
+  {% if pageOgImage %}<meta name="twitter:image" content="{{ site.url }}{{ pageOgImage }}">{% endif %}
 
   <script type="application/ld+json">
   {

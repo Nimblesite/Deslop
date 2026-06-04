@@ -372,7 +372,10 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
 }
 
 @media (max-width: 767.98px) {
-  body.menu-open { overflow: hidden; }
+  /* Lock background scroll while the drawer is open. The root scroller is
+     <html>, so overflow:hidden on body alone doesn't hold — lock html too. */
+  body.menu-open,
+  html:has(body.menu-open) { overflow: hidden; }
 
   /* The glass header's backdrop-filter would make it the containing block for
      the fixed drawers, trapping them inside the 68px bar. Drop it on mobile so

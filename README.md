@@ -298,7 +298,7 @@ args    = ["--root", "."]
 
 ## License
 
-Dual-licensed under [MIT](LICENSE) or Apache-2.0, at your option.
+Licensed under the [MIT License](LICENSE) © NIMBLESITE PTY LTD.
 
 ---
 
