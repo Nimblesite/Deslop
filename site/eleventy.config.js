@@ -66,6 +66,12 @@ layout: layouts/base.njk
       <h2>The Manuscript</h2>
       <p class="docs-sidebar__version">Live LSP + MCP · preview</p>
     </div>
+    <nav class="docs-sidebar__site-nav" aria-label="Site">
+      <a href="/" class="docs-sidebar__link">Home</a>
+      {% for item in navigation.main %}
+      <a href="{{ item.url }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.text }}</a>
+      {% endfor %}
+    </nav>
     <nav class="docs-sidebar__nav" aria-label="Documentation">
       {% for entry in navPages %}
       {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
@@ -104,7 +110,7 @@ layout: layouts/base.njk
         </div>
       </header>
 
-      <div class="docs-article__body">
+      <div class="prose prose--docs">
         {{ content | safe }}
       </div>
 
@@ -177,7 +183,7 @@ layout: layouts/base.njk
     {% endif %}
   </header>
 
-  <div class="post-article__body">
+  <div class="prose">
     {{ content | safe }}
   </div>
 
@@ -322,7 +328,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if site.stylesheet %}<link rel="stylesheet" href="{{ site.stylesheet }}">{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% if page.url.startsWith('/docs/') %}is-docs{% endif %}">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <header class="site-header">
@@ -371,6 +377,8 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     </nav>
   </header>
 
+  <div class="drawer-scrim" data-drawer-close></div>
+
   <main id="main-content">
     {% block content %}{{ content | safe }}{% endblock %}
   </main>
@@ -404,6 +412,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   </footer>
 
   <script src="/techdoc/js/main.js" type="module"></script>
+  <script src="/assets/js/drawer.js" type="module"></script>
 
   {% block scripts %}{% endblock %}
 </body>

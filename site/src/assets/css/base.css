@@ -222,6 +222,7 @@ pre {
 
 .nav {
   max-width: 100%;
+  min-height: var(--header-height);
   padding: var(--space-4) var(--space-6);
 }
 
@@ -341,4 +342,134 @@ pre {
   width: 100%;
   background: var(--surface-container-high);
   box-shadow: 0 20px 40px rgba(14, 14, 14, 0.4);
+}
+
+/* ─────────── Mobile navigation drawer ─────────── */
+/* Off-canvas drawer pattern (see docs/designs/prose_mobile + landing_mobile).
+   The hamburger toggles `body.menu-open`; the page's primary nav slides in
+   from the left over a blurred scrim. Desktop keeps the inline nav. The same
+   treatment serves the site nav (.nav-links) and the docs nav (.docs-sidebar)
+   so every panel reads identically. */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: color-mix(in srgb, var(--surface-container-lowest) 80%, transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--dur) var(--ease), visibility var(--dur) var(--ease);
+}
+body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
+
+@media (min-width: 768px) {
+  .drawer-scrim { display: none; }
+  .mobile-menu-toggle { display: none; }
+  /* Neutralise the techdoc package's max-width:768px mobile nav at the boundary
+     (its display:none + position:absolute would otherwise win at exactly 768px). */
+  .nav-links { display: flex; position: static; transform: none; }
+}
+
+@media (max-width: 767.98px) {
+  body.menu-open { overflow: hidden; }
+
+  /* The glass header's backdrop-filter would make it the containing block for
+     the fixed drawers, trapping them inside the 68px bar. Drop it on mobile so
+     the drawers position against the viewport; the bar goes solid instead. */
+  .site-header {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* Site nav becomes the drawer on every non-docs page. */
+  .nav-links {
+    display: flex;
+    position: fixed;
+    top: var(--header-height);
+    left: 0;
+    bottom: 0;
+    width: min(20rem, 84vw);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: var(--space-4);
+    background: var(--surface-container-low);
+    box-shadow: var(--shadow-lg);
+    transform: translateX(-100%);
+    transition: transform var(--dur) var(--ease);
+    overflow-y: auto;
+    z-index: 95;
+  }
+  body.menu-open .nav-links { transform: translateX(0); }
+  .nav-links li { width: 100%; }
+  .nav-link {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    font-size: 0.9375rem;
+    border-radius: var(--radius-sm);
+  }
+  .nav-link.active {
+    border-bottom: none;
+    border-radius: var(--radius-sm);
+    background: var(--surface-container-high);
+    padding-bottom: var(--space-3);
+  }
+
+  /* On docs pages the doc nav (.docs-sidebar) is the drawer, so the duplicate
+     site nav in the bar is hidden — the drawer carries it instead. */
+  .is-docs .nav-links { display: none; }
+}
+
+@media (max-width: 359.98px) {
+  .logo-badge { display: none; }
+}
+
+/* ─────────── Footer (global chrome) ─────────── */
+.site-footer {
+  background: var(--surface-container-lowest);
+  margin-top: var(--space-20);
+  padding: var(--space-12) var(--space-8) 0;
+}
+.footer-content { max-width: var(--max-width); padding: 0; }
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+.footer-section h3 {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--secondary-fixed-dim);
+  margin-bottom: var(--space-4);
+}
+.footer-section ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.footer-section a {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--on-surface) 45%, transparent);
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
+}
+.footer-section a:hover { color: var(--on-surface); }
+
+.footer-bottom {
+  padding: var(--space-6) 0;
+  background: linear-gradient(to bottom, var(--surface-container-high) 0 1px, transparent 1px);
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-position: top;
+  text-align: left;
+}
+.footer-bottom p {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary-container);
+  margin: 0;
 }
