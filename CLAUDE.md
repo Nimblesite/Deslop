@@ -108,7 +108,7 @@ Processes communicate over IPC. Generate IPC model code with [typeDiagram](https
 ## Website
 
 - Zero duplicate CSS.
-- Hard CSS budget: 1.5k LOC.
+- Hard CSS budget: 1.8k LOC.
 
 ## Logging Standards
 

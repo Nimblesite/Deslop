@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Deslop - Documentation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#690005",
+                        "primary-fixed": "#ffdad5",
+                        "on-surface-variant": "#e2beb9",
+                        "on-tertiary-fixed-variant": "#004a7a",
+                        "on-primary-container": "#ffcbc4",
+                        "tertiary-fixed-dim": "#9bcbff",
+                        "tertiary-fixed": "#d0e4ff",
+                        "on-primary-fixed-variant": "#910809",
+                        "background": "#131313",
+                        "inverse-primary": "#b4271f",
+                        "on-surface": "#e5e2e1",
+                        "secondary": "#c8c6c5",
+                        "inverse-on-surface": "#313030",
+                        "on-tertiary-fixed": "#001d34",
+                        "secondary-fixed": "#e5e2e1",
+                        "primary": "#ffb4aa",
+                        "on-primary": "#690003",
+                        "tertiary-container": "#00619e",
+                        "surface-bright": "#393939",
+                        "surface-container-low": "#1c1b1b",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed-variant": "#474746",
+                        "outline-variant": "#5a403d",
+                        "primary-container": "#b3261e",
+                        "surface-tint": "#ffb4aa",
+                        "secondary-container": "#474746",
+                        "on-error-container": "#ffdad6",
+                        "surface": "#131313",
+                        "on-secondary-container": "#b7b5b4",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary": "#003256",
+                        "primary-fixed-dim": "#ffb4aa",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "surface-container-highest": "#353534",
+                        "surface-container-high": "#2a2a2a",
+                        "surface-container": "#201f1f",
+                        "error-container": "#93000a",
+                        "surface-dim": "#131313",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "surface-variant": "#353534",
+                        "outline": "#a98985",
+                        "on-background": "#e5e2e1",
+                        "tertiary": "#9bcbff",
+                        "on-primary-fixed": "#410001",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-tertiary-container": "#bbdaff",
+                        "on-secondary": "#303030"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {},
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    "fontSize": {}
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body antialiased min-h-screen flex flex-col pt-16">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-surface flex items-center justify-between px-6 h-16 w-full">
+<div class="flex items-center gap-4">
+<button class="text-primary dark:text-primary active:scale-95 duration-100 hover:bg-surface-container-highest transition-colors p-2 rounded-DEFAULT" id="menu-btn">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-display font-black text-primary tracking-tighter text-xl">DESLOP</span>
+</div>
+<button class="text-on-surface hover:bg-surface-container-highest transition-colors active:scale-95 duration-100 p-2 rounded-DEFAULT">
+<span class="material-symbols-outlined">search</span>
+</button>
+</header>
+<!-- NavigationDrawer (Hidden by default on mobile, overlaid) -->
+<div class="fixed inset-0 bg-surface-container-lowest/80 backdrop-blur-[2px] z-[55] hidden transition-opacity duration-200 opacity-0" id="drawer-overlay"></div>
+<nav class="h-full w-80 fixed left-0 top-0 z-[60] bg-surface-container-low dark:bg-surface-container-low shadow-[20px_0_40px_rgba(0,0,0,0.4)] flex flex-col pt-20 pb-10 transition-transform duration-200 ease-in-out -translate-x-full" id="nav-drawer">
+<div class="px-6 mb-6">
+<h2 class="font-display font-black text-primary tracking-tighter uppercase text-sm">DOCUMENTATION</h2>
+</div>
+<ul class="flex flex-col flex-1 overflow-y-auto">
+<li>
+<a class="flex items-center gap-3 bg-surface-container-highest text-primary border-r-2 border-primary px-4 py-3 font-body text-sm font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">description</span>
+                    Introduction
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high hover:text-on-surface font-body text-sm font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                    Installation
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high hover:text-on-surface font-body text-sm font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">terminal</span>
+                    CLI Reference
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high hover:text-on-surface font-body text-sm font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">api</span>
+                    API Docs
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 text-on-surface-variant px-4 py-3 hover:bg-surface-container-high hover:text-on-surface font-body text-sm font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[18px]">history</span>
+                    Changelog
+                </a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 px-4 py-8 md:px-8 max-w-3xl mx-auto w-full">
+<!-- Breadcrumbs -->
+<div class="font-mono text-[0.75rem] text-on-surface-variant mb-6 tracking-wide uppercase">
+            docs / <span class="text-primary font-bold">introduction</span>
+</div>
+<!-- Article Header -->
+<header class="mb-10">
+<h1 class="font-headline font-bold text-3xl md:text-4xl tracking-tighter leading-tight mb-4 text-on-surface">The standard for high-velocity execution.</h1>
+<p class="font-body text-[0.875rem] text-on-surface-variant leading-relaxed opacity-90 max-w-xl">
+                Deslop is a compiled-to-metal engine designed to eliminate runtime overhead. It leverages advanced kinetic memory allocation to achieve near-zero latency, making it the premier choice for systems demanding uncompromised speed and reliability.
+            </p>
+</header>
+<!-- Technical Preview (Terminal Block) -->
+<section class="mb-12">
+<h2 class="font-headline font-bold text-lg tracking-tighter mb-4 text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">bolt</span> Quick Start
+            </h2>
+<div class="bg-surface-container-low rounded-DEFAULT overflow-hidden flex flex-col">
+<div class="bg-surface-container-high px-4 py-2 flex items-center justify-between">
+<span class="font-mono text-[0.65rem] text-on-surface-variant uppercase tracking-widest">~/.deslop/setup.sh</span>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+</div>
+<div class="p-6 font-mono text-sm leading-relaxed overflow-x-auto">
+<div class="flex">
+<span class="text-outline-variant select-none mr-4">1</span>
+<span class="text-tertiary">curl</span> <span class="text-primary">-sL</span> <span class="text-on-surface">https://deslop.sh</span> <span class="text-primary">|</span> <span class="text-tertiary">bash</span>
+</div>
+<div class="flex">
+<span class="text-outline-variant select-none mr-4">2</span>
+<span class="text-on-surface">deslop </span><span class="text-primary">ignite</span><span class="text-on-surface"> --force</span>
+</div>
+<div class="flex mt-4 text-on-surface-variant">
+<span class="text-outline-variant select-none mr-4">*</span>
+<span>&gt; Initializing kinetic engine... [0.003ms]</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Feature Cards -->
+<section class="flex flex-col gap-6 mb-12">
+<h2 class="font-headline font-bold text-lg tracking-tighter mb-2 text-on-surface">Core Architecture</h2>
+<div class="bg-surface-container-low p-6 flex flex-col justify-between hover:bg-surface-container-highest transition-colors relative group overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="relative z-10 flex items-start gap-4">
+<span class="material-symbols-outlined text-primary text-[24px]">speed</span>
+<div>
+<h3 class="font-headline font-bold text-md tracking-tight mb-2">Zero-Cost Abstractions</h3>
+<p class="font-body text-[0.875rem] text-on-surface-variant leading-relaxed">
+                            Write expressive, high-level code that compiles down to the most efficient machine instructions possible. No garbage collection pauses.
+                        </p>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 flex flex-col justify-between hover:bg-surface-container-highest transition-colors relative group overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<div class="relative z-10 flex items-start gap-4">
+<span class="material-symbols-outlined text-primary text-[24px]">memory</span>
+<div>
+<h3 class="font-headline font-bold text-md tracking-tight mb-2">Memory Isolation</h3>
+<p class="font-body text-[0.875rem] text-on-surface-variant leading-relaxed">
+                            Strict linear types guarantee memory safety without sacrificing performance. Eliminate data races at compile time.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Navigation Footer -->
+<div class="flex justify-between items-center pt-8 border-t border-surface-container-highest">
+<span class="text-on-surface-variant text-[0.75rem] font-mono">End of Introduction</span>
+<a class="flex items-center gap-2 px-4 py-2 bg-primary-container text-on-primary-container font-medium text-sm rounded-DEFAULT hover:bg-primary hover:text-on-primary transition-colors" href="#">
+                Next: Installation
+                <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</a>
+</div>
+</main>
+<!-- Footer -->
+<footer class="w-full py-12 px-6 bg-surface-container-lowest dark:bg-surface-container-lowest flex flex-col items-center gap-8 w-full mt-auto">
+<ul class="flex flex-wrap justify-center gap-6">
+<li><a class="font-label text-[10px] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Documentation</a></li>
+<li><a class="font-label text-[10px] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">GitHub</a></li>
+<li><a class="font-label text-[10px] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Twitter</a></li>
+<li><a class="font-label text-[10px] tracking-widest uppercase text-on-surface-variant hover:text-primary transition-colors opacity-80 hover:opacity-100" href="#">Status</a></li>
+</ul>
+<div class="font-display font-black text-primary text-center">
+<span class="block mb-2 text-xl tracking-tighter">DESLOP</span>
+<span class="font-label text-[10px] tracking-widest uppercase text-on-surface-variant">© 2024 DESLOP KINETIC SYSTEMS. ALL RIGHTS RESERVED.</span>
+</div>
+</footer>
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuBtn = document.getElementById('menu-btn');
+            const navDrawer = document.getElementById('nav-drawer');
+            const drawerOverlay = document.getElementById('drawer-overlay');
+            let isDrawerOpen = false;
+
+            function toggleDrawer() {
+                isDrawerOpen = !isDrawerOpen;
+                if (isDrawerOpen) {
+                    navDrawer.classList.remove('-translate-x-full');
+                    drawerOverlay.classList.remove('hidden');
+                    // Small delay to allow display:block to apply before animating opacity
+                    setTimeout(() => {
+                        drawerOverlay.classList.remove('opacity-0');
+                    }, 10);
+                } else {
+                    navDrawer.classList.add('-translate-x-full');
+                    drawerOverlay.classList.add('opacity-0');
+                    setTimeout(() => {
+                        drawerOverlay.classList.add('hidden');
+                    }, 200);
+                }
+            }
+
+            menuBtn.addEventListener('click', toggleDrawer);
+            drawerOverlay.addEventListener('click', toggleDrawer);
+        });
+    </script>
+</body></html>
