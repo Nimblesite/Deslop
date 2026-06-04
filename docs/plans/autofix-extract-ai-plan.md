@@ -4,7 +4,9 @@
 
 ## Scope
 
-Two new MCP tools — `extract-method-plan` and `extract-method-apply` — that handle Type-2 and slot-alignable Type-3 clusters by combining a mechanical AST-derived scaffold with an AI-filled name slot. The AI picks a method name and one canonical name per parameter slot; Deslop synthesises the final `WorkspaceEdit` deterministically.
+**This is the fallback after `[AUTOFIX-MERGE]`.** Leaf-gap Type-2 / constrained Type-3 clusters are now merged **mechanically** (no AI) by [autofix-extract-method-plan.md](autofix-extract-method-plan.md) Tier A — anti-unification derives parameter names mechanically. The AI path remains only for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: clusters with structural / control-flow drift (gaps not confined to leaf positions), Type-4 semantic clones, or cases where a generalising parameter **name** materially aids readability. Renamed-identifier Type-2 is no longer a reason to invoke AI.
+
+Two MCP tools — `extract-method-plan` and `extract-method-apply` — handle that residue by combining a mechanical AST-derived scaffold with an AI-filled name slot. The AI picks a method name and one canonical name per parameter slot; Deslop synthesises the final `WorkspaceEdit` deterministically.
 
 Non-goals: Type-2 via LSP `codeAction` (synchronous; AI round-trip is not), AI-generated body code, AI-chosen destination, AI-driven type inference, freeform extract that accepts arbitrary code from the agent.
 

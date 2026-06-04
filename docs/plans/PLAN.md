@@ -51,8 +51,8 @@ Implemented work intentionally not repeated here:
 - [Language roadmap](LANG-ROADMAP.md) — future parser/plugin rollout. P-LANG-0 is complete; TypeScript/TSX is the next planned language slice.
 - [JetBrains native UX](jetbrains-ux-plan.md) — Tool Window and embedding picker over the existing LSP custom methods.
 - [JetBrains E2E](jetbrains-e2e-plan.md) — real Rider / IntelliJ tests with the real `deslop-lsp` binary.
-- [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) — LSP `refactor.extract` code action. Blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42) (Type-1 / Type-2 bucket split).
-- [Autofix — AI-assisted Extract for Type-2 / Type-3](autofix-extract-ai-plan.md) — `extract-method-plan` + `extract-method-apply` MCP tools. Blocked on Type-1 path landing.
+- [Autofix — Mechanical (zero-risk) deduplication](autofix-extract-method-plan.md) — LSP code actions + the `merge-plan` MCP tool over a shared `refactor` module: `[AUTOFIX-EXTRACT]` Type-1 verbatim extract, `[AUTOFIX-MERGE]` leaf-gap Type-2/3 call-site merge via anti-unification with default-valued params (the 50+-call-site case), `[AUTOFIX-CONSOLIDATE]` cross-file identical-definition consolidation. Safety underwritten by the static type checker (Dart/C#/Rust first; Python under strict typing). Tier 1 blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42).
+- [Autofix — AI-assisted Extract (fallback)](autofix-extract-ai-plan.md) — `extract-method-plan` + `extract-method-apply` MCP tools for the non-mechanical residue (structural drift, Type-4, readability naming). Blocked on the mechanical path landing.
 - [Interactive TUI](interactive-tui-plan.md) — deferred. Revisit after real CLI operator feedback.
 
 ## TODO
@@ -66,8 +66,8 @@ Implemented work intentionally not repeated here:
 - [ ] **Selected-cluster synchronisation** — one `selectedClusterId` signal locks the editor caret, the Top Offenders tree, the cluster webview, and the bubble together: `deslop.openCluster` and an in-clone caret both `TreeView.reveal(..., { select: true, focus: false })` the matching row (requires `getParent` for every grouping mode), and the tree never steals the caret ([vsix.md §VSIX-CLUSTER-SYNC](../specs/vsix.md#vsix-cluster-sync)). E2E proof across cluster/file/folder modes and on retraction per [§VSIX-CLUSTER-SYNC-TESTS](../specs/vsix.md#vsix-cluster-sync-tests).
 - [ ] Finish [JetBrains native UX](jetbrains-ux-plan.md).
 - [ ] Finish [JetBrains E2E](jetbrains-e2e-plan.md).
-- [ ] Finish [Autofix — Extract Method for Type-1](autofix-extract-method-plan.md) (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)).
-- [ ] Finish [Autofix — AI-assisted Extract](autofix-extract-ai-plan.md) (blocked on Type-1 landing).
+- [ ] Finish [Autofix — Mechanical (zero-risk) deduplication](autofix-extract-method-plan.md): Tier 1 `[AUTOFIX-EXTRACT]` (blocked on [#42](https://github.com/Nimblesite/Deslop/issues/42)), Tier A `[AUTOFIX-MERGE]` (anti-unification + default params + `merge-plan` tool + `refactor.rewrite` code action), Tier B `[AUTOFIX-CONSOLIDATE]` (cross-file consolidation).
+- [ ] Finish [Autofix — AI-assisted Extract (fallback)](autofix-extract-ai-plan.md) for the non-mechanical residue (blocked on the mechanical path landing).
 - [ ] Revisit [Interactive TUI](interactive-tui-plan.md) after operator feedback.
 
 ### ✅ Done

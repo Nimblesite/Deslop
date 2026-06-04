@@ -26,3 +26,48 @@ Primitives:
 Surveys:
 - [A Survey of Software Clone Detection from Security Perspective](https://www.semanticscholar.org/paper/A-Survey-of-Software-Clone-Detection-From-Security-Zhang-Sakurai/c834d313a2dca5747245c895b1a7c53e503ca8f6)
 - [Survey of Clone Detection Techniques, Types I–IV](https://www.semanticscholar.org/paper/The-Survey-of-the-Code-Clone-Detection-Techniques-(-Kaur-Sharma/f5600f495f863fd9f62ed29873d509939cd09ca0)
+
+### [READ-LIST-MERGE] Mechanical merge & behaviour-preserving refactoring
+
+Grounds `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]` in [autofix-extract.md](autofix-extract.md). Every link below was verified to resolve with a faithful claim. (Baxter et al. 1998 — the differing-leaf `Similarity = 2S/(2S+L+R)` and leaf-ignoring hash — is already listed under *Canonical* above.)
+
+Anti-unification (least general generalisation — the maths of turning differences into parameters):
+- [Plotkin 1970 — A Note on Inductive Generalization (lgg)](https://homepages.inf.ed.ac.uk/gdp/publications/MI5_note_ind_gen.pdf)
+- [Reynolds 1970 — Transformational Systems and the Algebraic Structure of Atomic Formulas](https://www.cs.cmu.edu/afs/cs/user/jcr/ftp/transysalg.pdf)
+- [Cerna & Kutsia 2023 — Anti-unification and Generalization: A Survey (IJCAI)](https://arxiv.org/abs/2302.00277)
+- [Bulychev & Minea 2008 — Duplicate Code Detection Using Anti-Unification (Clone Digger)](https://doi.org/10.15514/syrcose-2008-2-22)
+- [Li & Thompson 2009 — Clone Detection and Removal for Erlang/OTP (Wrangler, PEPM)](https://doi.org/10.1145/1480945.1480971)
+
+Clone refactoring / procedure extraction (the per-site argument lists + parameterisation):
+- [Komondoor & Horwitz 2000 — Semantics-Preserving Procedure Extraction (POPL)](https://doi.org/10.1145/325694.325713)
+- [Komondoor & Horwitz 2001 — Using Slicing to Identify Duplication (SAS)](https://doi.org/10.1007/3-540-47764-0_3)
+- [Komondoor & Horwitz 2003 — Effective, Automatic Procedure Extraction (IWPC)](https://www.csa.iisc.ac.in/~raghavan/iwpc03-paper.pdf)
+- [Krishnan & Tsantalis 2014 — Unification and Refactoring of Clones (CSMR-WCRE)](https://users.encs.concordia.ca/~nikolaos/publications/CSMR-WCRE_2014.pdf)
+- [Tsantalis, Mazinanian & Krishnan 2015 — Assessing the Refactorability of Software Clones (TSE)](https://doi.org/10.1109/TSE.2015.2448531)
+- [Tairas & Gray 2012 — Unifying clone detection and refactoring (CeDAR, IST)](https://doi.org/10.1016/j.infsof.2012.06.011)
+- [Hotta, Higo & Kusumoto 2012 — Form Template Method via PDG (CSMR)](https://doi.org/10.1109/CSMR.2012.16)
+- [Juillerat & Hirsbrunner 2007 — Toward Form Template Method (SCAM)](https://doi.org/10.1109/SCAM.2007.10)
+- [Fowler — Refactoring catalog](https://refactoring.com/catalog/) · [Parameterize Function](https://refactoring.com/catalog/parameterizeFunction.html)
+- [Code Clone Refactoring in C# with Lambda Expressions 2025 — value-vs-thunk (arXiv 2512.21511)](https://arxiv.org/abs/2512.21511)
+
+Behaviour-preserving refactoring (the "zero-risk" definition + the binding invariant):
+- [Opdyke 1992 — Refactoring Object-Oriented Frameworks (PhD thesis)](https://www.laputan.org/pub/papers/opdyke-thesis.pdf)
+- [Schäfer, Ekman & de Moor 2008 — Sound and Extensible Renaming for Java (OOPSLA)](https://dl.acm.org/doi/10.1145/1449764.1449787)
+- [Schäfer & de Moor 2010 — Specifying and Implementing Refactorings (OOPSLA)](https://dl.acm.org/doi/10.1145/1869459.1869485)
+- [Schäfer 2010 — Specification, implementation and verification of refactorings (DPhil, Coq-verified)](https://ora.ox.ac.uk/objects/uuid:1a027679-1e2b-4fb5-a6ff-3270f15154a1)
+- [Steimann 2018 — Constraint-Based Refactoring (TOPLAS)](https://doi.org/10.1145/3156016)
+- [Steimann, Kollee & von Pilgrim 2011 — A Refactoring Constraint Language (ECOOP)](https://link.springer.com/chapter/10.1007/978-3-642-22655-7_13)
+
+Clone-type theory (which clusters are mechanically mergeable):
+- [Baker 1995 — On Finding Duplication and Near-Duplication (dup / p-match, WCRE)](https://plg.uwaterloo.ca/~migod/846/papers/wcre95-baker.pdf)
+- [Baker 1996 — Parameterized Pattern Matching (prev-encoding, JCSS)](https://www.sciencedirect.com/science/article/pii/S0022000096900033)
+- [Roy, Cordy & Koschke 2009 — Type-1..4 taxonomy (Sci. Comput. Program.)](https://doi.org/10.1016/j.scico.2009.02.007)
+- [Bellon et al. 2007 — Clone-detection benchmark (TSE)](https://doi.org/10.1109/TSE.2007.70725)
+
+IDE refactoring delivery + trust (LSP, previews, HCI):
+- [LSP 3.17 — Code Action](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeAction) · [WorkspaceEdit](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspaceEdit) · [workspace/applyEdit](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#workspace_applyEdit)
+- [rust-analyzer — assists architecture](https://rust-analyzer.github.io/book/)
+- [IntelliJ — Structural Search and Replace](https://www.jetbrains.com/help/idea/structural-search-and-replace.html)
+- [Eclipse LTK — Language Toolkit for refactorings](https://www.eclipse.org/articles/Article-LTK/ltk.html) · [JDT refactoring-wizard preview](https://help.eclipse.org/latest/topic/org.eclipse.jdt.doc.user/reference/ref-wizard-refactorings.htm)
+- [Murphy-Hill & Black 2008 — Refactoring Tools: Fitness for Purpose (IEEE Software)](https://pdxscholar.library.pdx.edu/compsci_fac/109/)
+- [Vakilian et al. 2012 — Use, disuse, and misuse of automated refactorings (ICSE)](https://dl.acm.org/doi/10.5555/2337223.2337251) ([open access](https://www.ideals.illinois.edu/items/27956))
