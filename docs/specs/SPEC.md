@@ -88,12 +88,13 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
 - [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
+- [severity.md](severity.md) — `[SEVERITY-*]` the bucket → severity model: the always-on Deslop-severity colour map, the opt-in diagnostic map, the master `deslop.diagnostics.enabled` gate (diagnostics **off by default**), and the colour-vs-percentile projection consumed by lsp.md and vsix.md.
 - [mcp.md](mcp.md) — `[MCP-*]` Model Context Protocol shell: tools, resources, notifications. `find-similar` is the keystone tool for AI agents.
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.
 - [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
 - [competitors.md](competitors.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
-- [autofix-extract.md](autofix-extract.md) — `[AUTOFIX-EXTRACT-*]` LSP `refactor.extract` code action that rewrites true Type-1 clusters as a single shared method. v1: pure tree-sitter, no semantic model, blocked on the bucket Type-1 / Type-2 split.
+- [autofix-extract.md](autofix-extract.md) — `[AUTOFIX-*]` the mechanical (zero-risk, no-AI) deduplication family: `[AUTOFIX-EXTRACT]` Type-1 verbatim extract, `[AUTOFIX-MERGE]` leaf-gap Type-2/3 call-site merge via anti-unification with default-valued parameters, `[AUTOFIX-CONSOLIDATE]` cross-file identical-definition consolidation, the `[AUTOFIX-CATALOG]` of further fixes, and the `[AUTOFIX-EXTRACT-AI]` fallback. Safety is underwritten by the static type checker (`[AUTOFIX-ZERO-RISK]`; Dart/C#/Rust first, Python under strict typing).
 
 ## Algorithm implementation status
 
@@ -129,8 +130,10 @@ The pipeline draws on a small handful of clone-detection research lines. Every a
 | VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
 | JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |
 | Type-1 / Type-2 bucket split (autofix prerequisite) | ⏳ tracked by [#42](https://github.com/Nimblesite/Deslop/issues/42) | — |
-| Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT-*]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
-| Autofix AI-assisted Extract for Type-2 / Type-3 | ⏳ | [`plans/autofix-extract-ai-plan.md`](../plans/autofix-extract-ai-plan.md) |
+| Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
+| Mechanical call-site merge — anti-unification + default params ([AUTOFIX-MERGE]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
+| Cross-file identical-definition consolidation ([AUTOFIX-CONSOLIDATE]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
+| Autofix AI-assisted Extract — fallback after [AUTOFIX-MERGE] | ⏳ | [`plans/autofix-extract-ai-plan.md`](../plans/autofix-extract-ai-plan.md) |
 | Rator-style node degrees-of-freedom encoding ([TECH-LLM-HYBRID]) | 🚫 not implemented | research only — would replace LSH if adopted |
 | HyClone-style execution-validated Type-4 ([TECH-LLM-HYBRID]) | 🚫 not implemented | research only — Python-specific |
 | LLM-ensemble embedding fusion (multi-model max/sum) | 🚫 not implemented | single embedding model today; provider trait keeps this open |

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Deslop - Lightning-Fast Code Deduplication</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-primary-fixed": "#410001",
+                      "on-error-container": "#ffdad6",
+                      "on-secondary-fixed": "#1b1c1c",
+                      "inverse-on-surface": "#313030",
+                      "outline-variant": "#5a403d",
+                      "secondary-container": "#474746",
+                      "surface-container-lowest": "#0e0e0e",
+                      "surface-container-low": "#1c1b1b",
+                      "surface-container": "#201f1f",
+                      "tertiary-fixed-dim": "#9bcbff",
+                      "surface-bright": "#393939",
+                      "surface-container-high": "#2a2a2a",
+                      "on-tertiary-fixed-variant": "#004a7a",
+                      "on-surface": "#e5e2e1",
+                      "on-background": "#e5e2e1",
+                      "tertiary": "#9bcbff",
+                      "on-secondary": "#303030",
+                      "secondary-fixed-dim": "#c8c6c5",
+                      "surface-dim": "#131313",
+                      "primary": "#ffb4aa",
+                      "on-error": "#690005",
+                      "secondary-fixed": "#e5e2e1",
+                      "primary-container": "#b3261e",
+                      "on-primary": "#690003",
+                      "on-tertiary-fixed": "#001d34",
+                      "inverse-primary": "#b4271f",
+                      "on-tertiary": "#003256",
+                      "surface": "#131313",
+                      "surface-tint": "#ffb4aa",
+                      "tertiary-fixed": "#d0e4ff",
+                      "on-tertiary-container": "#bbdaff",
+                      "secondary": "#c8c6c5",
+                      "on-primary-fixed-variant": "#910809",
+                      "error": "#ffb4ab",
+                      "primary-fixed-dim": "#ffb4aa",
+                      "outline": "#a98985",
+                      "surface-variant": "#353534",
+                      "on-surface-variant": "#e2beb9",
+                      "on-secondary-fixed-variant": "#474746",
+                      "surface-container-highest": "#353534",
+                      "background": "#131313",
+                      "tertiary-container": "#00619e",
+                      "primary-fixed": "#ffdad5",
+                      "on-secondary-container": "#b7b5b4",
+                      "on-primary-container": "#ffcbc4",
+                      "inverse-surface": "#e5e2e1",
+                      "error-container": "#93000a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {},
+              "fontFamily": {
+                      "headline": [
+                              "Inter"
+                      ],
+                      "display": [
+                              "Inter"
+                      ],
+                      "body": [
+                              "Inter"
+                      ],
+                      "label": [
+                              "Inter"
+                      ],
+                      "mono": [
+                          "JetBrains Mono"
+                      ]
+              },
+              "fontSize": {}
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: theme('colors.surface');
+            color: theme('colors.on-surface');
+        }
+        .terminal-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .terminal-scroll::-webkit-scrollbar-track {
+            background: theme('colors.surface-container-lowest');
+        }
+        .terminal-scroll::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-container-high');
+        }
+      </style>
+</head>
+<body class="font-body antialiased min-h-screen flex flex-col pt-14">
+<!-- TopAppBar Component -->
+<header class="fixed top-0 w-full bg-surface dark:bg-surface flex justify-between items-center px-4 h-14 z-50 flat no shadows">
+<div class="flex items-center gap-3 active:scale-95 duration-100 cursor-pointer">
+<span class="material-symbols-outlined text-primary dark:text-primary">menu</span>
+<div class="flex items-center gap-2">
+<img alt="Deslop Logo" class="w-6 h-6 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLt-s3JiwBXrZHeKbsIK8-LJeKvdIf0bqZ0BXss2Ba2ivqRXTW97e2q-VsFVuFRYh1wZXnSLQGrg77hFYqf1uLYxeGTj_6aBYM7ZvTzprAexRjuzC5IFFZ64g-UuXr3shXDpLoG_AVJxw9xA_nH7QB7-UJhU0J6mWvDGRoYyd-GV25YVKLJEGD82gNsBVH5acgKdD8Tso9tYWc7-z9nXiwNUONhw14Bxcdov0qeZGkVMbWQnZaBhyEf8A9U"/>
+<span class="font-headline font-black text-xl tracking-tighter text-on-surface dark:text-on-surface">DESLOP</span>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<nav class="hidden md:flex gap-4 font-body text-body-md tracking-tight uppercase">
+<a class="text-on-surface-variant hover:bg-surface-container-high transition-colors px-2 py-1 rounded-sm" href="#">Docs</a>
+<a class="text-on-surface-variant hover:bg-surface-container-high transition-colors px-2 py-1 rounded-sm" href="#">Blog</a>
+<a class="text-on-surface-variant hover:bg-surface-container-high transition-colors px-2 py-1 rounded-sm" href="#">GitHub</a>
+</nav>
+<span class="material-symbols-outlined text-primary dark:text-primary active:scale-95 duration-100 cursor-pointer">terminal</span>
+</div>
+</header>
+<main class="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12 md:py-24 gap-12 items-start">
+<!-- Hero Content Section -->
+<div class="flex-1 flex flex-col gap-8 md:sticky md:top-24">
+<div class="inline-flex items-center gap-2 font-mono text-xs tracking-widest uppercase text-on-surface-variant w-fit border border-outline-variant/20 px-3 py-1 rounded-full bg-surface-container-low">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                LIVE MCP + LSP · PREVENTS THE COPY-PASTE
+            </div>
+<h1 class="font-display font-black text-5xl sm:text-6xl md:text-7xl tracking-tighter leading-[1.1]">
+                Your agent is<br/>about to copy-<br/>paste.<br/>
+<span class="text-primary-container">Deslop tells it<br/>not to.</span>
+</h1>
+<p class="font-body text-lg text-on-surface-variant max-w-xl leading-relaxed">
+                Deslop is a <strong class="text-on-surface font-bold">live LSP + MCP server</strong> running in your workspace. It streams real-time duplicate-code signals to <strong class="text-on-surface font-bold">Claude Code, Cursor, Copilot, Continue, Codex</strong> — and your editor — <em class="italic">as code is written</em>. The agent calls <code class="font-mono bg-surface-container-lowest px-1.5 py-0.5 rounded-sm text-sm text-on-surface">find-similar</code> <em class="italic">before</em> writing a new function. If the pattern already exists, it reuses the canonical. The copy-paste never happens.
+            </p>
+<div class="flex flex-col sm:flex-row gap-4 mt-4 w-full">
+<!-- Primary CTA -->
+<button class="bg-gradient-to-r from-primary to-primary-container text-on-primary-container font-headline font-bold text-sm px-6 py-4 rounded-sm flex items-center justify-center gap-2 hover:opacity-90 transition-opacity flex-1 sm:flex-none">
+                    Install from the VS<br/>Code Marketplace
+                </button>
+<!-- Secondary CTA (Terminal Style) -->
+<div class="bg-surface-container-lowest border border-outline-variant/20 rounded-sm flex items-center justify-between px-4 py-4 font-mono text-sm text-on-surface-variant flex-1 sm:flex-none group cursor-copy hover:bg-surface-container-low transition-colors">
+<div class="flex flex-col">
+<span class="text-xs text-on-surface-variant/70 mb-1">Install CLI</span>
+<span>npm i -g @deslop/cli</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors text-lg" data-icon="content_copy">content_copy</span>
+</div>
+</div>
+<p class="font-mono text-[10px] text-on-surface-variant/70 mt-2 max-w-xl leading-tight uppercase tracking-wider">
+                The VSIX is the one install that gives you everything — live bubble, LSP server, MCP server, and the CLI in one bundle.
+            </p>
+</div>
+<!-- Right Side: Terminal Preview & Metrics -->
+<div class="flex-1 flex flex-col gap-8 w-full max-w-2xl">
+<!-- Terminal Window -->
+<div class="bg-surface-container-lowest rounded-md flex flex-col overflow-hidden relative shadow-2xl border border-outline-variant/10">
+<!-- Terminal Header -->
+<div class="bg-surface-container-low h-10 flex items-center px-4 gap-2 border-b border-surface-container relative z-10">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-surface-variant"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-variant"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-surface-variant"></div>
+</div>
+<div class="mx-auto font-mono text-xs text-on-surface-variant/70 tracking-wider">
+                        deslop-mcp · live · claude-code
+                    </div>
+</div>
+<!-- Terminal Content -->
+<div class="p-4 sm:p-6 font-mono text-sm flex flex-col gap-6 relative overflow-y-auto max-h-[60vh] terminal-scroll z-10">
+<!-- Command -->
+<div class="flex gap-2 text-on-surface-variant">
+<span class="text-primary">→</span>
+<span>agent: <span class="text-tertiary">find-similar</span> { path: "auth/middleware.ts", range: L42-L71 }</span>
+</div>
+<!-- Processing -->
+<div class="flex gap-2 text-on-surface-variant/70">
+<span class="text-surface-variant">←</span>
+<span>deslop: streaming clusters...</span>
+</div>
+<!-- Result Block 1 (Type 3) -->
+<div class="bg-surface-container-low p-4 rounded-sm flex flex-col gap-4 border-l-2 border-error">
+<div class="flex justify-between items-start">
+<span class="text-error text-xs font-bold uppercase tracking-wider">Nearly identical code [Type-3]</span>
+<span class="text-[10px] text-on-surface-variant/50">fused 0.94</span>
+</div>
+<div class="flex justify-between items-end text-xs sm:text-sm">
+<div class="flex flex-col text-on-surface-variant">
+<span>src/utils/legacy_auth.ts</span>
+<span>src/middleware/auth.ts</span>
+</div>
+<div class="flex flex-col text-tertiary-fixed-dim items-end text-right">
+<span>L104-L176</span>
+<span>L12-L84</span>
+</div>
+</div>
+</div>
+<!-- Result Block 2 (Type 4) -->
+<div class="bg-surface-container-low p-4 rounded-sm flex flex-col gap-4 border-l-2 border-tertiary">
+<div class="flex justify-between items-start">
+<span class="text-tertiary text-xs font-bold uppercase tracking-wider">Same behavior, different code [Type-4]</span>
+<span class="text-[10px] text-on-surface-variant/50">embed 0.82</span>
+</div>
+<div class="flex justify-between items-end text-xs sm:text-sm">
+<div class="flex flex-col text-on-surface-variant">
+<span>src/db/connection.rs</span>
+<span>src/db/pool.rs</span>
+</div>
+<div class="flex flex-col text-tertiary-fixed-dim items-end text-right">
+<span>L40-L55</span>
+<span>L12-L27</span>
+</div>
+</div>
+</div>
+<!-- Final Action -->
+<div class="flex gap-2 text-on-surface-variant mt-2 text-xs sm:text-sm">
+<span>agent decision: <strong class="text-on-surface">reuse `legacy_auth.verify()`</strong> · no copy-paste emitted</span>
+</div>
+</div>
+<!-- Terminal Footer Status -->
+<div class="bg-surface-container-lowest border-t border-outline-variant/10 py-2 px-4 font-mono text-[10px] text-on-surface-variant/50 tracking-widest uppercase flex justify-between">
+<span>Live LSP</span>
+<span>250 ms debounce</span>
+<span>2 s cap</span>
+</div>
+</div>
+<!-- Metrics Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div class="bg-surface-container-low p-5 rounded-sm flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-surface-container-high to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<span class="font-mono text-xs text-on-surface-variant uppercase tracking-widest relative z-10">Avg Scan Time</span>
+<span class="font-mono text-2xl font-bold text-on-surface relative z-10">0.003ms</span>
+</div>
+<div class="bg-surface-container-low p-5 rounded-sm flex flex-col gap-2 relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-primary-container/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+<span class="font-mono text-xs text-on-surface-variant uppercase tracking-widest relative z-10">Redundancy Removed</span>
+<span class="font-mono text-2xl font-bold text-primary relative z-10">4.2GB</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Component -->
+<footer class="mt-auto bg-surface-container-lowest dark:bg-surface-container-lowest flex flex-col items-start gap-4 p-6 w-full border-t border-outline-variant/20 flat no shadows">
+<div class="flex flex-col md:flex-row justify-between w-full gap-6">
+<div class="text-primary font-bold font-mono text-[10px] tracking-tight uppercase">
+                ©2024 DESLOP_CORE v4.2.0
+            </div>
+<div class="flex flex-wrap gap-6">
+<a class="font-mono text-[10px] tracking-tight uppercase text-on-surface-variant hover:text-primary transition-colors underline-offset-4 hover:underline" href="#">CHIPS_SET</a>
+<a class="font-mono text-[10px] tracking-tight uppercase text-on-surface-variant hover:text-primary transition-colors underline-offset-4 hover:underline" href="#">LATENCY_API</a>
+<a class="font-mono text-[10px] tracking-tight uppercase text-on-surface-variant hover:text-primary transition-colors underline-offset-4 hover:underline" href="#">LICENSE</a>
+</div>
+</div>
+</footer>
+</body></html>

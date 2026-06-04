@@ -193,9 +193,10 @@ layout: layouts/base.njk
 // Footer override: swap the techdoc plugin's footer markup for one that
 // credits Nimblesite (the product owner) and links back to nimblesite.co.
 // Techdoc ships `layouts/base.njk` as a virtual template, so we replace it
-// wholesale — the only deliberate diff from upstream is the `footer-bottom`
-// block. Keep the rest in lock-step with the plugin's template or head tags
-// will drift.
+// wholesale. Two deliberate diffs from upstream: the Google Analytics
+// (gtag.js) snippet at the top of <head>, and the `footer-bottom` block.
+// Keep the rest in lock-step with the plugin's template or head tags will
+// drift.
 const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
 <html lang="{{ lang | default('en') }}">
 <head>
@@ -207,6 +208,16 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-F8YJ86ETVQ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-F8YJ86ETVQ');
+  </script>
 
   <title>{{ title | default(site.title) }}</title>
   <meta name="title" content="{{ title | default(site.title) }}">

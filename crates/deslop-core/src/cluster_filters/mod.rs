@@ -52,6 +52,13 @@
 //! - **#147** — `xs.iter().map(|x| x.field.as_str()).collect()` is a
 //!   pure language idiom that clusters across unrelated element types.
 //!   Extracting it would require a cross-crate trait, not deduplication.
+//! - **#176** [CLONE-NOISE-RUST-MATCH-DISPATCH] — runs of `match` arms in
+//!   a dispatch `match` collapse to one `<path>::<ident> => Ok(<call>(..))`
+//!   shape under Type-2 normalisation, so the sibling-window pass matches
+//!   one window of arms against another within the same `match`. A routing
+//!   table maps distinct keys to distinct handlers; it is not extractable.
+//!   Suppressed only when the arm patterns are pairwise distinct and two
+//!   members differ in raw bytes, so a verbatim copied run still surfaces.
 //! - **#115a** [CLONE-NOISE-PY-STRENUM-CLASS-SHAPE] — `class X(StrEnum)`
 //!   declarations carry an identical docstring + assignment body shape
 //!   but each enum is a closed discriminator with distinct vocabulary.
@@ -183,11 +190,12 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_constants::is_module_constant_table_cluster(snippets)
 }
 
-/// All Rust idiom noise filters (issues #75/#147/#150/#155).
+/// All Rust idiom noise filters (issues #75/#147/#150/#176).
 fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
     rust::is_rust_language_parser_adapter_cluster(snippets)
         || rust::is_rust_top_level_decl_cluster(snippets)
         || rust::is_rust_iter_collect_idiom_cluster(snippets)
+        || rust::is_rust_match_dispatch_cluster(snippets)
 }
 
 /// Decides whether an embedding-dominant `same_behavior` cluster pairs

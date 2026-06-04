@@ -1,20 +1,36 @@
-# Autofix — Extract Method (true Type-1 only)
+# Autofix — Mechanical (Zero-Risk) Deduplication
 
-Deslop's first mechanical autofix: an LSP `textDocument/codeAction` of kind `refactor.extract` that, given a cluster of **true Type-1 occurrences** (raw token streams byte-identical post-trivia), emits a single shared method and rewrites every occurrence in the cluster as a call to it. **One refactor, N call-site replacements, one `WorkspaceEdit`.**
+Deslop's mechanical autofixes rewrite duplicate code **without an AI in the loop and without changing behaviour.** The family, in escalating order of what each handles:
 
-This spec covers v1: pure tree-sitter, no semantic model. Type-2 (renamed-identifier) clusters, cross-file extraction, and type inference are explicit non-goals — see [AUTOFIX-EXTRACT-NORTH-STAR].
+1. **[AUTOFIX-EXTRACT]** — true **Type-1** clusters (raw token streams byte-identical post-trivia): emit one shared method, rewrite every occurrence as a call. One refactor, N call-site replacements, one `WorkspaceEdit`.
+2. **[AUTOFIX-MERGE]** — **leaf-gap Type-2 / constrained Type-3** clusters (the 50+-call-site case): anti-unify the occurrences into one parameterised helper whose differing leaves become parameters — with **default values** for positions that are constant across (almost) every site — then rewrite all sites.
+3. **[AUTOFIX-CONSOLIDATE]** — an **identical definition duplicated across files**: keep one canonical copy, delete the duplicates, and rewrite imports/references everywhere.
+4. **[AUTOFIX-EXTRACT-AI]** — the **fallback** for what is genuinely not mechanical (structural drift, Type-4, intent-laden naming).
 
-## [AUTOFIX-EXTRACT-NORTH-STAR] Scope and non-goals
+## [AUTOFIX-ZERO-RISK] Why mechanical beats handing it to AI
+
+Getting the right context to an AI is hard, and even when it lands the AI often gets the refactor wrong. **Every cluster Deslop can drain mechanically is one that never needs the lossy, error-prone AI handoff.** The mechanical path is preferable wherever it applies, and it applies far more often than the original `[AUTOFIX-EXTRACT]`-only framing assumed.
+
+Two pillars make these actions zero-risk:
+
+- **Correctness by construction.** Each action is a *behaviour-preserving transformation* in the sense of Opdyke — it is applied only when a machine-checkable precondition set holds ([AUTOFIX-MERGE-SAFETY]). `[AUTOFIX-MERGE]` computes its template and per-site argument lists by **anti-unification** (least general generalisation, Plotkin/Reynolds); the parameter *name* is cosmetic and never affects behaviour, so AI naming is at most an optional readability polish, never a correctness prerequisite.
+- **The static type checker is the backstop.** In a type-safe language a mechanically-produced edit that is somehow wrong becomes a **compile error the developer sees immediately** — never a silent runtime behaviour change. The primary targets are therefore **Dart, C#, and Rust**. **Python qualifies only when strict type checking (basedpyright / pyright `strict`) is on** (gated via `session-config`); otherwise `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]` refuse for Python and route to the AI fallback.
+
+When any precondition is undecidable or fails, the action **refuses and routes to `[AUTOFIX-EXTRACT-AI]`** — biased, per Opdyke, toward a false "unsafe" over a false "safe".
+
+## [AUTOFIX-EXTRACT-NORTH-STAR] Scope and non-goals (the Type-1 verbatim action)
+
+This section governs `[AUTOFIX-EXTRACT]` specifically — the simplest action, pure tree-sitter, no semantic model. Type-2 leaf-gap clusters and cross-file duplicates are **not** abandoned to AI; they are handled mechanically by `[AUTOFIX-MERGE]` and `[AUTOFIX-CONSOLIDATE]` below.
 
 What this is:
 
-- A v1 best-effort refactor for the unambiguously-easiest clone bucket. No Roslyn / rust-analyzer / pyright dependency. The result is offered as a code action the user reviews and accepts.
+- A best-effort refactor for the unambiguously-easiest clone bucket. No Roslyn / rust-analyzer / pyright dependency. The result is offered as a code action the user reviews and accepts.
 - A power-user shortcut alongside the existing diagnostic, hover, and code lens — never the only suggested fix for a duplicate.
 
 What this is **not**:
 
-- **Not Type-2.** Renamed identifiers/literals require per-site argument lists; a single shared method has a single signature. Type-2 needs a real refactor engine and lands later.
-- **Not cross-file in v1.** All occurrences must share the same file URI.
+- **Not Type-2 — that is `[AUTOFIX-MERGE]`.** Renamed identifiers/literals need per-site argument lists; the verbatim single-signature extract here cannot produce them. The mechanical answer is anti-unification ([AUTOFIX-MERGE]), not AI.
+- **Not cross-file — that is `[AUTOFIX-CONSOLIDATE]`.** This action requires all occurrences to share the same file URI; cross-file identical definitions are consolidated mechanically by `[AUTOFIX-CONSOLIDATE]`.
 - **Not cross-class in v1.** Even within a file, occurrences in two different classes are skipped.
 - **Not type-aware.** Parameter and return types are syntactic placeholders. The user accepts the result may not compile.
 - **Not destination-configurable.** Per-language destination policy is fixed; the user moves the helper afterward if they want.
@@ -172,9 +188,145 @@ Goldens live under `crates/deslop-lsp/tests/fixtures/code_action/`. Test referen
 
 ---
 
-## [AUTOFIX-EXTRACT-AI] AI-assisted extraction for Type-2 and Type-3
+## [AUTOFIX-MERGE] Mechanical call-site merge (leaf-gap Type-2 / constrained Type-3)
 
-The Type-1 path above stays mechanical because byte-identical tokens guarantee identical free-variable names at every site. **Type-2 (renamed identifiers) and Type-3 (small structural drift) break that invariant** — site A's free vars are `(customer, name)` while site B's are `(admin, label)` — so a single shared signature needs **chosen** parameter names, not derived ones. Choosing names is intent work, not syntax work.
+The 50+-call-site case: N occurrences sharing one skeleton, differing only in a handful of leaf positions. Merge them into a single parameterised helper whose differing leaves become parameters, and rewrite every site. Bibliography: [reading-list.md §READ-LIST-MERGE](reading-list.md#read-list-merge).
+
+**Reuses, without restating:** the free-variable walk ([AUTOFIX-EXTRACT-FREE-VARS]); the slot-alignment + scaffold machinery ([AUTOFIX-EXTRACT-AI-SCAFFOLD], plus the slot bullets of [AUTOFIX-EXTRACT-AI-NORTH-STAR]); the per-language emitter trait; and the `WorkspaceEdit` assembly ([AUTOFIX-EXTRACT-WORKSPACE-EDIT]). `[AUTOFIX-MERGE]` **is** that scaffold with the AI name-selection step replaced by mechanical name derivation + default-value computation.
+
+### [AUTOFIX-MERGE-GATE] Which clusters are mechanically mergeable
+
+`decide_mergeability(cluster) -> Mechanical | AiOrHuman(reason)` (Baker p-match; Roy/Cordy taxonomy; Baxter similarity; Bellon thresholds):
+
+```
+0  size guard: AST mass >= MassThreshold AND span >= 6 lines (Bellon); >=2 survivors.
+1  skeleton: strip trivia; replace param-position leaves (ident/literal/type, leaf arg-exprs)
+   with PARAM, keep values in traversal order; remaining tree = skeleton.
+2  hash skeleton ignoring PARAM leaves (Baxter); confirm exact skeleton equality in-bucket.
+   no PARAM differs       -> Type-1 -> defer to [AUTOFIX-EXTRACT] (verbatim extract).
+   skeletons not equal     -> Type-3+ -> AiOrHuman.
+3  consistency (Baker prev-encoding): consistent bijective rename -> liftable; else treat each
+   differing leaf as its own parameter.
+4  gate (ALL must hold) -> Mechanical, else AiOrHuman:
+   (a) min Similarity(Fi,rep) >= SIM_THRESHOLD (~0.95)         [Baxter 2S/(2S+L+R)]
+   (b) max DIFF_LEAVES(Fi) <= MAX_DIFF_LEAVES (a handful)
+   (c) PARAM_ARITY <= MAX_PARAMS
+   (d) EVERY differing position is a LEAF/argument position — no structural/control-flow diff.
+```
+
+Unconstrained Type-3 (statements added/removed, control-flow drift) and Type-4 route to AI: Bellon shows experts disagree on most Type-3 candidates and Type-3 similarity is non-transitive — judgement, not auto-merge.
+
+### [AUTOFIX-MERGE-ANTIUNIFY] The template and the per-site arguments
+
+First-order syntactic anti-unification / least general generalisation (Plotkin 1970; Reynolds 1970; rule form per Cerna & Kutsia 2023; applied to ASTs by Bulychev & Minea 2008; shipped end-to-end by Li & Thompson 2009 / Wrangler):
+
+```
+STATE = (g, P, store)   g: template (starts as one fresh var); P: pending x:s~u;
+                        store: (s,u)->var  (the coalesce map that makes the result the *least* gen)
+DECOMPOSE (heads agree f/n):  g[x:=f(x1..xn)]; recurse on children pairwise   (keep f literally)
+SOLVE     (heads differ):     store has (s,u)->y ? g[x:=y]          (REUSE the parameter)
+                                                  : store[(s,u)]:=x  (NEW parameter; leaf in g)
+RESULT  g = the helper body; each surviving leaf var x carries sigma_j(x) at site j.
+N sites: fold pairwise carrying the store (or n-ary: reuse a var iff the whole N-tuple matches).
+   Each leaf var's N-vector of values, read per site, IS that site's argument list.
+GUARD   reject if #leaf-vars is large vs #preserved nodes (tiny skeleton + many holes = bad merge).
+```
+
+### [AUTOFIX-MERGE-SAFETY] Behaviour-preservation preconditions
+
+Declare MECHANICAL only if ALL pass (Opdyke behaviour-preservation; Komondoor & Horwitz extraction; Schäfer binding soundness; Tsantalis refactorability; value-vs-thunk per arXiv:2512.21511). Any failure or undecidable check → REFUSE, route to [AUTOFIX-EXTRACT-AI]:
+
+```
+A STRUCTURAL : occurrences identical up to consistent local renaming + fixed holes at the SAME
+   tree-aligned positions.
+B EXTRACTABLE: single-entry/single-exit; no return/break/continue/goto/throw-caught-outside/
+   yield/await/`?` crossing the boundary; no local declared-inside read-after.
+C BINDING    : simulate the move; lookup(ref)_after == lookup(ref)_before for every reference and
+   every generated call expr (Schäfer) — no new shadowing/capture/overload change; preserve
+   read/write order of free vars; do not straddle a lock/await/transaction/Rust-borrow boundary.
+D HOLE SAFETY: each hole pure & evaluation-timing-unchanged -> VALUE parameter; else -> a DEFERRED
+   THUNK (C# Func<>, Python lambda, Dart closure, Rust Fn/FnOnce) invoked at the original program
+   point (preserves order, defers side effects); if even a thunk can't preserve order -> REFUSE.
+   All variants of a hole must unify to one type T (supertype/interface/generic/trait bound); no
+   common type without an unchecked cast -> REFUSE.
+E ACCESS     : helper reachable/visible from EVERY site; every symbol it references accessible from
+   the helper's location for every site; unique non-colliding name.
+F ATOMIC     : rewrite ALL n sites in one change -> no default needed, default hazards vanish.
+```
+
+### [AUTOFIX-MERGE-NAMES] Mechanical naming, defaults, and the type-safety backstop
+
+- **Names (no AI).** Per slot, the **modal candidate identifier** across sites if it is one valid identifier, else positional (`arg0`, `arg1`). Deterministic — same cluster id, same names — for golden tests. AI naming ([AUTOFIX-EXTRACT-AI]) is an optional readability post-pass, never required.
+- **Defaults.** Per slot, inspect its N-vector. If all-but-≤K sites share one value, that value is the slot's **default** and only the outliers pass it; otherwise the slot is **required**. Because (F) rewrites every site, defaults are a *readability* win (common sites collapse to a bare call), never a correctness mechanism.
+- **Types (the backstop).** The parameter type is the unified type from (D). In Dart/C#/Rust the compiler verifies the merged result — a mis-typed merge is a compile error, never a silent change. This **replaces** the `object`/`DeslopTodo` placeholder approach for the mechanical path: if no type unifies, REFUSE rather than emit guess-typed code.
+
+### [AUTOFIX-MERGE-DEFAULTS] Per-language default feasibility (type-safe first)
+
+Defaults are only consulted when some callers cannot be rewritten atomically (e.g. a public API used outside the change set); otherwise (F) makes them moot.
+
+| Lang | Mechanical default rule |
+|---|---|
+| **C#** | Optional param only if the default is a compile-time const **and** all callers recompile in the change set; else add a forwarding **overload** (avoids the baked-in cross-assembly default hazard). |
+| **Dart** | Named/optional default only if the value is `const`; else nullable param + `?? computeDefault()`. |
+| **Rust** | No defaults, no overloading. Equivalents (all need atomic rewrite, F): pass explicitly; `Option<T>` + branch on `None`; a forwarding wrapper fn; or a builder / `Default`. |
+| **Python** | (strict-typing only) immutable-literal default OK; mutable/computed default uses the `None`-sentinel idiom (`def f(x=None): x = x if x is not None else ...`). |
+
+## [AUTOFIX-CONSOLIDATE] Cross-file identical-definition consolidation
+
+When a cluster's occurrences are **whole top-level definitions** (function / class / impl) that are Type-1/Type-2 identical but live in ≥2 files (differing only by filename / surrounding imports): keep one canonical copy, **delete the duplicate definitions**, and **rewrite every reference** in the duplicates' dependents to the canonical symbol.
+
+This is the one mechanical action needing **semantic depth** beyond tree-sitter: a per-language **import/symbol resolver** that builds the reference graph — the same primitive a language server's *rename symbol* / *move* uses. Its correctness invariant is Schäfer's: `lookup(ref)_after == lookup(ref)_before` for every reference; Steimann's constraint solving computes the extra import/qualification edits required.
+
+### [AUTOFIX-CONSOLIDATE-GATE] Preconditions
+
+REFUSE unless all hold: every duplicate definition is reference-resolvable; consolidation introduces no name collision at the canonical location; no visibility/orphan-rule break (Rust `pub`/crate visibility, trait orphan rule); every dependent reference is in the change set or reachable via the workspace index. The type-safety backstop applies — in typed languages a missed/incorrect import is an immediate compile error (Python only under strict typing).
+
+### [AUTOFIX-CONSOLIDATE-EDIT] The WorkspaceEdit
+
+`documentChanges` mixing resource operations and text edits, executed in array order: a `DeleteFile` for any duplicate file that becomes empty (else a `TextDocumentEdit` deleting the definition), plus one `TextDocumentEdit` per dependent rewriting its import/reference to the canonical symbol. Versioned identifiers; `changeAnnotations` for the preview tree; `failureHandling: transactional`; single undo label.
+
+## [AUTOFIX-CATALOG] The zero-risk mechanical-fix catalog
+
+The full surface of behaviour-preserving, no-AI deduplication actions and their status:
+
+| Fix | Mechanism | Depth | Status |
+|---|---|---|---|
+| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | specced; blocked on #42 |
+| Call-site merge ([AUTOFIX-MERGE]) | anti-unification + default params | binding + types | this spec |
+| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | this spec |
+| Redirect to existing canonical | a fragment duplicating an *existing* named helper → replace with a call to it (Fowler *Replace Inline Code with Function Call*) | binding + types | spec'd here; after [AUTOFIX-MERGE] |
+| Consolidate duplicate constant/literal | repeated literal → one shared `const`/`static`, refs updated | trivial | catalog (degenerate parameterise-by-constant) |
+| Pull Up Method / Form Template Method | now-identical sibling methods → superclass; differing steps overridable (Hotta/Higo PDG; Fowler) | class hierarchy | catalog (OO-only; needs hierarchy model) |
+| Identical import/using dedup | collapse duplicate import lines | trivial | catalog |
+
+Rows below "this spec" are documented opportunities, not yet implemented; each ships with its own gate when scheduled.
+
+## [AUTOFIX-MERGE-MCP] MCP tool surface
+
+One new tool, cloning the `cluster-by-id` end-to-end shape ([mcp.md §MCP-TOOLS](mcp.md#mcp-tools)); naming + prompt engineering per [MCP-AGENT-PROMPT-GUIDANCE]:
+
+| Tool | Inputs | Output | Description (prevention-first, ≤200 chars) |
+|---|---|---|---|
+| `merge-plan` | `{ cluster_id }` | `MergePlan` | Compute the mechanical merge for a cluster: parameterised helper, derived param names/types, per-site arguments, defaults, the `mechanical`/`ai_or_human` verdict, and the `WorkspaceEdit`. **Read-only — never writes files.** |
+
+`MergePlan` is the only addition; the mechanical path has no AI round-trip, so no second tool is needed (the AI fallback keeps its `extract-method-plan` / `extract-method-apply` pair). The host applies the returned `WorkspaceEdit`. Wire type added to [live-ipc.td](../models/live-ipc.td); the request reuses `ClusterIdParams`.
+
+## [AUTOFIX-MERGE-CODE-ACTION] LSP code action (IDE auto-fix)
+
+`backend.rs` advertises `codeActionProvider { codeActionKinds: ["refactor.extract", "refactor.rewrite"], resolveProvider: true }` (LSP 3.17 lists `refactor.rewrite` for "add/remove parameter, move method"). Flow:
+
+1. **Offer** (`textDocument/codeAction` at an occurrence range): a `CodeAction` literal with `edit` **omitted**, `{ kind: "refactor.rewrite", isPreferred: true, data: { cluster_id } }`.
+2. **Resolve** (`codeAction/resolve`, only for the chosen action): compute the `WorkspaceEdit` — `documentChanges` of versioned `TextDocumentEdit`s (insert helper + rewrite each site; for `[AUTOFIX-CONSOLIDATE]`, plus `DeleteFile`/import rewrites), `changeAnnotations` labelling the groups. Lazy resolve keeps the inner loop cheap on a big repo.
+3. **Preview**: the client renders the annotated affected-files tree + per-file diff; nothing is written until the user confirms (Eclipse LTK / JDT model; HCI: Murphy-Hill & Black; Vakilian et al.).
+4. **Apply**: `failureHandling: transactional` (all-or-nothing); a single `label` so the whole N-file merge reverts in one undo; versioned ids reject a stale buffer.
+
+The `refactor` logic lives in `deslop-core`; the LSP layer only assembles the `WorkspaceEdit`. AST subtrees for anti-unification come from new **in-process** `AnalysisSession` accessors (`subtree_at_range`, `source_bytes_for`) — never serialised to the wire (per [PRINCIPLES-AUDIENCE-AGENT]).
+
+---
+
+## [AUTOFIX-EXTRACT-AI] AI-assisted extraction — the fallback after [AUTOFIX-MERGE]
+
+The mechanical paths above handle Type-1 ([AUTOFIX-EXTRACT]), leaf-gap Type-2 / constrained Type-3 ([AUTOFIX-MERGE]), and cross-file identical definitions ([AUTOFIX-CONSOLIDATE]) **with no AI**. The AI path is the **fallback** for the residue `[AUTOFIX-MERGE-GATE]` routes to `AiOrHuman`: clusters with **structural / control-flow drift** (gaps that are not confined to leaf positions), Type-4 semantic clones, or cases where a generalising parameter **name** materially aids readability. Even then the AI never writes code — it fills name slots in a Deslop-built scaffold (below), and Deslop synthesises the edit deterministically. (Renamed-identifier Type-2 is **not** a reason to invoke AI: `[AUTOFIX-MERGE]` derives parameter names mechanically; AI naming is only a readability polish.)
 
 This section specifies the **AI-assisted path**: maximally mechanical, with a tightly bounded AI slot for the non-deterministic bits. The AI never writes code, never edits files, and never sees the broader workspace. It fills named placeholders in a Deslop-built scaffold, and Deslop synthesises the final edit deterministically.
 

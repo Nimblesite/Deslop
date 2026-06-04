@@ -318,4 +318,48 @@ export const REPORT_TYPE_CONFIG = {
       clusters: "Ordered clusters, worst offenders first.",
     },
   },
+  MergeVerdict: {
+    docs: "Whether a cluster can be merged with no AI in the loop ([AUTOFIX-MERGE-GATE] / [AUTOFIX-MERGE-SAFETY]).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    skipTs: true,
+    serdeAttrs: ['tag = "kind"', 'rename_all = "snake_case"'],
+    variantDocs: {
+      Mechanical: "The merge is fully mechanical — no AI or human judgement needed.",
+      AiOrHuman: "The merge needs AI or a human; `reason` carries the routing cause.",
+    },
+    fieldDocs: {
+      reason: "Why the merge was routed away from the mechanical path.",
+    },
+  },
+  MergeParameter: {
+    docs: "One parameter of the synthesised helper, with the concrete argument each occurrence passes ([AUTOFIX-MERGE-NAMES] / [AUTOFIX-MERGE-SAFETY]).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    skipTs: true,
+    fieldDocs: {
+      name: "Parameter name in the synthesised helper.",
+      type_name: "Declared parameter type.",
+      is_thunk: "True when the difference is passed as a deferred closure ([AUTOFIX-MERGE-SAFETY] D).",
+      is_required: "False when a default makes the argument omissible.",
+      default_value: "Set only for a constant-across-sites position ([AUTOFIX-MERGE-NAMES]).",
+      per_site_arguments: "Concrete expression each occurrence passes, in cluster-occurrence order.",
+    },
+  },
+  MergePlan: {
+    docs: "MCP `merge-plan` payload ([AUTOFIX-MERGE] / [AUTOFIX-MERGE-MCP]): the mechanical call-site merge for one cluster. Read-only — computing a plan never writes files.",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    skipTs: true,
+    fieldOverrides: { workspace_edit: "Option<serde_json::Value>" },
+    fieldSerdeAttrs: {
+      workspace_edit: ['skip_serializing_if = "Option::is_none"'],
+    },
+    fieldDocs: {
+      cluster_id: "Cluster the plan merges; echoes the request `ClusterIdParams`.",
+      language: "Detected source language of the cluster members.",
+      verdict: "Whether the merge is mechanical or needs AI / human review.",
+      helper_name: "Name of the synthesised helper function.",
+      helper_body: "Anti-unifier template — the new function body.",
+      parameters: "Derived parameters, each with its per-site argument list.",
+      workspace_edit: "LSP `WorkspaceEdit` as arbitrary JSON; `None` when the verdict is `AiOrHuman`.",
+    },
+  },
 };

@@ -473,5 +473,51 @@ type McpSessionConfig {
   generation: Int
 }
 
+# ---------------------------------------------------------------------------
+# MCP `merge-plan` payload ([AUTOFIX-MERGE], [AUTOFIX-MERGE-MCP]). The
+# mechanical call-site merge for one cluster: the anti-unified helper, the
+# derived parameters (each with its per-site argument list + optional default
+# value), the mechanical/AI verdict, and the WorkspaceEdit the host applies.
+# The request reuses `ClusterIdParams`. Read-only — computing a plan never
+# writes files.
+# ---------------------------------------------------------------------------
+
+# Whether the cluster can be merged with no AI in the loop. `AiOrHuman`
+# carries the routing reason ([AUTOFIX-MERGE-GATE] / [AUTOFIX-MERGE-SAFETY]).
+union MergeVerdict {
+  Mechanical
+  AiOrHuman { reason: String }
+}
+
+# One parameter of the synthesised helper. `per_site_arguments` holds the
+# concrete expression each occurrence passes, in cluster-occurrence order
+# (the substitutions recovered by anti-unification). `is_thunk` is true when
+# the difference is passed as a deferred closure ([AUTOFIX-MERGE-SAFETY] D);
+# `default_value` is set only for a constant-across-sites position
+# ([AUTOFIX-MERGE-NAMES]).
+type MergeParameter {
+  name: String
+  type_name: String
+  is_thunk: Bool
+  is_required: Bool
+  default_value: Option<String>
+  per_site_arguments: List<String>
+}
+
+# `helper_body` is the anti-unifier template (the new function body).
+# `workspace_edit` is the LSP WorkspaceEdit serialised as arbitrary JSON —
+# declared `String` here so the generator overrides it to
+# `Option<serde_json::Value>` on the Rust side (same pattern as
+# `JsonRpcError.data`); `None` when the verdict is `AiOrHuman`.
+type MergePlan {
+  cluster_id: String
+  language: String
+  verdict: MergeVerdict
+  helper_name: String
+  helper_body: String
+  parameters: List<MergeParameter>
+  workspace_edit: Option<String>
+}
+
 # All types referenced by name are now defined here. EXTERNAL_TYPES in
 # the generator can stay populated as a safety net for legacy callers.
