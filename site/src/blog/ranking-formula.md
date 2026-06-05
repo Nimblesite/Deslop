@@ -7,8 +7,8 @@ tags: posts
 description: Deslop ranks duplicate-code clusters by clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes). The worst offender is always line one. Here's why the formula is not configurable.
 excerpt: Deslop ranks clusters by clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes). Every decision in the tool flows from that one line. Here's why it's not configurable.
 heroImage: "/assets/img/blog/ranking-formula-header.png"
-heroImageWidth: "1200"
-heroImageHeight: "630"
+heroImageWidth: "1600"
+heroImageHeight: "900"
 heroImageAlt: "Header image showing Deslop's fixed ranking formula and a worst-offender-first report."
 ---
 

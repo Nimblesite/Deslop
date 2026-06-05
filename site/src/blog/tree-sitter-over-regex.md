@@ -7,8 +7,8 @@ tags: posts
 description: Deslop parses every language with tree-sitter — no regex, no line-matching. Why that constraint matters, and how it survives reformatting and identifier renaming.
 excerpt: Deslop parses every language with tree-sitter. No regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with.
 heroImage: "/assets/img/blog/tree-sitter-over-regex-header.png"
-heroImageWidth: "1200"
-heroImageHeight: "630"
+heroImageWidth: "1600"
+heroImageHeight: "900"
 heroImageAlt: "Header image contrasting regex line matching with tree-sitter AST fingerprinting."
 ---
 
