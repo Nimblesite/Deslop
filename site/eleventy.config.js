@@ -23,7 +23,7 @@ permalink: /blog/
     {%- for post in collections.posts | sort(true, false, "date") -%}
     <article class="post-card{% if loop.first %} post-card--featured{% endif %}">
       <a href="{{ post.url }}" class="post-card__thumb" tabindex="-1" aria-hidden="true">
-        <img src="{{ post.data.heroImage | default(post.data.ogImage) | default(site.ogImage) }}"
+        <img src="{{ post.data.heroImage | default(site.ogImage) }}"
              alt="" width="1200" height="630" loading="lazy" decoding="async">
       </a>
       <div class="post-card__body">
@@ -161,7 +161,7 @@ layout: layouts/base.njk
   "datePublished": "{{ date | dateToRfc3339 }}",
   "dateModified": "{{ (updated | default(date)) | dateToRfc3339 }}",
   "mainEntityOfPage": "{{ site.url }}{{ page.url }}",
-  "image": "{{ site.url }}{{ ogImage | default(site.ogImage) }}",{% if author %}
+  "image": "{{ site.url }}{{ heroImage | default(ogImage) | default(site.ogImage) }}",{% if author %}
   "author": {
     "@type": "Person",
     "name": "{{ author }}"
