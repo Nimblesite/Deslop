@@ -7,8 +7,8 @@ tags: posts
 description: Coding agents duplicate code faster than humans can review it. Why Deslop's live LSP + MCP server treats duplication as the defining problem of the AI era.
 excerpt: Coding agents generate plausible code faster than humans can review it. They also duplicate it faster. Here's why Deslop treats that as the defining problem of the era, not a side-effect.
 heroImage: "/assets/img/blog/ai-era-duplication-header.png"
-heroImageWidth: "1200"
-heroImageHeight: "630"
+heroImageWidth: "1600"
+heroImageHeight: "900"
 heroImageAlt: "Header image showing duplicate-code growth outpacing feature review in AI-era repositories."
 ---
 

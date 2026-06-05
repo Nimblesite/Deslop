@@ -12,8 +12,8 @@ category: engineering
 description: "AI-generated code can create duplicate code and technical debt. Learn what to check with code clone detection and how Deslop audits AI-era codebases."
 excerpt: "AI-generated code can multiply duplicate logic before review catches it. This guide explains what to check, why duplicate code becomes technical debt, and where to read the full Deslop research background."
 heroImage: "/assets/img/blog/ai-generated-code-duplicate-code-header.png"
-heroImageWidth: "1200"
-heroImageHeight: "630"
+heroImageWidth: "1600"
+heroImageHeight: "900"
 heroImageAlt: "Header image showing a four-level duplicate-code checklist for AI-generated code."
 ---
 
