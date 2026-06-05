@@ -12,6 +12,10 @@ tags:
 category: engineering
 description: "AI writes Dart faster than you can review it, and Flutter's verbose widget trees hide the duplication. How to detect and deduplicate cloned Dart code."
 excerpt: "Coding agents generate Flutter widgets, repositories, and state-management classes at a pace no reviewer can keep up with. Flutter's verbosity hides the copies. Here is what to check, why line-based tools miss it, and how to deduplicate Dart structurally."
+heroImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-header.png"
+heroImageWidth: "1200"
+heroImageHeight: "630"
+heroImageAlt: "Header image showing Flutter widget trees, cloned Dart cards, and a find-similar gate."
 ogImage: "/assets/img/blog/deduplicating-dart-code-ai-flutter-og.png"
 ogImageWidth: "1200"
 ogImageHeight: "630"

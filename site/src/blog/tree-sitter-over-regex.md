@@ -6,6 +6,10 @@ author: Christian Findlay
 tags: posts
 description: Deslop parses every language with tree-sitter — no regex, no line-matching. Why that constraint matters, and how it survives reformatting and identifier renaming.
 excerpt: Deslop parses every language with tree-sitter. No regex, no line-matching, no heuristics. Here's why that constraint matters more than any feature the tool ships with.
+heroImage: "/assets/img/blog/tree-sitter-over-regex-header.png"
+heroImageWidth: "1200"
+heroImageHeight: "630"
+heroImageAlt: "Header image contrasting regex line matching with tree-sitter AST fingerprinting."
 ---
 
 Most clone detectors you have used — CPD, Simian, jscpd — are fundamentally line-matchers. They take your source, tokenize or hash it by line, and find runs of matching lines. That approach has two features: it is fast, and it predates anyone writing a parser that is fast enough to not be the bottleneck. Tree-sitter changed the second fact. Deslop refuses to pretend otherwise.

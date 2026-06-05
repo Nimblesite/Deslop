@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Deslop - Engineering the Manuscript</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;family=JetBrains+Mono:wght@400;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-container": "#474746",
+                        "primary-fixed": "#ffdad5",
+                        "outline-variant": "#5a403d",
+                        "primary": "#ffb4aa",
+                        "surface-bright": "#393939",
+                        "error-container": "#93000a",
+                        "on-primary-fixed": "#410001",
+                        "error": "#ffb4ab",
+                        "tertiary-container": "#00619e",
+                        "on-surface": "#e5e2e1",
+                        "surface-tint": "#ffb4aa",
+                        "on-tertiary-fixed-variant": "#004a7a",
+                        "surface-container-high": "#2a2a2a",
+                        "on-secondary-fixed-variant": "#474746",
+                        "on-primary": "#690003",
+                        "surface": "#131313",
+                        "secondary": "#c8c6c5",
+                        "outline": "#a98985",
+                        "surface-container-lowest": "#0e0e0e",
+                        "on-surface-variant": "#e2beb9",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "surface-container-low": "#1c1b1b",
+                        "surface-container": "#201f1f",
+                        "primary-fixed-dim": "#ffb4aa",
+                        "tertiary": "#9bcbff",
+                        "inverse-primary": "#b4271f",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-tertiary-fixed": "#001d34",
+                        "on-background": "#e5e2e1",
+                        "surface-container-highest": "#353534",
+                        "on-primary-container": "#ffcbc4",
+                        "on-error-container": "#ffdad6",
+                        "inverse-on-surface": "#313030",
+                        "on-secondary-container": "#b7b5b4",
+                        "surface-variant": "#353534",
+                        "surface-dim": "#131313",
+                        "secondary-fixed": "#e5e2e1",
+                        "on-secondary": "#303030",
+                        "on-tertiary-container": "#bbdaff",
+                        "on-error": "#690005",
+                        "background": "#131313",
+                        "on-primary-fixed-variant": "#910809",
+                        "tertiary-fixed": "#d0e4ff",
+                        "on-tertiary": "#003256",
+                        "inverse-surface": "#e5e2e1",
+                        "tertiary-fixed-dim": "#9bcbff",
+                        "primary-container": "#b3261e"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0e0e0e; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a2a; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #353534; 
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col pt-16">
+<!-- TopAppBar Shell -->
+<header class="bg-surface_container_low dark:bg-surface-container-low flex justify-between items-center w-full px-6 py-4 fixed top-0 z-50">
+<button class="text-primary dark:text-primary hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-colors active:opacity-80 active:scale-95 transition-all p-2 rounded">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<div class="font-headline font-black text-2xl tracking-tighter text-primary dark:text-primary">
+            DS
+        </div>
+<button class="text-primary dark:text-primary hover:bg-surface-container-highest dark:hover:bg-surface-container-highest transition-colors active:opacity-80 active:scale-95 transition-all p-2 rounded">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow flex flex-col w-full max-w-screen-md mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+<!-- Hero Section -->
+<section class="flex flex-col gap-4 relative">
+<!-- Decorative accent line -->
+<div class="absolute -left-4 top-0 w-1 h-full bg-gradient-to-b from-primary-container to-transparent opacity-50"></div>
+<h1 class="font-headline text-4xl sm:text-5xl font-black tracking-tighter uppercase text-on-surface leading-tight">
+                Engineering <br/>
+<span class="text-primary-container">The Manuscript</span>
+</h1>
+<p class="font-body text-body-md text-on-surface-variant max-w-prose leading-relaxed">
+                Deep dives into the architecture, algorithms, and performance optimizations powering the world's fastest code deduplication engine. We share our research, failures, and breakthroughs.
+            </p>
+</section>
+<!-- Blog Grid (Single Column for Mobile) -->
+<section class="flex flex-col gap-8">
+<!-- Article Card 1 -->
+<article class="flex flex-col bg-surface-container-low rounded-DEFAULT overflow-hidden group">
+<div class="w-full h-48 sm:h-64 relative bg-surface-container-lowest overflow-hidden">
+<img alt="Abstract visual of AST analysis" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300 mix-blend-screen" data-alt="A highly detailed technical schematic of Abstract Syntax Tree analysis. The visual features glowing red geometric nodes and connection lines on a deep black background, resembling a complex neural network or data structure map. Technical text annotations in monospaced font hover near the nodes. The overall aesthetic is dark, high-tech, and clinical, emphasizing the 'Crimson Executioner' accent color (#b3261e) used for data deletion actions." src="https://lh3.googleusercontent.com/aida/AP1WRLs2IAL6KvR0S-qP5PLeYYKu05DIBtQ9eb44nz2Ax6vyVX6UPxxBZTCyPzpJ5N5ZBayI_DyZHTxLgY0kmewUcZ83GbiiC921Z3Lq4Vf4Bzl47OxWAc0KnbqZKZby90ThQX1DZRR1sQFLxRaxbQ3NbukYGjuGkZm9MOjr1T32JzAd5yhvdUwgGwG-tZXlQtIgWfk76QA3Noxw2cABGieORJhX715rpnaKiAZx8n3Kr48A744xHQ-WQoc-kw"/>
+<!-- Glassmorphism overlay for technical metadata -->
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="bg-surface-container-highest/80 backdrop-blur-[20px] text-primary font-mono text-xs px-2 py-1 rounded-sm uppercase tracking-wider font-bold">
+                            Research
+                        </span>
+<span class="bg-surface-container-highest/80 backdrop-blur-[20px] text-on-surface-variant font-mono text-xs px-2 py-1 rounded-sm">
+                            5 MIN READ
+                        </span>
+</div>
+</div>
+<div class="p-6 flex flex-col gap-4">
+<div class="flex items-center gap-2 text-on-surface-variant font-mono text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="calendar_today">calendar_today</span>
+<span>OCT 24, 2024</span>
+</div>
+<h2 class="font-headline text-xl font-bold text-on-surface group-hover:text-primary transition-colors duration-200 leading-tight">
+                        Optimizing AST Traversal for Billion-Line Codebases
+                    </h2>
+<p class="font-body text-sm text-on-surface-variant line-clamp-3">
+                        Traditional Abstract Syntax Tree traversal algorithms choke on monorepos. We detail our custom Rust implementation that bypasses memory bottlenecks and achieves O(log n) traversal speeds, reducing deduplication time by 40%.
+                    </p>
+<a class="mt-2 flex items-center gap-1 text-primary font-bold text-sm uppercase tracking-wide hover:text-primary-container transition-colors w-fit" href="#">
+                        Read Article
+                        <span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span>
+</a>
+</div>
+</article>
+<!-- Article Card 2 -->
+<article class="flex flex-col bg-surface-container-low rounded-DEFAULT overflow-hidden group">
+<div class="w-full h-48 sm:h-64 relative bg-surface-container-lowest overflow-hidden">
+<img alt="Code editor showing duplicate code detection" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300 mix-blend-screen" data-alt="A macro shot of a dark-themed code editor interface, tightly cropped to show lines of syntax-highlighted code. Overlaying the code is a glowing, semi-transparent red floating notification box indicating a 'Similarity' match with a percentage dial. The design style uses deep blacks (#131313) and bright crimson accents (#b3261e) to highlight the duplication error. The typography is strictly monospaced, conveying a highly technical, CLI-driven environment." src="https://lh3.googleusercontent.com/aida/AP1WRLtuyxxgmESeP9pY4o5c-_CKOIe35w-uMCuuc5fz7nXKDrV_cKyiFfdlM7XqAwVv2lWCQG3LsGIAdf5u9uvgUXKbLKYU3YqGhxguyucKrZJ0pztR1lslVV2RdZ0BjznrMdeXLjkdH3QnVH_LySyhWk9cQgYB4mG286YBjmWYtkUPKgZnt6fMs6m6ryEl0ttJieriH3JfBKHn_LHy1Ce0Y-eMce3s44cv2gTbmxPL0lvpVaOh4m3vL-o7Kw"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="bg-surface-container-highest/80 backdrop-blur-[20px] text-tertiary-container font-mono text-xs px-2 py-1 rounded-sm uppercase tracking-wider font-bold">
+                            Performance
+                        </span>
+<span class="bg-surface-container-highest/80 backdrop-blur-[20px] text-on-surface-variant font-mono text-xs px-2 py-1 rounded-sm">
+                            8 MIN READ
+                        </span>
+</div>
+</div>
+<div class="p-6 flex flex-col gap-4">
+<div class="flex items-center gap-2 text-on-surface-variant font-mono text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="calendar_today">calendar_today</span>
+<span>OCT 12, 2024</span>
+</div>
+<h2 class="font-headline text-xl font-bold text-on-surface group-hover:text-primary transition-colors duration-200 leading-tight">
+                        The Memory Cost of False Positives
+                    </h2>
+<p class="font-body text-sm text-on-surface-variant line-clamp-3">
+                        When identifying duplicate code blocks, false positives don't just annoy developers—they consume massive RAM during the resolution phase. Here is how we tuned our heuristic engine to drop the false positive rate below 0.01%.
+                    </p>
+<a class="mt-2 flex items-center gap-1 text-primary font-bold text-sm uppercase tracking-wide hover:text-primary-container transition-colors w-fit" href="#">
+                        Read Article
+                        <span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span>
+</a>
+</div>
+</article>
+<!-- Article Card 3 -->
+<article class="flex flex-col bg-surface-container-low rounded-DEFAULT overflow-hidden group">
+<div class="w-full h-48 sm:h-64 relative bg-surface-container-lowest overflow-hidden">
+<img alt="Abstract representation of data blocks" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300 mix-blend-screen" data-alt="A stylized 3D rendering of a central glowing cube representing a core data structure, surrounded by smaller satellite cubes connected by glowing neon lines mimicking circuit board traces. The color palette is strictly high-contrast dark mode: pitch black background (#0e0e0e) contrasted with electric cyan and piercing crimson red (#b3261e) data streams. Subtle monospaced code snippets float in the void, contributing to a hyper-technical, 'hacker' aesthetic." src="https://lh3.googleusercontent.com/aida/AP1WRLsTBhw3Axjh5w6xrz3mDWjxB1UVWw5UvLew0sSitIzwdJtNRObSYYwzLYFGrhlaS-BpaCfnd7LE3d0N4ttroUMeluaKBymHi9a9Uh-rjpocO_Xh9jNKxrhjOY9r_1T5PbIoW2rWFdwQUBrECaIfmUtT_bxP4dHixX2ptMl1KjwWskya-9QiVMhQnxluIGeSw_MNMOBvSbi_ZPzmXZPlZefxyV6MudM9uB0tvFN5w7uvy-xXToTTN7wAtg"/>
+<div class="absolute top-4 left-4 flex gap-2">
+<span class="bg-surface-container-highest/80 backdrop-blur-[20px] text-primary font-mono text-xs px-2 py-1 rounded-sm uppercase tracking-wider font-bold">
+                            Architecture
+                        </span>
+<span class="bg-surface-container-highest/80 backdrop-blur-[20px] text-on-surface-variant font-mono text-xs px-2 py-1 rounded-sm">
+                            12 MIN READ
+                        </span>
+</div>
+</div>
+<div class="p-6 flex flex-col gap-4">
+<div class="flex items-center gap-2 text-on-surface-variant font-mono text-xs">
+<span class="material-symbols-outlined text-[16px]" data-icon="calendar_today">calendar_today</span>
+<span>SEP 28, 2024</span>
+</div>
+<h2 class="font-headline text-xl font-bold text-on-surface group-hover:text-primary transition-colors duration-200 leading-tight">
+                        Rebuilding the Hashing Engine from Scratch
+                    </h2>
+<p class="font-body text-sm text-on-surface-variant line-clamp-3">
+                        Why standard SHA-256 wasn't fast enough for real-time deduplication. A deep dive into our custom hashing implementation designed specifically for raw text and syntax structures, yielding a 3x speedup.
+                    </p>
+<a class="mt-2 flex items-center gap-1 text-primary font-bold text-sm uppercase tracking-wide hover:text-primary-container transition-colors w-fit" href="#">
+                        Read Article
+                        <span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span>
+</a>
+</div>
+</article>
+</section>
+<!-- Pagination / Load More -->
+<div class="w-full flex justify-center pt-4">
+<button class="bg-surface-container-highest hover:bg-surface-bright text-on-surface font-mono text-sm px-6 py-3 rounded-sm transition-colors border border-outline-variant/20 uppercase tracking-widest font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="refresh">refresh</span>
+                Load More Archives
+            </button>
+</div>
+</main>
+<!-- Footer Shell -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest flex flex-col items-center gap-6 px-6 py-12 text-center mt-12 border-t border-surface-container-low">
+<div class="font-headline text-on-surface font-black text-xl tracking-tighter">
+            DS
+        </div>
+<nav class="flex flex-wrap justify-center gap-x-6 gap-y-4">
+<a class="font-label text-label-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors active:opacity-70" href="#">GitHub</a>
+<a class="font-label text-label-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors active:opacity-70" href="#">Docs</a>
+<a class="font-label text-label-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors active:opacity-70" href="#">Status</a>
+<a class="font-label text-label-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors active:opacity-70" href="#">Privacy</a>
+</nav>
+<div class="font-label text-label-sm font-bold uppercase tracking-widest text-on-surface-variant opacity-50 font-mono mt-4">
+            © 2024 DESLOP. ALL REPOSITORIES DEDUPLICATED.
+        </div>
+</footer>
+</body></html>

@@ -6,6 +6,10 @@ author: Christian Findlay
 tags: posts
 description: Coding agents duplicate code faster than humans can review it. Why Deslop's live LSP + MCP server treats duplication as the defining problem of the AI era.
 excerpt: Coding agents generate plausible code faster than humans can review it. They also duplicate it faster. Here's why Deslop treats that as the defining problem of the era, not a side-effect.
+heroImage: "/assets/img/blog/ai-era-duplication-header.png"
+heroImageWidth: "1200"
+heroImageHeight: "630"
+heroImageAlt: "Header image showing duplicate-code growth outpacing feature review in AI-era repositories."
 ---
 
 Every coding agent I have worked with has the same pathology. Given a request that resembles a request it has fulfilled before, it will cheerfully reach for the same shape of code — even when that shape already exists in the repo under a different name. Multiply that instinct across a team of three engineers and four agents, and you arrive at the condition that defines the current era of software: **repositories where the duplication rate grows faster than the feature rate**.
