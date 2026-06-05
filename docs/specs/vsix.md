@@ -54,7 +54,7 @@ For users who want a tighter callout, ghost-line mode renders the bubble on a **
 - `deslop.liveBubble.enabled = false` turns the bubble off globally for users who want the rest of the VSIX without the in-your-face moment. Off-by-default is **not** a setting we ship — silence-when-clean already gives users a tolerable floor; the bubble is on from the first install.
 
 **Why this is the headline.**
-No competitor ([competitors.md](competitors.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. Deslop *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
+No competitor ([comparison.md](comparison.md)) tells a developer about duplication at typing time. PMD CPD runs on CI. jscpd runs on CI. SonarLint flags on save, after the thought is already committed. JetBrains' inspection flashes a Problems panel entry you have to look for. Deslop *shows the duplicate to the developer inside the IDE, inline with their cursor, as they type the thing*. First tool to do it. Called out on the Marketplace listing, the README, and every demo GIF.
 
 ### [VSIX-BUNDLE] Extension bundle
 

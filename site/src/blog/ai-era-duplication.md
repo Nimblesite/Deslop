@@ -41,7 +41,7 @@ The only wrong move is to ignore the top of the report. That is where the money 
 
 ## Where this goes
 
-Deslop today is the live server. Two cooperating processes — a file watcher and LSP shell in one, an MCP shell in the other, talking over a local IPC socket — plus twelve MCP tools the agent can call mid-generation. Same pipeline, same schema, same cache as the CLI — the CLI is now the cold-cache fallback for CI gates. The VS Code extension bundles all of it (LSP, MCP, CLI) in a single VSIX. JetBrains is next.
+Deslop today is the live server. Two cooperating processes — a file watcher and LSP shell in one, an MCP shell in the other, talking over a local IPC socket — plus a focused set of MCP tools, led by find-similar, the agent can call mid-generation. Same pipeline, same schema, same cache as the CLI — the CLI is now the cold-cache fallback for CI gates. The VS Code extension bundles all of it (LSP, MCP, CLI) in a single VSIX. JetBrains is next.
 
 The primary user of the server is not you. It is the agent you are pair-programming with. Which is as it should be: agents generate duplication; agents should fix it — and, with `find-similar` in their inner loop, agents should prevent it.
 

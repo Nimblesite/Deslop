@@ -22,6 +22,10 @@ permalink: /blog/
   <div class="post-list">
     {%- for post in collections.posts | sort(true, false, "date") -%}
     <article class="blog-post">
+      <a href="{{ post.url }}" class="post-thumb" tabindex="-1" aria-hidden="true">
+        <img src="{{ post.data.heroImage | default(post.data.ogImage) | default(site.ogImage) }}"
+             alt="" width="1200" height="630" loading="lazy" decoding="async">
+      </a>
       <a href="{{ post.url }}" class="post-title">{{ post.data.title }}</a>
       <div class="post-meta">
         <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat(lang) }}</time>
@@ -66,6 +70,12 @@ layout: layouts/base.njk
       <h2>The Manuscript</h2>
       <p class="docs-sidebar__version">Live LSP + MCP · preview</p>
     </div>
+    <nav class="docs-sidebar__site-nav" aria-label="Site">
+      <a href="/" class="docs-sidebar__link">Home</a>
+      {% for item in navigation.main %}
+      <a href="{{ item.url }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.text }}</a>
+      {% endfor %}
+    </nav>
     <nav class="docs-sidebar__nav" aria-label="Documentation">
       {% for entry in navPages %}
       {% set entryLang = entry.url | extractLangFromUrl(defaultLanguage) %}
@@ -96,6 +106,7 @@ layout: layouts/base.njk
 
   <main class="docs-main">
     <article class="docs-article">
+      {% include "partials/prose-hero.njk" %}
       <header class="docs-article__header">
         <div class="docs-breadcrumb">
           <a href="/docs/">Docs</a>
@@ -104,7 +115,7 @@ layout: layouts/base.njk
         </div>
       </header>
 
-      <div class="docs-article__body">
+      <div class="prose prose--docs">
         {{ content | safe }}
       </div>
 
@@ -146,6 +157,21 @@ layout: layouts/base.njk
   "headline": "{{ title }}",
   "description": "{{ description | default(site.description) }}",
   "datePublished": "{{ date | dateToRfc3339 }}",
+  "dateModified": "{{ (updated | default(date)) | dateToRfc3339 }}",
+  "mainEntityOfPage": "{{ site.url }}{{ page.url }}",
+  "image": "{{ site.url }}{{ ogImage | default(site.ogImage) }}",{% if author %}
+  "author": {
+    "@type": "Person",
+    "name": "{{ author }}"
+  },{% endif %}
+  "publisher": {
+    "@type": "Organization",
+    "name": "{{ site.title }}",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "{{ site.url }}/assets/img/logo.png"
+    }
+  },
   "inLanguage": "{{ lang | default('en') }}"
 }
 </script>
@@ -154,6 +180,7 @@ layout: layouts/base.njk
 {% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
 
 <article class="post-article">
+  {% include "partials/prose-hero.njk" %}
   <header class="post-article__header">
     <div class="docs-breadcrumb">
       <a href="{{ langPrefix }}/blog/">Blog</a>
@@ -177,7 +204,7 @@ layout: layouts/base.njk
     {% endif %}
   </header>
 
-  <div class="post-article__body">
+  <div class="prose">
     {{ content | safe }}
   </div>
 
@@ -227,6 +254,9 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="robots" content="index, follow">
   <meta name="generator" content="Eleventy + techdoc">
   <meta name="theme-color" content="{{ site.themeColor | default('#0066cc') }}">
+  {% set pageOgImage = ogImage | default(site.ogImage) %}
+  {% set pageOgImageWidth = ogImageWidth | default(site.ogImageWidth) | default('1200') %}
+  {% set pageOgImageHeight = ogImageHeight | default(site.ogImageHeight) | default('630') %}
 
   <link rel="canonical" href="{{ site.url }}{{ page.url }}">
   <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg">
@@ -247,10 +277,13 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% for langCode in supportedLanguages %}{% if langCode != (lang | default('en')) %}
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
-  {% if site.ogImage %}
-  <meta property="og:image" content="{{ site.url }}{{ site.ogImage }}">
-  <meta property="og:image:width" content="{{ site.ogImageWidth | default('1200') }}">
-  <meta property="og:image:height" content="{{ site.ogImageHeight | default('630') }}">
+  {% if pageOgImage %}
+  <meta property="og:image" content="{{ site.url }}{{ pageOgImage }}">
+  <meta property="og:image:secure_url" content="{{ site.url }}{{ pageOgImage }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="{{ pageOgImageWidth }}">
+  <meta property="og:image:height" content="{{ pageOgImageHeight }}">
+  <meta property="og:image:alt" content="{{ ogImageAlt | default(title | default(site.title)) }}">
   {% endif %}
 
   <meta name="twitter:card" content="summary_large_image">
@@ -259,7 +292,8 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <meta name="twitter:description" content="{{ description | default(site.description) }}">
   {% if site.twitterSite %}<meta name="twitter:site" content="{{ site.twitterSite }}">{% endif %}
   {% if site.twitterCreator %}<meta name="twitter:creator" content="{{ site.twitterCreator }}">{% endif %}
-  {% if site.ogImage %}<meta name="twitter:image" content="{{ site.url }}{{ site.ogImage }}">{% endif %}
+  {% if pageOgImage %}<meta name="twitter:image" content="{{ site.url }}{{ pageOgImage }}">
+  <meta name="twitter:image:alt" content="{{ ogImageAlt | default(title | default(site.title)) }}">{% endif %}
 
   <script type="application/ld+json">
   {
@@ -322,7 +356,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   {% if site.stylesheet %}<link rel="stylesheet" href="{{ site.stylesheet }}">{% endif %}
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% if page.url.startsWith('/docs/') %}is-docs{% endif %}">
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
   <header class="site-header">
@@ -371,6 +405,8 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
     </nav>
   </header>
 
+  <div class="drawer-scrim" data-drawer-close></div>
+
   <main id="main-content">
     {% block content %}{{ content | safe }}{% endblock %}
   </main>
@@ -404,6 +440,7 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   </footer>
 
   <script src="/techdoc/js/main.js" type="module"></script>
+  <script src="/assets/js/drawer.js" type="module"></script>
 
   {% block scripts %}{% endblock %}
 </body>
@@ -446,12 +483,85 @@ const LLMS_TXT_OVERRIDE = `---json
 - Source: https://github.com/Nimblesite/Deslop
 `;
 
+// robots.txt override: the plugin default `Disallow: /assets/` blocks every
+// crawler in the `*` group (which includes social-card fetchers like
+// facebookexternalhit, Twitterbot, LinkedInBot, and Slackbot — none are in the
+// named allow-list below) from reading the Open Graph images under
+// /assets/img/, so link previews render without a card. It also hides CSS/JS,
+// which Google's guidance says never to block since Googlebot needs them to
+// render. Static assets carry no crawl risk, so only the search endpoint is
+// disallowed. The named search/AI-crawler groups are kept verbatim.
+const ROBOTS_TXT_OVERRIDE = `---json
+{
+  "permalink": "robots.txt",
+  "eleventyExcludeFromCollections": true
+}
+---
+# {{ site.title | default(site.name) }}
+# {{ site.url }}
+
+# Allow all crawlers
+User-agent: *
+Allow: /
+Disallow: /search?
+
+# AI Crawlers - Welcome!
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Cohere-ai
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: Meta-ExternalFetcher
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+# Sitemaps
+Sitemap: {{ site.url }}/sitemap.xml
+`;
+
 const OVERRIDES = {
   "blog/index.njk": BLOG_INDEX_OVERRIDE,
   "_includes/layouts/base.njk": BASE_LAYOUT_OVERRIDE,
   "_includes/layouts/docs.njk": DOCS_LAYOUT_OVERRIDE,
   "_includes/layouts/blog.njk": BLOG_POST_LAYOUT_OVERRIDE,
   "llms.txt.njk": LLMS_TXT_OVERRIDE,
+  "robots.txt.njk": ROBOTS_TXT_OVERRIDE,
 };
 
 /**

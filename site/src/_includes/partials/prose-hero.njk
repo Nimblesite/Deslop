@@ -1,0 +1,16 @@
+{#-
+  Shared hero image for prose pages (blog posts AND docs). Renders only when
+  the page declares one via `heroImage`, falling back to the post-specific
+  `ogImage` social card so a post that already ships an OG card gets a hero
+  for free. Pages without any image render nothing — no generic placeholder.
+  Kept in one partial so docs and blog never drift apart.
+-#}
+{%- set proseHeroSrc = heroImage | default(ogImage) -%}
+{%- if proseHeroSrc -%}
+<figure class="prose-hero">
+  <img class="prose-hero__img" src="{{ proseHeroSrc }}"
+       alt="{{ heroImageAlt | default(ogImageAlt) | default(title) }}"
+       width="{{ ogImageWidth | default('1200') }}" height="{{ ogImageHeight | default('630') }}"
+       loading="eager" decoding="async">
+</figure>
+{%- endif -%}

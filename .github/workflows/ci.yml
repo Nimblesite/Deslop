@@ -48,6 +48,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
+          # Caches the ~/.npm download store keyed on the extension
+          # lockfiles. Purely additive: a miss installs fresh (prior
+          # behaviour), a hit skips re-downloading the tarballs.
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
 
       # `typediagram` CLI is the wire-format generator invoked by both
       # `make typediagram-gen` and the deslop-core build.rs on every
@@ -122,6 +129,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
+          # Caches the ~/.npm download store keyed on the extension
+          # lockfiles. Purely additive: a miss installs fresh (prior
+          # behaviour), a hit skips re-downloading the tarballs.
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
 
       # See ci job — typediagram is required by build.rs and Makefile.
       - name: Install typediagram
@@ -178,6 +192,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
+          # Caches the ~/.npm download store keyed on the extension
+          # lockfiles. Purely additive: a miss installs fresh (prior
+          # behaviour), a hit skips re-downloading the tarballs.
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
 
       # See ci job — typediagram is required by build.rs and Makefile.
       - name: Install typediagram

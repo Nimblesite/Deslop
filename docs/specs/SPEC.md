@@ -93,7 +93,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.
 - [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
-- [competitors.md](competitors.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
+- [comparison.md](comparison.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
 - [autofix-extract.md](autofix-extract.md) — `[AUTOFIX-*]` the mechanical (zero-risk, no-AI) deduplication family: `[AUTOFIX-EXTRACT]` Type-1 verbatim extract, `[AUTOFIX-MERGE]` leaf-gap Type-2/3 call-site merge via anti-unification with default-valued parameters, `[AUTOFIX-CONSOLIDATE]` cross-file identical-definition consolidation, the `[AUTOFIX-CATALOG]` of further fixes, and the `[AUTOFIX-EXTRACT-AI]` fallback. Safety is underwritten by the static type checker (`[AUTOFIX-ZERO-RISK]`; Dart/C#/Rust first, Python under strict typing).
 
 ## Algorithm implementation status

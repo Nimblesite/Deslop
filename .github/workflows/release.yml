@@ -85,6 +85,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.x"
+          # Caches the ~/.npm download store keyed on the extension
+          # lockfiles, shared across all matrix legs. Purely additive: a
+          # miss installs fresh (prior behaviour), a hit skips the tarball
+          # downloads for the two `npm install` steps below + typediagram.
+          cache: npm
+          cache-dependency-path: |
+            clients/vscode/package-lock.json
+            clients/vscode/webview-ui/package-lock.json
 
       # `typediagram` CLI is the wire-format generator invoked by the
       # deslop-core build.rs on every `cargo build`. It must be installed

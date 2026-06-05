@@ -21,7 +21,7 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
   "description": "Live LSP + MCP duplicate-code server for AI coding agents. Streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex as code is written. Tree-sitter parsing, AST fingerprints, MinHash LSH, HNSW embeddings.",
   "featureList": [
     "Live LSP server with 250 ms reactive file watcher",
-    "MCP server with 12 tools including find-similar for the agent inner loop",
+    "MCP server led by find-similar — the call the agent makes before writing new code; the rest are read-only and on-demand",
     "Tree-sitter parsing for C#, Rust, Python, Dart",
     "Clone detection across all four buckets: identical code [Type-1/2], nearly identical code [Type-3], loosely similar code [weak LSH], same behavior different code [Type-4]",
     "VS Code extension bundling LSP, MCP server, and CLI",
@@ -103,10 +103,10 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
   <section class="bento">
     <div class="bento__grid">
       <div class="bento__cell">
-        <span class="bento__label">MCP Tools Shipped</span>
+        <span class="bento__label">Reactive Watcher</span>
         <div class="bento__row">
-          <span class="bento__value">12</span>
-          <span class="bento__icon material-symbols-outlined">smart_toy</span>
+          <span class="bento__value">&lt;250 ms</span>
+          <span class="bento__icon material-symbols-outlined">bolt</span>
         </div>
       </div>
 

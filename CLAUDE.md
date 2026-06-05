@@ -1,15 +1,13 @@
 <!-- agent-pmo:9a71cbf -->
 # Deslop Live — Agent Instructions
 
-**Never kill a VS Code process — including browser-hosted instances.** The user cannot recover from this; do not do it.
+⚠️ **Never kill a VS Code process — including browser-hosted instances.** The user cannot recover from this; do not do it. ⚠️
 
-> **Token discipline.** Check file size before reading. Prefer `Grep` over `Read`; use `offset`/`limit`. Make the smallest diff that solves the problem. Delete dead code, unused imports, and stale comments. Call out irrelevant context before proceeding — bloat degrades reasoning.
+⚠️ **Token discipline.** Check file size before reading. Prefer `Grep` over `Read`; use `offset`/`limit`. Make the smallest diff that solves the problem. Delete dead code, unused imports, and stale comments. Call out irrelevant context before proceeding — bloat degrades reasoning. ⚠️
 
-> **Quality bar.** This codebase is held to an A+ standard: every change must pass review at a top-tier engineering organization (Google / Meta / Microsoft caliber). No exceptions, not even for a single line. Substandard code is fixed immediately, never deferred.
+⚠️ **Quality bar.** This codebase is held to an A+ standard: every change must pass review at a top-tier engineering organization (Google / Meta / Microsoft caliber). No exceptions, not even for a single line. Substandard code is fixed immediately, never deferred. ⚠️
 
-**Wire models use typeDiagram.** Every model sent across the wire (IPC) is generated from a [typeDiagram](https://typediagram.dev/docs/language-reference.html) definition — never a hand-written wire struct.
-
-**"Deslop.live" means the whole loop** (watcher → scheduler → session → broadcast → UI). An incremental update drives the entire pipeline, including a reactive UI refresh.
+⚠️ **"Deslop.live" (reactive) means the whole loop** (watcher → scheduler → session → broadcast → UI). An incremental update drives the entire pipeline, including a reactive UI refresh. ⚠️
 
 ## Project Overview
 
@@ -74,6 +72,7 @@ Processes communicate over IPC. Generate IPC model code with [typeDiagram](https
 ## Hard Rules — Universal (non-negotiable)
 
 - **Files < 500 lines.** Refactor when over.
+**Wire models use typeDiagram.** Every model sent across the wire (IPC) is generated from a [typeDiagram](https://typediagram.dev/docs/language-reference.html) definition — never a hand-written wire struct.
 - **No git commands.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, etc. CI handles git.
 - **Reduce code duplication — be aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Search before writing. Move code, don't copy.
 - **Regex on source code or structured data is prohibited.** Use tree-sitter for all source parsing.
@@ -130,24 +129,7 @@ Processes communicate over IPC. Generate IPC model code with [typeDiagram](https
 - **Deterministic.** No `sleep`, no timing dependencies, no random state.
 - **E2E tests are black-box only** — the CLI binary, fixture directories, rendered reports. Never reach into internals.
 - The coverage threshold lives in `coverage-thresholds.json` and increases monotonically (−1% allowance for rounding).
-
-Do not write assertions that merely guard against AI-style labels. Instead, assert **positive, human-readable values**. Human-readable panels may carry subtle technical terms for reference, but they must not **confuse or overwhelm** the user.
-
-Avoid:
-```typescript
-assert.doesNotMatch(
-    md.value,
-    /\[Type-\d|\[Type-\d\/\d|\[weak LSH\]|\[Type-\d,\s*AI match\]/,
-    `human hover must not expose taxonomy labels: ${md.value}`,
-);
-```
-
-Prefer:
-```typescript
-const text = inlineText(cluster(), "worst");
-assert.match(text, /×\s*4/);
-assert.match(text, /Alpha\.cs/);
-```
+- Do not write assertions that merely guard against AI-style labels. Instead, assert **positive, human-readable values**. 
 
 ## Human vs. AI Readability
 
@@ -190,7 +172,7 @@ If the TMC server is available: register on start (name, intent, files), lock fi
 
 ## Migration to `lspkit`
 
-The cross-cutting LSP+MCP scaffolding in this repo is the prime example of the "one engine, two surfaces" pattern. That pattern is being distilled into the generic `lspkit-*` workspace at `/Users/christianfindlay/Documents/Code/lsp_toolkit`. Domain-specific analysis (parsing, fingerprinting, clustering, ranking, embeddings) stays here; the protocol shells are what migrate.
+The cross-cutting LSP+MCP scaffolding in this repo is the prime example of the "one engine, two surfaces" pattern. That pattern is being distilled into the generic `lspkit-*` workspace (a separate sibling repo). Domain-specific analysis (parsing, fingerprinting, clustering, ranking, embeddings) stays here; the protocol shells are what migrate.
 
 **For new LSP/MCP infrastructure work:** prefer `lspkit-*` crates over reinventing it here.
 **For changes to existing scaffolding in this repo:** flag in the PR description if the patch duplicates `lspkit` functionality, and reference the upstream crate.

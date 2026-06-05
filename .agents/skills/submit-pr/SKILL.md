@@ -20,11 +20,17 @@ Create a pull request for the current branch with a description derived strictly
    - **How Do The Automated Tests Prove It Works?** — name specific E2E tests (black-box, against fixture repos) and describe what their assertions demonstrate. Note coverage movement if the threshold in [coverage-thresholds.json](coverage-thresholds.json) was ratcheted up. "Tests pass" is NOT acceptable.
 5. **Call out breaking changes explicitly** in the Details section if any public API, CLI flag, report format, or spec ID changed.
 6. **Create the PR** with `gh pr create --base main --title "<title>" --body-file <path>` (write the filled template to a temp file and pass it via `--body-file` to preserve formatting).
+7. **Monitor CI on the PR until it is green — and fix it whenever it breaks.** This step is mandatory and does not end until every required check on the PR has passed. Do not hand the PR back to the user on a red or still-running pipeline.
+   - **Watch the run:** `gh pr checks <pr-number> --watch --fail-fast` (or grab the run id from `gh run list --branch <branch>` and `gh run watch <run-id> --exit-status`). A single green snapshot is not enough — wait for all required checks to conclude.
+   - **When a check fails:** pull the failing logs with `gh run view <run-id> --log-failed`, diagnose the actual cause (do not guess), reproduce locally with `make ci`, and fix it. Invoke the `ci-prep` skill if it helps.
+   - **Push the fix** (`git add` / `git commit` / `git push` — permitted here, see git exception below), then **watch again**. Loop — fix → push → re-watch — until the run is fully green. Re-checking is the job; keep doing it until it passes.
+   - **If a failure is genuinely external** (runner outage, flaky infra, unrelated to this branch), say so explicitly with the evidence rather than forcing a change.
 
 ## Rules
 
 - **Never create a PR if `make ci` fails.** Coverage below threshold counts as failure.
-- **No git commands beyond `git diff main...HEAD`.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase` — CI handles git per [AGENTS.md](AGENTS.md).
+- **🔴 GOLDEN RULE — never stamp a commit with an AI co-author.** Do **not** add a `Co-Authored-By: Claude …` (or any AI/agent) trailer, and do not set author/committer to anything but the repo's configured git user. Write a plain, human commit message describing the fix. This is absolute and overrides any default co-authorship behaviour.
+- **Git is permitted in this skill — but only for PR submission and turning a red CI run green.** This is the one place the repo-wide "no git" rule from [AGENTS.md](AGENTS.md) is relaxed: you may run `git add`, `git commit`, and `git push` to land CI fixes (step 7). Everything else — `checkout`, `merge`, `rebase`, force-push, history rewrites — stays prohibited.
 - PR description must be specific and tight — no vague placeholders, no "various improvements".
 - Reference spec IDs (`[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`) whenever the change maps to a spec section, so reviewers can `grep` spec → code → tests.
 - Link any related GitHub issue (`Closes #N`) if one exists.
@@ -35,4 +41,6 @@ Create a pull request for the current branch with a description derived strictly
 - `make ci` passed locally (including coverage threshold).
 - Diff against `main` was read and summarised into the template's three sections.
 - PR created with `gh pr create` against `main`.
+- CI on the PR was watched to completion and is **fully green** (all required checks pass).
+- Any CI failures were fixed and pushed, with **no AI co-author trailer** on the commits.
 - PR URL returned to the user.

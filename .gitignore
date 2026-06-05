@@ -48,6 +48,11 @@ lcov.info
 *.key
 !*.pub.key
 
+# Per-developer / runtime agent state (never commit)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 # Temporary
 tmp/
 temp/
@@ -112,3 +117,6 @@ crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
 # Local deslop runs - never commit
 deslop-*.log
 deslop-report.*
+
+
+test-results/
