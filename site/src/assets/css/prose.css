@@ -205,7 +205,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 
 /* ─────────── Blog listing ─────────── */
 .blog-container {
-  max-width: 56rem;
+  max-width: 80rem;
   margin-inline: auto;
   padding: var(--space-12) var(--space-6);
 }
@@ -248,62 +248,99 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 }
 .blog-nav-link:hover { color: var(--on-surface); background: var(--surface-container-highest); }
 
-.post-list { display: flex; flex-direction: column; gap: var(--space-4); }
-.post-list .blog-post {
-  max-width: none;
-  margin-inline: 0;
-  padding: var(--space-8);
+/* Responsive grid: 1 col → 2 cols → 3 cols. The newest post is featured and
+   spans two columns on the widest breakpoint (.post-card--featured). */
+.post-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+@media (min-width: 640px) { .post-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .post-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.post-card {
+  display: flex;
+  flex-direction: column;
   background: var(--surface-container-low);
   border-radius: var(--radius-sm);
-  display: grid;
-  gap: var(--space-3);
+  overflow: hidden;
   transition: background var(--dur-slow) var(--ease);
 }
-.post-list .blog-post:hover { background: var(--surface-container-high); }
+.post-card:hover { background: var(--surface-container-high); }
+@media (min-width: 1024px) { .post-card--featured { grid-column: span 2; } }
 
-.post-thumb {
+.post-card__thumb {
   display: block;
-  border-radius: var(--radius-sm);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
 }
-.post-thumb img {
+.post-card__thumb img {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 1200 / 630;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   transition: transform var(--dur-slow) var(--ease);
 }
-.post-list .blog-post:hover .post-thumb img { transform: scale(1.02); }
+.post-card:hover .post-card__thumb img { transform: scale(1.03); }
 
-.post-title {
-  font-family: var(--font-head);
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--on-surface);
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+.post-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
 }
-.post-title:hover { color: var(--primary); }
-.post-meta {
+
+.post-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   color: var(--on-surface-variant);
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-.post-excerpt { color: var(--on-surface-variant); margin: 0; line-height: 1.6; }
-.post-more {
+.post-card__sep { opacity: 0.5; }
+
+.post-card__title {
+  font-family: var(--font-head);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--on-surface);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.post-card__title:hover { color: var(--primary); }
+.post-card--featured .post-card__title { font-size: clamp(1.75rem, 3vw, 2.25rem); }
+
+.post-card__excerpt {
+  margin: 0;
+  color: var(--on-surface-variant);
+  line-height: 1.6;
+  font-size: 0.9375rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.post-card--featured .post-card__excerpt { font-size: 1.0625rem; -webkit-line-clamp: none; }
+
+.post-card__more {
+  margin-top: auto;
+  padding-top: var(--space-2);
   font-family: var(--font-mono);
   font-size: 0.75rem;
+  font-weight: 700;
   color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-1);
 }
-.post-more .material-symbols-outlined { font-size: 1rem; }
+.post-card__more .material-symbols-outlined { font-size: 1rem; transition: transform var(--dur) var(--ease); }
+.post-card:hover .post-card__more .material-symbols-outlined { transform: translateX(3px); }
 
 /* ─────────── Blog post detail ─────────── */
 .post-article {

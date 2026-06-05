@@ -19,20 +19,22 @@ permalink: /blog/
     <a href="/blog/categories/" class="blog-nav-link">{{ "blog.categories" | t(lang) | default("Categories") }}</a>
   </nav>
 
-  <div class="post-list">
+  <div class="post-grid">
     {%- for post in collections.posts | sort(true, false, "date") -%}
-    <article class="blog-post">
-      <a href="{{ post.url }}" class="post-thumb" tabindex="-1" aria-hidden="true">
+    <article class="post-card{% if loop.first %} post-card--featured{% endif %}">
+      <a href="{{ post.url }}" class="post-card__thumb" tabindex="-1" aria-hidden="true">
         <img src="{{ post.data.heroImage | default(post.data.ogImage) | default(site.ogImage) }}"
              alt="" width="1200" height="630" loading="lazy" decoding="async">
       </a>
-      <a href="{{ post.url }}" class="post-title">{{ post.data.title }}</a>
-      <div class="post-meta">
-        <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat(lang) }}</time>
-        {% if post.data.author %} · {{ post.data.author }}{% endif %}
+      <div class="post-card__body">
+        <div class="post-card__meta">
+          <time datetime="{{ post.date | isoDate }}">{{ post.date | dateFormat(lang) }}</time>
+          {% if post.data.author %}<span class="post-card__sep">·</span>{{ post.data.author }}{% endif %}
+        </div>
+        <a href="{{ post.url }}" class="post-card__title">{{ post.data.title }}</a>
+        {% if post.data.excerpt or post.data.description %}<p class="post-card__excerpt">{{ post.data.excerpt | default(post.data.description) }}</p>{% endif %}
+        <a href="{{ post.url }}" class="post-card__more">Read Article <span class="material-symbols-outlined">arrow_forward</span></a>
       </div>
-      {% if post.data.excerpt or post.data.description %}<p class="post-excerpt">{{ post.data.excerpt | default(post.data.description) }}</p>{% endif %}
-      <span class="post-more">Read <span class="material-symbols-outlined">arrow_forward</span></span>
     </article>
     {%- endfor -%}
   </div>

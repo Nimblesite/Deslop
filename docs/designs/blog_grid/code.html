@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Deslop - Engineering the Manuscript</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#393939",
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-secondary": "#303030",
+                        "primary-fixed-dim": "#ffb4aa",
+                        "surface-container-low": "#1c1b1b",
+                        "tertiary-fixed": "#d0e4ff",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "tertiary-fixed-dim": "#9bcbff",
+                        "secondary-fixed": "#e5e2e1",
+                        "on-background": "#e5e2e1",
+                        "on-surface-variant": "#e2beb9",
+                        "surface-container": "#201f1f",
+                        "on-surface": "#e5e2e1",
+                        "on-primary": "#690003",
+                        "surface-container-lowest": "#0e0e0e",
+                        "inverse-primary": "#b4271f",
+                        "surface-variant": "#353534",
+                        "on-tertiary": "#003256",
+                        "surface": "#131313",
+                        "secondary-container": "#474746",
+                        "outline-variant": "#5a403d",
+                        "outline": "#a98985",
+                        "on-tertiary-fixed-variant": "#004a7a",
+                        "inverse-on-surface": "#313030",
+                        "on-secondary-container": "#b7b5b4",
+                        "on-primary-fixed-variant": "#910809",
+                        "on-tertiary-fixed": "#001d34",
+                        "error-container": "#93000a",
+                        "surface-container-high": "#2a2a2a",
+                        "tertiary-container": "#00619e",
+                        "surface-dim": "#131313",
+                        "on-secondary-fixed-variant": "#474746",
+                        "primary-fixed": "#ffdad5",
+                        "on-error": "#690005",
+                        "primary-container": "#b3261e",
+                        "tertiary": "#9bcbff",
+                        "on-error-container": "#ffdad6",
+                        "on-tertiary-container": "#bbdaff",
+                        "surface-tint": "#ffb4aa",
+                        "error": "#ffb4ab",
+                        "background": "#131313",
+                        "surface-container-highest": "#353534",
+                        "on-primary-container": "#ffcbc4",
+                        "inverse-surface": "#e5e2e1",
+                        "secondary": "#c8c6c5",
+                        "primary": "#ffb4aa",
+                        "on-primary-fixed": "#410001"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter", "sans-serif"],
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["JetBrains Mono", "monospace"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #131313; color: #e5e2e1; }
+        .glass-overlay { background: rgba(53, 53, 52, 0.8); backdrop-filter: blur(20px); }
+        .ambient-shadow { box-shadow: 0 20px 40px rgba(14, 14, 14, 0.4); }
+        .text-gradient { background: linear-gradient(90deg, #ffb4aa 0%, #b3261e 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .ghost-border { border: 1px solid rgba(90, 64, 61, 0.2); }
+    </style>
+</head>
+<body class="font-body antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<header class="bg-surface dark:bg-surface flex justify-between items-center w-full px-6 py-4 max-w-full docked full-width top-0 bg-surface-container-low dark:bg-surface-container-low flat no shadows z-50 sticky">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-2 group" href="#">
+<img alt="Deslop Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLt-s3JiwBXrZHeKbsIK8-LJeKvdIf0bqZ0BXss2Ba2ivqRXTW97e2q-VsFVuFRYh1wZXnSLQGrg77hFYqf1uLYxeGTj_6aBYM7ZvTzprAexRjuzC5IFFZ64g-UuXr3shXDpLoG_AVJxw9xA_nH7QB7-UJhU0J6mWvDGRoYyd-GV25YVKLJEGD82gNsBVH5acgKdD8Tso9tYWc7-z9nXiwNUONhw14Bxcdov0qeZGkVMbWQnZaBhyEf8A9U"/>
+<span class="text-display-sm font-black tracking-tighter text-primary dark:text-primary uppercase group-hover:opacity-80 transition-opacity">Deslop</span>
+</a>
+<nav class="hidden md:flex items-center gap-6">
+<a class="font-body text-body-md tracking-tight font-label text-label-sm font-mono text-on-surface-variant dark:text-on-surface-variant hover:text-primary transition-colors duration-150 scale-95 active:scale-90 transition-transform" href="#">Features</a>
+<a class="font-body text-body-md tracking-tight font-label text-label-sm font-mono text-on-surface-variant dark:text-on-surface-variant hover:text-primary transition-colors duration-150 scale-95 active:scale-90 transition-transform" href="#">Docs</a>
+<a class="font-body text-body-md tracking-tight font-label text-label-sm font-mono text-on-surface-variant dark:text-on-surface-variant hover:text-primary transition-colors duration-150 scale-95 active:scale-90 transition-transform" href="#">Pricing</a>
+<a class="font-body text-body-md tracking-tight font-label text-label-sm font-mono text-primary font-bold border-b-2 border-primary pb-1 hover:text-primary transition-colors duration-150 scale-95 active:scale-90 transition-transform" href="#">Blog</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-label text-label-sm tracking-tight px-4 py-2 bg-primary-container text-on-primary-container rounded-DEFAULT hover:opacity-90 transition-opacity font-bold uppercase">Execute</button>
+</div>
+</header>
+<main class="flex-grow flex flex-col pt-16 pb-24 px-6 md:px-12 max-w-7xl mx-auto w-full gap-16">
+<!-- Hero Section -->
+<section class="flex flex-col gap-6 md:w-2/3">
+<h1 class="font-display text-5xl md:text-7xl font-black tracking-tighter text-on-surface leading-none uppercase">
+                Engineering <br/>
+<span class="text-gradient">The Manuscript</span>
+</h1>
+<p class="font-body text-lg text-on-surface-variant max-w-2xl leading-relaxed">
+                Dispatches from the frontier of high-performance systems. Research, release notes, and deep dives into deduplication algorithms, AST fingerprinting, and the pursuit of extreme efficiency.
+            </p>
+</section>
+<!-- Blog Grid -->
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Post 1 (Featured, spans 2 cols on lg) -->
+<article class="bg-surface-container-low flex flex-col justify-between gap-6 hover:bg-surface-container-highest transition-colors cursor-pointer group lg:col-span-2"><div class="w-full aspect-video overflow-hidden rounded-sm mb-2 border border-outline-variant/30"><img alt="AST Analysis Visualization" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5jvBfgomdkHXvdqIzdlybN4rZtJSNv9Or3FZ5FFpDeiH8cr_QFKSa2qKJOQSVSDG8Hl66LpR7bMsHX0mJOecsDb-y2FD3SWuzS_cqBd8hsl7oQrfmdxuY5_10NaKdbMZULt2st__H11c3lMgGP0_0Lq-ymYACZHd9QYR-Mg-r55TmJcjqtijSiX511tFQqjIoKmcp9ZocSyIFGB85eeNfEk9Pws3ZPXOEp5M6rIM_dttr3ZXiU-OgQFzXR38xvzPfCr0sDivQ1SY"/></div>
+<div class="flex flex-col gap-4 px-8">
+<div class="flex items-center justify-between">
+<span class="font-mono text-xs font-bold text-primary bg-primary-container/20 px-2 py-1 rounded-sm uppercase tracking-wider">Research</span>
+<div class="font-mono text-xs text-on-surface-variant flex gap-3">
+<span>2024-10-24</span>
+<span class="opacity-50">|</span>
+<span>12 MIN READ</span>
+</div>
+</div>
+<h2 class="font-display text-3xl font-bold tracking-tight text-on-surface group-hover:text-primary transition-colors">Optimizing AST Fingerprinting for 10M+ LOC</h2>
+<p class="font-body text-on-surface-variant leading-relaxed">
+                        A detailed breakdown of our new structural hashing algorithm. By moving away from naive token streams to semantic tree-sitter wrappers, we achieved a 40% reduction in collision rates across massive monorepos.
+                    </p>
+</div>
+<div class="flex items-center gap-2 text-primary font-bold font-label text-sm uppercase tracking-wide group-hover:translate-x-1 transition-transform px-8 pb-8">
+                    Read Article <span class="material-symbols-outlined text-sm">arrow_forward_ios</span>
+</div>
+</article>
+<!-- Post 2 -->
+<article class="bg-surface-container-low flex flex-col justify-between gap-6 hover:bg-surface-container-highest transition-colors cursor-pointer group"><div class="w-full aspect-video overflow-hidden rounded-sm mb-2 border border-outline-variant/30"><img alt="IDE Diagnostic Interface" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpO4ECii9EUKKsn3cpHyQdWoLfkLTE33jiYlkGZqfPs73kziBjmIXBHmo5QjWedZimn-YGoWQulMlsci2cO3l_eIRov9hAcf_qY__S0fUwA0RAG0qaCSqfuUebKUtxkyJceQpQKBapW5ZkngT_Tgis2Ew4O9MEFiDU5IPcELNJ-2INeqZ4_rEpMVUbPBMYIZ9rlRpSrmMrxowiolRiM4OqKPYRfFFR_YgKUDewUDwefw_lrc3o6ZbnTmKRxAqRMM7vvNcgdQv3oH8"/></div>
+<div class="flex flex-col gap-4 px-8">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<span class="font-mono text-xs font-bold text-primary bg-primary-container/20 px-2 py-1 rounded-sm uppercase tracking-wider">Release</span>
+<div class="font-mono text-xs text-on-surface-variant flex gap-3">
+<span>2024-10-18</span>
+</div>
+</div>
+<h2 class="font-display text-xl font-bold tracking-tight text-on-surface group-hover:text-primary transition-colors">Introducing Deslop Live: Real-time Agent Intervention</h2>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed line-clamp-3">
+                        Stop bad code before it commits. Deslop Live hooks directly into your LSP to provide sub-millisecond deduplication warnings as you type.
+                    </p>
+</div>
+<div class="flex items-center gap-2 text-primary font-bold font-label text-sm uppercase tracking-wide group-hover:translate-x-1 transition-transform mt-4 px-8 pb-8">
+                    Read Article <span class="material-symbols-outlined text-sm">arrow_forward_ios</span>
+</div>
+</article>
+<!-- Post 3 -->
+<article class="bg-surface-container-low flex flex-col justify-between gap-6 hover:bg-surface-container-highest transition-colors cursor-pointer group"><div class="w-full aspect-video overflow-hidden rounded-sm mb-2 border border-outline-variant/30"><img alt="Code Fusing Illustration" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBdcRRiDL28zZoJEMS5UMLcMUUU12l0-1k9dYps65nZVNnfI9tCkSynHMQu7Lzcz2UdxK-Xqbr9L4-qpNm2DFd4w8YOS0ZqG0Ut8n0CnV8VmHdMkVcK9yQydMlE7gYVTKnB9Jn7t08-aKpHGMSlfwf8PXdGNEZOYaLkuZ9CjmI8YH1lUztFNCGUj5sgFhwGPkwr0EXjfYeqW1BELysiwwZC2yKhU1zyzDjd710Yu9cH3gG6_aQp8rgQykZc4AUvnRjGVQXU5Vry2E"/></div>
+<div class="flex flex-col gap-4 px-8">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<span class="font-mono text-xs font-bold text-primary bg-primary-container/20 px-2 py-1 rounded-sm uppercase tracking-wider">Study</span>
+<div class="font-mono text-xs text-on-surface-variant flex gap-3">
+<span>2024-09-30</span>
+</div>
+</div>
+<h2 class="font-display text-xl font-bold tracking-tight text-on-surface group-hover:text-primary transition-colors">The Cost of Copy-Paste: A Quantitative Study</h2>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed line-clamp-3">
+                        We analyzed 500 open-source repositories to measure the compounding technical debt generated by unmanaged code duplication. The results are expensive.
+                    </p>
+</div>
+<div class="flex items-center gap-2 text-primary font-bold font-label text-sm uppercase tracking-wide group-hover:translate-x-1 transition-transform mt-4 px-8 pb-8">
+                    Read Article <span class="material-symbols-outlined text-sm">arrow_forward_ios</span>
+</div>
+</article>
+<!-- Post 4 -->
+<article class="bg-surface-container-low flex flex-col justify-between gap-6 hover:bg-surface-container-highest transition-colors cursor-pointer group"><div class="w-full aspect-video overflow-hidden rounded-sm mb-2 border border-outline-variant/30"><img alt="Code Fusing Illustration" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBdcRRiDL28zZoJEMS5UMLcMUUU12l0-1k9dYps65nZVNnfI9tCkSynHMQu7Lzcz2UdxK-Xqbr9L4-qpNm2DFd4w8YOS0ZqG0Ut8n0CnV8VmHdMkVcK9yQydMlE7gYVTKnB9Jn7t08-aKpHGMSlfwf8PXdGNEZOYaLkuZ9CjmI8YH1lUztFNCGUj5sgFhwGPkwr0EXjfYeqW1BELysiwwZC2yKhU1zyzDjd710Yu9cH3gG6_aQp8rgQykZc4AUvnRjGVQXU5Vry2E"/></div>
+<div class="flex flex-col gap-4 px-8">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<span class="font-mono text-xs font-bold text-primary bg-primary-container/20 px-2 py-1 rounded-sm uppercase tracking-wider">Performance</span>
+<div class="font-mono text-xs text-on-surface-variant flex gap-3">
+<span>2024-09-12</span>
+</div>
+</div>
+<h2 class="font-display text-xl font-bold tracking-tight text-on-surface group-hover:text-primary transition-colors">Building a Faster Tree-Sitter Wrapper in Rust</h2>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed line-clamp-3">
+                        How we stripped down the standard bindings and utilized zero-copy deserialization to push our parsing speed beyond 2GB/s.
+                    </p>
+</div>
+<div class="flex items-center gap-2 text-primary font-bold font-label text-sm uppercase tracking-wide group-hover:translate-x-1 transition-transform mt-4 px-8 pb-8">
+                    Read Article <span class="material-symbols-outlined text-sm">arrow_forward_ios</span>
+</div>
+</article>
+<!-- Post 5 -->
+<article class="bg-surface-container-low flex flex-col justify-between gap-6 hover:bg-surface-container-highest transition-colors cursor-pointer group"><div class="w-full aspect-video overflow-hidden rounded-sm mb-2 border border-outline-variant/30"><img alt="Code Fusing Illustration" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBdcRRiDL28zZoJEMS5UMLcMUUU12l0-1k9dYps65nZVNnfI9tCkSynHMQu7Lzcz2UdxK-Xqbr9L4-qpNm2DFd4w8YOS0ZqG0Ut8n0CnV8VmHdMkVcK9yQydMlE7gYVTKnB9Jn7t08-aKpHGMSlfwf8PXdGNEZOYaLkuZ9CjmI8YH1lUztFNCGUj5sgFhwGPkwr0EXjfYeqW1BELysiwwZC2yKhU1zyzDjd710Yu9cH3gG6_aQp8rgQykZc4AUvnRjGVQXU5Vry2E"/></div>
+<div class="flex flex-col gap-4 px-8">
+<div class="flex items-center justify-between flex-wrap gap-2">
+<span class="font-mono text-xs font-bold text-primary bg-primary-container/20 px-2 py-1 rounded-sm uppercase tracking-wider">Theory</span>
+<div class="font-mono text-xs text-on-surface-variant flex gap-3">
+<span>2024-08-28</span>
+</div>
+</div>
+<h2 class="font-display text-xl font-bold tracking-tight text-on-surface group-hover:text-primary transition-colors">Semantic Similarity vs. Structural Identity</h2>
+<p class="font-body text-sm text-on-surface-variant leading-relaxed line-clamp-3">
+                        Exploring the boundaries of when two pieces of code are 'the same'. We dive into Levenshtein distances applied to normalized syntax trees.
+                    </p>
+</div>
+<div class="flex items-center gap-2 text-primary font-bold font-label text-sm uppercase tracking-wide group-hover:translate-x-1 transition-transform mt-4 px-8 pb-8">
+                    Read Article <span class="material-symbols-outlined text-sm">arrow_forward_ios</span>
+</div>
+</article>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest dark:bg-surface-container-lowest flex flex-col md:flex-row justify-between items-center w-full px-8 py-12 gap-6 full-width bottom flat no shadows mt-auto">
+<div class="font-mono text-label-md font-bold text-on-surface">
+            DESLOP
+        </div>
+<div class="font-mono text-label-sm tracking-tight text-secondary dark:text-secondary">
+            © 2024 DESLOP KINETIC SYSTEMS. ALL RIGHTS RESERVED.
+        </div>
+<nav class="flex gap-6">
+<a class="font-mono text-label-sm tracking-tight text-on-secondary-fixed-variant hover:text-primary-fixed-dim transition-colors" href="#">Changelog</a>
+<a class="font-mono text-label-sm tracking-tight text-on-secondary-fixed-variant hover:text-primary-fixed-dim transition-colors" href="#">Security</a>
+<a class="font-mono text-label-sm tracking-tight text-on-secondary-fixed-variant hover:text-primary-fixed-dim transition-colors" href="#">Status</a>
+<a class="font-mono text-label-sm tracking-tight text-on-secondary-fixed-variant hover:text-primary-fixed-dim transition-colors" href="#">Privacy</a>
+</nav>
+</footer>
+</body></html>
