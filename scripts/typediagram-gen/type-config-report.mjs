@@ -39,6 +39,10 @@ export const REPORT_TYPE_CONFIG = {
       canonical_node_count: "usize",
       occurrences_total: "usize",
     },
+    fieldSerdeAttrs: {
+      category: ["default"],
+    },
+    tsOptional: ["category"],
     fieldDocs: {
       id: "Stable short id for cross-referencing.",
       weight: "Ranking weight (higher = worse).",
@@ -46,6 +50,7 @@ export const REPORT_TYPE_CONFIG = {
       canonical_node_count: "AST node count of one canonical member.",
       signals: "Per-cluster signal breakdown (structural / Jaccard / embedding / fused).",
       bucket: "Canonical bucket label (`identical`, `nearly_identical`, `loosely_similar`, `same_behavior`).",
+      category: "Clone category ([RANK-CATEGORY]): `logic` (default) or `data` for a demoted data-structure literal. Orthogonal to `bucket`. Empty/absent on older reports resolves to `logic`.",
       occurrences: "Cluster members; live wire caps this list.",
       occurrences_total: "Total occurrences before wire truncation.",
       occurrences_truncated: "True when `occurrences` was truncated for the wire.",

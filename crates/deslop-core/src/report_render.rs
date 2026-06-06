@@ -88,6 +88,12 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         canonical_node_count,
         signals,
         bucket,
+        // Default category; `render_report` re-parses the members and
+        // stamps the authoritative `CloneCategory` ([RANK-CATEGORY]) using
+        // the shared parse cache, so this stays `logic` here.
+        category: crate::clone_category::CloneCategory::Logic
+            .wire_label()
+            .to_owned(),
         occurrences,
         occurrences_total,
         occurrences_truncated: false,

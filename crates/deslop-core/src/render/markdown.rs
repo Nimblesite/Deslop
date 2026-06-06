@@ -153,6 +153,7 @@ mod tests {
                 fused: 0.98,
             },
             bucket: String::new(),
+            category: String::new(),
             occurrences: vec![occurrence("/tmp/A.cs", 0, 5)],
             occurrences_total: 1,
             occurrences_truncated: false,

@@ -29,6 +29,17 @@ Every cluster in this report belongs to exactly one of four buckets. The human l
 
 Full canonical definition including routing thresholds: [taxonomy.md §[CLONE-BUCKETS]](taxonomy.md).
 
+## Clone category (`logic` vs `data`)
+
+Each cluster also carries a `category` field, orthogonal to its bucket. The bucket answers *how similar* the copies are; the category answers *whether the repetition is extractable logic or un-refactorable data*.
+
+| `category` | Meaning | Action |
+|---|---|---|
+| `logic` (default) | Ordinary duplicated code. | Extract the duplicated logic into a shared function. |
+| `data` | A data-structure literal repeated across sibling rows (e.g. a top-level `List<Model>` of near-identical constructor literals). Real repetition, but the constructor's purpose is to enumerate per-row fields. | Consider a builder with default arguments, or move the rows to a JSON/CSV/asset file. |
+
+`data` clusters are demoted in the ranking by default (a configurable weight multiplier) so they sink below comparable `logic` clones, and may be dropped entirely via `.deslop.toml` `[ranking] data_clones = "ignore"`. A *verbatim*-copied table (byte-identical members) stays `logic` — that is genuine copy-paste. An absent or empty `category` means `logic`. Full definition: [pipeline.md §[RANK-CATEGORY]](pipeline.md).
+
 ## How to read the report format
 
 Each line starts with `#N` (rank, lower = worse) and looks like:
