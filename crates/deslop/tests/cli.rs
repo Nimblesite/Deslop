@@ -28,5 +28,7 @@ mod language_sections;
 mod logging;
 #[path = "cli/metrics.rs"]
 mod metrics;
+#[path = "cli/report_css.rs"]
+mod report_css;
 #[path = "cli/thresholds.rs"]
 mod thresholds;

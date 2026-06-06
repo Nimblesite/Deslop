@@ -1,0 +1,13 @@
+/*
+ * Web-font @import for the live site only.
+ *
+ * Kept out of base.css so the design-system token/layer files
+ * (base/home/prose/syntax) carry zero @import. The standalone HTML
+ * report inlines those four files into a single <style> block, where a
+ * relative or network @import cannot reliably resolve and would break
+ * "opens offline, no external assets". The report falls back to the
+ * system-font stacks declared in base.css's --font-* tokens; the site
+ * imports this file via styles.css to load the branded webfonts.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
