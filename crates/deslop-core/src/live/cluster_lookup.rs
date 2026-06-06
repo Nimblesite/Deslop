@@ -87,6 +87,7 @@ mod tests {
                 fused: 0.0,
             },
             bucket: String::new(),
+            category: String::new(),
             occurrences: Vec::new(),
             occurrences_total: 0,
             occurrences_truncated: false,

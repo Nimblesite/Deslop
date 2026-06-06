@@ -108,6 +108,7 @@
 
 mod calls;
 mod dart;
+mod dart_data_table;
 mod python;
 mod python_class_shapes;
 mod python_constants;
@@ -128,7 +129,9 @@ use tree_sitter::Node;
 pub(crate) use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 
-use crate::{ast::ByteRange, fingerprint::Fingerprint, state::FileId};
+use crate::{
+    ast::ByteRange, clone_category::CloneCategory, fingerprint::Fingerprint, state::FileId,
+};
 
 /// Decides whether `cluster` is a known noise pattern that must not be
 /// surfaced as duplication. Returns `true` when the cluster should be
@@ -155,6 +158,45 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
         || is_signature_only_cluster(&snippets)
         || calls::is_literal_variation_call_cluster(&snippets)
         || language_specific_noise(language, &snippets)
+}
+
+/// Classifies a cluster's [`CloneCategory`] ([RANK-CATEGORY]) by re-parsing
+/// its member sources the same way [`is_noise_pattern`] does. Returns
+/// [`CloneCategory::DataTable`] for a data-structure literal whose repeated
+/// rows are un-refactorable data; otherwise [`CloneCategory::Logic`]. The
+/// verbatim escape hatch (`raw_snippet_texts_differ`) lives inside each
+/// per-language predicate, so a byte-for-byte copied table stays `Logic`.
+///
+/// Distinct from `is_noise_pattern`: a `DataTable` is real repetition the
+/// user *may* act on (a builder, an asset file), so the policy demotes or
+/// drops it per config rather than silently hiding it.
+pub(crate) fn classify_clone_category<S: BuildHasher>(
+    members: &[Fingerprint],
+    sources: &HashMap<FileId, Vec<u8>>,
+    file_languages: &HashMap<FileId, &'static str, S>,
+    cache: &ParseCache,
+) -> CloneCategory {
+    let Some(language) = uniform_language(members, file_languages) else {
+        return CloneCategory::Logic;
+    };
+    let Some(snippets) = collect_snippets(members, sources, language, cache) else {
+        return CloneCategory::Logic;
+    };
+    if is_data_table_cluster(language, &snippets) {
+        CloneCategory::DataTable
+    } else {
+        CloneCategory::Logic
+    }
+}
+
+/// Dispatches data-table detection by language. Dart covers
+/// collection-literal data tables today ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]);
+/// other languages have no collection-literal table filter yet.
+fn is_data_table_cluster(language: &str, snippets: &[Snippet<'_>]) -> bool {
+    match language {
+        "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
+        _ => false,
+    }
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is

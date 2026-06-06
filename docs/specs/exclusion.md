@@ -24,6 +24,16 @@ report_hide = ["**/Migrations/**/*.cs"]
 report_hide = ["**/target/**"]
 ```
 
+**`[ranking]` section.** Controls the clone-category policy of [RANK-CATEGORY]:
+
+```toml
+[ranking]
+data_clones = "demote"      # "demote" (default) | "ignore" | "keep"
+data_clone_weight = 0.15    # multiplier in demote mode; finite, in (0.0, 1.0]
+```
+
+`data_clones` selects how `data`-category clusters ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]) are ranked: `demote` (default) down-weights them by `data_clone_weight`, `ignore` drops them from the report, `keep` ranks them at full weight. `data_clone_weight` must be finite and strictly inside `(0.0, 1.0]`; `NaN`, infinity, `0.0`, and values above `1.0` are rejected with a `ConfigThreshold`-style error naming the config path. The weight is consulted only in `demote` mode. Both keys are omittable; absence yields the default `demote` / `0.15`.
+
 **Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
 
 **Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.
@@ -31,6 +41,16 @@ report_hide = ["**/target/**"]
 **No config is valid.** Absence of `.deslop.toml` is not an error and is not warned on; Deslop still applies the built-in generated/build filters above.
 
 **`report_hide` membership is a rendering decision, not an analysis one.** Hidden files still participate in fingerprinting, LSH, and (later) embedding. The `hidden: bool` per occurrence is the only surface-level signal of the policy, so downstream consumers that want the unfiltered view can ignore `clusters_hidden` and inspect `occurrences[].hidden` directly.
+
+### [CLONE-NOISE-DART-DATA-TABLE-LITERAL] Dart collection-literal data tables
+
+A top-level Dart collection literal whose elements are repeated near-identical data — `List<Highlight> highlights = [ Highlight(title: …, wonder: …), Highlight(title: …, wonder: …), … ]`, a `Set` of constructor calls, or a `Map` of literal entries — clusters via the sibling-window pass because Type-2 normalisation collapses every field value to the same shape. This is real repetition, but it is *data*, not extractable logic: the constructor's purpose is to enumerate per-row fields. The class-field registry filter (#169, [pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) only covers runs of declarations inside a `class_body`; a top-level `List`/`Set`/`Map` literal has no enclosing `class_body`, so those tables previously fell through at full weight and dominated the ranking.
+
+**Predicate.** A cluster is classified `data` ([RANK-CATEGORY]) when, for every member, the member's reported range covers a run of one or more sibling elements inside a `list_literal` or `set_or_map_literal`, and every covered element is a pure data shape — a constructor/factory invocation (`call_expression`), a `record_literal`, a map `pair`, or a bare literal — with **no** embedded `function_body` or `function_expression` (a closure-bearing element keeps clustering as logic). Reuses the same CST-walk helpers as #169 (`enclosing_kind`, `node_contains_kind`, `node_intersects_range`).
+
+**Verbatim escape hatch.** Classification requires at least two members to differ in raw bytes (`raw_snippet_texts_differ`), matching #104/#133/#169. A *verbatim*-copied table is genuine copy-paste duplication and must still surface at full `logic` weight, never demoted.
+
+This predicate feeds the [RANK-CATEGORY] policy: under the default **demote** mode the table is down-weighted and labelled `category="data"`; under **ignore** it is dropped; under **keep** it ranks at full weight.
 
 ### [CONFIG-CROSS-LANGUAGE] Cross-language comparison
 The same `.deslop.toml` file controls whether clone candidates may span different parser language ids.

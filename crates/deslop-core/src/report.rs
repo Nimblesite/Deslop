@@ -12,9 +12,12 @@ use std::{collections::HashMap, hash::BuildHasher, path::Path};
 use crate::{
     boilerplate::BoilerplateRange,
     buckets::{classify, ClusterKind},
+    clone_category::CloneCategory,
     cluster::Cluster,
-    cluster_filters::{is_embedding_role_mismatch, is_noise_pattern, ParseCache},
-    config::ExclusionConfig,
+    cluster_filters::{
+        classify_clone_category, is_embedding_role_mismatch, is_noise_pattern, ParseCache,
+    },
+    config::{ExclusionConfig, RankingPolicy},
     pair::PairScore,
     report_boilerplate::build_boilerplate_hints,
     report_metrics::{compute_repo_metrics, AnalysedLines, MetricsInputs},
@@ -138,28 +141,18 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     // Parse each source file at most once for the whole render, shared
     // across every cluster's noise/role checks ([CLONE-NOISE-REPARSE-CACHE]).
     let parse_cache = ParseCache::new();
+    let policy = inputs.exclusion.ranking_policy();
     let materialised: Vec<(ReportCluster, bool)> = inputs
         .clusters
         .iter()
-        .map(|cluster| {
-            let report_cluster = cluster_to_report(
-                cluster,
-                inputs.registry,
-                inputs.file_languages,
-                inputs.scan_root,
-                inputs.exclusion,
-                inputs.sources,
-            );
-            let all_hidden = cluster_is_hidden(cluster, &report_cluster, &inputs, &parse_cache);
-            (report_cluster, all_hidden)
-        })
+        .map(|cluster| materialise_cluster(cluster, &inputs, &parse_cache, policy))
         .collect();
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
     let mut visible_clusters: Vec<ReportCluster> = materialised
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
         .collect();
-    reweigh_by_visible_occurrences(&mut visible_clusters);
+    reweigh_by_visible_occurrences(&mut visible_clusters, policy);
     log_bucket_distribution(&visible_clusters, clusters_hidden);
     let metrics = compute_repo_metrics(&MetricsInputs {
         clusters: inputs.clusters,
@@ -188,6 +181,42 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
     }
+}
+
+/// Builds one [`ReportCluster`], stamps its [`CloneCategory`]
+/// ([RANK-CATEGORY]), and decides whether it is hidden from the ranked
+/// report. A cluster is hidden when it is a known noise pattern *or* when it
+/// is a `data`-category cluster and the policy is `ignore`. The category is
+/// classified once here using the shared parse cache and the result is both
+/// stamped onto the wire cluster and reused for the drop decision, so the
+/// re-parse never happens twice.
+fn materialise_cluster<S: BuildHasher>(
+    cluster: &Cluster,
+    inputs: &ReportInputs<'_, S>,
+    parse_cache: &ParseCache,
+    policy: RankingPolicy,
+) -> (ReportCluster, bool) {
+    let mut report_cluster = cluster_to_report(
+        cluster,
+        inputs.registry,
+        inputs.file_languages,
+        inputs.scan_root,
+        inputs.exclusion,
+        inputs.sources,
+    );
+    let category = classify_clone_category(
+        &cluster.members,
+        inputs.sources,
+        inputs.file_languages,
+        parse_cache,
+    );
+    category
+        .wire_label()
+        .clone_into(&mut report_cluster.category);
+    let dropped_as_data = category == CloneCategory::DataTable && policy.drops_data_clusters();
+    let hidden =
+        dropped_as_data || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+    (report_cluster, hidden)
 }
 
 /// Decides whether a cluster must be dropped from the ranked report.
@@ -241,12 +270,16 @@ fn cluster_is_hidden<S: BuildHasher>(
 /// Re-ranks visible clusters by non-hidden occurrence count so mixed
 /// clusters dominated by `report_hide` paths cannot push fully-visible
 /// clusters down the ranking ([#140 EXCLUSION-CONFIG],
-/// [PIPELINE-RANK-WORST-FIRST]). Hidden occurrences still travel on
-/// each cluster for downstream context.
-fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster]) {
+/// [PIPELINE-RANK-WORST-FIRST]). The clone-category multiplier from
+/// [RANK-CATEGORY] is folded in here so a `data`-category cluster sinks
+/// below comparable `logic` clones; the multiplier is `1.0` for logic and
+/// in `keep`/`ignore` modes, so non-data clusters keep their prior weight.
+/// Hidden occurrences still travel on each cluster for downstream context.
+fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster], policy: RankingPolicy) {
     for cluster in &mut *clusters {
         let visible = visible_occurrence_count(cluster);
-        cluster.weight = visible_rank_weight(cluster.canonical_node_count, visible);
+        let base = visible_rank_weight(cluster.canonical_node_count, visible);
+        cluster.weight = base * category_multiplier(cluster, policy);
     }
     clusters.sort_by(|left, right| {
         right
@@ -255,6 +288,16 @@ fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster]) {
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
+}
+
+/// Returns the ranking-weight multiplier for `cluster` under `policy`
+/// ([RANK-CATEGORY]). `data`-category clusters get the policy's demote
+/// multiplier; everything else stays at `1.0`.
+fn category_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
+    match CloneCategory::from_wire_label(&cluster.category) {
+        CloneCategory::DataTable => policy.weight_multiplier(),
+        CloneCategory::Logic => 1.0,
+    }
 }
 
 /// Counts non-hidden occurrences on a rendered cluster. Hidden

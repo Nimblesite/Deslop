@@ -29,7 +29,21 @@ Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `
 Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n). Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
-`weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters.
+`weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
+
+### [RANK-CATEGORY] Clone category and the ranking policy
+Every cluster carries a **clone category** that is orthogonal to the similarity bucket of [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets). The bucket answers *"how similar are these copies?"* (`Identical` / `NearlyIdentical` / `LooselySimilar` / `SameBehavior`); the category answers *"is this repetition extractable logic or un-refactorable data?"*:
+
+- `logic` — ordinary duplicated code. Full ranking weight. The default.
+- `data` — a data-structure literal repeated across sibling elements (e.g. a top-level `List<Model>` of near-identical constructor literals). Real repetition, but the constructor's purpose *is* to enumerate per-row fields; at best a user hoists a builder with defaults or moves the rows to a JSON/CSV/asset. Detected by [CLONE-NOISE-DART-DATA-TABLE-LITERAL].
+
+The category drives a **three-way ranking policy** configured in `.deslop.toml` under `[ranking]` (see [CLONE-NOISE-DART-DATA-TABLE-LITERAL] for the keys):
+
+- **keep** — both categories rank at full weight. Restores pre-category ordering.
+- **demote** (default) — `data` clusters are multiplied by `data_clone_weight` (default `0.15`, strictly in `(0.0, 1.0]`) so they rank below comparable `logic` clones but remain in the report, labelled `category="data"`. The multiplier is never zero, so a pathologically large verbatim blob can still rise.
+- **ignore** — `data` clusters are dropped from the report entirely (reuses the [EXCLUSION-CONFIG] cluster-hide path) and counted under `clusters_hidden`.
+
+`data` clusters carry a category-specific action hint ("consider a builder with default args, or move the rows to a JSON/CSV/asset") instead of the "extract the duplicate" hint. The category and its label travel on the JSON `ReportCluster.category` field so every downstream surface — text, HTML, and the VSIX tree — orders and labels identically from one source of truth ([OUTPUT-SCHEMA-JSON]).
 
 ### [STATE-FILE-REGISTRY] File registry (the only global state)
 `deslop-core::state::FileRegistry` maps `FileId ↔ PathBuf`. This is the *only* place mutable state associated with a pipeline run may live. Instances are per-run (not process-global) so a future long-running daemon can keep multiple analyses side-by-side.

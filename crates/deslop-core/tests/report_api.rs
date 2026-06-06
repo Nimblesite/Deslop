@@ -107,6 +107,7 @@ fn sample_cluster() -> ReportCluster {
             fused: 1.0,
         },
         bucket: "identical".to_owned(),
+        category: "logic".to_owned(),
         occurrences: sample_occurrences(),
         occurrences_total: 0,
         occurrences_truncated: false,
