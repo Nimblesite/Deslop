@@ -1,19 +1,34 @@
 //! Static CSS for the HTML report.
 //!
-//! [`SITE_CSS`] is lifted verbatim from the website
-//! (`site/src/assets/css/styles.css`) so the report shares the
-//! "Kinetic Manuscript" identity ([OUTPUT-HUMAN-HTML]). [`REPORT_CSS`]
-//! is the small additive layer of report-only classes (`.snippet`,
-//! `.ln`, `.tok-*`, `.cluster-card`, `.run-details`) — additive so the
-//! design system stays the source of truth for tokens and surfaces.
+//! [`SITE_CSS`] inlines the website's design-system stylesheets so the
+//! report shares the "Kinetic Manuscript" identity ([OUTPUT-HUMAN-HTML]).
+//! The website's `styles.css` is a four-line aggregator of
+//! `@import url("base.css")` … statements; inlining *that* into a
+//! standalone `file://` report's `<style>` is useless, because a
+//! `<style>` block cannot resolve `@import url()` against relative
+//! sibling files that do not exist next to the report — every design
+//! token would collapse to the browser's serif default. So [`SITE_CSS`]
+//! inlines the four imported files directly, in `styles.css`'s import
+//! order, leaving no `@import url(` to dangle. [`REPORT_CSS`] is the
+//! small additive layer of report-only classes (`.snippet`, `.ln`,
+//! `.tok-*`, `.cluster-card`, `.run-details`) — additive so the design
+//! system stays the source of truth for tokens and surfaces.
 
 /// Design-system stylesheet, bundled at build time directly from the
-/// website source. The website's `styles.css` is the single source of
-/// truth — `include_str!` re-reads it on every compile, so the report
-/// can never lag behind the site. Do NOT copy or paraphrase the CSS
-/// here; if a token is missing, add it upstream in
-/// `site/src/assets/css/styles.css` and rebuild.
-pub const SITE_CSS: &str = include_str!("../../../../site/src/assets/css/styles.css");
+/// website source. The website stays the single source of truth — each
+/// `include_str!` re-reads the real stylesheet on every compile, so the
+/// report can never lag behind the site. The four files are concatenated
+/// in the same order `site/src/assets/css/styles.css` imports them
+/// (`base` → `home` → `prose` → `syntax`); inlining the aggregator's
+/// `@import url()` lines instead would leave them unresolved in a
+/// `file://` report ([OUTPUT-HUMAN-HTML]). Do NOT copy or paraphrase the
+/// CSS here; if a token is missing, add it upstream and rebuild.
+pub const SITE_CSS: &str = concat!(
+    include_str!("../../../../site/src/assets/css/base.css"),
+    include_str!("../../../../site/src/assets/css/home.css"),
+    include_str!("../../../../site/src/assets/css/prose.css"),
+    include_str!("../../../../site/src/assets/css/syntax.css"),
+);
 
 /// Report-only CSS additions. Tiny on purpose — anything reusable
 /// belongs in the website CSS upstream.

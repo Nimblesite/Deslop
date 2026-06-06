@@ -4,9 +4,9 @@
  * Obsidian tones, Crimson Executioner accent, tonal layering, no 1px dividers.
  */
 
-/* ─────────── Fonts ─────────── */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap");
+/* Fonts are imported by styles.css via fonts.css — kept out of this file
+   so the standalone HTML report (which inlines base/home/prose/syntax)
+   carries no @import and opens offline on the --font-* fallback stacks. */
 
 /* ─────────── Tokens ─────────── */
 :root,
