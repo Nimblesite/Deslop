@@ -1,26 +1,57 @@
 import techdoc from "eleventy-plugin-techdoc";
 import syntaxHighlight from "@11ty/eleventy-plugin-syntaxhighlight";
 
-const BLOG_INDEX_OVERRIDE = `---
+// Per-language blog-index front matter. `title`/`description` feed <title>
+// and the meta description (Eleventy does not template front-matter values);
+// the visible H1, subtitle, eyebrow, and "read more" come from i18n.json so
+// every string has one source of truth.
+const BLOG_INDEX_META = {
+  en: {
+    title: "Blog",
+    description:
+      "Field notes on duplicate-code detection for AI coding agents — ranking, tree-sitter parsing, the MCP and LSP servers, and why prevention beats cleanup.",
+  },
+  zh: {
+    title: "博客",
+    description:
+      "面向 AI 编码智能体的重复代码检测现场札记——排名机制、tree-sitter 解析、MCP 与 LSP 服务器，以及为何预防胜于清理。",
+  },
+};
+
+/**
+ * Builds the blog-index virtual template for one language. The default
+ * language renders at /blog/ from `collections.posts`; every other language
+ * renders at /<lang>/blog/ from `collections.<lang>posts`, with nav links
+ * carrying the locale prefix. One body, no per-language copies.
+ */
+const blogIndexOverride = (lang) => {
+  const isDefault = lang === "en";
+  const langPrefix = isDefault ? "" : `/${lang}`;
+  const meta = BLOG_INDEX_META[lang];
+  const posts = isDefault ? "collections.posts" : `collections.${lang}posts`;
+  const frontmatter = isDefault
+    ? `permalink: /blog/`
+    : `permalink: /${lang}/blog/\nlang: ${lang}`;
+  return `---
 layout: layouts/base.njk
-title: Blog
-description: Field notes on duplicate-code detection for AI coding agents — ranking, tree-sitter parsing, the MCP and LSP servers, and why prevention beats cleanup.
-permalink: /blog/
+title: ${meta.title}
+description: ${meta.description}
+${frontmatter}
 ---
 <div class="blog-container">
   <header class="blog-header">
-    <p class="blog-eyebrow">The Manuscript · Field Notes</p>
+    <p class="blog-eyebrow">{{ "blog.eyebrow" | t(lang) | default("The Manuscript · Field Notes") }}</p>
     <h1>{{ "blog.title" | t(lang) | default("Blog") }}</h1>
     <p class="blog-subtitle">{{ "blog.subtitle" | t(lang) | default(site.description) }}</p>
   </header>
 
   <nav class="blog-nav">
-    <a href="/blog/tags/" class="blog-nav-link">{{ "blog.tags" | t(lang) | default("Tags") }}</a>
-    <a href="/blog/categories/" class="blog-nav-link">{{ "blog.categories" | t(lang) | default("Categories") }}</a>
+    <a href="${langPrefix}/blog/tags/" class="blog-nav-link">{{ "blog.tags" | t(lang) | default("Tags") }}</a>
+    <a href="${langPrefix}/blog/categories/" class="blog-nav-link">{{ "blog.categories" | t(lang) | default("Categories") }}</a>
   </nav>
 
   <div class="post-grid">
-    {%- for post in collections.posts | sort(true, false, "date") -%}
+    {%- for post in ${posts} | sort(true, false, "date") -%}
     <article class="post-card{% if loop.first %} post-card--featured{% endif %}">
       <a href="{{ post.url }}" class="post-card__thumb" tabindex="-1" aria-hidden="true">
         <img src="{{ post.data.heroImage | default(site.ogImage) }}"
@@ -33,19 +64,20 @@ permalink: /blog/
         </div>
         <a href="{{ post.url }}" class="post-card__title">{{ post.data.title }}</a>
         {% if post.data.excerpt or post.data.description %}<p class="post-card__excerpt">{{ post.data.excerpt | default(post.data.description) }}</p>{% endif %}
-        <a href="{{ post.url }}" class="post-card__more">Read Article <span class="material-symbols-outlined">arrow_forward</span></a>
+        <a href="{{ post.url }}" class="post-card__more">{{ "blog.readMore" | t(lang) | default("Read Article") }} <span class="material-symbols-outlined">arrow_forward</span></a>
       </div>
     </article>
     {%- endfor -%}
   </div>
 
-  {% if (collections.posts | length) == 0 %}
+  {% if (${posts} | length) == 0 %}
   <div class="blog-empty">
     <p>{{ "blog.empty" | t(lang) | default("No blog posts yet.") }}</p>
   </div>
   {% endif %}
 </div>
 `;
+};
 
 const DOCS_LAYOUT_OVERRIDE = `---
 layout: layouts/base.njk
@@ -64,18 +96,21 @@ layout: layouts/base.njk
 {% endblock %}
 
 {% set currentLang = lang | default('en') %}
+{% set langPrefix = "/" + currentLang if currentLang != defaultLanguage else "" %}
 {% set navPages = collections.all | eleventyNavigation %}
 
 <div class="docs-shell">
   <aside class="docs-sidebar" id="docs-sidebar">
     <div class="docs-sidebar__brand">
-      <h2>The Manuscript</h2>
-      <p class="docs-sidebar__version">Live LSP + MCP · preview</p>
+      <h2>{{ "docs.brand" | t(currentLang) | default("The Manuscript") }}</h2>
+      <p class="docs-sidebar__version">{{ "docs.versionTag" | t(currentLang) | default("Live LSP + MCP · preview") }}</p>
     </div>
     <nav class="docs-sidebar__site-nav" aria-label="Site">
-      <a href="/" class="docs-sidebar__link">Home</a>
+      <a href="{{ langPrefix }}/" class="docs-sidebar__link">{{ "nav.home" | t(currentLang) | default("Home") }}</a>
       {% for item in navigation.main %}
-      <a href="{{ item.url }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.text }}</a>
+      {% set navUrl = item.url %}
+      {% if not item.external and currentLang != defaultLanguage %}{% set navUrl = item.url | altLangUrl('en', currentLang) %}{% endif %}
+      <a href="{{ navUrl }}" class="docs-sidebar__link"{% if item.external %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.text }}</a>
       {% endfor %}
     </nav>
     <nav class="docs-sidebar__nav" aria-label="Documentation">
@@ -101,7 +136,7 @@ layout: layouts/base.njk
     <div class="docs-sidebar__foot">
       <a href="https://github.com/Nimblesite/Deslop" class="docs-sidebar__cta">
         <span class="material-symbols-outlined">support_agent</span>
-        Community support
+        {{ "docs.communitySupport" | t(currentLang) | default("Community support") }}
       </a>
     </div>
   </aside>
@@ -111,7 +146,7 @@ layout: layouts/base.njk
       {% include "partials/prose-hero.njk" %}
       <header class="docs-article__header">
         <div class="docs-breadcrumb">
-          <a href="/docs/">Docs</a>
+          <a href="{{ langPrefix }}/docs/">{{ "nav.docs" | t(currentLang) | default("Docs") }}</a>
           <span class="material-symbols-outlined">chevron_right</span>
           <span class="docs-breadcrumb__current">{{ title | default("Introduction") }}</span>
         </div>
@@ -131,7 +166,7 @@ layout: layouts/base.njk
         {% else %}
         <span class="docs-article__prev is-disabled">
           <span class="material-symbols-outlined">arrow_back</span>
-          <span>Previous</span>
+          <span>{{ "docs.previous" | t(currentLang) | default("Previous") }}</span>
         </span>
         {% endif %}
         {% if nextPage %}
@@ -185,13 +220,13 @@ layout: layouts/base.njk
   {% include "partials/prose-hero.njk" %}
   <header class="post-article__header">
     <div class="docs-breadcrumb">
-      <a href="{{ langPrefix }}/blog/">Blog</a>
+      <a href="{{ langPrefix }}/blog/">{{ "blog.title" | t(lang) | default("Blog") }}</a>
       <span class="material-symbols-outlined">chevron_right</span>
       <span class="docs-breadcrumb__current">{{ title }}</span>
     </div>
     <h1>{{ title }}</h1>
     <p class="post-article__meta">
-      <time datetime="{{ date | isoDate }}">{{ date | dateFormat }}</time>
+      <time datetime="{{ date | isoDate }}">{{ date | dateFormat(lang) }}</time>
       {% if author %} · <span class="post-article__author">{{ author }}</span>{% endif %}
       {% if category %} · <a href="{{ langPrefix }}/blog/categories/{{ category | slugify }}/">{{ category | capitalize }}</a>{% endif %}
     </p>
@@ -227,7 +262,14 @@ layout: layouts/base.njk
 // Keep the rest in lock-step with the plugin's template or head tags will
 // drift.
 const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
-<html lang="{{ lang | default('en') }}">
+{#- Locale-safe i18n: derive the effective language and a locale-stripped base
+    path straight from the URL, so language alternates never double-prefix
+    (/zh/zh/...) even when an auto-generated page reports the wrong lang. Set
+    noTranslation: true in a page's front matter to opt it out of the language
+    cluster entirely. -#}
+{%- set effLang = 'zh' if (page.url == '/zh/' or page.url.startsWith('/zh/')) else (lang | default('en')) -%}
+{%- set basePath = (page.url | replace('/zh/', '/')) if effLang == 'zh' else page.url -%}
+<html lang="{{ effLang }}">
 <head>
   <script>
     (function() {
@@ -265,20 +307,27 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
   <link rel="icon" type="image/png" href="/assets/img/logo.png">
   <link rel="alternate" type="application/atom+xml" title="{{ site.title }} Feed" href="{{ site.url }}/feed.xml">
 
+  {%- if noTranslation %}
+  <link rel="alternate" hreflang="{{ effLang }}" href="{{ site.url }}{{ page.url }}">
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url }}">
+  {%- else %}
   {% for langCode in supportedLanguages %}
-  <link rel="alternate" hreflang="{{ langCode }}" href="{{ site.url }}{{ page.url | altLangUrl(lang | default('en'), langCode) }}">
+  <link rel="alternate" hreflang="{{ langCode }}" href="{{ site.url }}{% if langCode == defaultLanguage %}{{ basePath }}{% else %}/{{ langCode }}{{ basePath }}{% endif %}">
   {% endfor %}
-  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url | altLangUrl(lang | default('en'), defaultLanguage) }}">
+  <link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ basePath }}">
+  {%- endif %}
 
   <meta property="og:type" content="{% if page.url.startsWith('/blog/') and page.url != '/blog/' %}article{% else %}website{% endif %}">
   <meta property="og:url" content="{{ site.url }}{{ page.url }}">
   <meta property="og:title" content="{{ title | default(site.title) }}">
   <meta property="og:description" content="{{ description | default(site.description) }}">
   <meta property="og:site_name" content="{{ site.title }}">
-  <meta property="og:locale" content="{{ (lang | default('en')) | toOgLocale }}">
-  {% for langCode in supportedLanguages %}{% if langCode != (lang | default('en')) %}
+  <meta property="og:locale" content="{{ effLang | toOgLocale }}">
+  {%- if not noTranslation %}
+  {% for langCode in supportedLanguages %}{% if langCode != effLang %}
   <meta property="og:locale:alternate" content="{{ langCode | toOgLocale }}">
   {% endif %}{% endfor %}
+  {%- endif %}
   {% if pageOgImage %}
   <meta property="og:image" content="{{ site.url }}{{ pageOgImage }}">
   <meta property="og:image:secure_url" content="{{ site.url }}{{ pageOgImage }}">
@@ -384,13 +433,23 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
           {% endif %}
           <a href="{{ navUrl }}" {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
              class="nav-link {% if (item.url == '/' and (page.url == '/' or page.url == '/index.html' or page.url == ('/' + currentLang + '/') or page.url == ('/' + currentLang + '/index.html'))) or (item.url != '/' and item.url | length > 1 and (page.url.startsWith(item.url) or page.url.startsWith(navUrl))) %}active{% endif %}">
-            {{ item.text }}
+            {% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}
           </a>
         </li>
         {% endfor %}
       </ul>
 
       <div class="nav-actions">
+        <div class="language-switcher">
+          {%- if not noTranslation %}
+          {% if effLang == 'zh' %}
+          <a href="{{ basePath }}" lang="en" class="lang-link" aria-label="Switch to English">English</a>
+          {% else %}
+          <a href="/zh{{ basePath }}" lang="zh" class="lang-link" aria-label="切换到中文">中文</a>
+          {% endif %}
+          {%- endif %}
+        </div>
+
         {% if techdocOptions.features.darkMode %}
         <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
           <span class="theme-icon-light">☀</span>
@@ -420,14 +479,14 @@ const BASE_LAYOUT_OVERRIDE = `<!DOCTYPE html>
         {% set currentLang = lang | default('en') %}
         {% for section in navigation.footer %}
         <div class="footer-section">
-          <h3>{{ section.title }}</h3>
+          <h3>{% if section.i18nKey and currentLang != defaultLanguage %}{{ section.i18nKey | t(currentLang) | default(section.title) }}{% else %}{{ section.title }}{% endif %}</h3>
           <ul>
             {% for item in section.items %}
             {% set footerUrl = item.url %}
-            {% if item.url.startsWith('/') and currentLang != defaultLanguage %}
+            {% if item.url.startsWith('/') and currentLang != defaultLanguage and not item.noLangPrefix %}
               {% set footerUrl = item.url | altLangUrl('en', currentLang) %}
             {% endif %}
-            <li><a href="{{ footerUrl }}">{{ item.text }}</a></li>
+            <li><a href="{{ footerUrl }}">{% if item.i18nKey and currentLang != defaultLanguage %}{{ item.i18nKey | t(currentLang) | default(item.text) }}{% else %}{{ item.text }}{% endif %}</a></li>
             {% endfor %}
           </ul>
         </div>
@@ -558,7 +617,8 @@ Sitemap: {{ site.url }}/sitemap.xml
 `;
 
 const OVERRIDES = {
-  "blog/index.njk": BLOG_INDEX_OVERRIDE,
+  "blog/index.njk": blogIndexOverride("en"),
+  "zh/blog/index.njk": blogIndexOverride("zh"),
   "_includes/layouts/base.njk": BASE_LAYOUT_OVERRIDE,
   "_includes/layouts/docs.njk": DOCS_LAYOUT_OVERRIDE,
   "_includes/layouts/blog.njk": BLOG_POST_LAYOUT_OVERRIDE,
@@ -597,6 +657,14 @@ export default function (eleventyConfig) {
       docs: true,
       darkMode: true,
       i18n: false,
+    },
+    // Ship English + Mandarin. Registering both here drives the plugin's
+    // language-prefixed collections (zhposts, zhDocs) and the /zh/blog/ index,
+    // tags, and categories pages, and emits the en + zh + x-default hreflang
+    // cluster from the base layout. The /zh/ content tree lives in src/zh/.
+    i18n: {
+      defaultLanguage: "en",
+      languages: ["en", "zh"],
     },
   });
 

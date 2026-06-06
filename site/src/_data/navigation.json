@@ -1,26 +1,28 @@
 {
   "main": [
-    { "text": "Docs", "url": "/docs/" },
-    { "text": "Blog", "url": "/blog/" },
+    { "text": "Docs", "i18nKey": "nav.docs", "url": "/docs/" },
+    { "text": "Blog", "i18nKey": "nav.blog", "url": "/blog/" },
     { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop", "external": true }
   ],
   "footer": [
     {
       "title": "Product",
+      "i18nKey": "footer.product",
       "items": [
-        { "text": "Getting Started", "url": "/docs/" },
-        { "text": "How It Works", "url": "/docs/how-it-works/" },
-        { "text": "AI Integration", "url": "/docs/ai-integration/" },
-        { "text": "For AI", "url": "/docs/for-ai/" },
-        { "text": "Output Formats", "url": "/docs/output-formats/" },
-        { "text": "VS Code Cluster Panel", "url": "/docs/vscode-cluster-panel/" }
+        { "text": "Getting Started", "i18nKey": "footer.gettingStarted", "url": "/docs/" },
+        { "text": "How It Works", "i18nKey": "footer.howItWorks", "url": "/docs/how-it-works/" },
+        { "text": "AI Integration", "i18nKey": "footer.aiIntegration", "url": "/docs/ai-integration/" },
+        { "text": "For AI", "i18nKey": "footer.forAI", "url": "/docs/for-ai/" },
+        { "text": "Output Formats", "i18nKey": "footer.outputFormats", "url": "/docs/output-formats/" },
+        { "text": "VS Code Cluster Panel", "i18nKey": "footer.clusterPanel", "url": "/docs/vscode-cluster-panel/" }
       ]
     },
     {
       "title": "Community",
+      "i18nKey": "footer.community",
       "items": [
         { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop" },
-        { "text": "RSS", "url": "/feed.xml" }
+        { "text": "RSS", "i18nKey": "footer.rss", "url": "/feed.xml", "noLangPrefix": true }
       ]
     }
   ]

@@ -1,3 +1,4 @@
+# agent-pmo:f87d349
 [defaults]
 exclude = [
   "**/.deslop-cache/**",
@@ -21,3 +22,12 @@ exclude = [
   "**/*.pb.cs",
   "**/_site/**",
 ]
+
+# Duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP], spec [EXIT-CODES].
+# Single source of truth for this repo's duplication budget. Committed,
+# PR-reviewed, ratcheted DOWN only (never up without written justification).
+# `deslop .` reads this value and exits 3 (tanking CI) when measured repo-wide
+# duplication exceeds it. Seeded at the currently-measured value; the score is
+# inflated by the coarse E2E test suites and SHOULD be driven down over time.
+[threshold]
+max_duplication_percent = 26.5
