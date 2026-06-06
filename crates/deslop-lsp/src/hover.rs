@@ -183,6 +183,7 @@ mod tests {
                 fused: 2.2,
             },
             bucket: "identical".into(),
+            category: "logic".into(),
             occurrences_total: 2,
             occurrences_truncated: false,
             occurrences: vec![

@@ -100,6 +100,7 @@ mod tests {
                 fused: 2.14,
             },
             bucket: "nearly_identical".into(),
+            category: "logic".into(),
             occurrences_total: occurrences.len(),
             occurrences_truncated: false,
             occurrences,

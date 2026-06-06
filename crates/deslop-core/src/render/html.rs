@@ -19,6 +19,7 @@ use std::{
 
 use crate::{
     buckets::{bucket_labels, classify, ClusterKind},
+    clone_category::CloneCategory,
     render::{
         highlight::highlight_snippet,
         html_css::{REPORT_CSS, SITE_CSS},
@@ -380,34 +381,59 @@ fn language_display_name(language: &str) -> &'static str {
     }
 }
 
-/// Writes a single cluster as a Terminal Card: title + action sentence
-/// + one expanded example snippet + compact "also found in …" list.
+/// Writes a single cluster as a Terminal Card: title plus action sentence
+/// plus one expanded example snippet plus a compact "also found in …" list.
+/// A `data`-category cluster ([RANK-CATEGORY]) carries a "data table" chip in
+/// the header and the category-specific builder/asset action sentence, both
+/// sourced from [`CloneCategory`] so the HTML, text, and tree surfaces render
+/// identical words.
 fn write_cluster_card(out: &mut String, cluster: &ReportCluster, snippets: &mut SnippetLoader<'_>) {
     let kind = classify(cluster);
     let labels = bucket_labels(kind);
+    let category = CloneCategory::from_wire_label(&cluster.category);
     let occurrences = &cluster.occurrences;
     let ai_badge = if labels.ai_match {
         "<span class=\"cluster-card__ai-badge\" title=\"Detected by the AI embedding pass — semantically equivalent, syntactically different.\">AI match</span>"
     } else {
         ""
     };
+    let action = match category {
+        CloneCategory::DataTable => category.action_sentence(),
+        CloneCategory::Logic => kind_action(kind),
+    };
     let _ = write!(
         out,
         "<article class=\"cluster-card {kind_class}\">\
          <header class=\"cluster-card__head\">\
          <h3 class=\"cluster-card__title\">{title}</h3>\
-         {ai_badge}\
+         {ai_badge}{category_chip}\
          <span class=\"cluster-card__cost\">{cost}</span>\
          </header>\
          <p class=\"cluster-card__action\">{action}</p>",
         kind_class = kind_class(kind),
         title = escape(&kind_title(kind, occurrences.len())),
+        category_chip = category_chip(category),
         cost = escape(&cost_chip(cluster)),
-        action = escape(kind_action(kind)),
+        action = escape(action),
     );
     write_example(out, occurrences, snippets);
     write_also_list(out, occurrences, snippets);
     let _ = write!(out, "</article>");
+}
+
+/// Renders the `data table` category chip for the card header, or an empty
+/// string for an ordinary logic clone. Reuses the `cluster-card__ai-badge`
+/// pill style — same visual treatment, zero duplicate CSS — and sources the
+/// label from [`CloneCategory::chip`] so it never drifts from the text
+/// renderer ([RANK-CATEGORY]).
+fn category_chip(category: CloneCategory) -> String {
+    category.chip().map_or_else(String::new, |label| {
+        format!(
+            "<span class=\"cluster-card__ai-badge\" \
+             title=\"Repeated data rows, not duplicated logic — demoted in the ranking.\">{}</span>",
+            escape(label),
+        )
+    })
 }
 
 /// Returns a compact "scope" chip text — number of AST nodes the

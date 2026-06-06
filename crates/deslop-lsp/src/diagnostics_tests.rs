@@ -27,6 +27,7 @@ fn sample_cluster(
             fused: 2.2,
         },
         bucket: bucket.into(),
+        category: "logic".into(),
         occurrences_total: occurrences.len(),
         occurrences_truncated: false,
         occurrences,

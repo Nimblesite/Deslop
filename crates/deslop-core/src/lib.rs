@@ -18,6 +18,7 @@
 pub mod ast;
 pub mod boilerplate;
 pub mod buckets;
+pub mod clone_category;
 pub mod cluster;
 mod cluster_filters;
 pub mod config;
@@ -52,7 +53,11 @@ pub mod version_contract;
 pub mod wire_generated;
 
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
-pub use config::{BoilerplateImportsMode, ExclusionConfig, DEFAULT_CONFIG_FILENAME};
+pub use clone_category::CloneCategory;
+pub use config::{
+    BoilerplateImportsMode, DataClonePolicy, ExclusionConfig, RankingPolicy,
+    DEFAULT_CONFIG_FILENAME,
+};
 pub use delta::ReportDelta;
 pub use embedding::{
     list_ollama_models, EmbeddingMode, EmbeddingProvider, EmbeddingSpec, NoopProvider,

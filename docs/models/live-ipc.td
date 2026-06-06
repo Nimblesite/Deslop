@@ -184,6 +184,7 @@ type ReportCluster {
   canonical_node_count: Int
   signals: ReportSignals
   bucket: String
+  category: String
   occurrences: List<ReportOccurrence>
   occurrences_total: Int
   occurrences_truncated: Bool

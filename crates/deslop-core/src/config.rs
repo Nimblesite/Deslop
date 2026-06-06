@@ -102,6 +102,74 @@ impl BoilerplateImportsMode {
     }
 }
 
+/// How `data`-category clusters ([RANK-CATEGORY]) are ranked. Selected by
+/// `.deslop.toml` `[ranking] data_clones`; defaults to [`Self::Demote`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DataClonePolicy {
+    /// Down-weight data clusters by `data_clone_weight` so they rank below
+    /// comparable logic clones but stay in the report, labelled. The default.
+    #[default]
+    Demote,
+    /// Drop data clusters from the report entirely (counted in
+    /// `clusters_hidden`).
+    Ignore,
+    /// Rank data clusters at full weight — restores pre-category ordering.
+    Keep,
+}
+
+/// Default `data_clone_weight` multiplier in [`DataClonePolicy::Demote`]
+/// ([RANK-CATEGORY]). Kept above zero so a pathologically large verbatim
+/// data blob can still rise rather than being silently zeroed.
+pub const DEFAULT_DATA_CLONE_WEIGHT: f64 = 0.15;
+
+/// Compiled `[ranking]` policy ([RANK-CATEGORY]). Carries the validated
+/// demote multiplier so callers never re-validate at render time.
+#[derive(Debug, Clone, Copy)]
+pub struct RankingPolicy {
+    /// Selected three-way data-clone policy.
+    data_clones: DataClonePolicy,
+    /// Validated demote multiplier; finite and strictly inside `(0.0, 1.0]`.
+    data_clone_weight: f64,
+}
+
+impl Default for RankingPolicy {
+    fn default() -> Self {
+        Self {
+            data_clones: DataClonePolicy::Demote,
+            data_clone_weight: DEFAULT_DATA_CLONE_WEIGHT,
+        }
+    }
+}
+
+impl RankingPolicy {
+    /// Returns the selected data-clone policy.
+    #[must_use]
+    pub const fn data_clones(self) -> DataClonePolicy {
+        self.data_clones
+    }
+
+    /// Multiplier applied to a `data`-category cluster's ranking weight
+    /// ([RANK-CATEGORY]). `1.0` for [`DataClonePolicy::Keep`] (no demotion);
+    /// the validated `data_clone_weight` for [`DataClonePolicy::Demote`].
+    /// [`DataClonePolicy::Ignore`] never reweighs — those clusters are
+    /// dropped — so it reports `1.0` for completeness.
+    #[must_use]
+    pub fn weight_multiplier(self) -> f64 {
+        match self.data_clones {
+            DataClonePolicy::Demote => self.data_clone_weight,
+            DataClonePolicy::Keep | DataClonePolicy::Ignore => 1.0,
+        }
+    }
+
+    /// True when `data`-category clusters must be dropped from the report
+    /// entirely rather than demoted.
+    #[must_use]
+    pub fn drops_data_clusters(self) -> bool {
+        matches!(self.data_clones, DataClonePolicy::Ignore)
+    }
+}
+
 /// Raw on-disk TOML shape. Kept separate from [`ExclusionConfig`] so the
 /// runtime type can carry compiled matchers instead of raw pattern strings.
 #[derive(Debug, Default, Clone, Deserialize)]
@@ -123,6 +191,21 @@ struct RawConfig {
     /// Report-rendering toggles.
     #[serde(default)]
     report: RawReport,
+    /// Clone-category ranking policy ([RANK-CATEGORY]).
+    #[serde(default)]
+    ranking: RawRanking,
+}
+
+/// Raw on-disk shape of the `[ranking]` section ([RANK-CATEGORY]).
+#[derive(Debug, Default, Clone, Deserialize)]
+struct RawRanking {
+    /// How `data`-category clusters are ranked. `None` means the key was
+    /// not set, so the [`DataClonePolicy`] default (`demote`) applies.
+    #[serde(default)]
+    data_clones: Option<DataClonePolicy>,
+    /// Demote multiplier. `None` means inherit [`DEFAULT_DATA_CLONE_WEIGHT`].
+    #[serde(default)]
+    data_clone_weight: Option<f64>,
 }
 
 /// Raw on-disk shape of the `[analysis]` section.
@@ -207,6 +290,8 @@ pub struct ExclusionConfig {
     /// Whether the HTML report splits clusters into per-language
     /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Defaults off.
     split_by_language: bool,
+    /// Compiled clone-category ranking policy ([RANK-CATEGORY]).
+    ranking_policy: RankingPolicy,
 }
 
 /// Compiled matchers for a single language overlay.
@@ -236,6 +321,7 @@ impl ExclusionConfig {
             fail_over_percent: None,
             allow_cross_language_comparison: false,
             split_by_language: false,
+            ranking_policy: RankingPolicy::default(),
         }
     }
 
@@ -314,6 +400,7 @@ impl ExclusionConfig {
             );
         }
         let fail_over_percent = resolve_threshold(path, raw.threshold.as_ref())?;
+        let ranking_policy = resolve_ranking_policy(path, &raw.ranking)?;
         Ok(Self {
             source: path.to_path_buf(),
             scan_root: scan_root.map(Path::to_path_buf),
@@ -324,6 +411,7 @@ impl ExclusionConfig {
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
             split_by_language: raw.report.split_by_language,
+            ranking_policy,
         })
     }
 
@@ -354,6 +442,12 @@ impl ExclusionConfig {
     #[must_use]
     pub const fn split_by_language(&self) -> bool {
         self.split_by_language
+    }
+
+    /// Returns the compiled clone-category ranking policy ([RANK-CATEGORY]).
+    #[must_use]
+    pub const fn ranking_policy(&self) -> RankingPolicy {
+        self.ranking_policy
     }
 
     /// Returns the source path this config was loaded from, or an empty
@@ -570,4 +664,40 @@ fn resolve_threshold(
             path: source.to_path_buf(),
             message: msg,
         })
+}
+
+/// Validates and compiles the `[ranking]` section into a [`RankingPolicy`]
+/// ([RANK-CATEGORY]). The policy defaults to `demote` / [`DEFAULT_DATA_CLONE_WEIGHT`];
+/// an explicit `data_clone_weight` must be finite and strictly inside
+/// `(0.0, 1.0]` or the load fails with a `ConfigThreshold`-style error.
+fn resolve_ranking_policy(source: &Path, raw: &RawRanking) -> Result<RankingPolicy, CoreError> {
+    let data_clone_weight = match raw.data_clone_weight {
+        None => DEFAULT_DATA_CLONE_WEIGHT,
+        Some(weight) => {
+            validate_data_clone_weight(weight).map_err(|message| CoreError::ConfigThreshold {
+                path: source.to_path_buf(),
+                message,
+            })?
+        }
+    };
+    Ok(RankingPolicy {
+        data_clones: raw.data_clones.unwrap_or_default(),
+        data_clone_weight,
+    })
+}
+
+/// Returns `weight` when it is a finite multiplier strictly inside
+/// `(0.0, 1.0]`, else a diagnostic explaining the rejection. Zero is
+/// rejected so a demoted cluster can never be silently erased; values above
+/// `1.0` would *promote* data clones, defeating the policy ([RANK-CATEGORY]).
+fn validate_data_clone_weight(weight: f64) -> Result<f64, String> {
+    if !weight.is_finite() {
+        return Err(format!("data_clone_weight must be finite, got {weight}"));
+    }
+    if weight <= 0.0 || weight > 1.0 {
+        return Err(format!(
+            "data_clone_weight must be in the range (0.0, 1.0], got {weight}"
+        ));
+    }
+    Ok(weight)
 }

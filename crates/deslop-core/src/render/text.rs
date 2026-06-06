@@ -8,6 +8,7 @@
 use std::fmt::Write as _;
 
 use crate::{
+    clone_category::CloneCategory,
     report::{Report, ReportCluster},
     report_metrics::ThresholdSource,
 };
@@ -134,17 +135,28 @@ fn write_boilerplate_hints(out: &mut String, report: &Report) {
     }
 }
 
-/// Writes a single cluster block.
+/// Writes a single cluster block. A `data`-category cluster carries a
+/// `[data table]` chip on the header line and the category-specific action
+/// sentence (builder / asset hint) on the interpretation line, both sourced
+/// from [`CloneCategory`] so every surface renders the same words
+/// ([RANK-CATEGORY]).
 fn write_cluster(out: &mut String, idx: usize, cluster: &ReportCluster) {
+    let category = CloneCategory::from_wire_label(&cluster.category);
+    let chip = category
+        .chip()
+        .map_or(String::new(), |label| format!(" [{label}]"));
+    let interpretation = match category {
+        CloneCategory::DataTable => category.action_sentence(),
+        CloneCategory::Logic => cluster.interpretation.as_str(),
+    };
     let _ = writeln!(
         out,
-        "#{rank} [{id}] weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}",
+        "#{rank} [{id}]{chip} weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}",
         rank = idx.saturating_add(1),
         id = cluster.id,
         weight = cluster.weight,
         size = cluster.size,
         nodes = cluster.canonical_node_count,
         summary = cluster.summary,
-        interpretation = cluster.interpretation,
     );
 }
