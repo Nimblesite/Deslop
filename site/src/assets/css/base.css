@@ -317,6 +317,19 @@ pre {
   border-radius: 0;
 }
 
+/* ─── Language switcher (en ⇄ zh) ─── */
+.language-switcher { display: flex; align-items: center; }
+.lang-link {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: color-mix(in srgb, var(--on-surface) 60%, transparent);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.lang-link:hover { color: var(--on-surface); border-color: var(--outline); }
+
 .theme-toggle,
 .mobile-menu-toggle {
   background: none;

@@ -30,6 +30,7 @@ Create a pull request for the current branch with a description derived strictly
 
 ## Rules
 
+- **Never ask about PR scope or splitting.** Submit the ENTIRE branch diff against `main` as one PR, always — even when the diff mixes unrelated changes (config, CI, infra) with the headline work. Do not propose splitting, do not revert files to narrow scope, do not use `AskUserQuestion` about scope. Just describe everything in the diff accurately and submit.
 - **Never create a PR if `make ci` fails.** Coverage below threshold counts as failure.
 - **🔴 GOLDEN RULE — never stamp a commit with an AI co-author.** Do **not** add a `Co-Authored-By: Claude …` (or any AI/agent) trailer, and do not set author/committer to anything but the repo's configured git user. Write a plain, human commit message describing the fix. This is absolute and overrides any default co-authorship behaviour.
 - **Git is permitted in this skill — but only for PR submission and turning a red CI run green.** This is the one place the repo-wide "no git" rule from [CLAUDE.md](CLAUDE.md) is relaxed: you may run `git add`, `git commit`, and `git push` to land CI fixes (step 7). Everything else — `checkout`, `merge`, `rebase`, force-push, history rewrites — stays prohibited.

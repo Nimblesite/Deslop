@@ -4,6 +4,8 @@
       "back": "← Back to Blog",
       "title": "Blog",
       "subtitle": "Notes on duplicate detection, AI-era codebases, and the decisions behind Deslop.",
+      "eyebrow": "The Manuscript · Field Notes",
+      "readMore": "Read Article",
       "tags": "Tags",
       "categories": "Categories",
       "empty": "No blog posts yet."
@@ -11,12 +13,66 @@
     "nav": {
       "docs": "Docs",
       "blog": "Blog",
+      "home": "Home",
       "api": "API",
       "apiReference": "API Reference"
     },
     "docs": {
       "title": "Documentation",
-      "gettingStarted": "Getting Started"
+      "gettingStarted": "Getting Started",
+      "brand": "The Manuscript",
+      "versionTag": "Live LSP + MCP · preview",
+      "communitySupport": "Community support",
+      "previous": "Previous"
+    },
+    "footer": {
+      "product": "Product",
+      "community": "Community",
+      "gettingStarted": "Getting Started",
+      "howItWorks": "How It Works",
+      "aiIntegration": "AI Integration",
+      "forAI": "For AI",
+      "outputFormats": "Output Formats",
+      "clusterPanel": "VS Code Cluster Panel",
+      "rss": "RSS"
+    }
+  },
+  "zh": {
+    "blog": {
+      "back": "← 返回博客",
+      "title": "博客",
+      "subtitle": "关于重复检测、AI 时代代码库，以及 Deslop 背后设计决策的现场札记。",
+      "eyebrow": "手稿 · 现场札记",
+      "readMore": "阅读全文",
+      "tags": "标签",
+      "categories": "分类",
+      "empty": "暂无博客文章。"
+    },
+    "nav": {
+      "docs": "文档",
+      "blog": "博客",
+      "home": "首页",
+      "api": "API",
+      "apiReference": "API 参考"
+    },
+    "docs": {
+      "title": "文档",
+      "gettingStarted": "快速开始",
+      "brand": "手稿",
+      "versionTag": "实时 LSP + MCP · 预览",
+      "communitySupport": "社区支持",
+      "previous": "上一页"
+    },
+    "footer": {
+      "product": "产品",
+      "community": "社区",
+      "gettingStarted": "快速开始",
+      "howItWorks": "工作原理",
+      "aiIntegration": "AI 集成",
+      "forAI": "面向 AI",
+      "outputFormats": "输出格式",
+      "clusterPanel": "VS Code 簇面板",
+      "rss": "RSS"
     }
   }
 }

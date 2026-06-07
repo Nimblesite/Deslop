@@ -1,4 +1,4 @@
-# agent-pmo:9a71cbf
+# agent-pmo:f87d349
 name: CI
 
 on:
@@ -104,6 +104,14 @@ jobs:
       - name: Build
         run: make build
 
+      # Duplication gate ([CI-DESLOP]). Self-hosted: run the release binary
+      # built by the step above against this repo. It reads the ratcheted
+      # [threshold] max_duplication_percent from .deslop.toml and exits 3
+      # (failing CI) the moment repo-wide duplication climbs past it. The
+      # threshold is the single source of truth — never hardcoded here.
+      - name: Duplication gate (deslop)
+        run: ./target/release/deslop . --no-color
+
       - name: Deployment manifest and binary gates
         run: make deployment-verify
 
@@ -120,6 +128,9 @@ jobs:
     name: VSIX tests + coverage
     needs: ci
     runs-on: ubuntu-latest
+    # TIMEOUT EXCEPTION: builds the real LSP+MCP from source, installs Node
+    # deps, then runs full E2E against headless VS Code Electron under xvfb —
+    # the 10-minute default is too tight for the Electron download + E2E run.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -183,6 +194,9 @@ jobs:
     name: JetBrains package gate
     needs: ci
     runs-on: ubuntu-latest
+    # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB
+    # SDK and runs the resolver test against the real released deslop-lsp
+    # binary — well over the 10-minute default on a cold runner cache.
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
