@@ -15,7 +15,8 @@ use crate::{
     clone_category::CloneCategory,
     cluster::Cluster,
     cluster_filters::{
-        classify_clone_category, is_embedding_role_mismatch, is_noise_pattern, ParseCache,
+        classify_clone_category, is_embedding_role_mismatch, is_noise_pattern,
+        is_single_file_declaration_family, ParseCache,
     },
     config::{ExclusionConfig, RankingPolicy},
     pair::PairScore,
@@ -264,7 +265,20 @@ fn cluster_is_hidden<S: BuildHasher>(
             inputs.file_languages,
             parse_cache,
         );
-    token_only_or_mega || noise || role_mismatch
+    // Issue #197: a single-file `structural_only` family of sibling
+    // declarations (REST CRUD / settings / builder methods) is the same
+    // evidence-free noise as the cross-file #134 scaffolding, but kept full
+    // `NearlyIdentical` weight because the signal-only routing only demotes
+    // cross-file spreads. The AST check confines this to declaration
+    // families, so worth-extracting statement-window clones stay visible.
+    let single_file_declaration_family = report_cluster.bucket == "structural_only"
+        && is_single_file_declaration_family(
+            &cluster.members,
+            inputs.sources,
+            inputs.file_languages,
+            parse_cache,
+        );
+    token_only_or_mega || noise || role_mismatch || single_file_declaration_family
 }
 
 /// Re-ranks visible clusters by non-hidden occurrence count so mixed

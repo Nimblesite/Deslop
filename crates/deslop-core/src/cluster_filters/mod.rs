@@ -109,6 +109,7 @@
 mod calls;
 mod dart;
 mod dart_data_table;
+mod declaration_family;
 mod python;
 mod python_class_shapes;
 mod python_constants;
@@ -126,6 +127,7 @@ use std::{
 
 use tree_sitter::Node;
 
+pub(crate) use declaration_family::is_single_file_declaration_family;
 pub(crate) use snippets::ParseCache;
 use snippets::{collect_snippets, parse_for, uniform_language, Snippet};
 

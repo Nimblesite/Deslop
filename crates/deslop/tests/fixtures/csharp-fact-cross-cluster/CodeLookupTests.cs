@@ -31,15 +31,5 @@ namespace ICD10.Api.Tests
             Assert.NotNull(body);
             Assert.NotEmpty(body);
         }
-
-        [Fact]
-        public async Task GetCodeByCode_ReturnsOk_WhenCodeFound()
-        {
-            var response = await _client.GetAsync("/api/codes/C00.0");
-            response.EnsureSuccessStatusCode();
-            var body = await response.Content.ReadAsStringAsync();
-            Assert.NotNull(body);
-            Assert.NotEmpty(body);
-        }
     }
 }

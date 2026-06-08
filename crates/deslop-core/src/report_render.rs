@@ -226,23 +226,21 @@ pub(crate) fn report_bucket_kind(
         (ClusterKind::NearlyIdentical, true, true) => ClusterKind::Identical,
         _ => kind,
     };
-    // Issue #134 / #197: a multi-copy structural-only match (high
-    // structural fingerprint, no token or semantic support, 3+
-    // occurrences) is too weak to call "nearly identical". #134's
-    // reproduction was cross-file test scaffolding; #197's is an
-    // in-class sibling-method family — the REST/CRUD/settings/builder
-    // idiom where each method shares a skeleton but targets a different
-    // endpoint literal and return type (`structural=1.0,
-    // token_jaccard=0, embedding_cos=0`). Both dominate top-offenders
-    // for the same reason: a token≈0, embedding≈0 family ranks purely on
-    // size. File spread is not what distinguishes a real Type-3 from
-    // this noise — sibling-method families live in one file.
+    // Issue #134: a *cross-file multi-copy* structural-only match
+    // (high structural fingerprint, no token or semantic support,
+    // 3+ occurrences spread across 3+ files) is too weak to call
+    // "nearly identical". The issue's reproduction shows clusters of
+    // 7-53 occurrences with `structural=1.0, token_jaccard=0,
+    // embedding_cos=0` dominating top-offenders — test scaffolding
+    // or generated boilerplate replicated across many test files.
     //
     // Source-bytes equivalent clusters (Identical) keep their bucket
     // because byte-level proof is independent of the signal triple.
-    // Small two-occurrence pairs keep `NearlyIdentical` — at that scale
-    // a structural-only match really can identify a Type-3 candidate
-    // worth extracting.
+    // The *single-file* twin of this noise — an in-class sibling-method
+    // family (issue #197) — is handled later, in the renderer's
+    // `cluster_is_hidden` AST pass, because distinguishing a sibling
+    // declaration family from a worth-extracting statement-window clone
+    // needs the CST, which this signal-only routing does not have.
     if kind == ClusterKind::NearlyIdentical && is_scaffolding_structural_only(signals, members) {
         return ClusterKind::LooselySimilar;
     }
@@ -250,20 +248,26 @@ pub(crate) fn report_bucket_kind(
 }
 
 /// Returns true when the structural fingerprint is the only positive
-/// support for a 3+ member family, regardless of file spread (issues
-/// #134, #197). The signal thresholds (0.05) match the issue acceptance
-/// criterion (`token_jaccard=0.00` and `embedding_cos=0.00`) while
-/// tolerating `MinHash` collision noise. The 3-member floor preserves
-/// genuine small two-occurrence pairs; the file-count floor was dropped
-/// in #197 because in-class sibling-method families (REST CRUD, settings,
-/// builders) reproduce the exact same evidence-free noise inside a single
-/// file. This unifies the predicate with the `structural_only` wire label,
-/// which never had a file-count condition.
+/// support *and* the cluster spans enough distinct files to mirror the
+/// cross-test-file scaffolding pattern from issue #134. The signal
+/// thresholds (0.05) match the issue acceptance criterion
+/// (`token_jaccard=0.00` and `embedding_cos=0.00`) while tolerating
+/// `MinHash` collision noise. The 3-member, 3-file floors preserve
+/// genuine same-file Type-3 clusters and small two-occurrence pairs;
+/// single-file sibling-declaration families are suppressed separately
+/// ([#197], see `cluster_is_hidden`).
 fn is_scaffolding_structural_only(signals: ReportSignals, members: &[Fingerprint]) -> bool {
-    signals.structural >= 0.99
-        && signals.token_jaccard < 0.05
-        && signals.embedding_cos < 0.05
-        && members.len() >= 3
+    if signals.structural < 0.99
+        || signals.token_jaccard >= 0.05
+        || signals.embedding_cos >= 0.05
+        || members.len() < 3
+    {
+        return false;
+    }
+    let mut files: Vec<FileId> = members.iter().map(|member| member.file_id).collect();
+    files.sort_unstable();
+    files.dedup();
+    files.len() >= 3
 }
 
 /// Returns true for substantive C# Type-3 candidates found only through

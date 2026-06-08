@@ -14,8 +14,9 @@ use crate::common::*;
 fn chained_dict_assertions_across_test_files_do_not_cluster() -> Result<()> {
     let scan_root = fixture("python-issue-107-chained-dict-assert");
     let report = run_report(&scan_root, 4)?;
-    let offenders =
-        summaries_where(&report, &scan_root, |text| text.contains("assert ") && text.contains("]["))?;
+    let offenders = summaries_where(&report, &scan_root, |text| {
+        text.contains("assert ") && text.contains("][")
+    })?;
     assert!(
         offenders.is_empty(),
         "chained `assert X[k1][k2]` assertions across unrelated test files \
