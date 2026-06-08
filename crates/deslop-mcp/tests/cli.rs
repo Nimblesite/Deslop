@@ -1010,6 +1010,22 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
             "issue #113: find-similar schema must document {field}: {properties:?}"
         );
     }
+    // Issue #170/#198: the `language` enum is derived from the core parser
+    // registry, so it must list every first-class language — including
+    // `dart`, which `session-config` already reports. A hand-maintained
+    // enum let `dart` fall off and made the filter unusable on Dart repos.
+    let language_enum = properties
+        .get("language")
+        .and_then(|language| language.get("enum"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("find-similar language must be a closed enum: {properties:?}"))?;
+    let languages: Vec<&str> = language_enum.iter().filter_map(Value::as_str).collect();
+    for expected in ["csharp", "rust", "python", "dart"] {
+        assert!(
+            languages.contains(&expected),
+            "issue #170/#198: find-similar language enum must include {expected}, got {languages:?}"
+        );
+    }
     let _ = child.finish();
     Ok(())
 }
@@ -1116,6 +1132,43 @@ fn issue_110_report_pages_omit_schema_doc_and_schema_doc_tool_serves_it() -> Res
     assert_eq!(
         schema_doc, resource_doc,
         "schema-doc tool and deslop://schema resource must serve the same markdown"
+    );
+    let _ = child.finish();
+    Ok(())
+}
+
+#[test]
+fn report_query_accepts_dart_language_filter() -> Result<()> {
+    // Issue #170/#198: `report-query` only *filters* already-detected
+    // clusters by language — no parsing — yet its `language` enum omitted
+    // `dart`, so `language: "dart"` failed JSON-Schema validation with
+    // InvalidParams and there was no workaround on Dart repos. The enum is
+    // now derived from the core parser registry, so the filter must be
+    // accepted (returning a, possibly empty, page) rather than rejected.
+    let mut child = McpChild::spawn(fixture_root(), &[])?;
+    let _ = init_session(&mut child)?;
+    let response = child.request(
+        "tools/call",
+        &json!({
+            "name": "report-query",
+            "arguments": { "offset": 0, "limit": 5, "language": "dart" }
+        }),
+    )?;
+    assert!(
+        response.get("error").is_none(),
+        "issue #170/#198: report-query must accept language=\"dart\" at the \
+         schema layer, not reject it as InvalidParams: {response}"
+    );
+    let page = structured_tool_result(
+        response
+            .get("result")
+            .ok_or_else(|| anyhow!("report-query must return a result: {response}"))?,
+    )?;
+    let clusters = value_get(&page, "/clusters")?;
+    assert!(
+        clusters.is_array(),
+        "report-query must return a clusters array even when the language \
+         filter matches nothing: {page}"
     );
     let _ = child.finish();
     Ok(())

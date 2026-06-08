@@ -282,6 +282,15 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
     ]
 }
 
+/// Stable language ids of every registered parser, in registry order.
+/// Single source of truth for any surface that needs the closed set of
+/// supported languages — tool schemas, language filters, docs — so the list
+/// can never drift from [`default_parsers`] ([PIPELINE-LANG-TRAIT]).
+#[must_use]
+pub fn language_ids() -> Vec<&'static str> {
+    default_parsers().iter().map(|parser| parser.id()).collect()
+}
+
 /// Builds a lowercase-extension → language-id lookup from the parser
 /// registry. Returning the language id (not a parser index) lets
 /// [`crate::discover::discover_files`] check [`crate::config::ExclusionConfig`]
