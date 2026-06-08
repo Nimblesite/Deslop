@@ -1,6 +1,14 @@
 //! JSON schema builders for each MCP tool's input parameters.
 
+use deslop_core::pipeline::language_ids;
 use serde_json::{json, Value};
+
+/// The closed `language` enum, derived from the core parser registry so the
+/// tool schemas can never drift from the set of supported languages
+/// ([MCP-TOOL-REPORT-QUERY]). Fixes the omission of `dart` (gh #170, #198).
+fn language_enum() -> Value {
+    Value::Array(language_ids().into_iter().map(Value::from).collect())
+}
 
 /// Empty-parameter schema.
 pub(super) fn schema_empty() -> Value {
@@ -34,7 +42,7 @@ pub(super) fn schema_report_query() -> Value {
         "properties": {
             "offset": { "type": "integer", "minimum": 0 },
             "limit": { "type": "integer", "minimum": 0 },
-            "language": { "type": "string", "enum": ["csharp", "rust", "python"], "description": "Match clusters whose detected source language equals this id." },
+            "language": { "type": "string", "enum": language_enum(), "description": "Match clusters whose detected source language equals this id." },
             "bucket": { "type": "string", "enum": ["identical", "nearly_identical", "loosely_similar", "same_behavior"], "description": "Match clusters whose canonical bucket equals this id." },
             "path_contains": { "type": "string", "description": "Case-sensitive substring match against any occurrence path on the cluster." },
             "min_score": { "type": "number", "description": "Inclusive ranking-score floor." },
@@ -84,7 +92,7 @@ pub(super) fn schema_find_similar() -> Value {
             "snippet": { "type": "string" },
             "language": {
                 "type": "string",
-                "enum": ["csharp", "rust", "python"]
+                "enum": language_enum()
             },
             "top_n": { "type": "integer", "minimum": 0, "default": 5 },
             "max_occurrences": { "type": "integer", "minimum": 1, "default": 15, "description": "Total occurrence budget across returned clusters. See top-offenders for semantics." }

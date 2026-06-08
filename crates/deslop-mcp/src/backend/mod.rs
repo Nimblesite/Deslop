@@ -208,7 +208,8 @@ pub enum FindSimilarInput<'a> {
     Snippet {
         /// Source text to parse.
         snippet: &'a str,
-        /// Language id (one of `csharp`, `rust`, `python`).
+        /// Language id (one of the ids in `deslop_core::pipeline::language_ids`,
+        /// e.g. `csharp`, `rust`, `python`, `dart`).
         language: &'a str,
     },
 }

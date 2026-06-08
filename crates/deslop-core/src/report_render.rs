@@ -236,10 +236,11 @@ pub(crate) fn report_bucket_kind(
     //
     // Source-bytes equivalent clusters (Identical) keep their bucket
     // because byte-level proof is independent of the signal triple.
-    // Single-file repetitions (e.g. three `[Fact]`-decorated methods
-    // in one test class) and small two-occurrence pairs keep
-    // `NearlyIdentical` — at those scales a structural-only match
-    // really does identify a Type-3 candidate worth extracting.
+    // The *single-file* twin of this noise — an in-class sibling-method
+    // family (issue #197) — is handled later, in the renderer's
+    // `cluster_is_hidden` AST pass, because distinguishing a sibling
+    // declaration family from a worth-extracting statement-window clone
+    // needs the CST, which this signal-only routing does not have.
     if kind == ClusterKind::NearlyIdentical && is_scaffolding_structural_only(signals, members) {
         return ClusterKind::LooselySimilar;
     }
@@ -252,7 +253,9 @@ pub(crate) fn report_bucket_kind(
 /// thresholds (0.05) match the issue acceptance criterion
 /// (`token_jaccard=0.00` and `embedding_cos=0.00`) while tolerating
 /// `MinHash` collision noise. The 3-member, 3-file floors preserve
-/// genuine same-file Type-3 clusters and small two-occurrence pairs.
+/// genuine same-file Type-3 clusters and small two-occurrence pairs;
+/// single-file sibling-declaration families are suppressed separately
+/// ([#197], see `cluster_is_hidden`).
 fn is_scaffolding_structural_only(signals: ReportSignals, members: &[Fingerprint]) -> bool {
     if signals.structural < 0.99
         || signals.token_jaccard >= 0.05

@@ -20,5 +20,6 @@ mod session;
 mod signatures;
 
 pub use config::{EmbeddingSettings, PipelineConfig};
+pub use corpus::language_ids;
 pub use run::{debug_ast_dump, run};
 pub use session::PipelineSession;

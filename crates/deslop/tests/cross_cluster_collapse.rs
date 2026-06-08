@@ -132,12 +132,14 @@ fn clusters_for_file(report: &serde_json::Value, needle: &str) -> Vec<serde_json
         .unwrap_or_default()
 }
 
-// Issue #50 acceptance: a small C# file with 3 [Fact]-decorated
-// identical test methods must produce exactly one cluster covering
+// Issue #50 acceptance: a small C# file with two [Fact]-decorated
+// near-identical test methods must produce exactly one cluster covering
 // the test-method region. Pre-fix, the `attribute_list +
 // method_declaration` subtree and the bare `method_declaration`
 // subtree each form a separate fused cluster, so the user sees the
-// same three occurrences reported twice.
+// same occurrences reported twice. The fixture is a two-method pair so
+// the cluster stays visible: a three-or-more sibling-method family is a
+// single-file `structural_only` pattern suppressed by #197.
 #[test]
 fn fact_decorated_identical_methods_produce_one_cluster() -> Result<()> {
     let tmp = tempfile::tempdir()?;
