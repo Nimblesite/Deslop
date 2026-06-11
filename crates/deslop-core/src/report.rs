@@ -300,8 +300,9 @@ fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster], policy: Rankin
     for cluster in &mut *clusters {
         let visible = visible_occurrence_count(cluster);
         let base = visible_rank_weight(cluster.canonical_node_count, visible);
-        cluster.weight =
-            base * category_multiplier(cluster, policy) * structural_only_multiplier(cluster, policy);
+        cluster.weight = base
+            * category_multiplier(cluster, policy)
+            * structural_only_multiplier(cluster, policy);
     }
     clusters.sort_by(|left, right| {
         right

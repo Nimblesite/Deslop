@@ -194,10 +194,7 @@ fn structural_only_family_is_demoted_below_genuine_clone_by_default() -> Result<
          method family (rank {family}): {report:#}"
     );
 
-    let family_cluster = clusters(&report)
-        .get(family)
-        .cloned()
-        .unwrap_or_default();
+    let family_cluster = clusters(&report).get(family).cloned().unwrap_or_default();
     let interpretation = family_cluster
         .get("interpretation")
         .and_then(Value::as_str)
@@ -283,9 +280,18 @@ fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()>
     let src = tmp.path().join("src");
     write_fixture(&src)?;
     for (body, fragment) in [
-        ("[ranking]\nstructural_only_weight = 2.5\n", "range (0.0, 1.0]"),
-        ("[ranking]\nstructural_only_weight = 0.0\n", "range (0.0, 1.0]"),
-        ("[ranking]\nstructural_only_weight = nan\n", "must be finite"),
+        (
+            "[ranking]\nstructural_only_weight = 2.5\n",
+            "range (0.0, 1.0]",
+        ),
+        (
+            "[ranking]\nstructural_only_weight = 0.0\n",
+            "range (0.0, 1.0]",
+        ),
+        (
+            "[ranking]\nstructural_only_weight = nan\n",
+            "must be finite",
+        ),
     ] {
         fs::write(src.join(".deslop.toml"), body)?;
         let _assertion = Command::cargo_bin("deslop")?

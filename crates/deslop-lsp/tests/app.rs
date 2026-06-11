@@ -206,9 +206,12 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
 #[test]
 fn startup_dispatch_propagates_async_server_error() -> Result<()> {
     let startup = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-error"])?)?;
-    let error = run_startup_with(startup, |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
-        std::future::ready(Err(anyhow!("async server failed")))
-    })
+    let error = run_startup_with(
+        startup,
+        |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
+            std::future::ready(Err(anyhow!("async server failed")))
+        },
+    )
     .err()
     .ok_or_else(|| anyhow!("startup dispatch should have returned an error"))?;
     assert!(format!("{error:#}").contains("async server failed"));

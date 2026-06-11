@@ -171,12 +171,11 @@ fn read_request(reader: &mut BufReader<IpcStream>, writer: &mut IpcStream) -> Op
     if reader.read_line(&mut line).is_err() {
         return None;
     }
-    match serde_json::from_str(line.trim()) {
-        Ok(value) => Some(value),
-        Err(_) => {
-            let _written = write_frame(writer, &parse_error());
-            None
-        }
+    if let Ok(value) = serde_json::from_str(line.trim()) {
+        Some(value)
+    } else {
+        let _written = write_frame(writer, &parse_error());
+        None
     }
 }
 

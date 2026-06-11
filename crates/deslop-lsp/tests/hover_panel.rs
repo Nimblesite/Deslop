@@ -316,6 +316,7 @@ fn count_card_headlines(markdown: &str) -> usize {
             trimmed.starts_with("**")
                 && (trimmed.contains("Identical code")
                     || trimmed.contains("Nearly identical code")
+                    || trimmed.contains("Same shape, different content")
                     || trimmed.contains("Loosely similar code")
                     || trimmed.contains("Same behavior"))
         })

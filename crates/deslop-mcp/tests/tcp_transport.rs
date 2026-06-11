@@ -87,7 +87,10 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
     )?;
     let offenders = structured_content(&response, "top-offenders")?;
     ensure!(
-        offenders.get("total_clusters").and_then(Value::as_u64).is_some(),
+        offenders
+            .get("total_clusters")
+            .and_then(Value::as_u64)
+            .is_some(),
         "top-offenders over TCP must return the live report shape: {response}"
     );
 
@@ -171,7 +174,9 @@ fn stale_discovery_record_reports_lsp_not_running() -> Result<()> {
     };
     fs::write(
         cache_dir.join("deslop.port"),
-        format!(r#"{{"port":{dead_port},"token":"0000000000000000000000000000000000000000000000000000000000000000"}}"#),
+        format!(
+            r#"{{"port":{dead_port},"token":"0000000000000000000000000000000000000000000000000000000000000000"}}"#
+        ),
     )?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
