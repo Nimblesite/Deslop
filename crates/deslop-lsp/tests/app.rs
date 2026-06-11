@@ -8,6 +8,7 @@ use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
 use deslop_core::embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL};
+use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
 use deslop_lsp::app::{
     action_from_args, run_process, run_process_result, run_startup_with, LspAction, LspStartup,
 };
@@ -171,16 +172,20 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
             model_id: "async-model".to_owned(),
             endpoint: "http://127.0.0.1:1234".to_owned(),
         },
+        ipc_mode: IpcMode::Tcp,
+        ranking_structural_only: None,
     };
     let mut observed: Option<LspStartup> = None;
 
-    run_startup_with(startup, |workspace_root, min_nodes, embedding| {
+    run_startup_with(startup, |workspace_root, min_nodes, embedding, ipc_mode| {
         observed = Some(LspStartup {
             workspace_root,
             min_nodes,
             worker_threads: 0,
             nice: 0,
             embedding,
+            ipc_mode,
+            ranking_structural_only: None,
         });
         std::future::ready(Ok(()))
     })?;
@@ -192,6 +197,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
     assert_eq!(observed.embedding.provider_id, "ollama");
     assert_eq!(observed.embedding.model_id, "async-model");
     assert_eq!(observed.embedding.endpoint, "http://127.0.0.1:1234");
+    assert_eq!(observed.ipc_mode, IpcMode::Tcp);
     Ok(())
 }
 
@@ -200,9 +206,12 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
 #[test]
 fn startup_dispatch_propagates_async_server_error() -> Result<()> {
     let startup = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-error"])?)?;
-    let error = run_startup_with(startup, |_workspace_root, _min_nodes, _embedding| {
-        std::future::ready(Err(anyhow!("async server failed")))
-    })
+    let error = run_startup_with(
+        startup,
+        |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
+            std::future::ready(Err(anyhow!("async server failed")))
+        },
+    )
     .err()
     .ok_or_else(|| anyhow!("startup dispatch should have returned an error"))?;
     assert!(format!("{error:#}").contains("async server failed"));
@@ -227,6 +236,95 @@ fn invalid_arguments_return_user_facing_errors() -> Result<()> {
         ["deslop-lsp", "/tmp/ws", "--unknown"],
         "unsupported LSP startup flag",
     )?;
+    Ok(())
+}
+
+/// [LIVE-IPC-TCP] `--ipc-transport` selects either transport, falls
+/// back to the platform default, and rejects unknown or missing
+/// values with actionable messages.
+#[test]
+fn ipc_transport_flag_parses_defaults_and_rejects() -> Result<()> {
+    let tcp = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ipc-transport",
+        "tcp",
+    ])?)?;
+    assert_eq!(tcp.ipc_mode, IpcMode::Tcp);
+    let unix = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ipc-transport",
+        "unix",
+    ])?)?;
+    assert_eq!(unix.ipc_mode, IpcMode::Unix);
+    let default = serve_startup(action_from_args(["deslop-lsp", "/tmp/ws"])?)?;
+    assert_eq!(default.ipc_mode, IpcMode::platform_default());
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--ipc-transport", "carrier-pigeon"],
+        "--ipc-transport must be `unix` or `tcp`",
+    )?;
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--ipc-transport"],
+        "--ipc-transport requires",
+    )?;
+    Ok(())
+}
+
+/// [RANK-STRUCTURAL-ONLY] / [VSIX-SETTINGS-RANKING]:
+/// `--ranking-structural-only` parses every policy, defaults to
+/// deferring to `.deslop.toml`, rejects unknown values, and reaches
+/// the process-wide override when startup dispatch runs.
+#[test]
+fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
+    let demote = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ranking-structural-only",
+        "demote",
+    ])?)?;
+    assert_eq!(demote.ranking_structural_only, Some(ClonePolicy::Demote));
+    let keep = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ranking-structural-only",
+        "keep",
+    ])?)?;
+    assert_eq!(keep.ranking_structural_only, Some(ClonePolicy::Keep));
+    let unset = serve_startup(action_from_args(["deslop-lsp", "/tmp/ws"])?)?;
+    assert_eq!(unset.ranking_structural_only, None);
+    assert_error_contains(
+        [
+            "deslop-lsp",
+            "/tmp/ws",
+            "--ranking-structural-only",
+            "shout",
+        ],
+        "--ranking-structural-only: expected demote|ignore|keep",
+    )?;
+    assert_error_contains(
+        ["deslop-lsp", "/tmp/ws", "--ranking-structural-only"],
+        "--ranking-structural-only requires",
+    )?;
+
+    // Startup dispatch records the override in the central state
+    // module so every later config load sees the editor's choice.
+    let ignore = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/ws",
+        "--ranking-structural-only",
+        "ignore",
+    ])?)?;
+    run_startup_with(
+        ignore,
+        |_workspace_root, _min_nodes, _embedding, _ipc_mode| std::future::ready(Ok(())),
+    )?;
+    assert_eq!(
+        deslop_core::state::structural_only_override(),
+        Some(ClonePolicy::Ignore),
+        "run_startup_with must record the [RANK-STRUCTURAL-ONLY] override \
+         in deslop-core::state before the server starts"
+    );
     Ok(())
 }
 

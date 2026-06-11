@@ -331,6 +331,12 @@ export function buildServerArgs(
   if (Number.isInteger(nice) && nice !== 0) {
     args.push("--nice", String(Math.max(-20, Math.min(19, nice))));
   }
+  // [VSIX-SETTINGS-RANKING] / [RANK-STRUCTURAL-ONLY]: "default" defers
+  // to .deslop.toml; anything else overrides it for this session.
+  const structuralOnly = cfg.get<string>("ranking.structuralOnly", "default");
+  if (["demote", "ignore", "keep"].includes(structuralOnly)) {
+    args.push("--ranking-structural-only", structuralOnly);
+  }
   if (debug) args.push("--debug");
   return args;
 }

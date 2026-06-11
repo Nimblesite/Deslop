@@ -9,7 +9,7 @@ description = "Deslop analysis engine — AST fingerprinting, clustering, rankin
 
 [features]
 default = []
-live = ["dep:notify", "dep:tokio", "dep:futures", "dep:async-trait"]
+live = ["dep:notify", "dep:tokio", "dep:futures", "dep:async-trait", "dep:getrandom"]
 # Enables `embedding::test_support::StubProvider` for downstream test
 # crates. Never enable in production binaries — the deterministic
 # BLAKE3 shim is not a product provider.
@@ -30,6 +30,7 @@ ignore.workspace = true
 blake3.workspace = true
 ureq.workspace = true
 instant-distance.workspace = true
+getrandom = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }

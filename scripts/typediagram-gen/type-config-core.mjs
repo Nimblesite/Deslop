@@ -1,4 +1,15 @@
 export const CORE_TYPE_CONFIG = {
+  IpcEndpointFile: {
+    docs: "On-disk discovery record for the TCP loopback IPC transport ([LIVE-IPC-TCP]). Written to `.deslop-cache/deslop.port` by deslop-lsp when TCP carries the IPC protocol (default on Windows, opt-in elsewhere via `--ipc-transport tcp`); read by deslop-mcp to locate and authenticate against the live server ([MCP-IPC-DISCOVERY]).",
+    derives: ["Debug", "Clone", "Serialize", "Deserialize"],
+    skipTs: true,
+    fieldOverrides: { port: "u16" },
+    fieldDocs: {
+      port: "Loopback TCP port deslop-lsp bound on `127.0.0.1`.",
+      token:
+        "Per-session shared secret. Clients present it as the first line of every TCP connection; the server drops mismatching connections.",
+    },
+  },
   OllamaModelInfo: {
     docs: "One row from the Ollama `/api/tags` enumeration. See `docs/models/live-ipc.td`.",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],

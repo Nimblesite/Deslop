@@ -55,8 +55,7 @@ pub mod wire_generated;
 pub use buckets::{bucket_labels, classify, classify_signals, BucketLabels, ClusterKind};
 pub use clone_category::CloneCategory;
 pub use config::{
-    BoilerplateImportsMode, DataClonePolicy, ExclusionConfig, RankingPolicy,
-    DEFAULT_CONFIG_FILENAME,
+    BoilerplateImportsMode, ClonePolicy, ExclusionConfig, RankingPolicy, DEFAULT_CONFIG_FILENAME,
 };
 pub use delta::ReportDelta;
 pub use embedding::{

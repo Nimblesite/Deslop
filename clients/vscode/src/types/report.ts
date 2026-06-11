@@ -124,12 +124,14 @@ export function severityOf(weightPercentile: number): Severity {
 export type Bucket =
   | "identical"
   | "nearly_identical"
+  | "structural_only"
   | "loosely_similar"
   | "same_behavior";
 
 export const BUCKETS: readonly Bucket[] = [
   "identical",
   "nearly_identical",
+  "structural_only",
   "loosely_similar",
   "same_behavior",
 ] as const;
@@ -167,6 +169,15 @@ const LABELS: Record<Bucket, BucketLabels> = {
     cssSuffix: "nearly-identical",
     aiMatch: false,
   },
+  structural_only: {
+    plainTitle: "Same shape, different content",
+    hybridTitle: "Same shape, different content [structural-only]",
+    actionSentence:
+      "Only the code shape matches — usually sibling boilerplate. Verify before extracting.",
+    taxonomyLabel: "structural-only match (unverified Type-2/3 candidate)",
+    cssSuffix: "structural-only",
+    aiMatch: false,
+  },
   loosely_similar: {
     plainTitle: "Loosely similar code",
     hybridTitle: "Loosely similar code [weak LSH]",
@@ -199,6 +210,15 @@ export function classifyCluster(signals: ReportSignals): Bucket {
   }
   if (signals.embedding_cos >= 0.8 && signals.structural < 0.5) {
     return "same_behavior";
+  }
+  // [RANK-STRUCTURAL-ONLY]: shape is the only positive evidence.
+  // Ceilings mirror deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT.
+  if (
+    signals.structural >= 0.99 &&
+    signals.token_jaccard < 0.05 &&
+    signals.embedding_cos < 0.05
+  ) {
+    return "structural_only";
   }
   if (
     signals.structural >= 0.99 ||

@@ -158,7 +158,7 @@ jobs:
 | `metrics.duplication_percent` | CI 门禁用以比较的仓库整体核心指标数字。 |
 | `metrics.threshold.breached` | `true` → 该次运行以 `3` 退出且门禁失败。`source` 为 `cli`、`config` 或 `none`。 |
 | `clusters` | 按 `weight` **降序**排序——`clusters[0]` 始终是最严重的重复。自上而下处理。 |
-| `bucket` | `identical` / `nearly_identical` → 提取一个共享定义。`loosely_similar` → 将差异参数化。`same_behavior` → 调和同一行为的两份实现（需要 `--embeddings`）。 |
+| `bucket` | `identical` / `nearly_identical` → 提取一个共享定义。`structural_only` → 仅代码形状匹配（没有 token 或语义证据）——先确认是真正的重复再提取；默认在排名中降权。`loosely_similar` → 将差异参数化。`same_behavior` → 调和同一行为的两份实现（需要 `--embeddings`）。 |
 | `signals.fused` | 单位区间内的置信度。`≥ 0.85` 是立即行动线，与上文 `find-similar` 法则中的阈值相同。 |
 | `occurrences[].hidden` | `true` 标记一次 `report_hide` 匹配——即生成代码的手写克隆。 |
 

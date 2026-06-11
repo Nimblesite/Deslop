@@ -124,6 +124,54 @@ jobs:
             target/release/deslop.exe
           retention-days: 7
 
+  # Windows compile + transport gate ([LIVE-IPC-TCP]). Until now,
+  # cfg(windows) code paths were only compiled by the release matrix —
+  # a Windows-only regression could merge green and explode at release
+  # time. This job checks the whole workspace on windows-latest and
+  # runs the TCP transport E2E suite with the real Windows binaries,
+  # because TCP loopback is the production IPC transport on Windows.
+  windows:
+    name: Windows check + TCP IPC E2E
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      # Same pinned generator as the Linux leg; deslop-core's build.rs
+      # invokes it on every cargo build to produce the gitignored wire
+      # models from docs/models/live-ipc.td.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.8.0
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check workspace (Windows)
+        run: cargo check --workspace --locked --all-targets
+
+      # `cargo check` links nothing and `cargo test -p deslop-mcp` only
+      # builds that package's own binaries — the deslop-lsp.exe the E2E
+      # suite spawns must be built explicitly first.
+      - name: Build server binaries for E2E
+        run: cargo build --locked -p deslop-lsp -p deslop-mcp
+
+      - name: TCP transport E2E (real binaries)
+        run: cargo test --locked -p deslop-mcp --test tcp_transport
+
   vsix:
     name: VSIX tests + coverage
     needs: ci

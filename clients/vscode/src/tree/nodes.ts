@@ -44,6 +44,7 @@ export type Node =
 export const CATEGORY_STYLE: Record<Bucket, { icon: string; color: string }> = {
   identical: { icon: "circle-filled", color: "charts.red" },
   nearly_identical: { icon: "circle-large-filled", color: "charts.orange" },
+  structural_only: { icon: "circle-slash", color: "charts.foreground" },
   loosely_similar: { icon: "circle-outline", color: "charts.blue" },
   same_behavior: { icon: "sparkle", color: "charts.purple" },
 };

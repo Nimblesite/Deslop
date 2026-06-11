@@ -45,6 +45,18 @@ The category drives a **three-way ranking policy** configured in `.deslop.toml` 
 
 `data` clusters carry a category-specific action hint ("consider a builder with default args, or move the rows to a JSON/CSV/asset") instead of the "extract the duplicate" hint. The category and its label travel on the JSON `ReportCluster.category` field so every downstream surface — text, HTML, and the VSIX tree — orders and labels identically from one source of truth ([OUTPUT-SCHEMA-JSON]).
 
+### [RANK-STRUCTURAL-ONLY] Structural-only evidence and the ranking policy
+
+`StructuralOnly` is the [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) bucket for clusters whose **only positive evidence is the normalized AST shape** — `structural ≥ 0.99` with token and embedding support both below `STRUCTURAL_ONLY_MAX_SUPPORT` (0.05). Normalization strips identifiers and literals, so a sibling method family (REST CRUD endpoints, settings getters, builders) collides into one shape; the exact-structural pass also leaves `token_jaccard` *unscored* at `0.0`, so the triple alone cannot distinguish boilerplate from a true Type-2 rename. The history (#134 → #154 → #169 → #197) shows why shape-specific suppressions alone never closed the hole: each fix allowlisted one geometry (≥3-file scaffolding; single-file declaration families; Dart field registries) and every other geometry kept full `NearlyIdentical`-grade weight.
+
+This section closes the hole structurally:
+
+1. **One predicate.** `deslop-core::buckets::is_structural_only_signals` is the single source of truth, shared by the bucket routing (the wire label) and the ranking demotion. A cluster labelled `structural_only` is by construction the cluster the policy demotes — the #197 label/ranking divergence cannot recur.
+2. **Weight policy.** The `[ranking]` section gains `structural_only = "demote" | "ignore" | "keep"` (default **demote**) and `structural_only_weight` (default `0.15`, strictly in `(0.0, 1.0]`), exactly parallel to [RANK-CATEGORY]'s data knobs and validated by the same rule. The multiplier folds into the visible re-rank next to the category coefficient, so a shape-only family sinks below comparable token- or semantics-supported clones regardless of its file spread or declaration shape.
+3. **Existing suppressions stay.** Cross-file ≥3-member/≥3-file scaffolding still demotes to `LooselySimilar` (hidden, #134); single-file sibling-declaration families are still hidden by the AST pass (#197); Dart data registries stay with [RANK-CATEGORY] (#169). The weight policy catches everything those shapes miss (e.g. two-file method families split by Dart `part`/extension idioms).
+4. **Editor override.** The VS Code setting `deslop.ranking.structuralOnly` (`default` | `demote` | `ignore` | `keep`, [VSIX-SETTINGS-RANKING]) feeds `deslop-lsp --ranking-structural-only`, recorded once at startup in the central state module (`deslop-core::state`) and consulted by every config load — the editor channel wins over `.deslop.toml`; `default` defers to it.
+5. **Filterable.** The MCP `report-query` `bucket` enum is derived from `ClusterKind::all()`, so `structural_only` is filterable by agents (#195/#197).
+
 ### [STATE-FILE-REGISTRY] File registry (the only global state)
 `deslop-core::state::FileRegistry` maps `FileId ↔ PathBuf`. This is the *only* place mutable state associated with a pipeline run may live. Instances are per-run (not process-global) so a future long-running daemon can keep multiple analyses side-by-side.
 

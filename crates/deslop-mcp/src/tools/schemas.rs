@@ -1,6 +1,6 @@
 //! JSON schema builders for each MCP tool's input parameters.
 
-use deslop_core::pipeline::language_ids;
+use deslop_core::{buckets::ClusterKind, pipeline::language_ids};
 use serde_json::{json, Value};
 
 /// The closed `language` enum, derived from the core parser registry so the
@@ -8,6 +8,21 @@ use serde_json::{json, Value};
 /// ([MCP-TOOL-REPORT-QUERY]). Fixes the omission of `dart` (gh #170, #198).
 fn language_enum() -> Value {
     Value::Array(language_ids().into_iter().map(Value::from).collect())
+}
+
+/// The closed `bucket` enum, derived from the canonical [`ClusterKind`]
+/// registry so the filter can never drift from the buckets the engine
+/// emits ([CLONE-BUCKETS]) — the #170/#198 anti-drift lesson applied to
+/// buckets. Notably includes `structural_only` so agents can exclude
+/// (or isolate) demoted shape-only families ([RANK-STRUCTURAL-ONLY],
+/// gh #195/#197).
+fn bucket_enum() -> Value {
+    Value::Array(
+        ClusterKind::all()
+            .into_iter()
+            .map(|kind| Value::from(kind.wire_label()))
+            .collect(),
+    )
 }
 
 /// Empty-parameter schema.
@@ -43,7 +58,7 @@ pub(super) fn schema_report_query() -> Value {
             "offset": { "type": "integer", "minimum": 0 },
             "limit": { "type": "integer", "minimum": 0 },
             "language": { "type": "string", "enum": language_enum(), "description": "Match clusters whose detected source language equals this id." },
-            "bucket": { "type": "string", "enum": ["identical", "nearly_identical", "loosely_similar", "same_behavior"], "description": "Match clusters whose canonical bucket equals this id." },
+            "bucket": { "type": "string", "enum": bucket_enum(), "description": "Match clusters whose canonical bucket equals this id." },
             "path_contains": { "type": "string", "description": "Case-sensitive substring match against any occurrence path on the cluster." },
             "min_score": { "type": "number", "description": "Inclusive ranking-score floor." },
             "min_size": { "type": "integer", "minimum": 0, "description": "Inclusive subtree-node-count floor (canonical_node_count)." }

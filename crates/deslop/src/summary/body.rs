@@ -194,14 +194,16 @@ fn write_breakdown_line(theme: &Theme, report: &Report, _technical: bool) {
 }
 
 /// Theme colour for a bucket. Mirrors the card band in the HTML
-/// renderer: green=identical, yellow=nearly identical, red=loosely
-/// similar, cyan=same behavior (AI match). Terminal themes can't
-/// render purple reliably, so `SameBehavior` uses cyan — aligned with
+/// renderer: green=identical, yellow=nearly identical, dim=structural
+/// only (demoted shape-only evidence), red=loosely similar, cyan=same
+/// behavior (AI match). Terminal themes can't render purple reliably,
+/// so `SameBehavior` uses cyan — aligned with
 /// `docs/specs/taxonomy.md [CLONE-BUCKETS]` colour-band commentary.
 fn bucket_colour(theme: &Theme, kind: ClusterKind) -> &'static str {
     match kind {
         ClusterKind::Identical => theme.green,
         ClusterKind::NearlyIdentical => theme.yellow,
+        ClusterKind::StructuralOnly => theme.dim,
         ClusterKind::LooselySimilar => theme.red,
         ClusterKind::SameBehavior => theme.cyan,
     }
@@ -254,6 +256,8 @@ struct ClusterBreakdown {
     identical: usize,
     /// Cluster count classified as [`ClusterKind::NearlyIdentical`].
     nearly_identical: usize,
+    /// Cluster count classified as [`ClusterKind::StructuralOnly`].
+    structural_only: usize,
     /// Cluster count classified as [`ClusterKind::LooselySimilar`].
     loosely_similar: usize,
     /// Cluster count classified as [`ClusterKind::SameBehavior`].
@@ -266,6 +270,7 @@ impl ClusterBreakdown {
         match kind {
             ClusterKind::Identical => self.identical,
             ClusterKind::NearlyIdentical => self.nearly_identical,
+            ClusterKind::StructuralOnly => self.structural_only,
             ClusterKind::LooselySimilar => self.loosely_similar,
             ClusterKind::SameBehavior => self.same_behavior,
         }
@@ -282,6 +287,9 @@ impl From<&Report> for ClusterBreakdown {
                 }
                 ClusterKind::NearlyIdentical => {
                     out.nearly_identical = out.nearly_identical.saturating_add(1);
+                }
+                ClusterKind::StructuralOnly => {
+                    out.structural_only = out.structural_only.saturating_add(1);
                 }
                 ClusterKind::LooselySimilar => {
                     out.loosely_similar = out.loosely_similar.saturating_add(1);

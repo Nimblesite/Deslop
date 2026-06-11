@@ -20,6 +20,7 @@ All three classes point at the **same** bucket identity (the Rust enum variant).
 |-------------------|-------------------------------------------------|-----------------------------------------------------|------------------------------------------------------------------------------------------------|--------------------|-----------------------------|
 | `Identical`       | **Identical code**                              | `Identical code [Type-1/2]`                         | Safe to extract — every copy is the same.                                                      | green / crimson    | Type-1, Type-2              |
 | `NearlyIdentical` | **Nearly identical code**                       | `Nearly identical code [Type-3]`                    | Review the locations — small differences may matter.                                           | yellow / blue      | Type-3                      |
+| `StructuralOnly`  | **Same shape, different content**               | `Same shape, different content [structural-only]`   | Only the code shape matches — usually sibling boilerplate. Verify before extracting.           | muted / outline    | structural-only (unverified Type-2/3 candidate) |
 | `LooselySimilar`  | **Loosely similar code**                        | `Loosely similar code [weak LSH]`                   | Loose textual overlap. Treat as a hint.                                                        | neutral            | weak LSH-only (sub-Type-3)  |
 | `SameBehavior`    | **Same behavior, different code** *(AI match)*  | `Same behavior, different code [Type-4, AI match]`  | The AI noticed these do the same thing written two ways — read both before merging.            | purple / cyan      | Type-4                      |
 
@@ -53,7 +54,7 @@ Surface routing:
 
 **Rules:**
 
-1. **The enum is the identity.** `ClusterKind::Identical`, `ClusterKind::NearlyIdentical`, `ClusterKind::LooselySimilar`, `ClusterKind::SameBehavior`. These names appear in code, tests, and CSS class suffixes. Never `Exact`, never `Near`, never `Weak`, never `Semantic`.
+1. **The enum is the identity.** `ClusterKind::Identical`, `ClusterKind::NearlyIdentical`, `ClusterKind::StructuralOnly`, `ClusterKind::LooselySimilar`, `ClusterKind::SameBehavior`. These names appear in code, tests, and CSS class suffixes. Never `Exact`, never `Near`, never `Weak`, never `Semantic`.
 2. **Pure-visual is pure.** HTML card, bubble, webviews, tree view — developers see the plain title and action sentence, never `Type-N`. If you feel pulled toward a "technical mode" toggle on a pure-visual surface, the toggle is the bug.
 3. **Shared-text is hybrid.** CLI stderr, LSP diagnostics, Problems panel, hover — plain prose prefix so humans read it naturally, bracketed `Type-N` suffix so AI scrapers can still classify. `"Identical code [Type-1/2]"` on one line; `"Same behavior, different code [Type-4, AI match]"` on another.
 4. **AI-only retains everything.** JSON `interpretation`, `action_hints`, `schema_doc`, MCP responses keep the full plain-title + action-sentence + `Type-N` form. Dropping `Type-N` would break agent prompts already in the wild.
@@ -68,9 +69,12 @@ The canonical signal thresholds that map a cluster's `(structural, token_jaccard
 |----------------------------------------------------------------|-------------------|
 | `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99`                     | `Identical`       |
 | `embedding_cos ≥ 0.80 ∧ structural < 0.5`                      | `SameBehavior`    |
+| `structural ≥ 0.99 ∧ token_jaccard < 0.05 ∧ embedding_cos < 0.05` | `StructuralOnly` |
 | `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90`                     | `NearlyIdentical` |
 | `structural ≥ 0.99 ∨ (structural > 0 ∧ token_jaccard ≥ 0.95)`  | `NearlyIdentical` |
 | else                                                           | `LooselySimilar`  |
+
+`StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197). Its 0.05 ceilings live in `deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT` and tolerate MinHash collision noise. Two report-render refinements sit on top of the raw signal routing: a structural-only cluster whose raw source slices are byte-equivalent is **upgraded to `Identical`** (byte proof beats the unscored token signal, [CLONE-BUCKETS-IDENTICAL]), and a cross-file ≥3-member/≥3-file scaffolding spread is demoted to `LooselySimilar` (#134) which the renderer hides. Ranking: `StructuralOnly` clusters are weight-demoted by default via the `[ranking] structural_only` policy ([RANK-STRUCTURAL-ONLY]).
 
 `SameBehavior` is tested **before** `NearlyIdentical` so a strong AI signal on two syntactically divergent implementations gets the AI label rather than being absorbed into near-miss. It is only reachable when the embedding pass ran (`--embeddings=auto|required`). When the pass is disabled, `embedding_cos` is `0.00` across the whole report and the `SameBehavior` branch is dead.
 
@@ -79,7 +83,7 @@ The canonical signal thresholds that map a cluster's `(structural, token_jaccard
 The `Type-1 → Type-4` taxonomy is standard in clone-detection literature (Bellon/Koschke, Roy/Cordy 2007). Deslop surfaces it verbatim on **AI-only** surfaces and in **bracketed form on shared-text** surfaces (see [CLONE-BUCKETS-DUAL-LABEL]). It never appears on **pure-visual** surfaces (HTML card, VS Code webview, bubble decoration).
 
 - **Type-1** — identical code, ignoring whitespace/comments. Maps to `Identical`.
-- **Type-2** — identical up to renaming of identifiers/literals/types. Maps to `Identical`.
+- **Type-2** — identical up to renaming of identifiers/literals/types. Maps to `Identical` when raw source slices are byte-equivalent after whitespace folding; an *unverified* shape-only candidate (no token/semantic support, bytes differ) maps to `StructuralOnly`.
 - **Type-3** — Type-2 + added/removed/modified statements ("near-miss" clones). Maps to `NearlyIdentical`, or `LooselySimilar` when the signal is weak (LSH-only, sub-threshold).
 - **Type-4** — semantically equivalent, syntactically different (same behavior, different structure/algorithm). Maps to `SameBehavior`.
 

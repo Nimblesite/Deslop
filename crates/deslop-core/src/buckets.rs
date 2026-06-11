@@ -36,6 +36,13 @@ pub enum ClusterKind {
     /// Type-3 near-miss: same shape with small structural or token
     /// differences that may be semantically meaningful.
     NearlyIdentical,
+    /// Structural-only match ([RANK-STRUCTURAL-ONLY], #134/#154/#197):
+    /// the normalized AST shape is the only positive evidence — no
+    /// token overlap, no semantic support. Usually a sibling
+    /// boilerplate family (REST CRUD, settings getters, builders);
+    /// occasionally a genuine Type-2 rename candidate. Surfaced, but
+    /// demoted in ranking by default.
+    StructuralOnly,
     /// Weak LSH-only overlap that survived the sub-threshold filters.
     /// Hint, not a directive.
     LooselySimilar,
@@ -49,10 +56,11 @@ impl ClusterKind {
     /// Every variant in canonical order. Used by renderers that need
     /// to iterate over all buckets (e.g. the CLI breakdown line).
     #[must_use]
-    pub const fn all() -> [Self; 4] {
+    pub const fn all() -> [Self; 5] {
         [
             Self::Identical,
             Self::NearlyIdentical,
+            Self::StructuralOnly,
             Self::LooselySimilar,
             Self::SameBehavior,
         ]
@@ -66,6 +74,7 @@ impl ClusterKind {
         match self {
             Self::Identical => "identical",
             Self::NearlyIdentical => "nearly_identical",
+            Self::StructuralOnly => "structural_only",
             Self::LooselySimilar => "loosely_similar",
             Self::SameBehavior => "same_behavior",
         }
@@ -147,6 +156,15 @@ pub const fn bucket_labels(kind: ClusterKind) -> BucketLabels {
             css_suffix: "nearly-identical",
             ai_match: false,
         },
+        ClusterKind::StructuralOnly => BucketLabels {
+            plain_title: "Same shape, different content",
+            hybrid_title: "Same shape, different content [structural-only]",
+            action_sentence:
+                "Only the code shape matches — usually sibling boilerplate. Verify before extracting.",
+            taxonomy_label: "structural-only match (unverified Type-2/3 candidate)",
+            css_suffix: "structural-only",
+            ai_match: false,
+        },
         ClusterKind::LooselySimilar => BucketLabels {
             plain_title: "Loosely similar code",
             hybrid_title: "Loosely similar code [weak LSH]",
@@ -179,10 +197,31 @@ fn kind_from_wire_label(label: &str) -> Option<ClusterKind> {
     match label {
         "identical" => Some(ClusterKind::Identical),
         "nearly_identical" => Some(ClusterKind::NearlyIdentical),
+        "structural_only" => Some(ClusterKind::StructuralOnly),
         "loosely_similar" => Some(ClusterKind::LooselySimilar),
         "same_behavior" => Some(ClusterKind::SameBehavior),
         _ => None,
     }
+}
+
+/// Maximum token / embedding support a cluster may show while still
+/// counting as evidence-free for [`is_structural_only_signals`]. The
+/// 0.05 ceiling matches the #197 acceptance criterion
+/// (`token_jaccard=0.00`, `embedding_cos=0.00`) while tolerating
+/// `MinHash` collision noise.
+pub const STRUCTURAL_ONLY_MAX_SUPPORT: f64 = 0.05;
+
+/// Single source of truth for the structural-only evidence test
+/// ([RANK-STRUCTURAL-ONLY], #134/#197): the structural fingerprint is
+/// the only positive support. Shared by the bucket routing and the
+/// ranking demotion so a cluster labelled `structural_only` is always
+/// the cluster the `[ranking]` policy demotes — the label and the
+/// weight can no longer diverge.
+#[must_use]
+pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
+    signals.structural >= 0.99
+        && signals.token_jaccard < STRUCTURAL_ONLY_MAX_SUPPORT
+        && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
 }
 
 /// Signals-only fallback for reports that do not carry `cluster.bucket`.
@@ -192,6 +231,8 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::Identical
     } else if signals.embedding_cos >= 0.80 && signals.structural < 0.50 {
         ClusterKind::SameBehavior
+    } else if is_structural_only_signals(signals) {
+        ClusterKind::StructuralOnly
     } else if signals.structural >= 0.99
         || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {

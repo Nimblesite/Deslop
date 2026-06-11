@@ -34,6 +34,7 @@ tree-sitter-python = "=0.25.0"
 tree-sitter-dart = "=0.2.0"
 ignore = "=0.4.23"
 blake3 = "=1.5.4"
+getrandom = "=0.2.17"
 ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
 notify = "=6.1.1"

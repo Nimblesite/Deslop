@@ -439,6 +439,7 @@ Exposed under `deslop.*` in VS Code settings:
 | Setting | Default | Purpose |
 |---|---|---|
 | `deslop.minNodes` | `30` | Forwarded to the LSP at `initialize`. Matches CLI `--min-nodes`. |
+| `deslop.ranking.structuralOnly` | `default` | [VSIX-SETTINGS-RANKING] How shape-only-evidence clusters are ranked ([pipeline.md §RANK-STRUCTURAL-ONLY](pipeline.md#rank-structural-only)). `default` defers to `.deslop.toml`; `demote` / `ignore` / `keep` are forwarded as `deslop-lsp --ranking-structural-only <value>` and win over the file. Applied at server start. |
 | `deslop.embedding.provider` | `ollama` | `ollama` is the only production provider; the enum excludes the test-only stub. A stale `"stub"` value persisted by an older build is ignored in memory (treated as `ollama`, embeddings `off`) without rewriting user settings. |
 | `deslop.embedding.model` | `nomic-embed-text` | Selected via picker; this is the persisted value. |
 | `deslop.embedding.endpoint` | `http://127.0.0.1:11434` | Ollama endpoint. Loopback-only by default. |
@@ -451,7 +452,7 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.diagnostics.scope` | `"open-files"` | `"open-files"` keeps LSP 3.17 pull behaviour (Problems only populated for tabs the editor has open); `"workspace"` makes the LSP push `publishDiagnostics` for every offender file so Problems mirrors the Top Offenders tree even with no tabs open. See [lsp.md §LSP-DIAGNOSTICS-SCOPE](lsp.md#lsp-diagnostics-scope). |
 | `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |
 
-Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required.
+Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required. Exception ([VSIX-SETTINGS-RANKING]): `deslop.ranking.structuralOnly` rides the LSP launch arguments, so it takes effect when the language server (re)starts.
 
 ### [VSIX-NOTIFICATIONS] User-facing toasts
 

@@ -42,7 +42,7 @@ Deslop follows the standard clone taxonomy used throughout the code-clone litera
 | Type-3 | Near-miss clone with inserted, deleted, or changed statements | Sibling-window fingerprints and token MinHash LSH |
 | Type-4 | Similar behavior with different syntax or structure | Optional embedding cosine similarity |
 
-The public report buckets are implemented in `crates/deslop-core/src/buckets.rs`. The code maps signal triples to four wire labels: `identical`, `nearly_identical`, `loosely_similar`, and `same_behavior`. The `same_behavior` bucket is only reachable when the embedding signal is strong enough.
+The public report buckets are implemented in `crates/deslop-core/src/buckets.rs`. The code maps signal triples to five wire labels: `identical`, `nearly_identical`, `structural_only`, `loosely_similar`, and `same_behavior`. The `structural_only` bucket marks clusters whose only positive evidence is the normalized AST shape; they are weight-demoted in the ranking by default. The `same_behavior` bucket is only reachable when the embedding signal is strong enough.
 
 ## Algorithm foundations
 

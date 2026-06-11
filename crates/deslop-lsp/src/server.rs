@@ -102,6 +102,7 @@ pub async fn run_stdio(
     workspace_root: PathBuf,
     min_nodes: u32,
     embedding: LspEmbeddingConfig,
+    ipc_mode: deslop_core::live::transport::IpcMode,
 ) -> anyhow::Result<()> {
     tracing::info!(
         workspace_root = %workspace_root.display(),
@@ -117,6 +118,7 @@ pub async fn run_stdio(
             workspace_root_for_builder.clone(),
             min_nodes,
             &embedding,
+            ipc_mode,
         ) {
             Ok(backend) => backend,
             Err(error) => report_init_failure(&error),
