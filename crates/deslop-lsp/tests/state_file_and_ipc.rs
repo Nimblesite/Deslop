@@ -8,6 +8,13 @@
 //! [LSP-IPC] The LSP exposes `.deslop-cache/deslop.sock` (Unix only)
 //! so the MCP can delegate `duplicates/findSimilar` and
 //! `embedding/listModels` without duplicating compute.
+//!
+//! Whole suite is Unix-gated: it drives the Unix-socket transport
+//! end-to-end. The TCP twin that Windows production uses lives in
+//! `crates/deslop-mcp/tests/tcp_transport.rs` ([LIVE-IPC-TCP]) and
+//! runs on every platform.
+
+#![cfg(unix)]
 
 mod common;
 
