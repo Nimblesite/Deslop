@@ -294,7 +294,12 @@ fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
     let unset = serve_startup(action_from_args(["deslop-lsp", "/tmp/ws"])?)?;
     assert_eq!(unset.ranking_structural_only, None);
     assert_error_contains(
-        ["deslop-lsp", "/tmp/ws", "--ranking-structural-only", "shout"],
+        [
+            "deslop-lsp",
+            "/tmp/ws",
+            "--ranking-structural-only",
+            "shout",
+        ],
         "--ranking-structural-only: expected demote|ignore|keep",
     )?;
     assert_error_contains(
@@ -310,9 +315,10 @@ fn ranking_structural_only_flag_parses_applies_and_rejects() -> Result<()> {
         "--ranking-structural-only",
         "ignore",
     ])?)?;
-    run_startup_with(ignore, |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
-        std::future::ready(Ok(()))
-    })?;
+    run_startup_with(
+        ignore,
+        |_workspace_root, _min_nodes, _embedding, _ipc_mode| std::future::ready(Ok(())),
+    )?;
     assert_eq!(
         deslop_core::state::structural_only_override(),
         Some(ClonePolicy::Ignore),
