@@ -163,6 +163,12 @@ jobs:
       - name: Check workspace (Windows)
         run: cargo check --workspace --locked --all-targets
 
+      # `cargo check` links nothing and `cargo test -p deslop-mcp` only
+      # builds that package's own binaries — the deslop-lsp.exe the E2E
+      # suite spawns must be built explicitly first.
+      - name: Build server binaries for E2E
+        run: cargo build --locked -p deslop-lsp -p deslop-mcp
+
       - name: TCP transport E2E (real binaries)
         run: cargo test --locked -p deslop-mcp --test tcp_transport
 
