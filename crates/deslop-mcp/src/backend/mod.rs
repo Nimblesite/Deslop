@@ -52,12 +52,13 @@ pub enum BackendError {
     /// Internal mutex was poisoned. Fatal — the session is toast.
     #[error("backend state mutex poisoned; analysis aborted")]
     MutexPoisoned,
-    /// The LSP server is not running — its IPC socket is absent.
+    /// The LSP server is not running — neither its IPC socket nor the
+    /// TCP discovery record beside it answered ([MCP-IPC-DISCOVERY]).
     /// Includes the absolute socket path so users hit by `--root .`
     /// resolving against the wrong cwd ([Deslop#151]) can immediately
     /// see the directory mismatch instead of guessing.
     #[error(
-        "LSP is not running — start deslop-lsp to enable this tool. MCP looked for the IPC socket at {socket_path:?}. If a deslop-lsp process is running elsewhere, MCP was launched against a different --root than the LSP."
+        "LSP is not running — start deslop-lsp to enable this tool. MCP looked for the IPC socket at {socket_path:?} and the TCP discovery record `deslop.port` beside it. If a deslop-lsp process is running elsewhere, MCP was launched against a different --root than the LSP."
     )]
     LspNotRunning {
         /// Absolute path the MCP backend tried to connect to.

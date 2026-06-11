@@ -12,6 +12,8 @@ use deslop_core::{requests_version, version_contract_output, ComponentKind};
 use tokio::runtime::{Builder, Runtime};
 use tracing_subscriber::EnvFilter;
 
+use deslop_core::{config::ClonePolicy, live::transport::IpcMode};
+
 use crate::backend::LspEmbeddingConfig;
 
 /// Fully parsed startup configuration for the LSP app layer.
@@ -27,6 +29,14 @@ pub struct LspStartup {
     pub nice: i32,
     /// Embedding startup configuration.
     pub embedding: LspEmbeddingConfig,
+    /// IPC transport for the MCP bridge ([LIVE-IPC-TCP]). Platform
+    /// default unless `--ipc-transport` overrides it.
+    pub ipc_mode: IpcMode,
+    /// Optional [RANK-STRUCTURAL-ONLY] policy override from
+    /// `--ranking-structural-only`, fed by the
+    /// `deslop.ranking.structuralOnly` editor setting
+    /// ([VSIX-SETTINGS-RANKING]). `None` defers to `.deslop.toml`.
+    pub ranking_structural_only: Option<ClonePolicy>,
 }
 
 /// The top-level action requested by the user-facing argv.
@@ -97,17 +107,21 @@ where
 /// Returns Tokio runtime construction or injected server errors.
 pub fn run_startup_with<F, Fut>(startup: LspStartup, server: F) -> Result<()>
 where
-    F: FnOnce(PathBuf, u32, LspEmbeddingConfig) -> Fut,
+    F: FnOnce(PathBuf, u32, LspEmbeddingConfig, IpcMode) -> Fut,
     Fut: std::future::Future<Output = Result<()>>,
 {
     init_tracing();
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
     apply_process_nice(startup.nice)?;
+    if let Some(policy) = startup.ranking_structural_only {
+        deslop_core::state::set_structural_only_override(policy);
+    }
     log_startup(&startup);
     build_runtime(startup.worker_threads)?.block_on(server(
         startup.workspace_root,
         startup.min_nodes,
         startup.embedding,
+        startup.ipc_mode,
     ))
 }
 
@@ -137,6 +151,8 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
         worker_threads: parse_worker_threads(args)?,
         nice: parse_nice(args)?,
         embedding: LspEmbeddingConfig::default(),
+        ipc_mode: parse_ipc_mode(args)?,
+        ranking_structural_only: parse_ranking_structural_only(args)?,
     })
 }
 
@@ -171,6 +187,40 @@ fn parse_nice(args: &[String]) -> Result<i32> {
     Ok(0)
 }
 
+/// Reads the optional `--ipc-transport` value ([LIVE-IPC-TCP]),
+/// defaulting to the platform transport (Unix socket on Unix, TCP
+/// loopback on Windows).
+fn parse_ipc_mode(args: &[String]) -> Result<IpcMode> {
+    for (index, arg) in args.iter().enumerate() {
+        if arg == "--ipc-transport" {
+            return match required_flag_value(args, index, "--ipc-transport")? {
+                "unix" => Ok(IpcMode::Unix),
+                "tcp" => Ok(IpcMode::Tcp),
+                other => Err(anyhow!(
+                    "--ipc-transport must be `unix` or `tcp`, got {other:?}"
+                )),
+            };
+        }
+    }
+    Ok(IpcMode::platform_default())
+}
+
+/// Reads the optional `--ranking-structural-only` value
+/// ([RANK-STRUCTURAL-ONLY], [VSIX-SETTINGS-RANKING]). `None` defers to
+/// `.deslop.toml`.
+fn parse_ranking_structural_only(args: &[String]) -> Result<Option<ClonePolicy>> {
+    for (index, arg) in args.iter().enumerate() {
+        if arg == "--ranking-structural-only" {
+            let value = required_flag_value(args, index, "--ranking-structural-only")?;
+            return value
+                .parse::<ClonePolicy>()
+                .map(Some)
+                .map_err(|message| anyhow!("--ranking-structural-only: {message}"));
+        }
+    }
+    Ok(None)
+}
+
 /// Parses a required usize flag value after `flag`.
 fn parse_required_usize(args: &[String], index: usize, flag: &str) -> Result<usize> {
     Ok(required_flag_value(args, index, flag)?.parse::<usize>()?)
@@ -193,7 +243,9 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     let mut index = 2;
     while let Some(arg) = args.get(index) {
         match arg.as_str() {
-            "--worker-threads" | "--nice" => index = index.saturating_add(2),
+            "--worker-threads" | "--nice" | "--ipc-transport" | "--ranking-structural-only" => {
+                index = index.saturating_add(2);
+            }
             "--debug" | "--stdio" => index = index.saturating_add(1),
             flag if LEGACY_STARTUP_FLAGS.contains(&flag) => {
                 return Err(anyhow!(
@@ -273,6 +325,8 @@ fn log_startup(startup: &LspStartup) {
         min_nodes = startup.min_nodes,
         worker_threads = startup.worker_threads,
         nice = startup.nice,
+        ipc_transport = ?startup.ipc_mode,
+        ranking_structural_only = ?startup.ranking_structural_only,
         embedding_mode = startup.embedding.mode.as_str(),
         embedding_provider = %startup.embedding.provider_id,
         embedding_model = %startup.embedding.model_id,

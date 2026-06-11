@@ -332,9 +332,11 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 }
 
 // Implements [UX-TECHNICAL-BREAKDOWN]: `--technical` prints the
-// researcher breakdown row with Type-1/2/3 labels. Plain mode uses
-// friendly wording; this test guards the taxonomy string the
-// technical branch emits.
+// researcher breakdown row with bracketed taxonomy labels. Plain mode
+// uses friendly wording; this test guards the taxonomy string the
+// technical branch emits. The csharp-small pair is a renamed clone
+// with no token evidence, so it carries the `structural_only` bucket's
+// hybrid title ([RANK-STRUCTURAL-ONLY], [CLONE-BUCKETS-DUAL-LABEL]).
 #[test]
 fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -351,12 +353,12 @@ fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
     assert!(
-        stderr.contains("1 × Nearly identical code [Type-3]"),
-        "--technical must print the Type-taxonomy breakdown: {stderr}"
+        stderr.contains("1 × Same shape, different content [structural-only]"),
+        "--technical must print the bracketed-taxonomy breakdown: {stderr}"
     );
     assert!(
-        stderr.contains("#1  ● Nearly identical code [Type-3]"),
-        "--technical must print Type taxonomy in the ranked row: {stderr}"
+        stderr.contains("#1  ● Same shape, different content [structural-only]"),
+        "--technical must print the bracketed taxonomy in the ranked row: {stderr}"
     );
     Ok(())
 }

@@ -4,8 +4,11 @@
 //! is wired via `mod common;` declarations rather than `pub use`. Keeps
 //! the per-test files small and prevents duplicated handshake / spawn
 //! plumbing across LSP-backed E2E suites.
+//!
+//! Platform-neutral on purpose: the TCP transport suite
+//! (`tcp_transport.rs`, [LIVE-IPC-TCP]) runs on every platform,
+//! including the Windows CI check leg.
 
-#![cfg(unix)]
 #![allow(dead_code)]
 
 use std::{
@@ -65,9 +68,18 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
 /// Spawns the LSP binary, drives the LSP `initialize`+`initialized`
 /// handshake, and returns the running process.
 pub fn spawn_lsp_and_initialize(root: &Path) -> Result<Child> {
+    spawn_lsp_with_args(root, &[])
+}
+
+/// Spawns the LSP binary with extra startup flags (e.g.
+/// `--ipc-transport tcp`, [LIVE-IPC-TCP]), drives the LSP
+/// `initialize`+`initialized` handshake, and returns the running
+/// process.
+pub fn spawn_lsp_with_args(root: &Path, extra_args: &[&str]) -> Result<Child> {
     let bin = cargo_bin("deslop-lsp");
     let mut child = Command::new(bin)
         .arg(root)
+        .args(extra_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

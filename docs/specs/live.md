@@ -129,14 +129,27 @@ After the **initial** full pipeline pass and after every **cold-pass install** (
 
 **Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
 
-### [LIVE-IPC-SOCKET] IPC socket
+### [LIVE-IPC-SOCKET] IPC endpoint
 
-The LSP exposes its in-memory `latest_report` directly through a local socket. **This is the only read path used by the MCP.** No on-disk cache is consulted on the read side.
+The LSP exposes its in-memory `latest_report` directly through a local IPC endpoint. **This is the only read path used by the MCP.** No on-disk cache is consulted on the read side.
 
-- **Unix/macOS:** `{workspace_root}/.deslop-cache/deslop.sock` (Unix domain socket)
-- **Windows:** named-pipe support is a future ticket; today the IPC server is `#[cfg(unix)]` only.
+- **Unix/macOS:** `{workspace_root}/.deslop-cache/deslop.sock` (Unix domain socket) — the default transport.
+- **Windows:** TCP loopback per [LIVE-IPC-TCP] — Windows has no Unix sockets, so `deslop-lsp` binds `127.0.0.1` and publishes the endpoint in a discovery record.
 
-The LSP creates the socket on startup and removes it on clean shutdown. The MCP connects on demand (lazy, not persistent). Protocol: line-delimited JSON-RPC 2.0.
+The LSP creates the endpoint on startup and removes its on-disk artifacts on clean shutdown. The MCP connects on demand (lazy, not persistent). Protocol: line-delimited JSON-RPC 2.0 on both transports.
+
+### [LIVE-IPC-TCP] TCP loopback transport
+
+Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is started with `--ipc-transport tcp` on any platform — the IPC server binds an OS-assigned TCP port on `127.0.0.1` and publishes a **discovery record** at `{workspace_root}/.deslop-cache/deslop.port`. The record is the `IpcEndpointFile` wire model (typeDiagram, `docs/models/live-ipc.td`): `{ "port": <u16>, "token": "<64-hex>" }`.
+
+- **Token gate.** The token is fresh per LSP session (128 bits of OS entropy, hex-encoded). A TCP client must present it as the **first line** of every connection, before any JSON-RPC; the server drops mismatching connections without a response. This keeps the analysis server closed to other local processes and turns a stale record colliding with a foreign listener into a clean failure instead of a garbage exchange. Unix-socket connections present no token — the filesystem already permission-guards the socket (the record itself is written `0600` where Unix permissions exist).
+- **Same protocol.** Past the token line, both transports carry identical line-delimited JSON-RPC ([LIVE-IPC-SOCKET] method table applies verbatim).
+- **Platform-neutral by construction.** The TCP path is plain `std::net` compiled on every platform, and the E2E suite (`crates/deslop-mcp/tests/tcp_transport.rs`) forces it on Unix CI — the code Windows runs in production is the code CI tests everywhere.
+- The transport choice lives in `deslop_core::live::transport::IpcMode` (`platform_default()`: Unix socket where available, otherwise TCP).
+
+### [MCP-IPC-DISCOVERY] Client endpoint discovery
+
+The MCP resolves the endpoint per call: try the Unix socket where the platform has one; when it is absent or refuses, read the discovery record and dial loopback (presenting the token). When neither endpoint answers, every IPC call returns `LspNotRunning` naming **both** candidate paths so `--root` mismatches stay diagnosable ([Deslop#151]). A stale discovery record whose port no longer listens maps to the same `LspNotRunning`, never a hang.
 
 **Single-shot methods** (one request → one response, connection closes):
 
@@ -157,7 +170,7 @@ The LSP creates the socket on startup and removes it on clean shutdown. The MCP 
 |---|---|
 | `report/subscribe` | One frame per generation bump until the subscriber disconnects. The MCP forwards each frame as `notifications/deslop/reportChanged` to its own client. |
 
-If the socket is absent, every IPC call returns `LspNotRunning` immediately. The MCP exposes that variant to its own client with an actionable message; it does **not** fall back to a second pipeline. CI / one-shot audits use the `deslop` CLI instead.
+If no endpoint is live ([MCP-IPC-DISCOVERY]), every IPC call returns `LspNotRunning` immediately. The MCP exposes that variant to its own client with an actionable message; it does **not** fall back to a second pipeline. CI / one-shot audits use the `deslop` CLI instead.
 
 ### [LIVE-WATCHER] File watcher
 

@@ -407,6 +407,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "futures",
+ "getrandom",
  "ignore",
  "instant-distance",
  "nix 0.29.0",

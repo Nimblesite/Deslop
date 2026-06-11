@@ -238,17 +238,22 @@ fn lsp_not_running_rpc(socket_path: &std::path::Path) -> JsonRpcError {
 }
 
 /// Assembles the machine-readable recovery payload for a missing LSP.
-/// The cache-fallback path is derived from the socket's parent directory
-/// (the `.deslop-cache` dir) joined with the canonical live-report file
-/// name, so an agent can read the last analysis while the LSP is down.
+/// The cache-fallback and TCP-discovery paths are derived from the
+/// socket's parent directory (the `.deslop-cache` dir), so an agent
+/// can read the last analysis while the LSP is down and knows where
+/// the TCP endpoint record would appear ([MCP-IPC-DISCOVERY]).
 fn lsp_recovery_data(socket_path: &std::path::Path) -> Value {
     let cache_fallback = socket_path
         .parent()
         .map(|dir| dir.join(deslop_core::live::LIVE_REPORT_FILE_NAME));
+    let port_file = socket_path
+        .parent()
+        .map(|dir| dir.join(deslop_core::live::transport::IPC_PORT_FILE_NAME));
     json!({
         "reason": "lsp_not_running",
         "retry_after_ms": 500,
         "socket_path": socket_path.display().to_string(),
+        "port_file_path": port_file.map(|path| path.display().to_string()),
         "cache_fallback": {
             "path": cache_fallback.map(|path| path.display().to_string()),
             "format": "live-report-json",

@@ -1,5 +1,15 @@
 typeDiagram
 
+# [LIVE-IPC-TCP] On-disk discovery record for the TCP loopback IPC
+# transport. Written to `.deslop-cache/deslop.port` by deslop-lsp when
+# TCP carries the IPC protocol (default on Windows, opt-in elsewhere via
+# `--ipc-transport tcp`); read by deslop-mcp to locate and authenticate
+# against the live server ([MCP-IPC-DISCOVERY]).
+type IpcEndpointFile {
+  port: Int
+  token: String
+}
+
 # [LIVE-IPC-SOCKET] JSON-RPC payload models shared by deslop-lsp and deslop-mcp.
 type OllamaModelInfo {
   name: String

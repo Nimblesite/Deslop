@@ -15,7 +15,7 @@ use tree_sitter::{Node, Parser};
 
 use crate::{
     ast::ByteRange,
-    buckets::{bucket_labels, classify_signals, ClusterKind},
+    buckets::{bucket_labels, classify_signals, is_structural_only_signals, ClusterKind},
     cluster::Cluster,
     config::ExclusionConfig,
     fingerprint::Fingerprint,
@@ -65,21 +65,13 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     );
     let kind = report_bucket_kind(signals, &cluster.members, sources, file_languages);
     let interpretation = interpret(kind);
-    // Issue #134: structural-only matches (high structural fingerprint,
-    // zero token overlap, zero embedding support) are skeleton-shape
-    // collisions. They are still surfaced — Type-2 renamed clones are
-    // legitimate duplication candidates — but the wire label is
-    // demoted away from "nearly_identical" so reports do not overstate
-    // the evidence when only the syntactic shape lines up.
-    let bucket = if kind == ClusterKind::NearlyIdentical
-        && signals.structural >= 0.99
-        && signals.token_jaccard <= f64::EPSILON
-        && signals.embedding_cos <= f64::EPSILON
-    {
-        "structural_only".to_owned()
-    } else {
-        kind.wire_label().to_owned()
-    };
+    // The bucket is the wire label of the routed kind — including
+    // `structural_only` ([RANK-STRUCTURAL-ONLY]), which issue #134
+    // introduced as a label-only override here. It is now a
+    // first-class [`ClusterKind`] routed in `report_bucket_kind`, so
+    // the label, the interpretation, and the ranking demotion can no
+    // longer diverge (issue #197 inconsistency #1).
+    let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
     ReportCluster {
         id: cluster.id.clone(),
@@ -221,47 +213,56 @@ pub(crate) fn report_bucket_kind(
         classify_signals(signals)
     };
     let equivalent = source_slices_are_equivalent_for_language(members, sources, file_languages);
+    // `StructuralOnly` joins `NearlyIdentical` in the byte-equivalence
+    // upgrade: an exact-structural cluster whose raw source slices are
+    // equivalent is a proven Type-1/2 clone regardless of the unscored
+    // token signal ([CLONE-BUCKETS-IDENTICAL]), so it must never sink
+    // into the demoted structural-only tier.
     let kind = match (kind, equivalent, signals.structural >= 0.99) {
         (ClusterKind::Identical, false, _) => ClusterKind::NearlyIdentical,
-        (ClusterKind::NearlyIdentical, true, true) => ClusterKind::Identical,
+        (ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly, true, true) => {
+            ClusterKind::Identical
+        }
         _ => kind,
     };
-    // Issue #134: a *cross-file multi-copy* structural-only match
-    // (high structural fingerprint, no token or semantic support,
-    // 3+ occurrences spread across 3+ files) is too weak to call
-    // "nearly identical". The issue's reproduction shows clusters of
-    // 7-53 occurrences with `structural=1.0, token_jaccard=0,
-    // embedding_cos=0` dominating top-offenders — test scaffolding
-    // or generated boilerplate replicated across many test files.
+    // Structural-only routing ([RANK-STRUCTURAL-ONLY], one shared
+    // predicate with the ranking demotion — issue #197 inconsistency
+    // #1). Source-bytes equivalent clusters (Identical) keep their
+    // bucket because byte-level proof is independent of the signal
+    // triple. Two destinations:
     //
-    // Source-bytes equivalent clusters (Identical) keep their bucket
-    // because byte-level proof is independent of the signal triple.
-    // The *single-file* twin of this noise — an in-class sibling-method
-    // family (issue #197) — is handled later, in the renderer's
-    // `cluster_is_hidden` AST pass, because distinguishing a sibling
-    // declaration family from a worth-extracting statement-window clone
-    // needs the CST, which this signal-only routing does not have.
-    if kind == ClusterKind::NearlyIdentical && is_scaffolding_structural_only(signals, members) {
-        return ClusterKind::LooselySimilar;
+    // - Issue #134: a *cross-file multi-copy* structural-only match
+    //   (3+ occurrences spread across 3+ files) is test scaffolding /
+    //   generated boilerplate — demoted to `LooselySimilar`, which the
+    //   renderer hides.
+    // - Everything else with shape-only evidence becomes
+    //   [`ClusterKind::StructuralOnly`]: surfaced and labelled
+    //   honestly, demoted in ranking by the `[ranking]`
+    //   `structural_only` policy. The *single-file* sibling-method
+    //   family (issue #197) is additionally hidden by the renderer's
+    //   `cluster_is_hidden` AST pass, which needs the CST this
+    //   signal-only routing does not have.
+    if matches!(
+        kind,
+        ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly
+    ) && is_structural_only_signals(signals)
+    {
+        if is_cross_file_scaffolding(members) {
+            return ClusterKind::LooselySimilar;
+        }
+        return ClusterKind::StructuralOnly;
     }
     kind
 }
 
-/// Returns true when the structural fingerprint is the only positive
-/// support *and* the cluster spans enough distinct files to mirror the
-/// cross-test-file scaffolding pattern from issue #134. The signal
-/// thresholds (0.05) match the issue acceptance criterion
-/// (`token_jaccard=0.00` and `embedding_cos=0.00`) while tolerating
-/// `MinHash` collision noise. The 3-member, 3-file floors preserve
-/// genuine same-file Type-3 clusters and small two-occurrence pairs;
-/// single-file sibling-declaration families are suppressed separately
-/// ([#197], see `cluster_is_hidden`).
-fn is_scaffolding_structural_only(signals: ReportSignals, members: &[Fingerprint]) -> bool {
-    if signals.structural < 0.99
-        || signals.token_jaccard >= 0.05
-        || signals.embedding_cos >= 0.05
-        || members.len() < 3
-    {
+/// Returns true when a structural-only cluster spans enough distinct
+/// files to mirror the cross-test-file scaffolding pattern from issue
+/// #134. Caller has already established the structural-only signal
+/// shape via [`is_structural_only_signals`]. The 3-member, 3-file
+/// floors preserve small two-occurrence pairs; smaller spreads route
+/// to [`ClusterKind::StructuralOnly`] instead.
+fn is_cross_file_scaffolding(members: &[Fingerprint]) -> bool {
+    if members.len() < 3 {
         return false;
     }
     let mut files: Vec<FileId> = members.iter().map(|member| member.file_id).collect();

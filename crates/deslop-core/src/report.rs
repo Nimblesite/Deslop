@@ -215,8 +215,13 @@ fn materialise_cluster<S: BuildHasher>(
         .wire_label()
         .clone_into(&mut report_cluster.category);
     let dropped_as_data = category == CloneCategory::DataTable && policy.drops_data_clusters();
-    let hidden =
-        dropped_as_data || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+    // [RANK-STRUCTURAL-ONLY] `ignore` drops shape-only-evidence
+    // clusters the same way the data `ignore` policy drops tables.
+    let dropped_as_structural_only =
+        policy.drops_structural_only() && classify(&report_cluster) == ClusterKind::StructuralOnly;
+    let hidden = dropped_as_data
+        || dropped_as_structural_only
+        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
     (report_cluster, hidden)
 }
 
@@ -267,11 +272,11 @@ fn cluster_is_hidden<S: BuildHasher>(
         );
     // Issue #197: a single-file `structural_only` family of sibling
     // declarations (REST CRUD / settings / builder methods) is the same
-    // evidence-free noise as the cross-file #134 scaffolding, but kept full
-    // `NearlyIdentical` weight because the signal-only routing only demotes
-    // cross-file spreads. The AST check confines this to declaration
-    // families, so worth-extracting statement-window clones stay visible.
-    let single_file_declaration_family = report_cluster.bucket == "structural_only"
+    // evidence-free noise as the cross-file #134 scaffolding. The AST
+    // check confines this to declaration families, so worth-extracting
+    // statement-window clones stay visible (demoted, not hidden, per
+    // [RANK-STRUCTURAL-ONLY]).
+    let single_file_declaration_family = kind == ClusterKind::StructuralOnly
         && is_single_file_declaration_family(
             &cluster.members,
             inputs.sources,
@@ -285,15 +290,18 @@ fn cluster_is_hidden<S: BuildHasher>(
 /// clusters dominated by `report_hide` paths cannot push fully-visible
 /// clusters down the ranking ([#140 EXCLUSION-CONFIG],
 /// [PIPELINE-RANK-WORST-FIRST]). The clone-category multiplier from
-/// [RANK-CATEGORY] is folded in here so a `data`-category cluster sinks
-/// below comparable `logic` clones; the multiplier is `1.0` for logic and
-/// in `keep`/`ignore` modes, so non-data clusters keep their prior weight.
+/// [RANK-CATEGORY] and the structural-only multiplier from
+/// [RANK-STRUCTURAL-ONLY] are folded in here so a `data`-category or
+/// shape-only-evidence cluster sinks below comparable full-evidence
+/// clones; both multipliers are `1.0` in `keep`/`ignore` modes and for
+/// non-matching clusters, which therefore keep their prior weight.
 /// Hidden occurrences still travel on each cluster for downstream context.
 fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster], policy: RankingPolicy) {
     for cluster in &mut *clusters {
         let visible = visible_occurrence_count(cluster);
         let base = visible_rank_weight(cluster.canonical_node_count, visible);
-        cluster.weight = base * category_multiplier(cluster, policy);
+        cluster.weight =
+            base * category_multiplier(cluster, policy) * structural_only_multiplier(cluster, policy);
     }
     clusters.sort_by(|left, right| {
         right
@@ -309,8 +317,21 @@ fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster], policy: Rankin
 /// multiplier; everything else stays at `1.0`.
 fn category_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
     match CloneCategory::from_wire_label(&cluster.category) {
-        CloneCategory::DataTable => policy.weight_multiplier(),
+        CloneCategory::DataTable => policy.data_weight_multiplier(),
         CloneCategory::Logic => 1.0,
+    }
+}
+
+/// Returns the ranking-weight multiplier for structural-only clusters
+/// under `policy` ([RANK-STRUCTURAL-ONLY]). Keyed off the same
+/// [`ClusterKind::StructuralOnly`] routing that assigns the wire label,
+/// so a labelled cluster is always the cluster the policy demotes
+/// (issue #197 inconsistency #1).
+fn structural_only_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
+    if classify(cluster) == ClusterKind::StructuralOnly {
+        policy.structural_only_weight_multiplier()
+    } else {
+        1.0
     }
 }
 
@@ -378,6 +399,8 @@ struct BucketDistribution {
     identical: usize,
     /// Visible nearly-identical clusters.
     nearly_identical: usize,
+    /// Visible structural-only clusters.
+    structural_only: usize,
     /// Visible loosely-similar clusters.
     loosely_similar: usize,
     /// Visible same-behavior clusters.
@@ -401,6 +424,9 @@ impl BucketDistribution {
             ClusterKind::NearlyIdentical => {
                 self.nearly_identical = self.nearly_identical.saturating_add(1);
             }
+            ClusterKind::StructuralOnly => {
+                self.structural_only = self.structural_only.saturating_add(1);
+            }
             ClusterKind::LooselySimilar => {
                 self.loosely_similar = self.loosely_similar.saturating_add(1);
             }
@@ -415,6 +441,7 @@ impl BucketDistribution {
             hidden,
             identical = self.identical,
             nearly_identical = self.nearly_identical,
+            structural_only = self.structural_only,
             loosely_similar = self.loosely_similar,
             same_behavior = self.same_behavior,
             "bucket distribution",

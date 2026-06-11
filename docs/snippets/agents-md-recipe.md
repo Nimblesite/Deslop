@@ -52,6 +52,9 @@ inspect the response.
 
 - If the response shows a cluster with **`signals.fused ≥ 0.85`** *or* the
   bucket is `identical` / `nearly_identical`, do NOT write the new copy.
+  A `structural_only` match means only the code shape lines up (no token
+  or semantic evidence) — read the match before deciding; it is often
+  sibling boilerplate rather than a reusable implementation.
   Reuse the canonical occurrence the tool returns. Extract a helper if needed.
 - If the response is empty or the closest match is structurally distant
   (`signals.fused < 0.6`), proceed with authoring.

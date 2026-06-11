@@ -174,7 +174,13 @@ impl LspBackend {
         min_nodes: u32,
     ) -> Result<Self, deslop_core::live::LiveError> {
         let embedding = LspEmbeddingConfig::default();
-        Self::new_with_config(client, workspace_root, min_nodes, &embedding)
+        Self::new_with_config(
+            client,
+            workspace_root,
+            min_nodes,
+            &embedding,
+            deslop_core::live::transport::IpcMode::platform_default(),
+        )
     }
 
     /// Constructs a backend with explicit embedding startup config.
@@ -187,6 +193,7 @@ impl LspBackend {
         workspace_root: PathBuf,
         min_nodes: u32,
         embedding: &LspEmbeddingConfig,
+        ipc_mode: deslop_core::live::transport::IpcMode,
     ) -> Result<Self, deslop_core::live::LiveError> {
         let (provider, resolved_mode) = resolve_startup_provider(embedding)?;
         let observability = Observability::default();
@@ -206,9 +213,14 @@ impl LspBackend {
         let (watcher, scheduler) =
             crate::file_watch::start(&root, None, Arc::clone(&session), client.clone())?;
         let report_changed = scheduler.report_changed_sender();
-        let ipc = crate::ipc::IpcServer::start(&root, Arc::clone(&service), report_changed.clone())
-            .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
-            .ok();
+        let ipc = crate::ipc::IpcServer::start(
+            &root,
+            ipc_mode,
+            Arc::clone(&service),
+            report_changed.clone(),
+        )
+        .map_err(|e| tracing::warn!(%e, "ipc_socket_start_failed"))
+        .ok();
         // A seeded session serves a cached report while a background cold
         // pass runs; a fresh session has already finished its blocking
         // scan. `initialized()` reads this to report the right startup

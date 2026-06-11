@@ -340,6 +340,23 @@
           "minimum": 1,
           "description": "Minimum AST node count for a subtree to be fingerprinted. Forwarded to the LSP at initialize."
         },
+        "deslop.ranking.structuralOnly": {
+          "type": "string",
+          "enum": [
+            "default",
+            "demote",
+            "ignore",
+            "keep"
+          ],
+          "enumDescriptions": [
+            "Use the .deslop.toml [ranking] structural_only setting (or the engine default, demote).",
+            "Down-weight structural-only clusters so they rank below clones with token or semantic evidence.",
+            "Hide structural-only clusters from the report entirely.",
+            "Rank structural-only clusters at full weight."
+          ],
+          "default": "default",
+          "description": "How clusters whose only evidence is code shape (bucket structural_only \u2014 e.g. sibling REST/settings method families) are ranked. Overrides .deslop.toml when not set to default. Takes effect after the language server restarts."
+        },
         "deslop.embedding.provider": {
           "type": "string",
           "enum": [

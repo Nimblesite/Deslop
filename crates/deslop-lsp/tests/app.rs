@@ -8,6 +8,7 @@ use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{anyhow, Result};
 use deslop_core::embedding::{EmbeddingMode, DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL};
+use deslop_core::live::transport::IpcMode;
 use deslop_lsp::app::{
     action_from_args, run_process, run_process_result, run_startup_with, LspAction, LspStartup,
 };
@@ -171,16 +172,20 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
             model_id: "async-model".to_owned(),
             endpoint: "http://127.0.0.1:1234".to_owned(),
         },
+        ipc_mode: IpcMode::Tcp,
+        ranking_structural_only: None,
     };
     let mut observed: Option<LspStartup> = None;
 
-    run_startup_with(startup, |workspace_root, min_nodes, embedding| {
+    run_startup_with(startup, |workspace_root, min_nodes, embedding, ipc_mode| {
         observed = Some(LspStartup {
             workspace_root,
             min_nodes,
             worker_threads: 0,
             nice: 0,
             embedding,
+            ipc_mode,
+            ranking_structural_only: None,
         });
         std::future::ready(Ok(()))
     })?;
@@ -192,6 +197,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
     assert_eq!(observed.embedding.provider_id, "ollama");
     assert_eq!(observed.embedding.model_id, "async-model");
     assert_eq!(observed.embedding.endpoint, "http://127.0.0.1:1234");
+    assert_eq!(observed.ipc_mode, IpcMode::Tcp);
     Ok(())
 }
 
@@ -200,7 +206,7 @@ fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
 #[test]
 fn startup_dispatch_propagates_async_server_error() -> Result<()> {
     let startup = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-error"])?)?;
-    let error = run_startup_with(startup, |_workspace_root, _min_nodes, _embedding| {
+    let error = run_startup_with(startup, |_workspace_root, _min_nodes, _embedding, _ipc_mode| {
         std::future::ready(Err(anyhow!("async server failed")))
     })
     .err()

@@ -157,7 +157,7 @@ A non-zero exit fails the step. The `if: always()` upload keeps `deslop-report.h
 | `metrics.duplication_percent` | The repo-wide headline number the CI gate compares against. |
 | `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
 | `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down. |
-| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (needs `--embeddings`). |
+| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → only the code shape matches (no token or semantic evidence) — verify it is a real duplicate before extracting; demoted in ranking by default. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (needs `--embeddings`). |
 | `signals.fused` | Unit-bounded confidence. `≥ 0.85` is the act-now line, the same threshold as the `find-similar` law above. |
 | `occurrences[].hidden` | `true` marks a `report_hide` match — a hand-written clone of generated code. |
 

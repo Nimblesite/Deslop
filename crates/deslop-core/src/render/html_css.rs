@@ -45,6 +45,7 @@ pub const REPORT_CSS: &str = "\
 .cluster-card{background:var(--surface-container-low);padding:var(--space-6);margin-bottom:var(--space-6);border-radius:var(--radius-sm);border-left:4px solid var(--primary-container);}\
 .cluster-card.kind-identical{border-left-color:var(--primary-container);}\
 .cluster-card.kind-nearly-identical{border-left-color:var(--tertiary-container);}\
+.cluster-card.kind-structural-only{border-left-color:var(--on-surface-variant);}\
 .cluster-card.kind-loosely-similar{border-left-color:var(--secondary-container);}\
 .cluster-card.kind-same-behavior{border-left-color:var(--secondary);}\
 .cluster-card__ai-badge{font-family:var(--font-mono);font-size:0.6875rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;background:var(--secondary-container);color:var(--on-secondary-container);padding:0.125rem var(--space-2);border-radius:var(--radius-sm);white-space:nowrap;align-self:center;}\

@@ -1,27 +1,25 @@
 //! `LiveBackend` — [`McpBackend`] implementation that calls the LSP
-//! IPC socket on every read ([MCP-WHY-LIVE], [MCP-IPC-CLIENT]).
+//! IPC endpoint on every read ([MCP-WHY-LIVE], [MCP-IPC-CLIENT]).
 //!
 //! Single source of truth: the LSP's in-memory `latest_report`
 //! ([LIVE-IPC-SOCKET]). The MCP never touches
 //! `.deslop-cache/live-report.json` — that file is the LSP's private
 //! warm-start cache ([LIVE-SEED-CACHE]), not a wire contract. Every
-//! read tool call issues one JSON-RPC request to
-//! `.deslop-cache/deslop.sock`. When the socket is missing, callers
-//! receive [`BackendError::LspNotRunning`] — there is no fallback
-//! pipeline; CI/one-shot use the `deslop` CLI.
+//! read tool call issues one JSON-RPC request over the published
+//! transport — the Unix socket `.deslop-cache/deslop.sock`, or the
+//! TCP loopback endpoint from `.deslop-cache/deslop.port` on Windows
+//! and under `--ipc-transport tcp` ([LIVE-IPC-TCP],
+//! [MCP-IPC-DISCOVERY]). When no endpoint is live, callers receive
+//! [`BackendError::LspNotRunning`] — there is no fallback pipeline;
+//! CI/one-shot use the `deslop` CLI.
 
 use std::{
-    io::BufReader,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
     sync::{atomic::AtomicU64, atomic::Ordering, Arc, Mutex},
 };
-// `BufRead::read_line` is only reached on the Unix subscribe path below;
-// on non-Unix targets the subscribe functions are stubbed out.
-#[cfg(unix)]
-use std::io::BufRead;
-// `ReportChangedNotification` is only referenced by the Unix subscribe reader.
-#[cfg(unix)]
-use deslop_core::live::wire::ReportChangedNotification;
+
+use deslop_core::live::{transport::IpcStream, wire::ReportChangedNotification};
 
 use deslop_core::{
     live::wire::{
@@ -41,13 +39,14 @@ use super::{
     SessionBackendConfig, SessionConfigSnapshot,
 };
 
-/// `McpBackend` implementation that delegates every read to the LSP via
-/// the shared Unix socket. No on-disk cache, no file watcher, no
-/// duplicate analysis pipeline.
+/// `McpBackend` implementation that delegates every read to the LSP
+/// over the published IPC transport. No on-disk cache, no file
+/// watcher, no duplicate analysis pipeline.
 pub struct LiveBackend {
     /// Workspace root pinned at initialisation.
     root: PathBuf,
-    /// Absolute path to the LSP IPC socket.
+    /// Absolute Unix-socket path, kept for error reporting; the TCP
+    /// discovery record lives beside it ([MCP-IPC-DISCOVERY]).
     ipc_socket: PathBuf,
     /// Last-seen LSP generation. Updated lazily after each IPC read so
     /// the synchronous `generation()` accessor stays cheap.
@@ -74,8 +73,7 @@ impl LiveBackend {
     /// Currently infallible; returns `Result` for symmetry with the
     /// previous backend signature so callers do not have to branch.
     pub fn initialise(config: SessionBackendConfig) -> Result<Self, BackendError> {
-        let cache_dir = config.root.join(".deslop-cache");
-        let ipc_socket = cache_dir.join("deslop.sock");
+        let ipc_socket = deslop_core::live::transport::socket_path(&config.root);
         Ok(Self {
             root: config.root,
             ipc_socket,
@@ -86,7 +84,7 @@ impl LiveBackend {
 
     /// Issues an IPC `report/get` and decodes the result into `Report`.
     fn fetch_report(&self) -> Result<Arc<Report>, BackendError> {
-        let result = ipc_call(&self.ipc_socket, "report/get", &json!({}))?;
+        let result = ipc_call(&self.root, "report/get", &json!({}))?;
         let report: Report = serde_json::from_value(result)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc report parse: {err}")))?;
         Ok(Arc::new(report))
@@ -94,7 +92,7 @@ impl LiveBackend {
 
     /// Issues `session/config` and decodes the response.
     fn fetch_session_config(&self) -> Result<SessionConfig, BackendError> {
-        let result = ipc_call(&self.ipc_socket, "session/config", &json!({}))?;
+        let result = ipc_call(&self.root, "session/config", &json!({}))?;
         let config: SessionConfig = serde_json::from_value(result).map_err(|err| {
             BackendError::StateFileCorrupt(format!("ipc session_config parse: {err}"))
         })?;
@@ -102,18 +100,18 @@ impl LiveBackend {
     }
 }
 
-/// Connects to the subscribe socket, sends the initial JSON-RPC
-/// request, blocks for the ack frame, and returns the buffered
-/// reader alongside the LSP's current generation. Returning the
-/// reader (not the underlying stream) preserves any bytes the LSP
-/// wrote between the ack and the next user call, which a separate
-/// `try_clone`'d stream would lose to `BufReader`'s internal buffer.
-#[cfg(unix)]
+/// Connects to the subscribe endpoint over whichever transport the
+/// LSP published, sends the initial JSON-RPC request, blocks for the
+/// ack frame, and returns the buffered reader alongside the LSP's
+/// current generation. Returning the reader (not the underlying
+/// stream) preserves any bytes the LSP wrote between the ack and the
+/// next user call, which a separate `try_clone`'d stream would lose
+/// to `BufReader`'s internal buffer.
 fn connect_subscribe_and_read_ack(
-    socket: &Path,
-) -> std::io::Result<(BufReader<std::os::unix::net::UnixStream>, u64)> {
-    use std::{io::Write, os::unix::net::UnixStream};
-    let mut stream = UnixStream::connect(socket)?;
+    root: &Path,
+) -> Result<(BufReader<IpcStream>, u64), BackendError> {
+    use std::io::Write;
+    let mut stream = super::ipc::connect(root)?;
     let payload = serde_json::to_vec(&json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -121,31 +119,22 @@ fn connect_subscribe_and_read_ack(
         "params": {},
     }))
     .unwrap_or_default();
-    stream.write_all(&payload)?;
-    stream.write_all(b"\n")?;
-    stream.flush()?;
+    let io_error =
+        |err: std::io::Error| BackendError::StateFileCorrupt(format!("ipc subscribe: {err}"));
+    stream.write_all(&payload).map_err(io_error)?;
+    stream.write_all(b"\n").map_err(io_error)?;
+    stream.flush().map_err(io_error)?;
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    let _bytes = reader.read_line(&mut line)?;
+    let _bytes = reader.read_line(&mut line).map_err(io_error)?;
     let generation = parse_subscribe_ack_generation(&line).unwrap_or(0);
     Ok((reader, generation))
 }
 
-#[cfg(not(unix))]
-fn connect_subscribe_and_read_ack(
-    _socket: &Path,
-) -> std::io::Result<(BufReader<std::fs::File>, u64)> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "MCP subscribe is Unix-only",
-    ))
-}
-
 /// Spawns the background thread that drains broadcast notifications
 /// from `reader` and forwards them as MCP `reportChanged` frames.
-#[cfg(unix)]
 fn spawn_subscribe_reader(
-    reader: BufReader<std::os::unix::net::UnixStream>,
+    reader: BufReader<IpcStream>,
     sender: Arc<Mutex<Option<NotificationSender>>>,
     generation: Arc<AtomicU64>,
 ) {
@@ -168,17 +157,8 @@ fn spawn_subscribe_reader(
     });
 }
 
-#[cfg(not(unix))]
-fn spawn_subscribe_reader(
-    _reader: BufReader<std::fs::File>,
-    _sender: Arc<Mutex<Option<NotificationSender>>>,
-    _generation: Arc<AtomicU64>,
-) {
-}
-
 /// Parses one `report/changed` notification frame, returning `None`
 /// when the line is not a recognisable notification.
-#[cfg(unix)]
 fn parse_report_changed(line: &str) -> Option<ReportChangedNotification> {
     let frame: Value = serde_json::from_str(line.trim()).ok()?;
     if frame.get("method").and_then(Value::as_str) != Some("report/changed") {
@@ -190,7 +170,6 @@ fn parse_report_changed(line: &str) -> Option<ReportChangedNotification> {
 
 /// Reads the `generation` field from the `report/subscribe` ack so
 /// the MCP can sync its counter without an extra IPC round-trip.
-#[cfg(unix)]
 fn parse_subscribe_ack_generation(line: &str) -> Option<u64> {
     let frame: Value = serde_json::from_str(line.trim()).ok()?;
     frame
@@ -214,11 +193,7 @@ impl McpBackend for LiveBackend {
 
     fn report_for_file(&self, path: &Path) -> Result<Vec<ReportCluster>, BackendError> {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
-        let result = ipc_call(
-            &self.ipc_socket,
-            "report/forFile",
-            &json!({ "path": resolved }),
-        )?;
+        let result = ipc_call(&self.root, "report/forFile", &json!({ "path": resolved }))?;
         let file_report: deslop_core::live::wire::FileReport = serde_json::from_value(result)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc forFile parse: {err}")))?;
         Ok(file_report.clusters)
@@ -232,7 +207,7 @@ impl McpBackend for LiveBackend {
     ) -> Result<Vec<ReportCluster>, BackendError> {
         let resolved = crate::safety::resolve_within_root(&self.root, path)?;
         let result = ipc_call(
-            &self.ipc_socket,
+            &self.root,
             "report/forRange",
             &json!({
                 "path": resolved,
@@ -274,7 +249,7 @@ impl McpBackend for LiveBackend {
         };
         let params = serde_json::to_value(&request)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc serialise: {err}")))?;
-        let result = ipc_call(&self.ipc_socket, "duplicates/findSimilar", &params)?;
+        let result = ipc_call(&self.root, "duplicates/findSimilar", &params)?;
         let clusters: Vec<ReportCluster> = serde_json::from_value(
             result.get("clusters").cloned().unwrap_or(json!([])),
         )
@@ -290,7 +265,7 @@ impl McpBackend for LiveBackend {
     }
 
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError> {
-        let result = match ipc_call(&self.ipc_socket, "cluster/byId", &json!({ "id": id })) {
+        let result = match ipc_call(&self.root, "cluster/byId", &json!({ "id": id })) {
             Ok(value) => value,
             // The LSP surfaces unknown ids as a JSON-RPC error. The
             // generic IPC client maps every RPC error to
@@ -311,7 +286,7 @@ impl McpBackend for LiveBackend {
     }
 
     fn list_embedding_models(&self) -> Result<Vec<WireEmbeddingModelInfo>, BackendError> {
-        let result = ipc_call(&self.ipc_socket, "embedding/listModels", &json!({}))?;
+        let result = ipc_call(&self.root, "embedding/listModels", &json!({}))?;
         let models = serde_json::from_value::<Vec<WireEmbeddingModelInfo>>(result)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc models parse: {err}")))?;
         Ok(models)
@@ -341,7 +316,7 @@ impl McpBackend for LiveBackend {
     }
 
     fn mark_changed(&self, _paths: &[PathBuf]) -> Result<RescanProgress, BackendError> {
-        let result = match ipc_call(&self.ipc_socket, "deslop.lsp.refreshReport", &json!({})) {
+        let result = match ipc_call(&self.root, "deslop.lsp.refreshReport", &json!({})) {
             Ok(result) => result,
             Err(BackendError::LspNotRunning { .. }) => {
                 return Ok(empty_rescan_progress(
@@ -374,7 +349,7 @@ impl McpBackend for LiveBackend {
         // background reader thread so any `report/changed` frames the
         // LSP wrote between ack and reader spawn are not lost in a
         // discarded buffer ([MCP-IPC-CLIENT]).
-        match connect_subscribe_and_read_ack(&self.ipc_socket) {
+        match connect_subscribe_and_read_ack(&self.root) {
             Ok((reader, initial_generation)) => {
                 self.generation.store(initial_generation, Ordering::Relaxed);
                 spawn_subscribe_reader(

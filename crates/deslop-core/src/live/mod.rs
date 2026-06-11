@@ -18,6 +18,7 @@ pub mod notifications;
 pub mod scheduler;
 pub mod session;
 mod session_helpers;
+pub mod transport;
 pub mod watcher;
 pub mod wire;
 

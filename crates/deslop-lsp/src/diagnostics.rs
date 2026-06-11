@@ -105,11 +105,14 @@ pub(crate) fn occurrence_matches_path(occurrence: &ReportOccurrence, path: &Path
 }
 
 /// Maps cluster bucket → LSP severity per [LSP-SEVERITY-BUCKET].
-/// Defaults: `Identical` → `Error`, all others → `Warning`.
+/// Defaults: `Identical` → `Error`, `StructuralOnly` → `Hint`
+/// (shape-only evidence, demoted in ranking per
+/// [RANK-STRUCTURAL-ONLY]), all others → `Warning`.
 /// Future: configurable per bucket via `deslop.severity.*` settings.
 fn severity_for(cluster: &ReportCluster) -> DiagnosticSeverity {
     match classify(cluster) {
         ClusterKind::Identical => DiagnosticSeverity::ERROR,
+        ClusterKind::StructuralOnly => DiagnosticSeverity::HINT,
         ClusterKind::NearlyIdentical | ClusterKind::LooselySimilar | ClusterKind::SameBehavior => {
             DiagnosticSeverity::WARNING
         }

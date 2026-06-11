@@ -6,7 +6,9 @@
 //! Per the project charter (see `CLAUDE.md`), this is the **only** module
 //! permitted to hold mutable state shared across pipeline stages.
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::OnceLock};
+
+use crate::config::ClonePolicy;
 
 /// Opaque handle assigned by the [`FileRegistry`] to a discovered file.
 ///
@@ -45,4 +47,27 @@ impl FileRegistry {
         let index = usize::try_from(id.0).ok()?;
         self.paths.get(index).map(PathBuf::as_path)
     }
+}
+
+/// Process-wide override of the `[ranking] structural_only` policy
+/// ([RANK-STRUCTURAL-ONLY]). Set at most once, at process startup,
+/// from the surface's own channel — `deslop-lsp
+/// --ranking-structural-only`, fed by the
+/// `deslop.ranking.structuralOnly` editor setting
+/// ([VSIX-SETTINGS-RANKING]). Consulted by every subsequent config
+/// load so the editor channel wins over `.deslop.toml`.
+static STRUCTURAL_ONLY_OVERRIDE: OnceLock<ClonePolicy> = OnceLock::new();
+
+/// Records the process-wide [RANK-STRUCTURAL-ONLY] policy override.
+/// First write wins; later calls are ignored — the override models a
+/// startup flag, not a runtime toggle.
+pub fn set_structural_only_override(policy: ClonePolicy) {
+    let _first_write_wins = STRUCTURAL_ONLY_OVERRIDE.set(policy);
+}
+
+/// Returns the process-wide [RANK-STRUCTURAL-ONLY] policy override,
+/// when one was recorded at startup.
+#[must_use]
+pub fn structural_only_override() -> Option<ClonePolicy> {
+    STRUCTURAL_ONLY_OVERRIDE.get().copied()
 }

@@ -16,16 +16,19 @@ Candidate pairs from all three passes are unioned, filtered to same-language end
 
 ## Clone buckets (canonical)
 
-Every cluster in this report belongs to exactly one of four buckets. The human label is what end-users see in the CLI / HTML / VS Code UI; the academic `Type-N` label is retained here because agents often read the literature. Both labels refer to the **same** bucket.
+Every cluster in this report belongs to exactly one of five buckets. The human label is what end-users see in the CLI / HTML / VS Code UI; the academic `Type-N` label is retained here because agents often read the literature. Both labels refer to the **same** bucket.
 
 | Bucket            | Human label                              | Academic ref     | Meaning                                                                                  |
 |-------------------|------------------------------------------|------------------|------------------------------------------------------------------------------------------|
 | `Identical`       | Identical code                           | Type-1, Type-2   | Identical after normalization (ignoring whitespace, comments, renamed identifiers).      |
 | `NearlyIdentical` | Nearly identical code                    | Type-3           | Type-2 + added/removed/modified statements. Small differences may matter — review both.  |
+| `StructuralOnly`  | Same shape, different content            | structural-only  | The AST shape is the *only* positive evidence (no token overlap, no semantic support). Usually a sibling boilerplate family (REST CRUD, settings getters); weight-demoted in the ranking by default. Verify before extracting. |
 | `LooselySimilar`  | Loosely similar code                     | weak LSH-only    | Loose textual overlap below the near-miss bar. Treat as a hint, not a directive.         |
 | `SameBehavior`    | Same behavior, different code *(AI)*     | Type-4           | Semantically equivalent, syntactically different. Requires the embedding pass.           |
 
-`SameBehavior` is populated only when the embedding pass ran. If `embedding_cos` is `0.00` across the whole report, the pass was disabled and the `SameBehavior` bucket is empty — structural / token-based clusters (`Identical`, `NearlyIdentical`, `LooselySimilar`) are unaffected.
+`SameBehavior` is populated only when the embedding pass ran. If `embedding_cos` is `0.00` across the whole report, the pass was disabled and the `SameBehavior` bucket is empty — structural / token-based clusters (`Identical`, `NearlyIdentical`, `StructuralOnly`, `LooselySimilar`) are unaffected.
+
+`StructuralOnly` clusters rank with a configurable weight multiplier (`.deslop.toml` `[ranking] structural_only = "demote" | "ignore" | "keep"`, default `demote` at `0.15`) — so a low rank does not mean low copy count; check `size`. To exclude or isolate them in queries, filter on `bucket = "structural_only"`.
 
 Full canonical definition including routing thresholds: [taxonomy.md §[CLONE-BUCKETS]](taxonomy.md).
 
@@ -73,7 +76,8 @@ Byte ranges come from `tree-sitter` and remain in JSON/tool payloads. Human-faci
 | `structural` | `token_jaccard` | `embedding_cos` | Bucket → human label | What it means |
 |---|---|---|---|---|
 | `1.00` | `1.00` | any | `Identical` → **Identical code** *(Type-1/2)* | Safe candidate for extraction into a shared function/method. |
-| `1.00` | `<1.00` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Same AST shape but slightly different token k-grams. Usually overlapping sibling-extension ranges. |
+| `1.00` | `0.05 – 1.00` | any | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Same AST shape but slightly different token k-grams. Usually overlapping sibling-extension ranges. |
+| `1.00` | `< 0.05` | `< 0.05` | `StructuralOnly` → **Same shape, different content** | Shape-only match: the exact-structural pass leaves `token_jaccard` unscored at `0.00`, so there is no token or semantic evidence. Sibling method families (REST CRUD, settings getters) live here; byte-equivalent copies are upgraded to `Identical` instead. Demoted in ranking by default. |
 | `0.00` | `≥ 0.90` | `<0.80` or disabled | `NearlyIdentical` → **Nearly identical code** *(Type-3)* | Similar token content, different structure. Review before merging — may differ in a semantically important way (loop vs recursion, added guard, etc.). |
 | `<0.50` | any | `≥ 0.80` | `SameBehavior` → **Same behavior, different code** *(Type-4, AI match)* | The embedding pass noticed these do the same thing written two syntactically distinct ways. Read both before merging. |
 | `0.00` | `0.70 – 0.90` | `<0.80` or disabled | `LooselySimilar` → **Loosely similar code** | Weak signal. Likely rejected; if present, endpoints were substantial (≥ 40 nodes). Treat as a hint, not a directive. |
