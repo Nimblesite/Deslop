@@ -4,11 +4,14 @@
 //! resolution, path canonicalisation, and pipeline config construction.
 //! All methods are `pub(super)` — they are called only from `session/mod.rs`.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use crate::{
-    boilerplate::collect_import_boilerplate_ranges, error::CoreError, report::CacheStats,
-    state::FileId,
+    boilerplate::collect_import_boilerplate_ranges, discover::discover_files, error::CoreError,
+    report::CacheStats, state::FileId,
 };
 
 use super::{
@@ -68,6 +71,70 @@ impl PipelineSession {
         let _prev_lang = self.file_languages.insert(file_id, language);
         self.files_analysed = self.live_paths.len();
         Ok(())
+    }
+
+    /// Reloads `.deslop.toml` and re-evaluates the existing corpus
+    /// against it: drops files the new `exclude` patterns now match
+    /// and re-discovers files a removed pattern re-admits
+    /// ([LIVE-CONFIG-LIVE], #189). A malformed config is logged and
+    /// the prior exclusion is kept — a typo never bricks the daemon.
+    pub(super) fn refresh_exclusion(
+        &mut self,
+        stats: &mut CacheStats,
+        embedding: &EmbeddingSettings<'_>,
+    ) -> Result<(), CoreError> {
+        if let Err(error) = self.reload_exclusion() {
+            tracing::warn!(
+                %error,
+                "deslop_toml_reload_failed; keeping prior exclusion config",
+            );
+            return Ok(());
+        }
+        let dropped = self.drop_newly_excluded();
+        let added = self.apply_newly_included(stats, embedding)?;
+        tracing::info!(dropped, added, "deslop_toml_reloaded corpus re-evaluated");
+        Ok(())
+    }
+
+    /// Drops every live file the reloaded exclusion config now
+    /// matches. Returns the number of dropped paths.
+    fn drop_newly_excluded(&mut self) -> usize {
+        let doomed: Vec<PathBuf> = self
+            .live_paths
+            .iter()
+            .filter_map(|(file_id, path)| {
+                let language = self.file_languages.get(file_id).copied();
+                self.exclusion
+                    .is_excluded(path, language)
+                    .then(|| path.clone())
+            })
+            .collect();
+        for path in &doomed {
+            self.drop_path(path);
+        }
+        doomed.len()
+    }
+
+    /// Re-runs discovery and applies every path the reloaded exclusion
+    /// config re-admits but the corpus does not yet contain. Returns
+    /// the number of newly-applied paths.
+    fn apply_newly_included(
+        &mut self,
+        stats: &mut CacheStats,
+        embedding: &EmbeddingSettings<'_>,
+    ) -> Result<usize, CoreError> {
+        let discovery = discover_files(&self.root, &self.extension_to_language, &self.exclusion);
+        let known: HashSet<PathBuf> = self.live_paths.values().cloned().collect();
+        let fresh: Vec<PathBuf> = discovery
+            .files
+            .into_iter()
+            .map(|file| file.path)
+            .filter(|path| !known.contains(path))
+            .collect();
+        for path in &fresh {
+            self.apply_one_change(path, stats, embedding)?;
+        }
+        Ok(fresh.len())
     }
 
     /// Removes a path from every in-memory map if present.

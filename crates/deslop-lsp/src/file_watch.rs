@@ -18,26 +18,21 @@
 //! decorations, bubble, status bar) refreshes immediately without any
 //! editor action ([LSP-PUSH-NOTIFICATIONS], [VSIX-REACTIVITY-INVARIANT]).
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use deslop_core::{
-    config::DEFAULT_CONFIG_FILENAME,
+    config::watched_config_paths,
     live::{
         AnalysisSession, AnalysisState, LiveError, LiveWatcher, ReportChangedNotification,
         Scheduler,
     },
+    pipeline::watched_source_extensions,
     ExclusionConfig,
 };
 use tokio::sync::{broadcast::Receiver, Mutex};
 use tower_lsp::Client;
 
 use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
-
-/// File extensions the watcher monitors — one entry per supported language.
-const WATCHED_EXTENSIONS: &[&str] = &["cs", "rs", "py"];
 
 /// Starts the filesystem watcher + scheduler for `root` and spawns
 /// the background task that forwards change broadcasts to `client`.
@@ -55,7 +50,10 @@ pub fn start(
     session: Arc<Mutex<AnalysisSession>>,
     client: Client,
 ) -> Result<(LiveWatcher, Scheduler), LiveError> {
-    let extensions: Vec<String> = WATCHED_EXTENSIONS.iter().map(|e| (*e).to_owned()).collect();
+    let extensions: Vec<String> = watched_source_extensions()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
     let exclusion = Arc::new(ExclusionConfig::empty());
     let config_paths = watched_config_paths(root, config_path);
     let (watcher, watcher_rx) =
@@ -74,16 +72,6 @@ pub fn start(
         "file_watch started",
     );
     Ok((watcher, scheduler))
-}
-
-/// Builds the list of config-file paths the watcher must forward as
-/// first-class live updates ([LIVE-CONFIG-LIVE], #139).
-fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
-    let default = root.join(DEFAULT_CONFIG_FILENAME);
-    match override_path {
-        Some(explicit) => vec![default, explicit.to_path_buf()],
-        None => vec![default],
-    }
 }
 
 /// Loops over both broadcast channels and pushes each event as an LSP

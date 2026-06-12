@@ -3,9 +3,10 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const stamper = join(repoRoot, "scripts/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
 
