@@ -120,7 +120,7 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 - **Top Offenders** tree — see [VSIX-TOP-OFFENDERS-GROUPING] for the cluster / file / folder grouping modes, [VSIX-TOP-OFFENDERS-SORT] for the impact-vs-path sort axis, and [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] for the optional per-language split. In every mode, cluster rows show:
   - **Cluster slug** as the leading element of the bold label ([VSIX-TOP-OFFENDERS-CLUSTER-ID]) — the first 7 hex chars of `cluster.id`, identical to the slug used by the LSP hover bubble. The slug is stable across runs.
-  - Severity dot ([LSP-SEVERITY]) and short interpretation (e.g. `Type-1 exact · 6 copies · 320 nodes`).
+  - Severity dot ([LSP-SEVERITY]) and short plain-title summary (e.g. `Identical code · 6 copies · 320 nodes` — pure-visual surface, never `Type-N`, per [CLONE-BUCKETS-DUAL-LABEL]).
   - Grey description tail: `rank #N · N copies`. The literal word **rank** appears on every surface that shows `#N` (description, tooltip, accessibility label, copy-for-AI) so neither humans nor AI agents confuse the volatile rank for the stable id ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`...\``) and in every command argument; only the visible label is shortened.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
@@ -129,11 +129,11 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
 
-#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster / File / Folder grouping modes
+#### [VSIX-TOP-OFFENDERS-GROUPING] Cluster / File / Folder / Type grouping modes
 
-The Top Offenders tree exposes three grouping modes that change the tree shape and what counts as a root. Two orthogonal axes compose on top of every mode: the sort order ([VSIX-TOP-OFFENDERS-SORT]) and the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
+The Top Offenders tree exposes four grouping modes that change the tree shape and what counts as a root. Two orthogonal axes compose on top of every mode: the sort order ([VSIX-TOP-OFFENDERS-SORT]) and the per-language split ([VSIX-TOP-OFFENDERS-LANGUAGE-GROUP]).
 
-The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"`, default `"cluster"`). VS Code's standard user→workspace precedence applies: a workspace value pinned in `.vscode/settings.json` overrides the user-level default, so a repo team can lock a lens for everyone working in that repo while individuals keep their own machine-wide default elsewhere. Unknown / missing values fall back to `"cluster"` — never panic.
+The mode is persisted via the `deslop.topOffenders.groupBy` setting (`"cluster"` | `"file"` | `"folder"` | `"type"`, default `"cluster"`; the `type` mode groups by finding category per [facets.md §FACET-GROUP-BY-TYPE](facets.md#facet-group-by-type)). VS Code's standard user→workspace precedence applies: a workspace value pinned in `.vscode/settings.json` overrides the user-level default, so a repo team can lock a lens for everyone working in that repo while individuals keep their own machine-wide default elsewhere. Unknown / missing values fall back to `"cluster"` — never panic. The orthogonal bucket/category **filter** axis lives in [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter).
 
 A view-title toggle in the Top Offenders header cycles modes. The toggle writes to the workspace configuration target so the choice persists per-repo. Cold-start respects the persisted value — there is no flash-of-default render. The toolbar also carries collapse / expand / refresh actions ([VSIX-TOP-OFFENDERS-TOOLBAR]) because folder mode can nest deeply.
 
@@ -178,7 +178,7 @@ Rank lives in the grey description, not the bold label. The bold label leads wit
 
 #### [VSIX-TOP-OFFENDERS-CATEGORY-COLORS] Top Offenders category metadata
 
-Top Offenders root rows expose the clone bucket with stable theme-aware icon colour metadata. `Identical code`, `Nearly identical code`, `Loosely similar code`, and `Same behavior, different code` must not share the same colour token.
+Top Offenders root rows expose the clone bucket with stable theme-aware icon colour metadata. `Identical code`, `Nearly identical code`, `Same shape, different content`, `Loosely similar code`, and `Same behavior, different code` must not share the same colour token.
 
 Colour is never the only signal. The category text remains in the visible label, the tooltip carries the hybrid taxonomy label, and the accessibility label includes the category and representative file.
 
@@ -208,7 +208,7 @@ The single deliberate exception is the **Refresh** button (`deslop.refresh` → 
 
 #### [VSIX-TOP-OFFENDERS-TOOLBAR] Collapse / expand / refresh actions
 
-The **Diagnostics toggle** ([VSIX-SEVERITY-CONTROL]) leads the title bar at `navigation@0`, ahead of everything else, because it is the control the user reaches for most. After it come the grouping/sort/split toggles (`navigation@1`–`@3`), then three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@4`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@5`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@6`).
+The **Diagnostics toggle** ([VSIX-SEVERITY-CONTROL]) leads the title bar at `navigation@0`, ahead of everything else, because it is the control the user reaches for most. After it come the grouping/sort/split toggles (`navigation@1`–`@3`), then **Choose Filter** (`deslop.topOffenders.chooseFilter`, `navigation@4`, [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter)), then three icon actions, **adjacent and in order**: **Expand All** (`$(expand-all)`, `deslop.topOffenders.expandAll`, `navigation@5`), **Collapse All** (`$(collapse-all)`, `deslop.topOffenders.collapseAll`, `navigation@6`), and **Refresh** (`$(refresh)`, `deslop.refresh`, `navigation@7`).
 
 Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBulkExpansion`): the provider rewrites the collapsible state it returns from `getTreeItem` and fires `onDidChangeTreeData`, so the whole tree expands or collapses **in one shot at every level** — reliable in cluster, file, and folder mode, not just the first level (which is why we do not use the one-level `TreeView.reveal({ expand: true })` or rely on the built-in `showCollapseAll` button, which would render a second, detached collapse action). The override is presentation-only ([VSIX-VIEW-STATE-UI-ONLY]) and is released on the next data change. **Refresh** is the one toolbar action that reaches the engine — it forces a full workspace re-scan. The Session and Duplication panels keep VS Code's built-in Collapse All for consistency.
 
@@ -223,7 +223,7 @@ Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severi
 
 The two states are selected by a `when` clause on the `deslop:diagnosticsEnabled` context key, which the extension sets from the store whenever the setting changes — never from a second cached copy ([VSIX-STATE]). Writing targets the workspace configuration so the choice persists per-repo, exactly like the grouping/sort toggles ([VSIX-TOP-OFFENDERS-GROUPING]). Flipping it forwards `workspace/didChangeConfiguration` to the LSP, which re-resolves diagnostics for every open file in the same round-trip; there is no re-analysis ([VSIX-VIEW-STATE-UI-ONLY]) — the report is unchanged, only its diagnostic projection.
 
-**Severity configuration (`deslop.severity.configure`).** A companion gear at `navigation@0` (immediately right of the toggle) opens a QuickPick that edits both maps in flow, without leaving the panel. It lists the four buckets, each row showing the bucket's plain title, its current **colour** level (`deslop.severity.*`) and its current **diagnostic** level (`deslop.diagnostics.severity.*`, or `none`). Selecting a bucket opens a second QuickPick to set each axis from `error · warning · information · hint` (plus `none` for the diagnostic axis). The QuickPick is the prominent in-flow editor; the VS Code Settings UI (filtered to `@ext:nimblesite.deslop-live severity`) remains the durable store both write to. Both targets are the workspace, so a team posture pinned in `.vscode/settings.json` wins per [VSIX-SETTINGS] precedence.
+**Severity configuration (`deslop.severity.configure`).** A companion gear at `navigation@0` (immediately right of the toggle) opens a QuickPick that edits both maps in flow, without leaving the panel. It lists every bucket from `ClusterKind::all()`, each row showing the bucket's plain title, its current **colour** level (`deslop.severity.*`) and its current **diagnostic** level (`deslop.diagnostics.severity.*`, or `none`). Selecting a bucket opens a second QuickPick to set each axis from `error · warning · information · hint` (plus `none` for the diagnostic axis). The QuickPick is the prominent in-flow editor; the VS Code Settings UI (filtered to `@ext:nimblesite.deslop-live severity`) remains the durable store both write to. Both targets are the workspace, so a team posture pinned in `.vscode/settings.json` wins per [VSIX-SETTINGS] precedence.
 
 The toggle changes only whether diagnostics publish; it never touches the bubble, tree, code-lens, or gutter colour, which are driven by the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)). A status-bar segment ([VSIX-STATUS-BAR]) mirrors the toggle state for users working away from the panel and is itself clickable to flip it.
 
@@ -447,12 +447,14 @@ Exposed under `deslop.*` in VS Code settings:
 | `deslop.incremental` | `true` | Mirrors `--incremental`. Always-on in the daemon shell; off for CLI compatibility. |
 | `deslop.showAllLenses` | `false` | Show code lenses below the 50th-percentile threshold. |
 | `deslop.diagnostics.enabled` | `false` | Master gate — clone diagnostics are **off by default**. Flip via the prominent Top Offenders toggle ([VSIX-SEVERITY-CONTROL]). See [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate). |
-| `deslop.severity.{identical,nearlyIdentical,looselySimilar,sameBehavior}` | `error · warning · information · hint` | Always-on **colour** map for bubble / tree / lens / gutter. Values `"error" \| "warning" \| "information" \| "hint"`. See [severity.md §SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map). |
-| `deslop.diagnostics.severity.{identical,nearlyIdentical,looselySimilar,sameBehavior}` | `error · warning · warning · warning` | Per-bucket **Problems-panel** severity, only when the gate is on. Adds `"none"` to suppress a bucket. See [severity.md §SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics). |
+| `deslop.severity.{identical,nearlyIdentical,structuralOnly,looselySimilar,sameBehavior}` | `error · warning · hint · information · hint` | Always-on **colour** map for bubble / tree / lens / gutter — one key per bucket from `ClusterKind::all()`. Values `"error" \| "warning" \| "information" \| "hint"`. See [severity.md §SEVERITY-DESLOP-MAP](severity.md#severity-deslop-map). |
+| `deslop.diagnostics.severity.{identical,nearlyIdentical,structuralOnly,looselySimilar,sameBehavior}` | `error · warning · hint · warning · warning` | Per-bucket **Problems-panel** severity, only when the gate is on. Adds `"none"` to suppress a bucket. See [severity.md §SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics). |
 | `deslop.diagnostics.scope` | `"open-files"` | `"open-files"` keeps LSP 3.17 pull behaviour (Problems only populated for tabs the editor has open); `"workspace"` makes the LSP push `publishDiagnostics` for every offender file so Problems mirrors the Top Offenders tree even with no tabs open. See [lsp.md §LSP-DIAGNOSTICS-SCOPE](lsp.md#lsp-diagnostics-scope). |
 | `deslop.configPath` | `""` | Optional override for `.deslop.toml` — mirrors CLI `--config`. |
+| `deslop.topOffenders.filterBuckets` / `.filterCategories` | `[]` | Multi-select facet filters over the tree — see [facets.md §FACET-TOP-OFFENDERS-FILTER](facets.md#facet-top-offenders-filter). UI-only, no LSP flag. |
+| `deslop.literals.enabled`, `deslop.ranking.{magicLiterals,constantFindings,unusedPublic}` | `default` (all tri-state) | Literal-family detection + ranking policies, forwarded as LSP launch flags exactly like `deslop.ranking.structuralOnly`; `default` omits the flag so `.deslop.toml` wins — see [literals.md §LITERAL-CONFIG](literals.md#literal-config). |
 
-Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required. Exception ([VSIX-SETTINGS-RANKING]): `deslop.ranking.structuralOnly` rides the LSP launch arguments, so it takes effect when the language server (re)starts.
+Settings changes hot-reload the LSP via `workspace/didChangeConfiguration` — no restart required. Exceptions ([VSIX-SETTINGS-RANKING], [literals.md §LITERAL-CONFIG](literals.md#literal-config)): `deslop.ranking.structuralOnly`, `deslop.literals.enabled`, and `deslop.ranking.{magicLiterals,constantFindings,unusedPublic}` ride the LSP launch arguments, so they take effect when the language server (re)starts.
 
 ### [VSIX-NOTIFICATIONS] User-facing toasts
 

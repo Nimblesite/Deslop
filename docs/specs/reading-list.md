@@ -27,6 +27,39 @@ Surveys:
 - [A Survey of Software Clone Detection from Security Perspective](https://www.semanticscholar.org/paper/A-Survey-of-Software-Clone-Detection-From-Security-Zhang-Sakurai/c834d313a2dca5747245c895b1a7c53e503ca8f6)
 - [Survey of Clone Detection Techniques, Types I–IV](https://www.semanticscholar.org/paper/The-Survey-of-the-Code-Clone-Detection-Techniques-(-Kaur-Sharma/f5600f495f863fd9f62ed29873d509939cd09ca0)
 
+### [READ-LIST-LITERALS] Micro-clones, magic values, and constant drift
+
+Grounds [literals.md](literals.md), [RANK-LITERAL-FAMILY], and [DECISION-LITERALS] — the
+value-level lineage the canonical fragment-clone list above does not cover.
+
+Micro-clones (why the size floor must not be lowered, and why sub-floor findings still matter):
+- [Mondal, Roy & Schneider 2018 — Micro-clones in evolving software (SANER)](https://doi.org/10.1109/SANER.2018.8330196)
+- [Islam, Mondal & Roy 2019 — Comparing bug replication in regular and micro clones (SANER)](https://doi.org/10.1109/SANER.2019.8667974) — micro-clones carry ~6× the consistent bug-fix changes of regular clones
+- [van Tonder & Le Goues 2016 — Defending against the attack of the micro-clones (ICPC)](https://doi.org/10.1109/ICPC.2016.7503738) — 95% of micro-clone-fixing PRs merged uncontested
+- [Li, Lu, Myagmar & Zhou 2004/2006 — CP-Miner: copy-paste and related bugs (OSDI/TSE)](https://doi.org/10.1109/TSE.2006.28) — value-indexed token mining + the unchanged-ratio forgotten-update heuristic
+- [Beller, Zaidman & Karpov 2017 — The last line effect explained (EMSE)](https://doi.org/10.1007/s10664-016-9489-6)
+
+Inconsistency & drift (the `constant_drift` grounding — transferred by inference, no direct study):
+- [Juergens et al. 2009 — Do code clones matter? (ICSE)](https://doi.org/10.1109/ICSE.2009.5070547) — ~52% of clone classes change inconsistently; inconsistent change is fault-indicating
+- [Engler, Chen, Hallem, Chou & Chelf 2001 — Bugs as deviant behavior (SOSP)](https://doi.org/10.1145/502034.502041) — belief-consistency z-ranking: the majority value outranks the deviant
+
+Magic values & smells:
+- [Eghbali & Pradel 2020 — No strings attached: an empirical study of string-related software bugs (ASE)](https://doi.org/10.1145/3324884.3416576)
+- [Fowler — Replace Magic Literal](https://refactoring.com/catalog/replaceMagicLiteral.html)
+
+Industrial rule defaults (the source-verified threshold provenance for [LITERAL-NOISE]):
+- [SonarSource RSPEC S1192 — string literals should not be duplicated](https://rules.sonarsource.com/java/RSPEC-1192/) (threshold 3, min content length 5; in the default profile for Java/C#/Python and shipped for Dart)
+- [SonarSource RSPEC S109 — magic numbers](https://rules.sonarsource.com/java/RSPEC-109/) (in **no** default profile — the opt-in precedent)
+- [PMD — AvoidDuplicateLiterals](https://pmd.github.io/pmd/pmd_rules_java_errorprone.html#avoidduplicateliterals) · [Checkstyle — MagicNumber](https://checkstyle.org/checks/coding/magicnumber.html) (`constantWaiverParentToken` — the fix site never re-triggers)
+- [ESLint — no-magic-numbers](https://eslint.org/docs/latest/rules/no-magic-numbers) · [goconst](https://github.com/jgautheron/goconst) (`match-constant` default-on — the `shadowed_constant` precedent) · [go-mnd](https://github.com/tommy-muehle/go-mnd)
+- [rust-clippy #1539 — declined magic-number lint](https://github.com/rust-lang/rust-clippy/issues/1539) (the false-positive-rate argument) · [clippy approx_constant](https://rust-lang.github.io/rust-clippy/master/index.html#approx_constant) (per-constant `min_digits` gating)
+
+Unused-symbol detection (the [LITERAL-UNUSED-MARKER] grounding):
+- [vulture — confidence-scored dead-code detection for Python](https://github.com/jendrikseipp/vulture) (the 60/90/100 confidence model)
+- [Eder et al. 2012 — How much does unused code matter for maintenance? (ICSE)](https://doi.org/10.1109/ICSE.2012.6227109)
+- [Romano et al. 2018 — A multi-study investigation into dead code (TSE)](https://doi.org/10.1109/TSE.2018.2842781) — developers distrust deletion of possibly-dynamically-used code
+- [rust-lang/rust #120079 — dead_code does not cover pub items across a workspace](https://github.com/rust-lang/rust/issues/120079) · [Knip — includeEntryExports](https://knip.dev/reference/configuration#includeentryexports)
+
 ### [READ-LIST-MERGE] Mechanical merge & behaviour-preserving refactoring
 
 Grounds `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]` in [autofix-extract.md](autofix-extract.md). Every link below was verified to resolve with a faithful claim. (Baxter et al. 1998 — the differing-leaf `Similarity = 2S/(2S+L+R)` and leaf-ignoring hash — is already listed under *Canonical* above.)

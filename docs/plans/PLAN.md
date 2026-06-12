@@ -59,6 +59,24 @@ Implemented work intentionally not repeated here:
 
 ### 🟡 Remaining features
 
+- [ ] **Literal & constant duplication family** — magic literals, shadowed/duplicate/drifting/aliased
+  constants as first-class findings on the category axis, plus the monorepo unused-public-constant
+  marker. Phased plan: [literal-constant-plan.md](literal-constant-plan.md) Track A. Specs:
+  [literals.md](../specs/literals.md), [taxonomy.md §CLONE-CATEGORY-REGISTRY](../specs/taxonomy.md#clone-category-registry),
+  [pipeline.md §RANK-LITERAL-FAMILY](../specs/pipeline.md#rank-literal-family),
+  [decisions.md §DECISION-LITERALS](../specs/decisions.md#decision-literals). Gated on the
+  [LITERAL-CENSUS] noise calibration. Advances [#70](https://github.com/Nimblesite/Deslop/issues/70),
+  [#79](https://github.com/Nimblesite/Deslop/issues/79), [#133](https://github.com/Nimblesite/Deslop/issues/133).
+- [ ] **Facets + six-tool MCP surface** — bucket/category/language filtering and `type` grouping on
+  every surface (tree, webviews, HTML, CLI, MCP); sorting via the MCP `sort` param and the existing
+  tree sort axis (webview/HTML stay fixed worst-first by design); the MCP consolidated 12 → 6
+  (`find-similar`, `duplicates`, `cluster-by-id`, `rescan`, `session`, `schema-doc`). Phased plan:
+  [literal-constant-plan.md](literal-constant-plan.md) Track B. Specs: [facets.md](../specs/facets.md),
+  [mcp.md §MCP-TOOLS](../specs/mcp.md#mcp-tools),
+  [decisions.md §DECISION-MCP-SURFACE](../specs/decisions.md#decision-mcp-surface). Delivers the
+  unbuilt asks of [#195](https://github.com/Nimblesite/Deslop/issues/195); fixes the Dart
+  `language: "unknown"` defect behind [#164](https://github.com/Nimblesite/Deslop/issues/164);
+  verify-closes [#170](https://github.com/Nimblesite/Deslop/issues/170)/[#198](https://github.com/Nimblesite/Deslop/issues/198).
 - [ ] Continue [Language roadmap](LANG-ROADMAP.md) with TypeScript/TSX.
 - [ ] **Cluster grouping + Duplication panel** — Top Offenders gains folder-tree grouping ([vsix.md §VSIX-TOP-OFFENDERS-FOLDER-MODE](../specs/vsix.md#vsix-top-offenders-folder-mode)), an impact/path sort axis ([§VSIX-TOP-OFFENDERS-SORT](../specs/vsix.md#vsix-top-offenders-sort)), a per-language split ([§VSIX-TOP-OFFENDERS-LANGUAGE-GROUP](../specs/vsix.md#vsix-top-offenders-language-group), [#162](https://github.com/Nimblesite/Deslop/issues/162)), and collapse/expand/refresh toolbar actions ([§VSIX-TOP-OFFENDERS-TOOLBAR](../specs/vsix.md#vsix-top-offenders-toolbar), [#60](https://github.com/Nimblesite/Deslop/issues/60)). The Focused File panel is replaced by the Duplication panel ([§VSIX-METRICS-PANEL](../specs/vsix.md#vsix-metrics-panel)) + report webview ([§VSIX-METRICS-REPORT](../specs/vsix.md#vsix-metrics-report), [#159](https://github.com/Nimblesite/Deslop/issues/159)), backed by new `RepoMetrics.per_file` ([pipeline.md §METRICS-REPO](../specs/pipeline.md#metrics-repo)). The HTML report gains optional per-language sections ([pipeline.md §OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS](../specs/pipeline.md#output-human-html-language-sections), [#163](https://github.com/Nimblesite/Deslop/issues/163)).
 - [ ] Add `deslop.diagnostics.scope` (`"open-files"` | `"workspace"`) so Problems can mirror the Top Offenders tree even with no tabs open. Spec: [lsp.md §LSP-DIAGNOSTICS-SCOPE](../specs/lsp.md#lsp-diagnostics-scope) + [vsix.md §VSIX-SETTINGS](../specs/vsix.md#vsix-settings). Issue: [#129](https://github.com/Nimblesite/Deslop/issues/129).
