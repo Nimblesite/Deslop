@@ -259,6 +259,92 @@ fn rerun_remove_drops_clone_and_reports_cluster_removed() -> Result<()> {
     Ok(())
 }
 
+// Implements [LIVE-CONFIG-LIVE] (#189): replaying the watched
+// `<root>/.deslop.toml` through the rerun harness must re-evaluate the
+// existing corpus against the reloaded `exclude` patterns. A pattern
+// added between generations drops the now-excluded file — and its
+// clusters — instead of only re-rendering.
+#[test]
+fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
+    // Stage a config that excludes Beta.cs; `--rerun-add` lands it at
+    // the watched `<root>/.deslop.toml` between generation 0 and 1.
+    let staged = tmp.path().join("staged-deslop.toml");
+    fs::write(&staged, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
+    let config_dst = scan_root.join(".deslop.toml");
+    let spec = format!("{}={}", staged.display(), config_dst.display());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--rerun-add")
+        .arg(&spec)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
+    assert!(
+        array_len(&delta, "clusters_removed") > 0,
+        "excluding Beta.cs must remove the Alpha/Beta clone cluster: {delta:#}"
+    );
+    let report = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        !report.contains("Beta.cs"),
+        "generation 1 report must not mention the excluded file"
+    );
+    Ok(())
+}
+
+// Implements [LIVE-CONFIG-LIVE] (#189): the reverse direction — a
+// pattern removed between generations re-discovers the previously
+// excluded file so its clusters appear. Exercises the explicit
+// `--config` override path rather than `<root>/.deslop.toml`.
+#[test]
+fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
+    // Initial pass excludes Beta.cs via an explicit override config,
+    // so generation 0 sees only Alpha.cs and reports no clusters.
+    let override_config = tmp.path().join("deslop.toml");
+    fs::write(&override_config, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
+    let staged = tmp.path().join("staged-looser.toml");
+    fs::write(&staged, "[defaults]\nexclude = []\n")?;
+    let spec = format!("{}={}", staged.display(), override_config.display());
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--config")
+        .arg(&override_config)
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--rerun-add")
+        .arg(&spec)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    assert_eq!(field(&delta, "from_generation"), 0);
+    assert_eq!(field(&delta, "to_generation"), 1);
+    assert!(
+        array_len(&delta, "clusters_added") > 0,
+        "dropping the exclude must re-discover Beta.cs and surface its cluster: {delta:#}"
+    );
+    let report = fs::read_to_string(tmp.path().join("report.json"))?;
+    assert!(
+        report.contains("Beta.cs"),
+        "generation 1 report must include the re-included file"
+    );
+    Ok(())
+}
+
 // Implements [LIVE-STATE] + [EXCLUSION-CONFIG]: a `--rerun-touch` path
 // that is covered by the loaded exclusion config is treated as a
 // deletion so that an edit making it excluded drops it from the corpus.
