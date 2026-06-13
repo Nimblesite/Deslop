@@ -3,7 +3,7 @@ name: submit-pr
 description: Creates a pull request for Deslop with a well-structured description after verifying `make ci` passes. Use when the user asks to submit, create, or open a pull request.
 disable-model-invocation: true
 ---
-<!-- agent-pmo:9a71cbf -->
+<!-- agent-pmo:b636503 -->
 
 # Submit PR
 

@@ -23,6 +23,25 @@ Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship
 | **SourcererCC** | Apache-2.0 Java tool, scales to 250 MLOC, unmaintained since ~2020. |
 | **SSCD / HyClone / SCOTT / Rator** | Research prototypes (2023–2025 papers). GitHub research dumps with no releases. Deslop already cites their findings in [fusion.md](fusion.md) and [landscape.md](landscape.md) — we adopt the algorithms, not the artifacts. |
 
+#### Literal & constant rules (linter lineage — the [literals.md](literals.md) competitors)
+
+PMD and Sonar appear above through their CPD-style fragment engines; their literal rules are a
+distinct competitor class ([DECISION-LITERALS] records why this lineage matters):
+
+| Rule | Scope | Live? | Weakness |
+|---|---|---|---|
+| **SonarSource S1192** (duplicated strings) | Per-file, one language at a time | On save (SonarLint) | No cross-file clustering, no ranking, no constant-aware canonical suggestion, no MCP. |
+| **SonarSource S109 / Checkstyle MagicNumber / ESLint no-magic-numbers / go-mnd** | Magic numbers, per occurrence | Lint-time | Per-site diagnostics with no grouping — 40 sites = 40 identical warnings, nothing says "this is one finding". All opt-in for good FP reasons. |
+| **PMD AvoidDuplicateLiterals** | Per-file strings | ❌ CI | Same per-file blindness; threshold 4 outlier. |
+| **goconst** | Go: repeated strings + `match-constant` | ❌ CI | Single-language; flat output; no editor surface. |
+| **ReSharper / Rider "Convert to constant"** | IDE quick-fix | In-IDE | A fix without a repo-wide detection pass; IDE-locked. |
+
+**Where Deslop wins:** workspace-wide value clustering (not per-file counting), constants as
+first-class participants (`shadowed_constant` / `constant_duplicate` / `constant_drift` /
+`constant_alias` — no shipping tool detects same-name-different-value drift), one ranked list with
+the fragment clones, live in the agent loop via [MCP-TOOL-FILTERS], and the monorepo
+unused-public-constant marker ([LITERAL-UNUSED-MARKER]) that no linter in this table attempts.
+
 #### Adjacent / AI-native
 
 | Tool | Status for clone detection |

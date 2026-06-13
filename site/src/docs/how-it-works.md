@@ -105,7 +105,7 @@ Everything above also runs incrementally inside the LSP server (`crates/deslop-c
 A file watcher batches edits (250 ms debounce, 2 s cap) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
 
 - broadcasts `deslop/reportChanged` over the LSP wire, and
-- serves the running corpus over a Unix-domain IPC socket (`.deslop-cache/deslop.sock`), so the bundled MCP server answers `find-similar` without re-parsing.
+- serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`.
 
 `.deslop-cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
 

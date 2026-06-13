@@ -4,7 +4,7 @@
 
 This is not a batch scanner. It is a long-running server with a file watcher, a debouncer, an incremental cache, and atomic state writes. Every editor surface and every MCP tool reads the same live state on every keystroke.
 
-[VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) · [Latest release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
+[VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) · [Releases](https://deslop.live/releases/) · [Latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
 
 ---
 
@@ -28,7 +28,7 @@ Twelve MCP tools ship today:
 | `session-config` | Inspect the running server's config. |
 | `schema-doc` | Self-describing JSON schema for the report payload. |
 
-The MCP server reads `.deslop-cache/live-report.json` — atomically rewritten by the LSP after every file-watcher pass — and delegates `find-similar` to the LSP over a Unix-domain socket so snippet matching runs against the *running* corpus, not a stale cache. **Every MCP response reflects the workspace as of the last keystroke.**
+The MCP server delegates every read and `find-similar` call to the running LSP over the local IPC endpoint, so snippet matching runs against the *running* corpus, not a stale cache. macOS and Linux use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`. **Every MCP response reflects the workspace as of the last keystroke.**
 
 ---
 
@@ -76,7 +76,7 @@ Every detection algorithm in the table below is a real file, not a future plan:
 | HNSW ANN over local embeddings (SSCD 2024) | `instant-distance` HNSW, deterministic seed, top-k cosine | [`embedding/pairs.rs`](crates/deslop-core/src/embedding/pairs.rs) |
 | Max/sum fusion (ensemble-LLM 2025) | `clamp(structural + token_jaccard + embedding_cos, 0, 1)`, threshold 0.85 | [`pair.rs`](crates/deslop-core/src/pair.rs) |
 | Worst-offenders ranking | `clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)` | [`cluster.rs`](crates/deslop-core/src/cluster.rs) |
-| Live + reactive (LSP watcher → state file → MCP) | 250 ms debounce, 2 s cap, atomic state-file rewrite, IPC socket | [`live/`](crates/deslop-core/src/live/), [`deslop-lsp/`](crates/deslop-lsp/), [`deslop-mcp/`](crates/deslop-mcp/) |
+| Live + reactive (LSP watcher → IPC → MCP) | 250 ms debounce, 2 s cap, in-memory report, Unix socket or token-gated TCP IPC | [`live/`](crates/deslop-core/src/live/), [`deslop-lsp/`](crates/deslop-lsp/), [`deslop-mcp/`](crates/deslop-mcp/) |
 
 Full research → code map: [docs/specs/SPEC.md §Algorithm implementation status](docs/specs/SPEC.md#algorithm-implementation-status). Site-facing version: [Research Background](https://deslop.live/docs/research-background/).
 
@@ -86,7 +86,7 @@ Full research → code map: [docs/specs/SPEC.md §Algorithm implementation statu
 
 **The VSIX is the one install that gives you everything**: the live bubble, the LSP server, the MCP server, and the `deslop` CLI all at once. The bundled binaries are the canonical ones — every MCP client below points at them by absolute path so you stay version-locked to the extension.
 
-1. Grab `deslop-live-X.Y.Z-<target>.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
+1. Grab `deslop-live-X.Y.Z-<target>.vsix` from the [Releases page](https://deslop.live/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest).
 2. Install it:
 
    ```bash
@@ -125,7 +125,7 @@ deslop --version
 
 ### Direct download
 
-Grab the archive for your platform from the [latest release](https://github.com/Nimblesite/Deslop/releases/latest) and drop the binaries on your `PATH`.
+Grab the archive for your platform from the [Releases page](https://deslop.live/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then drop the binaries on your `PATH`.
 
 ## Use the CLI
 

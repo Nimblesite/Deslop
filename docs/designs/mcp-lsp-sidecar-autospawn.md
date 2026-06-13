@@ -11,9 +11,9 @@ A user wired the `deslop-mcp` server into GitHub Copilot's agent and **every too
 
 ## 2. Background — current wiring
 
-`deslop-lsp` is the **engine host**: it owns the `LiveService` / `AnalysisSession` whose in-memory `latest_report` is the single source of truth, runs the file watcher + scheduler, and binds a Unix-domain socket at `<root>/.deslop-cache/deslop.sock` serving line-delimited JSON-RPC 2.0 ([crates/deslop-lsp/src/ipc.rs](../../crates/deslop-lsp/src/ipc.rs)).
+`deslop-lsp` is the **engine host**: it owns the `LiveService` / `AnalysisSession` whose in-memory `latest_report` is the single source of truth, runs the file watcher + scheduler, and exposes a local IPC endpoint serving line-delimited JSON-RPC 2.0. Unix hosts bind `<root>/.deslop-cache/deslop.sock`; Windows binds token-gated TCP loopback discovered through `<root>/.deslop-cache/deslop.port` ([docs/specs/live.md §LIVE-IPC-SOCKET](../specs/live.md#live-ipc-socket)).
 
-`deslop-mcp` is a **stateless transport shell**: `LiveBackend` holds no analysis state and has no pipeline; every tool call is one `ipc_call` to that socket, and "there is no fallback pipeline" ([crates/deslop-mcp/src/backend/state.rs:1-11](../../crates/deslop-mcp/src/backend/state.rs#L1-L11), [crates/deslop-mcp/src/backend/ipc.rs](../../crates/deslop-mcp/src/backend/ipc.rs)).
+`deslop-mcp` is a **stateless transport shell**: `LiveBackend` holds no analysis state and has no pipeline; every tool call is one `ipc_call` to that endpoint, and "there is no fallback pipeline" ([crates/deslop-mcp/src/backend/state.rs:1-11](../../crates/deslop-mcp/src/backend/state.rs#L1-L11), [crates/deslop-mcp/src/backend/ipc.rs](../../crates/deslop-mcp/src/backend/ipc.rs)).
 
 ```mermaid
 flowchart TB

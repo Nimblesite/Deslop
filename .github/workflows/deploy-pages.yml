@@ -1,3 +1,4 @@
+# agent-pmo:b636503
 name: Deploy GitHub Pages
 
 # Reusable site deploy. It deliberately has NO `push` trigger — the live site
@@ -42,6 +43,8 @@ jobs:
 
       - name: Build site
         working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
       - uses: actions/configure-pages@v4

@@ -276,6 +276,19 @@ impl IpcStream {
             Self::Tcp(stream) => stream.try_clone().map(Self::Tcp),
         }
     }
+
+    /// Closes the write half so rejected clients observe EOF without a frame.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the platform shutdown failure.
+    pub fn shutdown_write(&self) -> std::io::Result<()> {
+        match self {
+            #[cfg(unix)]
+            Self::Unix(stream) => stream.shutdown(std::net::Shutdown::Write),
+            Self::Tcp(stream) => stream.shutdown(std::net::Shutdown::Write),
+        }
+    }
 }
 
 impl Read for IpcStream {

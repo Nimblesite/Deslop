@@ -1,4 +1,4 @@
-<!-- agent-pmo:9a71cbf -->
+<!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
 ⚠️ **Never kill a VS Code process — including browser-hosted instances.** The user cannot recover from this; do not do it. ⚠️
@@ -8,6 +8,8 @@
 ⚠️ **Quality bar.** This codebase is held to an A+ standard: every change must pass review at a top-tier engineering organization (Google / Meta / Microsoft caliber). No exceptions, not even for a single line. Substandard code is fixed immediately, never deferred. ⚠️
 
 ⚠️ **"Deslop.live" (reactive) means the whole loop** (watcher → scheduler → session → broadcast → UI). An incremental update drives the entire pipeline, including a reactive UI refresh. ⚠️
+
+⚠️ DO NOT USE GIT, ESPECIALLY NOT STAMPING YOURSELF AS COAUTHOR ⚠️
 
 ## Project Overview
 
@@ -73,7 +75,10 @@ Processes communicate over IPC. Generate IPC model code with [typeDiagram](https
 
 - **Files < 500 lines.** Refactor when over.
 **Wire models use typeDiagram.** Every model sent across the wire (IPC) is generated from a [typeDiagram](https://typediagram.dev/docs/language-reference.html) definition — never a hand-written wire struct.
+- **Act autonomously.** Do not stop mid-task for confirmation or approval. Choose the most reasonable default, record the assumption, and continue to completion.
 - **No git commands.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, etc. CI handles git.
+- **Git discipline:** never push to `main`, never list an AI/agent co-author, work on exactly one branch at a time, never start a new branch when a feature branch already exists, converge multiple feature branches before other work, and never use `git worktree`.
+- **Auto-memory is off.** `.claude/settings.json` sets `"autoMemoryEnabled": false`; durable rules go through reviewed changes to this file.
 - **Reduce code duplication — be aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Search before writing. Move code, don't copy.
 - **Regex on source code or structured data is prohibited.** Use tree-sitter for all source parsing.
 - **No exceptions for control flow.** Return `Result<T, E>`. Panics are bugs.

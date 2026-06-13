@@ -106,7 +106,7 @@ weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)
 文件监视器对编辑进行批处理（250 ms 防抖，2 s 上限），并通过 `PipelineSession::update_files` 重新运行流水线。最新报告被保留在内存中，随后 LSP 会：
 
 - 在 LSP 线路上广播 `deslop/reportChanged`，并且
-- 通过一个 Unix 域 IPC 套接字（`.deslop-cache/deslop.sock`）提供运行中的语料，使得捆绑的 MCP 服务器无需重新解析即可应答 `find-similar`。
+- 通过本地 IPC 端点提供运行中的语料，使得捆绑的 MCP 服务器无需重新解析即可应答 `find-similar`。macOS 与 Linux 使用 `.deslop-cache/deslop.sock`；Windows 使用通过 `.deslop-cache/deslop.port` 发现的 token 门控 TCP 回环端点。
 
 `.deslop-cache/live-report.json` 仅作为冷启动种子写入 —— 以便刚启动的 LSP 能在其首趟扫描运行期间应答查询 —— 而非在每次编辑时写入。
 

@@ -1,6 +1,6 @@
 # Live analysis — in-process session in the LSP
 
-`deslop-lsp` runs a persistent `AnalysisSession` that watches the workspace, re-analyses on every file change, and writes the current report to a shared state file on disk. `deslop-mcp` reads that state file — it runs no analysis of its own. The CLI is unchanged: no watcher, no background threads, exits after one pass.
+`deslop-lsp` runs a persistent `AnalysisSession` that watches the workspace, re-analyses on every file change, and exposes the current in-memory report through a local IPC endpoint. `deslop-mcp` delegates to that endpoint — it runs no analysis of its own and does not read the warm-start state file. The CLI is unchanged: no watcher, no background threads, exits after one pass.
 
 See also: [lsp.md](lsp.md), [mcp.md](mcp.md).
 
@@ -8,7 +8,7 @@ See also: [lsp.md](lsp.md), [mcp.md](mcp.md).
 
 The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo feature. Only one binary links it:
 
-- `crates/deslop-lsp` — JSON-RPC over stdio. Owns the `AnalysisSession`, the watcher, the scheduler, and all pipeline work. Writes the state file and the IPC socket.
+- `crates/deslop-lsp` — JSON-RPC over stdio. Owns the `AnalysisSession`, the watcher, the scheduler, and all pipeline work. Writes the warm-start seed cache and exposes the IPC endpoint.
 
 `crates/deslop-mcp` does **not** link the `live` feature. It is a pure transport adapter that delegates **every** read and compute call to the running LSP via the IPC socket ([LIVE-IPC-SOCKET]). It never reads `.deslop-cache/live-report.json` — that file is the LSP's private warm-start cache ([LIVE-SEED-CACHE]), not a wire contract.
 
@@ -35,13 +35,13 @@ flowchart LR
     end
 
     subgraph McpProc["deslop-mcp process"]
-        McpInner["State-file reader + in-memory cache\nIPC delegate for compute ops\n(no analysis work)"]
+        McpInner["IPC delegate\n(no analysis work)"]
     end
 
     CliProc(["deslop CLI process\n(one-shot batch)"])
 
     StateFile[(".deslop-cache/live-report.json")]
-    IpcSocket[(".deslop-cache/deslop.sock")]
+    IpcSocket[(".deslop-cache/deslop.sock\nor .deslop-cache/deslop.port")]
     DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
     Ollama[(Ollama /api/embed)]
@@ -54,13 +54,12 @@ flowchart LR
     Workspace -- "file events (notify)" --> LspProc
     Workspace -- "walk + read" --> CliProc
 
-    LspProc -- "atomic write after every pass" --> StateFile
+    LspProc -- "warm-start seed" --> StateFile
     LspProc -- "read/write" --> DiskCache
     LspProc -- "listens" --> IpcSocket
     LspProc <-- "embed batches" --> Ollama
 
-    McpProc -- "reads (cached in-memory)" --> StateFile
-    McpProc -- "find-similar · listModels" --> IpcSocket
+    McpProc -- "all reads · find-similar · listModels" --> IpcSocket
 
     CliProc -- "read/write" --> DiskCache
     CliProc <-- "embed batches" --> Ollama

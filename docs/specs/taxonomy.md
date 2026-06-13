@@ -74,9 +74,43 @@ The canonical signal thresholds that map a cluster's `(structural, token_jaccard
 | `structural ≥ 0.99 ∨ (structural > 0 ∧ token_jaccard ≥ 0.95)`  | `NearlyIdentical` |
 | else                                                           | `LooselySimilar`  |
 
-`StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197). Its 0.05 ceilings live in `deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT` and tolerate MinHash collision noise. Two report-render refinements sit on top of the raw signal routing: a structural-only cluster whose raw source slices are byte-equivalent is **upgraded to `Identical`** (byte proof beats the unscored token signal, [CLONE-BUCKETS-IDENTICAL]), and a cross-file ≥3-member/≥3-file scaffolding spread is demoted to `LooselySimilar` (#134) which the renderer hides. Ranking: `StructuralOnly` clusters are weight-demoted by default via the `[ranking] structural_only` policy ([RANK-STRUCTURAL-ONLY]).
+`StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197). Its 0.05 ceilings live in `deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT` and tolerate MinHash collision noise. Two report-render refinements sit on top of the raw signal routing: a structural-only cluster whose raw source slices are byte-equivalent is **upgraded to `Identical`** (byte proof beats the unscored token signal, [CLONE-BUCKETS]), and a cross-file ≥3-member/≥3-file scaffolding spread is demoted to `LooselySimilar` (#134) which the renderer hides. Ranking: `StructuralOnly` clusters are weight-demoted by default via the `[ranking] structural_only` policy ([RANK-STRUCTURAL-ONLY]).
 
 `SameBehavior` is tested **before** `NearlyIdentical` so a strong AI signal on two syntactically divergent implementations gets the AI label rather than being absorbed into near-miss. It is only reachable when the embedding pass ran (`--embeddings=auto|required`). When the pass is disabled, `embedding_cos` is `0.00` across the whole report and the `SameBehavior` branch is dead.
+
+**Literal-family clusters bypass signal routing.** Clusters produced by the value-level join
+([LITERAL-CATEGORY], literals.md) carry no similarity signals; their `bucket` is stamped from
+raw-text equality of the **matched-value byte ranges** (literal tokens / declaration value ranges —
+never whole-occurrence ranges) — all compared texts byte-equal → `Identical`, else
+`NearlyIdentical`; `constant_drift` is always `NearlyIdentical` by construction. The wire `bucket`
+field is authoritative. They never land in `StructuralOnly` / `LooselySimilar` / `SameBehavior`
+([LITERAL-WIRE]).
+
+## [CLONE-CATEGORY-REGISTRY] Clone categories (single source of truth)
+
+The **category** axis is orthogonal to the bucket: bucket answers *"how textually similar?"*,
+category answers *"what kind of repetition?"*. The Rust `CloneCategory` enum is the identity; this
+table is canonical for every renderer, schema enum, and facet surface (all derived from
+`CloneCategory::all()` — never hand-listed, [FACET-MODEL]). Ranking policy per category:
+[RANK-CATEGORY], [RANK-LITERAL-FAMILY].
+
+| Category (enum) | Wire label | Chip (pure-visual) | Action sentence | Defined by |
+|---|---|---|---|---|
+| `Logic` | `logic` | — (default, no chip) | Ordinary duplicated code — extract the shared implementation. | [RANK-CATEGORY] |
+| `DataTable` | `data` | data table | Consider a builder with default args, or move the rows to a JSON/CSV/asset. | [RANK-CATEGORY] |
+| `MagicLiteral` | `magic_literal` | magic value | The same literal value is repeated inline — name it once as a constant. | [LITERAL-CATEGORY-MAGIC] |
+| `ShadowedConstant` | `shadowed_constant` | use the existing constant | A constant already names this value — replace the inline literals with it. | [LITERAL-CATEGORY-SHADOWED] |
+| `ConstantDuplicate` | `constant_duplicate` | duplicate constant | The same constant is declared in several places — hoist one shared declaration. | [LITERAL-CATEGORY-CONST-DUP] |
+| `ConstantDrift` | `constant_drift` | conflicting values | Same constant name resolves to different values — confirm which is correct and consolidate. | [LITERAL-CATEGORY-CONST-DRIFT] |
+| `ConstantAlias` | `constant_alias` | same value, different names | One value lives under several names — pick the canonical name and delete the rest. | [LITERAL-CATEGORY-CONST-ALIAS] |
+
+Chips and action sentences come from the same one-helper pattern as the bucket sextuple (rule 6 of
+[CLONE-BUCKETS-DUAL-LABEL]): a single function in `deslop-core::clone_category` keyed by variant;
+every surface pulls from it. The **wire label and chip columns are normative**; the action
+sentences above are paraphrases whose exact copy lives in `deslop-core::clone_category` (the same
+deferral [CLONE-BUCKETS] makes for hex colours). A cluster carries exactly one category; the five
+literal-family categories are produced only by the value-level join (literals.md), never by signal
+routing.
 
 ## [CLONE-TYPE-TAXONOMY] Academic ground rules (reference only)
 

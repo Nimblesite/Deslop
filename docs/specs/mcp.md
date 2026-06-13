@@ -35,96 +35,144 @@ An agent that runs the CLI once at the start of a session sees a stale report af
 
 The MCP surface splits into **tools**, **resources**, and **notifications**.
 
-### [MCP-TOOLS] Tools
+### [MCP-TOOLS] Six tools
 
-Each tool has a JSON schema and an agent-readable description. Descriptions are written for an LLM reader — the agent reads the tool list and decides when to call each one.
+**Exactly six tools** ([DECISION-MCP-SURFACE]). Two calls carry the product: **`find-similar`
+before writing code (prevention)** and **`duplicates` when fixing it (cure)**; the other four are
+drill-in, freshness, session, and schema support. `tools/list` returns these six and nothing else.
 
-**Snapshot tools** (each delegates one IPC round-trip to the LSP — `LspNotRunning` if the socket is absent):
+| Tool | Role | One-line description shape |
+|---|---|---|
+| `find-similar` | **Prevention keystone.** Call BEFORE writing new code. | see [MCP-TOOL-FINDSIMILAR] |
+| `duplicates` | **The one report tool.** Ranked clusters, worst-first; scope by path/range; filter by bucket / category / language ([MCP-TOOL-FILTERS]); `detail` picks slim or full payloads. The zero-arg call returns the worst five clusters with full data. | "Ranked duplicate clusters, worst first. Filter with buckets (identical…), categories (magic_literal…). Start here when fixing duplicates." |
+| `cluster-by-id` | Escape hatch for one full cluster, no occurrence budget. | "Full cluster record by stable id (shown in report text and LSP diagnostics)." |
+| `rescan` | Force the LSP's full refresh, then return a fresh filtered `duplicates` page plus `generation` + change summary. Use when watcher lag is suspected. | accepts the same filter/shape params as `duplicates`, plus `paths?` |
+| `session` | Session metadata + embedding-model management in one tool: `action = "get"` (default) \| `"list-embedding-models"` \| `"set-embedding-model"`. | see [MCP-TOOL-SESSION] |
+| `schema-doc` | One-shot schema markdown for clients with weak resource support. | "One-shot report schema markdown. Call once for field meanings; report pages omit it by default." |
 
-| Tool | Inputs | Output | Description |
-|---|---|---|---|
-| `top-offenders` | `{ n?, max_occurrences? }` | `TopOffenders` | Fetch the worst duplicate clusters with full occurrences, interpretation, signals, bucket, and score. Start here when choosing what to fix. `max_occurrences` (default 15) caps total occurrences across returned clusters per [MCP-OCCURRENCE-BUDGET]. |
-| `rescan` | `{ paths?, n?, max_occurrences? }` | `RescanPayload` | Ask the running LSP to execute `deslop.lsp.refreshReport` over IPC, then return fresh top offenders plus `generation` and `summary` change counts. If the LSP socket is absent, returns the last known generation with an empty summary. Same `max_occurrences` budget as `top-offenders`. Use when watcher lag or stale ranges are suspected. |
-| `report-get` | `{ offset, limit }` (both required) | `ReportPage` | Fetch one page of the current duplication report. Worst offenders first. Call at session start; follow with `cluster-by-id` to drill in. Both `offset` and `limit` are required — the agent sizes its own context window. |
-| `report-query` | `{ offset, limit, language?, bucket?, path_contains?, min_score?, min_size? }` | `ReportPage` | Filtered lookup. Use instead of `report-get` when you can describe what you're looking for. |
-| `schema-doc` | `{}` | `SchemaDocPayload` | One-shot schema markdown. Call once when learning field meanings; report pages omit `schema_doc` by default to avoid repeated context bloat. |
-| `report-for-file` | `{ path, max_occurrences? }` | `FileReport` | All clone clusters touching this file. Call before editing to see what's already duplicated here. `max_occurrences` (default 15) per [MCP-OCCURRENCE-BUDGET]. |
-| `report-for-range` | `{ path, start_byte, end_byte, max_occurrences? }` | `[Cluster]` | Clusters overlapping the byte range you're about to edit. Same budget. |
-| `cluster-by-id` | `{ id }` | `Cluster` | Fetch a cluster by its stable 16-char id. The only tool that returns full occurrence lists — `report-get` and `report-query` omit them to keep pages slim. |
+All tools are source-read-only except `session`'s `set-embedding-model` action ([MCP-EMBEDDING-CONSENT]); `rescan` never edits source, but it triggers the LSP's full refresh before returning. Every result is subject to the global payload cap; cap-truncation `next_action` hints name `duplicates`.
 
-**Compute tools** (delegate to LSP via [LIVE-IPC-SOCKET] — requires LSP running):
+### [MCP-TOOL-FILTERS] The shared filter block
 
-| Tool | Inputs | Output | Description |
-|---|---|---|---|
-| `find-similar` | `{ path?, start_byte?, end_byte?, snippet?, language?, top_n?, max_occurrences? }` | `[Cluster]` | **Before you write a new block, call this.** Runs the full structural + LSH + embedding passes on the input against the live index. Prevents introducing new clones. Returns `LspNotRunning` if LSP is absent. Same budget as `top-offenders`. See [MCP-TOOL-FINDSIMILAR]. |
-| `list-embedding-models` | `{}` | `[EmbeddingModelInfo]` | Enumerate Ollama models on the host. Delegates to LSP via IPC; returns `LspNotRunning` if the socket is absent. |
-| `set-embedding-model` | `{ provider_id, model_id, endpoint?, user_initiated: true }` | `EmbeddingProvenance` | Switch the live embedding model after a human-initiated request. Writes shared workspace settings and notifies the LSP via IPC. The agent must not use this autonomously. See [MCP-EMBEDDING-CONSENT]. |
+Every cluster-returning tool (`duplicates`, `rescan`, `find-similar`) accepts one identical filter
+block, AND-combined, applied **before** pagination and before the occurrence budget. One schema
+builder, one wire `filters` echo type, one matching function — never per-tool copies (DRY hard
+rule). This is the agent-side spelling of [FACET-MODEL]; same wire vocabulary as every UI surface.
 
-**Session tool**:
+```text
+buckets?:        [enum]   // ClusterKind::all() wire labels (e.g. "identical") — canonical
+                          // list: taxonomy.md [CLONE-BUCKETS]
+categories?:     [enum]   // CloneCategory::all() wire labels (e.g. "magic_literal") — canonical
+                          // list: taxonomy.md [CLONE-CATEGORY-REGISTRY]
+languages?:      [enum]   // the core language registry (the #170/#198 anti-drift fix)
+path_contains?:  string
+min_score?:      number
+min_size?:       integer
+name_contains?:  string   // substring on ReportCluster.constant_name ([LITERAL-WIRE])
+value_contains?: string   // substring on ReportCluster.literal_value
+```
 
-| Tool | Inputs | Output | Description |
-|---|---|---|---|
-| `session-config` | `{}` | `SessionConfig` | min-nodes, active languages, embedding provenance, exclusion config path, cache root. One IPC round-trip; `LspNotRunning` if the socket is absent. |
+Array params with empty/absent = no filtering; a one-element array is the single-value form. The
+canonical phrase mappings (identical wording in [FACET-MODEL] rule 4): *"only pay attention to
+IDENTICAL code"* = `buckets: ["identical"]`; *"identical literals"* =
+`categories: ["magic_literal"]` optionally + `buckets: ["identical"]` (`shadowed_constant` is the
+separate prevention category). The value lists are never enumerated here or in the schema source —
+all three enums are **derived from the canonical registries at schema-build time**, so new buckets,
+categories, and languages become filterable with zero schema edits. Filtered tools echo the applied
+filters in their result so transcripts are reproducible; `total_clusters` reflects the post-filter
+count.
 
-All tools are source-read-only except `set-embedding-model`; `rescan` never edits source, but it may trigger the LSP's full refresh command before reloading MCP's cache and emitting report-change notifications. `set-embedding-model` requires `user_initiated: true` and may only be set after a human asked for the switch.
+The shared **shape block** rides beside it on `duplicates` and `rescan`:
+
+```text
+limit?:           integer >= 1, default 5
+offset?:          integer >= 0, default 0
+detail?:          "full" (default) | "summary"   // full = ReportCluster + occurrence budget;
+                                                 // summary = slim ClusterSummary rows
+max_occurrences?: integer >= 1, default 15        // detail = "full" only ([MCP-OCCURRENCE-BUDGET])
+sort?:            "score" (default) | "occurrences" | "size"
+                  // score = weight desc; occurrences = occurrence_count desc;
+                  // size = size_nodes desc. Every sort tie-breaks by score desc then id asc,
+                  // so paging across ties is deterministic.
+```
+
+`rescan` additionally accepts `paths?: [string]` — workspace-relative files the caller just
+changed, scoping the forced refresh to those files; absent = full refresh. Paths outside the
+pinned workspace root are rejected per [MCP-SAFETY].
+
+### [MCP-TOOL-DUPLICATES] `duplicates` — one tool, every report view
+
+Inputs: the filter block + shape block above, plus an optional scope:
+
+- no scope — whole-workspace ranked list;
+- `path` — clusters whose occurrences touch that file;
+- `path` + `start_byte` + `end_byte` — clusters overlapping the byte range (range params require
+  `path` and each other; violations are `InvalidParams`).
+
+Output (`DuplicatesPage` — the one page wire type, whatever the scope or detail):
+
+```text
+{
+  generation, tool_version, files_analysed, min_nodes, clusters_hidden,
+  embedding_provenance, cache_stats, metrics, action_hints,
+  total_clusters, total_occurrences,
+  page: { offset, limit, returned },
+  filters: { …echo of applied filter block… },
+  clusters: [ClusterSummary…] | [ReportCluster…]   // per `detail`
+}
+```
+
+`ClusterSummary` (slim — no `occurrences[]`):
+`{ id, bucket, category, score, size_nodes, occurrence_count, language, first_occurrence: { path, start_byte, end_byte, start_line, end_line } }`.
+Line numbers accompany byte offsets — humans reason in lines. `category` is on the summary row so
+literal-family findings are distinguishable without a drill-in. The summary's `language` derives
+from the canonical occurrence path via the **core parser registry's** extension map — the single
+source shared with the HTML renderer, so every registered language (Dart included, #164) reports
+its real id, never `"unknown"`.
+
+`schema_doc` is intentionally absent from every page; agents call `schema-doc` or read
+`deslop://schema` once. `total_clusters` lets the agent decide whether to keep paging; exhaustive
+audits page until `offset + returned >= total_clusters`.
 
 ### [MCP-OCCURRENCE-BUDGET] Per-call total-occurrence budget
 
-Every tool that ships full `ReportCluster` shapes — `top-offenders`, `rescan`,
-`report-for-file`, `report-for-range`, `find-similar` — accepts an optional
-`max_occurrences` parameter (default **15**) that bounds the **total** number
-of occurrences across **all** returned clusters. The budget is the
-fix for [issue #136](https://github.com/Nimblesite/Deslop/issues/136): an
-unbounded `top-offenders` response on a real workspace ships 50+ occurrences
-per cluster (each carrying byte ranges + paths), and that's enough to
-crash some MCP clients (e.g. Codex's `rmcp_client`). No tool result is
-allowed to be large enough to break the agent.
+Every call that ships full `ReportCluster` shapes — `duplicates` / `rescan` with
+`detail: "full"`, and `find-similar` — accepts `max_occurrences` (default **15**) bounding the
+**total** occurrences across **all** returned clusters. The budget is the fix for
+[issue #136](https://github.com/Nimblesite/Deslop/issues/136): an unbounded full-detail response on
+a real workspace ships 50+ occurrences per cluster, enough to crash some MCP clients (e.g. Codex's
+`rmcp_client`). No tool result is allowed to be large enough to break the agent.
 
-**Algorithm.** Walk the candidate clusters worst-first. Track running
-`used` occurrences. For each cluster:
+**Algorithm.** Walk the candidate clusters worst-first. Track running `used` occurrences. For each
+cluster:
 
-- If `used >= max_occurrences`: **drop this cluster and every following
-  cluster.**
-- Else if `cluster.occurrences.len() <= remaining_budget`: include the
-  cluster fully, advance `used`.
-- Else: include the cluster with `occurrences` truncated to the
-  `remaining_budget`, set `occurrences_truncated = true`, mark
-  `used = max_occurrences`. Stop after this cluster.
+- If `used >= max_occurrences`: **drop this cluster and every following cluster.**
+- Else if `cluster.occurrences.len() <= remaining_budget`: include the cluster fully, advance `used`.
+- Else: include the cluster with `occurrences` truncated to the `remaining_budget`, set
+  `occurrences_truncated = true`, mark `used = max_occurrences`. Stop after this cluster.
 
-A budget that is exactly consumed by a cluster's full occurrence list
-does **not** set `occurrences_truncated`; truncation only fires when a
-cluster's tail was actually dropped.
+A budget exactly consumed by a cluster's full occurrence list does **not** set
+`occurrences_truncated`; truncation only fires when a tail was actually dropped.
 
-**`total_occurrences`.** Every payload reports the **unfiltered**
-occurrence count across every cluster the tool would have considered.
-Agents read this to know how much was filtered. For
-`top-offenders` / `rescan` it sums across the entire report; for
-`report-for-file` / `report-for-range` it sums across the clusters
-matching the path/range; for `find-similar` it sums across the matched
-clusters.
+**`total_occurrences`.** Every payload reports the **un-budgeted** occurrence count across the
+full post-filter cluster set (before pagination and before the budget) so agents know how much
+exists beyond what this page shipped.
+**`page.returned`** counts clusters actually present in `clusters[]`, i.e. after any budget drop.
+**Per-cluster `occurrences_total`** stays accurate when a tail is dropped.
 
-**Per-cluster `occurrences_total`.** Already on `ReportCluster` from the
-live-wire truncation pass. The budget keeps it accurate per cluster:
-when the tail is dropped, `occurrences_total` reflects the cluster's
-true count, not the truncated array length.
+**`cluster-by-id`** is the escape hatch: the full cluster, no budget (the agent asked for exactly
+one), capped at the live-wire occurrence cap of 100 per call. It accepts `offset?` (integer ≥ 0,
+default 0) over the occurrence list, so a >100-occurrence cluster — common for literal-family
+findings — is fully enumerable by paging until fewer than 100 come back.
 
-**`cluster-by-id`** is the escape hatch. It returns the full cluster
-without applying the budget (the agent specifically asked for one
-cluster), capped only by the existing live-wire `LIVE_WIRE_OCCURRENCE_CAP`
-of 100. Agents that need every occurrence of a clipped cluster call
-`cluster-by-id` with the cluster's stable id.
-
-Tool descriptions in `crates/deslop-mcp/src/tools/mod.rs` lead with the
-budget so an LLM reading `tools/list` sees the contract before the first
-call. Tests `issue_136_top_offenders_max_occurrences_caps_response_and_reports_total`
-and `issue_136_top_offenders_default_max_occurrences_is_fifteen` in
-`crates/deslop-mcp/tests/cli.rs` lock the behaviour.
+Tool descriptions lead with the budget so an LLM reading `tools/list` sees the contract before the
+first call. The budget behaviour is pinned by the issue-136 tests named in [MCP-TESTING].
 
 ### [MCP-EMBEDDING-CONSENT] Embedding model consent
 
-Follows [LIVE-EMBEDDING-CONSENT]. Default startup serves deterministic-only reports. An agent or host must call `list-embedding-models`, present the choice to the user, then call `set-embedding-model` with `user_initiated: true`. If no explicit human request, the only valid MCP behaviour is to leave the current model unchanged.
+Follows [LIVE-EMBEDDING-CONSENT]. Default startup serves deterministic-only reports. An agent or host must call `session { action: "list-embedding-models" }`, present the choice to the user, then call `session { action: "set-embedding-model", … }` with `user_initiated: true`. If no explicit human request, the only valid MCP behaviour is to leave the current model unchanged.
 
-`set-embedding-model` writes only `deslop.embedding.*` workspace settings, never source files. If the MCP cannot write those settings, it must fail the switch instead of silently diverging from the LSP.
+The set action writes only `deslop.embedding.*` workspace settings, never source files. If the MCP cannot write those settings, it must fail the switch instead of silently diverging from the LSP.
 
 ### [MCP-TOOL-FINDSIMILAR] `find-similar` — the keystone tool
 
@@ -135,7 +183,18 @@ Input variants:
 
 Both delegate to the LSP via [LIVE-IPC-SOCKET]. Budget: < 250 ms ([LIVE-PERF-BUDGETS]).
 
-Output: top-N clusters (default N=5) by fused score with signals, interpretation, action hints, and occurrences.
+The tool description keeps its prevention framing verbatim in spirit: **"Call BEFORE writing new
+code to PREVENT duplication."** It additionally teaches the constant-prevention path: before
+declaring a new constant, query `duplicates { categories: ["shadowed_constant",
+"constant_duplicate"], name_contains/value_contains: … }` to find an existing canonical
+([LITERAL-CATEGORY-SHADOWED]).
+
+`find-similar` accepts the [MCP-TOOL-FILTERS] block (so an agent told to care only about identical
+code passes `buckets: ["identical"]` inside the prevention loop too) and the uniform `limit`
+(default 5, replacing the old `top_n`) + `max_occurrences` params.
+
+Output: top-`limit` clusters by fused score with signals, interpretation, action hints, occurrences,
+and the `filters` echo.
 
 Edge cases:
 
@@ -145,45 +204,17 @@ Edge cases:
 - Snippet below `min-nodes` after normalisation → empty result with `below_min_nodes: true`.
 - LSP not running → `LspNotRunning` error.
 
-### [MCP-TOOL-REPORT-PAGINATION] `report-get` — slim, paginated, agent-sized
+### [MCP-TOOL-SESSION] `session` — metadata + embedding management
 
-The canonical report is unbounded. `report-get` returns a **slim page** and forces the agent to pick its own page size.
+One tool, three actions, replacing three plumbing tools:
 
-**Required inputs:** `offset` (zero-based cluster index), `limit` (max clusters in this page). Omitting either is `InvalidParams`.
-
-**Output (`ReportPage`):**
-
-```text
-{
-  generation, metrics, files_analysed,
-  min_nodes, embedding_provenance, cache_stats, action_hints,
-  total_clusters, page: { offset, limit, returned },
-  clusters: [ClusterSummary, ...]
-}
-```
-
-`schema_doc` is intentionally absent from `ReportPage`; agents that need the
-large markdown guide call `schema-doc` or read `deslop://schema` once.
-
-**`ClusterSummary`** (not `Cluster` — `members[]` and `occurrences[]` are omitted):
-
-```text
-{
-  id, bucket, bucket_type, score, size_nodes, size_loc,
-  occurrence_count, language,
-  first_occurrence: { path, start_byte, end_byte }
-}
-```
-
-`total_clusters` lets the agent decide whether to keep paging. Agents that want the top 10 ignore it; exhaustive audits page until `offset + returned >= total_clusters`.
-
-### [MCP-TOOL-REPORT-QUERY] `report-query` — targeted lookup
-
-Same slim page shape as [MCP-TOOL-REPORT-PAGINATION], plus filter knobs:
-
-**Required:** `offset`, `limit`. **Optional filters** (combine with AND): `language`, `bucket`, `path_contains`, `min_score`, `min_size`. Filtering happens before pagination; `total_clusters` reflects the post-filter count.
-
-Output echoes the filter inputs so transcripts are reproducible. Use `report-get` for the headline scan; `report-query` when the agent has a hypothesis. For "does this snippet already exist?" use `find-similar`.
+- `{ }` or `{ action: "get" }` — root, min-nodes, active languages, incremental flag, embedding
+  provenance, cache stats, generation counter.
+- `{ action: "list-embedding-models" }` — enumerate available models (one IPC round-trip).
+- `{ action: "set-embedding-model", provider_id, model_id, endpoint?, user_initiated: true }` —
+  switch the live model. The schema keeps `user_initiated` as a **required const-`true`** property
+  for this action, and the handler rejects its absence — the [MCP-EMBEDDING-CONSENT] invariant
+  carries over verbatim. The agent must never call this autonomously.
 
 ### [MCP-RESOURCES] Resources
 
@@ -196,7 +227,7 @@ Content refreshes on every `resources/read` — always whatever the LSP's in-mem
 
 ### [MCP-IPC-CLIENT] IPC client (single source of truth)
 
-Every read tool issues exactly one JSON-RPC request over the LSP socket. The MCP holds **no on-disk cache** and **no in-memory `Report` cache** — caching layers are exactly what create the staleness window the IPC architecture exists to eliminate. Per-call cost is one Unix-socket round-trip (sub-millisecond on localhost), bounded entirely by the LSP's `LiveService` lock contention. If the socket is missing or the LSP exits mid-call, every read returns `LspNotRunning`; the MCP does **not** fall back to a second pipeline. CI / one-shot audits are the `deslop` CLI's job, not the MCP's.
+Every read tool issues exactly one JSON-RPC request over the LSP's IPC endpoint. The MCP holds **no on-disk cache** and **no in-memory `Report` cache** — caching layers are exactly what create the staleness window the IPC architecture exists to eliminate. Per-call cost is one local IPC round-trip (Unix socket, or TCP loopback per [LIVE-IPC-TCP]; sub-millisecond either way), bounded entirely by the LSP's `LiveService` lock contention. If the socket is missing or the LSP exits mid-call, every read returns `LspNotRunning`; the MCP does **not** fall back to a second pipeline. CI / one-shot audits are the `deslop` CLI's job, not the MCP's.
 
 ### [MCP-NOTIFICATIONS] Notifications (server → client)
 
@@ -211,32 +242,32 @@ Both frames always arrive consecutively on the wire. Agents reconcile against th
 
 Three rules the descriptions follow:
 
-1. **Tell the agent when to call the tool.** `find-similar`: *"Before you write a new block, call this."*
-2. **Tell the agent what the result means.** `report-get`: *"Worst offenders first."*
-3. **Point to related tools.** `list-embedding-models`: *"Use before switching models."*
+1. **Tell the agent when to call the tool.** `find-similar`: *"Before you write a new block, call this."* `duplicates`: *"Start here when fixing duplicates."*
+2. **Tell the agent what the result means.** `duplicates`: *"Worst offenders first."*
+3. **Name the filter vocabulary inline.** `duplicates` lists the bucket and category wire labels in its description so an agent instructed *"only pay attention to identical code"* maps the instruction to `buckets: ["identical"]` without reading the schema doc.
 
-Descriptions are written once (the `tools/list` response) and reused in [vsix.md] docs and `deslop://schema`.
+A small tool list is itself prompt engineering: every extra tool is a description the agent must read and a wrong choice it can make.
 
 ### [MCP-SAFETY] Safety + scope
 
-- **Read-only by default.** All tools are pure reads except `set-embedding-model`, which writes only the embedding provider setting.
+- **Read-only by default.** All tools are pure reads except `session`'s `set-embedding-model` action, which writes only the embedding provider setting.
 - **No arbitrary command execution.** No `exec`, no `shell`, no `write-file`.
-- **No secrets in payloads.** Snippets echoed by `find-similar` are normalised AST summaries, not raw source.
-- **One workspace per MCP session.** `initialize` pins the workspace root; `report-for-file` rejects paths outside it.
+- **No secrets in payloads.** Snippets echoed by `find-similar` are normalised AST summaries, not raw source. Literal-family `literal_value` / `constant_value` fields are capped at 80 chars ([LITERAL-WIRE]) and never logged.
+- **One workspace per MCP session.** `initialize` pins the workspace root; path-scoped `duplicates` calls reject paths outside it.
 
 ### [MCP-TESTING] E2E tests
 
 `crates/deslop-mcp/tests/cli.rs` drives the real MCP binary over stdio with raw JSON-RPC frames. No mocking.
 
-- `initialize` + `tools/list` returns the tools above with matching schemas and no `null` capability values.
-- `tools/call report-get` requires both `offset` and `limit`; omitting either returns `InvalidParams`.
-- `tools/call report-get` with a non-trivial fixture returns a `ReportPage` under the byte budget, with `total_clusters >= page.returned` and the `ClusterSummary` shape (no `members[]`, no `occurrences[]`).
-- `tools/call report-get` past the end returns empty `clusters[]`, `page.returned == 0`.
-- `tools/call report-query` honours each filter independently and in combination; echoed `filters` reflect inputs.
-- `tools/call schema-doc` returns the same markdown as `resources/read deslop://schema`; `report-get` and `report-query` omit inline `schema_doc`.
-- `tools/call cluster-by-id` returns the full `Cluster` with `occurrences[]`.
-- `tools/call report-for-file` returns the expected cluster.
-- `tools/call find-similar` with a known snippet returns the matching cluster above threshold (requires LSP running alongside the test).
-- `tools/call find-similar` with unparseable input returns `UnparseableInputError`.
-- `tools/call set-embedding-model` followed by `session-config` shows the new provenance.
+- `initialize` + `tools/list` returns exactly the six tools with matching schemas, no other tool names, and no `null` capability values.
+- `duplicates {}` returns 5 full clusters, budget applied, `total_clusters` + `total_occurrences` populated.
+- `duplicates { detail: "summary" }` pages: slim rows (no `occurrences[]`), `category` + `language` populated (Dart fixtures report `dart`, not `unknown`), paging past the end returns empty `clusters[]` with `returned == 0`.
+- Each filter param honoured independently and in combination; `buckets: ["identical"]` returns only that bucket; `categories: ["magic_literal"]` returns only literal findings; unknown enum values rejected by schema; echoed `filters` reflect inputs; `total_clusters` is post-filter.
+- Scope: `duplicates { path }` returns the expected cluster; `{ path, start_byte, end_byte }` honours the range; range params without `path` → `InvalidParams`.
+- `sort: "occurrences"` and `"size"` reorder as specced; default remains score-descending.
+- `cluster-by-id` returns the full cluster with `occurrences[]` and the literal-family fields when present.
+- `rescan` returns `generation` + change summary + a filtered page; the issue-135/137/153 freshness behaviours hold (stale-watcher recovery, fresh generation, no stale ranges).
+- `session {}` returns the config; `list-embedding-models` action lists; `set-embedding-model` without `user_initiated: true` is rejected; with it, a follow-up `session {}` shows the new provenance.
+- `schema-doc` returns the same markdown as `resources/read deslop://schema`; pages omit inline `schema_doc`.
+- `find-similar` keystone cases unchanged (snippet match, unparseable input, below-min-nodes) plus `buckets` filtering and the `limit` rename.
 - `resources/read deslop://report` returns valid canonical JSON; a follow-up file-change triggers `notifications/resources/updated`.

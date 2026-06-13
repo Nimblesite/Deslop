@@ -1,4 +1,4 @@
-# agent-pmo:9a71cbf
+# agent-pmo:b636503
 name: Release
 
 on:
@@ -7,7 +7,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   version:
@@ -78,6 +78,8 @@ jobs:
             vsix_target: win32-x64
             cross: false
     runs-on: ${{ matrix.os }}
+    # TIMEOUT EXCEPTION: each matrix leg builds release-mode Rust binaries,
+    # packages a platform-specific VSIX, and verifies packaged binaries.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -217,11 +219,11 @@ jobs:
 
       - name: Install extension deps
         working-directory: clients/vscode
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Install webview-ui deps
         working-directory: clients/vscode/webview-ui
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build webview-ui
         working-directory: clients/vscode/webview-ui
@@ -262,6 +264,8 @@ jobs:
     needs: [version, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -482,6 +486,13 @@ jobs:
     needs: [version, release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Passwordless publish via Microsoft Entra ID OIDC: the release environment
+    # gives the GitHub OIDC subject a stable
+    # repo:OWNER/REPO:environment:release shape for Entra federation.
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -491,20 +502,72 @@ jobs:
         with:
           path: artifacts/
 
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
       # One `vsce publish` per platform-specific VSIX — vsce silently uses only
       # the first when several are globbed into a single call. The Marketplace
       # forbids a SemVer prerelease suffix in the version field, so the VSIX is
       # packaged with the core MAJOR.MINOR.PATCH (see stamp-release-version.mjs)
       # and prerelease status is conveyed by the --pre-release flag for any
-      # hyphenated tag. Secret: VSCODE_MARKETPLACE_PAT (org secret; Marketplace -> Manage). See
-      # docs/release.md.
-      - name: Publish each platform VSIX
-        env:
-          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+      # hyphenated tag. The short-lived Marketplace token is minted from the
+      # Entra OIDC session and passed to vsce through VSCE_PAT; no PAT secret is
+      # stored. See docs/specs/release.md.
+      - name: Publish each platform VSIX (Entra OIDC, no PAT)
         run: |
           set -euo pipefail
-          if [ -z "${VSCE_PAT:-}" ]; then
-            echo "::error::VSCE_PAT secret is not set; cannot publish to the Marketplace"
+          shopt -s globstar nullglob
+          flag=""
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            flag="--pre-release"
+            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
+          fi
+          VSCE_PAT="$(az account get-access-token \
+            --resource 499b84ac-1321-427f-aa17-267ca6975798 \
+            --query accessToken -o tsv)"
+          echo "::add-mask::${VSCE_PAT}"
+          export VSCE_PAT
+          published=0
+          for vsix in artifacts/**/*.vsix; do
+            echo "Publishing ${vsix}"
+            npx --yes @vscode/vsce@3.9.2 publish --skip-duplicate ${flag} --packagePath "${vsix}"
+            published=$((published + 1))
+          done
+          if [ "${published}" -eq 0 ]; then
+            echo "::error::no VSIX artifacts found to publish"
+            exit 1
+          fi
+          echo "Published ${published} VSIX(es) to the Marketplace"
+
+  publish-openvsx:
+    name: Publish VSIX to Open VSX
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Open VSX has no OIDC trusted-publishing path today, so this uses a
+    # separate Open VSX token scoped to the protected release environment.
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Publish each platform VSIX to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OVSX_PAT:-}" ]; then
+            echo "::error::OPEN_VSX_PAT secret is not set; cannot publish to Open VSX"
             exit 1
           fi
           shopt -s globstar nullglob
@@ -516,11 +579,11 @@ jobs:
           published=0
           for vsix in artifacts/**/*.vsix; do
             echo "Publishing ${vsix}"
-            npx --yes @vscode/vsce publish ${flag} --packagePath "${vsix}"
+            npx --yes ovsx@1.0.0 publish --skip-duplicate ${flag} --packagePath "${vsix}"
             published=$((published + 1))
           done
           if [ "${published}" -eq 0 ]; then
             echo "::error::no VSIX artifacts found to publish"
             exit 1
           fi
-          echo "Published ${published} VSIX(es) to the Marketplace"
+          echo "Published ${published} VSIX(es) to Open VSX"

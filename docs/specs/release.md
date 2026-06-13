@@ -61,18 +61,33 @@ A `v*` tag fans out to every channel from one workflow
 (`.github/workflows/release.yml`):
 
 - **VS Code Marketplace** — `publish-marketplace` runs one `vsce publish` per
-  platform-specific VSIX. The PAT lives in the `VSCE_PAT` secret (Marketplace →
-  Manage scope). The Marketplace forbids a SemVer prerelease suffix in the
-  version field, so `stamp-release-version.mjs` stamps the VSIX
-  (`clients/vscode/package.json` + lockfile) with the core `MAJOR.MINOR.PATCH`
-  while every other project keeps the full tag version; a hyphenated tag is
-  published with `--pre-release`.
+  platform-specific VSIX using Microsoft Entra OIDC, not a stored Marketplace
+  PAT. The job runs in the protected `release` environment with
+  `id-token: write`, signs in through the shared
+  `Nimblesite-VSCode-Marketplace` app, mints a short-lived Azure DevOps access
+  token, and passes it to pinned `@vscode/vsce@3.9.2` through `VSCE_PAT`.
+  Environment secrets required: `AZURE_CLIENT_ID` and `AZURE_TENANT_ID`.
+  Re-runs use `--skip-duplicate` so an already-published platform package does
+  not block the remaining VSIXes.
+  The Marketplace forbids a SemVer prerelease suffix in the version field, so
+  `stamp-release-version.mjs` stamps the VSIX (`clients/vscode/package.json` +
+  lockfile) with the core `MAJOR.MINOR.PATCH` while every other project keeps
+  the full tag version; a hyphenated tag is published with `--pre-release`.
+- **Open VSX** — `publish-openvsx` runs independently of Marketplace publish
+  and uploads every platform-specific VSIX with pinned `ovsx@1.0.0`. Open VSX
+  does not currently support OIDC trusted publishing, so the protected
+  `release` environment must provide a separate `OPEN_VSX_PAT` token. Re-runs
+  also use `--skip-duplicate`.
 - **Homebrew tap** — `publish-homebrew` renders `Formula/deslop.rb` and pushes
   to `Nimblesite/homebrew-tap` (secret `HOMEBREW_TAP_TOKEN`).
 - **Scoop bucket** — `publish-scoop` renders `bucket/deslop.json` and pushes to
   `Nimblesite/scoop-bucket` (secret `SCOOP_BUCKET_TOKEN`).
 - **GitHub release** — `release` uploads every platform archive, the VSIXes, and
   `SHA256SUMS`.
+- **Website** — stable tags call `deploy-pages` after the GitHub release is
+  created. The Eleventy build loads `site/src/_data/releases.js`, fetches
+  GitHub Releases with `GITHUB_TOKEN`, and renders `/releases/` plus
+  `/zh/releases/` from the current release metadata on every website publish.
 
 ## Binary resolution — bundled, no fallback
 

@@ -32,7 +32,7 @@ Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries i
 `weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
 
 ### [RANK-CATEGORY] Clone category and the ranking policy
-Every cluster carries a **clone category** that is orthogonal to the similarity bucket of [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets). The bucket answers *"how similar are these copies?"* (`Identical` / `NearlyIdentical` / `LooselySimilar` / `SameBehavior`); the category answers *"is this repetition extractable logic or un-refactorable data?"*:
+Every cluster carries a **clone category** that is orthogonal to the similarity bucket of [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets). The canonical category table (seven values including the literal family) lives at [taxonomy.md §CLONE-CATEGORY-REGISTRY](taxonomy.md#clone-category-registry); this section governs the two fragment-clone categories. The bucket answers *"how similar are these copies?"*; the category answers *"is this repetition extractable logic or un-refactorable data?"*:
 
 - `logic` — ordinary duplicated code. Full ranking weight. The default.
 - `data` — a data-structure literal repeated across sibling elements (e.g. a top-level `List<Model>` of near-identical constructor literals). Real repetition, but the constructor's purpose *is* to enumerate per-row fields; at best a user hoists a builder with defaults or moves the rows to a JSON/CSV/asset. Detected by [CLONE-NOISE-DART-DATA-TABLE-LITERAL].
@@ -55,7 +55,59 @@ This section closes the hole structurally:
 2. **Weight policy.** The `[ranking]` section gains `structural_only = "demote" | "ignore" | "keep"` (default **demote**) and `structural_only_weight` (default `0.15`, strictly in `(0.0, 1.0]`), exactly parallel to [RANK-CATEGORY]'s data knobs and validated by the same rule. The multiplier folds into the visible re-rank next to the category coefficient, so a shape-only family sinks below comparable token- or semantics-supported clones regardless of its file spread or declaration shape.
 3. **Existing suppressions stay.** Cross-file ≥3-member/≥3-file scaffolding still demotes to `LooselySimilar` (hidden, #134); single-file sibling-declaration families are still hidden by the AST pass (#197); Dart data registries stay with [RANK-CATEGORY] (#169). The weight policy catches everything those shapes miss (e.g. two-file method families split by Dart `part`/extension idioms).
 4. **Editor override.** The VS Code setting `deslop.ranking.structuralOnly` (`default` | `demote` | `ignore` | `keep`, [VSIX-SETTINGS-RANKING]) feeds `deslop-lsp --ranking-structural-only`, recorded once at startup in the central state module (`deslop-core::state`) and consulted by every config load — the editor channel wins over `.deslop.toml`; `default` defers to it.
-5. **Filterable.** The MCP `report-query` `bucket` enum is derived from `ClusterKind::all()`, so `structural_only` is filterable by agents (#195/#197).
+5. **Filterable.** The MCP `duplicates` filter block ([MCP-TOOL-FILTERS]) derives its `buckets` enum from `ClusterKind::all()`, so `structural_only` is filterable by agents (#195/#197).
+
+### [RANK-LITERAL-FAMILY] Literal-family weight formula and policy
+
+Literal-family clusters ([CLONE-CATEGORY-REGISTRY] categories `magic_literal`,
+`shadowed_constant`, `constant_duplicate`, `constant_drift`, `constant_alias`) interleave in the
+**same** worst-first list as fragment clones — no separate section, no second sort; the facets
+([FACET-MODEL]) are how users isolate them. Their base weight is a deliberate, documented fork of
+[PIPELINE-RANK-WORST-FIRST], because `clone_node_count` degenerates at 1 for a bare literal token:
+
+`weight = max(visible_occurrences − occurrence_floor + 1, 1) × length_factor × log2(1 + distinct_files)`
+
+where `occurrence_floor` is the category's minimum (3 for `magic_literal`, 2 elsewhere) — the
+`max(…, 1)` keeps the term positive when `report_hide` hides occurrences after the trigger
+counted them; `length_factor = min(content_chars(normalized_value), 40)` with `content_chars` =
+Unicode scalar count of the normalised value (escape sequences counted as spelled; for numbers,
+the canonical normalised spelling; for `constant_drift`, the longest variant value); and
+`distinct_files` counts files with visible occurrences. A literal-family cluster with fewer than 2
+visible occurrences is dropped and counted in `clusters_hidden`, matching the fragment-clone rule.
+The linear occurrence term follows Sonar's per-occurrence remediation model; the file-spread log
+term mirrors the existing `spanned_loc` factor and rewards the cross-file repetition that the
+literature ties to faults. Micro-findings are **not** down-ranked for being small — micro-clones
+are measurably more bug-prone than regular clones ([READ-LIST-LITERALS]); a 40-site magic URL
+belongs in top offenders.
+
+Policy knobs in `[ranking]` (same `keep | demote | ignore` enum, validation, and
+`clusters_hidden` accounting as the data/structural-only knobs; editor channel per
+[LITERAL-CONFIG]):
+
+- `magic_literals = "keep"` (default) with `magic_literal_weight = 0.3` applied only under
+  `demote`. Default-keep is the evidence call: noise is controlled at detection time
+  ([LITERAL-NOISE], [LITERAL-CENSUS]), not by hiding confirmed findings.
+- `constant_findings = "keep"` (default) with `constant_findings_weight = 0.5` under `demote` —
+  one knob covering `constant_duplicate`, `constant_alias`, and `shadowed_constant`.
+- `constant_drift = "keep"` (default) | `"ignore"` — **no demote**: same-name-conflicting-values is
+  a correctness risk, never quietly down-weighted. Drift clusters stamp `nearly_identical`
+  ([LITERAL-WIRE]), which resolves to the warning tier under the default bucket-keyed severity
+  maps — severity has no category channel; it is keyed by bucket only (#177 tracks a category-keyed
+  override as out of scope here).
+
+### [RANK-UNUSED-PUBLIC] Unused-public-constant boost (monorepo)
+
+When the [LITERAL-UNUSED-MARKER] (literals.md) fires for **every** declaration occurrence in a
+constant-family cluster, the cluster's weight is multiplied by `unused_public_weight` — an
+**up**-weight, mirroring the `ClonePolicy` pattern with an inverted validation range:
+
+- `[ranking] unused_public = "boost"` (default) | `"ignore"`.
+- `unused_public_weight = 1.5`, finite, validated in `[1.0, 10.0]`.
+
+The boost (and the marker itself) only activates in a monorepo with a non-publishable declaring
+package (`[workspace] monorepo`, [LITERAL-UNUSED-MARKER]) — published public constants are exempt by
+design. Conservative 1.5× because confidence caps at 90: the marker raises a duplicate constant's
+priority, it never asserts deletability.
 
 ### [STATE-FILE-REGISTRY] File registry (the only global state)
 `deslop-core::state::FileRegistry` maps `FileId ↔ PathBuf`. This is the *only* place mutable state associated with a pipeline run may live. Instances are per-run (not process-global) so a future long-running daemon can keep multiple analyses side-by-side.
@@ -93,9 +145,9 @@ One honest number, computed deterministically from the same cluster set the repo
 `RepoMetrics` fields:
 
 - `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
-- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric.
+- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric. Literal-family clusters ([RANK-LITERAL-FAMILY]) are **excluded** from `duplicated_loc` / `duplication_percent` — the headline percentage keeps meaning fragment-clone duplication; `clusters_total` still counts them.
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
-- `clusters_total: usize` — count of clusters contributing to `duplicated_loc` (i.e. non-hidden clusters with ≥ 2 occurrences). Matches `clusters.len()` but is carried explicitly so downstream consumers don't re-derive it.
+- `clusters_total: usize` — count of non-hidden clusters carried in `clusters`, literal-family included; always equals `clusters.len()` but is carried explicitly so downstream consumers don't re-derive it. Only fragment-clone clusters contribute lines to `duplicated_loc` — [RANK-LITERAL-FAMILY] clusters are excluded from the line projection, not from this count.
 - `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
 - `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **Folders are not carried on the wire** — per-folder rollups are derived by consumers (the VSIX [VSIX-METRICS-PANEL], the HTML report) by summing the `analysed_loc` and `duplicated_loc` of every file under a path prefix, which keeps both numerator and denominator exact. Powers the per-folder/per-file breakdown in [VSIX-METRICS-PANEL].
 

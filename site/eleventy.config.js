@@ -524,6 +524,7 @@ const LLMS_TXT_OVERRIDE = `---json
 ## Install
 
 - VS Code extension (preferred — bundles LSP + MCP + CLI): https://github.com/Nimblesite/Deslop/releases/latest
+- Release index: {{ site.url }}/releases/
 - Homebrew (CLI only): brew install nimblesite/tap/deslop
 - Scoop (CLI only): scoop install deslop
 
@@ -541,6 +542,7 @@ const LLMS_TXT_OVERRIDE = `---json
 - Home: {{ site.url }}/
 - Documentation: {{ site.url }}/docs/
 - Blog: {{ site.url }}/blog/
+- Releases: {{ site.url }}/releases/
 - Source: https://github.com/Nimblesite/Deslop
 `;
 

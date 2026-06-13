@@ -26,7 +26,7 @@ Then open a `.cs` / `.rs` / `.py` / `.dart` file. The live bubble is active imme
 
 The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64` — the right one is selected for you automatically.
 
-> **Offline or air-gapped?** Grab the `.vsix` from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) and install it via **Extensions panel → `…` menu → Install from VSIX…**.
+> **Offline or air-gapped?** Grab the `.vsix` from the [Releases page](/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then install it via **Extensions panel → `…` menu → Install from VSIX…**.
 
 ## Install the CLI only (Homebrew / Scoop)
 
@@ -51,7 +51,7 @@ Bucket source: [github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesit
 
 ### Direct download
 
-Grab the per-platform archive from the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) and drop the binaries on your `PATH`.
+Grab the per-platform archive from the [Releases page](/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then drop the binaries on your `PATH`.
 
 ## Run the CLI
 
@@ -133,3 +133,4 @@ max_duplication_percent = 5.0
 3. Read [Output Formats](/docs/output-formats/) before parsing the JSON yourself.
 4. Read [VS Code Cluster Panel](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
 5. Read [For AI](/docs/for-ai/) if you are (or are configuring) a coding agent — the operating manual for `.deslop.toml`, CI gating, and parsing the JSON report.
+6. Check [Releases](/releases/) for the current VSIX, CLI archives, checksums, and changelog links.
