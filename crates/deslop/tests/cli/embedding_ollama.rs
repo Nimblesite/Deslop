@@ -52,13 +52,10 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("15")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-model")
@@ -150,13 +147,10 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("auto")
         .arg("--embedding-model")
@@ -192,13 +186,10 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
 
-    let mut first = Command::cargo_bin("deslop")?;
+    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("15")
-        .arg("--output")
-        .arg(tmp.path().join("first"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-model")
@@ -231,13 +222,10 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     );
 
     let started = Instant::now();
-    let mut second = Command::cargo_bin("deslop")?;
+    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("15")
-        .arg("--output")
-        .arg(tmp.path().join("second"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-model")
@@ -273,13 +261,10 @@ fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-model")
@@ -311,14 +296,11 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
 
-    let mut first = Command::cargo_bin("deslop")?;
+    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("15")
         .arg("--incremental")
-        .arg("--output")
-        .arg(tmp.path().join("first"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-model")
@@ -344,14 +326,11 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         "first incremental run must register both files as misses",
     );
 
-    let mut second = Command::cargo_bin("deslop")?;
+    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("15")
         .arg("--incremental")
-        .arg("--output")
-        .arg(tmp.path().join("second"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-model")

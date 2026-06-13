@@ -32,6 +32,12 @@ pub(crate) fn outputs_under(dir: &Path) -> RunOutputs {
     }
 }
 
+pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _cmd = cmd.arg(scan_root).arg("--output").arg(output_prefix);
+    Ok(cmd)
+}
+
 /// Appends `.<ext>` to `base` by cloning and replacing the file name.
 pub(crate) fn with_ext(base: &Path, ext: &str) -> PathBuf {
     let mut path = base.to_path_buf();

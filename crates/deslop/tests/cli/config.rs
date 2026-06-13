@@ -6,13 +6,10 @@ fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
         .assert()
@@ -39,13 +36,10 @@ fn report_hide_keeps_mixed_cluster_and_flags_hidden_occurrence() -> Result<()> {
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults]\nreport_hide = [\"**/Beta.cs\"]\n")?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
         .assert()
@@ -77,13 +71,10 @@ fn report_hide_per_language_overlay_flags_csharp_only() -> Result<()> {
         &config,
         "[language.csharp]\nreport_hide = [\"**/Beta.cs\"]\n",
     )?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
         .assert()
@@ -105,13 +96,10 @@ fn exclude_per_language_overlay_scoped_to_its_language() -> Result<()> {
         &config,
         "[language.python]\nexclude = [\"**/*.py\"]\n\n[language.csharp]\nexclude = [\"**/Beta.cs\"]\n",
     )?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
         .assert()
@@ -143,15 +131,8 @@ fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
         "[defaults]\nexclude = [\"**/Beta.cs\"]\n",
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"files_analysed\": 1"));
     Ok(())
@@ -172,15 +153,8 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
     )?;
     fs::write(scan_root.join("Makefile"), "all:\n\techo hi\n")?;
     fs::write(scan_root.join("README"), "nothing to see here\n")?;
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"files_analysed\": 1"),
@@ -197,11 +171,8 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
 fn missing_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let missing = tmp.path().join("does-not-exist.toml");
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&missing)
         .arg("--no-color")
@@ -219,11 +190,8 @@ fn invalid_exclude_pattern_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults]\nexclude = [\"[unclosed\"]\n")?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
         .arg("--no-color")
@@ -240,11 +208,8 @@ fn malformed_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "not valid toml = = =\n")?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--config")
         .arg(&config)
         .arg("--no-color")
@@ -281,15 +246,8 @@ fn report_hide_pattern_is_scan_root_relative() -> Result<()> {
         "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let report = read_json_report(&out.json)?;
     let clusters = field(&report, "clusters")
         .as_array()
@@ -348,15 +306,8 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
         "[defaults]\nexclude = [\"benchmarks/fixtures/**\"]\n",
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let body = fs::read_to_string(&out.json)?;
     assert!(
         body.contains("\"files_analysed\": 1"),

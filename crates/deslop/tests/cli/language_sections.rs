@@ -61,14 +61,11 @@ fn render_polyglot_html(tmp: &Path, extra: &[&str]) -> Result<String> {
     let scan_root = tmp.join("src");
     write_polyglot_clones(&scan_root)?;
     let out = outputs_under(tmp);
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
         .args(extra.iter())
-        .arg("--output")
-        .arg(tmp.join("report"))
         .assert()
         .success();
     Ok(fs::read_to_string(&out.html)?)
@@ -134,15 +131,8 @@ fn html_report_splits_into_language_sections_via_config() -> Result<()> {
         "[report]\nsplit_by_language = true\n",
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("<h2>Rust — ") && html.contains("<h2>Dart — "),

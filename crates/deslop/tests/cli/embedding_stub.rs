@@ -12,15 +12,8 @@ use crate::support::*;
 fn default_run_records_embeddings_off_provenance() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(
         json.contains("\"embedding_provenance\": null"),
@@ -38,13 +31,10 @@ fn default_run_records_embeddings_off_provenance() -> Result<()> {
 #[test]
 fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-endpoint")
@@ -62,13 +52,10 @@ fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
 fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("auto")
         .arg("--embedding-endpoint")
@@ -88,11 +75,8 @@ fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
 #[test]
 fn embeddings_flag_rejects_unknown_values() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("maybe")
         .assert()
@@ -113,13 +97,10 @@ fn mock_ollama_records_provenance_and_runs_embedding_pass() -> Result<()> {
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-type3"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-provider")
@@ -162,13 +143,10 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut first = Command::cargo_bin("deslop")?;
+    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("first"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-provider")
@@ -189,13 +167,10 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
         "embedding cache directory missing: {}",
         cache_dir.display()
     );
-    let mut second = Command::cargo_bin("deslop")?;
+    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("second"))
         .arg("--embeddings")
         .arg("required")
         .arg("--embedding-provider")
@@ -219,13 +194,10 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("auto")
         .arg("--embedding-provider")
@@ -250,11 +222,8 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
 #[test]
 fn unknown_embedding_provider_is_rejected() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("auto")
         .arg("--embedding-provider")
@@ -272,11 +241,8 @@ fn unknown_embedding_provider_is_rejected() -> Result<()> {
 #[test]
 fn stub_embedding_provider_is_rejected_in_production() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--embeddings")
         .arg("auto")
         .arg("--embedding-provider")

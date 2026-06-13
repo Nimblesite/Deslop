@@ -6,13 +6,8 @@ fn metrics_zero_on_empty_corpus() -> Result<()> {
     let scan_root = tmp.path().join("empty");
     fs::create_dir_all(&scan_root)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.assert().success();
     let json = read_json_report(&out.json)?;
     assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
     assert_eq!(metric_field(&json, "duplicated_loc").as_u64(), Some(0));
@@ -41,15 +36,8 @@ fn metrics_per_file_breakdown_matches_repo_totals() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let analysed = write_clone_pair(&scan_root)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let json = read_json_report(&out.json)?;
     let per_file = metric_field(&json, "per_file")
         .as_array()
@@ -134,15 +122,8 @@ fn metrics_match_hand_counted_fixture() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let analysed = write_clone_pair(&scan_root)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let json = read_json_report(&out.json)?;
     let metrics = field(&json, "metrics").clone();
     assert_eq!(
@@ -179,15 +160,8 @@ fn metrics_exclude_hidden_occurrences() -> Result<()> {
     let plain_root = tmp_plain.path().join("src");
     let _ = write_clone_pair(&plain_root)?;
     let plain_out = outputs_under(tmp_plain.path());
-    let mut cmd_plain = Command::cargo_bin("deslop")?;
-    let _plain_assertion = cmd_plain
-        .arg(&plain_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp_plain.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd_plain = deslop_command(&plain_root, &tmp_plain.path().join("report"))?;
+    let _plain_assertion = cmd_plain.arg("--min-nodes").arg("8").assert().success();
     let plain_metrics = field(&read_json_report(&plain_out.json)?, "metrics").clone();
     let plain_dup = field(&plain_metrics, "duplicated_loc")
         .as_u64()
@@ -210,15 +184,8 @@ fn metrics_exclude_hidden_occurrences() -> Result<()> {
         "[defaults]\nreport_hide = [\"**/Alpha.cs\"]\n",
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let metrics = field(&read_json_report(&out.json)?, "metrics").clone();
     let hidden_dup = field(&metrics, "duplicated_loc").as_u64().unwrap_or(0);
     let hidden_files = field(&metrics, "duplicated_files").as_u64().unwrap_or(0);
@@ -242,15 +209,8 @@ fn metrics_deduplicate_overlapping_sibling_ranges() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let analysed = write_clone_pair(&scan_root)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("4").assert().success();
     let json = read_json_report(&out.json)?;
     let metrics = field(&json, "metrics").clone();
     let dup = field(&metrics, "duplicated_loc").as_u64().unwrap_or(0);
@@ -270,16 +230,13 @@ fn fail_over_cli_exits_three_on_breach() -> Result<()> {
     let scan_root = tmp.path().join("src");
     let _ = write_clone_pair(&scan_root)?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
         .arg("--fail-over")
         .arg("0")
         .arg("--no-color")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .code(3);
     let _ = assertion;
