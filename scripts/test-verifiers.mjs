@@ -4,9 +4,10 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const verifyManifest = join(repoRoot, "scripts/verify-deployment-manifest.mjs");
 const verifyBinaries = join(repoRoot, "scripts/verify-deployment-binaries.mjs");
 const verifyJetBrains = join(repoRoot, "scripts/verify-jetbrains-package.mjs");

@@ -6,8 +6,9 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const workflow = readFileSync(workflowPath, "utf8");
 

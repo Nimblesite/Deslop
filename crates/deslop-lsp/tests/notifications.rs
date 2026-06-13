@@ -139,6 +139,50 @@ fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> 
     Ok(())
 }
 
+/// [LIVE-WATCHER] A pure-fs edit to a Dart file must drive the live
+/// loop exactly like C#/Rust/Python. The watcher's extension filter
+/// must cover every registered `LanguageParser`; a `.dart` save with
+/// no LSP notification must still push `deslop/reportChanged`.
+#[test]
+fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
+    let workspace = copy_fixture("dart-small")?;
+    let beta = workspace.path().join("beta.dart");
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+    let frames = spawn_frame_reader(stdout);
+
+    let (init_id, init) = initialize_request()?;
+    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
+    let initial = request_response(
+        &mut stdin,
+        &frames,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    ensure!(
+        cluster_count(&initial) > 0,
+        "dart fixture must start with duplicate clusters"
+    );
+
+    // Pure external save: rewrite beta.dart on disk to break the clone
+    // pair. No didChangeWatchedFiles is sent — only the filesystem
+    // watcher can deliver this event to the scheduler.
+    fs::write(&beta, unrelated_dart())?;
+    let changed = recv_method(&frames, "deslop/reportChanged", Duration::from_secs(10))?;
+    let removed = json_u64(&changed, "/params/summary/clusters_removed")?;
+    ensure!(
+        removed > 0,
+        "external .dart save must remove the broken clone cluster"
+    );
+    Ok(())
+}
+
+/// Replacement Dart body with no duplicated logic.
+fn unrelated_dart() -> &'static str {
+    "String describe(String name) {\n  return 'value: ' + name;\n}\n"
+}
+
 /// Second replacement body for the back-to-back saves test above.
 fn second_unrelated_csharp() -> &'static str {
     "public class Beta {\n    public string Description() {\n        return \"distinct\";\n    }\n}\n"

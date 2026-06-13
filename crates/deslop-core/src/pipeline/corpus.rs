@@ -291,6 +291,18 @@ pub fn language_ids() -> Vec<&'static str> {
     default_parsers().iter().map(|parser| parser.id()).collect()
 }
 
+/// Source-file extensions of every registered parser, in registry order.
+/// Single source of truth for any surface that filters filesystem events
+/// by extension — e.g. the LSP live watcher — so the watched set can
+/// never drift from [`default_parsers`] ([PIPELINE-LANG-TRAIT]).
+#[must_use]
+pub fn watched_source_extensions() -> Vec<&'static str> {
+    default_parsers()
+        .iter()
+        .flat_map(|parser| parser.file_extensions().iter().copied())
+        .collect()
+}
+
 /// Builds a lowercase-extension → language-id lookup from the parser
 /// registry. Returning the language id (not a parser index) lets
 /// [`crate::discover::discover_files`] check [`crate::config::ExclusionConfig`]

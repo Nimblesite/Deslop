@@ -19,11 +19,52 @@
 
 **The point of Deslop is to prevent duplication, not just scrub it afterwards.** Post-hoc deduplication is what every static analyzer already does. Deslop's edge is being **live in the agent's inner loop** so a duplicate never lands in the first place.
 
-**Directive for AI agents (Claude Code, Cursor, Copilot, Codex, Continue):**
+### LAW: call `find-similar` BEFORE you author new code
 
-> **Before writing any new function, class, helper, or test setup, call the `find-similar` MCP tool first.** If the proposed pattern already exists with high similarity, reuse the canonical implementation instead of authoring a new copy.
+Before you write any new function, method, class, helper, fixture, test setup,
+parser branch, error type, route handler, view model, or any other code unit
+larger than a few lines, you MUST call the `find-similar` MCP tool with the
+proposed code (or its byte range, if it already exists in a draft buffer) and
+inspect the response.
 
-This applies during **code authoring**. When fixing existing duplicates, use `top-offenders` and `cluster-by-id`; when writing fresh code, use `find-similar`. Both modes use the same live server — the call you make encodes the intent.
+- If the response shows a cluster with **`signals.fused ≥ 0.85`** *or* the
+  bucket is `identical` / `nearly_identical`, do NOT write the new copy.
+  A `structural_only` match means only the code shape lines up (no token
+  or semantic evidence) — read the match before deciding; it is often
+  sibling boilerplate rather than a reusable implementation.
+  Reuse the canonical occurrence the tool returns. Extract a helper if needed.
+- If the response is empty or the closest match is structurally distant
+  (`signals.fused < 0.6`), proceed with authoring.
+- If the response is borderline (`0.6 ≤ fused < 0.85`), read the canonical
+  occurrence and decide whether the new code is genuinely different. Bias
+  toward reuse.
+
+`find-similar` accepts either:
+- a **byte range** in an existing file (`path`, `start_byte`, `end_byte`), or
+- a **snippet** (`snippet`, `language`) — useful when you have a draft in your
+  scratchpad that has not been written to disk yet.
+
+### When to use the OTHER Deslop tools instead
+
+- **Fixing existing duplicates** (refactor / dedup work) → start with
+  `top-offenders`, then `cluster-by-id` for the cluster you'll merge. Don't
+  use `find-similar` for this — it answers a different question.
+- **Investigating a specific file** → `report-for-file`.
+- **Investigating a specific block before refactor** → `report-for-range`.
+- **Schema reference for the JSON shapes** → call `schema-doc` *once* per
+  session. Don't bundle it into every response.
+
+### Hard rules
+
+- Do NOT skip `find-similar` because "this looks new." Most clones are
+  introduced by people who genuinely thought the code was new. The tool exists
+  to override that intuition with evidence.
+- Do NOT silence Deslop warnings by widening thresholds, marking clusters
+  hidden, or splitting the code into trivially different shapes. If the tool
+  flags something, treat it as a real signal until you've shown otherwise.
+- Do NOT call `find-similar` after writing a duplicate "just to confirm." That
+  is cure, not prevention. Call it BEFORE the keystroke that creates the
+  duplicate.
 
 The MCP tool description leads with prevention ("Call BEFORE writing new code…"). Reports surface `find-similar` as the prevention path in their `action_hints`. This document and the user-facing `AGENTS.md` recipe teach this so agents pick it up without re-reading docstrings.
 

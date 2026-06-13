@@ -26,15 +26,13 @@ use deslop_core::{
         AnalysisSession, AnalysisState, LiveError, LiveWatcher, ReportChangedNotification,
         Scheduler,
     },
+    pipeline::watched_source_extensions,
     ExclusionConfig,
 };
 use tokio::sync::{broadcast::Receiver, Mutex};
 use tower_lsp::Client;
 
 use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
-
-/// File extensions the watcher monitors — one entry per supported language.
-const WATCHED_EXTENSIONS: &[&str] = &["cs", "rs", "py"];
 
 /// Starts the filesystem watcher + scheduler for `root` and spawns
 /// the background task that forwards change broadcasts to `client`.
@@ -52,7 +50,10 @@ pub fn start(
     session: Arc<Mutex<AnalysisSession>>,
     client: Client,
 ) -> Result<(LiveWatcher, Scheduler), LiveError> {
-    let extensions: Vec<String> = WATCHED_EXTENSIONS.iter().map(|e| (*e).to_owned()).collect();
+    let extensions: Vec<String> = watched_source_extensions()
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
     let exclusion = Arc::new(ExclusionConfig::empty());
     let config_paths = watched_config_paths(root, config_path);
     let (watcher, watcher_rx) =
