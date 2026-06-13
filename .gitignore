@@ -1,4 +1,4 @@
-# agent-pmo:9a71cbf
+# agent-pmo:b636503
 # =============================================================================
 # Universal — applies to every repo
 # =============================================================================
@@ -14,7 +14,6 @@ ehthumbs.db
 Desktop.ini
 
 # IDE / Editor
-.idea/
 *.swp
 *.swo
 *~
@@ -37,6 +36,12 @@ coverage/
 lcov.info
 *.profraw
 *.profdata
+htmlcov/
+.coverage
+coverage.xml
+coverage.out
+coverage-summary.json
+TestResults/
 
 # Secrets / local overrides
 .env
@@ -80,8 +85,6 @@ codededup-*.log
 node_modules/
 site/_site/
 
-/*.png
-
 /clients/vscode/.vscode-test/
 /clients/vscode/dist
 clients/vscode/out/
@@ -101,9 +104,6 @@ crates/deslop-core/src/wire_generated.rs
 clients/vscode/src/types/wire-generated.ts
 
 
-
-/*.png
-
 *.vsix
 
 
@@ -112,11 +112,13 @@ clients/vscode/bin/
 
 clients/vscode/media/webview/
 
-crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
-
 # Local deslop runs - never commit
 deslop-*.log
 deslop-report.*
 
 
 test-results/
+
+
+/*.png
+crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/

@@ -1,4 +1,4 @@
-# agent-pmo:9a71cbf
+# agent-pmo:b636503
 # =============================================================================
 # Standard Makefile — Deslop
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
@@ -31,7 +31,7 @@ endif
 # Coverage — single source of truth is coverage-thresholds.json
 # See docs/specs/SPEC.md and REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON].
 # ---------------------------------------------------------------------------
-_COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
+COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
 # =============================================================================
 # Standard Targets
@@ -60,16 +60,71 @@ typediagram-gen:
 ##       The `--ignore-filename-regex` list lives in
 ##       `coverage-thresholds.json` under `.rust.ignore_filename_regex`
 ##       (single source of truth). Per-crate thresholds live under
-##       `.rust.crates.<crate>`; `scripts/coverage-check.sh` enforces
-##       each one independently — no workspace roll-up masking.
+##       `.rust.crates.<crate>`; `_coverage_check` enforces each one
+##       independently — no workspace roll-up masking.
 test: delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
-	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
+	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info -- --skip ollama_
-	@bash scripts/coverage-check.sh lcov.info "$(_COVERAGE_THRESHOLDS_FILE)"
+	    --lcov --output-path lcov.info -- --fail-fast --skip ollama_
+	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
+
+_coverage_check:
+	@_lcov="$${RUST_LCOV:-lcov.info}"; \
+	 if [ ! -f "$$_lcov" ]; then echo "FAIL: $$_lcov not found"; exit 1; fi; \
+	 if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
+	 _default=$$(jq -r '.rust.default_threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	 if [ "$$_default" = "null" ] || [ -z "$$_default" ]; then \
+	   echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) missing .rust.default_threshold"; exit 1; \
+	 fi; \
+	 _failed=0; \
+	 for _crate in deslop-core deslop deslop-lsp deslop-mcp; do \
+	   _threshold=$$(jq -r ".rust.crates.\"$$_crate\" // .rust.default_threshold" "$(COVERAGE_THRESHOLDS_FILE)"); \
+	   if [ "$$_threshold" = "null" ] || [ -z "$$_threshold" ]; then \
+	     echo "FAIL: no threshold for crate $$_crate in $(COVERAGE_THRESHOLDS_FILE)"; \
+	     _failed=1; \
+	     continue; \
+	   fi; \
+	   _counts=$$(awk -v crate="crates/$$_crate/src/" '\
+	     /^SF:/ { in_crate = (index($$0, crate) > 0) ? 1 : 0; next } \
+	     /^LH:/ { if (in_crate) lh += substr($$0, 4) + 0 } \
+	     /^LF:/ { if (in_crate) lf += substr($$0, 4) + 0 } \
+	     /^end_of_record/ { in_crate = 0 } \
+	     END { printf "%d %d", lh, lf } \
+	   ' "$$_lcov"); \
+	   _lh=$$(echo "$$_counts" | awk '{print $$1}'); \
+	   _lf=$$(echo "$$_counts" | awk '{print $$2}'); \
+	   if [ "$$_lf" -eq 0 ]; then \
+	     echo "FAIL: crate $$_crate has no covered lines in $$_lcov (all files filtered or crate has no tested source)"; \
+	     _failed=1; \
+	     continue; \
+	   fi; \
+	   _pct=$$(awk -v lh="$$_lh" -v lf="$$_lf" 'BEGIN { printf "%.1f", lh / lf * 100 }'); \
+	   _pass=$$(awk -v lh="$$_lh" -v lf="$$_lf" -v t="$$_threshold" 'BEGIN { print (lh / lf * 100 + 1.0 >= t) ? 1 : 0 }'); \
+	   if [ "$$_pass" -eq 1 ]; then \
+	     printf "  %-14s %s%% (threshold %s%% + 1%% slack) OK\n" "$$_crate" "$$_pct" "$$_threshold"; \
+	   else \
+	     printf "  %-14s %s%% (threshold %s%% + 1%% slack) FAIL\n" "$$_crate" "$$_pct" "$$_threshold"; \
+	     _failed=1; \
+	   fi; \
+	 done; \
+	 _total_counts=$$(awk '\
+	   /^LH:/ { lh += substr($$0, 4) + 0 } \
+	   /^LF:/ { lf += substr($$0, 4) + 0 } \
+	   END { printf "%d %d", lh, lf } \
+	 ' "$$_lcov"); \
+	 _total_lh=$$(echo "$$_total_counts" | awk '{print $$1}'); \
+	 _total_lf=$$(echo "$$_total_counts" | awk '{print $$2}'); \
+	 if [ "$$_total_lf" -eq 0 ]; then \
+	   echo "FAIL: no covered lines in $$_lcov"; \
+	   _failed=1; \
+	 else \
+	   _total_pct=$$(awk -v lh="$$_total_lh" -v lf="$$_total_lf" 'BEGIN { printf "%.1f", lh / lf * 100 }'); \
+	   echo "Workspace total: $$_total_pct% ($$_total_lh/$$_total_lf lines)"; \
+	 fi; \
+	 exit "$$_failed"
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
 ##       Also enforces the taxonomy content gate
@@ -124,7 +179,7 @@ setup:
 	@echo "==> Setting up development environment..."
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
-	npm install -g typediagram@0.5.0
+	npm install -g typediagram@0.8.0
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
@@ -250,7 +305,7 @@ vsix-test-ollama: delete-path-binaries vsix-install vsix-build _vsix-stage-bundl
 	cd clients/vscode && npm run test:ollama
 
 ## vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
-##                Threshold lives in clients/vscode/coverage-thresholds.json.
+##                Threshold lives in the repo-root coverage-thresholds.json.
 vsix-coverage: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run coverage
 

@@ -3,7 +3,7 @@ name: code-dedup
 description: Searches for duplicate code, duplicate tests, and dead code in the Deslop Rust workspace, then safely merges or removes them. Use when the user says "deduplicate", "find duplicates", "remove dead code", "DRY up", or "code dedup". Requires test coverage — refuses to touch untested code.
 ---
 
-<!-- agent-pmo:9a71cbf -->
+<!-- agent-pmo:b636503 -->
 
 # Code Dedup
 
