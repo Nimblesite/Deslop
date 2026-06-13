@@ -27,7 +27,7 @@ Deslop 是一个**实时重复代码分析服务器** —— LSP + MCP，运行�
 
 该扩展捆绑了面向 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 和 `win32-x64` 的原生二进制文件 —— 系统会自动为你选择正确的那一个。
 
-> **离线或隔离网络环境？** 从 [最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取 `.vsix`，并通过**扩展面板 → `…` 菜单 → 从 VSIX 安装…**进行安装。
+> **离线或隔离网络环境？** 从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取 `.vsix`，并通过**扩展面板 → `…` 菜单 → 从 VSIX 安装…**进行安装。
 
 ## 仅安装 CLI（Homebrew / Scoop）
 
@@ -52,7 +52,7 @@ Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/
 
 ### 直接下载
 
-从 [最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取对应平台的归档文件，并将二进制文件放入你的 `PATH`。
+从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取对应平台的归档文件，并将二进制文件放入你的 `PATH`。
 
 ## 运行 CLI
 
@@ -134,3 +134,4 @@ max_duplication_percent = 5.0
 3. 在自行解析 JSON 之前，先阅读 [输出格式](/zh/docs/output-formats/)。
 4. 当你需要了解某个面板标签、评分或操作的含义时，阅读 [VS Code 簇面板](/zh/docs/vscode-cluster-panel/)。
 5. 如果你是（或正在配置）一个编码智能体，阅读 [面向 AI](/zh/docs/for-ai/) —— 这是关于 `.deslop.toml`、CI 门禁与解析 JSON 报告的操作手册。
+6. 查看[发布](/zh/releases/)以获取当前 VSIX、CLI 归档、校验和与变更日志链接。

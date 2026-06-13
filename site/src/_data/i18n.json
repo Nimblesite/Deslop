@@ -13,6 +13,7 @@
     "nav": {
       "docs": "Docs",
       "blog": "Blog",
+      "releases": "Releases",
       "home": "Home",
       "api": "API",
       "apiReference": "API Reference"
@@ -34,7 +35,25 @@
       "forAI": "For AI",
       "outputFormats": "Output Formats",
       "clusterPanel": "VS Code Cluster Panel",
+      "releases": "Releases",
+      "githubReleases": "GitHub Releases",
       "rss": "RSS"
+    },
+    "releases": {
+      "title": "Releases",
+      "eyebrow": "Release Index",
+      "subtitle": "Latest Deslop GitHub releases, VSIX artifacts, CLI archives, and checksums.",
+      "latestGithub": "Latest on GitHub",
+      "allGithub": "All GitHub releases",
+      "latestStable": "Latest stable",
+      "prerelease": "Prerelease",
+      "cardSummary": "VSIX packages, CLI archives, checksums, and generated release notes are hosted on GitHub.",
+      "assetCount": "Artifacts",
+      "assets": "Assets",
+      "moreAssets": "more",
+      "viewRelease": "View release",
+      "generated": "This page is generated from GitHub Releases during the website build.",
+      "empty": "Release metadata was unavailable during this build. GitHub remains the source of truth."
     }
   },
   "zh": {
@@ -51,6 +70,7 @@
     "nav": {
       "docs": "文档",
       "blog": "博客",
+      "releases": "发布",
       "home": "首页",
       "api": "API",
       "apiReference": "API 参考"
@@ -72,7 +92,25 @@
       "forAI": "面向 AI",
       "outputFormats": "输出格式",
       "clusterPanel": "VS Code 簇面板",
+      "releases": "发布",
+      "githubReleases": "GitHub 发布",
       "rss": "RSS"
+    },
+    "releases": {
+      "title": "发布",
+      "eyebrow": "发布索引",
+      "subtitle": "最新 Deslop GitHub release、VSIX 工件、CLI 归档与校验和。",
+      "latestGithub": "GitHub 最新发布",
+      "allGithub": "全部 GitHub 发布",
+      "latestStable": "最新稳定版",
+      "prerelease": "预发布",
+      "cardSummary": "VSIX 包、CLI 归档、校验和以及自动生成的发布说明都托管在 GitHub。",
+      "assetCount": "工件",
+      "assets": "工件",
+      "moreAssets": "更多",
+      "viewRelease": "查看发布",
+      "generated": "本页在网站构建期间从 GitHub Releases 生成。",
+      "empty": "本次构建无法获取发布元数据。GitHub 仍是发布信息的事实来源。"
     }
   }
 }

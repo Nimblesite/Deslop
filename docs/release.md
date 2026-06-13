@@ -73,6 +73,10 @@ A `v*` tag fans out to every channel from one workflow
   `Nimblesite/scoop-bucket` (secret `SCOOP_BUCKET_TOKEN`).
 - **GitHub release** — `release` uploads every platform archive, the VSIXes, and
   `SHA256SUMS`.
+- **Website** — stable tags call `deploy-pages` after the GitHub release is
+  created. The Eleventy build loads `site/src/_data/releases.js`, fetches
+  GitHub Releases with `GITHUB_TOKEN`, and renders `/releases/` plus
+  `/zh/releases/` from the current release metadata on every website publish.
 
 ## Binary resolution — bundled, no fallback
 

@@ -2,6 +2,7 @@
   "main": [
     { "text": "Docs", "i18nKey": "nav.docs", "url": "/docs/" },
     { "text": "Blog", "i18nKey": "nav.blog", "url": "/blog/" },
+    { "text": "Releases", "i18nKey": "nav.releases", "url": "/releases/" },
     { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop", "external": true }
   ],
   "footer": [
@@ -14,7 +15,8 @@
         { "text": "AI Integration", "i18nKey": "footer.aiIntegration", "url": "/docs/ai-integration/" },
         { "text": "For AI", "i18nKey": "footer.forAI", "url": "/docs/for-ai/" },
         { "text": "Output Formats", "i18nKey": "footer.outputFormats", "url": "/docs/output-formats/" },
-        { "text": "VS Code Cluster Panel", "i18nKey": "footer.clusterPanel", "url": "/docs/vscode-cluster-panel/" }
+        { "text": "VS Code Cluster Panel", "i18nKey": "footer.clusterPanel", "url": "/docs/vscode-cluster-panel/" },
+        { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
       ]
     },
     {
@@ -22,6 +24,7 @@
       "i18nKey": "footer.community",
       "items": [
         { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop" },
+        { "text": "GitHub Releases", "i18nKey": "footer.githubReleases", "url": "https://github.com/Nimblesite/Deslop/releases" },
         { "text": "RSS", "i18nKey": "footer.rss", "url": "/feed.xml", "noLangPrefix": true }
       ]
     }

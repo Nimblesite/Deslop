@@ -1,0 +1,56 @@
+{% set releaseList = releases.items | default([]) %}
+{% if releases.latest %}
+  {% set latestUrl = releases.latest.url %}
+{% else %}
+  {% set latestUrl = releases.latestUrl %}
+{% endif %}
+
+<div class="blog-container">
+  <header class="blog-header">
+    <p class="blog-eyebrow">{{ "releases.eyebrow" | t(currentLang) | default("Release Index") }}</p>
+    <h1>{{ "releases.title" | t(currentLang) | default("Releases") }}</h1>
+    <p class="blog-subtitle">{{ "releases.subtitle" | t(currentLang) | default("Latest Deslop GitHub releases, VSIX artifacts, CLI archives, and checksums.") }}</p>
+  </header>
+
+  <nav class="blog-nav" aria-label="{{ "releases.title" | t(currentLang) | default("Releases") }}">
+    <a href="{{ latestUrl }}" class="blog-nav-link" target="_blank" rel="noopener noreferrer">{{ "releases.latestGithub" | t(currentLang) | default("Latest on GitHub") }}</a>
+    <a href="{{ releases.allUrl }}" class="blog-nav-link" target="_blank" rel="noopener noreferrer">{{ "releases.allGithub" | t(currentLang) | default("All GitHub releases") }}</a>
+  </nav>
+
+  {% if releaseList | length %}
+  <div class="post-grid">
+    {% for release in releaseList %}
+    <article class="post-card{% if loop.first %} post-card--featured{% endif %}">
+      <div class="post-card__body">
+        <div class="post-card__meta">
+          {% if release.publishedAt %}
+          <time datetime="{{ release.publishedAt }}">{{ release.publishedDate | dateFormat(currentLang) }}</time>
+          {% endif %}
+          {% if release.isLatestStable %}<span class="post-card__sep">·</span>{{ "releases.latestStable" | t(currentLang) | default("Latest stable") }}{% endif %}
+          {% if release.prerelease %}<span class="post-card__sep">·</span>{{ "releases.prerelease" | t(currentLang) | default("Prerelease") }}{% endif %}
+        </div>
+        <a href="{{ release.url }}" class="post-card__title" target="_blank" rel="noopener noreferrer">{{ release.name | escape }}</a>
+        <p class="post-card__excerpt">{{ "releases.cardSummary" | t(currentLang) | default("VSIX packages, CLI archives, checksums, and generated release notes are hosted on GitHub.") }} {{ "releases.assetCount" | t(currentLang) | default("Artifacts") }}: {{ release.assets | length }}.</p>
+        {% if release.assets | length %}
+        <div class="post-article__tags" aria-label="{{ "releases.assets" | t(currentLang) | default("Assets") }}">
+          {% for asset in release.assets | limit(8) %}
+          <a href="{{ asset.url }}" class="post-article__tag" target="_blank" rel="noopener noreferrer">{{ asset.name | escape }}</a>
+          {% endfor %}
+          {% if (release.assets | length) > 8 %}
+          <a href="{{ release.url }}" class="post-article__tag" target="_blank" rel="noopener noreferrer">+{{ (release.assets | length) - 8 }} {{ "releases.moreAssets" | t(currentLang) | default("more") }}</a>
+          {% endif %}
+        </div>
+        {% endif %}
+        <a href="{{ release.url }}" class="post-card__more" target="_blank" rel="noopener noreferrer">{{ "releases.viewRelease" | t(currentLang) | default("View release") }} <span class="material-symbols-outlined">open_in_new</span></a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="blog-subtitle">{{ "releases.generated" | t(currentLang) | default("This page is generated from GitHub Releases during the website build.") }}</p>
+  {% else %}
+  <div class="blog-empty">
+    <p>{{ "releases.empty" | t(currentLang) | default("Release metadata was unavailable during this build. GitHub remains the source of truth.") }}</p>
+    <p><a href="{{ releases.allUrl }}" target="_blank" rel="noopener noreferrer">{{ "releases.allGithub" | t(currentLang) | default("All GitHub releases") }}</a></p>
+  </div>
+  {% endif %}
+</div>

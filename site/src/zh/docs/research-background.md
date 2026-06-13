@@ -188,7 +188,7 @@ JSON 报告是规范输出。文本和 HTML 渲染器是基于该报告的派生
 
 `crates/deslop-lsp/src/backend.rs` 中的 LSP 服务器包装了 `LiveService`，并暴露诊断、悬停、code lens 以及自定义的 `deslop/*` 方法。LSP 嵌入以 `EmbeddingMode::Off` 启动，除非由客户端显式配置。
 
-`crates/deslop-mcp/src/` 中的 MCP 服务器通过 stdio 暴露 JSON-RPC 工具，并用 `crates/deslop-mcp/src/safety.rs::resolve_within_root` 保护文件系统输入。每个读取工具——`find-similar`、`top-offenders`、`report-get`、`report-for-file` 和 `report-for-range`——都通过一个 Unix 域套接字（`.deslop-cache/deslop.sock`）转发到 LSP 的实时 `AnalysisSession`，因此每个答案都是针对运行中的语料而非陈旧的状态文件运行的。MCP 自身不保留任何磁盘缓存；它持有一个到该套接字的 `report/subscribe` 连接，并在 LSP 广播报告变更时向其客户端推送 `resources/updated` + `deslop/reportChanged`。
+`crates/deslop-mcp/src/` 中的 MCP 服务器通过 stdio 暴露 JSON-RPC 工具，并用 `crates/deslop-mcp/src/safety.rs::resolve_within_root` 保护文件系统输入。每个读取工具——`find-similar`、`top-offenders`、`report-get`、`report-for-file` 和 `report-for-range`——都通过本地 IPC 端点转发到 LSP 的实时 `AnalysisSession`，因此每个答案都是针对运行中的语料而非陈旧的状态文件运行的。Unix 主机使用 `.deslop-cache/deslop.sock`；Windows 使用从 `.deslop-cache/deslop.port` 发现的 token 门控 TCP 回环端点。MCP 自身不保留任何磁盘缓存；它持有一个到该端点的 `report/subscribe` 连接，并在 LSP 广播报告变更时向其客户端推送 `resources/updated` + `deslop/reportChanged`。
 
 ## 审计者验证映射
 
