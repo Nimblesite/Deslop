@@ -145,6 +145,7 @@ fn handle_connection(
         return;
     };
     if !authenticate(&mut reader, expected_token.as_deref()) {
+        let _closed = writer.shutdown_write();
         return;
     }
     let Some(request) = read_request(&mut reader, &mut writer) else {

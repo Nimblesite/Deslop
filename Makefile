@@ -68,7 +68,7 @@ test: delete-path-binaries typediagram-gen
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info -- --fail-fast --skip ollama_
+	    --lcov --output-path lcov.info -- --skip ollama_
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
 
 _coverage_check:
