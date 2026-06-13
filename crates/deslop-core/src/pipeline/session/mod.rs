@@ -18,7 +18,7 @@ use std::{
 
 use crate::{
     boilerplate::BoilerplateRange,
-    config::ExclusionConfig,
+    config::{is_config_path, watched_config_paths, ExclusionConfig},
     discover::{discover_files, DiscoveryResult},
     error::CoreError,
     fpcache::CachedFile,
@@ -174,6 +174,12 @@ impl PipelineSession {
     /// root or with unsupported extensions are silently skipped — a
     /// watcher can fire on any file, not only interesting ones.
     ///
+    /// A `changed` entry naming a watched config file
+    /// (`<root>/.deslop.toml` or the explicit override) reloads the
+    /// exclusion config and re-evaluates the whole corpus against it:
+    /// newly-excluded files are dropped, newly re-included files are
+    /// re-discovered ([LIVE-CONFIG-LIVE], #189).
+    ///
     /// # Errors
     ///
     /// Same error surface as [`Self::initialise`].
@@ -183,7 +189,14 @@ impl PipelineSession {
         embedding: EmbeddingSettings<'_>,
     ) -> Result<Report, CoreError> {
         let mut stats = CacheStats::default();
-        for path in changed {
+        let watched = watched_config_paths(&self.root, self.config_path.as_deref());
+        if changed.iter().any(|path| is_config_path(path, &watched)) {
+            self.refresh_exclusion(&mut stats, &embedding)?;
+        }
+        for path in changed
+            .iter()
+            .filter(|path| !is_config_path(path, &watched))
+        {
             self.apply_one_change(path, &mut stats, &embedding)?;
         }
         self.cumulative_stats.hits = self.cumulative_stats.hits.saturating_add(stats.hits);
@@ -280,15 +293,16 @@ impl PipelineSession {
         self.files_analysed
     }
 
-    /// Reloads the exclusion config from disk. Called by the daemon
-    /// when `.deslop.toml` itself changes.
+    /// Reloads the exclusion config from disk. Called from
+    /// [`Self::update_files`] when a watched config path is in the
+    /// changed set ([LIVE-CONFIG-LIVE], #189).
     ///
     /// # Errors
     ///
     /// Returns [`CoreError::ConfigParse`] or [`CoreError::ConfigPattern`]
     /// when the new config is malformed. The session keeps the old
     /// config on failure so a bad edit does not brick the daemon.
-    pub fn reload_exclusion(&mut self) -> Result<(), CoreError> {
+    fn reload_exclusion(&mut self) -> Result<(), CoreError> {
         self.exclusion = load_exclusion(&self.root, self.config_path.as_deref())?;
         Ok(())
     }

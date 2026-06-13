@@ -18,13 +18,10 @@
 //! decorations, bubble, status bar) refreshes immediately without any
 //! editor action ([LSP-PUSH-NOTIFICATIONS], [VSIX-REACTIVITY-INVARIANT]).
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use deslop_core::{
-    config::DEFAULT_CONFIG_FILENAME,
+    config::watched_config_paths,
     live::{
         AnalysisSession, AnalysisState, LiveError, LiveWatcher, ReportChangedNotification,
         Scheduler,
@@ -74,16 +71,6 @@ pub fn start(
         "file_watch started",
     );
     Ok((watcher, scheduler))
-}
-
-/// Builds the list of config-file paths the watcher must forward as
-/// first-class live updates ([LIVE-CONFIG-LIVE], #139).
-fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
-    let default = root.join(DEFAULT_CONFIG_FILENAME);
-    match override_path {
-        Some(explicit) => vec![default, explicit.to_path_buf()],
-        None => vec![default],
-    }
 }
 
 /// Loops over both broadcast channels and pushes each event as an LSP

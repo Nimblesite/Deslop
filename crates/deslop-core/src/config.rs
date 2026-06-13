@@ -696,6 +696,38 @@ fn matches(matcher: &Gitignore, path: &Path) -> bool {
     matcher.matched(path, false).is_ignore()
 }
 
+/// Builds the canonical set of config paths that should trigger a live
+/// exclusion reload — `<root>/.deslop.toml` plus the explicit override
+/// (if any) ([LIVE-CONFIG-LIVE], #139).
+#[must_use]
+pub fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
+    let default = root.join(DEFAULT_CONFIG_FILENAME);
+    let mut paths = vec![canonicalise_or_clone(&default)];
+    if let Some(explicit) = override_path {
+        paths.push(canonicalise_or_clone(explicit));
+    }
+    paths
+}
+
+/// Returns `true` when `candidate` matches one of the watched config
+/// paths in either canonical or as-given form.
+#[must_use]
+pub fn is_config_path(candidate: &Path, watched: &[PathBuf]) -> bool {
+    if watched.iter().any(|watched_path| watched_path == candidate) {
+        return true;
+    }
+    let canonical = canonicalise_or_clone(candidate);
+    watched
+        .iter()
+        .any(|watched_path| watched_path == &canonical)
+}
+
+/// Canonicalises `path` when possible; otherwise returns a clone so
+/// non-existent override paths still compare predictably.
+fn canonicalise_or_clone(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Compiles a list of glob patterns into an [`ignore::gitignore::Gitignore`]
 /// matcher. The builder is rooted at the scan root when known so user
 /// patterns are scan-root-relative — `subdir/**` matches
