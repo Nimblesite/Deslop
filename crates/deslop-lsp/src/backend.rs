@@ -355,6 +355,10 @@ impl LanguageServer for LspBackend {
         // in-flight cold pass (or a settled scan) without a window reload
         // ([VSIX reactivity]).
         crate::cache_seed::push_initial_state(&self.client, &self.cold_pass_active).await;
+        // [CI-DESLOP] GH #194: the threshold is a CLI-only gate; its sole
+        // live-surface effect is one non-blocking warning when the budget
+        // is smashed. Nothing else in the editor changes.
+        crate::threshold_warning::push_threshold_warning(&self.client, &self.service).await;
     }
 
     async fn shutdown(&self) -> LspResult<()> {

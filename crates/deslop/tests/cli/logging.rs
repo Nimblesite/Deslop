@@ -4,14 +4,11 @@ use crate::support::*;
 fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env_remove("RUST_LOG")
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--no-color")
         .assert()
         .success();
@@ -56,14 +53,11 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
 #[test]
 fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env_remove("RUST_LOG")
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--log-to-console")
         .arg("--no-color")
         .assert()
@@ -87,14 +81,11 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
 #[test]
 fn log_level_warn_suppresses_info_events() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
         .env_remove("RUST_LOG")
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--log-level")
         .arg("warn")
         .arg("--no-color")
@@ -118,13 +109,10 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
 #[test]
 fn preamble_announces_what_the_run_will_do() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--technical")
         .arg("--no-color")
         .assert()
@@ -154,13 +142,10 @@ fn preamble_announces_what_the_run_will_do() -> Result<()> {
 #[test]
 fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--no-color")
         .assert()
         .success();
@@ -179,15 +164,12 @@ fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
 #[test]
 fn color_force_env_emits_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env("DESLOP_FORCE_COLOR", "1")
         .env_remove("NO_COLOR")
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -207,14 +189,11 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
 #[test]
 fn rust_log_env_controls_severity_filter() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env("RUST_LOG", "warn")
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--log-to-console")
         .arg("--no-color")
         .assert()
@@ -233,15 +212,12 @@ fn rust_log_env_controls_severity_filter() -> Result<()> {
 #[test]
 fn no_color_env_overrides_force_color() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env("NO_COLOR", "1")
         .env("DESLOP_FORCE_COLOR", "1")
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -263,26 +239,20 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     // First run populates the cache.
-    let mut first = Command::cargo_bin("deslop")?;
+    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
         .arg("--incremental")
-        .arg("--output")
-        .arg(tmp.path().join("first"))
         .assert()
         .success();
-    let mut second = Command::cargo_bin("deslop")?;
+    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
         .arg("--incremental")
         .arg("--technical")
         .arg("--no-color")
-        .arg("--output")
-        .arg(tmp.path().join("second"))
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -304,9 +274,8 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg(&scan_root)
         .arg("--min-nodes")
         .arg("8")
         .arg("--embeddings")
@@ -319,8 +288,6 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
         .arg(server.endpoint())
         .arg("--technical")
         .arg("--no-color")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -340,15 +307,12 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 #[test]
 fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
         .arg("--technical")
         .arg("--no-color")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -372,14 +336,8 @@ fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let empty = tmp.path().join("empty");
     fs::create_dir_all(&empty)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let assertion = cmd
-        .arg(&empty)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--no-color")
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&empty, &tmp.path().join("report"))?;
+    let assertion = cmd.arg("--no-color").assert().success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
     assert!(
         !stderr.contains("Worst offender"),

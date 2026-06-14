@@ -178,6 +178,63 @@ fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
     Ok(())
 }
 
+/// [CI-DESLOP] Issue #194: the live LSP surface must push a single
+/// non-blocking warning when the measured duplication smashes the
+/// `.deslop.toml [threshold] max_duplication_percent` budget. The
+/// threshold stays a CLI gate — here it drives only an informational
+/// `window/showMessage`, never suppression, ranking, or any other live
+/// behaviour. The breach is confirmed up front so the test can only fail
+/// because the warning is missing, not because the fixture is clean.
+#[test]
+fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    fs::write(
+        workspace.path().join(".deslop.toml"),
+        "[threshold]\nmax_duplication_percent = 5.0\n",
+    )?;
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+    let frames = spawn_frame_reader(stdout);
+
+    let (init_id, init) = initialize_request()?;
+    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
+    let initial = request_response(
+        &mut stdin,
+        &frames,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    let measured = initial
+        .pointer("/result/metrics/duplication_percent")
+        .and_then(serde_json::Value::as_f64)
+        .ok_or_else(|| anyhow!("report carries no duplication_percent: {initial}"))?;
+    ensure!(
+        measured > 5.0,
+        "fixture + config must smash the 5% budget so a missing warning is the only gap (measured {measured}%)"
+    );
+
+    write_frame(
+        &mut stdin,
+        &notification("initialized", &serde_json::json!({}))?,
+    )?;
+    let warning = recv_method(&frames, "window/showMessage", Duration::from_secs(15))?;
+    let message_type = json_u64(&warning, "/params/type")?;
+    ensure!(
+        message_type == 2,
+        "a smashed budget must surface as a non-blocking Warning (type 2), got {message_type}: {warning}"
+    );
+    let message = warning
+        .pointer("/params/message")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("showMessage frame carries no message: {warning}"))?;
+    ensure!(
+        message.contains("smashed") && message.contains("5%") && message.contains(".deslop.toml"),
+        "the warning must name the smashed 5% threshold and its .deslop.toml source: {message}"
+    );
+    Ok(())
+}
+
 /// Replacement Dart body with no duplicated logic.
 fn unrelated_dart() -> &'static str {
     "String describe(String name) {\n  return 'value: ' + name;\n}\n"

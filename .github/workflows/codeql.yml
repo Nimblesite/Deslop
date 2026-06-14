@@ -1,0 +1,83 @@
+# agent-pmo:0b21609
+name: CodeQL
+
+# CodeQL static security analysis ([GITHUB-CODE-SCANNING]).
+#
+# SEPARATE from ci.yml on purpose: CodeQL feeds GitHub code-scanning alerts and
+# needs `security-events: write` + a weekly schedule, while ci.yml owns
+# lint/test/build. It does NOT overlap with `make lint` (style/correctness) or
+# dependency-review (vulnerable packages) — CodeQL finds vulnerable CODE. Never
+# add security-rule linter plugins (eslint-plugin-security, etc.) that re-cover
+# CodeQL: no doubling up. GitHub default-setup CodeQL is OFF (advanced setup is
+# this file) — running both scans the same code twice.
+#
+# Matrix = (languages in this repo) ∩ (languages CodeQL supports right now):
+#   - rust                  — the deslop CLI/LSP/MCP binaries that ship
+#   - javascript-typescript — the VS Code extension (clients/vscode) + webview-ui + site
+#   - actions               — the workflow files themselves
+# `build-mode: none` is used throughout: rust + interpreted langs support it and
+# it avoids re-compiling what ci.yml already builds. Action SHAs are kept current
+# by the github-actions Dependabot group ([GITHUB-DEPENDABOT]).
+#
+# DEFERRED — java-kotlin (clients/jetbrains plugin): CodeQL supports it but only
+# via a real Gradle build (autobuild/manual), and that project resolves the
+# IntelliJ-Platform SDK on a cold runner (the CI `jetbrains` job needs 20 min).
+# An autobuild CodeQL leg would be slow and flaky, training reviewers to ignore a
+# red check. Enable it once a `build-mode: manual` step drives the gradle wrapper
+# directly. To turn on, uncomment the matrix entry below.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    # Run before EVERY release: scan the exact released SHA with the current
+    # query set. The PR scan covered the diff, the weekly scan covers drift,
+    # this covers the release itself.
+    tags: ["v*"]
+  schedule:
+    # Weekly, so newly-published CodeQL queries re-scan even without a push.
+    - cron: "27 4 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Code scanning (SARIF upload) is free on PUBLIC repos and needs GHAS on
+    # private ones. Gating on public visibility lets a private fork skip cleanly
+    # (no red X) and self-enable the moment it is made public.
+    if: github.event.repository.visibility == 'public'
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions          # scans the workflow files themselves
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+          - language: rust
+            build-mode: none
+          # - language: java-kotlin    # clients/jetbrains — needs a manual Gradle build (see header)
+          #   build-mode: manual
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+        with:
+          category: "/language:${{ matrix.language }}"

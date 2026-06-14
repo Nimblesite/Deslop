@@ -1,0 +1,68 @@
+# agent-pmo:0b21609
+# Dependabot — portfolio standard ([GITHUB-DEPENDABOT]).
+#
+# Goal: keep dependencies patched (supply-chain defense) WITHOUT blanketing the
+# repo in pull requests. Every ecosystem here is GROUPED, so a run opens at most
+# two PRs per ecosystem (one for minor/patch, one for majors) instead of one PR
+# per dependency. These group rules ALSO apply to Dependabot security updates, so
+# security fixes land grouped too.
+#
+# Ecosystems present in THIS repo: github-actions (workflows), cargo (workspace
+# Cargo.toml), npm (site + VS Code extension + webview-ui), gradle (JetBrains
+# plugin). No NuGet/pip/pub/go manifests, so those blocks are omitted.
+version: 2
+
+updates:
+  # GitHub Actions — pinned action SHAs are a prime supply-chain target, so keep
+  # them current (this also refreshes the CodeQL action pins in codeql.yml).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Cargo / Rust — workspace Cargo.toml (the shipped deslop-* binaries).
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      cargo-minor:
+        update-types: ["minor", "patch"]
+      cargo-major:
+        update-types: ["major"]
+
+  # npm / Node — the three package.json roots (no root-level package.json).
+  - package-ecosystem: npm
+    directories:
+      - /site
+      - /clients/vscode
+      - /clients/vscode/webview-ui
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      npm-minor:
+        update-types: ["minor", "patch"]
+      npm-major:
+        update-types: ["major"]
+
+  # Gradle — the JetBrains IntelliJ-Platform plugin (clients/jetbrains).
+  - package-ecosystem: gradle
+    directory: /clients/jetbrains
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      gradle-minor:
+        update-types: ["minor", "patch"]
+      gradle-major:
+        update-types: ["major"]

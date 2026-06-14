@@ -24,6 +24,7 @@ pub mod position;
 pub mod presentation;
 mod profiling;
 pub mod server;
+mod threshold_warning;
 
 pub use backend::LspBackend;
 pub use server::run_stdio;

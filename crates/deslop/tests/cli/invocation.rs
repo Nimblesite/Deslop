@@ -75,13 +75,8 @@ fn prints_help_and_mentions_min_nodes_flag() -> Result<()> {
 fn accepts_path_argument_without_panicking() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(tmp.path())
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(tmp.path(), &tmp.path().join("report"))?;
+    let _assertion = cmd.assert().success();
     assert!(out.json.exists(), "json missing at {}", out.json.display());
     assert!(out.txt.exists(), "txt missing at {}", out.txt.display());
     assert!(out.html.exists(), "html missing at {}", out.html.display());
@@ -94,15 +89,8 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 fn default_run_emits_all_three_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
     assert!(json.contains("\"action_hints\""), "action_hints missing");
@@ -158,15 +146,8 @@ fn long_clone_html_caps_inline_preview_and_folds_rest() -> Result<()> {
         wrap_clone_in_class("Beta", &body),
     )?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("class=\"snippet\""),
@@ -202,13 +183,10 @@ fn wrap_clone_in_class(class: &str, body: &str) -> String {
 fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--nojson")
         .arg("--nohtml")
         .assert()
@@ -224,11 +202,8 @@ fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
 #[test]
 fn suppressing_every_format_is_an_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--nojson")
         .arg("--notext")
         .arg("--nohtml")
@@ -245,13 +220,10 @@ fn suppressing_every_format_is_an_error() -> Result<()> {
 fn from_report_rerenders_without_analysing() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut first = Command::cargo_bin("deslop")?;
+    let mut first = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = first
-        .arg(fixture("csharp-small"))
         .arg("--min-nodes")
         .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--notext")
         .arg("--nohtml")
         .assert()
@@ -259,13 +231,10 @@ fn from_report_rerenders_without_analysing() -> Result<()> {
     assert!(out.json.exists());
     let rendered_dir = tempfile::tempdir()?;
     let rerender = outputs_under(rendered_dir.path());
-    let mut second = Command::cargo_bin("deslop")?;
+    let mut second = deslop_command(tmp.path(), &rendered_dir.path().join("report"))?;
     let _assertion = second
-        .arg(tmp.path())
         .arg("--from-report")
         .arg(&out.json)
-        .arg("--output")
-        .arg(rendered_dir.path().join("report"))
         .arg("--nojson")
         .assert()
         .success();
