@@ -17,13 +17,13 @@ repository = "https://github.com/Nimblesite/Deslop"
 
 [workspace.dependencies]
 anyhow = "=1.0.86"
-thiserror = "=1.0.63"
+thiserror = "=2.0.18"
 clap = { version = "=4.5.16", features = ["derive"] }
 tracing = "=0.1.40"
 tracing-subscriber = { version = "=0.3.18", features = ["env-filter"] }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
-toml = "=0.8.22"
+toml = "=1.1.2"
 assert_cmd = "=2.0.16"
 predicates = "=3.1.2"
 tempfile = "=3.12.0"
@@ -34,12 +34,12 @@ tree-sitter-python = "=0.25.0"
 tree-sitter-dart = "=0.2.0"
 ignore = "=0.4.23"
 blake3 = "=1.5.4"
-getrandom = "=0.2.17"
+getrandom = "=0.4.2"
 ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
-notify = "=6.1.1"
+notify = "=8.2.0"
 tokio = { version = "=1.40.0", features = ["rt-multi-thread", "macros", "sync", "io-util", "io-std", "time"] }
-tower = { version = "=0.4.13", default-features = false }
+tower = { version = "=0.5.3", default-features = false }
 tower-lsp = "=0.20.0"
 futures = "=0.3.31"
 async-trait = "=0.1.83"
