@@ -179,7 +179,7 @@ setup:
 	@echo "==> Setting up development environment..."
 	rustup component add llvm-tools-preview clippy rustfmt
 	cargo install --locked cargo-llvm-cov
-	npm install -g typediagram@0.8.0
+	npm install -g typediagram@0.11.0
 	@echo "==> Setup complete. Run 'make ci' to validate."
 
 # =============================================================================
