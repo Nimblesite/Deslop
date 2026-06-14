@@ -1,4 +1,4 @@
-# agent-pmo:f87d349
+# agent-pmo:0b21609
 name: CI
 
 on:
@@ -282,3 +282,23 @@ jobs:
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
         run: make jetbrains-package
+
+  # Dependency review ([GITHUB-DEP-REVIEW]) — blocks PRs that pull in
+  # dependencies with known vulnerabilities. One owner per concern: this is the
+  # repo's only dependency vuln-gate (no cargo-deny/osv-scanner), `make lint`
+  # owns style, and codeql.yml owns vulnerable code. The action diffs the PR, so
+  # it only runs on pull_request events (this workflow's trigger).
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write  # dependency-review posts its PR summary
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
