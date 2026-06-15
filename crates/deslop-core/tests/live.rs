@@ -1200,3 +1200,57 @@ async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> 
     );
     Ok(())
 }
+
+// [LSP-NON-INTERFERENCE-NONBLOCKING] The lock-free report snapshot is what
+// lets the LSP answer its additive editor surfaces (diagnostics, code lens)
+// without ever awaiting the session mutex an in-flight analysis pass can
+// hold for seconds. This proves the snapshot (a) mirrors the live report in
+// lock-step and (b) stays readable while the session mutex is held — the
+// structural guarantee that Deslop can never freeze the editor.
+#[tokio::test(flavor = "multi_thread")]
+async fn lsp_report_snapshot_is_lock_free_and_tracks_mutations() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    let snapshot = session.report_snapshot_handle();
+
+    // (a) The snapshot is the exact same Arc the session serves — not a copy.
+    let initial = deslop_core::live::read_report_snapshot(&snapshot);
+    assert!(
+        Arc::ptr_eq(&initial, &session.report()),
+        "snapshot must mirror the session's report by identity",
+    );
+    assert!(
+        !initial.clusters.is_empty(),
+        "csharp-small has a clone, so the seeded report has clusters",
+    );
+
+    // A mutation republishes; the snapshot tracks it in lock-step.
+    let alpha = tmp.path().join("Alpha.cs");
+    fs::write(
+        &alpha,
+        "namespace Alpha { public class Solo { public int One() { return 1; } } }\n",
+    )
+    .context("rewrite Alpha")?;
+    let _delta = session.apply_changes(&[alpha]).context("apply")?;
+    let after = deslop_core::live::read_report_snapshot(&snapshot);
+    assert!(
+        Arc::ptr_eq(&after, &session.report()),
+        "snapshot must track the report after apply_changes republishes it",
+    );
+
+    // (b) The read never touches the session mutex: it answers even while a
+    // pass holds the lock. If reads went through the mutex this would
+    // deadlock instead of returning.
+    let session = Arc::new(tokio::sync::Mutex::new(session));
+    let held = Arc::clone(&session).lock_owned().await;
+    let while_locked = deslop_core::live::read_report_snapshot(&snapshot);
+    assert_eq!(
+        while_locked.clusters.len(),
+        after.clusters.len(),
+        "the LSP snapshot read must be served while the session mutex is held",
+    );
+    drop(held);
+    Ok(())
+}

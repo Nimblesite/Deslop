@@ -48,6 +48,15 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// (`live/watcher.rs`) and incremental update (`pipeline/session/change.rs`)
 /// have no hidden filter and rely solely on this component list, so the
 /// exclusion must live here to cover all three discovery paths.
+///
+/// `.dart_tool` and `.pub-cache` cover the Dart/Flutter toolchain's own
+/// caches: `.dart_tool/` holds `package_config.json`, `build_runner`
+/// outputs, and per-package generated `.dart`; `.pub-cache/` is a
+/// vendored copy of every dependency's source. On a large Flutter
+/// monorepo a hot build churns thousands of `.dart` files under
+/// `.dart_tool/`; because the live watcher has no `.gitignore` filter,
+/// excluding them here is what keeps that churn from monopolising the
+/// session and starving the editor's responsiveness ([#231]).
 const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "node_modules",
     "target",
@@ -58,6 +67,8 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     ".cargo",
     ".git",
     ".claude",
+    ".dart_tool",
+    ".pub-cache",
 ];
 
 /// Directory components that are always analysed but hidden from summaries.
