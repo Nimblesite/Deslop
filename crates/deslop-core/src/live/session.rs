@@ -7,7 +7,7 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 
 use crate::{
@@ -78,6 +78,13 @@ pub struct AnalysisSession {
     pending_changes: Vec<PathBuf>,
     /// Atomic snapshot of the current report.
     latest_report: Arc<Report>,
+    /// Lock-free mirror of [`Self::latest_report`] ([LSP-NON-INTERFERENCE]).
+    /// The LSP backend reads its additive editor surfaces (diagnostics,
+    /// code lens) from this handle without ever awaiting the session
+    /// mutex — which a long `apply_changes` pass can hold for seconds on
+    /// a churning monorepo. Republished by [`Self::publish_report`] in
+    /// lock-step with `latest_report`.
+    report_snapshot: Arc<RwLock<Arc<Report>>>,
     /// Monotonic generation counter.
     generation: u64,
     /// Active embedding provider.
@@ -214,7 +221,7 @@ impl AnalysisSession {
         let previous_report = Arc::clone(&self.latest_report);
         self.pipeline = Some(pipeline);
         self.generation = self.generation.saturating_add(1);
-        self.latest_report = Arc::new(report);
+        self.publish_report(Arc::new(report));
         // [LIVE-READ-FRESHNESS] / [Deslop#153] Record the on-disk mtime
         // of every file in the freshly-installed report so the next
         // read does not falsely refire a refresh.
@@ -289,12 +296,14 @@ impl AnalysisSession {
     fn finalise(init: SessionInit) -> Self {
         let mut freshness = FreshnessTracker::new();
         freshness.record_from_report(&init.root, &init.report);
+        let latest_report = Arc::new(init.report);
         Self {
             root: init.root,
             min_nodes: init.min_nodes,
             pipeline: init.pipeline,
             pending_changes: Vec::new(),
-            latest_report: Arc::new(init.report),
+            report_snapshot: Arc::new(RwLock::new(Arc::clone(&latest_report))),
+            latest_report,
             generation: 1,
             embedding_provider: init.embedding_provider,
             embedding_mode: init.mode,
@@ -315,6 +324,27 @@ impl AnalysisSession {
     #[must_use]
     pub fn report(&self) -> Arc<Report> {
         Arc::clone(&self.latest_report)
+    }
+
+    /// Swaps in `report` and republishes it to the lock-free snapshot in
+    /// lock-step ([LSP-NON-INTERFERENCE]). Every mutation that changes
+    /// `latest_report` routes through here so the snapshot the LSP reads
+    /// can never drift from the session's authoritative report.
+    fn publish_report(&mut self, report: Arc<Report>) {
+        self.latest_report = Arc::clone(&report);
+        let mut guard = self
+            .report_snapshot
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *guard = report;
+    }
+
+    /// Returns a clone of the lock-free report-snapshot handle. The LSP
+    /// backend reads its additive editor surfaces from this without ever
+    /// awaiting the session mutex ([LSP-NON-INTERFERENCE]).
+    #[must_use]
+    pub fn report_snapshot_handle(&self) -> Arc<RwLock<Arc<Report>>> {
+        Arc::clone(&self.report_snapshot)
     }
 
     /// Returns the current generation counter.
@@ -369,7 +399,7 @@ impl AnalysisSession {
         let next = self.run_pipeline(changed)?;
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
-        self.latest_report = Arc::clone(&next_arc);
+        self.publish_report(Arc::clone(&next_arc));
         // [LIVE-READ-FRESHNESS] Refresh the mtime ledger so a follow-up
         // read of the same files does not re-trigger this same pass.
         self.freshness
@@ -463,26 +493,16 @@ impl AnalysisSession {
         }
     }
 
-    /// Returns clusters whose occurrences overlap `path`.
+    /// Returns clusters whose occurrences overlap `path`. Thin wrapper
+    /// over [`report_for_file_in`] so the live read and the LSP backend's
+    /// lock-free snapshot read share one implementation.
     #[must_use]
     pub fn report_for_file(&self, path: &Path) -> FileReport {
-        let mut clusters: Vec<ReportCluster> = self
-            .latest_report
-            .clusters
-            .iter()
-            .filter(|cluster| cluster_touches_path(cluster, path))
-            .cloned()
-            .collect();
-        clusters.sort_by_key(|cluster| earliest_byte_for_path(cluster, path));
-        let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
-        FileReport {
-            path: path.to_path_buf(),
-            clusters,
-            total_occurrences,
-        }
+        report_for_file_in(&self.latest_report, path)
     }
 
-    /// Returns clusters overlapping a byte range in `path`.
+    /// Returns clusters overlapping a byte range in `path`. Thin wrapper
+    /// over [`report_for_range_in`].
     #[must_use]
     pub fn report_for_range(
         &self,
@@ -490,14 +510,7 @@ impl AnalysisSession {
         start_byte: usize,
         end_byte: usize,
     ) -> Vec<ReportCluster> {
-        let clusters = self
-            .latest_report
-            .clusters
-            .iter()
-            .filter(|cluster| cluster_overlaps_range(cluster, path, start_byte, end_byte))
-            .cloned()
-            .collect();
-        collapse_overlapping_clusters_for_range(clusters, path, start_byte, end_byte)
+        report_for_range_in(&self.latest_report, path, start_byte, end_byte)
     }
 
     /// Looks up a cluster by its stable id ([Deslop#149]).
@@ -557,7 +570,7 @@ impl AnalysisSession {
         let previous_report = Arc::clone(&self.latest_report);
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
-        self.latest_report = Arc::new(report);
+        self.publish_report(Arc::new(report));
         // [LIVE-READ-FRESHNESS] keep the mtime ledger aligned with the
         // freshly-committed report so reads do not loop-refire.
         self.freshness
@@ -726,6 +739,59 @@ impl AnalysisSession {
             })
         }
     }
+}
+
+/// Builds a [`FileReport`] for `path` from an arbitrary report snapshot.
+/// Shared by [`AnalysisSession::report_for_file`] and the LSP backend's
+/// lock-free editor reads so both surfaces filter and sort identically
+/// ([LSP-NON-INTERFERENCE]).
+#[must_use]
+pub fn report_for_file_in(report: &Report, path: &Path) -> FileReport {
+    let mut clusters: Vec<ReportCluster> = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster_touches_path(cluster, path))
+        .cloned()
+        .collect();
+    clusters.sort_by_key(|cluster| earliest_byte_for_path(cluster, path));
+    let total_occurrences: usize = clusters.iter().map(crate::report::occurrence_count).sum();
+    FileReport {
+        path: path.to_path_buf(),
+        clusters,
+        total_occurrences,
+    }
+}
+
+/// Returns clusters overlapping a byte range in `path` from an arbitrary
+/// report snapshot. Shared by [`AnalysisSession::report_for_range`] and
+/// the LSP backend's lock-free editor reads.
+#[must_use]
+pub fn report_for_range_in(
+    report: &Report,
+    path: &Path,
+    start_byte: usize,
+    end_byte: usize,
+) -> Vec<ReportCluster> {
+    let clusters = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster_overlaps_range(cluster, path, start_byte, end_byte))
+        .cloned()
+        .collect();
+    collapse_overlapping_clusters_for_range(clusters, path, start_byte, end_byte)
+}
+
+/// Clones the current report out of a lock-free snapshot handle without
+/// touching the session mutex. The LSP backend uses this so its additive
+/// editor surfaces never block behind an in-flight analysis pass
+/// ([LSP-NON-INTERFERENCE]).
+#[must_use]
+pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
+    Arc::clone(
+        &handle
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    )
 }
 
 /// Derives language ids from the occurrence paths of a report,

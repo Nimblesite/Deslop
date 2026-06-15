@@ -262,6 +262,63 @@ async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<(
     Ok(())
 }
 
+// #222 [EXCLUSION-CONFIG]: Claude Code agent workflows create git
+// worktrees under `.claude/worktrees/<id>/` — each a full checkout of the
+// repo. The initial walk's hidden-dir filter skips dot-dirs, but the live
+// watcher and incremental update have no hidden filter and must drop these
+// copies via `BUILTIN_EXCLUDE_COMPONENTS`. Before the fix, every worktree
+// file was reported as an N-copy "identical" cluster and dominated Top
+// Offenders. This drives the incremental path (`apply_changes`) exactly as
+// the watcher does after the agent writes the files.
+#[tokio::test(flavor = "multi_thread")]
+async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+
+    // Three worktree checkouts, each byte-identical to the real Alpha.cs,
+    // so without the exclusion they would form an N-copy identical cluster.
+    let body = fs::read(tmp.path().join("Alpha.cs")).context("read Alpha")?;
+    let mut worktree_copies = Vec::new();
+    for id in [
+        "wf_1cbc6fe3-539-1",
+        "wf_1cbc6fe3-539-2",
+        "wf_37bd3366-169-1",
+    ] {
+        let dir = tmp.path().join(".claude").join("worktrees").join(id);
+        fs::create_dir_all(&dir).context("mkdir worktree")?;
+        let copy = dir.join("Alpha.cs");
+        fs::write(&copy, &body).context("write worktree copy")?;
+        worktree_copies.push(copy);
+    }
+
+    // Feed the worktree files through the incremental path the live watcher
+    // uses. Every one is excluded, so the change must be a no-op delta.
+    let delta = session
+        .apply_changes(&worktree_copies)
+        .context("apply worktree changes")?;
+    assert!(
+        delta.clusters_added.is_empty()
+            && delta.clusters_updated.is_empty()
+            && delta.clusters_removed.is_empty(),
+        "excluded agent worktree copies must produce a no-op delta, got: {delta:?}",
+    );
+
+    // No occurrence in the live report may point inside `.claude/`.
+    let report = session.report();
+    for cluster in &report.clusters {
+        for occurrence in &cluster.occurrences {
+            assert!(
+                !occurrence.path.to_string_lossy().contains(".claude"),
+                "agent worktree path leaked into the live report: {}",
+                occurrence.path.display(),
+            );
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
@@ -1141,5 +1198,59 @@ async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> 
         "after skipping the deep file a genuine duplicate must still cluster: {:?}",
         after.clusters,
     );
+    Ok(())
+}
+
+// [LSP-NON-INTERFERENCE-NONBLOCKING] The lock-free report snapshot is what
+// lets the LSP answer its additive editor surfaces (diagnostics, code lens)
+// without ever awaiting the session mutex an in-flight analysis pass can
+// hold for seconds. This proves the snapshot (a) mirrors the live report in
+// lock-step and (b) stays readable while the session mutex is held — the
+// structural guarantee that Deslop can never freeze the editor.
+#[tokio::test(flavor = "multi_thread")]
+async fn lsp_report_snapshot_is_lock_free_and_tracks_mutations() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    let snapshot = session.report_snapshot_handle();
+
+    // (a) The snapshot is the exact same Arc the session serves — not a copy.
+    let initial = deslop_core::live::read_report_snapshot(&snapshot);
+    assert!(
+        Arc::ptr_eq(&initial, &session.report()),
+        "snapshot must mirror the session's report by identity",
+    );
+    assert!(
+        !initial.clusters.is_empty(),
+        "csharp-small has a clone, so the seeded report has clusters",
+    );
+
+    // A mutation republishes; the snapshot tracks it in lock-step.
+    let alpha = tmp.path().join("Alpha.cs");
+    fs::write(
+        &alpha,
+        "namespace Alpha { public class Solo { public int One() { return 1; } } }\n",
+    )
+    .context("rewrite Alpha")?;
+    let _delta = session.apply_changes(&[alpha]).context("apply")?;
+    let after = deslop_core::live::read_report_snapshot(&snapshot);
+    assert!(
+        Arc::ptr_eq(&after, &session.report()),
+        "snapshot must track the report after apply_changes republishes it",
+    );
+
+    // (b) The read never touches the session mutex: it answers even while a
+    // pass holds the lock. If reads went through the mutex this would
+    // deadlock instead of returning.
+    let session = Arc::new(tokio::sync::Mutex::new(session));
+    let held = Arc::clone(&session).lock_owned().await;
+    let while_locked = deslop_core::live::read_report_snapshot(&snapshot);
+    assert_eq!(
+        while_locked.clusters.len(),
+        after.clusters.len(),
+        "the LSP snapshot read must be served while the session mutex is held",
+    );
+    drop(held);
     Ok(())
 }

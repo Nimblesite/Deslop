@@ -5,7 +5,6 @@ import * as vscode from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
-  Middleware,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
@@ -61,10 +60,6 @@ const PRODUCTION_EMBEDDING_PROVIDER = "ollama";
 const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
 const DEFAULT_EMBEDDING_ENDPOINT = "http://127.0.0.1:11434";
 const DEFAULT_EMBEDDING_MODE = "off";
-
-const HOVER_SUPPRESSING_MIDDLEWARE = {
-  provideHover: () => null,
-} satisfies Middleware;
 
 interface EmbeddingSettings {
   readonly provider: typeof PRODUCTION_EMBEDDING_PROVIDER;
@@ -309,9 +304,12 @@ export function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     },
     outputChannel: initOutputChannel(),
     initializationOptions: currentInitializationOptions(),
-    // The TypeScript ClusterHoverProvider owns the editor hover card.
-    // Suppress the LSP textDocument/hover so they don't stack in the popup.
-    middleware: HOVER_SUPPRESSING_MIDDLEWARE,
+    // [LSP-NON-INTERFERENCE] No middleware. Deslop's LSP advertises no
+    // hover/definition/etc. providers, so there is nothing to intercept
+    // or suppress — the editor's own language server owns those. The
+    // clone card is rendered by the additive ClusterHoverProvider
+    // (registered separately), which stacks alongside the language
+    // server's hover instead of replacing it.
   };
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }

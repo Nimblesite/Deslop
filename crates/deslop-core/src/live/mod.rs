@@ -30,7 +30,10 @@ pub use notifications::{
     broadcast_report_changed, broadcast_state, ReportChangedSender, StateSender,
 };
 pub use scheduler::Scheduler;
-pub use session::{AnalysisSession, EmbeddingProgressReporter};
+pub use session::{
+    read_report_snapshot, report_for_file_in, report_for_range_in, AnalysisSession,
+    EmbeddingProgressReporter,
+};
 pub use session_helpers::STATE_FILE_NAME as LIVE_REPORT_FILE_NAME;
 pub use watcher::LiveWatcher;
 pub use wire::{
