@@ -205,11 +205,12 @@ fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Resul
         .pointer("/result")
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("code lens result missing: {response}"))?;
-    assert!(
-        !lenses.is_empty(),
-        "Deslop must contribute its additive clone code lens on a duplicated file: {response}"
-    );
-    let command = lenses[0]
+    let first_lens = lenses.first().ok_or_else(|| {
+        anyhow!(
+            "Deslop must contribute its additive clone code lens on a duplicated file: {response}"
+        )
+    })?;
+    let command = first_lens
         .pointer("/command/command")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("code lens command missing: {response}"))?;
