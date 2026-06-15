@@ -56,7 +56,7 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// monorepo a hot build churns thousands of `.dart` files under
 /// `.dart_tool/`; because the live watcher has no `.gitignore` filter,
 /// excluding them here is what keeps that churn from monopolising the
-/// session and starving the editor's responsiveness ([#231]).
+/// session and starving the editor's responsiveness.
 const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "node_modules",
     "target",

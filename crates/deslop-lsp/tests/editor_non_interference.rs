@@ -6,7 +6,7 @@
 //! lens). Drives the real `deslop-lsp` binary over stdio — no mocked
 //! transport.
 //!
-//! Regression guard for #231: on a large Flutter/Windows codebase a
+//! Regression guard: on a large Flutter/Windows codebase a
 //! `definitionProvider` overload made VS Code's F12 spin (it waits for
 //! every provider, and Deslop blocked on its in-flight analysis). The
 //! structural fix is to advertise none of the standard providers at all,

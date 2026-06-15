@@ -583,7 +583,12 @@ fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Re
     let _init = handshake(&mut stdin, &mut stdout)?;
 
     // The first read is served straight from the synthetic seed cache.
-    let seeded = call(&mut stdin, &mut stdout, "deslop/reportGet", &serde_json::json!({}))?;
+    let seeded = call(
+        &mut stdin,
+        &mut stdout,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
     ensure!(
         seeded.pointer("/result/clusters/0/id") == Some(&serde_json::json!("cached-gh73")),
         "seeded startup must serve the cached cluster first: {seeded}"
@@ -594,7 +599,12 @@ fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Re
     let deadline = Instant::now() + ANALYSIS_TIMEOUT;
     let mut replaced = false;
     while Instant::now() < deadline {
-        let live = call(&mut stdin, &mut stdout, "deslop/reportGet", &serde_json::json!({}))?;
+        let live = call(
+            &mut stdin,
+            &mut stdout,
+            "deslop/reportGet",
+            &serde_json::json!({}),
+        )?;
         let first_id = live
             .pointer("/result/clusters/0/id")
             .and_then(serde_json::Value::as_str);

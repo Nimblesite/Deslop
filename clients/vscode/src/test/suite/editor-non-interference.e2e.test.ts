@@ -3,7 +3,7 @@
 // `vscode.executeDefinitionProvider` returns nothing from Deslop and F12
 // stays entirely the editor's own language server.
 //
-// Regression guard for #231: a `definitionProvider` overload made F12 spin
+// Regression guard: a `definitionProvider` overload made F12 spin
 // on large Flutter/Windows projects (VS Code waits for every provider, and
 // Deslop blocked on its in-flight analysis). Driven against the real
 // bundled LSP binary, per CLAUDE.md (no fake LSP).
@@ -21,7 +21,7 @@ async function codeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
   );
 }
 
-suite("editor non-interference (#231)", () => {
+suite("editor non-interference", () => {
   let alpha: vscode.Uri;
 
   suiteSetup(async () => {
