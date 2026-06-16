@@ -345,6 +345,59 @@ fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
     Ok(())
 }
 
+// Implements [LIVE-DELTA] (#199): the delta must carry the authoritative
+// gen-1 `metrics`, not just cluster diffs, so live consumers (the VSIX
+// DUPLICATION headline) move off the seed snapshot instead of freezing.
+// Removing the only clone peer drops duplication to zero in gen 1; the
+// emitted delta's metrics must report that — and must equal the gen-1
+// report's metrics, since the server is the single source of truth.
+#[test]
+fn issue_199_delta_carries_recomputed_metrics() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&fixture("csharp-small"), &scan_root)?;
+    let doomed = scan_root.join("Beta.cs");
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _assertion = cmd
+        .arg(&scan_root)
+        .arg("--min-nodes")
+        .arg("8")
+        .arg("--output")
+        .arg(tmp.path().join("report"))
+        .arg("--rerun-remove")
+        .arg(&doomed)
+        .assert()
+        .success();
+    let delta = load_json(&delta_path(tmp.path()))?;
+    let report = load_json(&tmp.path().join("report.json"))?;
+    let delta_metrics = field(&delta, "metrics");
+    let report_metrics = field(&report, "metrics");
+    assert!(
+        delta_metrics.is_object(),
+        "delta must carry a metrics object so the headline can move off the seed: {delta:#}"
+    );
+    // Removing the only peer eliminates all duplication in generation 1.
+    assert_eq!(
+        field(delta_metrics, "duplicated_loc").as_u64(),
+        Some(0),
+        "post-removal delta metrics must report zero duplicated LOC: {delta:#}"
+    );
+    // The delta's metrics must equal the gen-1 report's metrics — the
+    // server recomputes `report.metrics` every generation and is the
+    // single source of truth for the displayed numbers.
+    assert_eq!(
+        field(delta_metrics, "duplication_percent"),
+        field(report_metrics, "duplication_percent"),
+        "delta duplication_percent must equal the gen-1 report's value: {delta:#}"
+    );
+    assert_eq!(
+        field(delta_metrics, "analysed_loc"),
+        field(report_metrics, "analysed_loc"),
+        "delta analysed_loc must equal the gen-1 report's value: {delta:#}"
+    );
+    Ok(())
+}
+
 // Implements [LIVE-STATE] + [EXCLUSION-CONFIG]: a `--rerun-touch` path
 // that is covered by the loaded exclusion config is treated as a
 // deletion so that an edit making it excluded drops it from the corpus.

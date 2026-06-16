@@ -484,6 +484,15 @@ function emptyDelta(toGeneration: number): ReportDelta {
     clusters_added: [],
     clusters_removed: [],
     clusters_updated: [],
+    metrics: {
+      analysed_loc: 0,
+      duplicated_loc: 0,
+      duplication_percent: 0,
+      clusters_total: 0,
+      duplicated_files: 0,
+      threshold: { percent: 0, breached: false, source: "none" },
+      per_file: [],
+    },
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "x",
   };
