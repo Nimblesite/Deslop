@@ -370,6 +370,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn spawn_refresh_pushes_running_then_report_then_idle(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Drives the detached deferred-refresh task end-to-end (the test
+        // above only exercises the inner `initialise_in_background` /
+        // `commit_refresh` helpers directly). Asserts the full
+        // running → reportChanged → idle sequence the editor relies on
+        // and that the cold-pass flag clears once the pass commits.
+        let temp = tempfile::tempdir()?;
+        write_fixture(temp.path())?;
+        let provider: Arc<dyn EmbeddingProvider> = Arc::new(StubProvider::new());
+        let (session, _seeded) = open_session(
+            temp.path().to_path_buf(),
+            30,
+            true,
+            None,
+            Arc::clone(&provider),
+            EmbeddingMode::Off,
+        )?;
+        let session = Arc::new(Mutex::new(session));
+        let service = Arc::new(LiveService::new(Arc::clone(&session)));
+        let (client, mut socket) = initialized_loopback_client().await?;
+        let (report_changed, _rx) = tokio::sync::broadcast::channel(8);
+        let cold_pass_active = Arc::new(AtomicBool::new(true));
+        let task = RefreshTask {
+            session,
+            service,
+            client,
+            root: temp.path().to_path_buf(),
+            min_nodes: 30,
+            incremental: true,
+            config_path: None,
+            provider,
+            mode: EmbeddingMode::Off,
+            report_changed,
+            cold_pass_active: Arc::clone(&cold_pass_active),
+        };
+
+        spawn_refresh(task);
+
+        let running = next_client_frame(&mut socket).await?;
+        assert_eq!(
+            running.pointer("/params/state").and_then(Value::as_str),
+            Some("running"),
+            "spawn_refresh must push the Running state first: {running}"
+        );
+        let changed = next_client_frame(&mut socket).await?;
+        assert_eq!(
+            changed.pointer("/method").and_then(Value::as_str),
+            Some(REPORT_CHANGED),
+            "the committed cold pass must publish reportChanged: {changed}"
+        );
+        let idle = next_client_frame(&mut socket).await?;
+        assert_eq!(
+            idle.pointer("/params/state").and_then(Value::as_str),
+            Some("idle"),
+            "the cold pass must settle to idle once committed: {idle}"
+        );
+        assert!(
+            !cold_pass_active.load(Ordering::SeqCst),
+            "spawn_refresh must clear the cold-pass-active flag once the pass commits"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn refresh_error_pushes_errored_state() -> Result<(), Box<dyn std::error::Error>> {
         let (client, mut socket) = initialized_loopback_client().await?;
         report_refresh_error(

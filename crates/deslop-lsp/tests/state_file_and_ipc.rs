@@ -566,6 +566,61 @@ fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
     Ok(())
 }
 
+/// [LIVE-CACHE-SEED] A seeded startup is not a dead end: after serving the
+/// synthetic cache instantly, the background cold pass must re-analyse the
+/// real corpus and commit, replacing the seed with the genuine report.
+/// This drives the deferred-refresh path end-to-end (the prior seed tests
+/// only assert the fast cached serve, then exit before the cold pass runs).
+#[test]
+fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let state_path = workspace.path().join(STATE_FILE);
+    seed_cached_report(&state_path)?;
+
+    let mut child = spawn_lsp(workspace.path())?;
+    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let _guard = KillOnDrop(&mut child);
+    let _init = handshake(&mut stdin, &mut stdout)?;
+
+    // The first read is served straight from the synthetic seed cache.
+    let seeded = call(
+        &mut stdin,
+        &mut stdout,
+        "deslop/reportGet",
+        &serde_json::json!({}),
+    )?;
+    ensure!(
+        seeded.pointer("/result/clusters/0/id") == Some(&serde_json::json!("cached-gh73")),
+        "seeded startup must serve the cached cluster first: {seeded}"
+    );
+
+    // Poll until the background cold pass commits the real report — the
+    // synthetic `cached-gh73` cluster is replaced by genuine cluster ids.
+    let deadline = Instant::now() + ANALYSIS_TIMEOUT;
+    let mut replaced = false;
+    while Instant::now() < deadline {
+        let live = call(
+            &mut stdin,
+            &mut stdout,
+            "deslop/reportGet",
+            &serde_json::json!({}),
+        )?;
+        let first_id = live
+            .pointer("/result/clusters/0/id")
+            .and_then(serde_json::Value::as_str);
+        if matches!(first_id, Some(id) if id != "cached-gh73") {
+            replaced = true;
+            break;
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+    ensure!(
+        replaced,
+        "the deferred cold pass must commit the real report, replacing the seed cache"
+    );
+    Ok(())
+}
+
 struct KillOnDrop<'a>(&'a mut std::process::Child);
 
 impl Drop for KillOnDrop<'_> {
