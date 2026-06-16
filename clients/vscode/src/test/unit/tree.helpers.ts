@@ -73,6 +73,19 @@ export function fileMetric(path: string, analysedLoc: number, duplicatedLoc: num
   };
 }
 
+export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
+  return {
+    analysed_loc: 100,
+    duplicated_loc: 10,
+    duplication_percent: 10,
+    clusters_total: 0,
+    duplicated_files: 2,
+    threshold: { percent: 0, breached: false, source: "none" },
+    per_file: [],
+    ...overrides,
+  };
+}
+
 export function report(
   clusters: ReportCluster[],
   metricsOverride: Partial<RepoMetrics> = {},
@@ -83,16 +96,7 @@ export function report(
     files_analysed: 5,
     clusters_hidden: 0,
     cache_stats: { hits: 1, misses: 2 },
-    metrics: {
-      analysed_loc: 100,
-      duplicated_loc: 10,
-      duplication_percent: 10,
-      clusters_total: clusters.length,
-      duplicated_files: 2,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-      ...metricsOverride,
-    },
+    metrics: metrics({ clusters_total: clusters.length, ...metricsOverride }),
     schema_doc: "docs",
     action_hints: [],
     boilerplate_hints: [],

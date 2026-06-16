@@ -131,6 +131,11 @@ export class ReportStore implements vscode.Disposable {
       this._report.value = {
         ...current,
         clusters,
+        // The server recomputes metrics every generation and ships them
+        // on the delta (#199). Without this the DUPLICATION headline +
+        // per-file rows freeze at the seed snapshot, since the delta path
+        // is the one almost always taken after the first report.
+        metrics: delta.metrics,
         cache_stats: delta.cache_stats,
         tool_version: delta.tool_version,
       };
