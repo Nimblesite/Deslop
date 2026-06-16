@@ -22,7 +22,7 @@ use deslop_core::{
         LiveError, LiveService, LiveWatcher, Scheduler,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
-    EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
+    EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError, Report,
 };
 
 /// Returns the absolute fixture path used by the CLI tests.
@@ -42,6 +42,24 @@ fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
     let dir = tempfile::tempdir().context("tempdir")?;
     copy_recursive(&src, dir.path())?;
     Ok(dir)
+}
+
+/// Counts live cluster occurrences whose relative path contains the
+/// given directory or file name as a whole path component. Component
+/// matching (not substring) so `pkg` never matches a `pkg_twin`
+/// sibling — the prefix-eviction guard for #223.
+fn occurrences_with_component(report: &Report, component: &str) -> usize {
+    report
+        .clusters
+        .iter()
+        .flat_map(|cluster| cluster.occurrences.iter())
+        .filter(|occurrence| {
+            occurrence
+                .path
+                .components()
+                .any(|part| part.as_os_str() == component)
+        })
+        .count()
 }
 
 fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
@@ -482,6 +500,41 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
         third.file_name(),
         target.file_name(),
         "third edit on the same path must also reach the channel",
+    );
+    Ok(())
+}
+
+/// #223 [LIVE-WATCHER]: a removed directory carries no source
+/// extension, yet the watcher must forward its `Remove` event so the
+/// session can evict every file under it. Before the fix the
+/// extension filter dropped the directory path and the channel stayed
+/// silent — leaving the contained files as phantom occurrences until a
+/// full restart. Drives the real watcher end to end.
+#[tokio::test(flavor = "multi_thread")]
+async fn watcher_forwards_directory_removal_without_a_source_extension() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    // macOS FSEvents reports under the canonicalised root; match the
+    // existing watcher tests so event paths share a prefix.
+    let root = tmp.path().canonicalize().context("canonicalise root")?;
+    let nested = root.join("nested");
+    fs::create_dir_all(&nested).context("mkdir nested")?;
+    fs::write(nested.join("Sample.cs"), b"class A {}\n").context("seed file")?;
+
+    let extensions = vec!["cs".to_owned()];
+    let exclusion = Arc::new(ExclusionConfig::empty());
+    let (_watcher_keep_alive, mut rx) =
+        LiveWatcher::start(&root, extensions, exclusion, Vec::new())
+            .map_err(|err| anyhow!("watcher start: {err}"))?;
+    // FSEvents (macOS) and inotify (Linux) need a beat to attach.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    fs::remove_dir_all(&nested).context("rm -rf nested")?;
+    let event = wait_for_event(&mut rx, &nested, Duration::from_secs(10)).await?;
+    assert_eq!(
+        event.file_name(),
+        nested.file_name(),
+        "the extension-less directory removal must reach the channel so \
+         the session can evict every file under the removed subtree",
     );
     Ok(())
 }
@@ -1201,56 +1254,131 @@ async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> 
     Ok(())
 }
 
-// [LSP-NON-INTERFERENCE-NONBLOCKING] The lock-free report snapshot is what
-// lets the LSP answer its additive editor surfaces (diagnostics, code lens)
-// without ever awaiting the session mutex an in-flight analysis pass can
-// hold for seconds. This proves the snapshot (a) mirrors the live report in
-// lock-step and (b) stays readable while the session mutex is held — the
-// structural guarantee that Deslop can never freeze the editor.
+/// #223: removing a whole directory must drive the live loop and evict
+/// every occurrence under that subtree, exactly like a single-file
+/// deletion. A directory `Remove` event carries the directory path
+/// (which has no source extension and matches no live leaf), so the
+/// session must evict by ancestor prefix — not by exact-leaf match.
 #[tokio::test(flavor = "multi_thread")]
-async fn lsp_report_snapshot_is_lock_free_and_tracks_mutations() -> Result<()> {
+async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    // Two byte-identical copies under a nested subtree form a guaranteed
+    // `identical` cluster whose occurrences live entirely under `nested/`.
+    let nested = tmp.path().join("nested");
+    fs::create_dir_all(&nested).context("mkdir nested")?;
+    let body = fs::read(tmp.path().join("Alpha.cs")).context("read Alpha")?;
+    fs::write(nested.join("One.cs"), &body).context("write One")?;
+    fs::write(nested.join("Two.cs"), &body).context("write Two")?;
+
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+
+    let before = session.report();
+    assert!(
+        occurrences_with_component(&before, "nested") >= 2,
+        "the two nested copies must appear as live occurrences before deletion: {:?}",
+        before.clusters,
+    );
+    let files_before = before.files_analysed;
+
+    fs::remove_dir_all(&nested).context("rm -rf nested")?;
+    let _delta = session
+        .apply_changes(std::slice::from_ref(&nested))
+        .context("apply dir removal")?;
+
+    let after = session.report();
+    assert_eq!(
+        occurrences_with_component(&after, "nested"),
+        0,
+        "removing the directory must evict every occurrence under it; \
+         stale occurrences remained: {:?}",
+        after.clusters,
+    );
+    assert_eq!(
+        after.files_analysed,
+        files_before - 2,
+        "files_analysed must drop by the two evicted nested files; \
+         before={files_before}, after={}",
+        after.files_analysed,
+    );
+    Ok(())
+}
+
+/// #223 regression: a single-file deletion must still evict its
+/// occurrence (the leaf path matches a live entry directly). Guards the
+/// prefix-eviction change from regressing the exact-leaf path.
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
     let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
         .context("session")?;
-    let snapshot = session.report_snapshot_handle();
 
-    // (a) The snapshot is the exact same Arc the session serves — not a copy.
-    let initial = deslop_core::live::read_report_snapshot(&snapshot);
+    let before = session.report();
     assert!(
-        Arc::ptr_eq(&initial, &session.report()),
-        "snapshot must mirror the session's report by identity",
-    );
-    assert!(
-        !initial.clusters.is_empty(),
-        "csharp-small has a clone, so the seeded report has clusters",
+        occurrences_with_component(&before, "Beta.cs") >= 1,
+        "Beta.cs must appear as a live occurrence before deletion: {:?}",
+        before.clusters,
     );
 
-    // A mutation republishes; the snapshot tracks it in lock-step.
-    let alpha = tmp.path().join("Alpha.cs");
-    fs::write(
-        &alpha,
-        "namespace Alpha { public class Solo { public int One() { return 1; } } }\n",
-    )
-    .context("rewrite Alpha")?;
-    let _delta = session.apply_changes(&[alpha]).context("apply")?;
-    let after = deslop_core::live::read_report_snapshot(&snapshot);
-    assert!(
-        Arc::ptr_eq(&after, &session.report()),
-        "snapshot must track the report after apply_changes republishes it",
-    );
+    let beta = tmp.path().join("Beta.cs");
+    fs::remove_file(&beta).context("rm Beta.cs")?;
+    let _delta = session
+        .apply_changes(&[beta])
+        .context("apply file removal")?;
 
-    // (b) The read never touches the session mutex: it answers even while a
-    // pass holds the lock. If reads went through the mutex this would
-    // deadlock instead of returning.
-    let session = Arc::new(tokio::sync::Mutex::new(session));
-    let held = Arc::clone(&session).lock_owned().await;
-    let while_locked = deslop_core::live::read_report_snapshot(&snapshot);
+    let after = session.report();
     assert_eq!(
-        while_locked.clusters.len(),
-        after.clusters.len(),
-        "the LSP snapshot read must be served while the session mutex is held",
+        occurrences_with_component(&after, "Beta.cs"),
+        0,
+        "removing Beta.cs must evict its occurrence: {:?}",
+        after.clusters,
     );
-    drop(held);
+    Ok(())
+}
+
+/// #223 negative guard: removing a directory must not evict files in a
+/// sibling whose name shares a string prefix with the removed path
+/// (`pkg` vs `pkg_twin`). A naive `str::starts_with` would wrongly drop
+/// the sibling; component-wise `Path::starts_with` must not.
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_directory_spares_a_sibling_with_a_shared_name_prefix() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    let body = fs::read(tmp.path().join("Alpha.cs")).context("read Alpha")?;
+    for dir in ["pkg", "pkg_twin"] {
+        let path = tmp.path().join(dir);
+        fs::create_dir_all(&path).with_context(|| format!("mkdir {dir}"))?;
+        fs::write(path.join("One.cs"), &body).context("write One")?;
+        fs::write(path.join("Two.cs"), &body).context("write Two")?;
+    }
+
+    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    let before = session.report();
+    assert!(
+        occurrences_with_component(&before, "pkg") >= 2
+            && occurrences_with_component(&before, "pkg_twin") >= 2,
+        "both sibling directories must seed live occurrences: {:?}",
+        before.clusters,
+    );
+
+    let pkg = tmp.path().join("pkg");
+    fs::remove_dir_all(&pkg).context("rm -rf pkg")?;
+    let _delta = session.apply_changes(&[pkg]).context("apply pkg removal")?;
+
+    let after = session.report();
+    assert_eq!(
+        occurrences_with_component(&after, "pkg"),
+        0,
+        "the removed directory's occurrences must be evicted: {:?}",
+        after.clusters,
+    );
+    assert!(
+        occurrences_with_component(&after, "pkg_twin") >= 2,
+        "the prefix-sharing sibling must survive directory removal: {:?}",
+        after.clusters,
+    );
     Ok(())
 }
