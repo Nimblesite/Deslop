@@ -106,6 +106,7 @@ impl EventHandler for WatcherHandler {
         if !is_relevant_event(event.kind) {
             return;
         }
+        let is_removal = matches!(event.kind, EventKind::Remove(_));
         // Dedup paths within this single callback batch so a
         // `Modify(Metadata) + Modify(Data)` pair only fires once. The
         // set is stack-local — every new callback starts fresh, so a
@@ -116,15 +117,26 @@ impl EventHandler for WatcherHandler {
             if !seen_in_batch.insert(path.clone()) {
                 continue;
             }
-            self.forward_one(path);
+            self.forward_one(path, is_removal);
         }
     }
 }
 
 impl WatcherHandler {
     /// Forwards one path if it passes the filter set.
-    fn forward_one(&self, path: PathBuf) {
+    ///
+    /// Removals bypass the extension and exclusion filters: a removed
+    /// directory has no source extension yet may be an ancestor of live
+    /// files, and a previously-admitted path that an exclusion now
+    /// matches must still be evictable ([LIVE-WATCHER], #223). The
+    /// session re-checks existence and ownership before mutating any
+    /// map, so forwarding a removal it does not track is a cheap no-op.
+    fn forward_one(&self, path: PathBuf, is_removal: bool) {
         if self.is_watched_config_path(&path) {
+            let _result = self.sender.try_send(path);
+            return;
+        }
+        if is_removal {
             let _result = self.sender.try_send(path);
             return;
         }
