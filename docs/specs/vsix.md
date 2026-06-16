@@ -245,7 +245,7 @@ The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it 
 
 Each lens has three actions in its command array:
 
-- **"Jump"** — cycles `textDocument/definition` through remaining occurrences.
+- **"Jump"** — runs `deslop.jumpToNextOccurrence`, cycling through remaining occurrences. It never routes through `textDocument/definition`, so it cannot interfere with the editor's Go To Definition ([LSP-NON-INTERFERENCE]).
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
 - **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
 
