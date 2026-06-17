@@ -13,6 +13,9 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
+mod common;
+use common::{fixture_root, value_get};
+
 struct McpParent {
     child: Child,
     stdin: ChildStdin,
@@ -77,13 +80,6 @@ impl Drop for McpParent {
     }
 }
 
-fn fixture_root() -> &'static Path {
-    Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/csharp-mcp"
-    ))
-}
-
 fn init_session(parent: &mut McpParent) -> Result<Value> {
     parent.request(
         "initialize",
@@ -133,13 +129,6 @@ fn read_mcp_pid(child: &mut Child) -> Result<u32> {
         .trim()
         .parse::<u32>()
         .context("parse mcp pid from parent shell")
-}
-
-fn value_get(value: &Value, pointer: &str) -> Result<Value> {
-    value
-        .pointer(pointer)
-        .cloned()
-        .ok_or_else(|| anyhow!("pointer {pointer} not found in {value}"))
 }
 
 fn wait_for_pid_exit(pid: u32, duration: Duration) -> Result<bool> {

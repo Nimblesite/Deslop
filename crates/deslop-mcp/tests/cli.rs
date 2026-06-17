@@ -23,6 +23,9 @@ use assert_cmd::cargo::cargo_bin;
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
+mod common;
+use common::{fixture_root, value_get};
+
 /// One live `deslop-mcp` child-process conversation. Holds stdio
 /// handles + the buffered line reader so the test author works in
 /// request/response pairs instead of raw bytes.
@@ -346,13 +349,6 @@ impl WaitTimeout for Child {
 /// Read-only fixture root. The `.deslop-cache/live-report.json` state file
 /// is pre-committed alongside the source files so `StateFileBackend` can
 /// serve data without an LSP process.
-fn fixture_root() -> &'static Path {
-    Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/csharp-mcp"
-    ))
-}
-
 /// Copies the fixture (including `.deslop-cache/live-report.json`) to a
 /// writable temp directory for tests that mutate the workspace.
 fn copied_fixture_root() -> Result<TempDir> {
@@ -561,13 +557,6 @@ fn structured_tool_result(result: &Value) -> Result<Value> {
         .get("structuredContent")
         .cloned()
         .ok_or_else(|| anyhow!("missing structuredContent in {result}"))
-}
-
-fn value_get(value: &Value, pointer: &str) -> Result<Value> {
-    value
-        .pointer(pointer)
-        .cloned()
-        .ok_or_else(|| anyhow!("pointer {pointer} not found in {value}"))
 }
 
 #[test]

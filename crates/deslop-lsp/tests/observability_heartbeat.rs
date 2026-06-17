@@ -9,7 +9,6 @@
 //! audience-neutral record.
 
 use std::{
-    io::{Read, Write},
     process::{ChildStdin, ChildStdout, Command, Stdio},
     sync::atomic::{AtomicI64, Ordering},
     thread,
@@ -18,7 +17,10 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
+
+mod common;
+use crate::common::*;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 
@@ -242,56 +244,6 @@ fn request_without_params(method: &str) -> Result<(i64, String)> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let payload = json!({"jsonrpc":"2.0","id":id,"method":method});
     Ok((id, serde_json::to_string(&payload)?))
-}
-
-fn notification(method: &str, params: &Value) -> Result<String> {
-    let payload = json!({"jsonrpc":"2.0","method":method,"params":params});
-    Ok(serde_json::to_string(&payload)?)
-}
-
-fn write_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
-}
-
-fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
-}
-
-fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let length = read_content_length(reader)?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
-}
-
-fn send_and_recv(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    id: i64,
-    payload: &str,
-) -> Result<Value> {
-    write_frame(stdin, payload)?;
-    loop {
-        let frame = read_frame(reader)?;
-        if frame.get("id").and_then(Value::as_i64) == Some(id) {
-            return Ok(frame);
-        }
-    }
 }
 
 fn handshake(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {

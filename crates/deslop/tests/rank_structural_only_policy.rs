@@ -19,6 +19,9 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::*;
+
 /// Generates one shape-identical API method. The method name, endpoint
 /// literal, and every local identifier differ per call (normalisation
 /// strips identifiers, so the family still fuses at `structural=1.00`
@@ -119,14 +122,6 @@ fn report_for_config(config: Option<&str>) -> Result<Value> {
     }
     let report = run_report(&src, tmp.path())?;
     Ok(report)
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn bucket_of(cluster: &Value) -> &str {

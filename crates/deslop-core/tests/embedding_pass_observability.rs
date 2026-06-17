@@ -1,8 +1,7 @@
 //! Regression coverage for GH#94 embedding-pass observability.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt, fs,
+    fs,
     path::Path,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -18,11 +17,9 @@ use deslop_core::{
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     EmbeddingProvider, EmbeddingSpec, ProviderError,
 };
-use tracing::{
-    field::{Field, Visit},
-    span::{Attributes, Id, Record},
-    Event, Level, Metadata, Subscriber,
-};
+
+mod common;
+use crate::common::*;
 
 const VECTOR_DIMS: usize = 4;
 const SLOW_BATCH: usize = 2;
@@ -255,147 +252,4 @@ fn assert_positive_field(event: &CapturedEvent, field: &str) -> Result<()> {
         .with_context(|| format!("parse field {field}"))?;
     assert!(value > 0, "GH#94: {field} should be positive");
     Ok(())
-}
-
-#[derive(Clone, Debug, Default)]
-struct CapturedEvents {
-    events: Arc<Mutex<Vec<CapturedEvent>>>,
-}
-
-impl CapturedEvents {
-    fn push(&self, event: CapturedEvent) {
-        if let Ok(mut events) = self.events.lock() {
-            events.push(event);
-        }
-    }
-
-    fn event(&self, message: &str) -> Result<CapturedEvent> {
-        self.events(message)?
-            .into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("missing event {message:?}; captured: {:?}", self.all()))
-    }
-
-    fn events(&self, message: &str) -> Result<Vec<CapturedEvent>> {
-        let events = self
-            .events
-            .lock()
-            .map_err(|_| anyhow!("captured events mutex poisoned"))?;
-        Ok(events
-            .iter()
-            .filter(|event| event.message() == Some(message))
-            .cloned()
-            .collect())
-    }
-
-    fn all(&self) -> Vec<CapturedEvent> {
-        self.events
-            .lock()
-            .map(|events| events.clone())
-            .unwrap_or_default()
-    }
-}
-
-#[derive(Clone, Debug)]
-struct CapturedEvent {
-    target: String,
-    level: String,
-    fields: BTreeSet<String>,
-    values: BTreeMap<String, String>,
-}
-
-impl CapturedEvent {
-    fn message(&self) -> Option<&str> {
-        self.values.get("message").map(String::as_str)
-    }
-
-    fn has_fields(&self, required: &[&str]) -> bool {
-        required.iter().all(|field| self.fields.contains(*field))
-    }
-}
-
-#[derive(Debug)]
-struct CaptureSubscriber {
-    captured: CapturedEvents,
-}
-
-impl CaptureSubscriber {
-    fn new(captured: CapturedEvents) -> Self {
-        Self { captured }
-    }
-}
-
-impl Subscriber for CaptureSubscriber {
-    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
-        metadata.target().starts_with("deslop_core")
-    }
-
-    fn new_span(&self, _span: &Attributes<'_>) -> Id {
-        Id::from_u64(1)
-    }
-
-    fn record(&self, _span: &Id, _values: &Record<'_>) {}
-
-    fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
-
-    fn event(&self, event: &Event<'_>) {
-        let mut visitor = FieldCollector::default();
-        event.record(&mut visitor);
-        self.captured.push(CapturedEvent {
-            target: event.metadata().target().to_owned(),
-            level: level_name(*event.metadata().level()),
-            fields: visitor.fields,
-            values: visitor.values,
-        });
-    }
-
-    fn enter(&self, _span: &Id) {}
-
-    fn exit(&self, _span: &Id) {}
-}
-
-fn level_name(level: Level) -> String {
-    level.as_str().to_owned()
-}
-
-#[derive(Default)]
-struct FieldCollector {
-    fields: BTreeSet<String>,
-    values: BTreeMap<String, String>,
-}
-
-impl FieldCollector {
-    fn record_value(&mut self, field: &Field, value: String) {
-        let name = field.name().to_owned();
-        let _inserted = self.fields.insert(name.clone());
-        let _previous = self.values.insert(name, value);
-    }
-}
-
-impl Visit for FieldCollector {
-    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
-        let raw = format!("{value:?}");
-        let normalized = raw
-            .strip_prefix('"')
-            .and_then(|inner| inner.strip_suffix('"'))
-            .unwrap_or(&raw)
-            .to_owned();
-        self.record_value(field, normalized);
-    }
-
-    fn record_str(&mut self, field: &Field, value: &str) {
-        self.record_value(field, value.to_owned());
-    }
-
-    fn record_i64(&mut self, field: &Field, value: i64) {
-        self.record_value(field, value.to_string());
-    }
-
-    fn record_u64(&mut self, field: &Field, value: u64) {
-        self.record_value(field, value.to_string());
-    }
-
-    fn record_bool(&mut self, field: &Field, value: bool) {
-        self.record_value(field, value.to_string());
-    }
 }

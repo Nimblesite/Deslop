@@ -6,7 +6,7 @@ use std::{
     fs,
     io::{ErrorKind, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
@@ -19,12 +19,8 @@ use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::{json, Value};
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 #[test]
 fn mock_provider_rejected_subtrees_are_reported() -> Result<()> {

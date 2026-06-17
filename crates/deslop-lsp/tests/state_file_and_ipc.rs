@@ -26,7 +26,10 @@ use std::{
 };
 
 use anyhow::{anyhow, ensure, Result};
-use common::{call, copy_fixture, handshake, notification, spawn_lsp, take_io, write_frame};
+use common::{
+    call, copy_fixture, handshake, notification, spawn_lsp, spawn_lsp_on_fixture, take_io,
+    write_frame,
+};
 
 const STATE_FILE: &str = ".deslop-cache/live-report.json";
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(15);
@@ -36,9 +39,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// initialization so the MCP has something to read immediately.
 #[test]
 fn state_file_exists_after_initialize() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let _guard = KillOnDrop(&mut child);
 
     let _init = handshake(&mut stdin, &mut stdout)?;
@@ -344,9 +346,8 @@ fn state_file_updated_after_file_change() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_find_similar_request() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let _guard = KillOnDrop(&mut child);
 
     let _init = handshake(&mut stdin, &mut stdout)?;
@@ -390,9 +391,8 @@ fn ipc_socket_handles_find_similar_request() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_list_models_request() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let _guard = KillOnDrop(&mut child);
 
     let _init = handshake(&mut stdin, &mut stdout)?;
@@ -536,9 +536,8 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let _guard = KillOnDrop(&mut child);
 
     let _init = handshake(&mut stdin, &mut stdout)?;

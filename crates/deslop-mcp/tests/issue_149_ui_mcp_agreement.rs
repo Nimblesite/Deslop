@@ -17,10 +17,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 mod common;
-use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
-};
+use common::{initialized_mcp, lsp_workspace_with_socket, structured_content, McpHandle};
 
 /// Lower bound for the slug shared with `clusterSlug()` in the VSIX
 /// (`clients/vscode/src/types/report.ts`). Hard-coded here so a drift
@@ -37,12 +34,7 @@ const SLUG_LEN: usize = 7;
 /// prefix-by-prefix match.
 #[test]
 fn ui_and_mcp_top_offenders_agree_on_worst_first_ids() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, socket) = lsp_workspace_with_socket()?;
 
     let canonical_ids = lsp_report_cluster_ids(&socket)?;
     ensure!(
@@ -75,12 +67,7 @@ fn ui_and_mcp_top_offenders_agree_on_worst_first_ids() -> Result<()> {
 /// must be able to fetch the cluster without first expanding the id.
 #[test]
 fn cluster_by_id_accepts_seven_hex_slug() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, socket) = lsp_workspace_with_socket()?;
 
     let canonical_ids = lsp_report_cluster_ids(&socket)?;
     let full_id = canonical_ids

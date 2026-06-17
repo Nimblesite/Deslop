@@ -8,6 +8,9 @@ use std::{
 use anyhow::Result;
 use assert_cmd::Command;
 
+mod common;
+use crate::common::*;
+
 #[test]
 fn rendered_occurrence_locations_are_line_column_not_byte_ranges() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -58,13 +61,6 @@ fn is_compact_range_token(token: &str) -> bool {
     tail.chars()
         .take_while(|c| c.is_ascii_digit() || *c == '-')
         .any(|c| c == '-')
-}
-
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
 }
 
 fn with_ext(base: &Path, ext: &str) -> PathBuf {

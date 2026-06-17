@@ -16,6 +16,9 @@ use std::{
 use anyhow::Result;
 use assert_cmd::Command;
 
+mod common;
+use crate::common::*;
+
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
     let _replaced = path.set_extension("json");
@@ -36,13 +39,6 @@ fn run_report(tmp: &Path, scan_root: &Path, min_nodes: &str) -> Result<serde_jso
         .success();
     let body = fs::read_to_string(report_path(tmp))?;
     Ok(serde_json::from_str(&body)?)
-}
-
-fn clusters(report: &serde_json::Value) -> &[serde_json::Value] {
-    report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
 }
 
 fn occurrence_paths(cluster: &serde_json::Value) -> Vec<String> {

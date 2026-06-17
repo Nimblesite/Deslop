@@ -147,16 +147,7 @@ impl EmbeddingProvider for OllamaProvider {
                 provider_id: PROVIDER_ID.to_owned(),
                 message: "expected one embedding, got none".to_owned(),
             })?;
-        if embedding.len() != self.spec.dimensions {
-            return Err(ProviderError::Malformed {
-                provider_id: PROVIDER_ID.to_owned(),
-                message: format!(
-                    "expected {} dims, got {}",
-                    self.spec.dimensions,
-                    embedding.len()
-                ),
-            });
-        }
+        ensure_dimensions(&embedding, self.spec.dimensions)?;
         Ok(embedding)
     }
 
@@ -177,16 +168,7 @@ impl EmbeddingProvider for OllamaProvider {
             });
         }
         for embedding in &embeddings {
-            if embedding.len() != self.spec.dimensions {
-                return Err(ProviderError::Malformed {
-                    provider_id: PROVIDER_ID.to_owned(),
-                    message: format!(
-                        "expected {} dims, got {}",
-                        self.spec.dimensions,
-                        embedding.len()
-                    ),
-                });
-            }
+            ensure_dimensions(embedding, self.spec.dimensions)?;
         }
         Ok(embeddings)
     }
@@ -333,6 +315,17 @@ struct TagEntry {
     /// users can see how much disk each installed model consumes.
     #[serde(default)]
     size: u64,
+}
+
+/// Rejects an embedding whose dimensionality does not match `expected`.
+fn ensure_dimensions(embedding: &[f32], expected: usize) -> Result<(), ProviderError> {
+    if embedding.len() != expected {
+        return Err(ProviderError::Malformed {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: format!("expected {} dims, got {}", expected, embedding.len()),
+        });
+    }
+    Ok(())
 }
 
 /// Fetches the `GET /api/tags` payload.

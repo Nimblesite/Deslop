@@ -20,6 +20,9 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::*;
+
 /// The hand-written copy-pasted logic clone, duplicated verbatim across two
 /// files. Six-statement method body, large enough to cluster at the test's
 /// `--min-nodes` floor.
@@ -31,14 +34,6 @@ fn report_path(tmp: &Path, stem: &str) -> PathBuf {
     let mut path = tmp.join(stem);
     let _replaced = path.set_extension("json");
     path
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn occurrence_paths(cluster: &Value) -> Vec<&str> {

@@ -2,21 +2,15 @@
 //! generator template strings that produce them are intentionally
 //! related, but they are not actionable duplicate logic.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+mod common;
+
+use std::{fs, path::Path};
 
 use anyhow::{anyhow, Result};
 use assert_cmd::Command;
 use serde_json::Value;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
@@ -35,35 +29,11 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
-fn occurrences(cluster: &Value) -> &[Value] {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
 fn occurrence_path(occurrence: &Value) -> Result<&str> {
     occurrence
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("reported occurrence is missing path"))
-}
-
-fn occurrence_byte(occurrence: &Value, field: &str) -> Result<usize> {
-    occurrence
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| anyhow!("reported occurrence is missing {field}"))
 }
 
 fn occurrence_text(scan_root: &Path, occurrence: &Value) -> Result<String> {

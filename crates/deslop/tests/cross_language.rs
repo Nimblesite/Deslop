@@ -9,6 +9,9 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::*;
+
 #[test]
 fn default_run_does_not_report_cross_language_clusters() -> Result<()> {
     let report = run_mixed_fixture(None)?;
@@ -84,13 +87,6 @@ fn occurrence_extensions(cluster: &Value) -> Result<BTreeSet<String>> {
 
 fn extension(path: &str) -> Option<&str> {
     Path::new(path).extension()?.to_str()
-}
-
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
 }
 
 fn with_ext(base: &Path, ext: &str) -> PathBuf {

@@ -27,17 +27,13 @@
 //!     arguments are suppressed (#70) — each paired with a genuine clone
 //!     that must still surface, proving the suppression stays targeted.
 
-use std::{fs, path::Path, path::PathBuf};
+use std::{fs, path::Path};
 
 use anyhow::Result;
 use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;

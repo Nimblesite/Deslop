@@ -1,6 +1,12 @@
 //! Shared E2E helpers for the `deslop-lsp` integration tests. Drives the
 //! real binary over stdio with LSP framing — no mocked transport, no
 //! fake service.
+//!
+//! Each integration binary pulls in only the subset of helpers it needs,
+//! so the unused-symbol lint is silenced for this shared module (matching
+//! the `deslop-core` and `deslop-mcp` test commons).
+
+#![allow(dead_code)]
 
 use std::{
     fs,
@@ -65,6 +71,26 @@ pub fn take_io(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>,
         .take()
         .ok_or_else(|| anyhow!("child stderr missing"))?;
     Ok((stdin, BufReader::new(stdout), stderr))
+}
+
+/// Copies the named fixture into a temp workspace, spawns the LSP against
+/// it, and takes the child's stdio handles. Returns the workspace temp dir
+/// (keep it bound — dropping it deletes the workspace), the child process,
+/// and its stdin / buffered stdout / stderr. The caller binds whichever it
+/// needs `mut`.
+pub fn spawn_lsp_on_fixture(
+    name: &str,
+) -> Result<(
+    tempfile::TempDir,
+    Child,
+    ChildStdin,
+    BufReader<ChildStdout>,
+    ChildStderr,
+)> {
+    let workspace = copy_fixture(name)?;
+    let mut child = spawn_lsp(workspace.path())?;
+    let (stdin, stdout, stderr) = take_io(&mut child)?;
+    Ok((workspace, child, stdin, stdout, stderr))
 }
 
 /// Writes one LSP framed payload.

@@ -20,8 +20,8 @@ use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
+    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_initialize,
+    structured_content, wait_for_path, ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
 };
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
@@ -30,12 +30,7 @@ use common::{
 /// behind the IPC chain in production.
 #[test]
 fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
 
@@ -77,12 +72,7 @@ fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
 /// array (no stub fallback row, no legacy keys).
 #[test]
 fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = mcp.request(

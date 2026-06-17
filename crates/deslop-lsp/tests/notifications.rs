@@ -6,22 +6,19 @@
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
-    path::{Path, PathBuf},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio},
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        mpsc::{self, Receiver},
-    },
+    io::{BufReader, Read},
+    path::Path,
+    process::{Child, ChildStderr, ChildStdin, ChildStdout},
+    sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, ensure, Result};
 
-type FrameResult = std::result::Result<serde_json::Value, String>;
+mod common;
+use crate::common::*;
 
-/// JSON-RPC id counter for this integration-test process.
-static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
+type FrameResult = std::result::Result<serde_json::Value, String>;
 
 /// Accepts normal VS Code notifications without tower-lsp fallback
 /// warnings.
@@ -254,74 +251,6 @@ impl Drop for KillOnDrop<'_> {
     }
 }
 
-/// Returns a workspace-relative fixture path.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("deslop")
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
-
-/// Copies a fixture into a temp directory so the LSP can write caches.
-fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
-    let src = fixture(name);
-    let dst = tempfile::tempdir()?;
-    for entry in fs::read_dir(&src)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let _bytes = fs::copy(entry.path(), dst.path().join(entry.file_name()))?;
-        }
-    }
-    Ok(dst)
-}
-
-/// Spawns the LSP binary against `workspace_root`.
-fn spawn_lsp(workspace_root: &Path) -> Result<Child> {
-    let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
-    Ok(Command::new(bin)
-        .arg(workspace_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?)
-}
-
-/// Acquires child stdio handles after a successful spawn.
-fn take_io(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>, ChildStderr)> {
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow!("child stderr missing"))?;
-    Ok((stdin, BufReader::new(stdout), stderr))
-}
-
-/// Writes one LSP framed payload.
-fn write_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
-}
-
-/// Reads one framed JSON-RPC response.
-fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<serde_json::Value> {
-    let length = read_content_length(reader)?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
-}
-
 /// Reads frames on a background thread so tests can time out waiting
 /// for notifications without blocking forever on stdout.
 fn spawn_frame_reader(mut stdout: BufReader<ChildStdout>) -> Receiver<FrameResult> {
@@ -333,38 +262,6 @@ fn spawn_frame_reader(mut stdout: BufReader<ChildStdout>) -> Receiver<FrameResul
         }
     });
     rx
-}
-
-/// Reads the `Content-Length` header block.
-fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
-}
-
-/// Sends a request and waits for the matching response id.
-fn send_and_recv(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    id: i64,
-    payload: &str,
-) -> Result<serde_json::Value> {
-    write_frame(stdin, payload)?;
-    loop {
-        let frame = read_frame(reader)?;
-        if frame.get("id").and_then(serde_json::Value::as_i64) == Some(id) {
-            return Ok(frame);
-        }
-    }
 }
 
 /// Sends a request and waits for the matching response from a frame channel.
@@ -439,30 +336,6 @@ fn recv_next(
     frame.map_err(|error| anyhow!(error))
 }
 
-/// Builds an `initialize` request.
-fn initialize_request() -> Result<(i64, String)> {
-    request(
-        "initialize",
-        &serde_json::json!({
-            "processId": null,
-            "rootUri": null,
-            "capabilities": {}
-        }),
-    )
-}
-
-/// Builds a JSON-RPC request.
-fn request(method: &str, params: &serde_json::Value) -> Result<(i64, String)> {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params
-    });
-    Ok((id, serde_json::to_string(&payload)?))
-}
-
 /// Builds the notification set VS Code sends during normal operation.
 fn normal_vscode_notifications(path: &Path) -> Result<Vec<String>> {
     let uri = tower_lsp::lsp_types::Url::from_file_path(path)
@@ -508,16 +381,6 @@ fn watched_file_changed(path: &Path) -> Result<String> {
 /// Replacement content with no duplicated method body.
 fn unrelated_csharp() -> &'static str {
     "public class Beta {\n    public string Name() {\n        return \"unique\";\n    }\n}\n"
-}
-
-/// Builds a JSON-RPC notification.
-fn notification(method: &str, params: &serde_json::Value) -> Result<String> {
-    let payload = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params
-    });
-    Ok(serde_json::to_string(&payload)?)
 }
 
 /// Returns the report cluster count from a JSON-RPC response frame.

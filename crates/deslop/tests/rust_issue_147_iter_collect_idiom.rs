@@ -4,21 +4,14 @@
 //! The cluster must not surface as actionable duplication.
 //! Spec: [CLONE-NOISE-RUST-ITER-COLLECT].
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(fixture_name: &str) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
@@ -35,13 +28,6 @@ fn run_report(fixture_name: &str) -> Result<Value> {
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
     Ok(serde_json::from_str(&body)?)
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
 }
 
 fn cluster_occurrence_paths(cluster: &Value) -> Vec<String> {

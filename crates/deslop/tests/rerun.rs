@@ -14,13 +14,8 @@ use assert_cmd::Command;
 use predicates::str::contains;
 use serde_json::Value;
 
-/// Returns the absolute path of a fixture under `tests/fixtures/<name>`.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 /// Copies every top-level file in `src` into `dst` (created fresh).
 fn seed(src: &Path, dst: &Path) -> Result<()> {

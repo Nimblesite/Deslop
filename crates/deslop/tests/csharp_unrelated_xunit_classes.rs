@@ -14,21 +14,13 @@
 //! anchor; LSH-only matches with `structural ≈ 0` belong in
 //! `loosely_similar`, not `nearly_identical`.
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::{Context, Result};
 use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
     let mut cmd = Command::cargo_bin("deslop")?;

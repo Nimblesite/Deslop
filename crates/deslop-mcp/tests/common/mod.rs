@@ -14,7 +14,7 @@
 use std::{
     fs,
     io::{BufRead, BufReader, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -154,6 +154,20 @@ pub fn wait_for_path(path: &Path, timeout: Duration) -> Result<()> {
     }
 }
 
+/// Spawns an initialized LSP over a fresh copied fixture and blocks until
+/// its IPC socket exists, returning the workspace temp dir, a kill-on-drop
+/// guard for the LSP process, and the socket path. The caller MUST bind the
+/// returned `TempDir` and `ChildKillOnDrop` to live (named) locals — dropping
+/// either early deletes the workspace or kills the LSP mid-test.
+pub fn lsp_workspace_with_socket() -> Result<(TempDir, ChildKillOnDrop, PathBuf)> {
+    let workspace = copied_fixture()?;
+    let lsp = spawn_lsp_and_initialize(workspace.path())?;
+    let guard = ChildKillOnDrop(lsp);
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    Ok((workspace, guard, socket))
+}
+
 /// Spawned MCP child + an id-tracked JSON-RPC request loop.
 pub struct McpHandle {
     child: Child,
@@ -260,4 +274,49 @@ pub fn structured_content(response: &Value, tool: &str) -> Result<Value> {
         .pointer("/result/structuredContent")
         .cloned()
         .ok_or_else(|| anyhow!("response missing structuredContent: {response}"))
+}
+
+/// Returns the cluster ids on a `report-get` page in stable order.
+pub fn cluster_ids(page: &Value) -> Vec<String> {
+    page.get("clusters")
+        .and_then(Value::as_array)
+        .map(|clusters| {
+            clusters
+                .iter()
+                .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Calls the `rescan` MCP tool and returns the structured payload.
+pub fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
+    let response = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "rescan",
+            "arguments": {
+                "paths": paths,
+                "n": 8,
+            }
+        }),
+    )?;
+    structured_content(&response, "rescan")
+}
+
+/// Resolves a JSON pointer in `value`, erroring when the path is absent.
+pub fn value_get(value: &Value, pointer: &str) -> Result<Value> {
+    value
+        .pointer(pointer)
+        .cloned()
+        .ok_or_else(|| anyhow!("pointer {pointer} not found in {value}"))
+}
+
+/// Read-only path to the bundled `csharp-mcp` MCP fixture template.
+pub fn fixture_root() -> &'static Path {
+    Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/csharp-mcp"
+    ))
 }

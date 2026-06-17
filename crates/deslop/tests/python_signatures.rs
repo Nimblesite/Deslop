@@ -16,12 +16,8 @@ use std::{fs, path::Path, path::PathBuf};
 use anyhow::Result;
 use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn json_output(tmp: &Path) -> PathBuf {
     tmp.join("report.json")

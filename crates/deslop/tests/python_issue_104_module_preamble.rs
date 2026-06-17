@@ -13,21 +13,14 @@
 //! directions: the differently-bodied preamble is hidden, and the
 //! verbatim-copied helper module stays visible.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
@@ -46,14 +39,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
 fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
     cluster
         .get("occurrences")
@@ -63,28 +48,6 @@ fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
         .iter()
         .map(|occurrence| occurrence_text(scan_root, occurrence))
         .collect()
-}
-
-fn occurrence_text(scan_root: &Path, occurrence: &Value) -> Result<String> {
-    let path = occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("occurrence missing path"))?;
-    let source = fs::read_to_string(scan_root.join(path))?;
-    let start = occurrence_byte(occurrence, "start_byte")?;
-    let end = occurrence_byte(occurrence, "end_byte")?;
-    source
-        .get(start..end)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow!("occurrence range invalid"))
-}
-
-fn occurrence_byte(occurrence: &Value, field: &str) -> Result<usize> {
-    occurrence
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| anyhow!("occurrence missing {field}"))
 }
 
 /// Collects every visible cluster whose occurrences contain `needle`.

@@ -12,20 +12,13 @@
 //! `bucket=nearly_identical` together with `structural >= 0.99`,
 //! `token_jaccard < 0.05`, and `embedding_cos < 0.05`.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use anyhow::Result;
 use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
     let mut cmd = Command::cargo_bin("deslop")?;

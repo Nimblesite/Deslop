@@ -13,6 +13,9 @@ use anyhow::{anyhow, Context, Result};
 use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::*;
+
 fn deslop_core_lang_dir() -> Result<PathBuf> {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     Ok(crate_dir
@@ -40,22 +43,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
-fn occurrences(cluster: &Value) -> &[Value] {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
 fn cluster_paths(cluster: &Value) -> BTreeSet<&str> {
     occurrences(cluster)
         .iter()
@@ -79,14 +66,6 @@ fn occurrence_path(occurrence: &Value) -> Result<&str> {
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("reported occurrence is missing path"))
-}
-
-fn occurrence_byte(occurrence: &Value, field: &str) -> Result<usize> {
-    occurrence
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| anyhow!("reported occurrence is missing {field}"))
 }
 
 fn language_parser_adapter_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>> {

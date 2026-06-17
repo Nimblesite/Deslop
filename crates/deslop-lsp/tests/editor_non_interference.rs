@@ -19,7 +19,7 @@ use std::{path::Path, thread, time::Duration};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use crate::common::{call, copy_fixture, handshake, spawn_lsp, take_io};
+use crate::common::{call, copy_fixture, handshake, spawn_lsp, spawn_lsp_on_fixture, take_io};
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -49,9 +49,8 @@ const FORBIDDEN_CAPABILITIES: &[&str] = &[
 
 #[test]
 fn initialize_advertises_no_standard_language_providers() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let init = handshake(&mut stdin, &mut stdout)?;
     let caps = init
         .pointer("/result/capabilities")

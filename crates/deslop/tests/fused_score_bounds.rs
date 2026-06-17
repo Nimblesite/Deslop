@@ -9,12 +9,8 @@ use std::{
 use anyhow::Result;
 use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");

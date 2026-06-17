@@ -4,6 +4,12 @@
 //! `use crate::common::*;`. It centralises the fixture-path lookup, the
 //! `deslop` invocation, and the report-walking helpers that every
 //! per-issue false-positive test would otherwise copy verbatim.
+//!
+//! Each integration binary pulls in only the subset of helpers it needs,
+//! so the unused-symbol lint is silenced for this shared module (matching
+//! the `deslop-core` and `deslop-mcp` test commons).
+
+#![allow(dead_code)]
 
 use std::{fs, path::Path, path::PathBuf};
 

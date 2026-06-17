@@ -25,24 +25,8 @@ use deslop_core::{
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError, Report,
 };
 
-/// Returns the absolute fixture path used by the CLI tests.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("deslop")
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
-
-/// Copies the fixture tree into a temp dir so destructive edits never
-/// pollute the source repo.
-fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
-    let src = fixture(name);
-    let dir = tempfile::tempdir().context("tempdir")?;
-    copy_recursive(&src, dir.path())?;
-    Ok(dir)
-}
+mod common;
+use crate::common::*;
 
 /// Counts live cluster occurrences whose relative path contains the
 /// given directory or file name as a whole path component. Component
@@ -60,20 +44,6 @@ fn occurrences_with_component(report: &Report, component: &str) -> usize {
                 .any(|part| part.as_os_str() == component)
         })
         .count()
-}
-
-fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
-    if src.is_dir() {
-        fs::create_dir_all(dst).with_context(|| format!("mkdir {}", dst.display()))?;
-        for entry in fs::read_dir(src).with_context(|| format!("read_dir {}", src.display()))? {
-            let entry = entry.context("dir entry")?;
-            let target = dst.join(entry.file_name());
-            copy_recursive(&entry.path(), &target)?;
-        }
-    } else {
-        let _bytes = fs::copy(src, dst).with_context(|| format!("copy {}", src.display()))?;
-    }
-    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -4,21 +4,14 @@
 //! not actionable duplication, and must never surface in the report.
 //! Spec: [CLONE-NOISE-RUST-DECL].
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(fixture_name: &str) -> Result<Value> {
     let tmp = tempfile::tempdir()?;

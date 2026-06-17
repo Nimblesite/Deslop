@@ -21,18 +21,13 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::*;
+
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
     let _replaced = path.set_extension("json");
     path
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn run(src: &Path, out_dir: &Path, min_nodes: &str) -> Result<Value> {
