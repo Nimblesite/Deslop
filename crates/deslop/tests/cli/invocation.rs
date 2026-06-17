@@ -17,8 +17,7 @@ fn prints_version_and_exits_zero() -> Result<()> {
 #[test]
 fn prints_json_version_contract() -> Result<()> {
     let output = Command::cargo_bin("deslop")?
-        .arg("--version")
-        .arg("--json")
+        .args(["--version", "--json"])
         .output()?;
     assert!(output.status.success(), "status was {}", output.status);
     let value: Value = serde_json::from_slice(&output.stdout)?;
@@ -90,7 +89,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
     assert!(json.contains("\"action_hints\""), "action_hints missing");
@@ -147,7 +146,7 @@ fn long_clone_html_caps_inline_preview_and_folds_rest() -> Result<()> {
     )?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("class=\"snippet\""),
@@ -185,10 +184,7 @@ fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--nojson")
-        .arg("--nohtml")
+        .args(["--min-nodes", "8", "--nojson", "--nohtml"])
         .assert()
         .success();
     assert!(!out.json.exists(), "json should be suppressed");
@@ -204,9 +200,7 @@ fn suppressing_every_format_is_an_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--nojson")
-        .arg("--notext")
-        .arg("--nohtml")
+        .args(["--nojson", "--notext", "--nohtml"])
         .assert()
         .failure()
         .stderr(contains("must remain enabled"));
@@ -222,10 +216,7 @@ fn from_report_rerenders_without_analysing() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut first = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = first
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--notext")
-        .arg("--nohtml")
+        .args(["--min-nodes", "8", "--notext", "--nohtml"])
         .assert()
         .success();
     assert!(out.json.exists());

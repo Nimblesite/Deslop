@@ -30,9 +30,7 @@ fn run_report(tmp: &Path, scan_root: &Path) -> Result<Value> {
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
         .arg(scan_root)
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
+        .args(["--embeddings", "off", "--output"])
         .arg(tmp.join("report"))
         .assert()
         .success();

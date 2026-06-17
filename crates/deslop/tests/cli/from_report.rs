@@ -32,14 +32,11 @@ fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
     fs::write(&report_path, current_report)?;
     let output_prefix = tmp.path().join("report");
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(tmp.path(), &output_prefix)?;
     let _assertion = cmd
-        .arg(tmp.path())
         .arg("--from-report")
         .arg(&report_path)
         .arg("--no-color")
-        .arg("--output")
-        .arg(&output_prefix)
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
@@ -100,13 +97,10 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
     fs::write(&report_path, report)?;
     let output_prefix = tmp.path().join("report");
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(tmp.path(), &output_prefix)?;
     let _assertion = cmd
-        .arg(tmp.path())
         .arg("--from-report")
         .arg(&report_path)
-        .arg("--output")
-        .arg(&output_prefix)
         .assert()
         .success();
     let html = fs::read_to_string(&out.html)?;
@@ -132,13 +126,9 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
 fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_command(&fixture("csharp-prologue-false-positive"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(fixture("csharp-prologue-false-positive"))
-        .arg("--min-nodes")
-        .arg("2")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
+        .args(["--min-nodes", "2"])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;

@@ -26,7 +26,10 @@ use std::{
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use serde::Deserialize;
 
-use crate::{error::CoreError, report_metrics::validate_threshold_percent};
+use crate::{
+    error::CoreError,
+    report_metrics::{validate_threshold_percent, ThresholdSource, ThresholdSummary},
+};
 
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
@@ -527,12 +530,17 @@ impl ExclusionConfig {
         self
     }
 
-    /// Returns the `[threshold] max_duplication_percent` loaded from
-    /// the config file, if any. `None` means the file did not opt in
-    /// to CI gating per [EXIT-CODES].
+    /// Resolves the config `[threshold] max_duplication_percent` into a
+    /// verdict against the `measured` repo-wide duplication percentage.
+    /// `None` config yields the "no gate" summary. This is the single
+    /// place a config threshold becomes a [`ThresholdSummary`], so the
+    /// live LSP/MCP render path and the CLI agree ([EXIT-CODES]).
     #[must_use]
-    pub const fn fail_over_percent(&self) -> Option<f64> {
-        self.fail_over_percent
+    pub fn resolve_threshold(&self, measured: f64) -> ThresholdSummary {
+        match self.fail_over_percent {
+            Some(percent) => ThresholdSummary::resolve(percent, ThresholdSource::Config, measured),
+            None => ThresholdSummary::none(),
+        }
     }
 
     /// Returns whether candidate pairs may span different parser

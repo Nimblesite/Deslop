@@ -25,7 +25,6 @@ mod mock_ollama;
 use std::{fs, path::Path};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use mock_ollama::MockOllama;
 use serde_json::Value;
 
@@ -38,20 +37,19 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("5")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
-        .arg(server.endpoint())
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(scan_root, &output)?
+        .args([
+            "--min-nodes",
+            "5",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            server.endpoint(),
+        ])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;

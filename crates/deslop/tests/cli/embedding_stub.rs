@@ -13,7 +13,7 @@ fn default_run_records_embeddings_off_provenance() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(
         json.contains("\"embedding_provenance\": null"),
@@ -33,12 +33,14 @@ fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-endpoint")
-        .arg("http://127.0.0.1:1")
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-endpoint",
+            "http://127.0.0.1:1",
+        ])
         .assert()
         .failure()
         .stderr(contains("unreachable"));
@@ -54,12 +56,14 @@ fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-endpoint")
-        .arg("http://127.0.0.1:1")
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "auto",
+            "--embedding-endpoint",
+            "http://127.0.0.1:1",
+        ])
         .assert()
         .success();
     let json = fs::read_to_string(&out.json)?;
@@ -77,8 +81,7 @@ fn embeddings_flag_rejects_unknown_values() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--embeddings")
-        .arg("maybe")
+        .args(["--embeddings", "maybe"])
         .assert()
         .failure()
         .stderr(contains("invalid --embeddings value"));
@@ -99,16 +102,18 @@ fn mock_ollama_records_provenance_and_runs_embedding_pass() -> Result<()> {
     seed_scan_root(&fixture("csharp-type3"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
-        .arg(server.endpoint())
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            server.endpoint(),
+        ])
         .assert()
         .success();
     let json = fs::read_to_string(&out.json)?;
@@ -145,16 +150,18 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
-        .arg(server.endpoint())
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            server.endpoint(),
+        ])
         .assert()
         .success();
     let cache_dir = scan_root
@@ -169,16 +176,18 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
     );
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
-        .arg(server.endpoint())
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            server.endpoint(),
+        ])
         .assert()
         .success();
     Ok(())
@@ -196,16 +205,18 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
-        .arg(server.endpoint())
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "auto",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            server.endpoint(),
+        ])
         .assert()
         .success();
     let json = fs::read_to_string(&out.json)?;
@@ -224,10 +235,7 @@ fn unknown_embedding_provider_is_rejected() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-provider")
-        .arg("imaginary-provider")
+        .args(["--embeddings", "auto", "--embedding-provider", "imaginary-provider"])
         .assert()
         .failure()
         .stderr(contains("unknown embedding provider"));
@@ -243,10 +251,7 @@ fn stub_embedding_provider_is_rejected_in_production() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-provider")
-        .arg("stub")
+        .args(["--embeddings", "auto", "--embedding-provider", "stub"])
         .assert()
         .failure()
         .stderr(contains("unknown embedding provider"));

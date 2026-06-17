@@ -14,7 +14,6 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 
 mod common;
 use crate::common::*;
@@ -26,15 +25,9 @@ fn report_path(tmp: &Path) -> PathBuf {
 }
 
 fn run_report(tmp: &Path, scan_root: &Path, min_nodes: &str) -> Result<serde_json::Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
     let _assertion = cmd
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg(min_nodes)
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(tmp.join("report"))
+        .args(["--min-nodes", min_nodes, "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(report_path(tmp))?;

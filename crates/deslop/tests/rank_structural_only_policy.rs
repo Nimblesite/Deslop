@@ -98,14 +98,8 @@ fn write_fixture(src: &Path) -> Result<()> {
 /// Runs the CLI against `src` and parses the JSON report.
 fn run_report(src: &Path, tmp: &Path) -> Result<Value> {
     let output = tmp.join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(src)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(src, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
@@ -291,10 +285,7 @@ fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()>
         fs::write(src.join(".deslop.toml"), body)?;
         let _assertion = Command::cargo_bin("deslop")?
             .arg(&src)
-            .arg("--min-nodes")
-            .arg("30")
-            .arg("--embeddings")
-            .arg("off")
+            .args(["--min-nodes", "30", "--embeddings", "off"])
             .assert()
             .failure()
             .stderr(predicates::str::contains("structural_only_weight"))

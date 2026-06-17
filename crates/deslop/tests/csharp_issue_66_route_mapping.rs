@@ -4,7 +4,6 @@
 use std::{fs, path::Path};
 
 use anyhow::{anyhow, Result};
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -13,14 +12,8 @@ use crate::common::*;
 fn run_report(scan_root: &Path) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(scan_root, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
         .assert()
         .success();
     let mut json_path = output;

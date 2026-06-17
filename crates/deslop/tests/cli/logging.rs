@@ -7,9 +7,7 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env_remove("RUST_LOG")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -56,10 +54,7 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env_remove("RUST_LOG")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--log-to-console")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--log-to-console", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -84,11 +79,7 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
         .env_remove("RUST_LOG")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--log-level")
-        .arg("warn")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--log-level", "warn", "--no-color"])
         .assert()
         .success();
     let log_path = find_timestamped_logs(tmp.path())?
@@ -111,10 +102,7 @@ fn preamble_announces_what_the_run_will_do() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -144,9 +132,7 @@ fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -168,8 +154,7 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
     let assertion = cmd
         .env("DESLOP_FORCE_COLOR", "1")
         .env_remove("NO_COLOR")
-        .arg("--min-nodes")
-        .arg("8")
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -192,10 +177,7 @@ fn rust_log_env_controls_severity_filter() -> Result<()> {
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
         .env("RUST_LOG", "warn")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--log-to-console")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--log-to-console", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -216,8 +198,7 @@ fn no_color_env_overrides_force_color() -> Result<()> {
     let assertion = cmd
         .env("NO_COLOR", "1")
         .env("DESLOP_FORCE_COLOR", "1")
-        .arg("--min-nodes")
-        .arg("8")
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -241,18 +222,12 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
     // First run populates the cache.
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
+        .args(["--min-nodes", "8", "--incremental"])
         .assert()
         .success();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--incremental", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -276,18 +251,19 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+        ])
         .arg(server.endpoint())
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--technical", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
@@ -309,10 +285,7 @@ fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();

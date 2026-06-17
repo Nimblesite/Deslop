@@ -54,12 +54,14 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
     seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
     let json = load_report_json(&out.json)?;
@@ -149,12 +151,14 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "auto",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
     let json = load_report_json(&out.json)?;
@@ -188,12 +192,14 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
 
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
 
@@ -224,12 +230,14 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     let started = Instant::now();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
     let elapsed = started.elapsed();
@@ -263,12 +271,14 @@ fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
     let text = fs::read_to_string(&out.txt)?;
@@ -298,13 +308,15 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
 
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--incremental")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "15",
+            "--incremental",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
 
@@ -328,13 +340,15 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
 
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--incremental")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
+        .args([
+            "--min-nodes",
+            "15",
+            "--incremental",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ])
         .assert()
         .success();
     let second_json = load_report_json(&tmp.path().join("second.json"))?;

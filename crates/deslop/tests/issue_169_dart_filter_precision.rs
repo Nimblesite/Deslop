@@ -18,7 +18,6 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -31,17 +30,10 @@ fn report_path(tmp: &Path) -> PathBuf {
 }
 
 fn run(src: &Path, out_dir: &Path, min_nodes: &str) -> Result<Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(src, &out_dir.join("report"))?;
     let _assertion = cmd
-        .arg(src)
-        .arg("--min-nodes")
-        .arg(min_nodes)
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--notext")
-        .arg("--nohtml")
-        .arg("--output")
-        .arg(out_dir.join("report"))
+        .args(["--min-nodes", min_nodes])
+        .args(["--embeddings", "off", "--notext", "--nohtml"])
         .assert()
         .success();
     let body = fs::read_to_string(report_path(out_dir))?;

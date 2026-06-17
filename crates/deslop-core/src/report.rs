@@ -155,7 +155,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         .collect();
     reweigh_by_visible_occurrences(&mut visible_clusters, policy);
     log_bucket_distribution(&visible_clusters, clusters_hidden);
-    let metrics = compute_repo_metrics(&MetricsInputs {
+    let mut metrics = compute_repo_metrics(&MetricsInputs {
         clusters: inputs.clusters,
         sources: inputs.sources,
         file_languages: inputs.file_languages,
@@ -163,6 +163,12 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         exclusion: inputs.exclusion,
         analysed_lines: inputs.analysed_lines,
     });
+    // Resolve the [EXIT-CODES] duplication gate here so every surface that
+    // renders through this path carries the breach verdict — the live
+    // LSP/MCP servers, not just the CLI. `compute_repo_metrics` leaves it
+    // `none()` because it has no config; the CLI may still override the
+    // result via `--fail-over` / `--no-fail-over` after this returns.
+    metrics.threshold = inputs.exclusion.resolve_threshold(metrics.duplication_percent);
     let boilerplate_hints = build_boilerplate_hints(
         inputs.boilerplate_ranges,
         inputs.registry,

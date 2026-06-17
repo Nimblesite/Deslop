@@ -311,15 +311,8 @@ fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
         report.metrics.threshold = ThresholdSummary::none();
         return Ok(());
     }
-    let config_percent = resolve_config_threshold(args)?;
-    report.metrics.threshold = match config_percent {
-        Some(percent) => ThresholdSummary::resolve(
-            percent,
-            ThresholdSource::Config,
-            report.metrics.duplication_percent,
-        ),
-        None => ThresholdSummary::none(),
-    };
+    report.metrics.threshold =
+        load_run_config(args)?.resolve_threshold(report.metrics.duplication_percent);
     Ok(())
 }
 
@@ -333,14 +326,6 @@ fn load_run_config(args: &Cli) -> Result<ExclusionConfig> {
         None => ExclusionConfig::discover(&args.path)
             .with_context(|| format!("discover config in {}", args.path.display())),
     }
-}
-
-/// Loads `.deslop.toml` (if any) to surface the
-/// `[threshold] max_duplication_percent` key without mutating the
-/// pipeline path. Returns `None` when no config file exists or the
-/// key is absent.
-fn resolve_config_threshold(args: &Cli) -> Result<Option<f64>> {
-    Ok(load_run_config(args)?.fail_over_percent())
 }
 
 /// Resolves whether the HTML report splits by language: the CLI

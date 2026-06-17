@@ -14,7 +14,6 @@
 use std::{fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
-use assert_cmd::Command;
 
 mod common;
 use crate::common::*;
@@ -26,12 +25,9 @@ fn json_output(tmp: &Path) -> PathBuf {
 fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
     let out = json_output(tmp.path());
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture(fixture_name))
+    let _assertion = deslop_cmd(&fixture(fixture_name), &tmp.path().join("report"))?
         .arg("--min-nodes")
         .arg(min_nodes.to_string())
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .success();
     let json = fs::read_to_string(&out)?;

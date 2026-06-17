@@ -10,7 +10,6 @@
 use std::fs;
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -19,14 +18,8 @@ use crate::common::*;
 fn run_report(fixture_name: &str) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture(fixture_name))
-        .arg("--min-nodes")
-        .arg("3")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
+        .args(["--min-nodes", "3", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;

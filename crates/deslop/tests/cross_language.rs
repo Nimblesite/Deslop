@@ -6,7 +6,6 @@
 use std::{collections::BTreeSet, fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -39,15 +38,8 @@ fn config_can_enable_cross_language_clusters() -> Result<()> {
 fn run_mixed_fixture(config: Option<&str>) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _args = cmd
-        .arg(fixture("mixed-small"))
-        .arg("--min-nodes")
-        .arg("10")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output);
+    let mut cmd = deslop_cmd(&fixture("mixed-small"), &output)?;
+    let _args = cmd.args(["--min-nodes", "10", "--embeddings", "off"]);
     if let Some(contents) = config {
         let path = tmp.path().join("deslop.toml");
         fs::write(&path, contents)?;

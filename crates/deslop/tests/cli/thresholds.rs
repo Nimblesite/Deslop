@@ -8,11 +8,7 @@ fn fail_over_cli_passes_under_threshold() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--fail-over")
-        .arg("100")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--fail-over", "100", "--no-color"])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
@@ -35,9 +31,7 @@ fn fail_over_config_file_loaded_when_flag_absent() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .code(3);
     let json = read_json_report(&out.json)?;
@@ -60,11 +54,7 @@ fn fail_over_cli_overrides_config_file() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--fail-over")
-        .arg("100")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--fail-over", "100", "--no-color"])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
@@ -87,10 +77,7 @@ fn no_fail_over_overrides_config_file_threshold() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-fail-over")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-fail-over", "--no-color"])
         .assert()
         .success();
     let json = read_json_report(&out.json)?;
@@ -107,9 +94,7 @@ fn fail_over_invalid_value_exits_two() -> Result<()> {
     fs::create_dir_all(&scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--fail-over")
-        .arg("-1.0")
-        .arg("--no-color")
+        .args(["--fail-over", "-1.0", "--no-color"])
         .assert()
         .code(2);
     Ok(())
@@ -127,9 +112,7 @@ fn from_report_replays_metrics_without_reanalysing() -> Result<()> {
     let initial = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
     let original = read_json_report(&initial.json)?;
@@ -163,11 +146,7 @@ fn text_renderer_shows_repo_duplication_header() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--fail-over")
-        .arg("0")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--fail-over", "0", "--no-color"])
         .assert()
         .code(3);
     let txt = fs::read_to_string(&out.txt)?;
@@ -194,11 +173,7 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--fail-over")
-        .arg("0")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--fail-over", "0", "--no-color"])
         .assert()
         .code(3);
     let html_breached = fs::read_to_string(&out.html)?;
@@ -214,9 +189,7 @@ fn html_renderer_colour_codes_threshold_state() -> Result<()> {
     let out2 = outputs_under(tmp2.path());
     let mut cmd2 = deslop_command(&scan_root2, &tmp2.path().join("report"))?;
     let _assertion2 = cmd2
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
     let html_neutral = fs::read_to_string(&out2.html)?;
@@ -235,9 +208,7 @@ fn fail_over_above_100_exits_two() -> Result<()> {
     fs::create_dir_all(&scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--fail-over")
-        .arg("150.0")
-        .arg("--no-color")
+        .args(["--fail-over", "150.0", "--no-color"])
         .assert()
         .code(2);
     Ok(())
@@ -251,9 +222,7 @@ fn fail_over_nan_exits_two() -> Result<()> {
     fs::create_dir_all(&scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--fail-over")
-        .arg("NaN")
-        .arg("--no-color")
+        .args(["--fail-over", "NaN", "--no-color"])
         .assert()
         .code(2);
     Ok(())
@@ -273,9 +242,7 @@ fn config_threshold_out_of_range_fails_runtime() -> Result<()> {
     )?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .code(1);
     Ok(())

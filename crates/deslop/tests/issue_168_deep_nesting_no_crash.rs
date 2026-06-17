@@ -13,7 +13,6 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -44,17 +43,9 @@ fn deeply_nested_dart_file_is_skipped_not_crashed() -> Result<()> {
     fs::write(src.join("beta.dart"), helper)?;
 
     let report = report_path(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&src, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&src)
-        .arg("--min-nodes")
-        .arg("5")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--notext")
-        .arg("--nohtml")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
+        .args(["--min-nodes", "5", "--embeddings", "off", "--notext", "--nohtml"])
         .assert()
         .success();
 

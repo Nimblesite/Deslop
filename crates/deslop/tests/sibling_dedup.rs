@@ -139,9 +139,7 @@ fn run_and_load_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
         .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--output")
+        .args(["--min-nodes", "4", "--output"])
         .arg(tmp.join("report"))
         .assert()
         .success();

@@ -14,7 +14,6 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -91,17 +90,9 @@ fn dart_const_constructor_registry_is_hidden() -> Result<()> {
     )?;
 
     let report = report_path(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&src, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&src)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--notext")
-        .arg("--nohtml")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
+        .args(["--min-nodes", "30", "--embeddings", "off", "--notext", "--nohtml"])
         .assert()
         .success();
 
