@@ -10,12 +10,12 @@
 
 #![cfg(unix)]
 
-use anyhow::{anyhow, ensure, Result};
-use serde_json::{json, Value};
+use anyhow::{ensure, Result};
+use serde_json::json;
 use tempfile::TempDir;
 
 mod common;
-use common::initialized_mcp;
+use common::{error_and_message, expected_socket_fragment, initialized_mcp};
 
 #[test]
 fn issue_151_top_offenders_error_names_socket_path_when_lsp_absent() -> Result<()> {
@@ -26,22 +26,11 @@ fn issue_151_top_offenders_error_names_socket_path_when_lsp_absent() -> Result<(
         "tools/call",
         &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
     )?;
-    let error = response
-        .pointer("/error")
-        .ok_or_else(|| anyhow!("expected error frame, got: {response}"))?;
-    let message = error
-        .get("message")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("error missing string message: {error}"))?;
+    let (_error, message) = error_and_message(&response)?;
 
-    let canonical = std::fs::canonicalize(workspace.path())?;
-    let expected_socket_fragment = canonical
-        .join(".deslop-cache")
-        .join("deslop.sock")
-        .display()
-        .to_string();
+    let socket_fragment = expected_socket_fragment(workspace.path())?;
     ensure!(
-        message.contains(&expected_socket_fragment),
+        message.contains(&socket_fragment),
         "error must name the exact socket path so users hit by --root mismatch can diagnose ([Deslop#151]): {message}"
     );
     ensure!(

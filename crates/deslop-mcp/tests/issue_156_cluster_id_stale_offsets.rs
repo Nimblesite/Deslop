@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 
 mod common;
 use common::{
-    initialized_mcp, lsp_workspace_with_socket, rescan_call, structured_content, wait_for_path,
+    call_tool, initialized_mcp, lsp_workspace_with_socket, rescan_call, wait_for_path,
     SOCKET_TIMEOUT,
 };
 
@@ -84,14 +84,7 @@ fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
     // the agent has not explicitly forced a refresh between read
     // calls. Either re-resolve offsets at read time or invalidate
     // stale clusters; either fix keeps the agent from being misled.
-    let response = mcp.request(
-        "tools/call",
-        &json!({
-            "name": "cluster-by-id",
-            "arguments": { "id": target_id }
-        }),
-    )?;
-    let cluster = structured_content(&response, "cluster-by-id")?;
+    let cluster = call_tool(&mut mcp, "cluster-by-id", &json!({ "id": target_id }))?;
     let occurrences = cluster
         .get("occurrences")
         .and_then(Value::as_array)

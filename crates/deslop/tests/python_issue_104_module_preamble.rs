@@ -32,6 +32,21 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
+fn occurrence_paths(cluster: &Value) -> Vec<String> {
+    cluster
+        .get("occurrences")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|occ| {
+            occ.get("path")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
+        .collect()
+}
+
 fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
     cluster
         .get("occurrences")
@@ -53,6 +68,26 @@ fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<V
         }
     }
     Ok(hits)
+}
+
+/// True when some visible cluster carries `needle` in its occurrence texts and
+/// spans both `left_path` and `right_path` — i.e. a surviving clone bridges the
+/// two named files.
+fn clone_spans_both_files(
+    report: &Value,
+    scan_root: &Path,
+    needle: &str,
+    left_path: &str,
+    right_path: &str,
+) -> Result<bool> {
+    clusters(report).iter().try_fold(false, |found, cluster| {
+        let paths = occurrence_paths(cluster);
+        let texts = occurrence_texts(scan_root, cluster)?;
+        let touches = texts.iter().any(|text| text.contains(needle));
+        let left = paths.iter().any(|path| path.contains(left_path));
+        let right = paths.iter().any(|path| path.contains(right_path));
+        Ok::<bool, anyhow::Error>(found || (touches && left && right))
+    })
 }
 
 // GH #104 acceptance: a module preamble of differently-bodied helpers
@@ -86,27 +121,13 @@ fn verbatim_copied_helper_module_still_surfaces() -> Result<()> {
          {:#?}",
         clusters(&report)
     );
-    let spans_both_files = clusters(&report).iter().try_fold(false, |found, cluster| {
-        let paths: Vec<String> = cluster
-            .get("occurrences")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|occ| {
-                occ.get("path")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned)
-            })
-            .collect();
-        let texts = occurrence_texts(&scan_root, cluster)?;
-        let touches_checksum = texts.iter().any(|text| text.contains("checksum"));
-        let left = paths.iter().any(|path| path.contains("billing_helpers.py"));
-        let right = paths
-            .iter()
-            .any(|path| path.contains("billing_helpers_copy.py"));
-        Ok::<bool, anyhow::Error>(found || (touches_checksum && left && right))
-    })?;
+    let spans_both_files = clone_spans_both_files(
+        &report,
+        &scan_root,
+        "checksum",
+        "billing_helpers.py",
+        "billing_helpers_copy.py",
+    )?;
     assert!(
         spans_both_files,
         "the surviving clone must span both copies of the helper module: {:#?}",
@@ -126,25 +147,13 @@ fn verbatim_copied_helper_module_still_surfaces() -> Result<()> {
 fn verbatim_copy_among_lookalikes_still_surfaces() -> Result<()> {
     let scan_root = fixture("python-issue-104-mixed-copy-lookalike");
     let report = run_report(&scan_root)?;
-    let surfaces_genuine_copy = clusters(&report).iter().try_fold(false, |found, cluster| {
-        let paths: Vec<String> = cluster
-            .get("occurrences")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|occ| {
-                occ.get("path")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned)
-            })
-            .collect();
-        let texts = occurrence_texts(&scan_root, cluster)?;
-        let touches_token = texts.iter().any(|text| text.contains("encode_token"));
-        let a = paths.iter().any(|path| path.contains("service_a.py"));
-        let b = paths.iter().any(|path| path.contains("service_b.py"));
-        Ok::<bool, anyhow::Error>(found || (touches_token && a && b))
-    })?;
+    let surfaces_genuine_copy = clone_spans_both_files(
+        &report,
+        &scan_root,
+        "encode_token",
+        "service_a.py",
+        "service_b.py",
+    )?;
     assert!(
         surfaces_genuine_copy,
         "a verbatim copy hiding among same-shape lookalikes must still \

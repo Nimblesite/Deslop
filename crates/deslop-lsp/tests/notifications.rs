@@ -51,19 +51,10 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
 fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     ensure!(
         cluster_count(&initial) > 0,
         "fixture must start with duplicate clusters"
@@ -97,19 +88,10 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
 fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     ensure!(
         cluster_count(&initial) > 0,
         "fixture must start with duplicate clusters"
@@ -144,19 +126,10 @@ fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> 
 fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
     let workspace = copy_fixture("dart-small")?;
     let beta = workspace.path().join("beta.dart");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     ensure!(
         cluster_count(&initial) > 0,
         "dart fixture must start with duplicate clusters"
@@ -177,11 +150,14 @@ fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
 
 /// [CI-DESLOP] Issue #194: the live LSP surface must push a single
 /// non-blocking warning when the measured duplication smashes the
-/// `.deslop.toml [threshold] max_duplication_percent` budget. The
-/// threshold stays a CLI gate — here it drives only an informational
-/// `window/showMessage`, never suppression, ranking, or any other live
-/// behaviour. The breach is confirmed up front so the test can only fail
-/// because the warning is missing, not because the fixture is clean.
+/// `.deslop.toml [threshold] max_duplication_percent` budget, and the
+/// resolved verdict must ride `RepoMetrics.threshold` so the DUPLICATION
+/// panel can display the gate. The threshold stays a CLI gate — on the
+/// live surface it only drives this informational `window/showMessage`
+/// and the read-only `RepoMetrics.threshold` verdict, never suppression,
+/// ranking, or any other live behaviour. The breach is confirmed up
+/// front so the test can only fail because the warning is missing, not
+/// because the fixture is clean.
 #[test]
 fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -189,19 +165,10 @@ fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
         workspace.path().join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 5.0\n",
     )?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     let measured = initial
         .pointer("/result/metrics/duplication_percent")
         .and_then(serde_json::Value::as_f64)
@@ -209,6 +176,33 @@ fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
     ensure!(
         measured > 5.0,
         "fixture + config must smash the 5% budget so a missing warning is the only gap (measured {measured}%)"
+    );
+    // The live render path must resolve the .deslop.toml gate onto
+    // RepoMetrics.threshold so the LSP/MCP DUPLICATION panel can show it —
+    // not only the CLI. Before the fix this stayed source="none".
+    let threshold = initial
+        .pointer("/result/metrics/threshold")
+        .ok_or_else(|| anyhow!("live report carries no metrics.threshold: {initial}"))?;
+    let source = threshold
+        .pointer("/source")
+        .and_then(serde_json::Value::as_str);
+    let breached = threshold
+        .pointer("/breached")
+        .and_then(serde_json::Value::as_bool);
+    let percent = threshold
+        .pointer("/percent")
+        .and_then(serde_json::Value::as_f64);
+    ensure!(
+        source == Some("config"),
+        "the live threshold must be sourced from .deslop.toml config: {threshold}"
+    );
+    ensure!(
+        breached == Some(true),
+        "a smashed 5% budget must mark the live threshold breached: {threshold}"
+    );
+    ensure!(
+        percent == Some(5.0),
+        "the live threshold must carry the configured 5% gate: {threshold}"
     );
 
     write_frame(
@@ -242,13 +236,19 @@ fn second_unrelated_csharp() -> &'static str {
     "public class Beta {\n    public string Description() {\n        return \"distinct\";\n    }\n}\n"
 }
 
-struct KillOnDrop<'a>(&'a mut Child);
+/// Drives the `initialize` handshake over a frame channel.
+fn frame_handshake(stdin: &mut ChildStdin, frames: &Receiver<FrameResult>) -> Result<()> {
+    let (init_id, init) = initialize_request()?;
+    let _init = send_and_recv_frame(stdin, frames, init_id, &init)?;
+    Ok(())
+}
 
-impl Drop for KillOnDrop<'_> {
-    fn drop(&mut self) {
-        let _kill = self.0.kill();
-        let _wait = self.0.wait();
-    }
+/// Requests the current live report over a frame channel.
+fn frame_report_get(
+    stdin: &mut ChildStdin,
+    frames: &Receiver<FrameResult>,
+) -> Result<serde_json::Value> {
+    request_response(stdin, frames, "deslop/reportGet", &serde_json::json!({}))
 }
 
 /// Reads frames on a background thread so tests can time out waiting
@@ -368,27 +368,9 @@ fn normal_vscode_notifications(path: &Path) -> Result<Vec<String>> {
     ])
 }
 
-/// Builds the watched-file notification VS Code sends after a save.
-fn watched_file_changed(path: &Path) -> Result<String> {
-    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
-        .map_err(|()| anyhow!("path is not absolute: {}", path.display()))?;
-    notification(
-        "workspace/didChangeWatchedFiles",
-        &serde_json::json!({ "changes": [{ "uri": uri.as_str(), "type": 2 }] }),
-    )
-}
-
 /// Replacement content with no duplicated method body.
 fn unrelated_csharp() -> &'static str {
     "public class Beta {\n    public string Name() {\n        return \"unique\";\n    }\n}\n"
-}
-
-/// Returns the report cluster count from a JSON-RPC response frame.
-fn cluster_count(frame: &serde_json::Value) -> usize {
-    frame
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len)
 }
 
 /// Reads a required integer field from a JSON frame.

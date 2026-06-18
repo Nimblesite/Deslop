@@ -1,5 +1,21 @@
 use crate::support::*;
 
+/// Writes the cross-file clone-pair fixture into a fresh temp dir, runs
+/// `deslop` with the given `--min-nodes` value, asserts the run
+/// succeeded, and returns the fixture's analysed-line count alongside the
+/// parsed JSON report. The temp dir is dropped on return — the report is
+/// already fully materialised in the returned `Value`.
+fn run_clone_pair(min_nodes: &str) -> Result<(u64, Value)> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    let analysed = write_clone_pair(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
+    let json = read_json_report(&out.json)?;
+    Ok((analysed, json))
+}
+
 #[test]
 fn metrics_zero_on_empty_corpus() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -32,13 +48,7 @@ fn metrics_zero_on_empty_corpus() -> Result<()> {
 // sorted worst-first on the wire.
 #[test]
 fn metrics_per_file_breakdown_matches_repo_totals() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    let analysed = write_clone_pair(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = read_json_report(&out.json)?;
+    let (analysed, json) = run_clone_pair("8")?;
     let per_file = metric_field(&json, "per_file")
         .as_array()
         .cloned()
@@ -118,13 +128,7 @@ fn assert_per_file_entry(entry: &Value) {
 // matches the lines covered by at least two non-hidden occurrences.
 #[test]
 fn metrics_match_hand_counted_fixture() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    let analysed = write_clone_pair(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
-    let json = read_json_report(&out.json)?;
+    let (analysed, json) = run_clone_pair("8")?;
     let metrics = field(&json, "metrics").clone();
     assert_eq!(
         metric_field(&json, "analysed_loc").as_u64(),
@@ -205,13 +209,7 @@ fn metrics_exclude_hidden_occurrences() -> Result<()> {
 // produce duplicated_loc <= lines in the files, never 2x that.
 #[test]
 fn metrics_deduplicate_overlapping_sibling_ranges() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    let analysed = write_clone_pair(&scan_root)?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
-    let json = read_json_report(&out.json)?;
+    let (analysed, json) = run_clone_pair("4")?;
     let metrics = field(&json, "metrics").clone();
     let dup = field(&metrics, "duplicated_loc").as_u64().unwrap_or(0);
     assert!(

@@ -16,12 +16,12 @@ use std::{
     thread,
 };
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 use tempfile::TempDir;
 
 mod common;
-use common::initialized_mcp;
+use common::{error_and_message, initialized_mcp};
 
 #[test]
 fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get() -> Result<()> {
@@ -36,13 +36,7 @@ fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get(
         &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
     )?;
 
-    let error = response
-        .pointer("/error")
-        .ok_or_else(|| anyhow!("expected error frame, got: {response}"))?;
-    let message = error
-        .get("message")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("error missing string message: {error}"))?;
+    let (_error, message) = error_and_message(&response)?;
     ensure!(
         message.contains("report/get"),
         "error must name the rejected method so users can match logs: {message}"
@@ -75,13 +69,7 @@ fn issue_148_session_config_reports_version_mismatch_when_lsp_rejects_method() -
         &json!({ "name": "session-config", "arguments": {} }),
     )?;
 
-    let error = response
-        .pointer("/error")
-        .ok_or_else(|| anyhow!("expected error frame, got: {response}"))?;
-    let message = error
-        .get("message")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("error missing string message: {error}"))?;
+    let (_error, message) = error_and_message(&response)?;
     ensure!(
         message.contains("session/config"),
         "error must name the rejected method: {message}"

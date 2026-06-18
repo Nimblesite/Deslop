@@ -198,3 +198,69 @@ pub fn call(
     let (id, payload) = request(method, params)?;
     send_and_recv(stdin, stdout, id, &payload)
 }
+
+/// RAII guard that kills and reaps the spawned LSP child when it drops, so a
+/// failing assertion never leaks the process.
+pub struct KillOnDrop<'a>(pub &'a mut Child);
+
+impl Drop for KillOnDrop<'_> {
+    fn drop(&mut self) {
+        let _kill = self.0.kill();
+        let _wait = self.0.wait();
+    }
+}
+
+/// Owning RAII guard: holds the spawned LSP child and kills it on drop. Unlike
+/// [`KillOnDrop`] it owns the process, so a helper can return the guard already
+/// armed — any later failure (handshake, request) still reaps the child.
+pub struct LspGuard(Child);
+
+impl Drop for LspGuard {
+    fn drop(&mut self) {
+        let _kill = self.0.kill();
+        let _wait = self.0.wait();
+    }
+}
+
+/// Spawns the LSP against `workspace`, takes its stdin/stdout, and returns the
+/// process wrapped in an armed [`LspGuard`] alongside those handles. The guard
+/// is live before the caller runs the handshake, matching the spawn-then-guard
+/// ordering of the inline setup it replaces.
+pub fn spawn_lsp_guarded(
+    workspace: &Path,
+) -> Result<(LspGuard, ChildStdin, BufReader<ChildStdout>)> {
+    let mut child = spawn_lsp(workspace)?;
+    let (stdin, stdout, _stderr) = take_io(&mut child)?;
+    Ok((LspGuard(child), stdin, stdout))
+}
+
+/// Copies the named fixture into a temp workspace, spawns the LSP, and returns
+/// the workspace (keep it bound — dropping it deletes the workspace) plus an
+/// armed [`LspGuard`] and the child's stdin/stdout.
+pub fn spawn_lsp_on_fixture_guarded(
+    name: &str,
+) -> Result<(tempfile::TempDir, LspGuard, ChildStdin, BufReader<ChildStdout>)> {
+    let workspace = copy_fixture(name)?;
+    let (guard, stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
+    Ok((workspace, guard, stdin, stdout))
+}
+
+/// Builds the `workspace/didChangeWatchedFiles` notification VS Code sends
+/// after a save of `path`.
+pub fn watched_file_changed(path: &Path) -> Result<String> {
+    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
+        .map_err(|()| anyhow!("path is not absolute: {}", path.display()))?;
+    notification(
+        "workspace/didChangeWatchedFiles",
+        &serde_json::json!({ "changes": [{ "uri": uri.as_str(), "type": 2 }] }),
+    )
+}
+
+/// Returns the report cluster count from a JSON-RPC response frame.
+#[must_use]
+pub fn cluster_count(frame: &serde_json::Value) -> usize {
+    frame
+        .pointer("/result/clusters")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len)
+}

@@ -292,6 +292,14 @@ pub(super) fn spans_multiple_files(file_ids: impl IntoIterator<Item = FileId>) -
     file_ids.into_iter().collect::<BTreeSet<FileId>>().len() >= 2
 }
 
+/// Returns true when `snippets` is a multi-member cluster whose every member
+/// is written in `language`. This is the precondition every language-specific
+/// cluster filter shares before it inspects member shapes — centralising it
+/// keeps the "≥ 2 members, all one language" gate identical across filters.
+pub(super) fn is_multi_member_language_cluster(snippets: &[Snippet<'_>], language: &str) -> bool {
+    snippets.len() >= 2 && snippets.iter().all(|snippet| snippet.language == language)
+}
+
 /// Returns true when at least two raw reported snippet ranges differ.
 pub(super) fn raw_snippet_texts_differ(snippets: &[Snippet<'_>]) -> bool {
     let Some(first) = snippets.first().and_then(snippet_range_text) else {

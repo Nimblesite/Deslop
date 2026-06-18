@@ -21,8 +21,8 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, node_contains_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
-    spans_multiple_files, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, node_contains_kind, node_intersects_range,
+    parse_for, raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::{ast::ByteRange, state::FileId};
 
@@ -31,7 +31,7 @@ use crate::{ast::ByteRange, state::FileId};
 /// test abstraction, so surfacing those bodies as refactor targets adds
 /// noise instead of useful duplication.
 pub(super) fn is_pytest_fixture_boilerplate_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
@@ -105,7 +105,7 @@ fn decorator_line_has_fixture_callee(line: &str) -> bool {
 /// statements across test files. Their AST/token shape is intentionally
 /// repetitive, but the concrete asserted paths and values differ.
 pub(super) fn is_python_assertion_only_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
@@ -155,7 +155,7 @@ fn assert_only_body_in_range(body: Node<'_>, range: ByteRange) -> bool {
 /// surviving structure is identical even though every test exercises a
 /// different contract.
 pub(super) fn is_chained_dict_assert_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
@@ -261,7 +261,7 @@ fn python_function_name_starts_with(function: Node<'_>, source: &[u8], prefix: &
 /// member is inside a pytest `test_*` function and at least one member
 /// uses a different set of dict keys.
 pub(super) fn is_test_dict_literal_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     let shapes: Option<Vec<DictLiteralShape>> =
@@ -378,7 +378,7 @@ fn dict_literal_key_sets_differ(shapes: &[DictLiteralShape]) -> bool {
 /// silently lose coverage granularity even when the Type-2 normalised
 /// bodies are identical across unrelated discriminators.
 pub(super) fn is_parametric_invariant_test_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     snippets.iter().all(snippet_inside_parametric_test)

@@ -11,8 +11,7 @@ use serde_json::Value;
 
 #[test]
 fn default_run_hides_generated_only_clusters_from_metrics() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("repo");
+    let (tmp, root) = repo_fixture()?;
     let generated = root.join("contracts/generated/csharp");
     fs::create_dir_all(&generated)?;
     fs::write(generated.join("Alpha.g.cs"), GENERATED_ALPHA)?;
@@ -46,8 +45,7 @@ fn default_run_hides_generated_only_clusters_from_metrics() -> Result<()> {
 
 #[test]
 fn default_run_hides_intentional_test_fixture_corpora_from_dogfood_report() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("repo");
+    let (tmp, root) = repo_fixture()?;
     let vscode_fixture = root.join("clients/vscode/src/test/fixtures/csharp-small");
     let cli_fixture = root.join("crates/deslop/tests/fixtures/csharp-small");
     let source = root.join("src/billing");
@@ -99,8 +97,7 @@ fn default_run_hides_intentional_test_fixture_corpora_from_dogfood_report() -> R
 
 #[test]
 fn default_run_hides_alembic_migration_only_clusters() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("repo");
+    let (tmp, root) = repo_fixture()?;
     let versions = root.join("alembic").join("versions");
     fs::create_dir_all(&versions)?;
     fs::write(
@@ -131,8 +128,7 @@ fn default_run_hides_alembic_migration_only_clusters() -> Result<()> {
 
 #[test]
 fn default_run_hides_python_generated_suffix_clusters() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("repo");
+    let (tmp, root) = repo_fixture()?;
     fs::create_dir_all(root.join("src/agent_backend/api"))?;
     fs::write(
         root.join("src/agent_backend/api/schemas_generated.py"),
@@ -181,8 +177,7 @@ fn default_run_hides_python_generated_suffix_clusters() -> Result<()> {
 
 #[test]
 fn default_run_does_not_cluster_distinct_fastapi_route_decorators() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("repo");
+    let (tmp, root) = repo_fixture()?;
     fs::create_dir_all(root.join("backend/src"))?;
     fs::write(root.join("backend/src/routes.py"), FASTAPI_ROUTES)?;
 
@@ -195,6 +190,12 @@ fn default_run_does_not_cluster_distinct_fastapi_route_decorators() -> Result<()
     );
     assert_eq!(metrics_field(&report, "duplicated_loc").as_u64(), Some(0));
     Ok(())
+}
+
+fn repo_fixture() -> Result<(tempfile::TempDir, PathBuf)> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("repo");
+    Ok((tmp, root))
 }
 
 fn run_report(root: &Path, tmp: &Path, min_nodes: u32) -> Result<Value> {

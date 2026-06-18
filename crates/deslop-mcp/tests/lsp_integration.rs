@@ -20,8 +20,8 @@ use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_initialize,
-    structured_content, wait_for_path, ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
+    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
+    structured_content, wait_for_path, McpHandle, SOCKET_TIMEOUT,
 };
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
@@ -119,11 +119,7 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
     // which is now an LSP-private warm-start cache only ([LIVE-SEED-CACHE]).
     let workspace = copied_fixture()?;
     let beta = workspace.path().join("Beta.cs");
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     // Flush any pending cold-pass install so the post-mutation rescan
@@ -202,11 +198,8 @@ fn rescan_via_mcp_triggers_lsp_reanalysis() -> Result<()> {
 fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result<()> {
     let workspace = copied_fixture()?;
     let beta = workspace.path().join("Beta.cs");
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
 

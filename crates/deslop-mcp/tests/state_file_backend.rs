@@ -29,7 +29,7 @@ use serde_json::{json, Value};
 mod common;
 use common::{
     cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
-    spawn_lsp_and_initialize, structured_content, wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT,
+    spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, SOCKET_TIMEOUT,
 };
 
 /// [MCP-IPC-CLIENT] Repurposes `issue_90_report_get_reloads_state_file_between_plain_calls`.
@@ -109,11 +109,8 @@ fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
 #[test]
 fn mcp_read_does_not_mutate_lsp_seed_cache() -> Result<()> {
     let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for seed cache")?;
 
     // Sample mtime + bytes after the LSP's initial pass has settled.
@@ -157,10 +154,7 @@ fn issue_118_incompatible_seed_cache_cannot_brick_lsp_startup() -> Result<()> {
     let state_file = cache_dir.join("live-report.json");
     fs::write(&state_file, br#"{"tool_version":"stale","clusters":[]}"#)?;
 
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     let response = call_report_get(&mut mcp, 0, 64)?;

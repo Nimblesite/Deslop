@@ -1,18 +1,27 @@
 use crate::support::*;
 
-#[test]
-fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
+/// Writes `config_body` to `<tmp>/deslop.toml`, runs the CLI over the
+/// `csharp-small` fixture with `--min-nodes 8 --config <that file>`,
+/// asserts success, and returns the JSON report body as a string. Used
+/// by the `--config`-driven exclusion/hide scenarios that differ only
+/// in the TOML they supply.
+fn run_with_config(config_body: &str) -> Result<String> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
-    fs::write(&config, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
+    fs::write(&config, config_body)?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--config"])
         .arg(&config)
         .assert()
         .success();
-    let json = fs::read_to_string(&out.json)?;
+    Ok(fs::read_to_string(&out.json)?)
+}
+
+#[test]
+fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
+    let json = run_with_config("[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
     assert!(
         json.contains("\"files_analysed\": 1"),
         "exclude should drop Beta.cs, leaving one file: {json}"
@@ -30,17 +39,7 @@ fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
 // hidden member flagged.
 #[test]
 fn report_hide_keeps_mixed_cluster_and_flags_hidden_occurrence() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(&config, "[defaults]\nreport_hide = [\"**/Beta.cs\"]\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--config"])
-        .arg(&config)
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_with_config("[defaults]\nreport_hide = [\"**/Beta.cs\"]\n")?;
     assert!(
         json.contains("\"files_analysed\": 2"),
         "report_hide must still analyse the file"
@@ -60,20 +59,7 @@ fn report_hide_keeps_mixed_cluster_and_flags_hidden_occurrence() -> Result<()> {
 // section stays empty — proves the overlay matcher path.
 #[test]
 fn report_hide_per_language_overlay_flags_csharp_only() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(
-        &config,
-        "[language.csharp]\nreport_hide = [\"**/Beta.cs\"]\n",
-    )?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--config"])
-        .arg(&config)
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_with_config("[language.csharp]\nreport_hide = [\"**/Beta.cs\"]\n")?;
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains("\"hidden\": true"));
     Ok(())
@@ -83,20 +69,9 @@ fn report_hide_per_language_overlay_flags_csharp_only() -> Result<()> {
 // Python rules should not affect a C# file.
 #[test]
 fn exclude_per_language_overlay_scoped_to_its_language() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(
-        &config,
+    let json = run_with_config(
         "[language.python]\nexclude = [\"**/*.py\"]\n\n[language.csharp]\nexclude = [\"**/Beta.cs\"]\n",
     )?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8", "--config"])
-        .arg(&config)
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"files_analysed\": 1"));
     assert!(!json.contains("Beta.cs"));
     Ok(())

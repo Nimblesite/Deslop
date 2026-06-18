@@ -8,6 +8,45 @@
 use crate::mock_ollama::MockOllama;
 use crate::support::*;
 
+/// Runs the full ollama embedding pass for `mode` (`required`/`auto`)
+/// against `scan_root`, writing to `output_prefix`, and asserts the CLI
+/// succeeds. Shared by every mock-Ollama happy-path test so the
+/// `--embedding-provider ollama` arg array lives in one place.
+fn run_ollama_pass(
+    scan_root: &Path,
+    output_prefix: &Path,
+    mode: &str,
+    endpoint: &str,
+) -> Result<()> {
+    let mut cmd = deslop_command(scan_root, output_prefix)?;
+    let _assertion = cmd
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            mode,
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            endpoint,
+        ])
+        .assert()
+        .success();
+    Ok(())
+}
+
+/// Runs the CLI with `args` against the `csharp-small` fixture and
+/// asserts it exits non-zero with `expected` on stderr. Shared by the
+/// argument/provider rejection tests.
+fn assert_cli_rejects(args: &[&str], expected: &str) -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let _assertion = cmd.args(args).assert().failure().stderr(contains(expected));
+    Ok(())
+}
+
 #[test]
 fn default_run_records_embeddings_off_provenance() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -78,14 +117,7 @@ fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
 // rejected with a clear error message.
 #[test]
 fn embeddings_flag_rejects_unknown_values() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--embeddings", "maybe"])
-        .assert()
-        .failure()
-        .stderr(contains("invalid --embeddings value"));
-    Ok(())
+    assert_cli_rejects(&["--embeddings", "maybe"], "invalid --embeddings value")
 }
 
 // Implements [FUSION-EMBED-PROVIDER]: `--embeddings=required` runs
@@ -100,22 +132,12 @@ fn mock_ollama_records_provenance_and_runs_embedding_pass() -> Result<()> {
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-type3"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args([
-            "--min-nodes",
-            "8",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
+    run_ollama_pass(
+        &scan_root,
+        &tmp.path().join("report"),
+        "required",
+        server.endpoint(),
+    )?;
     let json = fs::read_to_string(&out.json)?;
     assert!(
         json.contains("\"provider_id\": \"ollama\""),
@@ -148,22 +170,12 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .args([
-            "--min-nodes",
-            "8",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
+    run_ollama_pass(
+        &scan_root,
+        &tmp.path().join("first"),
+        "required",
+        server.endpoint(),
+    )?;
     let cache_dir = scan_root
         .join(".deslop-cache")
         .join("embeddings")
@@ -174,22 +186,12 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
         "embedding cache directory missing: {}",
         cache_dir.display()
     );
-    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
-    let _assertion = second
-        .args([
-            "--min-nodes",
-            "8",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
+    run_ollama_pass(
+        &scan_root,
+        &tmp.path().join("second"),
+        "required",
+        server.endpoint(),
+    )?;
     Ok(())
 }
 
@@ -203,22 +205,12 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
     let out = outputs_under(tmp.path());
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args([
-            "--min-nodes",
-            "8",
-            "--embeddings",
-            "auto",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
+    run_ollama_pass(
+        &scan_root,
+        &tmp.path().join("report"),
+        "auto",
+        server.endpoint(),
+    )?;
     let json = fs::read_to_string(&out.json)?;
     assert!(
         json.contains("\"provider_id\": \"ollama\""),
@@ -232,14 +224,10 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
 // the only registered production provider is `ollama`.
 #[test]
 fn unknown_embedding_provider_is_rejected() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--embeddings", "auto", "--embedding-provider", "imaginary-provider"])
-        .assert()
-        .failure()
-        .stderr(contains("unknown embedding provider"));
-    Ok(())
+    assert_cli_rejects(
+        &["--embeddings", "auto", "--embedding-provider", "imaginary-provider"],
+        "unknown embedding provider",
+    )
 }
 
 // [REMOVE-STUB] The deterministic BLAKE3 stub is not a product
@@ -248,12 +236,8 @@ fn unknown_embedding_provider_is_rejected() -> Result<()> {
 // accepts test infrastructure.
 #[test]
 fn stub_embedding_provider_is_rejected_in_production() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--embeddings", "auto", "--embedding-provider", "stub"])
-        .assert()
-        .failure()
-        .stderr(contains("unknown embedding provider"));
-    Ok(())
+    assert_cli_rejects(
+        &["--embeddings", "auto", "--embedding-provider", "stub"],
+        "unknown embedding provider",
+    )
 }

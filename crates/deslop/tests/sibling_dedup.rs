@@ -152,6 +152,31 @@ fn run_and_load_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value
     Ok(serde_json::from_str(&body)?)
 }
 
+/// Builds a temp scan root, writes a fixture into it via `write_fixture`,
+/// runs the CLI, and returns the owning `TempDir` (kept alive for the
+/// caller), the `scan_root` path, and the parsed JSON report. The
+/// `TempDir` must be held by the caller so the fixture survives until the
+/// assertions finish.
+fn prepared_report(
+    write_fixture: fn(&Path) -> Result<()>,
+) -> Result<(tempfile::TempDir, PathBuf, serde_json::Value)> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    write_fixture(&scan_root)?;
+    let report = run_and_load_report(tmp.path(), &scan_root)?;
+    Ok((tmp, scan_root, report))
+}
+
+/// Returns the report's `clusters` array as an owned `Vec`, or an empty
+/// `Vec` when the field is absent or not an array.
+fn clusters_array(report: &serde_json::Value) -> Vec<serde_json::Value> {
+    report
+        .get("clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
 /// Returns `true` when the half-open ranges `[a_start, a_end)` and
 /// `[b_start, b_end)` share at least one byte.
 fn ranges_overlap(a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> bool {
@@ -368,10 +393,7 @@ fn line_count(path: &Path) -> Result<usize> {
 // occurrences that point at the same file and overlap.
 #[test]
 fn clusters_never_contain_overlapping_occurrences_in_same_file() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_nested_clone_fixture(&scan_root)?;
-    let report = run_and_load_report(tmp.path(), &scan_root)?;
+    let (_tmp, _scan_root, report) = prepared_report(write_nested_clone_fixture)?;
     assert!(
         first_overlap(&report).is_none(),
         "cluster occurrences must be deduplicated per file before rendering: {}",
@@ -390,15 +412,8 @@ fn clusters_never_contain_overlapping_occurrences_in_same_file() -> Result<()> {
 // the same cluster id.
 #[test]
 fn cluster_size_equals_occurrences_length_for_every_cluster() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_nested_clone_fixture(&scan_root)?;
-    let report = run_and_load_report(tmp.path(), &scan_root)?;
-    let clusters = report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let (_tmp, _scan_root, report) = prepared_report(write_nested_clone_fixture)?;
+    let clusters = clusters_array(&report);
     assert!(
         !clusters.is_empty(),
         "fixture must produce at least one clone cluster: {report:#}"
@@ -437,10 +452,7 @@ fn cluster_size_equals_occurrences_length_for_every_cluster() -> Result<()> {
 // at bytes that aren't in the source.
 #[test]
 fn every_occurrence_byte_range_is_inside_its_source_file() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_nested_clone_fixture(&scan_root)?;
-    let report = run_and_load_report(tmp.path(), &scan_root)?;
+    let (_tmp, scan_root, report) = prepared_report(write_nested_clone_fixture)?;
     assert!(
         first_out_of_bounds(&report, &scan_root).is_none(),
         "every occurrence byte range must lie inside its source file: {}",
@@ -459,15 +471,8 @@ fn every_occurrence_byte_range_is_inside_its_source_file() -> Result<()> {
 // occurrence per file.
 #[test]
 fn sibling_window_cluster_has_one_occurrence_per_file() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_nested_clone_fixture(&scan_root)?;
-    let report = run_and_load_report(tmp.path(), &scan_root)?;
-    let clusters = report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let (_tmp, _scan_root, report) = prepared_report(write_nested_clone_fixture)?;
+    let clusters = clusters_array(&report);
     let sibling_cluster = clusters
         .iter()
         .find(|cluster| max_span_bytes(cluster) >= 100)
@@ -498,15 +503,8 @@ fn sibling_window_cluster_has_one_occurrence_per_file() -> Result<()> {
 // public report metrics/scores must stay sane.
 #[test]
 fn phantom_occurrence_fixture_respects_report_invariants() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    write_phantom_occurrence_fixture(&scan_root)?;
-    let report = run_and_load_report(tmp.path(), &scan_root)?;
-    let clusters = report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    let (_tmp, scan_root, report) = prepared_report(write_phantom_occurrence_fixture)?;
+    let clusters = clusters_array(&report);
     assert!(
         !clusters.is_empty(),
         "phantom-occurrence fixture must produce clone clusters: {report:#}"

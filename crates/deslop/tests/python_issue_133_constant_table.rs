@@ -61,6 +61,13 @@ fn occurrence_paths(cluster: &Value) -> Vec<String> {
         .collect()
 }
 
+/// Resolves the named fixture and runs the constant-table report over it.
+fn fixture_report(fixture_name: &str) -> Result<(std::path::PathBuf, Value)> {
+    let scan_root = fixture(fixture_name);
+    let report = run_report(&scan_root)?;
+    Ok((scan_root, report))
+}
+
 /// Collects every visible cluster whose occurrences contain `needle`.
 fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<Vec<Vec<String>>> {
     let mut hits = Vec::new();
@@ -78,8 +85,7 @@ fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<V
 // merely because both are runs of `NAME = <literal>` assignments.
 #[test]
 fn unrelated_constant_tables_do_not_cluster() -> Result<()> {
-    let scan_root = fixture("python-issue-133-constant-table");
-    let report = run_report(&scan_root)?;
+    let (scan_root, report) = fixture_report("python-issue-133-constant-table")?;
     let sql = clusters_touching(&report, &scan_root, "_PUBLIC_FUNCTIONS_SQL")?;
     let registry = clusters_touching(&report, &scan_root, "WORKSPACE_IMAGE_NAMESPACE")?;
     assert!(
@@ -97,8 +103,7 @@ fn unrelated_constant_tables_do_not_cluster() -> Result<()> {
 // shape alone.
 #[test]
 fn verbatim_copied_constants_still_surface() -> Result<()> {
-    let scan_root = fixture("python-issue-133-genuine-copy");
-    let report = run_report(&scan_root)?;
+    let (scan_root, report) = fixture_report("python-issue-133-genuine-copy")?;
     let copied = clusters_touching(&report, &scan_root, "DESLOP_GENUINE_COPY_MARKER")?;
     assert!(
         !copied.is_empty(),
@@ -134,8 +139,7 @@ fn verbatim_copied_constants_still_surface() -> Result<()> {
 // values, and anything that can carry logic keeps clustering for review.
 #[test]
 fn interpolated_template_modules_still_surface() -> Result<()> {
-    let scan_root = fixture("python-issue-133-precision");
-    let report = run_report(&scan_root)?;
+    let (scan_root, report) = fixture_report("python-issue-133-precision")?;
     let templated = clusters_touching(&report, &scan_root, "BANNER = f\"Welcome to")?;
     assert!(
         !templated.is_empty(),

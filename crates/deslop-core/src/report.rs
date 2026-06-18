@@ -168,7 +168,8 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     // LSP/MCP servers, not just the CLI. `compute_repo_metrics` leaves it
     // `none()` because it has no config; the CLI may still override the
     // result via `--fail-over` / `--no-fail-over` after this returns.
-    metrics.threshold = inputs.exclusion.resolve_threshold(metrics.duplication_percent);
+    let measured = metrics.duplication_percent;
+    metrics.threshold = inputs.exclusion.resolve_threshold(measured);
     let boilerplate_hints = build_boilerplate_hints(
         inputs.boilerplate_ranges,
         inputs.registry,

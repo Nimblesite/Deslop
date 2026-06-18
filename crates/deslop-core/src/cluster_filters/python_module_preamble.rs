@@ -21,7 +21,10 @@ use std::collections::BTreeSet;
 
 use tree_sitter::Node;
 
-use super::{parse_for, spans_multiple_files, trimmed_snippet_range, Snippet};
+use super::{
+    is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
+    Snippet,
+};
 use crate::ast::ByteRange;
 
 /// Top-level definition kinds that make up a Python test-module preamble.
@@ -38,7 +41,7 @@ const PREAMBLE_KINDS: &[&str] = &["function_definition", "decorated_definition"]
 /// not such a multi-definition run, or when two members are body
 /// equivalent (a genuine copy that must still surface).
 pub(super) fn is_module_preamble_sequence_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {

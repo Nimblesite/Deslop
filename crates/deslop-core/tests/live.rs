@@ -28,6 +28,20 @@ use deslop_core::{
 mod common;
 use crate::common::*;
 
+/// Copies the `csharp-small` fixture into a fresh temp dir and builds an
+/// [`AnalysisSession`] over it at `min_nodes = 15` with a deterministic
+/// [`StubProvider`]. Returns the [`tempfile::TempDir`] (kept alive by the
+/// caller) alongside the session. The shared setup behind the many
+/// `copy_fixture("csharp-small")` → `AnalysisSession::new(.., 15, ..)`
+/// tests in this file.
+fn csharp_small_session() -> Result<(tempfile::TempDir, AnalysisSession)> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    Ok((tmp, session))
+}
+
 /// Counts live cluster occurrences whose relative path contains the
 /// given directory or file name as a whole path component. Component
 /// matching (not substring) so `pkg` never matches a `pkg_twin`
@@ -230,10 +244,7 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
 
 #[tokio::test(flavor = "multi_thread")]
 async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, mut session) = csharp_small_session()?;
     let target = tmp.path().join("Beta.cs");
     fs::write(
         &target,
@@ -260,10 +271,7 @@ async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<(
 // the watcher does after the agent writes the files.
 #[tokio::test(flavor = "multi_thread")]
 async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, mut session) = csharp_small_session()?;
 
     // Three worktree checkouts, each byte-identical to the real Alpha.cs,
     // so without the exclusion they would form an N-copy identical cluster.
@@ -309,10 +317,7 @@ async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, session) = csharp_small_session()?;
     let report = session.report();
     let cluster = report
         .clusters
@@ -340,10 +345,7 @@ async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (_tmp, session) = csharp_small_session()?;
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
             snippet: "this is not C# {{ unbalanced".to_owned(),
@@ -892,10 +894,7 @@ async fn embedding_list_models_returns_empty_when_ollama_unreachable() -> Result
     // [REMOVE-STUB] Production model listing must not include the stub
     // fallback. When Ollama is unreachable the list is empty and the
     // VSIX shows its "Ollama not detected" empty state.
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (_tmp, session) = csharp_small_session()?;
     let session_lock = Arc::new(tokio::sync::Mutex::new(session));
     let mut service = LiveService::new(session_lock);
     service.set_ollama_endpoint("http://127.0.0.1:1".to_owned());
@@ -1280,10 +1279,7 @@ async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
 /// prefix-eviction change from regressing the exact-leaf path.
 #[tokio::test(flavor = "multi_thread")]
 async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, mut session) = csharp_small_session()?;
 
     let before = session.report();
     assert!(

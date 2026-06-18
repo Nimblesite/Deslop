@@ -29,14 +29,7 @@ fn execute_command_provider_advertises_and_opens_virtual_documents() -> Result<(
     let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
         spawn_lsp_on_fixture("csharp-small")?;
     let init = handshake(&mut stdin, &mut stdout)?;
-    let commands = advertised_commands(&init)?;
-
-    assert_eq!(commands.len(), 5, "unexpected command list: {commands:?}");
-    assert!(commands.contains(&"deslop.lsp.refreshReport".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.openCluster".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.openReport".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.pickEmbeddingModel".to_owned()));
-    assert!(commands.contains(&"deslop.lsp.toggleIncremental".to_owned()));
+    assert_advertised_commands(&init)?;
 
     let (report_response, report_shows) = call_with_show_document_response(
         &mut stdin,

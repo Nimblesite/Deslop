@@ -20,13 +20,13 @@
 
 use std::{fs, path::Path};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_initialize,
-    structured_content, wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT,
+    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
+    structured_content,
 };
 
 /// Sanity guard for the full `tools/list` payload. Picked an order
@@ -154,10 +154,7 @@ fn find_description(response: &Value, tool_name: &str) -> Result<String> {
 fn top_offenders_result_capped_at_two_hundred_kilobytes() -> Result<()> {
     let workspace = copied_fixture()?;
     inflate_workspace_with_clones(workspace.path())?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let mut mcp = initialized_mcp(workspace.path())?;
     let _rescan = mcp.request(
         "tools/call",
