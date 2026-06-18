@@ -213,25 +213,39 @@ impl Drop for KillOnDrop<'_> {
 /// Owning RAII guard: holds the spawned LSP child and kills it on drop. Unlike
 /// [`KillOnDrop`] it owns the process, so a helper can return the guard already
 /// armed — any later failure (handshake, request) still reaps the child.
-pub struct LspGuard(Child);
+pub struct LspGuard {
+    child: Child,
+    /// Held for the guard's whole lifetime, never read. Dropping the child's
+    /// piped stderr read end early stalls the heavily-logging LSP on a full
+    /// stderr pipe, so it stops servicing stdout and the test deadlocks.
+    _stderr: ChildStderr,
+}
 
 impl Drop for LspGuard {
     fn drop(&mut self) {
-        let _kill = self.0.kill();
-        let _wait = self.0.wait();
+        let _kill = self.child.kill();
+        let _wait = self.child.wait();
     }
 }
 
 /// Spawns the LSP against `workspace`, takes its stdin/stdout, and returns the
 /// process wrapped in an armed [`LspGuard`] alongside those handles. The guard
 /// is live before the caller runs the handshake, matching the spawn-then-guard
-/// ordering of the inline setup it replaces.
+/// ordering of the inline setup it replaces. The guard retains the child's
+/// stderr so the read end stays open for the whole test.
 pub fn spawn_lsp_guarded(
     workspace: &Path,
 ) -> Result<(LspGuard, ChildStdin, BufReader<ChildStdout>)> {
     let mut child = spawn_lsp(workspace)?;
-    let (stdin, stdout, _stderr) = take_io(&mut child)?;
-    Ok((LspGuard(child), stdin, stdout))
+    let (stdin, stdout, stderr) = take_io(&mut child)?;
+    Ok((
+        LspGuard {
+            child,
+            _stderr: stderr,
+        },
+        stdin,
+        stdout,
+    ))
 }
 
 /// Copies the named fixture into a temp workspace, spawns the LSP, and returns
