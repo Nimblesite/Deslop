@@ -11,7 +11,7 @@ workspaces.
 ## Test Targets
 
 - Plugin loads on the target IntelliJ Platform version.
-- Opening a supported `.cs`, `.rs`, or `.py` file starts `deslop-lsp`.
+- Opening a supported `.cs`, `.rs`, `.py`, or `.dart` file starts `deslop-lsp`.
 - Native diagnostics appear for a known duplicate fixture.
 - Hover and code lens are available when the platform exposes them.
 - Settings changes restart or reconfigure the LSP with the expected arguments.

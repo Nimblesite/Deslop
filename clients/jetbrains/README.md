@@ -9,7 +9,7 @@ The screenshot above is the **VS Code reference client**. This JetBrains plugin 
 Current slice:
 
 - Registers a `com.intellij.platform.lsp.serverSupportProvider`.
-- Starts `deslop-lsp` for `.cs`, `.rs`, and `.py` files.
+- Starts `deslop-lsp` for `.cs`, `.rs`, `.py`, and `.dart` files.
 - Resolves the `deslop-lsp` binary from the bundled plugin `bin/<platform>/` directory first, then falls back to `PATH`. (`DESLOP_BINARY_DIR` is a build-time staging variable used to embed the binary into the plugin zip, not a runtime resolver source.)
 - Launches with embeddings off until a settings page and picker land.
 

@@ -26,7 +26,7 @@ The plugin descriptor depends on `com.intellij.modules.lsp` and `com.intellij.mo
 
 ### [JETBRAINS-LSP] LSP server integration
 
-`clients/jetbrains` registers one `LspServerSupportProvider` through `com.intellij.platform.lsp.serverSupportProvider`. When a supported file opens (`.cs`, `.rs`, `.py`), the provider starts a project-wide `ProjectWideLspServerDescriptor` named `Deslop`.
+`clients/jetbrains` registers one `LspServerSupportProvider` through `com.intellij.platform.lsp.serverSupportProvider`. When a supported file opens (`.cs`, `.rs`, `.py`, `.dart`), the provider starts a project-wide `ProjectWideLspServerDescriptor` named `Deslop`.
 
 The descriptor launches:
 
