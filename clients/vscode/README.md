@@ -16,8 +16,8 @@ Every panel refreshes within 250 ms of a keystroke, and the same live report bac
 
 ## Features
 
-- **Live duplication bubble.** The moment you type code that matches an existing cluster, a severity-coloured label — **Identical code**, **Nearly identical code**, **Loosely similar code**, or **Same behavior, different code** (AI match) — appears at the end of the line, with a signal strip showing how structural vs. token vs. embedding similarity scored.
-- **Worst-first activity-bar view.** The Duplicate Clusters panel always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
+- **Live duplication bubble.** The moment you type code that matches an existing cluster, a severity-coloured label — **Identical code**, **Nearly identical code**, **Same shape, different content**, **Loosely similar code**, or **Same behavior, different code** (AI match) — appears at the end of the line, with a signal strip showing how structural, token, and embedding similarity scored.
+- **Worst-first activity-bar view.** The **Top Offenders** view always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals — no stale pixels, ever.
 - **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries offline-ready. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
@@ -52,10 +52,6 @@ args    = ["--root", "."]
 ```
 
 The full set of client wiring snippets — including Claude Desktop and the rule against pointing MCP clients at `cargo install` / `target/release` binaries — lives in the [root README](https://github.com/Nimblesite/Deslop#use-deslop-from-an-ai-agent-mcp).
-
-## Design
-
-Built on **the Kinetic Manuscript** — a high-density, editorial aesthetic inspired by technical whitepapers. Inter for UI, JetBrains Mono for data, crimson `#B3261E` as a surgical accent reserved for the worst offenders. No 1px borders, no bubbly radii, no consumer-SaaS greens. Professionalism comes from transparency.
 
 ## Install
 
