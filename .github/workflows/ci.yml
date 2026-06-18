@@ -13,14 +13,7 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
-    # TIMEOUT EXCEPTION: this job compiles the workspace three times over —
-    # clippy release (`make lint`), an llvm-cov *instrumented* rebuild that
-    # cannot reuse the normal cached artifacts (`make test`), and the release
-    # build reused by `make deployment-verify` — then runs the full coarse E2E
-    # suite under coverage. On a cold cargo cache (a large branch invalidates
-    # the workspace target) that exceeds the 10-minute default, so it matches
-    # the vsix/jetbrains jobs at 20 minutes.
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 

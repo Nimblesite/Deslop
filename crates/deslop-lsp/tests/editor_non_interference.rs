@@ -19,7 +19,7 @@ use std::{path::Path, thread, time::Duration};
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
 
-use crate::common::{call, copy_fixture, handshake, spawn_lsp, spawn_lsp_on_fixture, take_io};
+use crate::common::{call, handshake, spawn_lsp_on_fixture};
 
 const DEFINITION: &str = "textDocument/definition";
 const HOVER: &str = "textDocument/hover";
@@ -86,7 +86,7 @@ fn initialize_advertises_no_standard_language_providers() -> Result<()> {
 fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
     // F12 anywhere — including inside a clone range — must yield no Deslop
     // result, so the editor's own Go To Definition is the sole responder.
-    let (_workspace, mut child, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
 
     let response = call(
         &mut stdin,
@@ -109,7 +109,7 @@ fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
 fn hover_is_never_answered_by_deslop() -> Result<()> {
     // Hover belongs to the editor's language server. The clone card is an
     // additive client-side provider in the VSIX, not an LSP hover.
-    let (_workspace, mut child, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
 
     let response = call(
         &mut stdin,
@@ -138,7 +138,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
     // Removing the F12 overload must not cost the user canonical-occurrence
     // navigation: the additive clone diagnostic still links to the
     // canonical occurrence in the sibling file via `relatedInformation`.
-    let (_workspace, mut child, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
     wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
@@ -175,7 +175,7 @@ fn canonical_navigation_survives_via_additive_clone_diagnostics() -> Result<()> 
 fn additive_code_lens_carries_deslops_own_jump_command_not_definition() -> Result<()> {
     // The additive clone code lens is how Deslop offers occurrence
     // navigation — via its own command, never by overloading F12.
-    let (_workspace, mut child, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
     wait_for_clusters(&mut stdin, &mut stdout)?;
 
     let response = call(
@@ -211,7 +211,7 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
     // editing Alpha.cs away from its Beta.cs twin drops the clone, and the
     // refresh reports the removal. Exercises Deslop's own command surface,
     // which is wholly separate from any standard editor request.
-    let (_workspace, mut child, mut stdin, mut stdout, alpha) = lsp_alpha_session()?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr, alpha) = lsp_alpha_session()?;
     wait_for_clusters(&mut stdin, &mut stdout)?;
 
     std::fs::write(
@@ -238,21 +238,22 @@ fn refresh_command_re_evaluates_the_corpus_after_an_edit() -> Result<()> {
 
 /// Copies the `csharp-small` fixture, spawns the LSP, completes the
 /// handshake, and returns the workspace (keep it bound — dropping it
-/// deletes the workspace), the child, its stdin/stdout, and the path to
-/// `Alpha.cs`.
+/// deletes the workspace), the child, its stdin/stdout, the child's
+/// stderr (keep it bound — dropping the read end early stalls the
+/// heavily-logging LSP on a full stderr pipe so it never answers), and
+/// the path to `Alpha.cs`.
 fn lsp_alpha_session() -> Result<(
     tempfile::TempDir,
     std::process::Child,
     std::process::ChildStdin,
     std::io::BufReader<std::process::ChildStdout>,
+    std::process::ChildStderr,
     std::path::PathBuf,
 )> {
-    let workspace = copy_fixture("csharp-small")?;
+    let (workspace, child, mut stdin, mut stdout, stderr) = spawn_lsp_on_fixture("csharp-small")?;
     let alpha = workspace.path().join("Alpha.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
     let _init = handshake(&mut stdin, &mut stdout)?;
-    Ok((workspace, child, stdin, stdout, alpha))
+    Ok((workspace, child, stdin, stdout, stderr, alpha))
 }
 
 /// Extracts a definition target URI from any of the shapes the LSP allows
