@@ -400,6 +400,25 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   object-fit: cover;
 }
 
+/* ─────────── Inline content figure (docs screenshots & diagrams) ─────────── */
+.prose img { max-width: 100%; height: auto; }
+.prose figure { margin: 0; }
+.prose figure a { display: block; }
+.prose figure img {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--outline-variant) 30%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+.prose figcaption {
+  margin-top: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--on-surface-variant);
+  line-height: 1.6;
+}
+
 /* ─────────── Shared article typography (.prose) ─────────── */
 .prose { display: flex; flex-direction: column; gap: var(--space-6); }
 .prose > * { margin: 0; }

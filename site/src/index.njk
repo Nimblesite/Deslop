@@ -140,4 +140,34 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
       </div>
     </div>
   </section>
+
+  <section class="showcase">
+    <div class="showcase__head">
+      <div class="eyebrow-chip"><span>In your editor</span></div>
+      <h2 class="showcase__title">One live report, three surfaces.</h2>
+      <p class="showcase__lede">The VS Code extension bundles the LSP and MCP servers and renders the running analysis inline — worst-first clusters in the sidebar, a live clone warning right at your cursor, and a side-by-side diff against the canonical copy. The agent driving your editor reads the same report over MCP.</p>
+    </div>
+    <figure class="showcase__figure">
+      <img src="/assets/img/screenshot.webp"
+           alt="The Deslop VS Code extension analysing a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor with Compare, View cluster and Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence."
+           width="2560" height="1492" loading="lazy" decoding="async">
+    </figure>
+    <ol class="showcase__legend">
+      <li class="showcase__cell">
+        <span class="showcase__pos">Left · sidebar</span>
+        <strong>Top Offenders, Duplication, Session</strong>
+        <p>Top Offenders ranks every clone cluster worst-first — id, severity, plain-English bucket. Duplication breaks the repo down folder-by-folder with a duplicated-percentage on every node. Session shows the live server and the embedding-model picker.</p>
+      </li>
+      <li class="showcase__cell">
+        <span class="showcase__pos">Centre · editor</span>
+        <strong>Live clone warning</strong>
+        <p>The LSP underlines the duplicate as you type, names the canonical copy used as the anchor, and offers <em>Compare with canonical</em>, <em>View cluster</em>, and <em>Copy for AI</em> right on the finding.</p>
+      </li>
+      <li class="showcase__cell">
+        <span class="showcase__pos">Right · diff</span>
+        <strong>Compare against canonical</strong>
+        <p>VS Code's native side-by-side editor lines this occurrence up against the canonical one, matching rows aligned, so you can confirm the duplication before extracting a shared helper.</p>
+      </li>
+    </ol>
+  </section>
 </div>

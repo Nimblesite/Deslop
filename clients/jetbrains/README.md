@@ -2,6 +2,10 @@
 
 IntelliJ Platform plugin for Deslop. Rider is the first product target, but the implementation stays on the platform LSP API so IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion can follow (commercial Ultimate-tier IDEs only — the plugin depends on `com.intellij.modules.ultimate`, so Community editions cannot load it).
 
+[![The Deslop VS Code reference client on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor, and a side-by-side Compare diff against the canonical occurrence.](../../site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
+
+The screenshot above is the **VS Code reference client**. This JetBrains plugin starts the same `deslop-lsp` server, so it surfaces the identical live analysis through the IDE's native LSP diagnostics. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+
 Current slice:
 
 - Registers a `com.intellij.platform.lsp.serverSupportProvider`.

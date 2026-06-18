@@ -77,6 +77,8 @@ split_by_language = false  # true → one HTML section per language
 
 Glob 采用 gitignore 风格，并针对相对于配置文件的路径进行匹配。
 
+<span id="run-in-ci"></span>
+
 ## 在 CI 中运行
 
 无论发现多少重复，`deslop` 都会以 `0` 退出——除非你选择启用门禁。届时，当仓库整体的 `duplication_percent` 超过你设定的上限时，它会以 `3` 退出。有两种方式；命令行标志优先于配置键：
