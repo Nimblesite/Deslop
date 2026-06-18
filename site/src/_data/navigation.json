@@ -15,6 +15,7 @@
         { "text": "AI Integration", "i18nKey": "footer.aiIntegration", "url": "/docs/ai-integration/" },
         { "text": "For AI", "i18nKey": "footer.forAI", "url": "/docs/for-ai/" },
         { "text": "Output Formats", "i18nKey": "footer.outputFormats", "url": "/docs/output-formats/" },
+        { "text": "Configuration", "i18nKey": "footer.configuration", "url": "/docs/configuration/" },
         { "text": "VS Code Cluster Panel", "i18nKey": "footer.clusterPanel", "url": "/docs/vscode-cluster-panel/" },
         { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
       ]

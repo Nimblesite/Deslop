@@ -4,7 +4,7 @@ title: VS Code 簇面板 — 解读 Deslop 克隆簇
 description: Deslop VS Code 簇详情面板的实用指南，涵盖簇 id、排名、信号、出现位置以及比较操作。
 eleventyNavigation:
   key: VS Code 簇面板
-  order: 6
+  order: 7
 icon: account_tree
 lang: zh
 ---

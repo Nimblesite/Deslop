@@ -4,7 +4,7 @@ title: Research Background — Code-clone detection algorithms
 description: Deslop's research lineage — Baxter 1998, Chilowicz 2009 Merkle fingerprints, Broder 1997 MinHash, Indyk-Motwani 1998 LSH, SSCD 2024 HNSW. Each pinned to a real file.
 eleventyNavigation:
   key: Research Background
-  order: 7
+  order: 8
 icon: science
 ---
 
