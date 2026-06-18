@@ -386,19 +386,23 @@ function embeddingSettingsFromConfiguration(
   };
 }
 
-async function refreshAfterChange(
+export async function refreshAfterChange(
   c: LanguageClient,
   store: ReportStore,
   payload: ReportChangedNotification,
 ): Promise<void> {
-  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
-  // applyDelta silently bails when no current report exists, which would
-  // strand the notification during the startup window before
-  // seedInitialReport completes. Fall back to the full snapshot in that case.
-  if (delta && store.current.report) {
-    store.applyDelta(delta);
-    return;
-  }
+  // Pull the delta spanning the store's own baseline (#230). Without a
+  // `since_generation` the server defaults to `current - 1`, which only spans
+  // one generation — so a client that missed a `reportChanged` (lagged
+  // broadcast or async gap) would merge a delta that never retracts the
+  // clusters dropped in the skipped generations, leaving them as phantoms.
+  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta", {
+    since_generation: store.current.generation,
+  });
+  // applyDelta rejects (returns false) when no report is seeded yet or the
+  // delta's baseline does not match the store's generation. Either way fall
+  // back to the full snapshot so the store converges to the live engine.
+  if (delta && store.applyDelta(delta)) return;
   const snapshot = await c.sendRequest<Report>("deslop/reportGet");
   store.setSnapshot(snapshot, payload.generation);
 }

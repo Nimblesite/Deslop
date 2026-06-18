@@ -9,12 +9,14 @@ import {
   revealActiveBinary,
   tryResolveOptional,
   wireNotifications,
+  refreshAfterChange,
   seedInitialReport,
   buildServerArgs,
   syncEmbeddingSettingsToLsp,
   resolveWorkspaceRoot,
 } from "../../extension";
 import { ReportStore } from "../../reportStore";
+import { cluster, report } from "./tree.helpers";
 import {
   BundledBinaryMissingError,
   UnsupportedPlatformError,
@@ -381,6 +383,72 @@ suite("extension internals", () => {
     wireNotifications(client, store);
     await changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
     assert.ok(requests.includes("deslop/reportGet"));
+  });
+
+  // Regression (#230): a missed/lagged deslop/reportChanged leaves the store at
+  // an older baseline than the single-step delta the server returns by default
+  // (current-1 -> current). Applying that delta on the stale base never retracts
+  // the clusters dropped in the skipped generations, so a discarded cluster
+  // survives as a phantom rank-#1 entry. The refresh must converge the store to
+  // the live engine instead of merging a delta against a mismatched baseline.
+  test("refreshAfterChange converges to the engine after a missed generation (#230)", async () => {
+    // Engine history: gen 1 [phantom(100), keep(50)] -> gen 2 drops phantom
+    // (MISSED by the client) -> gen 3 adds fresh(80). Live truth at gen 3 is
+    // worst-first [fresh, keep]; "phantom" no longer exists in the engine.
+    const keep = cluster("keep", 50, "/repo/Keep.cs");
+    const fresh = cluster("fresh", 80, "/repo/Fresh.cs");
+    const liveReport = report([fresh, keep]);
+
+    const deltaSinceParams: Array<number | undefined> = [];
+    const client = {
+      sendRequest: (name: string, params?: { since_generation?: number }) => {
+        if (name === "deslop/reportDelta") {
+          deltaSinceParams.push(params?.since_generation);
+          // The server answers `since -> current(3)`. With the correct baseline
+          // (1) it can retract "phantom"; the buggy no-since default (current-1
+          // = 2) returns a delta that cannot, because phantom left in gen 2.
+          const since = params?.since_generation ?? 2;
+          if (since === 1) {
+            return Promise.resolve({
+              from_generation: 1,
+              to_generation: 3,
+              clusters_added: [fresh],
+              clusters_removed: ["phantom"],
+              clusters_updated: [],
+              cache_stats: { hits: 0, misses: 0 },
+              tool_version: "v",
+            });
+          }
+          return Promise.resolve({
+            from_generation: since,
+            to_generation: 3,
+            clusters_added: [fresh],
+            clusters_removed: [],
+            clusters_updated: [],
+            cache_stats: { hits: 0, misses: 0 },
+            tool_version: "v",
+          });
+        }
+        // deslop/reportGet always serves canonical live truth.
+        return Promise.resolve(liveReport);
+      },
+    } as unknown as LanguageClient;
+
+    const store = new ReportStore();
+    store.setSnapshot(report([cluster("phantom", 100, "/repo/Phantom.cs"), keep]), 1);
+
+    await refreshAfterChange(client, store, {
+      generation: 3,
+      summary: { clusters_added: 1, clusters_removed: 1, clusters_updated: 0, worst_weight: 80 },
+    });
+
+    assert.deepEqual(
+      store.current.report?.clusters.map((c) => c.id),
+      ["fresh", "keep"],
+      "the stale 'phantom' cluster (rank #1) must not survive a missed generation — " +
+        "the store must converge to the live engine report",
+    );
+    assert.equal(store.current.generation, 3, "the store must advance to the live generation");
   });
 
   test("seedInitialReport stores the returned snapshot", async () => {
