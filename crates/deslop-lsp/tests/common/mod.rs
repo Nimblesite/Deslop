@@ -239,7 +239,12 @@ pub fn spawn_lsp_guarded(
 /// armed [`LspGuard`] and the child's stdin/stdout.
 pub fn spawn_lsp_on_fixture_guarded(
     name: &str,
-) -> Result<(tempfile::TempDir, LspGuard, ChildStdin, BufReader<ChildStdout>)> {
+) -> Result<(
+    tempfile::TempDir,
+    LspGuard,
+    ChildStdin,
+    BufReader<ChildStdout>,
+)> {
     let workspace = copy_fixture(name)?;
     let (guard, stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     Ok((workspace, guard, stdin, stdout))

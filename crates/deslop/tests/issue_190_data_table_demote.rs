@@ -291,7 +291,14 @@ fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
         write_ranking_config(&src, body)?;
         let mut cmd = deslop_cmd(&src, &tmp.path().join("r"))?;
         let _assertion = cmd
-            .args(["--min-nodes", "30", "--embeddings", "off", "--notext", "--nohtml"])
+            .args([
+                "--min-nodes",
+                "30",
+                "--embeddings",
+                "off",
+                "--notext",
+                "--nohtml",
+            ])
             .assert()
             .failure()
             .stderr(predicates::str::contains("data_clone_weight"))

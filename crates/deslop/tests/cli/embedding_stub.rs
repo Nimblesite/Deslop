@@ -225,7 +225,12 @@ fn mock_ollama_under_auto_mode_runs_embedding_pass() -> Result<()> {
 #[test]
 fn unknown_embedding_provider_is_rejected() -> Result<()> {
     assert_cli_rejects(
-        &["--embeddings", "auto", "--embedding-provider", "imaginary-provider"],
+        &[
+            "--embeddings",
+            "auto",
+            "--embedding-provider",
+            "imaginary-provider",
+        ],
         "unknown embedding provider",
     )
 }

@@ -92,7 +92,14 @@ fn dart_const_constructor_registry_is_hidden() -> Result<()> {
     let report = report_path(tmp.path());
     let mut cmd = deslop_cmd(&src, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .args(["--min-nodes", "30", "--embeddings", "off", "--notext", "--nohtml"])
+        .args([
+            "--min-nodes",
+            "30",
+            "--embeddings",
+            "off",
+            "--notext",
+            "--nohtml",
+        ])
         .assert()
         .success();
 

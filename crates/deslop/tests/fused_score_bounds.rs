@@ -19,10 +19,7 @@ fn report_path(tmp: &Path) -> PathBuf {
 
 fn run_report(tmp: &Path) -> Result<serde_json::Value> {
     let mut cmd = deslop_cmd(&fixture("csharp-small"), &tmp.join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "8"])
-        .assert()
-        .success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let body = fs::read_to_string(report_path(tmp))?;
     Ok(serde_json::from_str(&body)?)
 }

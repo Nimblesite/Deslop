@@ -75,8 +75,14 @@ impl MockOllama {
         let max_embed_batch_len = Arc::new(AtomicUsize::new(0));
         let server_stop = Arc::clone(&stop);
         let server_max = Arc::clone(&max_embed_batch_len);
-        let handle =
-            thread::spawn(move || serve(&listener, server_stop.as_ref(), server_max.as_ref(), behavior));
+        let handle = thread::spawn(move || {
+            serve(
+                &listener,
+                server_stop.as_ref(),
+                server_max.as_ref(),
+                behavior,
+            );
+        });
         Ok(Self {
             endpoint: format!("http://{addr}"),
             addr,
@@ -209,7 +215,11 @@ fn request_path(headers: &str) -> String {
         .to_owned()
 }
 
-fn response_for(request: &HttpRequest, max_embed_batch_len: &AtomicUsize, behavior: MockBehavior) -> String {
+fn response_for(
+    request: &HttpRequest,
+    max_embed_batch_len: &AtomicUsize,
+    behavior: MockBehavior,
+) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
         // The dimension probe always succeeds so the provider can learn the

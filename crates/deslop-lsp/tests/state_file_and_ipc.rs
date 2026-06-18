@@ -40,8 +40,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// initialization so the MCP has something to read immediately.
 #[test]
 fn state_file_exists_after_initialize() -> Result<()> {
-    let (workspace, _guard, mut stdin, mut stdout) =
-        spawn_lsp_on_fixture_guarded("csharp-small")?;
+    let (workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
 
     let _init = handshake(&mut stdin, &mut stdout)?;
 
@@ -397,8 +396,7 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_refresh_report_request() -> Result<()> {
-    let (workspace, _guard, _stdin, _stdout, socket_path) =
-        workspace_socket_ready("csharp-small")?;
+    let (workspace, _guard, _stdin, _stdout, socket_path) = workspace_socket_ready("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
 
     let initial = ipc_call(

@@ -24,9 +24,9 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 mod common;
+use common::{fixture_root, value_get};
 #[cfg(unix)]
 use common::{pid_exists, read_mcp_pid, terminate_pid, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT};
-use common::{fixture_root, value_get};
 
 /// One live `deslop-mcp` child-process conversation. Holds stdio
 /// handles + the buffered line reader so the test author works in
@@ -1142,8 +1142,10 @@ fn report_query_accepts_dart_language_filter() -> Result<()> {
     // InvalidParams and there was no workaround on Dart repos. The enum is
     // now derived from the core parser registry, so the filter must be
     // accepted (returning a, possibly empty, page) rather than rejected.
-    let (child, response) =
-        init_and_tool_response("report-query", &json!({ "offset": 0, "limit": 5, "language": "dart" }))?;
+    let (child, response) = init_and_tool_response(
+        "report-query",
+        &json!({ "offset": 0, "limit": 5, "language": "dart" }),
+    )?;
     assert!(
         response.get("error").is_none(),
         "issue #170/#198: report-query must accept language=\"dart\" at the \
@@ -1242,7 +1244,8 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 
 #[test]
 fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
-    let (mut child, page) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 10 }))?;
+    let (mut child, page) =
+        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 10 }))?;
     let clusters = value_get(&page, "/clusters")?
         .as_array()
         .cloned()
@@ -1286,7 +1289,8 @@ fn same_occurrence(left: &Value, right: &Value) -> bool {
 
 #[test]
 fn report_get_offset_past_end_returns_empty_page() -> Result<()> {
-    let (mut child, probe) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
+    let (mut child, probe) =
+        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
     let total = value_get(&probe, "/total_clusters")?
         .as_u64()
         .ok_or_else(|| anyhow!("total_clusters missing"))?;
@@ -1358,8 +1362,10 @@ fn initialize_capabilities_have_no_null_values() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_language() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "language": "csharp" }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "language": "csharp" }),
+    )?;
     let clusters = value_get(&page, "/clusters")?;
     let array = clusters
         .as_array()
@@ -1381,8 +1387,10 @@ fn report_query_filters_by_language() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "language": "cobol" }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "language": "cobol" }),
+    )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
     Ok(())
@@ -1390,8 +1398,10 @@ fn report_query_filters_by_unknown_language_returns_empty() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_path_contains() -> Result<()> {
-    let (mut child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "path_contains": "Alpha" }))?;
+    let (mut child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "path_contains": "Alpha" }),
+    )?;
     let array = value_get(&page, "/clusters")?
         .as_array()
         .cloned()
@@ -1430,8 +1440,10 @@ fn report_query_filters_by_path_contains() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_size() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "min_size": 20 }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_size": 20 }),
+    )?;
     let clusters = value_get(&page, "/clusters")?;
     for cluster in clusters.as_array().unwrap_or(&Vec::new()) {
         let size = cluster
@@ -1449,7 +1461,8 @@ fn report_query_filters_by_min_size() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_score() -> Result<()> {
-    let (mut child, baseline) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
+    let (mut child, baseline) =
+        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
     let max_score = value_get(&baseline, "/clusters/0/score")?
         .as_f64()
         .ok_or_else(|| anyhow!("baseline score missing"))?;
@@ -1494,8 +1507,10 @@ fn report_query_requires_offset_and_limit() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "min_score": 9_999_999.0 }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_score": 9_999_999.0 }),
+    )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
     Ok(())
@@ -1503,8 +1518,10 @@ fn report_query_filters_by_min_score_excludes_above_max() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "min_size": 99_999 }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "min_size": 99_999 }),
+    )?;
     assert_empty_page(&page)?;
     let _ = child.finish();
     Ok(())
@@ -1512,8 +1529,10 @@ fn report_query_filters_by_min_size_excludes_above_max() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_unknown_bucket_returns_empty() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "bucket": "loosely_similar" }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "bucket": "loosely_similar" }),
+    )?;
     assert_empty_page(&page)?;
     let filters = value_get(&page, "/filters")?;
     assert_eq!(filters.get("bucket"), Some(&json!("loosely_similar")));
@@ -1538,8 +1557,10 @@ fn report_query_filters_by_nonmatching_path_returns_empty() -> Result<()> {
 
 #[test]
 fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
-    let (child, page) =
-        init_and_tool_payload("report-query", &json!({ "offset": 0, "limit": 50, "bucket": "nearly_identical" }))?;
+    let (child, page) = init_and_tool_payload(
+        "report-query",
+        &json!({ "offset": 0, "limit": 50, "bucket": "nearly_identical" }),
+    )?;
     let clusters = value_get(&page, "/clusters")?
         .as_array()
         .cloned()
@@ -1578,7 +1599,8 @@ fn report_query_echoes_filters_in_response() -> Result<()> {
 
 #[test]
 fn report_for_file_returns_only_matching_clusters() -> Result<()> {
-    let (child, payload) = init_and_tool_payload("report-for-file", &json!({ "path": "Alpha.cs" }))?;
+    let (child, payload) =
+        init_and_tool_payload("report-for-file", &json!({ "path": "Alpha.cs" }))?;
     let clusters = value_get(&payload, "/clusters")?;
     let array = clusters
         .as_array()
@@ -1622,8 +1644,10 @@ fn find_similar_snippet_returns_below_min_nodes_for_tiny_input() -> Result<()> {
     // cleanly but produces no fingerprint — the response surfaces
     // an empty `clusters` list with `below_min_nodes: true` per
     // [MCP-TOOL-FINDSIMILAR].
-    let (child, response) =
-        init_and_tool_response("find-similar", &json!({ "snippet": "int x = 0;", "language": "csharp" }))?;
+    let (child, response) = init_and_tool_response(
+        "find-similar",
+        &json!({ "snippet": "int x = 0;", "language": "csharp" }),
+    )?;
     let payload = value_get(&response, "/result/structuredContent")?;
     assert_eq!(
         payload.get("below_min_nodes"),
@@ -1644,8 +1668,10 @@ fn find_similar_snippet_returns_below_min_nodes_for_tiny_input() -> Result<()> {
 #[test]
 fn find_similar_snippet_unsupported_language_yields_error() -> Result<()> {
     // StateFileBackend returns LspNotRunning (-32004) before language validation.
-    let (child, response) =
-        init_and_tool_response("find-similar", &json!({ "snippet": "fn main() {}", "language": "cobol" }))?;
+    let (child, response) = init_and_tool_response(
+        "find-similar",
+        &json!({ "snippet": "fn main() {}", "language": "cobol" }),
+    )?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_004));
     let _ = child.finish();
     Ok(())
@@ -1696,7 +1722,8 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
 
 #[test]
 fn cluster_by_id_round_trips() -> Result<()> {
-    let (mut child, report_value) = init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
+    let (mut child, report_value) =
+        init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 1 }))?;
     let first_id = value_get(&report_value, "/clusters/0/id")?
         .as_str()
         .ok_or_else(|| anyhow!("first cluster id missing"))?
@@ -1717,7 +1744,8 @@ fn cluster_by_id_round_trips() -> Result<()> {
 
 #[test]
 fn cluster_by_id_unknown_returns_error() -> Result<()> {
-    let (child, response) = init_and_tool_response("cluster-by-id", &json!({ "id": "not-a-real-id" }))?;
+    let (child, response) =
+        init_and_tool_response("cluster-by-id", &json!({ "id": "not-a-real-id" }))?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
     let _ = child.finish();
     Ok(())
@@ -2013,7 +2041,8 @@ fn report_for_range_returns_empty_when_path_has_no_clusters() -> Result<()> {
 
 #[test]
 fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
-    let (_workspace, mut child) = workspace_with_extra_file("Ghost.cs", "namespace G { class G {} }")?;
+    let (_workspace, mut child) =
+        workspace_with_extra_file("Ghost.cs", "namespace G { class G {} }")?;
     let result = call_tool(
         &mut child,
         "report-for-file",
@@ -2101,8 +2130,10 @@ fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
     // tolerate an empty snippet — it is below the parser's minimum
     // node floor, so the success-path reply marks `below_min_nodes`
     // and returns no clusters (no error envelope).
-    let (child, response) =
-        init_and_tool_response("find-similar", &json!({ "snippet": "", "language": "csharp" }))?;
+    let (child, response) = init_and_tool_response(
+        "find-similar",
+        &json!({ "snippet": "", "language": "csharp" }),
+    )?;
     assert!(
         response.pointer("/error").is_none(),
         "find-similar with the live LSP must succeed (no JSON-RPC error envelope): {response}"
@@ -2218,7 +2249,8 @@ fn tool_missing_required_string_arg_returns_invalid_params() -> Result<()> {
 #[test]
 fn tool_missing_required_integer_arg_returns_invalid_params() -> Result<()> {
     // report-for-range needs start_byte + end_byte — omit both.
-    let (child, response) = init_and_tool_response("report-for-range", &json!({ "path": "Alpha.cs" }))?;
+    let (child, response) =
+        init_and_tool_response("report-for-range", &json!({ "path": "Alpha.cs" }))?;
     assert_eq!(value_get(&response, "/error/code")?.as_i64(), Some(-32_602));
     let _ = child.finish();
     Ok(())
@@ -2269,7 +2301,8 @@ fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> 
     // Query a file that doesn't exist but whose *parent* (the scan
     // root) does. This exercises safety::canonicalise_best_effort's
     // nonexistent-leaf branch, returning an empty cluster set.
-    let (child, payload) = init_and_tool_payload("report-for-file", &json!({ "path": "NeverCreated.cs" }))?;
+    let (child, payload) =
+        init_and_tool_payload("report-for-file", &json!({ "path": "NeverCreated.cs" }))?;
     let clusters = value_get(&payload, "/clusters")?;
     assert!(
         clusters.as_array().is_some_and(Vec::is_empty),
@@ -2281,8 +2314,10 @@ fn report_for_file_accepts_nonexistent_leaf_but_resolves_parent() -> Result<()> 
 
 #[test]
 fn path_in_nonexistent_subdirectory_is_rejected_as_io_failure() -> Result<()> {
-    let (child, response) =
-        init_and_tool_response("report-for-file", &json!({ "path": "no/such/dir/Phantom.cs" }))?;
+    let (child, response) = init_and_tool_response(
+        "report-for-file",
+        &json!({ "path": "no/such/dir/Phantom.cs" }),
+    )?;
     assert!(
         response.get("error").is_some(),
         "nonexistent parent directory must surface an error: {response}"

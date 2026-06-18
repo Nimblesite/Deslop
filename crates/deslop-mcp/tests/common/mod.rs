@@ -369,8 +369,7 @@ pub fn fixture_root() -> &'static Path {
 /// pid to stderr, so the orphan-exit suites can kill the launching parent
 /// while keeping the MCP child stdio open.
 #[cfg(unix)]
-pub const KILLABLE_PARENT_SCRIPT: &str =
-    r#"exec 3<&0; "$1" --root "$2" <&3 2>/dev/null & mcp_pid=$!; printf '%s\n' "$mcp_pid" >&2; wait "$mcp_pid""#;
+pub const KILLABLE_PARENT_SCRIPT: &str = r#"exec 3<&0; "$1" --root "$2" <&3 2>/dev/null & mcp_pid=$!; printf '%s\n' "$mcp_pid" >&2; wait "$mcp_pid""#;
 
 /// Reads the MCP pid the killable-parent shell prints on its stderr line.
 #[cfg(unix)]

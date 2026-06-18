@@ -240,7 +240,13 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
         .success();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
-        .args(["--min-nodes", "8", "--incremental", "--technical", "--no-color"])
+        .args([
+            "--min-nodes",
+            "8",
+            "--incremental",
+            "--technical",
+            "--no-color",
+        ])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;

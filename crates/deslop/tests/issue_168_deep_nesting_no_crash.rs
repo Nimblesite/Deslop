@@ -45,7 +45,14 @@ fn deeply_nested_dart_file_is_skipped_not_crashed() -> Result<()> {
     let report = report_path(tmp.path());
     let mut cmd = deslop_cmd(&src, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .args(["--min-nodes", "5", "--embeddings", "off", "--notext", "--nohtml"])
+        .args([
+            "--min-nodes",
+            "5",
+            "--embeddings",
+            "off",
+            "--notext",
+            "--nohtml",
+        ])
         .assert()
         .success();
 

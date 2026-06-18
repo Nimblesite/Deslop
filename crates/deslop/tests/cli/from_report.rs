@@ -126,11 +126,11 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
 fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-prologue-false-positive"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "2"])
-        .assert()
-        .success();
+    let mut cmd = deslop_command(
+        &fixture("csharp-prologue-false-positive"),
+        &tmp.path().join("report"),
+    )?;
+    let _assertion = cmd.args(["--min-nodes", "2"]).assert().success();
     let json = read_json_report(&out.json)?;
     let clusters = json
         .get("clusters")

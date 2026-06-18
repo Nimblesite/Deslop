@@ -9,10 +9,7 @@ fn run_min_nodes(fixture_name: &str, min_nodes: &str) -> Result<String> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&fixture(fixture_name), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", min_nodes])
-        .assert()
-        .success();
+    let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
     Ok(fs::read_to_string(&out.json)?)
 }
 
