@@ -3,7 +3,20 @@
 
 import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster, ReportDelta } from "../../types/report";
+import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
+
+function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
+  return {
+    analysed_loc: 0,
+    duplicated_loc: 0,
+    duplication_percent: 0,
+    clusters_total: 0,
+    duplicated_files: 0,
+    threshold: { percent: 0, breached: false, source: "none" },
+    per_file: [],
+    ...overrides,
+  };
+}
 
 function emptyReport(overrides: Partial<Report> = {}): Report {
   return {
@@ -12,15 +25,7 @@ function emptyReport(overrides: Partial<Report> = {}): Report {
     files_analysed: 0,
     clusters_hidden: 0,
     cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 0,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: 0,
-      duplicated_files: 0,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
+    metrics: metrics(),
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],
@@ -111,6 +116,7 @@ suite("ReportStore", () => {
       clusters_added: [],
       clusters_removed: [],
       clusters_updated: [],
+      metrics: metrics(),
       cache_stats: { hits: 0, misses: 0 },
       tool_version: "v",
     };
@@ -129,6 +135,7 @@ suite("ReportStore", () => {
       clusters_added: [cluster("c", 10)],
       clusters_removed: ["a"],
       clusters_updated: [cluster("b", 5)],
+      metrics: metrics(),
       cache_stats: { hits: 3, misses: 4 },
       tool_version: "v2",
     };
@@ -142,6 +149,37 @@ suite("ReportStore", () => {
     assert.equal(out.cache_stats.hits, 3);
     assert.equal(out.tool_version, "v2");
     assert.equal(store.current.generation, 2);
+  });
+
+  // #199: the DUPLICATION headline + per-file rows read straight from
+  // report.metrics, and the delta path is the one almost always taken
+  // after the first snapshot. applyDelta must therefore overwrite the
+  // carried-over seed metrics with the delta's recomputed values, or the
+  // headline freezes for the rest of the session.
+  test("applyDelta replaces report.metrics with the delta's recomputed metrics (#199)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      emptyReport({
+        metrics: metrics({ analysed_loc: 8981, duplicated_loc: 1588, duplication_percent: 17.7 }),
+      }),
+      1,
+    );
+    const delta: ReportDelta = {
+      from_generation: 1,
+      to_generation: 2,
+      clusters_added: [],
+      clusters_removed: [],
+      clusters_updated: [],
+      metrics: metrics({ analysed_loc: 9367, duplicated_loc: 1046, duplication_percent: 11.2 }),
+      cache_stats: { hits: 0, misses: 0 },
+      tool_version: "tool-v1",
+    };
+    store.applyDelta(delta);
+    const out = store.current.report;
+    assert.ok(out, "report must exist after applyDelta");
+    assert.equal(out.metrics.duplication_percent, 11.2, "headline percent must follow the delta");
+    assert.equal(out.metrics.analysed_loc, 9367, "analysed LOC must follow the delta");
+    assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta");
   });
 
   test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {

@@ -20,13 +20,13 @@
 
 use std::{fs, path::Path};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, SOCKET_TIMEOUT,
+    copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
+    structured_content,
 };
 
 /// Sanity guard for the full `tools/list` payload. Picked an order
@@ -43,11 +43,7 @@ const TOOL_DESCRIPTION_MAX_CHARS: usize = 200;
 /// payload ≤16 KB ([MCP-RESULT-SIZE-CAP]).
 #[test]
 fn tools_list_payload_stays_under_codex_wire_budget() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
     let response = mcp.request("tools/list", &json!({}))?;
@@ -113,11 +109,7 @@ fn check_one_description(tool: &Value) -> Result<()> {
 /// `reuse`, `avoid introducing new clones`).
 #[test]
 fn find_similar_description_still_leads_with_prevention() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
     let response = mcp.request("tools/list", &json!({}))?;
@@ -162,10 +154,7 @@ fn find_description(response: &Value, tool_name: &str) -> Result<String> {
 fn top_offenders_result_capped_at_two_hundred_kilobytes() -> Result<()> {
     let workspace = copied_fixture()?;
     inflate_workspace_with_clones(workspace.path())?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let mut mcp = initialized_mcp(workspace.path())?;
     let _rescan = mcp.request(
         "tools/call",
@@ -249,11 +238,7 @@ fn inflate_workspace_with_clones(root: &Path) -> Result<()> {
 /// ([MCP-WIRE-FRAMING]).
 #[test]
 fn resources_templates_list_returns_well_formed_method_not_found() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
     let response = mcp.request("resources/templates/list", &json!({}))?;

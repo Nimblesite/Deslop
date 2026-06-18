@@ -9,8 +9,7 @@
 //! audience-neutral record.
 
 use std::{
-    io::{Read, Write},
-    process::{ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::atomic::{AtomicI64, Ordering},
     thread,
     time::Duration,
@@ -18,7 +17,10 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
+
+mod common;
+use crate::common::*;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 
@@ -29,25 +31,8 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 #[test]
 fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
-        .arg(workspace.path())
-        .env("RUST_LOG", "info")
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    let mut stdin = stdin;
-    let mut reader = BufReader::new(stdout);
+    let mut child = spawn_logging_lsp(workspace.path())?;
+    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
 
     let _init = handshake(&mut stdin, &mut reader)?;
     let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
@@ -72,25 +57,8 @@ fn report_get_handler_logs_elapsed_ms() -> Result<()> {
 #[test]
 fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
     let workspace = tempfile::tempdir()?;
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
-        .arg(workspace.path())
-        .env("RUST_LOG", "info")
-        .env("NO_COLOR", "1")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    let mut stdin = stdin;
-    let mut reader = BufReader::new(stdout);
+    let mut child = spawn_logging_lsp(workspace.path())?;
+    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
 
     let _init = handshake(&mut stdin, &mut reader)?;
     let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
@@ -171,16 +139,7 @@ fn profile_dir_writes_non_empty_firefox_profile_on_shutdown() -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
 
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    let mut stdin = stdin;
-    let mut reader = BufReader::new(stdout);
+    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
 
     let _init = handshake(&mut stdin, &mut reader)?;
     let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
@@ -244,56 +203,6 @@ fn request_without_params(method: &str) -> Result<(i64, String)> {
     Ok((id, serde_json::to_string(&payload)?))
 }
 
-fn notification(method: &str, params: &Value) -> Result<String> {
-    let payload = json!({"jsonrpc":"2.0","method":method,"params":params});
-    Ok(serde_json::to_string(&payload)?)
-}
-
-fn write_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
-}
-
-fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
-}
-
-fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let length = read_content_length(reader)?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
-}
-
-fn send_and_recv(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    id: i64,
-    payload: &str,
-) -> Result<Value> {
-    write_frame(stdin, payload)?;
-    loop {
-        let frame = read_frame(reader)?;
-        if frame.get("id").and_then(Value::as_i64) == Some(id) {
-            return Ok(frame);
-        }
-    }
-}
-
 fn handshake(stdin: &mut ChildStdin, reader: &mut BufReader<ChildStdout>) -> Result<Value> {
     let (id, payload) = request(
         "initialize",
@@ -320,4 +229,32 @@ fn call(
 ) -> Result<Value> {
     let (id, payload) = request(method, params)?;
     send_and_recv(stdin, reader, id, &payload)
+}
+
+/// Spawns `deslop-lsp` against `workspace` with INFO logging and no
+/// colour, the shared startup for the observability tests. Stderr stays
+/// piped so a later `wait_with_output` can scrape the structured log.
+fn spawn_logging_lsp(workspace: &std::path::Path) -> Result<Child> {
+    Ok(Command::new(assert_cmd::cargo::cargo_bin("deslop-lsp"))
+        .arg(workspace)
+        .env("RUST_LOG", "info")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?)
+}
+
+/// Takes the child's stdin and a buffered stdout, leaving stderr on the
+/// child so the test can drain it through `wait_with_output`.
+fn take_stdin_stdout(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>)> {
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("child stdin missing"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("child stdout missing"))?;
+    Ok((stdin, BufReader::new(stdout)))
 }

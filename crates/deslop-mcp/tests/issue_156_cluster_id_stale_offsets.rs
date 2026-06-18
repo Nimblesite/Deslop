@@ -18,8 +18,8 @@ use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
+    call_tool, initialized_mcp, lsp_workspace_with_socket, rescan_call, wait_for_path,
+    SOCKET_TIMEOUT,
 };
 
 /// Issue #156: after rescanning, the cluster payload returned by
@@ -28,12 +28,7 @@ use common::{
 /// values for at least one MCP cycle.
 #[test]
 fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
 
@@ -89,14 +84,7 @@ fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
     // the agent has not explicitly forced a refresh between read
     // calls. Either re-resolve offsets at read time or invalidate
     // stale clusters; either fix keeps the agent from being misled.
-    let response = mcp.request(
-        "tools/call",
-        &json!({
-            "name": "cluster-by-id",
-            "arguments": { "id": target_id }
-        }),
-    )?;
-    let cluster = structured_content(&response, "cluster-by-id")?;
+    let cluster = call_tool(&mut mcp, "cluster-by-id", &json!({ "id": target_id }))?;
     let occurrences = cluster
         .get("occurrences")
         .and_then(Value::as_array)
@@ -140,19 +128,4 @@ fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
         );
     }
     Ok(())
-}
-
-/// Calls the `rescan` MCP tool and returns the structured payload.
-fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
-    let response = mcp.request(
-        "tools/call",
-        &json!({
-            "name": "rescan",
-            "arguments": {
-                "paths": paths,
-                "n": 8,
-            }
-        }),
-    )?;
-    structured_content(&response, "rescan")
 }

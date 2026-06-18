@@ -7,14 +7,9 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
@@ -23,15 +18,8 @@ fn report_path(tmp: &Path) -> PathBuf {
 }
 
 fn run_report(tmp: &Path) -> Result<serde_json::Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_cmd(&fixture("csharp-small"), &tmp.join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let body = fs::read_to_string(report_path(tmp))?;
     Ok(serde_json::from_str(&body)?)
 }

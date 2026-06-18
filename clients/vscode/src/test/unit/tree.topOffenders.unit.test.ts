@@ -24,6 +24,7 @@ import {
   cluster,
   iconColorId,
   labelText,
+  metrics,
   report,
   tooltipText,
   withGroupBy,
@@ -742,6 +743,7 @@ suite("TopOffendersProvider", () => {
         clusters_added: [cluster("fresh", 50, "/fresh.cs")],
         clusters_removed: ["stale"],
         clusters_updated: [],
+        metrics: metrics(),
         cache_stats: { hits: 2, misses: 0 },
         tool_version: "v2",
       });
@@ -777,6 +779,7 @@ suite("TopOffendersProvider", () => {
       clusters_added: [],
       clusters_removed: ["fixed"],
       clusters_updated: [],
+      metrics: metrics(),
       cache_stats: { hits: 2, misses: 0 },
       tool_version: "v2",
     });

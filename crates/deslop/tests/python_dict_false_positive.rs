@@ -16,29 +16,18 @@
 //! sit in the same file with non-overlapping but adjacent byte ranges
 //! inside the same parent node must be suppressed.
 
-use std::{fs, path::Path, path::PathBuf};
+use std::fs;
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_cli_on_fixture(fixture_name: &str) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
     let report_base = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture(fixture_name))
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--output")
-        .arg(&report_base)
-        .assert()
-        .success();
+    let mut cmd = deslop_cmd(&fixture(fixture_name), &report_base)?;
+    let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
     let json_path = {
         let mut p = report_base.clone();
         let mut name = p

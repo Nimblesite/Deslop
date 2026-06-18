@@ -26,7 +26,10 @@ use std::{
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use serde::Deserialize;
 
-use crate::{error::CoreError, report_metrics::validate_threshold_percent};
+use crate::{
+    error::CoreError,
+    report_metrics::{validate_threshold_percent, ThresholdSource, ThresholdSummary},
+};
 
 /// Default configuration file name searched for next to the scan root.
 pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
@@ -38,6 +41,25 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// the user's home directory by accident, the boilerplate generated
 /// code under `.cargo/git/checkouts/...` and
 /// `.cargo/registry/src/...` never enters the report.
+///
+/// `.git` and `.claude` cover working-tree copies that look like source
+/// but are not actionable duplication ([#222]). Claude Code agent
+/// workflows create full git worktrees under `.claude/worktrees/<id>/`;
+/// each is another checkout of the same repo, so without this exclusion
+/// every file is reported as N identical "copies". The initial walk's
+/// hidden-dir filter skips dot-dirs, but the live watcher
+/// (`live/watcher.rs`) and incremental update (`pipeline/session/change.rs`)
+/// have no hidden filter and rely solely on this component list, so the
+/// exclusion must live here to cover all three discovery paths.
+///
+/// `.dart_tool` and `.pub-cache` cover the Dart/Flutter toolchain's own
+/// caches: `.dart_tool/` holds `package_config.json`, `build_runner`
+/// outputs, and per-package generated `.dart`; `.pub-cache/` is a
+/// vendored copy of every dependency's source. On a large Flutter
+/// monorepo a hot build churns thousands of `.dart` files under
+/// `.dart_tool/`; because the live watcher has no `.gitignore` filter,
+/// excluding them here is what keeps that churn from monopolising the
+/// session and starving the editor's responsiveness.
 const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "node_modules",
     "target",
@@ -46,6 +68,10 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     ".venv",
     "__pycache__",
     ".cargo",
+    ".git",
+    ".claude",
+    ".dart_tool",
+    ".pub-cache",
 ];
 
 /// Directory components that are always analysed but hidden from summaries.
@@ -504,12 +530,17 @@ impl ExclusionConfig {
         self
     }
 
-    /// Returns the `[threshold] max_duplication_percent` loaded from
-    /// the config file, if any. `None` means the file did not opt in
-    /// to CI gating per [EXIT-CODES].
+    /// Resolves the config `[threshold] max_duplication_percent` into a
+    /// verdict against the `measured` repo-wide duplication percentage.
+    /// `None` config yields the "no gate" summary. This is the single
+    /// place a config threshold becomes a [`ThresholdSummary`], so the
+    /// live LSP/MCP render path and the CLI agree ([EXIT-CODES]).
     #[must_use]
-    pub const fn fail_over_percent(&self) -> Option<f64> {
-        self.fail_over_percent
+    pub fn resolve_threshold(&self, measured: f64) -> ThresholdSummary {
+        match self.fail_over_percent {
+            Some(percent) => ThresholdSummary::resolve(percent, ThresholdSource::Config, measured),
+            None => ThresholdSummary::none(),
+        }
     }
 
     /// Returns whether candidate pairs may span different parser

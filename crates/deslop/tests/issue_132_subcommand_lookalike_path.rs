@@ -65,10 +65,7 @@ fn deslop_existing_path_still_runs_to_completion() -> Result<()> {
     let report_base = cwd.path().join("report");
     let _output = Command::cargo_bin("deslop")?
         .arg(&scan)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
+        .args(["--min-nodes", "30", "--embeddings", "off"])
         .arg("--output")
         .arg(&report_base)
         .assert()

@@ -10,14 +10,11 @@
 
 #![cfg(unix)]
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 
 mod common;
-use common::{
-    copied_fixture_named, initialized_mcp, spawn_lsp_and_initialize, structured_content,
-    wait_for_path, ChildKillOnDrop, SOCKET_TIMEOUT,
-};
+use common::{call_tool, copied_fixture_named, initialized_mcp, spawn_lsp_and_wait_for_socket};
 
 /// File names of every occurrence across all returned clusters.
 fn occurrence_file_names(payload: &Value) -> Vec<String> {
@@ -43,20 +40,14 @@ fn occurrence_file_names(payload: &Value) -> Vec<String> {
 #[test]
 fn dart_generated_files_never_top_offenders_over_mcp() -> Result<()> {
     let workspace = copied_fixture_named("dart-mcp")?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
-    let response = mcp.request(
-        "tools/call",
-        &json!({
-            "name": "top-offenders",
-            "arguments": { "n": 50, "max_occurrences": 100_000_usize }
-        }),
+    let payload = call_tool(
+        &mut mcp,
+        "top-offenders",
+        &json!({ "n": 50, "max_occurrences": 100_000_usize }),
     )?;
-    let payload = structured_content(&response, "top-offenders")?;
     let files = occurrence_file_names(&payload);
 
     ensure!(

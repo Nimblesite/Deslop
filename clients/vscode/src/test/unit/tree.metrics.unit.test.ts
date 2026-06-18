@@ -69,6 +69,22 @@ suite("MetricsProvider", () => {
     assert.match(String(headline?.description ?? ""), /over 10\.0% gate/);
   });
 
+  test("headline shows the configured gate when within budget", () => {
+    const store = new ReportStore();
+    store.setSnapshot(
+      report([], {
+        duplication_percent: 8.0,
+        duplicated_loc: 800,
+        threshold: { percent: 20, breached: false, source: "config" },
+        per_file: [fileMetric("/src/a/Alpha.cs", 100, 8)],
+      }),
+      0,
+    );
+    const provider = new MetricsProvider(store, new StatusTicker());
+    const [headline] = provider.getChildren();
+    assert.match(String(headline?.description ?? ""), /within 20\.0% gate/);
+  });
+
   test("rolls per_file into a folder tree, worst-first, expanding to files", () => {
     const store = new ReportStore();
     store.setSnapshot(

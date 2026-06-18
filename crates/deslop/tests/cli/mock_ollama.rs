@@ -1,16 +1,24 @@
-//! In-process mock Ollama HTTP server for CLI black-box tests.
+//! In-process mock Ollama HTTP server for black-box tests.
 //!
 //! [REMOVE-STUB] Replaces the deterministic BLAKE3 stub provider in
-//! black-box CLI coverage. Tests that used `--embedding-provider stub`
-//! now point `--embedding-endpoint` at one of these mocks so the
-//! production code paths (Ollama provider, registry lookup,
-//! `EmbeddingMode::Required`) get exercised end-to-end.
+//! black-box coverage. Tests that used `--embedding-provider stub` now
+//! point `--embedding-endpoint` at one of these mocks so the production
+//! code paths (Ollama provider, registry lookup, `EmbeddingMode::Required`)
+//! get exercised end-to-end.
+//!
+//! This is a shared test module: the happy-path callers
+//! (`MockOllama::spawn`) and the failure-injection caller
+//! (`MockOllama::spawn_with`, issue #5) each use only the subset they need,
+//! so the unused-symbol lint is silenced for this module — matching the
+//! `common` test modules.
+
+#![allow(dead_code)]
 
 use std::{
     io::{ErrorKind, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
     },
     thread::{self, JoinHandle},
@@ -19,6 +27,19 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
+
+/// How the mock answers `/api/embed` requests. The dimension probe always
+/// succeeds regardless, so the provider can still learn the vector width.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum MockBehavior {
+    /// Every real embed request returns deterministic vectors.
+    Happy,
+    /// Every real embed request is rejected with a context-length error.
+    RejectAllEmbeds,
+    /// Only aggregate (multi-input) embed requests are rejected; single-input
+    /// retries succeed — exercises the bisect-and-retry path (#5).
+    RejectMultiInputEmbeds,
+}
 
 /// In-process mock Ollama HTTP server that returns deterministic
 /// embedding vectors. Keep the helper tiny — production tests should
@@ -31,6 +52,8 @@ pub(crate) struct MockOllama {
     addr: SocketAddr,
     /// Cooperative shutdown flag.
     stop: Arc<AtomicBool>,
+    /// Largest `input` array length seen on an `/api/embed` call.
+    max_embed_batch_len: Arc<AtomicUsize>,
     /// Background acceptor thread handle.
     handle: Option<JoinHandle<()>>,
 }
@@ -40,16 +63,31 @@ impl MockOllama {
     /// The model is reported as `nomic-embed-text` with a 4-lane
     /// deterministic vector per input.
     pub(crate) fn spawn() -> Result<Self> {
+        Self::spawn_with(MockBehavior::Happy)
+    }
+
+    /// Spawns a mock that answers `/api/embed` according to `behavior`.
+    pub(crate) fn spawn_with(behavior: MockBehavior) -> Result<Self> {
         let listener = TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
         let stop = Arc::new(AtomicBool::new(false));
+        let max_embed_batch_len = Arc::new(AtomicUsize::new(0));
         let server_stop = Arc::clone(&stop);
-        let handle = thread::spawn(move || serve(&listener, server_stop.as_ref()));
+        let server_max = Arc::clone(&max_embed_batch_len);
+        let handle = thread::spawn(move || {
+            serve(
+                &listener,
+                server_stop.as_ref(),
+                server_max.as_ref(),
+                behavior,
+            );
+        });
         Ok(Self {
             endpoint: format!("http://{addr}"),
             addr,
             stop,
+            max_embed_batch_len,
             handle: Some(handle),
         })
     }
@@ -58,6 +96,11 @@ impl MockOllama {
     /// `--embedding-endpoint`.
     pub(crate) fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    /// Largest `input` batch length the mock has served so far.
+    pub(crate) fn max_embed_batch_len(&self) -> usize {
+        self.max_embed_batch_len.load(Ordering::SeqCst)
     }
 }
 
@@ -71,12 +114,19 @@ impl Drop for MockOllama {
     }
 }
 
-fn serve(listener: &TcpListener, stop: &AtomicBool) {
+fn serve(
+    listener: &TcpListener,
+    stop: &AtomicBool,
+    max_embed_batch_len: &AtomicUsize,
+    behavior: MockBehavior,
+) {
     while !stop.load(Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _addr)) => {
+                // Switch accepted stream to blocking so read_request never gets
+                // WouldBlock on large (> 1 024 B) request bodies — issue #57.
                 let _ = stream.set_nonblocking(false);
-                handle_stream(stream);
+                handle_stream(stream, max_embed_batch_len, behavior);
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(5));
@@ -86,11 +136,11 @@ fn serve(listener: &TcpListener, stop: &AtomicBool) {
     }
 }
 
-fn handle_stream(mut stream: TcpStream) {
+fn handle_stream(mut stream: TcpStream, max_embed_batch_len: &AtomicUsize, behavior: MockBehavior) {
     let Ok(request) = read_request(&mut stream) else {
         return;
     };
-    let response = response_for(&request);
+    let response = response_for(&request, max_embed_batch_len, behavior);
     let _ = stream.write_all(response.as_bytes());
 }
 
@@ -165,18 +215,45 @@ fn request_path(headers: &str) -> String {
         .to_owned()
 }
 
-fn response_for(request: &HttpRequest) -> String {
+fn response_for(
+    request: &HttpRequest,
+    max_embed_batch_len: &AtomicUsize,
+    behavior: MockBehavior,
+) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
-        "/api/embed" => embed_response(&request.body),
+        // The dimension probe always succeeds so the provider can learn the
+        // vector width even while real embeds are being rejected.
+        "/api/embed" if is_dimension_probe(&request.body) => {
+            let inputs = request_inputs(&request.body).unwrap_or_default();
+            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
+            json_response("200 OK", &json!({ "embeddings": embeddings }))
+        }
+        "/api/embed" => {
+            record_embed_batch_len(&request.body, max_embed_batch_len);
+            embed_response(&request.body, behavior)
+        }
         _ => json_response("404 Not Found", &json!({ "error": "not found" })),
     }
 }
 
-fn embed_response(body: &str) -> String {
+fn embed_response(body: &str, behavior: MockBehavior) -> String {
     let inputs = request_inputs(body).unwrap_or_default();
-    let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
-    json_response("200 OK", &json!({ "embeddings": embeddings }))
+    match behavior {
+        MockBehavior::RejectAllEmbeds => context_length_error(),
+        MockBehavior::RejectMultiInputEmbeds if inputs.len() > 1 => context_length_error(),
+        MockBehavior::Happy | MockBehavior::RejectMultiInputEmbeds => {
+            let embeddings: Vec<Vec<f32>> = inputs.iter().map(|text| embed_vector(text)).collect();
+            json_response("200 OK", &json!({ "embeddings": embeddings }))
+        }
+    }
+}
+
+fn context_length_error() -> String {
+    json_response(
+        "500 Internal Server Error",
+        &json!({ "error": "input length exceeds the context length" }),
+    )
 }
 
 /// Returns a 4-lane deterministic vector seeded by `text` length and
@@ -187,6 +264,15 @@ fn embed_vector(text: &str) -> Vec<f32> {
     let len = f32::from(len_bits);
     let first = f32::from(text.bytes().next().unwrap_or(0));
     vec![len.sin(), first.cos(), 0.5_f32, -0.5_f32]
+}
+
+fn is_dimension_probe(body: &str) -> bool {
+    request_inputs(body).is_some_and(|inputs| inputs == ["deslop"])
+}
+
+fn record_embed_batch_len(body: &str, max_embed_batch_len: &AtomicUsize) {
+    let len = request_inputs(body).map_or(0, |inputs| inputs.len());
+    let _previous = max_embed_batch_len.fetch_max(len, Ordering::SeqCst);
 }
 
 fn request_inputs(body: &str) -> Option<Vec<String>> {

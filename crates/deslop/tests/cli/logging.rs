@@ -1,18 +1,29 @@
 use crate::support::*;
 
+/// Builds a `deslop` command against the `csharp-small` fixture writing
+/// its report under `<tmp>/report`. Every logging test shares this scan
+/// root + output layout; only the flag/env combination differs.
+fn csharp_small_command(tmp: &tempfile::TempDir) -> Result<Command> {
+    deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))
+}
+
+/// Decodes the captured stderr of a finished assertion into an owned
+/// `String` so the test can assert on the rendered console output.
+fn stderr_text(assertion: &assert_cmd::assert::Assert) -> Result<String> {
+    Ok(std::str::from_utf8(&assertion.get_output().stderr)?.to_owned())
+}
+
 #[test]
 fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
         .env_remove("RUST_LOG")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         !stderr.contains(" INFO "),
         "default stderr must not carry tracing INFO lines: {stderr}"
@@ -53,16 +64,13 @@ fn default_run_writes_log_to_timestamped_file_not_stderr() -> Result<()> {
 #[test]
 fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
         .env_remove("RUST_LOG")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--log-to-console")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--log-to-console", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         stderr.contains("deslop invoked"),
         "--log-to-console must surface the invoked event on stderr: {stderr}"
@@ -81,14 +89,10 @@ fn log_to_console_flag_routes_events_to_stderr() -> Result<()> {
 #[test]
 fn log_level_warn_suppresses_info_events() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let _assertion = cmd
         .env_remove("RUST_LOG")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--log-level")
-        .arg("warn")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--log-level", "warn", "--no-color"])
         .assert()
         .success();
     let log_path = find_timestamped_logs(tmp.path())?
@@ -109,15 +113,12 @@ fn log_level_warn_suppresses_info_events() -> Result<()> {
 #[test]
 fn preamble_announces_what_the_run_will_do() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         stderr.contains("deslop scanning"),
         "preamble must announce the scan: {stderr}"
@@ -142,14 +143,12 @@ fn preamble_announces_what_the_run_will_do() -> Result<()> {
 #[test]
 fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         !stderr.contains('\x1b'),
         "--no-color must strip ANSI escapes: {stderr:?}"
@@ -164,15 +163,14 @@ fn no_color_flag_suppresses_ansi_escapes() -> Result<()> {
 #[test]
 fn color_force_env_emits_ansi_escapes() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
         .env("DESLOP_FORCE_COLOR", "1")
         .env_remove("NO_COLOR")
-        .arg("--min-nodes")
-        .arg("8")
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         stderr.contains('\x1b'),
         "DESLOP_FORCE_COLOR must emit ANSI escapes: {stderr:?}"
@@ -189,16 +187,13 @@ fn color_force_env_emits_ansi_escapes() -> Result<()> {
 #[test]
 fn rust_log_env_controls_severity_filter() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
         .env("RUST_LOG", "warn")
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--log-to-console")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--log-to-console", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         !stderr.contains("deslop invoked"),
         "RUST_LOG=warn must suppress INFO events: {stderr}"
@@ -212,15 +207,14 @@ fn rust_log_env_controls_severity_filter() -> Result<()> {
 #[test]
 fn no_color_env_overrides_force_color() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
         .env("NO_COLOR", "1")
         .env("DESLOP_FORCE_COLOR", "1")
-        .arg("--min-nodes")
-        .arg("8")
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         !stderr.contains('\x1b'),
         "NO_COLOR must override the force flag: {stderr:?}"
@@ -241,21 +235,21 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
     // First run populates the cache.
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
+        .args(["--min-nodes", "8", "--incremental"])
         .assert()
         .success();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
-        .arg("--technical")
-        .arg("--no-color")
+        .args([
+            "--min-nodes",
+            "8",
+            "--incremental",
+            "--technical",
+            "--no-color",
+        ])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         stderr.contains("cache: 2 hit / 0 miss"),
         "--technical must surface the raw cache-stats line: {stderr}"
@@ -276,21 +270,22 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
+        .args([
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+        ])
         .arg(server.endpoint())
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--technical", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         stderr.contains("embeddings: ollama/nomic-embed-text@"),
         "--technical must surface the provenance triple on stderr: {stderr}"
@@ -307,15 +302,12 @@ fn technical_mode_surfaces_embedding_provenance_line() -> Result<()> {
 #[test]
 fn technical_mode_uses_type_taxonomy_in_breakdown_row() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = csharp_small_command(&tmp)?;
     let assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--technical")
-        .arg("--no-color")
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         stderr.contains("1 × Same shape, different content [structural-only]"),
         "--technical must print the bracketed-taxonomy breakdown: {stderr}"
@@ -338,7 +330,7 @@ fn plain_summary_on_empty_scan_root_has_no_worst_offender_line() -> Result<()> {
     fs::create_dir_all(&empty)?;
     let mut cmd = deslop_command(&empty, &tmp.path().join("report"))?;
     let assertion = cmd.arg("--no-color").assert().success();
-    let stderr = std::str::from_utf8(&assertion.get_output().stderr)?.to_owned();
+    let stderr = stderr_text(&assertion)?;
     assert!(
         !stderr.contains("Worst offender"),
         "empty scan must not print a worst-offender line: {stderr}"

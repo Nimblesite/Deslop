@@ -222,6 +222,7 @@ type ReportDelta {
   clusters_added: List<ReportCluster>
   clusters_removed: List<String>
   clusters_updated: List<ReportCluster>
+  metrics: RepoMetrics
   cache_stats: CacheStats
   tool_version: String
 }

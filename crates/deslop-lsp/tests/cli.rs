@@ -14,8 +14,8 @@ use assert_cmd::Command;
 use serde_json::Value;
 
 use crate::common::{
-    call, copy_fixture, handshake, notification, request, send_and_recv, spawn_lsp, take_io,
-    write_frame,
+    call, copy_fixture, handshake, notification, request, send_and_recv, spawn_lsp,
+    spawn_lsp_on_fixture, take_io, write_frame,
 };
 
 // Implements the Shipwright binary contract: every IDE-launched
@@ -52,9 +52,8 @@ fn prints_json_version_contract() -> Result<()> {
 
 #[test]
 fn initialize_reports_server_info_version() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let init = handshake(&mut stdin, &mut stdout)?;
     assert_eq!(pointer(&init, "/result/serverInfo/name")?, "deslop-lsp");
     assert_eq!(
@@ -75,9 +74,8 @@ fn exits_when_initialized_parent_process_disappears() -> Result<()> {
         "fake parent must stay alive until the LSP records its process id"
     );
 
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let init = initialize_with_process_id(&mut stdin, &mut stdout, parent.id())?;
     assert_eq!(pointer(&init, "/result/serverInfo/name")?, "deslop-lsp");
 

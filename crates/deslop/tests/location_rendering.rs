@@ -6,20 +6,16 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
+
+mod common;
+use crate::common::*;
 
 #[test]
 fn rendered_occurrence_locations_are_line_column_not_byte_ranges() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture("csharp-small"))
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(&output)
-        .assert()
-        .success();
+    let mut cmd = deslop_cmd(&fixture("csharp-small"), &output)?;
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let text = fs::read_to_string(with_ext(&output, "txt"))?;
     let html = fs::read_to_string(with_ext(&output, "html"))?;
     assert_human_locations(&text, "text report");
@@ -58,13 +54,6 @@ fn is_compact_range_token(token: &str) -> bool {
     tail.chars()
         .take_while(|c| c.is_ascii_digit() || *c == '-')
         .any(|c| c == '-')
-}
-
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
 }
 
 fn with_ext(base: &Path, ext: &str) -> PathBuf {

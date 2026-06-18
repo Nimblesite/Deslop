@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 mod common;
-use common::initialized_mcp;
+use common::{error_and_message, expected_socket_fragment, initialized_mcp};
 
 #[test]
 fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
@@ -26,25 +26,14 @@ fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
         "tools/call",
         &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
     )?;
-    let error = response
-        .pointer("/error")
-        .ok_or_else(|| anyhow!("expected error frame, got: {response}"))?;
+    let (error, message) = error_and_message(&response)?;
 
     // Wire back-compat: numeric code and the [Deslop#151] message are intact.
     ensure!(
         error.get("code").and_then(Value::as_i64) == Some(-32_004),
         "numeric error code must stay -32004 for wire back-compat: {error}"
     );
-    let message = error
-        .get("message")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("error missing string message: {error}"))?;
-    let canonical = std::fs::canonicalize(workspace.path())?;
-    let socket_fragment = canonical
-        .join(".deslop-cache")
-        .join("deslop.sock")
-        .display()
-        .to_string();
+    let socket_fragment = expected_socket_fragment(workspace.path())?;
     ensure!(
         message.contains(&socket_fragment) && message.contains("--root"),
         "message must still name the socket path and --root ([Deslop#151]): {message}"

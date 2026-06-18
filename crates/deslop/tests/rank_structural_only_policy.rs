@@ -19,6 +19,9 @@ use anyhow::Result;
 use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::*;
+
 /// Generates one shape-identical API method. The method name, endpoint
 /// literal, and every local identifier differ per call (normalisation
 /// strips identifiers, so the family still fuses at `structural=1.00`
@@ -95,14 +98,8 @@ fn write_fixture(src: &Path) -> Result<()> {
 /// Runs the CLI against `src` and parses the JSON report.
 fn run_report(src: &Path, tmp: &Path) -> Result<Value> {
     let output = tmp.join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(src)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(src, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
@@ -119,14 +116,6 @@ fn report_for_config(config: Option<&str>) -> Result<Value> {
     }
     let report = run_report(&src, tmp.path())?;
     Ok(report)
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn bucket_of(cluster: &Value) -> &str {
@@ -296,10 +285,7 @@ fn invalid_structural_only_weight_is_rejected_with_a_clear_error() -> Result<()>
         fs::write(src.join(".deslop.toml"), body)?;
         let _assertion = Command::cargo_bin("deslop")?
             .arg(&src)
-            .arg("--min-nodes")
-            .arg("30")
-            .arg("--embeddings")
-            .arg("off")
+            .args(["--min-nodes", "30", "--embeddings", "off"])
             .assert()
             .failure()
             .stderr(predicates::str::contains("structural_only_weight"))
