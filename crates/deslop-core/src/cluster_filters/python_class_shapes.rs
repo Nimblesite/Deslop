@@ -15,7 +15,9 @@
 
 use tree_sitter::Node;
 
-use super::{enclosing_kind, parse_for, trimmed_snippet_range, Snippet};
+use super::{
+    enclosing_kind, is_multi_member_language_cluster, parse_for, trimmed_snippet_range, Snippet,
+};
 use crate::ast::ByteRange;
 
 /// Detects **issue #115a**: every cluster occurrence is a Python
@@ -23,7 +25,7 @@ use crate::ast::ByteRange;
 /// consists only of a docstring and member assignments. Returning true
 /// drops the cluster — distinct enum vocabularies are not duplication.
 pub(super) fn is_strenum_class_shape_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     snippets.iter().all(is_strenum_class_snippet)
@@ -146,7 +148,7 @@ fn expression_statement_inner_kind(node: Node<'_>) -> Option<&'static str> {
 /// cluster — the `XUpdate` mirror is mandated by Pydantic's PATCH
 /// semantics, not extractable duplication.
 pub(super) fn is_pydantic_partial_update_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     let shapes: Option<Vec<PartialUpdateShape>> =

@@ -1,5 +1,22 @@
 use crate::support::*;
 
+/// Writes `report_body` to `<tmp>/<file_name>`, runs the CLI in
+/// `--from-report` replay mode over it (adding `--no-color` when
+/// requested), and asserts the run succeeds. The shared setup for the
+/// `--from-report` preservation scenarios that differ only in the
+/// synthetic report they replay and the rendered surface they inspect.
+fn replay_report(tmp: &Path, file_name: &str, report_body: &str, no_color: bool) -> Result<()> {
+    let report_path = tmp.join(file_name);
+    fs::write(&report_path, report_body)?;
+    let mut cmd = deslop_command(tmp, &tmp.join("report"))?;
+    let _arg = cmd.arg("--from-report").arg(&report_path);
+    if no_color {
+        let _arg = cmd.arg("--no-color");
+    }
+    let _assertion = cmd.assert().success();
+    Ok(())
+}
+
 #[test]
 fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
     let tmp = tempfile::tempdir()?;
@@ -28,20 +45,8 @@ fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
                 \"interpretation\": \"current\"\n\
               }]\n\
               }\n";
-    let report_path = tmp.path().join("current.json");
-    fs::write(&report_path, current_report)?;
-    let output_prefix = tmp.path().join("report");
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(tmp.path())
-        .arg("--from-report")
-        .arg(&report_path)
-        .arg("--no-color")
-        .arg("--output")
-        .arg(&output_prefix)
-        .assert()
-        .success();
+    replay_report(tmp.path(), "current.json", current_report, true)?;
     let json = read_json_report(&out.json)?;
     assert_eq!(metric_field(&json, "analysed_loc").as_u64(), Some(0));
     assert_eq!(metric_field(&json, "duplicated_loc").as_u64(), Some(0));
@@ -96,19 +101,8 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
                     \"interpretation\": \"semantic clone\"\n\
                   }]\n\
                   }\n";
-    let report_path = tmp.path().join("semantic.json");
-    fs::write(&report_path, report)?;
-    let output_prefix = tmp.path().join("report");
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(tmp.path())
-        .arg("--from-report")
-        .arg(&report_path)
-        .arg("--output")
-        .arg(&output_prefix)
-        .assert()
-        .success();
+    replay_report(tmp.path(), "semantic.json", report, false)?;
     let html = fs::read_to_string(&out.html)?;
     assert!(html.contains("Same behavior, different code"));
     assert!(html.contains("AI match"));
@@ -132,15 +126,11 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
 fn cross_cluster_collapse_removes_occurrence_subset_clusters() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("csharp-prologue-false-positive"))
-        .arg("--min-nodes")
-        .arg("2")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(
+        &fixture("csharp-prologue-false-positive"),
+        &tmp.path().join("report"),
+    )?;
+    let _assertion = cmd.args(["--min-nodes", "2"]).assert().success();
     let json = read_json_report(&out.json)?;
     let clusters = json
         .get("clusters")

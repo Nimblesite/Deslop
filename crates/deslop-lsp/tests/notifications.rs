@@ -6,22 +6,19 @@
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
-    path::{Path, PathBuf},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio},
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        mpsc::{self, Receiver},
-    },
+    io::{BufReader, Read},
+    path::Path,
+    process::{Child, ChildStderr, ChildStdin, ChildStdout},
+    sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, ensure, Result};
 
-type FrameResult = std::result::Result<serde_json::Value, String>;
+mod common;
+use crate::common::*;
 
-/// JSON-RPC id counter for this integration-test process.
-static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
+type FrameResult = std::result::Result<serde_json::Value, String>;
 
 /// Accepts normal VS Code notifications without tower-lsp fallback
 /// warnings.
@@ -54,19 +51,10 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
 fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     ensure!(
         cluster_count(&initial) > 0,
         "fixture must start with duplicate clusters"
@@ -100,19 +88,10 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
 fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     ensure!(
         cluster_count(&initial) > 0,
         "fixture must start with duplicate clusters"
@@ -147,19 +126,10 @@ fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> 
 fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
     let workspace = copy_fixture("dart-small")?;
     let beta = workspace.path().join("beta.dart");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     ensure!(
         cluster_count(&initial) > 0,
         "dart fixture must start with duplicate clusters"
@@ -180,11 +150,14 @@ fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
 
 /// [CI-DESLOP] Issue #194: the live LSP surface must push a single
 /// non-blocking warning when the measured duplication smashes the
-/// `.deslop.toml [threshold] max_duplication_percent` budget. The
-/// threshold stays a CLI gate — here it drives only an informational
-/// `window/showMessage`, never suppression, ranking, or any other live
-/// behaviour. The breach is confirmed up front so the test can only fail
-/// because the warning is missing, not because the fixture is clean.
+/// `.deslop.toml [threshold] max_duplication_percent` budget, and the
+/// resolved verdict must ride `RepoMetrics.threshold` so the DUPLICATION
+/// panel can display the gate. The threshold stays a CLI gate — on the
+/// live surface it only drives this informational `window/showMessage`
+/// and the read-only `RepoMetrics.threshold` verdict, never suppression,
+/// ranking, or any other live behaviour. The breach is confirmed up
+/// front so the test can only fail because the warning is missing, not
+/// because the fixture is clean.
 #[test]
 fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -192,19 +165,10 @@ fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
         workspace.path().join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 5.0\n",
     )?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
     let frames = spawn_frame_reader(stdout);
-
-    let (init_id, init) = initialize_request()?;
-    let _init = send_and_recv_frame(&mut stdin, &frames, init_id, &init)?;
-    let initial = request_response(
-        &mut stdin,
-        &frames,
-        "deslop/reportGet",
-        &serde_json::json!({}),
-    )?;
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
     let measured = initial
         .pointer("/result/metrics/duplication_percent")
         .and_then(serde_json::Value::as_f64)
@@ -212,6 +176,33 @@ fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
     ensure!(
         measured > 5.0,
         "fixture + config must smash the 5% budget so a missing warning is the only gap (measured {measured}%)"
+    );
+    // The live render path must resolve the .deslop.toml gate onto
+    // RepoMetrics.threshold so the LSP/MCP DUPLICATION panel can show it —
+    // not only the CLI. Before the fix this stayed source="none".
+    let threshold = initial
+        .pointer("/result/metrics/threshold")
+        .ok_or_else(|| anyhow!("live report carries no metrics.threshold: {initial}"))?;
+    let source = threshold
+        .pointer("/source")
+        .and_then(serde_json::Value::as_str);
+    let breached = threshold
+        .pointer("/breached")
+        .and_then(serde_json::Value::as_bool);
+    let percent = threshold
+        .pointer("/percent")
+        .and_then(serde_json::Value::as_f64);
+    ensure!(
+        source == Some("config"),
+        "the live threshold must be sourced from .deslop.toml config: {threshold}"
+    );
+    ensure!(
+        breached == Some(true),
+        "a smashed 5% budget must mark the live threshold breached: {threshold}"
+    );
+    ensure!(
+        percent == Some(5.0),
+        "the live threshold must carry the configured 5% gate: {threshold}"
     );
 
     write_frame(
@@ -245,81 +236,19 @@ fn second_unrelated_csharp() -> &'static str {
     "public class Beta {\n    public string Description() {\n        return \"distinct\";\n    }\n}\n"
 }
 
-struct KillOnDrop<'a>(&'a mut Child);
-
-impl Drop for KillOnDrop<'_> {
-    fn drop(&mut self) {
-        let _kill = self.0.kill();
-        let _wait = self.0.wait();
-    }
-}
-
-/// Returns a workspace-relative fixture path.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("deslop")
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
-
-/// Copies a fixture into a temp directory so the LSP can write caches.
-fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
-    let src = fixture(name);
-    let dst = tempfile::tempdir()?;
-    for entry in fs::read_dir(&src)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let _bytes = fs::copy(entry.path(), dst.path().join(entry.file_name()))?;
-        }
-    }
-    Ok(dst)
-}
-
-/// Spawns the LSP binary against `workspace_root`.
-fn spawn_lsp(workspace_root: &Path) -> Result<Child> {
-    let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
-    Ok(Command::new(bin)
-        .arg(workspace_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?)
-}
-
-/// Acquires child stdio handles after a successful spawn.
-fn take_io(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>, ChildStderr)> {
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| anyhow!("child stdin missing"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("child stdout missing"))?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| anyhow!("child stderr missing"))?;
-    Ok((stdin, BufReader::new(stdout), stderr))
-}
-
-/// Writes one LSP framed payload.
-fn write_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
+/// Drives the `initialize` handshake over a frame channel.
+fn frame_handshake(stdin: &mut ChildStdin, frames: &Receiver<FrameResult>) -> Result<()> {
+    let (init_id, init) = initialize_request()?;
+    let _init = send_and_recv_frame(stdin, frames, init_id, &init)?;
     Ok(())
 }
 
-/// Reads one framed JSON-RPC response.
-fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<serde_json::Value> {
-    let length = read_content_length(reader)?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
+/// Requests the current live report over a frame channel.
+fn frame_report_get(
+    stdin: &mut ChildStdin,
+    frames: &Receiver<FrameResult>,
+) -> Result<serde_json::Value> {
+    request_response(stdin, frames, "deslop/reportGet", &serde_json::json!({}))
 }
 
 /// Reads frames on a background thread so tests can time out waiting
@@ -333,38 +262,6 @@ fn spawn_frame_reader(mut stdout: BufReader<ChildStdout>) -> Receiver<FrameResul
         }
     });
     rx
-}
-
-/// Reads the `Content-Length` header block.
-fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
-}
-
-/// Sends a request and waits for the matching response id.
-fn send_and_recv(
-    stdin: &mut ChildStdin,
-    reader: &mut BufReader<ChildStdout>,
-    id: i64,
-    payload: &str,
-) -> Result<serde_json::Value> {
-    write_frame(stdin, payload)?;
-    loop {
-        let frame = read_frame(reader)?;
-        if frame.get("id").and_then(serde_json::Value::as_i64) == Some(id) {
-            return Ok(frame);
-        }
-    }
 }
 
 /// Sends a request and waits for the matching response from a frame channel.
@@ -439,30 +336,6 @@ fn recv_next(
     frame.map_err(|error| anyhow!(error))
 }
 
-/// Builds an `initialize` request.
-fn initialize_request() -> Result<(i64, String)> {
-    request(
-        "initialize",
-        &serde_json::json!({
-            "processId": null,
-            "rootUri": null,
-            "capabilities": {}
-        }),
-    )
-}
-
-/// Builds a JSON-RPC request.
-fn request(method: &str, params: &serde_json::Value) -> Result<(i64, String)> {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": method,
-        "params": params
-    });
-    Ok((id, serde_json::to_string(&payload)?))
-}
-
 /// Builds the notification set VS Code sends during normal operation.
 fn normal_vscode_notifications(path: &Path) -> Result<Vec<String>> {
     let uri = tower_lsp::lsp_types::Url::from_file_path(path)
@@ -495,37 +368,9 @@ fn normal_vscode_notifications(path: &Path) -> Result<Vec<String>> {
     ])
 }
 
-/// Builds the watched-file notification VS Code sends after a save.
-fn watched_file_changed(path: &Path) -> Result<String> {
-    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
-        .map_err(|()| anyhow!("path is not absolute: {}", path.display()))?;
-    notification(
-        "workspace/didChangeWatchedFiles",
-        &serde_json::json!({ "changes": [{ "uri": uri.as_str(), "type": 2 }] }),
-    )
-}
-
 /// Replacement content with no duplicated method body.
 fn unrelated_csharp() -> &'static str {
     "public class Beta {\n    public string Name() {\n        return \"unique\";\n    }\n}\n"
-}
-
-/// Builds a JSON-RPC notification.
-fn notification(method: &str, params: &serde_json::Value) -> Result<String> {
-    let payload = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params
-    });
-    Ok(serde_json::to_string(&payload)?)
-}
-
-/// Returns the report cluster count from a JSON-RPC response frame.
-fn cluster_count(frame: &serde_json::Value) -> usize {
-    frame
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len)
 }
 
 /// Reads a required integer field from a JSON frame.

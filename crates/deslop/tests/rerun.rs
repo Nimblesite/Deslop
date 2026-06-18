@@ -10,49 +10,15 @@
 use std::{fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use predicates::str::contains;
-use serde_json::Value;
 
-/// Returns the absolute path of a fixture under `tests/fixtures/<name>`.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
-
-/// Copies every top-level file in `src` into `dst` (created fresh).
-fn seed(src: &Path, dst: &Path) -> Result<()> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
-    }
-    Ok(())
-}
+mod common;
+use crate::common::*;
 
 /// Returns the on-disk `<dir>/report.delta.json` path the CLI emits
 /// when `--rerun-touch` is passed with an `--output <dir>/report` base.
 fn delta_path(dir: &Path) -> PathBuf {
     dir.join("report.delta.json")
-}
-
-fn load_json(path: &Path) -> Result<Value> {
-    Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
-}
-
-/// Reads a named field. Returns [`Value::Null`] when absent so callers
-/// get a deterministic `!=` instead of a panic.
-fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
-    value.get(name).unwrap_or(&Value::Null)
-}
-
-/// Returns the length of a named array-valued field. Returns `0` for
-/// missing or non-array fields (which will then trip the assertion with
-/// the full JSON printed so the failure is actionable).
-fn array_len(value: &Value, name: &str) -> usize {
-    field(value, name).as_array().map_or(0, Vec::len)
 }
 
 // Implements [LIVE-STATE] touching a path whose content is unchanged
@@ -65,14 +31,9 @@ fn rerun_touch_with_unchanged_sources_emits_empty_delta() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed(&fixture("csharp-small"), &scan_root)?;
     let touched = scan_root.join("Alpha.cs");
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-touch")
+        .args(["--min-nodes", "8", "--rerun-touch"])
         .arg(&touched)
         .assert()
         .success();
@@ -109,14 +70,9 @@ fn rerun_touch_on_existing_file_reparses_via_update_files() -> Result<()> {
         &beta,
         "namespace Beta\n{\n    public class Solo\n    {\n        public int Compute(int x)\n        {\n            return x + 1;\n        }\n    }\n}\n",
     )?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-touch")
+        .args(["--min-nodes", "4", "--rerun-touch"])
         .arg(&beta)
         .assert()
         .success();
@@ -145,14 +101,9 @@ fn rerun_touch_ignores_unsupported_and_out_of_root_paths() -> Result<()> {
     // Relative-looking path that canonicalises under the root: .cs so
     // the parser claims it, but the file does not exist → deletion no-op.
     let missing = PathBuf::from("Zeta.cs");
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-touch")
+        .args(["--min-nodes", "8", "--rerun-touch"])
         .arg(&readme)
         .arg("--rerun-touch")
         .arg(&missing)
@@ -186,14 +137,9 @@ fn rerun_add_introduces_new_file_and_reports_cluster_added() -> Result<()> {
     let _bytes = fs::copy(fixture("csharp-small").join("Beta.cs"), &staged)?;
     let dst = scan_root.join("Beta.cs");
     let spec = format!("{}={}", staged.display(), dst.display());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-add")
+        .args(["--min-nodes", "8", "--rerun-add"])
         .arg(&spec)
         .assert()
         .success();
@@ -213,13 +159,9 @@ fn rerun_add_rejects_spec_without_equals() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-add")
-        .arg("missing-equals-sign")
+        .args(["--rerun-add", "missing-equals-sign"])
         .assert()
         .failure()
         .stderr(contains("--rerun-add"));
@@ -236,14 +178,9 @@ fn rerun_remove_drops_clone_and_reports_cluster_removed() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed(&fixture("csharp-small"), &scan_root)?;
     let doomed = scan_root.join("Beta.cs");
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-remove")
+        .args(["--min-nodes", "8", "--rerun-remove"])
         .arg(&doomed)
         .assert()
         .success();
@@ -275,14 +212,9 @@ fn issue_189_new_exclude_pattern_drops_existing_corpus_files() -> Result<()> {
     fs::write(&staged, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
     let config_dst = scan_root.join(".deslop.toml");
     let spec = format!("{}={}", staged.display(), config_dst.display());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-add")
+        .args(["--min-nodes", "8", "--rerun-add"])
         .arg(&spec)
         .assert()
         .success();
@@ -317,15 +249,10 @@ fn issue_189_removed_exclude_pattern_rediscovers_files() -> Result<()> {
     let staged = tmp.path().join("staged-looser.toml");
     fs::write(&staged, "[defaults]\nexclude = []\n")?;
     let spec = format!("{}={}", staged.display(), override_config.display());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
+        .args(["--min-nodes", "8", "--config"])
         .arg(&override_config)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .arg("--rerun-add")
         .arg(&spec)
         .assert()
@@ -357,14 +284,9 @@ fn issue_199_delta_carries_recomputed_metrics() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed(&fixture("csharp-small"), &scan_root)?;
     let doomed = scan_root.join("Beta.cs");
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--rerun-remove")
+        .args(["--min-nodes", "8", "--rerun-remove"])
         .arg(&doomed)
         .assert()
         .success();
@@ -408,28 +330,17 @@ fn rerun_touch_on_excluded_path_drops_it_from_corpus() -> Result<()> {
     seed(&fixture("csharp-small"), &scan_root)?;
     // Initial run discovers both files (no exclusion); rerun applies a
     // config that excludes Beta.cs, so touching it drops it.
-    let mut first = Command::cargo_bin("deslop")?;
+    let mut first = deslop_cmd(&scan_root, &tmp.path().join("first"))?;
     let _assertion = first
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("first"))
-        .arg("--nohtml")
-        .arg("--notext")
+        .args(["--min-nodes", "8", "--nohtml", "--notext"])
         .assert()
         .success();
     let exclusion = tmp.path().join("deslop.toml");
     fs::write(&exclusion, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
-    let mut second = Command::cargo_bin("deslop")?;
+    let mut second = deslop_cmd(&scan_root, &tmp.path().join("second"))?;
     let _assertion = second
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
+        .args(["--min-nodes", "8", "--config"])
         .arg(&exclusion)
-        .arg("--output")
-        .arg(tmp.path().join("second"))
         .arg("--rerun-touch")
         .arg(scan_root.join("Beta.cs"))
         .assert()

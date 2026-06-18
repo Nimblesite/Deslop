@@ -7,33 +7,19 @@
 //! must never surface in the report.
 //! Spec: [CLONE-NOISE-RUST-MATCH-DISPATCH].
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(fixture_name: &str) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture(fixture_name))
-        .arg("--min-nodes")
-        .arg("3")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
+        .args(["--min-nodes", "3", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
@@ -88,11 +74,4 @@ fn rust_verbatim_copied_match_arms_still_cluster() -> Result<()> {
          genuine duplication and must still surface as a cluster: {report:#}"
     );
     Ok(())
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
 }

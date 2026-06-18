@@ -13,12 +13,11 @@
 #![cfg(unix)]
 
 use anyhow::{anyhow, ensure, Context, Result};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
+    initialized_mcp, lsp_workspace_with_socket, rescan_call, wait_for_path, SOCKET_TIMEOUT,
 };
 
 /// One unique C# file body that shares no normalised subtrees with
@@ -36,12 +35,7 @@ fn unique_body(seed: u32) -> String {
 /// payload that reports the post-refresh generation.
 #[test]
 fn issue_153_single_rescan_reflects_post_edit_state() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
 
@@ -95,12 +89,7 @@ fn issue_153_single_rescan_reflects_post_edit_state() -> Result<()> {
 /// catches up.
 #[test]
 fn issue_153_rescan_occurrence_offsets_reflect_post_edit_file() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
 
@@ -163,21 +152,6 @@ fn issue_153_rescan_occurrence_offsets_reflect_post_edit_file() -> Result<()> {
         "Alpha.cs must appear in at least one cluster after edit: {rescan}",
     );
     Ok(())
-}
-
-/// Calls the `rescan` MCP tool and returns the structured payload.
-fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
-    let response = mcp.request(
-        "tools/call",
-        &json!({
-            "name": "rescan",
-            "arguments": {
-                "paths": paths,
-                "n": 8,
-            }
-        }),
-    )?;
-    structured_content(&response, "rescan")
 }
 
 /// Extracts the `clusters` JSON array from a rescan payload.

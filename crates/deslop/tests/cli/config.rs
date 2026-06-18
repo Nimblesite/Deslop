@@ -1,20 +1,27 @@
 use crate::support::*;
 
-#[test]
-fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
+/// Writes `config_body` to `<tmp>/deslop.toml`, runs the CLI over the
+/// `csharp-small` fixture with `--min-nodes 8 --config <that file>`,
+/// asserts success, and returns the JSON report body as a string. Used
+/// by the `--config`-driven exclusion/hide scenarios that differ only
+/// in the TOML they supply.
+fn run_with_config(config_body: &str) -> Result<String> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
-    fs::write(&config, "[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
+    fs::write(&config, config_body)?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
+        .args(["--min-nodes", "8", "--config"])
         .arg(&config)
         .assert()
         .success();
-    let json = fs::read_to_string(&out.json)?;
+    Ok(fs::read_to_string(&out.json)?)
+}
+
+#[test]
+fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
+    let json = run_with_config("[defaults]\nexclude = [\"**/Beta.cs\"]\n")?;
     assert!(
         json.contains("\"files_analysed\": 1"),
         "exclude should drop Beta.cs, leaving one file: {json}"
@@ -32,19 +39,7 @@ fn exclude_pattern_drops_file_from_discovery() -> Result<()> {
 // hidden member flagged.
 #[test]
 fn report_hide_keeps_mixed_cluster_and_flags_hidden_occurrence() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(&config, "[defaults]\nreport_hide = [\"**/Beta.cs\"]\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
-        .arg(&config)
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_with_config("[defaults]\nreport_hide = [\"**/Beta.cs\"]\n")?;
     assert!(
         json.contains("\"files_analysed\": 2"),
         "report_hide must still analyse the file"
@@ -64,22 +59,7 @@ fn report_hide_keeps_mixed_cluster_and_flags_hidden_occurrence() -> Result<()> {
 // section stays empty — proves the overlay matcher path.
 #[test]
 fn report_hide_per_language_overlay_flags_csharp_only() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(
-        &config,
-        "[language.csharp]\nreport_hide = [\"**/Beta.cs\"]\n",
-    )?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
-        .arg(&config)
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_with_config("[language.csharp]\nreport_hide = [\"**/Beta.cs\"]\n")?;
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains("\"hidden\": true"));
     Ok(())
@@ -89,22 +69,9 @@ fn report_hide_per_language_overlay_flags_csharp_only() -> Result<()> {
 // Python rules should not affect a C# file.
 #[test]
 fn exclude_per_language_overlay_scoped_to_its_language() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let config = tmp.path().join("deslop.toml");
-    fs::write(
-        &config,
+    let json = run_with_config(
         "[language.python]\nexclude = [\"**/*.py\"]\n\n[language.csharp]\nexclude = [\"**/Beta.cs\"]\n",
     )?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
-        .arg(&config)
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"files_analysed\": 1"));
     assert!(!json.contains("Beta.cs"));
     Ok(())
@@ -132,7 +99,7 @@ fn default_config_file_in_scan_root_is_loaded() -> Result<()> {
     )?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"files_analysed\": 1"));
     Ok(())
@@ -154,7 +121,7 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
     fs::write(scan_root.join("Makefile"), "all:\n\techo hi\n")?;
     fs::write(scan_root.join("README"), "nothing to see here\n")?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"files_analysed\": 1"),
@@ -247,7 +214,7 @@ fn report_hide_pattern_is_scan_root_relative() -> Result<()> {
     )?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let report = read_json_report(&out.json)?;
     let clusters = field(&report, "clusters")
         .as_array()
@@ -307,7 +274,7 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
     )?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let body = fs::read_to_string(&out.json)?;
     assert!(
         body.contains("\"files_analysed\": 1"),
@@ -331,8 +298,7 @@ fn default_output_written_to_current_directory() -> Result<()> {
     let _assertion = cmd
         .current_dir(tmp.path())
         .arg(fixture("csharp-small"))
-        .arg("--min-nodes")
-        .arg("8")
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
     assert!(tmp.path().join("deslop-report.json").exists());

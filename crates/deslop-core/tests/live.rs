@@ -25,23 +25,21 @@ use deslop_core::{
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError, Report,
 };
 
-/// Returns the absolute fixture path used by the CLI tests.
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("deslop")
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
-/// Copies the fixture tree into a temp dir so destructive edits never
-/// pollute the source repo.
-fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
-    let src = fixture(name);
-    let dir = tempfile::tempdir().context("tempdir")?;
-    copy_recursive(&src, dir.path())?;
-    Ok(dir)
+/// Copies the `csharp-small` fixture into a fresh temp dir and builds an
+/// [`AnalysisSession`] over it at `min_nodes = 15` with a deterministic
+/// [`StubProvider`]. Returns the [`tempfile::TempDir`] (kept alive by the
+/// caller) alongside the session. The shared setup behind the many
+/// `copy_fixture("csharp-small")` → `AnalysisSession::new(.., 15, ..)`
+/// tests in this file.
+fn csharp_small_session() -> Result<(tempfile::TempDir, AnalysisSession)> {
+    let tmp = copy_fixture("csharp-small")?;
+    let provider = Arc::new(StubProvider::new());
+    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
+        .context("session")?;
+    Ok((tmp, session))
 }
 
 /// Counts live cluster occurrences whose relative path contains the
@@ -60,20 +58,6 @@ fn occurrences_with_component(report: &Report, component: &str) -> usize {
                 .any(|part| part.as_os_str() == component)
         })
         .count()
-}
-
-fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
-    if src.is_dir() {
-        fs::create_dir_all(dst).with_context(|| format!("mkdir {}", dst.display()))?;
-        for entry in fs::read_dir(src).with_context(|| format!("read_dir {}", src.display()))? {
-            let entry = entry.context("dir entry")?;
-            let target = dst.join(entry.file_name());
-            copy_recursive(&entry.path(), &target)?;
-        }
-    } else {
-        let _bytes = fs::copy(src, dst).with_context(|| format!("copy {}", src.display()))?;
-    }
-    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -260,10 +244,7 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
 
 #[tokio::test(flavor = "multi_thread")]
 async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, mut session) = csharp_small_session()?;
     let target = tmp.path().join("Beta.cs");
     fs::write(
         &target,
@@ -290,10 +271,7 @@ async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<(
 // the watcher does after the agent writes the files.
 #[tokio::test(flavor = "multi_thread")]
 async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, mut session) = csharp_small_session()?;
 
     // Three worktree checkouts, each byte-identical to the real Alpha.cs,
     // so without the exclusion they would form an N-copy identical cluster.
@@ -339,10 +317,7 @@ async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()>
 
 #[tokio::test(flavor = "multi_thread")]
 async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, session) = csharp_small_session()?;
     let report = session.report();
     let cluster = report
         .clusters
@@ -370,10 +345,7 @@ async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (_tmp, session) = csharp_small_session()?;
     let request = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
             snippet: "this is not C# {{ unbalanced".to_owned(),
@@ -922,10 +894,7 @@ async fn embedding_list_models_returns_empty_when_ollama_unreachable() -> Result
     // [REMOVE-STUB] Production model listing must not include the stub
     // fallback. When Ollama is unreachable the list is empty and the
     // VSIX shows its "Ollama not detected" empty state.
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (_tmp, session) = csharp_small_session()?;
     let session_lock = Arc::new(tokio::sync::Mutex::new(session));
     let mut service = LiveService::new(session_lock);
     service.set_ollama_endpoint("http://127.0.0.1:1".to_owned());
@@ -1310,10 +1279,7 @@ async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
 /// prefix-eviction change from regressing the exact-leaf path.
 #[tokio::test(flavor = "multi_thread")]
 async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
-    let tmp = copy_fixture("csharp-small")?;
-    let provider = Arc::new(StubProvider::new());
-    let mut session = AnalysisSession::new(tmp.path().to_path_buf(), 15, false, None, provider)
-        .context("session")?;
+    let (tmp, mut session) = csharp_small_session()?;
 
     let before = session.report();
     assert!(

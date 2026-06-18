@@ -11,8 +11,8 @@
 use tree_sitter::Node;
 
 use super::{
-    contains_bytes, enclosing_kind, node_contains_identifier, parse_for, snippet_range_text,
-    source_head, spans_multiple_files, trim_ascii_start, Snippet,
+    contains_bytes, enclosing_kind, is_multi_member_language_cluster, node_contains_identifier,
+    parse_for, snippet_range_text, source_head, spans_multiple_files, trim_ascii_start, Snippet,
 };
 use crate::state::FileId;
 
@@ -22,7 +22,7 @@ use crate::state::FileId;
 /// test called the production minter/helper, it would stop proving the
 /// signing implementation.
 pub(super) fn is_jwt_hmac_independent_verifier_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     let shapes: Option<Vec<JwtHmacShape>> = snippets.iter().map(jwt_hmac_shape).collect();
@@ -79,7 +79,7 @@ fn python_body_looks_like_hs256(body_source: &[u8]) -> bool {
 /// are intentionally related, but the generated output is not a refactor
 /// target and the template is already the source of truth.
 pub(super) fn is_generated_template_output_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))

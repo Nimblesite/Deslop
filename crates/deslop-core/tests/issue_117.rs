@@ -3,45 +3,15 @@
 
 #![cfg(feature = "live")]
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{fs, sync::Arc};
 
 use anyhow::{Context, Result};
 use deslop_core::{
     embedding::test_support::StubProvider, live::AnalysisSession, report::ReportCluster,
 };
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("deslop")
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
-
-fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
-    let src = fixture(name);
-    let dir = tempfile::tempdir().context("tempdir")?;
-    copy_recursive(&src, dir.path())?;
-    Ok(dir)
-}
-
-fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
-    if src.is_dir() {
-        fs::create_dir_all(dst).with_context(|| format!("mkdir {}", dst.display()))?;
-        for entry in fs::read_dir(src).with_context(|| format!("read_dir {}", src.display()))? {
-            let entry = entry.context("dir entry")?;
-            copy_recursive(&entry.path(), &dst.join(entry.file_name()))?;
-        }
-    } else {
-        let _bytes = fs::copy(src, dst).with_context(|| format!("copy {}", src.display()))?;
-    }
-    Ok(())
-}
+mod common;
+use crate::common::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_update_removes_cluster_when_one_occurrence_remains() -> Result<()> {

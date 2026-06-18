@@ -51,9 +51,7 @@ fn run_report(root: &Path, tmp: &Path, config: Option<&Path>) -> Result<RunOutpu
     let mut cmd = Command::cargo_bin("deslop")?;
     let mut command = cmd
         .arg(root)
-        .arg("--min-nodes")
-        .arg("3")
-        .arg("--output")
+        .args(["--min-nodes", "3", "--output"])
         .arg(tmp.join("report"));
     if let Some(path) = config {
         command = command.arg("--config").arg(path);

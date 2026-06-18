@@ -20,13 +20,17 @@ mod common;
 
 use std::{
     fs,
-    io::Write,
-    path::Path,
+    io::{BufReader, Write},
+    path::{Path, PathBuf},
+    process::{ChildStdin, ChildStdout},
     time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, ensure, Result};
-use common::{call, copy_fixture, handshake, notification, spawn_lsp, take_io, write_frame};
+use common::{
+    call, cluster_count, copy_fixture, handshake, spawn_lsp_guarded, spawn_lsp_on_fixture_guarded,
+    watched_file_changed, write_frame, LspGuard,
+};
 
 const STATE_FILE: &str = ".deslop-cache/live-report.json";
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(15);
@@ -36,10 +40,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// initialization so the MCP has something to read immediately.
 #[test]
 fn state_file_exists_after_initialize() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (workspace, _guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded("csharp-small")?;
 
     let _init = handshake(&mut stdin, &mut stdout)?;
 
@@ -53,7 +54,7 @@ fn state_file_exists_after_initialize() -> Result<()> {
         report.get("tool_version").is_some(),
         "state file must contain the current report shape: {report}"
     );
-    let count = cluster_count(&report);
+    let count = state_file_cluster_count(&report);
     ensure!(
         count > 0,
         "csharp-small fixture must produce at least one cluster in the state file"
@@ -66,10 +67,7 @@ fn state_file_exists_after_initialize() -> Result<()> {
         "deslop/reportGet",
         &serde_json::json!({}),
     )?;
-    let live_count = live
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let live_count = cluster_count(&live);
     ensure!(
         live_count == count,
         "state file cluster count ({count}) must match live reportGet count ({live_count})"
@@ -82,15 +80,7 @@ fn state_file_exists_after_initialize() -> Result<()> {
 /// startup on a cold full pass.
 #[test]
 fn issue_73_lsp_report_get_uses_prestaged_live_report_cache() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let state_path = workspace.path().join(STATE_FILE);
-    seed_cached_report(&state_path)?;
-
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-
-    let _init = handshake(&mut stdin, &mut stdout)?;
+    let (_workspace, _state_path, _guard, mut stdin, mut stdout) = seeded_workspace_ready()?;
     let start = Instant::now();
     let live = call(
         &mut stdin,
@@ -145,9 +135,7 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
     seed_cached_report(&state_path)?;
     let cached_bytes = fs::read(&state_path)?;
 
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
 
     let _init = handshake(&mut stdin, &mut stdout)?;
     let seeded = call(
@@ -167,7 +155,7 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
 
     // Cold-pass install rewrites the seed cache exactly once.
     wait_for_state_file_change(&state_path, &cached_bytes, ANALYSIS_TIMEOUT)?;
-    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
+    let socket_path = socket_path_for(workspace.path());
     wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
     let post_install = ipc_call(
         &socket_path,
@@ -178,10 +166,7 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
             "params": {}
         }),
     )?;
-    let refreshed_count = post_install
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let refreshed_count = cluster_count(&post_install);
     ensure!(
         refreshed_count > 0,
         "background full scan must produce real clusters in the live IPC report: {post_install}"
@@ -216,10 +201,7 @@ fn current_state_file_loads_and_incremental_updates_continue() -> Result<()> {
         "deslop/reportGet",
         &serde_json::json!({}),
     )?;
-    let live_count = live
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let live_count = cluster_count(&live);
     ensure!(
         live_count == updated_count,
         "live reportGet over stdio must match the IPC view of the incremental update: {live}"
@@ -243,9 +225,7 @@ fn incompatible_state_file_is_wiped_and_startup_scans_from_scratch() -> Result<(
     )?;
     let bad_bytes = fs::read(&state_path)?;
 
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
+    let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
 
     let _init = handshake(&mut stdin, &mut stdout)?;
     wait_for_file(&state_path, ANALYSIS_TIMEOUT)?;
@@ -265,7 +245,7 @@ fn incompatible_state_file_is_wiped_and_startup_scans_from_scratch() -> Result<(
         "fresh scan must not preserve incompatible cached metadata: {fresh}"
     );
     ensure!(
-        cluster_count(&fresh) > 0,
+        state_file_cluster_count(&fresh) > 0,
         "fresh scan must analyse the workspace and write real clusters: {fresh}"
     );
 
@@ -275,12 +255,9 @@ fn incompatible_state_file_is_wiped_and_startup_scans_from_scratch() -> Result<(
         "deslop/reportGet",
         &serde_json::json!({}),
     )?;
-    let live_count = live
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let live_count = cluster_count(&live);
     ensure!(
-        live_count == cluster_count(&fresh),
+        live_count == state_file_cluster_count(&fresh),
         "live reportGet must match the fresh scan written to state: {live}"
     );
     Ok(())
@@ -294,16 +271,9 @@ fn incompatible_state_file_is_wiped_and_startup_scans_from_scratch() -> Result<(
 #[cfg(unix)]
 #[test]
 fn state_file_updated_after_file_change() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
+    let (workspace, _guard, mut stdin, _stdout, socket_path) =
+        workspace_socket_ready("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
-    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
 
     let initial = ipc_call(
         &socket_path,
@@ -314,10 +284,7 @@ fn state_file_updated_after_file_change() -> Result<()> {
             "params": {}
         }),
     )?;
-    let initial_count = initial
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let initial_count = cluster_count(&initial);
     ensure!(
         initial_count > 0,
         "initial live IPC report must have clusters: {initial}"
@@ -344,15 +311,7 @@ fn state_file_updated_after_file_change() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_find_similar_request() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
-    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    let (_workspace, _guard, _stdin, _stdout, socket_path) = fixture_socket_ready("csharp-small")?;
 
     let response = ipc_call(
         &socket_path,
@@ -390,15 +349,7 @@ fn ipc_socket_handles_find_similar_request() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_list_models_request() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
-    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    let (_workspace, _guard, _stdin, _stdout, socket_path) = fixture_socket_ready("csharp-small")?;
 
     let response = ipc_call(
         &socket_path,
@@ -445,16 +396,8 @@ fn ipc_socket_handles_list_models_request() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_handles_refresh_report_request() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
+    let (workspace, _guard, _stdin, _stdout, socket_path) = workspace_socket_ready("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
-    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
 
     let initial = ipc_call(
         &socket_path,
@@ -465,10 +408,7 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
             "params": {}
         }),
     )?;
-    let initial_count = initial
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let initial_count = cluster_count(&initial);
     ensure!(
         initial_count > 0,
         "initial live IPC report must have clusters: {initial}"
@@ -520,10 +460,7 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
             "params": {}
         }),
     )?;
-    let updated_count = updated
-        .pointer("/result/clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
+    let updated_count = cluster_count(&updated);
     ensure!(
         updated_count < initial_count,
         "refreshReport must rescan edited files and reduce cluster count: {initial_count} -> {updated_count}"
@@ -536,15 +473,7 @@ fn ipc_socket_handles_refresh_report_request() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-
-    let _init = handshake(&mut stdin, &mut stdout)?;
-
-    let socket_path = workspace.path().join(".deslop-cache").join("deslop.sock");
-    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    let (_workspace, _guard, _stdin, _stdout, socket_path) = fixture_socket_ready("csharp-small")?;
 
     let response = ipc_call(
         &socket_path,
@@ -573,14 +502,7 @@ fn ipc_socket_returns_method_not_found_for_unknown_method() -> Result<()> {
 /// only assert the fast cached serve, then exit before the cold pass runs).
 #[test]
 fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let state_path = workspace.path().join(STATE_FILE);
-    seed_cached_report(&state_path)?;
-
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
-    let _guard = KillOnDrop(&mut child);
-    let _init = handshake(&mut stdin, &mut stdout)?;
+    let (_workspace, _state_path, _guard, mut stdin, mut stdout) = seeded_workspace_ready()?;
 
     // The first read is served straight from the synthetic seed cache.
     let seeded = call(
@@ -621,13 +543,74 @@ fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Re
     Ok(())
 }
 
-struct KillOnDrop<'a>(&'a mut std::process::Child);
+/// Returns the LSP IPC socket path under `workspace`'s `.deslop-cache`.
+fn socket_path_for(workspace: &Path) -> PathBuf {
+    workspace.join(".deslop-cache").join("deslop.sock")
+}
 
-impl Drop for KillOnDrop<'_> {
-    fn drop(&mut self) {
-        let _kill = self.0.kill();
-        let _wait = self.0.wait();
-    }
+/// Spawns the LSP over a fresh copy of `fixture`, drives the
+/// `initialize`+`initialized` handshake, and blocks until the IPC socket binds.
+/// Returns the owned workspace and process guard (both MUST stay bound — dropping
+/// either tears the workspace or the LSP down mid-test), the child's stdin/stdout
+/// (kept alive so the LSP's stdio transport stays open), and the bound socket path
+/// the test issues `ipc_call`s against.
+fn fixture_socket_ready(
+    fixture: &str,
+) -> Result<(
+    tempfile::TempDir,
+    LspGuard,
+    ChildStdin,
+    BufReader<ChildStdout>,
+    PathBuf,
+)> {
+    let (workspace, guard, mut stdin, mut stdout) = spawn_lsp_on_fixture_guarded(fixture)?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let socket_path = socket_path_for(workspace.path());
+    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    Ok((workspace, guard, stdin, stdout, socket_path))
+}
+
+/// Copies `fixture`, spawns the LSP guarded against the copy, drives the
+/// handshake, and blocks until the IPC socket binds. Returns the owned
+/// workspace and guard (keep both bound), the child's stdin/stdout, and the
+/// bound socket path. Unlike [`fixture_socket_ready`] the caller gets the
+/// workspace path before any source edit, so it can mutate watched files and
+/// notify the LSP over the returned stdin.
+fn workspace_socket_ready(
+    fixture: &str,
+) -> Result<(
+    tempfile::TempDir,
+    LspGuard,
+    ChildStdin,
+    BufReader<ChildStdout>,
+    PathBuf,
+)> {
+    let workspace = copy_fixture(fixture)?;
+    let (guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let socket_path = socket_path_for(workspace.path());
+    wait_for_file(&socket_path, ANALYSIS_TIMEOUT)?;
+    Ok((workspace, guard, stdin, stdout, socket_path))
+}
+
+/// Copies `csharp-small`, seeds the synthetic startup cache at its state-file
+/// path, spawns the guarded LSP, and drives the handshake. Returns the owned
+/// workspace and state path (keep the workspace bound), the process guard, and
+/// the child's stdin/stdout for follow-up `call`s. The seed-cache tests share
+/// this fast-serve setup; what varies is which post-handshake reads they assert.
+fn seeded_workspace_ready() -> Result<(
+    tempfile::TempDir,
+    PathBuf,
+    LspGuard,
+    ChildStdin,
+    BufReader<ChildStdout>,
+)> {
+    let workspace = copy_fixture("csharp-small")?;
+    let state_path = workspace.path().join(STATE_FILE);
+    seed_cached_report(&state_path)?;
+    let (guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    Ok((workspace, state_path, guard, stdin, stdout))
 }
 
 /// Polls until `path` exists or `timeout` elapses.
@@ -684,10 +667,7 @@ fn wait_for_cluster_count_change(
                 "params": {}
             }),
         ) {
-            let count = report
-                .pointer("/result/clusters")
-                .and_then(serde_json::Value::as_array)
-                .map_or(0, Vec::len);
+            let count = cluster_count(&report);
             if count != previous_count {
                 return Ok(count);
             }
@@ -725,20 +705,13 @@ fn ipc_call(socket_path: &Path, req: &serde_json::Value) -> Result<serde_json::V
         .map_err(|error| anyhow!("IPC response is not valid JSON: {error} — raw: {line}"))
 }
 
-fn cluster_count(report: &serde_json::Value) -> usize {
+/// Counts clusters in a persisted state-file report, where the cluster
+/// array sits at the document root rather than under a JSON-RPC `result`.
+fn state_file_cluster_count(report: &serde_json::Value) -> usize {
     report
         .get("clusters")
         .and_then(serde_json::Value::as_array)
         .map_or(0, Vec::len)
-}
-
-fn watched_file_changed(path: &Path) -> Result<String> {
-    let uri = tower_lsp::lsp_types::Url::from_file_path(path)
-        .map_err(|()| anyhow!("path must be absolute: {}", path.display()))?;
-    notification(
-        "workspace/didChangeWatchedFiles",
-        &serde_json::json!({"changes": [{"uri": uri.as_str(), "type": 2}]}),
-    )
 }
 
 fn seed_cached_report(path: &Path) -> Result<()> {

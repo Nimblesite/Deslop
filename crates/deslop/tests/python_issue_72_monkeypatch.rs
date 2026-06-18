@@ -1,32 +1,18 @@
 //! E2E regression for GH #72: `monkeypatch.setenv` setup patterns across
 //! config tests are scaffolding, not duplicate logic.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(fixture_name: &str) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture(fixture_name))
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(&fixture(fixture_name), &output)?
+        .args(["--min-nodes", "4", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;

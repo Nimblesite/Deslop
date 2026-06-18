@@ -36,6 +36,7 @@ import { buildFolderMode } from "./folder";
 import { buildMetricRows } from "./metrics";
 import { groupByLanguage, normalizeSplitByLanguage } from "./language";
 import { normalizeSortBy, SortBy } from "./sort";
+import { thresholdStatus } from "./threshold";
 
 // Re-export node classes so existing call sites
 // (commands/register.ts, commands/treeMenus.ts, tests, e2e suites)
@@ -323,7 +324,8 @@ export class MetricsProvider extends LifecycleAwareProvider {
 }
 
 // [VSIX-METRICS-PANEL] Headline row: repo-wide percentage + plain-English
-// totals, with a threshold-breach warning when the gate is crossed.
+// totals, with the configured duplication gate and an over/within verdict
+// appended whenever `.deslop.toml` sets one.
 function metricsHeadline(metrics: RepoMetrics): MetricsHeadlineNode {
   const detail =
     `${metrics.analysed_loc.toLocaleString()} LOC analysed · ` +
@@ -332,8 +334,7 @@ function metricsHeadline(metrics: RepoMetrics): MetricsHeadlineNode {
   return new MetricsHeadlineNode(
     metrics.duplication_percent,
     detail,
-    metrics.threshold.breached,
-    `${metrics.threshold.percent.toFixed(1)}% gate`,
+    thresholdStatus(metrics.threshold),
   );
 }
 
