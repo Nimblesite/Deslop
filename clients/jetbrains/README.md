@@ -4,7 +4,7 @@ IntelliJ Platform plugin for Deslop. Rider is the first product target, but the 
 
 [![The Deslop VS Code reference client on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor, and a side-by-side Compare diff against the canonical occurrence.](../../site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
 
-The screenshot is the **VS Code reference client** — the sidebar's worst-first **Top Offenders** tree and per-folder **Duplication** breakdown (left), the editor's live clone warning naming the canonical copy (centre), and the **Compare** diff against that canonical occurrence (right). This JetBrains plugin starts the same `deslop-lsp` server, so it surfaces the identical live analysis through the IDE's native LSP diagnostics. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+The screenshot above is the **VS Code reference client**. This JetBrains plugin starts the same `deslop-lsp` server, so it surfaces the identical live analysis through the IDE's native LSP diagnostics. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
 
 Current slice:
 

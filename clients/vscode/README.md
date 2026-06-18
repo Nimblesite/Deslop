@@ -2,7 +2,7 @@
 
 **The reference client for the Deslop live duplicate-code analysis server.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
 
-Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes. No save, no push, no context switch, no batch report.
+Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
 
 ![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare / View cluster / Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence.](https://deslop.live/assets/img/screenshot.webp)
 
@@ -19,8 +19,8 @@ Every panel refreshes within 250 ms of a keystroke, and the same live report bac
 - **Live duplication bubble.** The moment you type code that matches an existing cluster, a severity-coloured label — **Identical code**, **Nearly identical code**, **Same shape, different content**, **Loosely similar code**, or **Same behavior, different code** (AI match) — appears at the end of the line, with a signal strip showing how structural, token, and embedding similarity scored.
 - **Worst-first activity-bar view.** The **Top Offenders** view always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
-- **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals — no stale pixels, ever.
-- **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries offline-ready. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
+- **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals.
+- **Bundled LSP + MCP servers.** Every platform ships the `deslop-lsp` and `deslop-mcp` binaries. No post-install downloads. The MCP server auto-registers with Copilot Chat (and any other VS Code-hosted MCP client) so your AI agents inside VS Code consult the same live analysis you see — the duplicate is visible to the agent *before* it generates the copy-paste.
 - **Uses the installed extension bundle.** The VSIX runs the binaries unpacked under its own `bin/<platform>/` folder. No post-install copying and no PATH lookup are required.
 
 ## Wire `deslop-mcp` into external MCP clients

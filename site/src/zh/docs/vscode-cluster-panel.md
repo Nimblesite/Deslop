@@ -46,6 +46,7 @@ lang: zh
 | --- | --- |
 | Identical code | 这些副本在归一化之后结构上完全相同。 |
 | Nearly identical code | 这些副本很接近，但细微的差异可能很重要。 |
+| Same shape, different content | 这些副本仅在归一化后的 AST 形状上匹配，没有 token 或语义层面的重叠。属同类样板代码；在排名中降权。 |
 | Loosely similar code | Deslop 发现了较弱的重叠。请将其视为线索，而非定论。 |
 | Same behavior, different code | 嵌入（向量嵌入）阶段发现了语义相似性。请审查这两处位置。 |
 

@@ -45,6 +45,7 @@ The bucket label is the human-readable clone type:
 | --- | --- |
 | Identical code | The copies are structurally the same after normalization. |
 | Nearly identical code | The copies are close, but small differences may matter. |
+| Same shape, different content | The copies share AST shape only — no token or semantic overlap. Sibling boilerplate; demoted in ranking. |
 | Loosely similar code | Deslop found weak overlap. Treat it as a hint, not a verdict. |
 | Same behavior, different code | The embedding pass found semantic similarity. Review both locations. |
 

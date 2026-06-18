@@ -46,7 +46,7 @@ The MCP server delegates every read and `find-similar` call to the running LSP o
 
 **Live means reactive.** When you change code, every Deslop surface — the live bubble, the editor decorations, the **Top Offenders** tree, the cluster webview, the status bar, the MCP query results, the agent's view of the workspace — reflects the new state **immediately**. Not on the next save. Not when the editor refreshes. Not on a polling timer.
 
-The LSP file watcher fires on every change with a **250 ms debounce and a 2 s cap**. The pipeline runs incrementally — only the touched files get re-parsed. The new report is written atomically and a `deslop/reportChanged` notification fans out over the LSP wire and over MCP `resources/updated`. Editor surfaces, agent caches, and webviews observe the new report in the same microtask. A cluster that no longer exists in the source code cannot remain on screen, in a hover, in a code lens, or in an MCP response. **Stale UI is a correctness bug, not a polish issue.**
+The LSP file watcher fires on every change with a **250 ms debounce and a 2 s cap**. The pipeline runs incrementally — only the touched files get re-parsed. The new report is written atomically and a `deslop/reportChanged` notification fans out over the LSP wire and over MCP `resources/updated`. Editor surfaces, agent caches, and webviews observe the new report in the same microtask. A cluster that no longer exists in the source code cannot remain on screen, in a hover, in a code lens, or in an MCP response.
 
 The CLI is the **cold-cache fallback** for one-shot audits and CI gates. Every other surface — LSP, MCP, VS Code extension — is reactive by construction. See [SPEC §[PRINCIPLES-LIVE-IS-REACTIVE]](docs/specs/principles.md#principles-live-is-reactive).
 
@@ -105,7 +105,7 @@ Full research → code map: [docs/specs/SPEC.md §Algorithm implementation statu
 
    Or: **Extensions panel → `…` menu → Install from VSIX…**
 
-3. Open a `.cs` / `.rs` / `.py` file. The live bubble lights up the moment you type a duplicate. The command palette exposes **Deslop: Open Report**, **Deslop: Open Worst Cluster**, **Deslop: Jump to Next Occurrence**. The extension prepends its bundled `bin/<platform>/` to the VS Code process `PATH`, so `deslop`, `deslop-lsp`, and `deslop-mcp` are callable from the integrated terminal.
+3. Open a `.cs` / `.rs` / `.py` file. The live bubble lights up the moment you type a duplicate. The command palette exposes **Deslop: Open Report**, **Deslop: Open Worst Cluster**, **Deslop: Jump to Next Occurrence in Cluster**.
 
 VSIX bundles binaries for `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, and `win32-x64`.
 
@@ -295,14 +295,14 @@ args    = ["--root", "."]
 
 ### Useful flags
 
+`deslop-mcp` takes exactly two flags — the analysis knobs (minimum node count, embeddings, exclude globs) come from `.deslop.toml` at the root, or from the runtime `set-embedding-model` / `session-config` tools:
+
 ```
---min-nodes 30                       # raise to cut noise on small clones
---no-incremental                     # disable the .deslop-cache/ AST cache (default: on)
---embeddings auto                    # opt in to semantic (Type-4) matching (default: off)
---embedding-model nomic-embed-text   # any local Ollama embedding model
+--root /absolute/path/to/repo   # workspace to analyse (default: current directory)
+--config /path/to/.deslop.toml  # explicit config path (default: .deslop.toml beside the root)
 ```
 
-`--embeddings` defaults to `off`. `auto` probes the provider and falls back with a warning if Ollama is unreachable; `required` hard-fails when the provider is unreachable.
+Embeddings stay off until you opt in — pick a model with the `set-embedding-model` tool, or set it in `.deslop.toml`. The `--min-nodes`, `--embeddings`, and `--embedding-model` *command-line* flags belong to the `deslop` CLI (see [Use the CLI](#use-the-cli)).
 
 ---
 

@@ -100,7 +100,7 @@ max_duplication_percent = 20
 | --- | --- | --- | --- |
 | `max_duplication_percent` | 浮点数 | `0.0`–`100.0` | 当全仓库的 `duplication_percent` 超过此值时，`deslop` 以 **`3`** 退出并使 CI 失败。 |
 
-这是**唯一**需要显式启用的失败路径。没有 `[threshold]` 区段（且没有 `--fail-over`）时，无论发现多少重复，`deslop` 始终以 `0` 退出。命令行 `--fail-over` 参数会覆盖此键；`--no-fail-over` 会在单次运行中清除它。参见[输出格式 → 退出码](/zh/docs/output-formats/#退出码)。
+这是**唯一**需要显式启用的失败路径。没有 `[threshold]` 区段（且没有 `--fail-over`）时，无论发现多少重复，`deslop` 始终以 `0` 退出。命令行 `--fail-over` 参数会覆盖此键；`--no-fail-over` 会在单次运行中清除它。参见[输出格式 → 退出码](/zh/docs/output-formats/#exit-codes)。
 
 ## `[analysis]`
 

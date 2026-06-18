@@ -1,8 +1,8 @@
 # Examples
 
-Substantial fixtures that exercise every clone bucket Deslop can
-detect. Each subfolder is a self-contained scenario. Run Deslop
-against a folder to see the clusters.
+Fixtures exercising each clone bucket Deslop can detect. Each
+subfolder is a self-contained scenario. Run Deslop against a folder
+to see the clusters.
 
 [![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor, and a side-by-side Compare diff against the canonical occurrence.](../site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
 
@@ -28,6 +28,9 @@ title first, academic `Type-N` in brackets for AI readers:
 
 - **Identical code [Type-1/2]** — exact match or renamed identifiers.
 - **Nearly identical code [Type-3]** — same shape with small differences.
+- **Same shape, different content [structural-only]** — identical AST
+  shape, no token or semantic overlap (sibling boilerplate; demoted in
+  ranking).
 - **Loosely similar code [weak LSH]** — loose textual overlap.
 - **Same behavior, different code [Type-4]** — semantically equivalent,
   syntactically different.
@@ -41,7 +44,7 @@ CRUD repositories for three entities plus a LINQ rewrite.
 | Files | Relation | Expected signals |
 |---|---|---|
 | `UserRepository.cs` ↔ `ProductRepository.cs` | **Identical code [Type-1/2]** — identical shape, renamed identifiers | `structural=1.0`, `token_jaccard=1.0` |
-| `UserRepository.cs` ↔ `OrderRepository.cs` | **Nearly identical code [Type-3]** — same shape plus cache-invalidation hook | `structural=0.0`, `token_jaccard≈0.9`, high `embedding_cos` |
+| `UserRepository.cs` ↔ `OrderRepository.cs` | **Nearly identical code [Type-3]** — same shape plus cache-invalidation hook | `structural=1.0`, `token_jaccard≈0.9` |
 | `ProductRepository.cs` ↔ `ProductRepositoryLinq.cs` | **Same behavior, different code [Type-4]** — imperative vs LINQ | `structural=0.0`, low `token_jaccard`, high `embedding_cos` |
 
 ### [`csharp/validators/`](csharp/validators/)
@@ -110,7 +113,7 @@ CSV row parser in three implementations.
 | Files | Relation | Expected signals |
 |---|---|---|
 | `csv_hand.rs` ↔ `csv_state.rs` | **Same behavior, different code [Type-4]** — ad-hoc bool vs explicit state enum | only `embedding_cos` |
-| `csv_hand.rs` ↔ `csv_split.rs` | **Nearly identical code [Type-3]** — same intent, naïve implementation misses edge cases | moderate `token_jaccard`, high `embedding_cos` |
+| `csv_hand.rs` ↔ `csv_split.rs` | **Nearly identical code [Type-3]** — same intent, naïve implementation misses edge cases | `token_jaccard≈0.9` |
 
 ## Python
 
