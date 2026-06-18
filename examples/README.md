@@ -4,6 +4,14 @@ Substantial fixtures that exercise every clone bucket Deslop can
 detect. Each subfolder is a self-contained scenario. Run Deslop
 against a folder to see the clusters.
 
+[![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor, and a side-by-side Compare diff against the canonical occurrence.](../site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
+
+Open one of these folders in the [VS Code extension](../clients/vscode/) and
+the clusters below surface live: worst-first in the **Top Offenders** sidebar,
+underlined inline in the editor, and side-by-side in the **Compare** diff (shown
+above). The CLI command below renders the same clusters to `.json` / `.txt` /
+`.html` instead. Full panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+
 ```bash
 # Deterministic passes only (structural + LSH) — misses same-behavior matches:
 cargo run --release -- examples/csharp/repository --min-nodes 15

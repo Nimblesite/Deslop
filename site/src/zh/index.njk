@@ -25,7 +25,7 @@ lang: zh
     "配备 250 毫秒响应式文件监视器的实时 LSP 服务器",
     "以 find-similar 为核心的 MCP 服务器——智能体在编写新代码前所发起的调用；其余工具均为只读且按需调用",
     "面向 C#、Rust、Python、Dart 的 tree-sitter 解析",
-    "覆盖全部四类的克隆检测：完全相同的代码 [Type-1/2]、几乎相同的代码 [Type-3]、松散相似的代码 [weak LSH]、行为相同但代码不同 [Type-4]",
+    "覆盖全部五类的克隆检测：完全相同的代码 [Type-1/2]、几乎相同的代码 [Type-3]、形状相同但内容不同 [structural-only]、松散相似的代码 [weak LSH]、行为相同但代码不同 [Type-4]",
     "捆绑 LSP、MCP 服务器与 CLI 的 VS Code 扩展",
     "JetBrains 插件正在积极开发中（Rider、IntelliJ、PyCharm、WebStorm、RustRover、CLion）"
   ],
@@ -141,5 +141,35 @@ lang: zh
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="showcase">
+    <div class="showcase__head">
+      <div class="eyebrow-chip"><span>在你的编辑器中</span></div>
+      <h2 class="showcase__title">一份实时报告，三个界面。</h2>
+      <p class="showcase__lede">VS Code 扩展捆绑了 LSP 与 MCP 服务器，并将运行中的分析就地渲染——侧边栏中以最严重优先排序的克隆簇、光标处的实时克隆警告，以及与规范副本的并排差异对比。驱动你编辑器的智能体通过 MCP 读取的是同一份报告。</p>
+    </div>
+    <figure class="showcase__figure">
+      <img src="/assets/img/screenshot.webp"
+           alt="Deslop VS Code 扩展正在分析实时工作区：侧边栏中以最严重优先排序的 Top Offenders 树与按目录划分的 Duplication 占比，编辑器中带有 Compare、View cluster 与 Copy for AI 操作的实时克隆警告，以及与规范出现位置的并排 Compare 差异对比。"
+           width="2560" height="1492" loading="lazy" decoding="async">
+    </figure>
+    <ol class="showcase__legend">
+      <li class="showcase__cell">
+        <span class="showcase__pos">左 · 侧边栏</span>
+        <strong>Top Offenders、Duplication、Session</strong>
+        <p>Top Offenders 以最严重优先对每个克隆簇排序——id、严重程度、人类可读的分桶。Duplication 按目录逐层拆解整个仓库，每个节点都标注重复占比。Session 显示运行中的服务器与嵌入模型选择器。</p>
+      </li>
+      <li class="showcase__cell">
+        <span class="showcase__pos">中 · 编辑器</span>
+        <strong>实时克隆警告</strong>
+        <p>LSP 在你输入时为重复片段加下划线，标出用作锚点的规范副本，并在发现结果上直接提供 <em>Compare with canonical</em>、<em>View cluster</em> 与 <em>Copy for AI</em>。</p>
+      </li>
+      <li class="showcase__cell">
+        <span class="showcase__pos">右 · 差异对比</span>
+        <strong>与规范副本比较</strong>
+        <p>VS Code 原生的并排编辑器将当前出现位置与规范副本逐行对齐，让你在提取共享辅助函数之前先确认重复确实存在。</p>
+      </li>
+    </ol>
   </section>
 </div>

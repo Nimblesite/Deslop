@@ -13,6 +13,25 @@ lang: zh
 
 簇面板是 Deslop 重复代码发现结果背后的详细视图。它展示单个簇、Deslop 将这些位置归为一组的原因，以及可用于检查或比较各副本的编辑器操作。
 
+## 你看到的是什么
+
+<figure>
+  <a href="/assets/img/screenshot.webp">
+    <img src="/assets/img/screenshot.webp"
+         alt="Deslop VS Code 扩展正在分析实时工作区：侧边栏中以最严重优先排序的 Top Offenders 树与按目录划分的 Duplication 占比，编辑器中标出规范副本并带有 Compare、View cluster 与 Copy for AI 操作的实时克隆警告，以及与规范出现位置的并排 Compare 差异对比。"
+         width="2560" height="1492" loading="lazy" decoding="async">
+  </a>
+  <figcaption>Deslop VS Code 扩展正在分析实时工作区——侧边栏（左）、编辑器中的实时克隆警告（中），以及与规范出现位置的 Compare 差异对比（右）。每个面板都会在按键后 250&nbsp;毫秒内刷新。</figcaption>
+</figure>
+
+图中可见三个界面，它们读取的是同一份实时报告：
+
+- **侧边栏（左）** 堆叠了三个视图。**Top Offenders** 是工作区中每个克隆簇的最严重优先排序列表——每一行显示簇 id、严重程度圆点和人类可读的分桶（"Identical code"、"Nearly identical code"），并可展开为各出现位置；簇 `#1` 是影响最大的单一项，始终一键可达。**Duplication** 沿工作区 → 目录 → 文件逐层下钻，每个节点都标注重复占比——这正是 [CI 门禁](/zh/docs/output-formats/#exit-codes)所依据的全仓库数字。**Session** 显示运行中的服务器：嵌入模型选择器（语义层面的*行为相同但代码不同*阶段，在选择模型前处于关闭状态）、缓存大小、文件数量，以及实时的分析 State。
+- **编辑器（中）** 是 LSP 就地绘制发现结果的地方。重复片段在你输入时被加上下划线，提示信息标明分桶与副本数量——*"Identical code × 3 — Safe to extract — every copy is the same."*——随后标出用作比较锚点的**规范**出现位置。发现结果上提供三个操作：**Compare with canonical**、**View cluster** 与 **Copy for AI**（面向 AI 的上下文块，在每个 Deslop 界面上都可用）。
+- **Compare 差异对比（右）** 是 VS Code 原生的并排编辑器，由 **Compare with canonical** 打开：当前出现位置在左、规范副本在右，逐行对齐，让你在提取共享辅助函数之前先确认重复确实存在。
+
+这里的一切都是响应式的。编辑代码后，树、占比、就地警告与差异对比都会在 250&nbsp;毫秒内刷新。同一份实时报告也支撑着 MCP 工具（`find-similar`、`top-offenders`、`cluster-by-id`），因此驱动你编辑器的智能体会在写下副本*之前*就看到这个重复。本页其余部分是对该视图中每个标签、分数和操作的实用指南。
+
 ## 簇 Id
 
 簇 id 是这个重复代码组的稳定句柄。它由簇内容派生而来，因此除非底层代码变化到足以形成不同的簇，否则同一个克隆在多次刷新之间会保持相同的 id。

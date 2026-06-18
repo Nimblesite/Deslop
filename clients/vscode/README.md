@@ -4,6 +4,16 @@
 
 Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes. No save, no push, no context switch, no batch report.
 
+![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare / View cluster / Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence.](https://deslop.live/assets/img/screenshot.webp)
+
+**One live report, three surfaces.** The screenshot above shows the extension rendering the running analysis inline:
+
+- **Sidebar (left)** — **Top Offenders** ranks every clone cluster worst-first (id, severity, plain-English bucket, expandable to occurrences); **Duplication** breaks the repo down folder-by-folder with a duplicated-percentage on every node; **Session** shows the live server and the embedding-model picker.
+- **Editor (centre)** — the LSP underlines the duplicate as you type, names the **canonical** copy used as the anchor, and offers **Compare with canonical**, **View cluster**, and **Copy for AI** right on the finding.
+- **Compare diff (right)** — VS Code's native side-by-side editor lines this occurrence up against the canonical one so you can confirm before extracting.
+
+Every panel refreshes within 250 ms of a keystroke, and the same live report backs the MCP tools your agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+
 ## Features
 
 - **Live duplication bubble.** The moment you type code that matches an existing cluster, a severity-coloured label — **Identical code**, **Nearly identical code**, **Loosely similar code**, or **Same behavior, different code** (AI match) — appears at the end of the line, with a signal strip showing how structural vs. token vs. embedding similarity scored.

@@ -6,6 +6,16 @@ This is not a batch scanner. It is a long-running server with a file watcher, a 
 
 [VS Code Marketplace install](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) · [Releases](https://deslop.live/releases/) · [Latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) · [Docs](https://deslop.live/docs/) · [AGENTS.md recipe](docs/snippets/agents-md-recipe.md)
 
+[![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare / View cluster / Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence.](site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
+
+**One live report, three surfaces.** The screenshot above shows the VS Code extension rendering the running analysis inline:
+
+- **Sidebar (left)** — **Top Offenders** ranks every clone cluster worst-first (id, severity, plain-English bucket, expandable to occurrences); **Duplication** breaks the repo down folder-by-folder with a duplicated-percentage on every node; **Session** shows the live server and the embedding-model picker.
+- **Editor (centre)** — the LSP underlines the duplicate as you type, names the **canonical** copy used as the anchor, and offers **Compare with canonical**, **View cluster**, and **Copy for AI** right on the finding.
+- **Compare diff (right)** — VS Code's native side-by-side editor lines this occurrence up against the canonical one so you can confirm before extracting.
+
+Every panel refreshes within 250 ms of a keystroke, and the same live report backs the MCP tools the agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+
 ---
 
 ## The MCP edge — prevent the copy-paste, don't audit it

@@ -341,3 +341,56 @@
 }
 .bento__panorama-note { font-family: var(--font-body); font-size: 0.875rem; color: var(--on-surface-variant); max-width: 24rem; margin: 0; }
 @media (min-width: 768px) { .bento__panorama-note { text-align: right; } }
+
+/* ─────────── Product showcase (extension screenshot + panel legend) ─────────── */
+.showcase {
+  padding: var(--space-8) var(--space-6) var(--space-24);
+  max-width: var(--max-width);
+  margin-inline: auto;
+  width: 100%;
+}
+.showcase__head { max-width: 44rem; margin-bottom: var(--space-10); }
+.showcase__title {
+  font-weight: 900;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: var(--space-4) 0 var(--space-4);
+}
+.showcase__lede {
+  color: var(--on-surface-variant);
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
+  line-height: 1.6;
+}
+.showcase__figure {
+  margin: 0 0 var(--space-10);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(14, 14, 14, 0.6);
+}
+.showcase__figure img { display: block; width: 100%; height: auto; }
+.showcase__legend {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+@media (min-width: 768px) { .showcase__legend { grid-template-columns: repeat(3, 1fr); } }
+.showcase__cell {
+  background: var(--surface-container-low);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.showcase__pos {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--secondary-fixed-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.showcase__cell strong { color: var(--on-surface); font-size: 1.0625rem; font-weight: 700; }
+.showcase__cell p { color: var(--on-surface-variant); font-size: 0.9375rem; line-height: 1.6; margin: 0; }
