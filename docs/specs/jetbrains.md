@@ -1,6 +1,6 @@
 # JetBrains IDEs — IntelliJ Platform plugin
 
-The JetBrains client is a **thin IntelliJ Platform plugin** over `deslop-lsp`. It is not a second analysis engine, not a ReSharper backend, and not a fork of the VSIX UI. The first product target is **Rider**, because Deslop's first production language is C#, but the implementation must stay platform-shaped so the same plugin can later run in IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion, GoLand, and other JetBrains IDEs that expose the IntelliJ Platform LSP API.
+The JetBrains client is a **thin IntelliJ Platform plugin** over `deslop-lsp`. It is not a second analysis engine, not a ReSharper backend, and not a fork of the VSIX UI. The first product target is **Rider**, because Deslop's first production language is C#, but the implementation must stay platform-shaped so the same plugin can later run in IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion, GoLand, and other JetBrains IDEs that expose the IntelliJ Platform LSP API. A second surface, built on Red Hat's LSP4IJ client, extends the same analysis to **Android Studio and IntelliJ Community**, which lack that API — bringing Deslop to Flutter/Dart's home IDE.
 
 Official platform constraints: JetBrains' LSP API is exposed through `com.intellij.modules.lsp`, stdio support starts at 2023.2, pull diagnostics at 2025.1/2025.2, and code lens at 2026.1. The Deslop plugin targets the 2026.1 platform line for the first public build so diagnostics, hover, and code lens can map to the existing [lsp.md](lsp.md) contract without native reimplementation. See JetBrains' official [Language Server Protocol](https://plugins.jetbrains.com/docs/intellij/language-server-protocol.html) and [IntelliJ Platform Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/configuring-gradle.html) docs.
 
@@ -21,19 +21,26 @@ The first supported matrix is:
 | Primary | Rider 2026.1+ | First real user target for C# duplication. |
 | Build baseline | IntelliJ Platform 2026.1+ | Keeps the plugin on platform LSP APIs rather than Rider-only APIs. |
 | Smoke later | IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion | Validate the same plugin as Rust/Python support matures. |
+| Android Studio / Community | Android Studio 2026.1+, IntelliJ Community | The `deslop-lsp4ij` artifact via LSP4IJ — Flutter/Dart's home IDE. |
 
-The plugin descriptor depends on `com.intellij.modules.lsp` and `com.intellij.modules.ultimate`, matching the platform LSP requirement. Android Studio is out of scope because JetBrains does not expose this LSP integration there.
+Deslop ships **two plugin artifacts built from one codebase** (see [JETBRAINS-LSP]):
+
+- **`deslop-ultimate`** (id `nimblesite.deslop.jetbrains`) depends on `com.intellij.modules.lsp` and `com.intellij.modules.ultimate` and drives the platform's native LSP client — the path for Rider and IntelliJ IDEA Ultimate.
+- **`deslop-lsp4ij`** (id `nimblesite.deslop.jetbrains.community`) depends on `com.intellij.modules.platform` and Red Hat's `com.redhat.devtools.lsp4ij`, bringing the same analysis to **Android Studio and IntelliJ Community**, which do not expose the native LSP API.
+
+All non-surface code — binary resolution, settings, launch — lives in a shared module bundled into both zips, so the two artifacts differ only in how they hand `deslop-lsp` to the IDE. Installing both on a commercial IDE would start `deslop-lsp` twice for the same files, so the native artifact is the one published for Ultimate/Rider and the LSP4IJ artifact for Android Studio/Community.
 
 ### [JETBRAINS-LSP] LSP server integration
 
-`clients/jetbrains` registers one `LspServerSupportProvider` through `com.intellij.platform.lsp.serverSupportProvider`. When a supported file opens (`.cs`, `.rs`, `.py`, `.dart`), the provider starts a project-wide `ProjectWideLspServerDescriptor` named `Deslop`.
+`clients/jetbrains` is a Gradle build with three modules: a shared library (`deslop-shared`) and two thin LSP surfaces over it, each producing one plugin zip. All binary resolution, settings, and launch logic live in the shared module, so the surfaces launch `deslop-lsp` identically and differ only in how they register with the IDE.
 
-The descriptor launches:
+- **Native surface (`deslop-ultimate`).** Registers an `LspServerSupportProvider` through `com.intellij.platform.lsp.serverSupportProvider`. When a supported file opens (`.cs`, `.rs`, `.py`, `.dart`), it starts a project-wide `ProjectWideLspServerDescriptor` named `Deslop`.
+- **LSP4IJ surface (`deslop-lsp4ij`).** Registers a `com.redhat.devtools.lsp4ij.LanguageServerFactory` (extension namespace `com.redhat.devtools.lsp4ij`) plus a `fileNamePatternMapping` of `*.cs;*.rs;*.py;*.dart` to that server, launching `deslop-lsp` through an `OSProcessStreamConnectionProvider`. A test asserts the glob equals the shared supported-extension set so the two cannot drift.
+
+Both surfaces launch the binary with the workspace root only — min-node and embedding settings are read by the LSP from `.deslop.toml`, never passed as flags (#83):
 
 ```text
-deslop-lsp <workspace-root> --min-nodes <n> --embeddings <mode>
-  --embedding-provider <provider> --embedding-model <model>
-  --embedding-endpoint <endpoint>
+deslop-lsp <workspace-root>
 ```
 
 Initial scope:
@@ -114,10 +121,11 @@ The JetBrains plugin does not embed MCP in v1. Agents inside Rider can use `desl
 
 ### [JETBRAINS-PACKAGING] Packaging
 
-`clients/jetbrains` builds a JetBrains plugin zip through the IntelliJ Platform Gradle Plugin. GitHub Release packaging eventually attaches:
+`clients/jetbrains` builds **two** JetBrains plugin zips through the IntelliJ Platform Gradle Plugin — one per surface, each bundling the shared `deslop-shared` jar under `lib/modules/`. GitHub Release packaging attaches both:
 
 ```text
-deslop-jetbrains-<version>.zip
+deslop-ultimate-<version>.zip   # native LSP API — Rider / IntelliJ IDEA Ultimate
+deslop-lsp4ij-<version>.zip      # LSP4IJ — Android Studio / IntelliJ Community
 ```
 
 The plugin zip includes `shipwright.json` at the plugin root and any native helpers only under manifest-approved `bin/<platform>/` directories. Package verification must prove the manifest is present, required binaries exist for each shipped platform, no undeclared executable is present under `bin/<platform>/`, and each binary reports the manifest `expectedVersion`.

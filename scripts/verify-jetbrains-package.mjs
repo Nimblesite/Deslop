@@ -3,28 +3,46 @@ import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-const packageArg = process.argv[2] ?? latestPackage();
-const packagePath = isAbsolute(packageArg) ? packageArg : resolve(packageArg);
+// Verifies the shipped JetBrains plugin zips. With no path argument it checks both
+// artifacts — :deslop-ultimate (native LSP) and :deslop-lsp4ij (Android Studio /
+// Community) — each of which bundles shipwright.json at its root plus a
+// bin/<platform>/deslop-lsp staged from the same manifest contract.
 const platform = process.argv[3] ?? currentPlatform();
-const entries = unzipText(["-Z1", packagePath]).split("\n").filter(Boolean);
-const root = packageRoot(entries);
-const manifestEntry = `${root}/shipwright.json`;
+const explicit = process.argv[2];
+const packagePaths = explicit
+  ? [isAbsolute(explicit) ? explicit : resolve(explicit)]
+  : defaultPackages();
 
-assertEntry(entries, manifestEntry);
+for (const packagePath of packagePaths) verifyPackage(packagePath);
 
-const manifest = JSON.parse(unzipText(["-p", packagePath, manifestEntry]));
-const component = componentById(manifest, "deslop-lsp");
-const lspEntry = `${root}/bin/${platform}/${nameWithSuffix(component)}`;
-assertEntry(entries, lspEntry);
-verifyBundledEntry(lspEntry, component);
+function verifyPackage(packagePath) {
+  const entries = unzipText(["-Z1", packagePath]).split("\n").filter(Boolean);
+  const root = packageRoot(entries);
+  const manifestEntry = `${root}/shipwright.json`;
+  assertEntry(entries, manifestEntry, packagePath);
 
-for (const entry of binEntries(entries, root)) {
-  if (!componentForEntry(entry, manifest)) throw new Error(`Undeclared JetBrains binary: ${entry}`);
+  const manifest = JSON.parse(unzipText(["-p", packagePath, manifestEntry]));
+  const component = componentById(manifest, "deslop-lsp");
+  const lspEntry = `${root}/bin/${platform}/${nameWithSuffix(component)}`;
+  assertEntry(entries, lspEntry, packagePath);
+  verifyBundledEntry(packagePath, lspEntry, component);
+
+  for (const entry of binEntries(entries, root)) {
+    if (!componentForEntry(entry, manifest)) throw new Error(`Undeclared JetBrains binary: ${entry}`);
+  }
+  console.log(`Verified JetBrains package ${packagePath} for ${platform}`);
 }
 
-console.log(`Verified JetBrains package ${packagePath} for ${platform}`);
+function defaultPackages() {
+  return ["deslop-ultimate", "deslop-lsp4ij"].map((module) => {
+    const dir = resolve(`clients/jetbrains/${module}/build/distributions`);
+    const zips = existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".zip")) : [];
+    if (zips.length === 0) throw new Error(`No JetBrains package zip found under ${dir}`);
+    return join(dir, zips.sort().at(-1));
+  });
+}
 
-function verifyBundledEntry(entry, component) {
+function verifyBundledEntry(packagePath, entry, component) {
   const temp = mkdtempSync(join(tmpdir(), "deslop-jetbrains-"));
   try {
     unzipText(["-q", packagePath, entry, "-d", temp]);
@@ -42,13 +60,6 @@ function assertVersion(binaryPath, component) {
   const expected = `${component.id} ${component.expectedVersion}`;
   const actual = firstLine(String(result.stdout));
   if (actual !== expected) throw new Error(`${binaryPath} reported ${actual}; expected ${expected}`);
-}
-
-function latestPackage() {
-  const dir = resolve("clients/jetbrains/build/distributions");
-  const zips = existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".zip")) : [];
-  if (zips.length === 0) throw new Error(`No JetBrains package zip found under ${dir}`);
-  return join(dir, zips.sort().at(-1));
 }
 
 function packageRoot(entries) {
@@ -78,7 +89,7 @@ function assertExecutable(binaryPath) {
   if ((statSync(binaryPath).mode & 0o111) === 0) throw new Error(`${binaryPath} is not executable`);
 }
 
-function assertEntry(entries, entry) {
+function assertEntry(entries, entry, packagePath) {
   if (!entries.includes(entry)) throw new Error(`Missing ${entry} in ${packagePath}`);
 }
 

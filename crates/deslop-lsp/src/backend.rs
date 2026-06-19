@@ -11,7 +11,7 @@ use deslop_core::{
     report::Report,
 };
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{atomic::AtomicBool, Arc, RwLock},
 };
 use tokio::sync::Mutex;
@@ -284,6 +284,14 @@ impl LspBackend {
     #[must_use]
     pub fn observability(&self) -> &Observability {
         &self.observability
+    }
+
+    /// Returns the workspace root that occurrence paths resolve against.
+    /// Command handlers pass it to the HTML renderer as the snippet
+    /// scan root.
+    #[must_use]
+    pub fn workspace_root(&self) -> &Path {
+        &self.workspace_root
     }
 
     /// Re-runs analysis for changed paths when VS Code sends file

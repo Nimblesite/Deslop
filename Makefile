@@ -5,7 +5,7 @@
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries kill-deslop-processes deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries kill-deslop-processes deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-playwright-html vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
 
 JETBRAINS_DIR := clients/jetbrains
 
@@ -158,10 +158,10 @@ clean:
 	$(RM) lcov.info
 	$(RM) .deslop-cache
 
-## ci: fmt + lint + Rust test + build + VSIX e2e + VSIX coverage.
-##     Full CI simulation. Runs every non-Ollama test suite, Rust and
-##     VSIX, and enforces per-crate + VSIX coverage thresholds.
-##     Ollama-gated suites run via `make ci-ollama`.
+## ci: fmt + lint + Rust test + build + deployment-verify + VSIX coverage +
+##     HTML-report CSS (Playwright). Full CI simulation. Runs every non-Ollama
+##     test suite, Rust and VSIX, and enforces per-crate + VSIX coverage
+##     thresholds. Ollama-gated suites run via `make ci-ollama`.
 ci:
 	@$(MAKE) fmt CHECK=1
 	@$(MAKE) lint
@@ -169,6 +169,7 @@ ci:
 	@$(MAKE) build
 	@$(MAKE) deployment-verify
 	@$(MAKE) vsix-coverage
+	@$(MAKE) vsix-playwright-html
 
 ## setup: Post-create dev environment setup (used by devcontainer).
 ##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
@@ -309,6 +310,19 @@ vsix-test-ollama: delete-path-binaries vsix-install vsix-build _vsix-stage-bundl
 vsix-coverage: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run coverage
 
+## vsix-playwright-html: Render the standalone HTML report from a fixture repo
+##                       with the real deslop CLI, then assert in a headless
+##                       browser (Playwright) that the design-system CSS actually
+##                       applies — dark theme, layout, cluster-card accent, and
+##                       syntax colours ([OUTPUT-HUMAN-HTML]). Builds only the
+##                       deslop CLI the renderer needs and fetches the Chromium
+##                       headless shell with its OS libraries (--with-deps is
+##                       idempotent, a no-op once cached, and a no-op for system
+##                       libs on macOS) so `make ci` reproduces CI exactly.
+vsix-playwright-html: vsix-install
+	cargo build --release -p deslop
+	cd clients/vscode && npx playwright install --with-deps chromium && npm run test:playwright:html
+
 ## vsix-package: Build the .vsix artifact (does not publish).
 ##               Stages the host-platform deslop-lsp + deslop-mcp + deslop
 ##               binaries into clients/vscode/bin/<platform>/ and produces a
@@ -387,11 +401,11 @@ vsix-rebuild:
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
-## jetbrains-build: Build the JetBrains plugin zip.
+## jetbrains-build: Build both JetBrains plugin zips (native-LSP + LSP4IJ).
 jetbrains-build:
-	$(RM) $(JETBRAINS_DIR)/build/distributions/*.zip
+	$(RM) $(JETBRAINS_DIR)/deslop-ultimate/build/distributions/*.zip $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
-	cd $(JETBRAINS_DIR) && $(GRADLE) buildPlugin
+	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-ultimate:buildPlugin :deslop-lsp4ij:buildPlugin
 
 ## jetbrains-verify: Verify JetBrains plugin project and archive structure.
 jetbrains-verify:
@@ -402,9 +416,9 @@ jetbrains-package: jetbrains-build
 	@$(MAKE) jetbrains-verify
 	node scripts/verify-jetbrains-package.mjs
 
-## jetbrains-test: Run the JetBrains resolver unit tests via the wrapper.
+## jetbrains-test: Run the JetBrains shared-module tests via the wrapper.
 jetbrains-test:
-	cd $(JETBRAINS_DIR) && $(GRADLE) test --no-daemon
+	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-shared:test --no-daemon
 
 ## jetbrains-real-binary-test: Run the resolver tests AND the real-binary
 ##                             contract test, which copies target/release/deslop-lsp
@@ -414,7 +428,7 @@ jetbrains-test:
 jetbrains-real-binary-test:
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
-	  $(GRADLE) test --no-daemon --rerun-tasks
+	  $(GRADLE) :deslop-shared:test --no-daemon --rerun-tasks
 
 ## help: List all available targets
 help:
@@ -425,7 +439,7 @@ help:
 	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
 	@echo "  clean          - Remove build artifacts"
 	@echo "  deployment-verify - Validate deployment manifest and built binary contracts"
-	@echo "  ci             - fmt + lint + rust test + build + VSIX e2e + VSIX coverage"
+	@echo "  ci             - fmt + lint + rust test + build + VSIX coverage + HTML-report CSS (Playwright)"
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""
 	@echo "Repo-specific targets:"
@@ -438,6 +452,7 @@ help:
 	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"
 	@echo "  vsix-test-ollama - Ollama-gated VSIX e2e (type4 fixture, never in CI)"
 	@echo "  vsix-coverage  - VS Code E2E + enforce coverage threshold"
+	@echo "  vsix-playwright-html - Assert the standalone HTML report's CSS renders (Playwright)"
 	@echo "  vsix-package   - Build the .vsix artifact"
 	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"
 	@echo "  jetbrains-build - Build the JetBrains plugin zip"

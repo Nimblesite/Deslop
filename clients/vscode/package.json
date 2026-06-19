@@ -177,6 +177,11 @@
       {
         "command": "deslop.openDuplicationReport",
         "title": "Deslop: Open Duplication Report"
+      },
+      {
+        "command": "deslop.openHtmlReport",
+        "title": "Deslop: Open HTML Report",
+        "icon": "$(globe)"
       }
     ],
     "menus": {
@@ -231,6 +236,11 @@
           "command": "deslop.refresh",
           "when": "view == deslop.topOffenders",
           "group": "navigation@6"
+        },
+        {
+          "command": "deslop.openHtmlReport",
+          "when": "view == deslop.topOffenders",
+          "group": "navigation@7"
         },
         {
           "command": "deslop.refresh",
@@ -492,6 +502,7 @@
     "precoverage": "npm run compile && npm run build -- --coverage && rm -rf out/test/fixtures && cp -R src/test/fixtures out/test/fixtures",
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts",
+    "test:playwright:html": "playwright test scripts/playwright-html-report.spec.ts",
     "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"

@@ -7,6 +7,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore } from "../reportStore";
 import { openClusterPanel, openDuplicationReportPanel, openReportPanel } from "../webview/panels";
+import { showHtmlReport } from "../webview/htmlReport";
 import { pickEmbeddingModel } from "./embeddingPicker";
 import {
   setTopOffendersGroupBy,
@@ -31,6 +32,7 @@ import {
 type ClientFactory = () => LanguageClient | undefined;
 
 const LSP_REFRESH_REPORT_COMMAND = "deslop.lsp.refreshReport";
+const LSP_RENDER_HTML_REPORT_COMMAND = "deslop.lsp.renderHtmlReport";
 
 interface CommandDeps {
   readonly context: vscode.ExtensionContext;
@@ -66,6 +68,7 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.topOffenders.sortByPath", run: () => setTopOffendersSortBy("path") },
   { id: "deslop.topOffenders.toggleSplitByLanguage", run: () => toggleTopOffendersSplitByLanguage() },
   { id: "deslop.openDuplicationReport", run: ({ context, store }) => openDuplicationReportPanel(context, store) },
+  { id: "deslop.openHtmlReport", run: ({ clientOf }) => openHtmlReport(clientOf) },
   { id: "deslop.copyContextForAI", run: ({ store }, node) => copyContextForAI(node as ClusterNode | OccurrenceNode, store) },
   { id: "deslop.copyClusterContextById", run: ({ store }, id) => copyClusterContextById(store, id) },
   { id: "deslop.copyHumanLocation", run: (_deps, node) => copyHumanLocation(node as OccurrenceNode) },
@@ -94,6 +97,26 @@ export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | unde
     command: LSP_REFRESH_REPORT_COMMAND,
     arguments: [],
   });
+}
+
+// [OUTPUT-HUMAN-HTML] Asks the LSP to render the full standalone HTML report
+// and shows it in an in-editor browser tab. The renderer lives in the engine,
+// so neither this client nor the JetBrains plugins re-implement it.
+export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
+  const client = clientOf();
+  if (!client) {
+    void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
+    return;
+  }
+  const html = await client.sendRequest<string>("workspace/executeCommand", {
+    command: LSP_RENDER_HTML_REPORT_COMMAND,
+    arguments: [],
+  });
+  if (typeof html !== "string" || html.length === 0) {
+    void vscode.window.showInformationMessage("Deslop: no HTML report available yet.");
+    return;
+  }
+  showHtmlReport(html);
 }
 
 export async function toggleShowAllLenses(): Promise<void> {

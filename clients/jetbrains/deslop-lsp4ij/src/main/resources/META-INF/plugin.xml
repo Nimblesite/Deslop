@@ -1,0 +1,35 @@
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
+
+    <!-- The native-LSP (Ultimate/Rider) build delivers the identical bridge and
+         reuses the shared action id, file-editor type id, notification group,
+         and server id. Both load on IDEA Ultimate, so co-install would
+         double-start the LSP and collide those ids. Mutually exclusive by
+         design. -->
+    <incompatible-with>nimblesite.deslop.jetbrains</incompatible-with>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Deslop" displayType="BALLOON" />
+        <fileEditorProvider
+            implementation="com.nimblesite.deslop.jetbrains.DeslopHtmlReportEditorProvider" />
+    </extensions>
+
+    <actions>
+        <action id="Deslop.OpenHtmlReport"
+                class="com.nimblesite.deslop.jetbrains.DeslopCommunityOpenHtmlReportAction"
+                text="Deslop: Open HTML Report"
+                description="Render the live Deslop duplicate-code report in a browser tab.">
+            <add-to-group group-id="ToolsMenu" anchor="last" />
+        </action>
+    </actions>
+
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server id="deslop"
+                name="Deslop"
+                factoryClass="com.nimblesite.deslop.jetbrains.DeslopLsp4ijServerFactory">
+            <description>Live duplicate-code analysis through the Deslop LSP server.</description>
+        </server>
+        <fileNamePatternMapping patterns="*.cs;*.rs;*.py;*.dart" serverId="deslop" />
+    </extensions>
+</idea-plugin>

@@ -22,8 +22,9 @@ workspaces.
 - [ ] Choose the JetBrains UI test harness and pin versions in the Gradle
       project.
 - [ ] Add a fixture workspace copied to a temp directory for each test run.
-- [ ] Build `deslop-lsp` for tests instead of relying on a developer-local
-      binary.
+- [x] Build `deslop-lsp` for tests instead of relying on a developer-local
+      binary. (`make jetbrains-real-binary-test` + the CI `jetbrains` job build
+      the release binary and run `DeslopRealBinaryContractTest` against it.)
 - [ ] Launch Rider or IntelliJ with the plugin installed from the build output.
 - [ ] Assert native diagnostics on the C# duplicate fixture.
 - [ ] Assert the LSP process is launched with settings-derived arguments.

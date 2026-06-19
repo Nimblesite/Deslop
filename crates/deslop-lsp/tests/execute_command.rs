@@ -176,6 +176,7 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
     let init = initialize_in_process(&mut service).await?;
     assert_advertised_commands(&init)?;
     assert_open_report_command(&mut service, &mut socket).await?;
+    assert_render_html_report_command(&mut service, &mut socket).await?;
     assert_open_cluster_command(&mut service, &mut socket).await?;
     assert_toggle_incremental_command(&mut service, &mut socket).await?;
     assert_pick_embedding_model_command(&mut service, &mut socket).await?;
@@ -187,10 +188,11 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
 
 fn assert_advertised_commands(init: &Value) -> Result<()> {
     let commands = advertised_commands(init)?;
-    assert_eq!(commands.len(), 5, "unexpected command list: {commands:?}");
+    assert_eq!(commands.len(), 6, "unexpected command list: {commands:?}");
     assert!(commands.contains(&"deslop.lsp.refreshReport".to_owned()));
     assert!(commands.contains(&"deslop.lsp.openCluster".to_owned()));
     assert!(commands.contains(&"deslop.lsp.openReport".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.renderHtmlReport".to_owned()));
     assert!(commands.contains(&"deslop.lsp.pickEmbeddingModel".to_owned()));
     assert!(commands.contains(&"deslop.lsp.toggleIncremental".to_owned()));
     Ok(())
@@ -213,6 +215,54 @@ async fn assert_open_report_command(
     assert_eq!(show_external(show), Some(false));
     assert_json_str(&response, "/command", "deslop.lsp.openReport");
     Ok(())
+}
+
+async fn assert_render_html_report_command(
+    service: &mut LspService<LspBackend>,
+    socket: &mut ClientSocket,
+) -> Result<()> {
+    let (response, shows) = execute_in_process(
+        service,
+        socket,
+        json!({ "command": "deslop.lsp.renderHtmlReport" }),
+    )
+    .await?;
+    assert!(shows.is_empty(), "render must not open documents");
+    let html = response
+        .as_str()
+        .ok_or_else(|| anyhow!("renderHtmlReport must return an HTML string: {response}"))?;
+    assert_well_formed_report_html(html);
+    Ok(())
+}
+
+/// Asserts the rendered string is the self-contained, CSS-bearing HTML
+/// document the editor clients open in a browser tab ([OUTPUT-HUMAN-HTML]).
+fn assert_well_formed_report_html(html: &str) {
+    assert!(
+        html.starts_with("<!doctype html"),
+        "report must be a full HTML document: {}",
+        &html[..html.len().min(48)]
+    );
+    assert!(
+        html.contains("data-theme=\"dark\""),
+        "report must carry the dark-theme attribute the design system targets"
+    );
+    assert!(
+        html.contains("class=\"report-shell\""),
+        "report body must use the styled report-shell container"
+    );
+    assert!(
+        html.contains(".report-shell{max-width:"),
+        "report must inline its stylesheet so it renders offline with CSS"
+    );
+    assert!(
+        html.contains(".cluster-card{"),
+        "report must inline the cluster-card styling"
+    );
+    assert!(
+        html.trim_end().ends_with("</html>"),
+        "report must be a well-formed, fully-closed document"
+    );
 }
 
 async fn assert_open_cluster_command(
