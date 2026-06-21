@@ -136,7 +136,7 @@ Consequences for this repo:
   `deslop-lsp`, or `deslop-mcp` binaries onto the user's `PATH`. There is no
   `make install-binary` target. `cargo install --path crates/deslop-*` is
   forbidden.
-- `make delete-path-binaries` is invoked from every `vsix-*` and `test` target
+- `make _delete-path-binaries` is invoked from every `_vsix-*` and `test` target
   so a developer machine that previously leaked binaries onto `PATH` is
   scrubbed before tests run, and the rule is verifiable on a fresh checkout.
 - Every doc that shows an MCP wiring snippet (`README.md`,

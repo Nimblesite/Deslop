@@ -3,9 +3,13 @@
 # Standard Makefile — Deslop
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
 # Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
+#
+# Targets prefixed with `_` are INTERNAL: hidden from the IDE make task list,
+# invoked only by other targets or by CI. The public targets below are the
+# human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help build-release delete-path-binaries kill-deslop-processes deployment-verify vsix-install vsix-build vsix-test vsix-test-ollama vsix-coverage vsix-playwright-html vsix-package vsix-rebuild _vsix-stage-bundled-binaries _vsix-stage-and-package jetbrains-build jetbrains-verify jetbrains-package jetbrains-test jetbrains-real-binary-test typediagram-gen
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild jetbrains-package android-studio-rebuild typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-test _jetbrains-real-binary-test _android-studio-install
 
 JETBRAINS_DIR := clients/jetbrains
 
@@ -62,7 +66,7 @@ typediagram-gen:
 ##       (single source of truth). Per-crate thresholds live under
 ##       `.rust.crates.<crate>`; `_coverage_check` enforces each one
 ##       independently — no workspace roll-up masking.
-test: delete-path-binaries typediagram-gen
+test: _delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(COVERAGE_THRESHOLDS_FILE)"); \
@@ -168,8 +172,8 @@ ci:
 	@$(MAKE) test
 	@$(MAKE) build
 	@$(MAKE) deployment-verify
-	@$(MAKE) vsix-coverage
-	@$(MAKE) vsix-playwright-html
+	@$(MAKE) _vsix-coverage
+	@$(MAKE) _vsix-playwright-html
 
 ## setup: Post-create dev environment setup (used by devcontainer).
 ##        Version pin for `typediagram` must match `.github/workflows/ci.yml`
@@ -189,32 +193,37 @@ setup:
 
 ## test-ollama: Run every Ollama-gated test — Rust `ollama_*` tests and
 ##              the VSIX `.vscode-test-ollama.mjs` suite — that
-##              `make test`/`make vsix-test`/`make ci` filter out.
-##              Requires a local Ollama daemon on 127.0.0.1:11434 with
-##              `nomic-embed-text` already pulled.
-test-ollama: vsix-test-ollama
+##              `make test`/`make ci` filter out. Requires a local Ollama
+##              daemon on 127.0.0.1:11434 with `nomic-embed-text` pulled.
+test-ollama: _vsix-test-ollama
 	cargo test --release --workspace ollama_
 
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
 
-## build-release: Build the release binary for the deslop CLI
-build-release:
-	@echo "==> Building release binary..."
-	cargo build --release --package deslop
+## deployment-verify: Validate deployment manifest and built binary contracts.
+##                    Also runs the verifier proof suite which builds fake
+##                    binaries and plugin zips violating each Shipwright
+##                    contract rule and asserts every verifier rejects them.
+##                    Without this, a silently-broken verifier could let a
+##                    drifted binary ship.
+deployment-verify: build
+	node scripts/verify-deployment-manifest.mjs shipwright.json
+	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
+	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
+	node scripts/test-release-workflow-contract.mjs
+	node scripts/test-release-version-stamping.mjs
+	node scripts/test-verifiers.mjs
 
-## kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
-##                        `deslop-lsp` and `deslop-mcp` process so a stale
-##                        child from a previous VSCode/Cursor session can't
-##                        shadow the freshly-installed VSIX bundle, and so
-##                        socket-bound integration tests don't get starved
-##                        by a runaway analyser on another workspace.
-##                        Matches by process name (not full cmdline) so it
-##                        will not accidentally kill `cargo build -p deslop-lsp`
-##                        or similar parent commands. Idempotent — exits 0
-##                        when no matching process exists. Invoked by every
-##                        `vsix-*` and `test` target via `delete-path-binaries`.
-kill-deslop-processes:
+# _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
+#   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous
+#   VSCode/Cursor session can't shadow the freshly-installed VSIX bundle, and so
+#   socket-bound integration tests don't get starved by a runaway analyser on
+#   another workspace. Matches by process name (not full cmdline) so it will not
+#   accidentally kill `cargo build -p deslop-lsp` or similar parent commands.
+#   Idempotent — exits 0 when no matching process exists. Invoked by the rebuild
+#   targets; `test`/`vsix-*` scrub via `_delete-path-binaries`.
+_kill-deslop-processes:
 	@echo "==> Killing any running deslop-lsp / deslop-mcp processes..."
 	@_initial_lsp=$$(pgrep -x deslop-lsp 2>/dev/null || true); \
 	 _initial_mcp=$$(pgrep -x deslop-mcp 2>/dev/null || true); \
@@ -241,18 +250,15 @@ kill-deslop-processes:
 	 fi; \
 	 echo "    all targeted processes are dead (VSCode may auto-respawn — that is fine)"
 
-## delete-path-binaries: Remove any Deslop binaries that have leaked onto the
-##                       user's PATH (e.g. from a stray `cargo install`). The
-##                       VSIX is the only legitimate distribution surface — the
-##                       VS Code extension, Claude Code MCP, Codex MCP, and any
-##                       other host MUST resolve `deslop`, `deslop-lsp`, and
-##                       `deslop-mcp` from the unpacked VSIX `bin/<platform>/`
-##                       directory by absolute path. PATH resolution would let
-##                       a locally-built binary shadow the shipright-versioned
-##                       bundle. This target is invoked by every `vsix-*` and
-##                       `test` target so a developer machine that previously
-##                       ran `cargo install` is automatically scrubbed.
-delete-path-binaries:
+# _delete-path-binaries: Remove any Deslop binaries that have leaked onto the
+#   user's PATH (e.g. from a stray `cargo install`). The VSIX is the only
+#   legitimate distribution surface — the VS Code extension, Claude Code MCP,
+#   Codex MCP, and any other host MUST resolve `deslop`, `deslop-lsp`, and
+#   `deslop-mcp` from the unpacked VSIX `bin/<platform>/` directory by absolute
+#   path. PATH resolution would let a locally-built binary shadow the
+#   shipright-versioned bundle. Invoked by every `_vsix-*` and `test` target so a
+#   developer machine that previously ran `cargo install` is auto-scrubbed.
+_delete-path-binaries:
 	@echo "==> Removing cargo-installed Deslop binaries from PATH..."
 	@for _bin in deslop deslop-lsp deslop-mcp; do \
 	  cargo uninstall $$_bin 2>/dev/null || true; \
@@ -265,61 +271,44 @@ delete-path-binaries:
 	  fi; \
 	done
 
-## deployment-verify: Validate deployment manifest and built binary contracts.
-##                    Also runs the verifier proof suite which builds fake
-##                    binaries and plugin zips violating each Shipwright
-##                    contract rule and asserts every verifier rejects them.
-##                    Without this, a silently-broken verifier could let a
-##                    drifted binary ship.
-deployment-verify: build
-	node scripts/verify-deployment-manifest.mjs shipwright.json
-	node scripts/verify-deployment-binaries.mjs shipwright.json target/release
-	node scripts/verify-release-workflow-gates.mjs .github/workflows/release.yml
-	node scripts/test-release-workflow-contract.mjs
-	node scripts/test-release-version-stamping.mjs
-	node scripts/test-verifiers.mjs
-
-## vsix-install: Install Node deps for clients/vscode + webview-ui
-vsix-install:
+# _vsix-install: Install Node deps for clients/vscode + webview-ui.
+_vsix-install:
 	cd clients/vscode && npm install --no-audit --no-fund
 	cd clients/vscode/webview-ui && npm install --no-audit --no-fund
 
-## vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
-##             Depends on `vsix-install` so a cold CI checkout has the
-##             webview-ui + extension Node deps needed for esbuild bundling,
-##             and on `typediagram-gen` so the gitignored wire-generated.ts
-##             exists before tsc runs.
-vsix-build: vsix-install typediagram-gen
+# _vsix-build: Build deslop-lsp + deslop-mcp + VSIX bundle + webview UI.
+#   Depends on `_vsix-install` so a cold CI checkout has the webview-ui +
+#   extension Node deps needed for esbuild bundling, and on `typediagram-gen`
+#   so the gitignored wire-generated.ts exists before tsc runs.
+_vsix-build: _vsix-install typediagram-gen
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
 	cd clients/vscode/webview-ui && npm run build
 	cd clients/vscode && npm run build
 
-## vsix-test: Run VS Code E2E tests against bundled extension binaries only.
-vsix-test: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
+# _vsix-test: Run VS Code E2E tests against bundled extension binaries only.
+_vsix-test: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm test
 
-## vsix-test-ollama: Run the Ollama-gated VSIX e2e suite (csharp-type4
-##                   fixture, provider=ollama, model=nomic-embed-text).
-##                   NEVER runs in `make ci` / `make vsix-test`. Requires
-##                   a local Ollama daemon and the model pulled.
-vsix-test-ollama: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
+# _vsix-test-ollama: Run the Ollama-gated VSIX e2e suite (csharp-type4 fixture,
+#   provider=ollama, model=nomic-embed-text). NEVER runs in `make ci` /
+#   `make _vsix-test`. Requires a local Ollama daemon and the model pulled.
+#   Reached through the public `make test-ollama` umbrella.
+_vsix-test-ollama: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run test:ollama
 
-## vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
-##                Threshold lives in the repo-root coverage-thresholds.json.
-vsix-coverage: delete-path-binaries vsix-install vsix-build _vsix-stage-bundled-binaries
+# _vsix-coverage: Run VS Code E2E + enforce the VSIX coverage threshold.
+#   Threshold lives in the repo-root coverage-thresholds.json.
+_vsix-coverage: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run coverage
 
-## vsix-playwright-html: Render the standalone HTML report from a fixture repo
-##                       with the real deslop CLI, then assert in a headless
-##                       browser (Playwright) that the design-system CSS actually
-##                       applies — dark theme, layout, cluster-card accent, and
-##                       syntax colours ([OUTPUT-HUMAN-HTML]). Builds only the
-##                       deslop CLI the renderer needs and fetches the Chromium
-##                       headless shell with its OS libraries (--with-deps is
-##                       idempotent, a no-op once cached, and a no-op for system
-##                       libs on macOS) so `make ci` reproduces CI exactly.
-vsix-playwright-html: vsix-install
+# _vsix-playwright-html: Render the standalone HTML report from a fixture repo
+#   with the real deslop CLI, then assert in a headless browser (Playwright)
+#   that the design-system CSS actually applies — dark theme, layout,
+#   cluster-card accent, and syntax colours ([OUTPUT-HUMAN-HTML]). Builds only
+#   the deslop CLI the renderer needs and fetches the Chromium headless shell
+#   with its OS libraries (--with-deps is idempotent, a no-op once cached, and a
+#   no-op for system libs on macOS) so `make ci` reproduces CI exactly.
+_vsix-playwright-html: _vsix-install
 	cargo build --release -p deslop
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run test:playwright:html
 
@@ -329,7 +318,7 @@ vsix-playwright-html: vsix-install
 ##               platform-specific VSIX via `vsce package --target`
 ##               ([VSIX-BINARY-VERSIONING]). CI stages every supported platform;
 ##               locally we only have the host toolchain so we only stage that one.
-vsix-package: delete-path-binaries vsix-install vsix-build _vsix-stage-and-package
+vsix-package: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-and-package
 
 _vsix-stage-bundled-binaries:
 	@_uname_s=$$(uname -s); _uname_m=$$(uname -m); \
@@ -347,7 +336,7 @@ _vsix-stage-bundled-binaries:
 	 $(RM) clients/vscode/bin; $(MKDIR) "$$_dest"; \
 	 for _bin in deslop-lsp deslop-mcp deslop; do \
 	   _src=target/release/$$_bin$$_ext; \
-	   if [ ! -f "$$_src" ]; then echo "FAIL: $$_src missing (vsix-build should have produced it)"; exit 1; fi; \
+	   if [ ! -f "$$_src" ]; then echo "FAIL: $$_src missing (_vsix-build should have produced it)"; exit 1; fi; \
 	   cp "$$_src" "$$_dest/$$_bin$$_ext"; \
 	   chmod +x "$$_dest/$$_bin$$_ext"; \
 	 done
@@ -356,10 +345,10 @@ _vsix-stage-bundled-binaries:
 _vsix-stage-and-package: _vsix-stage-bundled-binaries
 	cd clients/vscode && npm run package
 
-## vsix-clean: Remove VSIX-specific build artifacts (staged bin/, node_modules,
-##             dist/, out/, packaged .vsix, coverage). Does NOT touch cargo's
-##             target/ — chain `make clean` for that.
-vsix-clean:
+# _vsix-clean: Remove VSIX-specific build artifacts (staged bin/, node_modules,
+#   dist/, out/, packaged .vsix, coverage). Does NOT touch cargo's target/ —
+#   chain `make clean` for that.
+_vsix-clean:
 	@echo "==> Cleaning VSIX build artifacts..."
 	$(RM) clients/vscode/bin
 	$(RM) clients/vscode/node_modules
@@ -371,10 +360,9 @@ vsix-clean:
 	$(RM) clients/vscode/shipwright.json
 	$(RM) clients/vscode/coverage
 
-## vsix-install-code: Install the packaged clients/vscode/deslop-live.vsix
-##                    into the local `code` CLI. Skips with a warning if
-##                    `code` isn't on PATH.
-vsix-install-code:
+# _vsix-install-code: Install the packaged clients/vscode/deslop-live.vsix into
+#   the local `code` CLI. Skips with a warning if `code` isn't on PATH.
+_vsix-install-code:
 	@if command -v code >/dev/null 2>&1; then \
 	  _vsix=$$(ls clients/vscode/deslop-live-*.vsix 2>/dev/null | head -n1); \
 	  if [ -z "$$_vsix" ]; then echo "FAIL: no clients/vscode/deslop-live-*.vsix found"; exit 1; fi; \
@@ -392,43 +380,89 @@ vsix-install-code:
 ##               showing up" strikes. Composes existing targets — does not duplicate
 ##               their logic.
 vsix-rebuild:
-	@$(MAKE) kill-deslop-processes
+	@$(MAKE) _kill-deslop-processes
 	@$(MAKE) clean
-	@$(MAKE) vsix-clean
+	@$(MAKE) _vsix-clean
 	@$(MAKE) vsix-package
-	@$(MAKE) vsix-install-code
-	@$(MAKE) delete-path-binaries
+	@$(MAKE) _vsix-install-code
+	@$(MAKE) _delete-path-binaries
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
-## jetbrains-build: Build both JetBrains plugin zips (native-LSP + LSP4IJ).
-jetbrains-build:
+# _jetbrains-build: Build both JetBrains plugin zips (native-LSP + LSP4IJ).
+_jetbrains-build:
 	$(RM) $(JETBRAINS_DIR)/deslop-ultimate/build/distributions/*.zip $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-ultimate:buildPlugin :deslop-lsp4ij:buildPlugin
 
-## jetbrains-verify: Verify JetBrains plugin project and archive structure.
-jetbrains-verify:
+# _jetbrains-verify: Verify JetBrains plugin project and archive structure.
+_jetbrains-verify:
 	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
 
-## jetbrains-package: Build and verify the JetBrains plugin package artifact.
-jetbrains-package: jetbrains-build
-	@$(MAKE) jetbrains-verify
+## jetbrains-package: Build BOTH JetBrains plugin zips (native-LSP + LSP4IJ),
+##                    verify project/structure, and assert the packaged
+##                    artifacts via scripts/verify-jetbrains-package.mjs.
+jetbrains-package: _jetbrains-build
+	@$(MAKE) _jetbrains-verify
 	node scripts/verify-jetbrains-package.mjs
 
-## jetbrains-test: Run the JetBrains shared-module tests via the wrapper.
-jetbrains-test:
+# _jetbrains-test: Run the JetBrains shared-module tests via the wrapper.
+_jetbrains-test:
 	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-shared:test --no-daemon
 
-## jetbrains-real-binary-test: Run the resolver tests AND the real-binary
-##                             contract test, which copies target/release/deslop-lsp
-##                             into a synthetic plugin root and proves the
-##                             resolver accepts it AND rejects manifest drift.
-##                             Requires a release build of deslop-lsp.
-jetbrains-real-binary-test:
+# _jetbrains-real-binary-test: Run the resolver tests AND the real-binary
+#   contract test, which copies target/release/deslop-lsp into a synthetic
+#   plugin root and proves the resolver accepts it AND rejects manifest drift.
+#   Requires a release build of deslop-lsp.
+_jetbrains-real-binary-test:
 	cargo build --release -p deslop-lsp
 	cd $(JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
 	  $(GRADLE) :deslop-shared:test --no-daemon --rerun-tasks
+
+## android-studio-rebuild: The Android Studio analogue of vsix-rebuild (macOS).
+##                         Kills stale Deslop processes, builds every release
+##                         binary, packages the Android Studio / Community plugin
+##                         (LSP4IJ surface) with the host deslop-lsp bundled, and
+##                         installs it into Android Studio together with its
+##                         required LSP4IJ dependency.
+android-studio-rebuild:
+	@$(MAKE) _kill-deslop-processes
+	$(RM) $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
+	cargo build --release -p deslop -p deslop-lsp -p deslop-mcp
+	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-lsp4ij:buildPlugin
+	@$(MAKE) _android-studio-install
+	@echo "==> Restart Android Studio to load the rebuilt plugin."
+
+# _android-studio-install: Install the freshly built plugin into the newest
+#   Android Studio config on this Mac, plus its LSP4IJ dependency (pinned to the
+#   version deslop-lsp4ij/build.gradle.kts builds against — keep the two in
+#   sync). Without LSP4IJ, Android Studio disables Deslop. Warns (does not fail)
+#   when Android Studio has never been launched here.
+_android-studio-install:
+	@_zip=$$(ls $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/deslop-lsp4ij-*.zip 2>/dev/null | head -n1); \
+	 if [ -z "$$_zip" ]; then echo "FAIL: no deslop-lsp4ij-*.zip found (the build step failed)"; exit 1; fi; \
+	 _cfg=$$(ls -d "$(HOME)/Library/Application Support/Google/AndroidStudio"* 2>/dev/null | sort | tail -n1); \
+	 if [ -z "$$_cfg" ]; then \
+	   echo "WARN: no Android Studio config dir under ~/Library/Application Support/Google/."; \
+	   echo "      Launch Android Studio once, or install from disk:"; \
+	   echo "      Settings -> Plugins -> gear -> Install Plugin from Disk -> $$_zip"; \
+	   exit 0; \
+	 fi; \
+	 _plugins="$$_cfg/plugins"; $(MKDIR) "$$_plugins"; \
+	 if [ ! -d "$$_plugins/lsp4ij" ]; then \
+	   echo "==> Installing the LSP4IJ 0.20.1 dependency from the Marketplace"; \
+	   _tmp=$$(mktemp -d); \
+	   if curl -fsSL -o "$$_tmp/lsp4ij.zip" "https://plugins.jetbrains.com/plugin/download?pluginId=com.redhat.devtools.lsp4ij&version=0.20.1"; then \
+	     unzip -q -o "$$_tmp/lsp4ij.zip" -d "$$_plugins"; \
+	   else \
+	     echo "    WARN: LSP4IJ download failed — install it from the Marketplace manually."; \
+	   fi; \
+	   $(RM) "$$_tmp"; \
+	 fi; \
+	 echo "==> Installing $$(basename "$$_zip") into $$_plugins"; \
+	 $(RM) "$$_plugins/deslop-lsp4ij"; \
+	 unzip -q -o "$$_zip" -d "$$_plugins"; \
+	 echo "    Installed into $$(basename "$$_cfg") with its LSP4IJ dependency."
 
 ## help: List all available targets
 help:
@@ -438,23 +472,17 @@ help:
 	@echo "  lint           - All linters/analyzers (read-only, no formatting)"
 	@echo "  fmt            - Format all code in-place (CHECK=1 for read-only CI check)"
 	@echo "  clean          - Remove build artifacts"
-	@echo "  deployment-verify - Validate deployment manifest and built binary contracts"
-	@echo "  ci             - fmt + lint + rust test + build + VSIX coverage + HTML-report CSS (Playwright)"
+	@echo "  ci             - fmt + lint + rust test + build + deployment-verify + VSIX coverage + HTML-report CSS"
 	@echo "  setup          - Post-create dev environment setup"
 	@echo ""
 	@echo "Repo-specific targets:"
-	@echo "  test-ollama    - Ollama-gated Rust + VSIX tests (never in CI)"
-	@echo "  ci-ollama      - make ci plus make test-ollama"
-	@echo "  build-release  - Build the release binary for the deslop CLI"
-	@echo "  delete-path-binaries - Scrub Deslop binaries off PATH (VSIX bundle is canonical)"
-	@echo "  vsix-install   - Install Node deps for clients/vscode + webview-ui"
-	@echo "  vsix-build     - Build LSP + MCP + VSIX bundle + webview UI"
-	@echo "  vsix-test      - Run VS Code E2E tests against the real LSP"
-	@echo "  vsix-test-ollama - Ollama-gated VSIX e2e (type4 fixture, never in CI)"
-	@echo "  vsix-coverage  - VS Code E2E + enforce coverage threshold"
-	@echo "  vsix-playwright-html - Assert the standalone HTML report's CSS renders (Playwright)"
-	@echo "  vsix-package   - Build the .vsix artifact"
-	@echo "  vsix-rebuild   - Nuke + rebuild + repackage + install the VSIX from scratch"
-	@echo "  jetbrains-build - Build the JetBrains plugin zip"
-	@echo "  jetbrains-verify - Verify JetBrains plugin configuration and structure"
-	@echo "  jetbrains-package - Build and verify the JetBrains plugin zip"
+	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
+	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
+	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
+	@echo "  ci-ollama              - make ci plus make test-ollama"
+	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
+	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"
+	@echo "  jetbrains-package      - Build both JetBrains plugin zips + verify the packages"
+	@echo "  android-studio-rebuild - Build binaries + package + install the Android Studio plugin (macOS)"
+	@echo ""
+	@echo "Internal '_'-prefixed targets (CI steps / plumbing) are hidden; read the Makefile for them."

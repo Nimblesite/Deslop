@@ -36,6 +36,6 @@ tasks.test {
     systemProperty("deslop.repoRoot", rootProject.projectDir.parentFile.parentFile.absolutePath)
     // The real-binary contract test (DeslopRealBinaryContractTest) is opt-in via
     // this property. CI sets DESLOP_LSP_REAL_BINARY to the built release binary;
-    // locally `make jetbrains-real-binary-test` runs it.
+    // locally `make _jetbrains-real-binary-test` runs it.
     System.getenv("DESLOP_LSP_REAL_BINARY")?.let { systemProperty("deslop.lsp.realBinary", it) }
 }

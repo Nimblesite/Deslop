@@ -216,22 +216,22 @@ jobs:
 
       # Builds the real deslop-lsp + deslop-mcp from the workspace
       # and installs Node deps for the extension + webview-ui.
-      - name: vsix-build
-        run: make vsix-build
+      - name: _vsix-build
+        run: make _vsix-build
 
       # Unit tests + coverage threshold. E2E spawns real VS Code Electron.
-      - name: vsix-coverage (unit + threshold)
-        run: xvfb-run -a make vsix-coverage
+      - name: _vsix-coverage (unit + threshold)
+        run: xvfb-run -a make _vsix-coverage
 
-      - name: vsix-test (full E2E against real LSP)
-        run: xvfb-run -a make vsix-test
+      - name: _vsix-test (full E2E against real LSP)
+        run: xvfb-run -a make _vsix-test
 
       # Renders the standalone HTML report (the artifact every "Open HTML
       # Report" button shows) and asserts the design-system CSS applies in a
       # real browser. The target installs the Chromium headless shell with its
       # OS libs (--with-deps), so the browser install lives in one place.
-      - name: vsix-playwright-html (standalone HTML report CSS)
-        run: make vsix-playwright-html
+      - name: _vsix-playwright-html (standalone HTML report CSS)
+        run: make _vsix-playwright-html
 
       - name: vsix-package deployment gate
         run: make vsix-package
@@ -284,8 +284,8 @@ jobs:
 
       # Resolver tests against the real released deslop-lsp binary —
       # proves the version contract end-to-end (DTK-MIG-DESLOP-JETBRAINS-RESOLVER).
-      - name: jetbrains-real-binary-test
-        run: make jetbrains-real-binary-test
+      - name: _jetbrains-real-binary-test
+        run: make _jetbrains-real-binary-test
 
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
