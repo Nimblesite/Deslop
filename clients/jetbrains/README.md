@@ -29,7 +29,7 @@ Modules:
 
 The surface starts `deslop-lsp` for `.cs`, `.rs`, `.py`, and `.dart` files, resolves the binary from the bundled plugin `bin/<platform>/` directory first (then `PATH`), and launches with embeddings off until a settings page and picker land. `DESLOP_BINARY_DIR` (host binary) and `DESLOP_LSP_BUNDLE_DIR` (all-platform release layout) are build-time staging variables, not runtime resolver sources.
 
-Build and verify both plugin zips (the public package gate):
+Build and verify the plugin zip (the public package gate):
 
 ```bash
 make jetbrains-package

@@ -1,7 +1,5 @@
 package com.nimblesite.deslop.jetbrains
 
-import java.nio.file.Path
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -50,27 +48,16 @@ internal class DeslopSupportedFilesTest {
      */
     @Test
     fun lsp4ijFilePatternsMatchTheSupportedSet() {
-        val repoRoot = System.getProperty("deslop.repoRoot")
-            ?: error("deslop.repoRoot system property must be set by the Gradle test task")
-        val pluginXml = Path.of(
-            repoRoot,
-            "clients/jetbrains/deslop-lsp4ij/src/main/resources/META-INF/plugin.xml",
-        )
         assertEquals(
             DeslopSupportedFiles.extensions,
-            lsp4ijFilePatternExtensions(pluginXml),
+            lsp4ijFilePatternExtensions(),
             "LSP4IJ fileNamePatternMapping must cover exactly the languages deslop-lsp analyses",
         )
     }
 
-    private fun lsp4ijFilePatternExtensions(pluginXml: Path): Set<String> {
-        val document = DocumentBuilderFactory.newInstance()
-            .also { it.isNamespaceAware = false }
-            .newDocumentBuilder()
-            .parse(pluginXml.toFile())
-        val nodes = document.getElementsByTagName("fileNamePatternMapping")
-        val patterns = (0 until nodes.length)
-            .map { nodes.item(it).attributes.getNamedItem("patterns").nodeValue }
+    private fun lsp4ijFilePatternExtensions(): Set<String> {
+        val patterns = PluginDescriptor
+            .attributeValues(PluginDescriptor.lsp4ij(), "fileNamePatternMapping", "patterns")
             .single()
         return patterns.split(";")
             .map { it.trim().removePrefix("*.").lowercase() }

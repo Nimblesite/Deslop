@@ -132,9 +132,9 @@ The version is lock-step with the Rust binaries and VSIX. Marketplace publishing
 Testing follows the repository rule: **no fake LSP/MCP**. Acceptable test layers:
 
 - Gradle `verifyPluginProjectConfiguration` and `verifyPluginStructure`.
-- Headless IntelliJ Platform tests for pure Kotlin helpers like binary resolution.
-- Rider/IntelliJ UI tests that launch the real `deslop-lsp` binary against fixture workspaces and assert native IDE diagnostics or Tool Window rows.
+- JUnit tests in `deslop-shared` for pure Kotlin helpers (binary resolution, settings) and for the **plugin descriptor** — `DeslopPluginDescriptorTest` parses the shipped `plugin.xml` (real XML parser, never regex) and pins the IDE-visible registrations: the `Deslop` tool window factory, the `DeslopReportRenderer` project service, the report action, and the LSP4IJ server factory + file-pattern mapping. This is the cheap guard against the failure mode where a dropped or renamed registration makes the plugin "show nothing."
+- Android Studio / IntelliJ UI tests that launch the real `deslop-lsp` binary against fixture workspaces and assert native IDE diagnostics or tool window rows. **Still the gap** — see [jetbrains-e2e-plan.md](../plans/jetbrains-e2e-plan.md).
 - Manifest-backed startup tests cover environment directory, `PATH`, bundled success, missing binary, component-name mismatch, version mismatch, and notification/Event Log reporting.
-- Plugin archive package tests prove the root manifest and manifest-declared platform binaries are present and no undeclared native executable is shipped.
+- Plugin archive package tests prove the root manifest and manifest-declared platform binary are present and no undeclared native executable is shipped.
 
-The first scaffold may ship with structure verification only. Before a public plugin zip, CI must exercise at least one real IDE test path against the real `deslop-lsp` binary.
+The descriptor + manifest + package layers ship today. Before a public plugin zip, CI must additionally exercise at least one real IDE launch test against the real `deslop-lsp` binary (the analogue of the VS Code `@vscode/test-cli` E2E suite that launches a real editor against a fixture repo).

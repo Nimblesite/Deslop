@@ -18,6 +18,13 @@ version = providers.gradleProperty("deslopVersion").getOrElse("0.1.0")
 dependencies {
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     testImplementation(kotlin("test-junit5"))
+    // The 2024.3 platform's JUnit5 LauncherSessionListener
+    // (JUnit5TestEnvironmentInitializer) hard-references JUnit4's
+    // org.junit.runners.model.Statement at session open. The platform jars put the
+    // listener on the test classpath but not JUnit4, so the test executor fails to
+    // start without it. Our tests are pure JUnit5 (useJUnitPlatform); this only
+    // satisfies the platform initializer.
+    testRuntimeOnly("junit:junit:4.13.2")
 
     intellijPlatform {
         intellijIdeaCommunity("2024.3")
