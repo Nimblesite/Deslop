@@ -1,9 +1,11 @@
-// The LSP4IJ plugin: Android Studio and IntelliJ Community, which do not ship the
-// native LSP API. It registers deslop-lsp through Red Hat's LSP4IJ client instead.
-// Compiled against the unified IntelliJ IDEA base (the IC/IU split ended in 2025.3);
-// because plugin.xml depends only on com.intellij.modules.platform + LSP4IJ, the one
-// artifact loads in Android Studio, Community, AND Rider/Ultimate. Distinct plugin id
-// keeps it separable from the native build.
+// The one shipped Deslop JetBrains plugin: registers deslop-lsp through Red Hat's
+// LSP4IJ client, which every IDE family ships support for (Android Studio, IntelliJ
+// Community, and — with the LSP4IJ plugin installed — Rider / IDEA Ultimate). Because
+// plugin.xml depends only on com.intellij.modules.platform + LSP4IJ, this single
+// artifact covers every family, so there is no separate native-LSP build to produce.
+// Compiled against IntelliJ IDEA Community 2024.3 (build 243) — the same floor the
+// since-build below declares — so it loads on, and only references APIs present in,
+// every Android Studio from Meerkat (2024.3) onward.
 plugins {
     kotlin("jvm")
     id("org.jetbrains.intellij.platform")
@@ -18,8 +20,8 @@ dependencies {
     implementation(project(":deslop-shared"))
 
     intellijPlatform {
-        intellijIdea("2026.1")
-        // LSP4IJ 0.20.1: since-build 242, no upper bound → loads on 261 (2026.1).
+        intellijIdeaCommunity("2024.3")
+        // LSP4IJ 0.20.1: since-build 242, no upper bound → loads on 243 (2024.3) up.
         plugin("com.redhat.devtools.lsp4ij", "0.20.1")
     }
 }
@@ -39,7 +41,10 @@ intellijPlatform {
             "bridging the Deslop LSP server through LSP4IJ."
         changeNotes = "First Android Studio / IntelliJ Community build via LSP4IJ."
         ideaVersion {
-            sinceBuild = "261"
+            // 243 = IntelliJ 2024.3 = Android Studio Meerkat. Android Studio trails
+            // the IntelliJ platform by several releases, so the previous 261 (IDEA
+            // 2026.1) floor excluded every shipping Android Studio. No upper bound.
+            sinceBuild = "243"
             untilBuild = provider { null }
         }
         vendor {

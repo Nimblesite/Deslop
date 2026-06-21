@@ -1,11 +1,11 @@
-// Shared library for both Deslop plugin artifacts. The `.module` sub-plugin puts
-// the IntelliJ Platform on the compile classpath but emits no plugin.xml / sandbox
-// / buildPlugin tasks. Compiles against the unified IntelliJ IDEA base (the IC/IU
-// split ended in 2025.3). Nothing here may use an Ultimate-only API (e.g.
-// com.intellij.platform.lsp.api.*) — only com.intellij.modules.platform APIs — so
-// the same classes load in Android Studio / Community AND Ultimate/Rider. The
-// Ultimate-only LSP client lives solely in :deslop-ultimate; CI Plugin Verifier
-// against Android Studio guards the rule.
+// Shared library for the Deslop LSP4IJ plugin. The `.module` sub-plugin puts the
+// IntelliJ Platform on the compile classpath but emits no plugin.xml / sandbox /
+// buildPlugin tasks. Compiles against IntelliJ IDEA Community 2024.3 — the build
+// floor (243) the shipped plugin declares in its since-build — so the bytecode can
+// only reference APIs that exist in every Android Studio / IntelliJ Community we
+// claim to support. Picking the floor as the compile base, rather than a newer
+// base with a lower since-build, is what guarantees no NoSuchMethodError at runtime
+// on an older IDE. Use only com.intellij.modules.platform APIs here.
 plugins {
     kotlin("jvm")
     id("org.jetbrains.intellij.platform.module")
@@ -20,7 +20,7 @@ dependencies {
     testImplementation(kotlin("test-junit5"))
 
     intellijPlatform {
-        intellijIdea("2026.1")
+        intellijIdeaCommunity("2024.3")
     }
 }
 

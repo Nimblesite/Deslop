@@ -389,19 +389,21 @@ vsix-rebuild:
 	@echo "==> vsix-rebuild done. Reload the VS Code window to pick up the new extension."
 	@echo "    PATH copies removed — the VSIX bundle is now the only source of truth."
 
-# _jetbrains-build: Build both JetBrains plugin zips (native-LSP + LSP4IJ).
+# _jetbrains-build: Build the JetBrains plugin zip (single LSP4IJ artifact, all IDE
+#   families). LSP4IJ reaches Android Studio, IntelliJ Community, and Rider/Ultimate
+#   from one build, so there is no separate native-LSP artifact.
 _jetbrains-build:
-	$(RM) $(JETBRAINS_DIR)/deslop-ultimate/build/distributions/*.zip $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
+	$(RM) $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
-	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-ultimate:buildPlugin :deslop-lsp4ij:buildPlugin
+	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-lsp4ij:buildPlugin
 
 # _jetbrains-verify: Verify JetBrains plugin project and archive structure.
 _jetbrains-verify:
 	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
 
-## jetbrains-package: Build BOTH JetBrains plugin zips (native-LSP + LSP4IJ),
+## jetbrains-package: Build the JetBrains plugin zip (single LSP4IJ artifact),
 ##                    verify project/structure, and assert the packaged
-##                    artifacts via scripts/verify-jetbrains-package.mjs.
+##                    artifact via scripts/verify-jetbrains-package.mjs.
 jetbrains-package: _jetbrains-build
 	@$(MAKE) _jetbrains-verify
 	node scripts/verify-jetbrains-package.mjs
@@ -482,7 +484,7 @@ help:
 	@echo "  ci-ollama              - make ci plus make test-ollama"
 	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"
-	@echo "  jetbrains-package      - Build both JetBrains plugin zips + verify the packages"
+	@echo "  jetbrains-package      - Build the JetBrains plugin zip + verify the package"
 	@echo "  android-studio-rebuild - Build binaries + package + install the Android Studio plugin (macOS)"
 	@echo ""
 	@echo "Internal '_'-prefixed targets (CI steps / plumbing) are hidden; read the Makefile for them."

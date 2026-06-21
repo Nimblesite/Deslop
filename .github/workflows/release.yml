@@ -260,11 +260,11 @@ jobs:
           if-no-files-found: error
 
   jetbrains:
-    name: Build JetBrains plugins
+    name: Build JetBrains plugin
     needs: [version, build]
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB SDK
-    # plus the LSP4IJ plugin, then builds two plugin zips bundling the all-platform
+    # plus the LSP4IJ plugin, then builds the plugin zip bundling the all-platform
     # deslop-lsp binaries assembled from the release matrix artifacts.
     timeout-minutes: 30
     steps:
@@ -313,22 +313,21 @@ jobs:
             fi
           done
 
-      - name: Build both plugin zips (all platforms bundled)
+      - name: Build the plugin zip (all platforms bundled)
         working-directory: clients/jetbrains
         run: |
           DESLOP_LSP_BUNDLE_DIR="${GITHUB_WORKSPACE}/bundle" \
-            ./gradlew :deslop-ultimate:buildPlugin :deslop-lsp4ij:buildPlugin \
+            ./gradlew :deslop-lsp4ij:buildPlugin \
             -PdeslopVersion="${{ needs.version.outputs.version }}"
 
-      - name: Verify both plugin packages
+      - name: Verify the plugin package
         run: node scripts/verify-jetbrains-package.mjs
 
-      - name: Upload JetBrains plugins
+      - name: Upload JetBrains plugin
         uses: actions/upload-artifact@v4
         with:
           name: jetbrains-plugins
           path: |
-            clients/jetbrains/deslop-ultimate/build/distributions/*.zip
             clients/jetbrains/deslop-lsp4ij/build/distributions/*.zip
           if-no-files-found: error
 

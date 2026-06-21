@@ -2,24 +2,23 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.redhat.devtools.lsp4ij</depends>
 
-    <!-- The native-LSP (Ultimate/Rider) build delivers the identical bridge and
-         reuses the shared action id, file-editor type id, notification group,
-         and server id. Both load on IDEA Ultimate, so co-install would
-         double-start the LSP and collide those ids. Mutually exclusive by
-         design. -->
-    <incompatible-with>nimblesite.deslop.jetbrains</incompatible-with>
-
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Deslop" displayType="BALLOON" />
-        <fileEditorProvider
-            implementation="com.nimblesite.deslop.jetbrains.DeslopHtmlReportEditorProvider" />
+        <!-- LSP4IJ render path behind the shared DeslopReportRenderer seam, so the
+             tool window and action stay free of LSP4IJ client APIs. -->
+        <projectService
+            serviceInterface="com.nimblesite.deslop.jetbrains.DeslopReportRenderer"
+            serviceImplementation="com.nimblesite.deslop.jetbrains.DeslopLsp4ijReportRenderer" />
+        <toolWindow id="Deslop"
+                    anchor="right"
+                    factoryClass="com.nimblesite.deslop.jetbrains.DeslopReportToolWindowFactory" />
     </extensions>
 
     <actions>
         <action id="Deslop.OpenHtmlReport"
-                class="com.nimblesite.deslop.jetbrains.DeslopCommunityOpenHtmlReportAction"
+                class="com.nimblesite.deslop.jetbrains.DeslopRenderReportAction"
                 text="Deslop: Open HTML Report"
-                description="Render the live Deslop duplicate-code report in a browser tab.">
+                description="Render the live Deslop duplicate-code report in the Deslop tool window.">
             <add-to-group group-id="ToolsMenu" anchor="last" />
         </action>
     </actions>

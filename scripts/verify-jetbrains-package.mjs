@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-// Verifies the shipped JetBrains plugin zips. With no path argument it checks both
-// artifacts — :deslop-ultimate (native LSP) and :deslop-lsp4ij (Android Studio /
-// Community) — each of which bundles shipwright.json at its root plus a
+// Verifies the shipped JetBrains plugin zip. With no path argument it checks the
+// single :deslop-lsp4ij artifact (one LSP4IJ build serves Android Studio, IntelliJ
+// Community, and Rider/Ultimate), which bundles shipwright.json at its root plus a
 // bin/<platform>/deslop-lsp staged from the same manifest contract.
 const platform = process.argv[3] ?? currentPlatform();
 const explicit = process.argv[2];
@@ -34,7 +34,7 @@ function verifyPackage(packagePath) {
 }
 
 function defaultPackages() {
-  return ["deslop-ultimate", "deslop-lsp4ij"].map((module) => {
+  return ["deslop-lsp4ij"].map((module) => {
     const dir = resolve(`clients/jetbrains/${module}/build/distributions`);
     const zips = existsSync(dir) ? readdirSync(dir).filter((name) => name.endsWith(".zip")) : [];
     if (zips.length === 0) throw new Error(`No JetBrains package zip found under ${dir}`);

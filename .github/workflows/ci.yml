@@ -250,9 +250,9 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB
-    # SDK plus the LSP4IJ plugin and packages BOTH plugin artifacts (native +
-    # LSP4IJ) while running the resolver test against the real released deslop-lsp
-    # binary — well over the 10-minute default on a cold runner cache.
+    # SDK plus the LSP4IJ plugin and packages the plugin artifact while running
+    # the resolver test against the real released deslop-lsp binary — well over
+    # the 10-minute default on a cold runner cache.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
