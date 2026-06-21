@@ -24,6 +24,7 @@
       "title": "Community",
       "i18nKey": "footer.community",
       "items": [
+        { "text": "Discord", "i18nKey": "footer.discord", "url": "https://discord.gg/HUrTkEVR" },
         { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop" },
         { "text": "GitHub Releases", "i18nKey": "footer.githubReleases", "url": "https://github.com/Nimblesite/Deslop/releases" },
         { "text": "RSS", "i18nKey": "footer.rss", "url": "/feed.xml", "noLangPrefix": true }
