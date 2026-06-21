@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: 工作原理 — tree-sitter AST、MinHash LSH、HNSW 嵌入
-description: Deslop 的流水线 —— tree-sitter 解析、AST 归一化、Merkle 指纹、MinHash + LSH、HNSW 嵌入、融合 0.85 阈值、最严重者优先的排名。250 ms 响应式循环。
+description: Deslop 的流水线 —— tree-sitter 解析、AST 归一化、Merkle 指纹、MinHash + LSH、HNSW 嵌入、融合 0.85 阈值、最严重者优先的排名。响应式分析循环。
 eleventyNavigation:
   key: 工作原理
   order: 2
@@ -103,7 +103,7 @@ weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)
 
 上述全部内容也会在 LSP 服务器内增量运行（`crates/deslop-core/src/live/`）。
 
-文件监视器对编辑进行批处理（250 ms 防抖，2 s 上限），并通过 `PipelineSession::update_files` 重新运行流水线。最新报告被保留在内存中，随后 LSP 会：
+文件监视器对编辑进行批处理（防抖，并设有硬上限，使格式化器的连发不会拖垮调度器），并通过 `PipelineSession::update_files` 重新运行流水线。最新报告被保留在内存中，随后 LSP 会：
 
 - 在 LSP 线路上广播 `deslop/reportChanged`，并且
 - 通过本地 IPC 端点提供运行中的语料，使得捆绑的 MCP 服务器无需重新解析即可应答 `find-similar`。macOS 与 Linux 使用 `.deslop-cache/deslop.sock`；Windows 使用通过 `.deslop-cache/deslop.port` 发现的 token 门控 TCP 回环端点。

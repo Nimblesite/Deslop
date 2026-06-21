@@ -1,0 +1,27 @@
+{#- Editor-extension install + review band — shared by the en (/) and zh (/zh/)
+    home pages so the markup lives in exactly one place. The listing is
+    data-driven from _data/extensions.js (single source of truth for the
+    marketplace + review URLs); section copy comes from i18n.json (editors.*)
+    keyed by the page language. -#}
+{% set currentLang = lang | default('en') %}
+<section class="editors" id="install">
+  <div class="editors__head">
+    <div class="eyebrow-chip"><span>{{ "editors.eyebrow" | t(currentLang) | default("Install") }}</span></div>
+    <h2 class="editors__title">{{ "editors.title" | t(currentLang) | default("Get Deslop in your editor.") }}</h2>
+    <p class="editors__lede">{{ "editors.lede" | t(currentLang) | default("One extension, published to every registry. Install it from yours below — then, if it earns its keep, leave a review so the next developer finds it too.") }}</p>
+  </div>
+  <ul class="editors__grid">
+    {% for ext in extensions %}
+    <li class="editor-card">
+      <span class="editor-card__icon material-symbols-outlined" aria-hidden="true">{{ ext.icon }}</span>
+      <span class="editor-card__registry">{{ ext.registry }}</span>
+      <strong class="editor-card__editors">{{ ext.editors }}</strong>
+      <p class="editor-card__blurb">{{ ext.blurb[currentLang] | default(ext.blurb.en) }}</p>
+      <div class="editor-card__actions">
+        <a href="{{ ext.installUrl }}" class="btn-primary" target="_blank" rel="noopener noreferrer">{{ "editors.install" | t(currentLang) | default("Install") }}</a>
+        <a href="{{ ext.reviewUrl }}" class="editor-card__review" target="_blank" rel="noopener noreferrer"><span class="material-symbols-outlined" aria-hidden="true">star</span>{{ "editors.review" | t(currentLang) | default("Rate &amp; review") }}</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</section>

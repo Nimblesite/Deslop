@@ -14,7 +14,7 @@ This is not a batch scanner. It is a long-running server with a file watcher, a 
 - **Editor (centre)** — the LSP underlines the duplicate as you type, names the **canonical** copy used as the anchor, and offers **Compare with canonical**, **View cluster**, and **Copy for AI** right on the finding.
 - **Compare diff (right)** — VS Code's native side-by-side editor lines this occurrence up against the canonical one so you can confirm before extracting.
 
-Every panel refreshes within 250 ms of a keystroke, and the same live report backs the MCP tools the agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+Every panel refreshes as you type, and the same live report backs the MCP tools the agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
 
 ---
 
@@ -46,7 +46,7 @@ The MCP server delegates every read and `find-similar` call to the running LSP o
 
 **Live means reactive.** When you change code, every Deslop surface — the live bubble, the editor decorations, the **Top Offenders** tree, the cluster webview, the status bar, the MCP query results, the agent's view of the workspace — reflects the new state **immediately**. Not on the next save. Not when the editor refreshes. Not on a polling timer.
 
-The LSP file watcher fires on every change with a **250 ms debounce and a 2 s cap**. The pipeline runs incrementally — only the touched files get re-parsed. The new report is written atomically and a `deslop/reportChanged` notification fans out over the LSP wire and over MCP `resources/updated`. Editor surfaces, agent caches, and webviews observe the new report in the same microtask. A cluster that no longer exists in the source code cannot remain on screen, in a hover, in a code lens, or in an MCP response.
+The LSP file watcher fires on every change, debounced so a burst of edits collapses into one analysis. The pipeline runs incrementally — only the touched files get re-parsed. The new report is written atomically and a `deslop/reportChanged` notification fans out over the LSP wire and over MCP `resources/updated`. Editor surfaces, agent caches, and webviews observe the new report in the same microtask. A cluster that no longer exists in the source code cannot remain on screen, in a hover, in a code lens, or in an MCP response.
 
 The CLI is the **cold-cache fallback** for one-shot audits and CI gates. Every other surface — LSP, MCP, VS Code extension — is reactive by construction. See [SPEC §[PRINCIPLES-LIVE-IS-REACTIVE]](docs/specs/principles.md#principles-live-is-reactive).
 
@@ -86,7 +86,7 @@ Every detection algorithm in the table below is a real file, not a future plan:
 | HNSW ANN over local embeddings (SSCD 2024) | `instant-distance` HNSW, deterministic seed, top-k cosine | [`embedding/pairs.rs`](crates/deslop-core/src/embedding/pairs.rs) |
 | Max/sum fusion (ensemble-LLM 2025) | `clamp(structural + token_jaccard + embedding_cos, 0, 1)`, threshold 0.85 | [`pair.rs`](crates/deslop-core/src/pair.rs) |
 | Worst-offenders ranking | `clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)` | [`cluster.rs`](crates/deslop-core/src/cluster.rs) |
-| Live + reactive (LSP watcher → IPC → MCP) | 250 ms debounce, 2 s cap, in-memory report, Unix socket or token-gated TCP IPC | [`live/`](crates/deslop-core/src/live/), [`deslop-lsp/`](crates/deslop-lsp/), [`deslop-mcp/`](crates/deslop-mcp/) |
+| Live + reactive (LSP watcher → IPC → MCP) | Debounced watcher, in-memory report, Unix socket or token-gated TCP IPC | [`live/`](crates/deslop-core/src/live/), [`deslop-lsp/`](crates/deslop-lsp/), [`deslop-mcp/`](crates/deslop-mcp/) |
 
 Full research → code map: [docs/specs/SPEC.md §Algorithm implementation status](docs/specs/SPEC.md#algorithm-implementation-status). Site-facing version: [Research Background](https://deslop.live/docs/research-background/).
 

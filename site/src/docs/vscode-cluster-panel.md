@@ -20,7 +20,7 @@ The cluster panel is the detailed view behind a Deslop duplicate-code finding. I
          alt="The Deslop VS Code extension analysing a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare, View cluster and Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence."
          width="2560" height="1492" loading="lazy" decoding="async">
   </a>
-  <figcaption>The Deslop VS Code extension on a live workspace — the sidebar (left), the live clone warning in the editor (centre), and the Compare diff against the canonical occurrence (right). Every panel refreshes within 250&nbsp;ms of a keystroke.</figcaption>
+  <figcaption>The Deslop VS Code extension on a live workspace — the sidebar (left), the live clone warning in the editor (centre), and the Compare diff against the canonical occurrence (right). Every panel refreshes as you type.</figcaption>
 </figure>
 
 Three surfaces are visible, and all of them read the same live report:
@@ -29,7 +29,7 @@ Three surfaces are visible, and all of them read the same live report:
 - **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined as you type, and a message states the bucket and the copy count — *"Identical code × 3 — Safe to extract — every copy is the same."* — then names the **canonical** occurrence used as the comparison anchor. Three actions sit on the finding: **Compare with canonical**, **View cluster**, and **Copy for AI** (the AI-ready context block, available on every Deslop surface).
 - **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare with canonical**: this occurrence on the left, the canonical on the right, with matching rows aligned so you can confirm the duplication before extracting a shared helper.
 
-Everything here is reactive. Edit the code and the tree, the percentages, the inline warning, and the diff all refresh within 250&nbsp;ms. The same live report backs the MCP tools (`find-similar`, `top-offenders`, `cluster-by-id`), so the agent driving your editor sees the duplicate *before* it writes the copy. The rest of this page is a field guide to each label, score, and action in that view.
+Everything here is reactive. Edit the code and the tree, the percentages, the inline warning, and the diff all refresh as you type. The same live report backs the MCP tools (`find-similar`, `top-offenders`, `cluster-by-id`), so the agent driving your editor sees the duplicate *before* it writes the copy. The rest of this page is a field guide to each label, score, and action in that view.
 
 ## Cluster Id
 

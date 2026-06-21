@@ -11,7 +11,7 @@ lang: zh
 
 # AI 集成
 
-Deslop 从第一次提交起就将编码智能体设计为一等受众。MCP 与 LSP 外壳如今均已发布——两者都消费同一套 `deslop-core` 流水线、同一套 JSON schema，以及与 CLI 相同的磁盘缓存。每一个 MCP 工具响应都针对**实时**工作区状态计算——LSP 在内存中持有实时报告，并在每次变更时刷新（250 ms 防抖，2 s 上限），MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop-cache/deslop.sock`；Windows 使用通过 `.deslop-cache/deslop.port` 发现的 token 门控 TCP 回环端点。没有批处理步骤。没有陈旧缓存。
+Deslop 从第一次提交起就将编码智能体设计为一等受众。MCP 与 LSP 外壳如今均已发布——两者都消费同一套 `deslop-core` 流水线、同一套 JSON schema，以及与 CLI 相同的磁盘缓存。每一个 MCP 工具响应都针对**实时**工作区状态计算——LSP 在内存中持有实时报告，并在每次变更时刷新（防抖，并设有硬上限），MCP 服务器则在下一次工具调用时通过本地 IPC 端点读取该实时状态。macOS 与 Linux 使用 `.deslop-cache/deslop.sock`；Windows 使用通过 `.deslop-cache/deslop.port` 发现的 token 门控 TCP 回环端点。没有批处理步骤。没有陈旧缓存。
 
 ## MCP 工具，全部实时
 
@@ -145,7 +145,7 @@ Deslop 的事实来源是 `[byte_start, byte_end)`。行号仅在渲染时派生
 `deslop-core` crate 拥有整条流水线。三个外壳消费它：
 
 - **MCP 服务器（`deslop-mcp`）**——智能体接口面。find-similar 加上一组聚焦的只读与配置工具（见上表）。该服务器将每一次读取——`top-offenders`、`report-get`、`report-for-file`、`find-similar` 及其余——通过本地 IPC 端点委托给运行中的 LSP，因此每个响应都针对 LSP 的实时内存语料库计算，而非陈旧的磁盘缓存。Unix 主机使用 `.deslop-cache/deslop.sock`；Windows 使用带 `.deslop-cache/deslop.port` 发现记录的 token 门控 TCP 回环端点。当 LSP 未运行时，MCP 返回一条可操作的错误；CI 与一次性审计则改用 `deslop` CLI。
-- **LSP 服务器（`deslop-lsp`）**——编辑器接口面。诊断、悬停、代码透镜、`textDocument/definition`、虚拟 `deslop://` 文档，以及自定义的 `deslop/*` 方法（`reportGet`、`reportDelta`、`reportForFile`、`reportForRange`、`clusterById`、`duplicatesFindSimilar`、`embeddingListModels`、`embeddingSetModel`、`sessionConfig`、`reportSchemaDoc`、`virtualDocument`、`cpuReport`）。触发 `deslop/reportChanged`、`deslop/analysisState` 与 `deslop/embeddingProgress` 通知。拥有文件监视器、防抖器（250 ms 静默，2 s 上限）与分析调度器。
+- **LSP 服务器（`deslop-lsp`）**——编辑器接口面。诊断、悬停、代码透镜、`textDocument/definition`、虚拟 `deslop://` 文档，以及自定义的 `deslop/*` 方法（`reportGet`、`reportDelta`、`reportForFile`、`reportForRange`、`clusterById`、`duplicatesFindSimilar`、`embeddingListModels`、`embeddingSetModel`、`sessionConfig`、`reportSchemaDoc`、`virtualDocument`、`cpuReport`）。触发 `deslop/reportChanged`、`deslop/analysisState` 与 `deslop/embeddingProgress` 通知。拥有文件监视器、防抖器与分析调度器。
 - **CLI（`deslop`）**——面向 CI 门禁与一次性审计的冷缓存兜底方案。
 
 三者复用相同的缓存布局（`.deslop-cache/fingerprints/`、`.deslop-cache/embeddings/`）与相同的 JSON schema。如今接入 CLI 的智能体只需把 `deslop-mcp` 加入其 MCP 配置即可获得实时通道——无需 schema 变更，无需重写解析器。

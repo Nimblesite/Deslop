@@ -181,7 +181,7 @@ Live analysis is implemented under `crates/deslop-core/src/live/`:
 
 - `session.rs` owns the live `AnalysisSession`.
 - `scheduler.rs` serializes debounced file-change work.
-- `debouncer.rs` uses a 250 ms quiet window and a 2000 ms cap.
+- `debouncer.rs` coalesces a burst of file-change events with a quiet window and a hard cap.
 - `watcher.rs` filters filesystem events by parser extension and exclusions.
 - `api.rs` exposes report, range, cluster, embedding, and configuration operations.
 
