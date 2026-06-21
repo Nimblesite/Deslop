@@ -38,7 +38,14 @@
       "clusterPanel": "VS Code Cluster Panel",
       "releases": "Releases",
       "githubReleases": "GitHub Releases",
+      "discord": "Discord",
       "rss": "RSS"
+    },
+    "community": {
+      "eyebrow": "Community",
+      "title": "Building Deslop in the open.",
+      "lede": "Questions, bug reports, feature requests, or just want to talk duplicate detection and AI codegen? Join the Deslop Discord — users and contributors both welcome.",
+      "cta": "Join the Discord"
     },
     "releases": {
       "title": "Releases",
@@ -96,7 +103,14 @@
       "clusterPanel": "VS Code 簇面板",
       "releases": "发布",
       "githubReleases": "GitHub 发布",
+      "discord": "Discord",
       "rss": "RSS"
+    },
+    "community": {
+      "eyebrow": "社区",
+      "title": "在公开环境中构建 Deslop。",
+      "lede": "有问题、bug 报告、功能请求，或者只是想聊聊重复检测与 AI 代码生成？加入 Deslop Discord——欢迎用户与贡献者。",
+      "cta": "加入 Discord"
     },
     "releases": {
       "title": "发布",

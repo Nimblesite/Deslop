@@ -4,8 +4,9 @@
 // over the csharp-type4 fixture (recursive vs. iterative — semantically
 // equivalent, structurally distinct, so only an embedding pass can match).
 //
-// Runs ONLY via `npm run test:ollama` or `make vsix-test-ollama`. NEVER
-// part of `make ci` / `make vsix-test` / default `npm test` — those stay
+// Runs ONLY via `npm run test:ollama`, `make _vsix-test-ollama`, or the public
+// `make test-ollama` umbrella. NEVER part of `make ci` / `make _vsix-test` /
+// default `npm test` — those stay
 // Ollama-free and CI-safe. See docs/specs/vsix.md for the gating policy.
 import { defineConfig } from "@vscode/test-cli";
 import path from "node:path";

@@ -77,6 +77,17 @@ suite("commands", () => {
     }
   });
 
+  test("openHtmlReport renders the standalone report in a webview tab", async () => {
+    // True E2E: the real LSP renders the HTML via renderHtmlReport and the
+    // extension hosts it in a singleton "Deslop HTML Report" tab.
+    await vscode.commands.executeCommand("deslop.openHtmlReport");
+    await sleep(400);
+    const hasReportTab = vscode.window.tabGroups.all
+      .flatMap((g) => g.tabs)
+      .some((t) => t.label === "Deslop HTML Report");
+    assert.ok(hasReportTab, "the standalone HTML report tab must open");
+  });
+
   test("revealActiveBinary fires the info modal without throwing", async () => {
     // The command shows a modal; we don't need to dismiss it — when the
     // extension-host test session ends VS Code tears all windows down.

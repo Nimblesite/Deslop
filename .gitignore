@@ -122,3 +122,9 @@ test-results/
 
 /*.png
 crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
+
+
+clients/jetbrains/buildSrc/build/
+clients/jetbrains/buildSrc/.gradle/
+clients/jetbrains/deslop-lsp4ij/build/
+clients/jetbrains/deslop-shared/build/
