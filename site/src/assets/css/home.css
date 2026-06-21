@@ -357,15 +357,18 @@
 }
 .showcase__head { max-width: 44rem; margin-bottom: var(--space-10); }
 .showcase__title,
-.community__title {
+.community__title,
+.editors__title {
   font-weight: 900;
   font-size: clamp(1.75rem, 4vw, 2.75rem);
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
-.showcase__title { margin: var(--space-4) 0 var(--space-4); }
+.showcase__title,
+.editors__title { margin: var(--space-4) 0 var(--space-4); }
 .showcase__lede,
-.community__lede {
+.community__lede,
+.editors__lede {
   color: var(--on-surface-variant);
   font-size: clamp(1rem, 1.5vw, 1.125rem);
   line-height: 1.6;
@@ -431,3 +434,69 @@
 }
 .btn-discord:hover { color: #fff; }
 .btn-discord__mark { display: block; }
+
+/* ─────────── Editor extensions (install + review) ─────────── */
+.editors {
+  padding: 0 var(--space-6) var(--space-24);
+  max-width: var(--max-width);
+  margin-inline: auto;
+  width: 100%;
+}
+.editors__head { max-width: 44rem; margin-bottom: var(--space-10); }
+.editors__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+@media (min-width: 768px) {
+  .editors__grid { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
+}
+
+.editor-card {
+  background: var(--surface-container-low);
+  padding: var(--space-8);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  transition: background var(--dur-slow) var(--ease);
+}
+.editor-card:hover { background: var(--surface-container-highest); }
+.editor-card__icon {
+  font-size: 2rem;
+  color: var(--primary-container);
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+.editor-card__registry {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--secondary-fixed-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.editor-card__editors { color: var(--on-surface); font-size: 1.125rem; font-weight: 700; }
+.editor-card__blurb {
+  color: var(--on-surface-variant);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  margin: 0 0 var(--space-4);
+  flex: 1;
+}
+.editor-card__actions { display: flex; align-items: center; gap: var(--space-6); flex-wrap: wrap; }
+.editor-card__review {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
+}
+.editor-card__review:hover { color: var(--on-surface); }
+.editor-card__review .material-symbols-outlined { font-size: 1.125rem; }

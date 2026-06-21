@@ -21,6 +21,15 @@
       ]
     },
     {
+      "title": "Install",
+      "i18nKey": "footer.install",
+      "items": [
+        { "text": "VS Code Marketplace", "i18nKey": "footer.vscodeMarketplace", "url": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live" },
+        { "text": "Open VSX Registry", "i18nKey": "footer.openVsx", "url": "https://open-vsx.org/extension/Nimblesite/deslop-live" },
+        { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
+      ]
+    },
+    {
       "title": "Community",
       "i18nKey": "footer.community",
       "items": [
