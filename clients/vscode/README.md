@@ -2,7 +2,7 @@
 
 **The reference client for the Deslop live duplicate-code analysis server.** A long-running LSP + MCP process sits in your workspace and feeds duplicate-code signals — live, on every keystroke — to your editor *and* to whichever AI coding agent is driving it (Claude Code, Cursor, Copilot, Continue, Codex).
 
-Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, 250 ms after the last keystroke**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
+Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — flags duplication on CI, on save, or in a panel you have to remember to open. Deslop surfaces duplicates **inline, next to your cursor, as you type**, and exposes the same live analysis to the agent over MCP so it can check *before* it copy-pastes.
 
 ![The Deslop VS Code extension on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor naming the canonical copy with Compare / View cluster / Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence.](https://deslop.live/assets/img/screenshot.webp)
 
@@ -12,7 +12,7 @@ Every other clone tool — PMD CPD, jscpd, SonarLint, JetBrains inspections — 
 - **Editor (centre)** — the LSP underlines the duplicate as you type, names the **canonical** copy used as the anchor, and offers **Compare with canonical**, **View cluster**, and **Copy for AI** right on the finding.
 - **Compare diff (right)** — VS Code's native side-by-side editor lines this occurrence up against the canonical one so you can confirm before extracting.
 
-Every panel refreshes within 250 ms of a keystroke, and the same live report backs the MCP tools your agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
+Every panel refreshes as you type, and the same live report backs the MCP tools your agent calls. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
 
 ## Features
 

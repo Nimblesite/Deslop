@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: How It Works — Tree-sitter ASTs, MinHash LSH, HNSW embeddings
-description: Deslop's pipeline — tree-sitter parse, AST normalization, Merkle fingerprints, MinHash + LSH, HNSW embeddings, fused 0.85 threshold, worst-offenders ranking. 250 ms reactive loop.
+description: Deslop's pipeline — tree-sitter parse, AST normalization, Merkle fingerprints, MinHash + LSH, HNSW embeddings, fused 0.85 threshold, worst-offenders ranking. Reactive analysis loop.
 eleventyNavigation:
   key: How It Works
   order: 2
@@ -102,7 +102,7 @@ Agents consume JSON. Humans read TXT in the terminal or open the HTML in a brows
 
 Everything above also runs incrementally inside the LSP server (`crates/deslop-core/src/live/`).
 
-A file watcher batches edits (250 ms debounce, 2 s cap) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
+A file watcher batches edits (debounced, with a hard cap so a formatter burst can't starve the scheduler) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
 
 - broadcasts `deslop/reportChanged` over the LSP wire, and
 - serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`.

@@ -182,7 +182,7 @@ JSON 报告是规范输出。文本和 HTML 渲染器是基于该报告的派生
 
 - `session.rs` 拥有实时的 `AnalysisSession`。
 - `scheduler.rs` 串行化经过防抖的文件变更工作。
-- `debouncer.rs` 使用 250 ms 的静默窗口和 2000 ms 的上限。
+- `debouncer.rs` 以静默窗口与硬上限合并一连串文件变更事件。
 - `watcher.rs` 按解析器扩展名和排除项过滤文件系统事件。
 - `api.rs` 暴露报告、范围、簇、嵌入和配置操作。
 
