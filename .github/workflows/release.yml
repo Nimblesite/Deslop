@@ -374,10 +374,17 @@ jobs:
               end
             end
 
+            # Install all three binaries unconditionally. The release tarball
+            # always contains them (the packaging step copies deslop, deslop-lsp,
+            # and deslop-mcp, and verify-deployment-binaries.mjs gates the build
+            # on their presence). A bare `bin.install` fails loudly if a binary
+            # is ever missing — a silent `if File.exist?` guard previously let a
+            # stale tarball install only `deslop`, leaving deslop-mcp off PATH
+            # (issue #240).
             def install
               bin.install "deslop"
-              bin.install "deslop-lsp" if File.exist?("deslop-lsp")
-              bin.install "deslop-mcp" if File.exist?("deslop-mcp")
+              bin.install "deslop-lsp"
+              bin.install "deslop-mcp"
             end
 
             test do
