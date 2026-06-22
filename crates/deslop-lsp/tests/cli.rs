@@ -1,4 +1,7 @@
 //! Contract tests for the `deslop-lsp` binary surface.
+//!
+//! Tests [LSP-TESTING] — spawns the real LSP binary and talks JSON-RPC
+//! over stdio against fixture workspaces; no mocked live session.
 
 mod common;
 

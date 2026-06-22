@@ -65,6 +65,15 @@ flowchart LR
     CliProc <-- "embed batches" --> Ollama
 ```
 
+### [LIVE-BINARY] The live binary
+`deslop-lsp` is the single executable that links the `live` feature of
+`deslop-core` and owns the running `AnalysisSession`, file watcher, and scheduler
+([LIVE-PACKAGING]). It is the only process that performs live analysis: the LSP
+client (VSIX, JetBrains, any editor) and the agent-facing MCP both delegate to it,
+the MCP over the IPC socket ([LIVE-IPC-SOCKET]) and the editor over LSP stdio.
+"The live binary" elsewhere in the specs (e.g. [lsp.md](lsp.md)) names this
+process.
+
 ### [LIVE-LIFECYCLE] Session lifecycle
 
 One `AnalysisSession` per workspace root, owned by `deslop-lsp`. On `initialize`:
@@ -127,6 +136,15 @@ After the **initial** full pipeline pass and after every **cold-pass install** (
 **Use:** the file is an **LSP-private startup cache**, not an IPC channel. On the next LSP startup, [LIVE-CACHE-SEED] (`AnalysisSession::try_seeded_from_cache`) loads it so the editor sees clusters within milliseconds while the cold full pass runs in the background.
 
 **Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
+
+### [LIVE-STATE-FILE] State file (alias)
+`[LIVE-STATE-FILE]` is an alias for the `.deslop-cache/live-report.json`
+warm-start cache specified in full by [LIVE-SEED-CACHE]: written atomically on
+the initial full pass and on each cold-pass install, holding canonical `Report`
+JSON. It is the LSP's private startup cache and the on-disk path named in the
+MCP's `LspNotRunning` recovery payload ([MCP-IPC-DISCOVERY]); it is not an IPC
+channel and is not rewritten on incremental passes. Prefer the [LIVE-SEED-CACHE]
+tag for new references.
 
 ### [LIVE-IPC-SOCKET] IPC endpoint
 
@@ -196,6 +214,16 @@ Single-threaded per session. Consecutive queued changesets merge before dispatch
 
 Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the budget → `tracing::warn!` with timing breakdown.
 
+### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
+Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched
+change ([LIVE-WATCHER]): the watch set always includes the canonical and
+as-given config paths. When such a file lands in a changeset, the scheduler
+reloads the exclusion config and re-evaluates the whole live corpus against it —
+dropping files the new `exclude` patterns now match and re-discovering files a
+removed pattern re-admits — then bumps the generation like any other pass
+([LIVE-SCHEDULER]). A malformed config is logged at `warn` and the previous
+exclusion is kept; a typo never bricks the daemon or empties the report.
+
 ### [LIVE-DELTA] Report deltas
 
 `ReportDelta` is the wire diff between two generations. LSP subscribers consume deltas instead of full snapshots so update traffic stays small.
@@ -230,6 +258,25 @@ The `live` module exposes the `LiveApi` trait. The LSP holds a `LiveApi` impl an
 | `embedding/setModel` | `{ provider_id, model_id, endpoint? }` | `EmbeddingProvenance \| null` | Switch the live embedding model; write workspace settings. |
 | `session/config` | `{}` | `SessionConfig` | min-nodes, languages, embedding provenance, exclusion config, cache dir. |
 
+### [LIVE-RESCAN-FRESHNESS] Single-call rescan freshness
+`rescan` (the `deslop.lsp.refreshReport` IPC method) blocks until a fresh full
+pass completes and returns that pass's report — never one from before the
+refresh. The `paths` argument is informational; the LSP always runs a full
+`refresh_full` under the session lock. The response's `generation` and `clusters`
+fields are drawn from the same post-refresh generation, so one call surfaces the
+post-edit state — eliminated clusters disappear and surviving clusters carry
+post-edit offsets without a second call.
+
+### [LIVE-CLUSTER-OFFSET-FRESHNESS] Cluster offset freshness on read
+A `cluster/byId` read (and `report/forFile` / `report/forRange` /
+`duplicates/findSimilar`) returns occurrence byte and line ranges that map onto
+the current on-disk file, even when the agent has edited files without an explicit
+`rescan` between reads. The session re-stats every occurrence path on each IPC
+read ([LIVE-READ-FRESHNESS]) and synchronously re-analyses any file whose mtime is
+newer than last observed, before resolving the cluster. A stale offset that
+overshoots the post-edit file length would corrupt agent context, so this gate is
+mandatory on every agent-facing read path, not just `rescan`.
+
 ### [LIVE-NOTIFICATIONS] Push notifications
 
 The LSP pushes three notification types to LSP clients (VSIX, other editors):
@@ -239,6 +286,15 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 - `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
 
 The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop-cache/live-report.json` and never watches the workspace.
+
+### [LIVE-REPORT-DISPLAY] Human-readable report display
+On-screen cluster views (LSP cluster virtual documents, hover bubbles, tree rows)
+are for humans, not AI: they render `line:column` locations and source snippets,
+never raw byte offsets. The cluster markdown renderer takes a source lookup and,
+when source is unavailable, prints the occurrence path alone and omits the snippet
+block rather than leaking offset internals. The raw JSON report retains byte
+offsets for AI consumers ([REPORTING-CONTEXT.md](REPORTING-CONTEXT.md)); the
+display layer translates them.
 
 ### [LIVE-PERF-BUDGETS] Performance budgets
 
@@ -251,6 +307,16 @@ The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` con
 | `duplicates/findSimilar`, ≤ 200-node snippet | < 250 ms. |
 
 Missed budgets → `tracing::warn!` with timing breakdown. Ratchet only.
+
+### [PERF-BUDGET-TYPE12] Batch CLI cold-pass budget (Type-1/2, no embeddings)
+A cold-cache `deslop` batch run over a 100 K-LOC C# corpus with embeddings
+disabled (structural + token LSH passes only) completes in **< 30 s** on a release
+binary. This is the CLI counterpart to the daemon budgets above; the embedding
+pass is excluded because Ollama latency dominates and is bounded separately
+([FUSION-EMBED-PROVIDER]). The budget is validated **manually** against a release
+build on a real corpus — coverage-instrumented `cargo test` triples runtime, so
+the E2E suite carries only a lax anti-quadratic regression guard plus correctness
+assertions (every file analysed, ≥ 1 ranked cluster). Ratchet only.
 
 ### [LIVE-NO-REGEX-NO-SHORTCUTS] Rules inherited
 

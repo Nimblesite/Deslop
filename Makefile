@@ -201,6 +201,8 @@ test-ollama: _vsix-test-ollama
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
 
+# [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
+#   version contracts, release-workflow gates, and the verifier proof suite.
 ## deployment-verify: Validate deployment manifest and built binary contracts.
 ##                    Also runs the verifier proof suite which builds fake
 ##                    binaries and plugin zips violating each Shipwright
@@ -250,6 +252,8 @@ _kill-deslop-processes:
 	 fi; \
 	 echo "    all targeted processes are dead (VSCode may auto-respawn — that is fine)"
 
+# [DEPLOY-EXTERNAL-MCP-CONSUMER] No install-binary target by design; this scrub
+#   keeps external MCP clients on the VSIX-bundled binary by absolute path.
 # _delete-path-binaries: Remove any Deslop binaries that have leaked onto the
 #   user's PATH (e.g. from a stray `cargo install`). The VSIX is the only
 #   legitimate distribution surface — the VS Code extension, Claude Code MCP,
@@ -320,6 +324,8 @@ _vsix-playwright-html: _vsix-install
 ##               locally we only have the host toolchain so we only stage that one.
 vsix-package: _delete-path-binaries _vsix-install _vsix-build _vsix-stage-and-package
 
+# [DEPLOY-EXTENSION-BUNDLED-TESTS] Stage binaries into the extension bundle so
+#   VSIX tests run against bundled binaries, never a PATH-visible build.
 _vsix-stage-bundled-binaries:
 	@_uname_s=$$(uname -s); _uname_m=$$(uname -m); \
 	 case "$$_uname_s-$$_uname_m" in \

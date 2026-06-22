@@ -342,6 +342,7 @@ impl LanguageServer for LspBackend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
         crate::parent_process::start_monitor(params.process_id);
         Ok(InitializeResult {
+            // [DEPLOY-PROTOCOL-VERSION] serverInfo.version must equal --version.
             server_info: Some(ServerInfo {
                 name: SERVER_NAME.to_owned(),
                 version: Some(deslop_core::version().to_owned()),
@@ -426,9 +427,9 @@ impl LanguageServer for LspBackend {
     ) -> LspResult<DocumentDiagnosticReportResult> {
         self.observability.record_handler("diagnostic");
         let path = url_to_path(&params.text_document.uri).unwrap_or_default();
-        // [LSP-NON-INTERFERENCE] Read the lock-free snapshot — never the
-        // session mutex — so clone diagnostics can never block behind an
-        // in-flight analysis pass.
+        // [LSP-NON-INTERFERENCE-NONBLOCKING] Read the lock-free snapshot —
+        // never the session mutex — so clone diagnostics can never block
+        // behind an in-flight analysis pass.
         let report = read_report_snapshot(&self.report_snapshot);
         let file_report = report_for_file_in(&report, &path);
         let items = diagnostics::build_for_file(&file_report, &self.workspace_root);
@@ -443,8 +444,8 @@ impl LanguageServer for LspBackend {
         ))
     }
 
-    // [LSP-NON-INTERFERENCE] No `hover` or `goto_definition` handler:
-    // Deslop never answers `textDocument/hover` or
+    // [LSP-NON-INTERFERENCE] [LSP-HOVER] No `hover` or `goto_definition`
+    // handler: Deslop never answers `textDocument/hover` or
     // `textDocument/definition`. Those belong to the editor's real
     // language server. The clone card is surfaced by the VSIX's own
     // additive `ClusterHoverProvider`; canonical navigation is offered
@@ -455,8 +456,9 @@ impl LanguageServer for LspBackend {
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return Ok(None);
         };
-        // [LSP-NON-INTERFERENCE] Lock-free snapshot read — never the
-        // session mutex — so the additive badges never block the editor.
+        // [LSP-NON-INTERFERENCE-NONBLOCKING] Lock-free snapshot read —
+        // never the session mutex — so the additive badges never block the
+        // editor.
         let report = read_report_snapshot(&self.report_snapshot);
         let file_report = report_for_file_in(&report, &path);
         Ok(Some(code_lens::build_for_file(&file_report)))

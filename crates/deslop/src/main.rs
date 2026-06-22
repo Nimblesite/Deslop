@@ -44,6 +44,8 @@ struct Cli {
     path: PathBuf,
 
     /// Minimum AST subtree node count to consider a clone candidate.
+    // [DECISION-MIN-NODES] default 30; subtrees below this floor are
+    // excluded from fingerprinting, clustering, and embedding.
     #[arg(long, default_value_t = 30)]
     min_nodes: u32,
 
@@ -362,6 +364,8 @@ const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
 /// tool name. Without this guard, `deslop top-offenders` silently
 /// "succeeds" with a clean-looking report against a non-existent
 /// directory ([Deslop#132]).
+// [CLI-SUBCOMMAND-LOOKALIKE] rejects a positional path that is actually
+// an MCP tool name / UI label with a named error (cli.md).
 fn validate_scan_path(path: &std::path::Path) -> Result<()> {
     if let Some(name) = path.to_str() {
         if KNOWN_NON_CLI_TOOL_NAMES.contains(&name) {

@@ -43,6 +43,7 @@ const TOOL_DESCRIPTION_MAX_CHARS: usize = 200;
 /// payload ≤16 KB ([MCP-RESULT-SIZE-CAP]).
 #[test]
 fn tools_list_payload_stays_under_codex_wire_budget() -> Result<()> {
+    // Tests [MCP-RESULT-SIZE-CAP]
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
@@ -238,6 +239,7 @@ fn inflate_workspace_with_clones(root: &Path) -> Result<()> {
 /// ([MCP-WIRE-FRAMING]).
 #[test]
 fn resources_templates_list_returns_well_formed_method_not_found() -> Result<()> {
+    // Tests [MCP-WIRE-FRAMING]
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 

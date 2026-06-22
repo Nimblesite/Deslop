@@ -3,6 +3,8 @@ import esbuild from "esbuild";
 const watch = process.argv.includes("--watch");
 const coverage = process.argv.includes("--coverage");
 
+// [VSIX-BUNDLE] Bundles the extension TypeScript into dist/extension.js;
+// the per-platform binaries are staged into bin/<platform>/ separately.
 const ctx = await esbuild.context({
   entryPoints: ["src/extension.ts"],
   bundle: true,

@@ -1,4 +1,5 @@
 //! [Deslop#132] The CLI must not silently scan a non-existent directory.
+//! Tests [CLI-SUBCOMMAND-LOOKALIKE]
 //!
 //! Repro: `deslop top-offenders` was previously parsed as a positional
 //! `PATH=top-offenders`, which doesn't exist, and the pipeline emitted

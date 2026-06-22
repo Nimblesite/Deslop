@@ -1,5 +1,6 @@
 //! E2E regression for GH #96: module `__all__` export lists are
 //! package-surface boilerplate, not duplicate business logic.
+//! Tests [CLONE-NOISE-PY-ALL-EXPORTS]
 
 mod common;
 

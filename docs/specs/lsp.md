@@ -39,13 +39,15 @@ Every Deslop request handler that reads the report (`diagnostic`, `codeLens`) an
 
 The LSP is **one consumer** of the Deslop severity model defined in [severity.md §SEVERITY-MODEL](severity.md#severity-model). That file owns the bucket → severity maps; this section owns only how the **diagnostic** projection reaches the Problems panel. Diagnostics are resolved along two axes, applied in order, behind the master gate.
 
-#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket — diagnostics default OFF
+#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket → severity
 
-Diagnostic publication is **off by default** (`deslop.diagnostics.enabled = false`, the gate in [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). When the user enables it, each bucket publishes at its `deslop.diagnostics.severity.*` level — defaults `Identical → Error`, the other three `→ Warning`, every one configurable to `"error" | "warning" | "information" | "hint" | "none"`. The full default table and the `none`-suppresses-this-bucket semantics live in [severity.md §SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics) and are not duplicated here.
+Every cluster publishes a diagnostic whose severity is resolved from its bucket: `Identical → Error`, and `NearlyIdentical` / `LooselySimilar` / `SameBehavior` → `Warning`. Resolution lives in `crates/deslop-lsp/src/diagnostics.rs::severity_for` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing them from raw weights. A cluster stays fully visible and **coloured** in the tree, code lens, hover, and live bubble regardless of this diagnostic projection; colour is an always-on VSIX concern, independent of whether a diagnostic is published.
 
-A suppressed or gated-off cluster stays fully visible and **coloured** in the tree, code lens, hover, and live bubble — colour comes from the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), not from this diagnostic projection. Suppression only removes the Problems-panel entry and the squiggle.
+**Status: ⏳ The configurable model is planned (#177).** The `deslop.diagnostics.enabled` master gate (diagnostics off by default), the per-bucket `deslop.diagnostics.severity.*` levels with `none`-suppression, the weight-percentile floors ([LSP-SEVERITY-PERCENTILE]), and the bucket-colour map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)) are specified in [severity.md §SEVERITY-MODEL](severity.md#severity-model) but not yet shipped; today every cluster publishes at its bucket default with no gate and no percentile floor.
 
 #### [LSP-SEVERITY-PERCENTILE] Secondary axis: weight-percentile thresholds
+
+**Status: ⏳ Planned (#177).** Percentile floors are not yet implemented; today every cluster in its bucket publishes a diagnostic. The model below is the target.
 
 Within each bucket, a cluster is only published as a diagnostic if its weight percentile (across the whole live report) meets the configured floor. This prevents noise from trivial clusters of the same type drowning out the worst offenders.
 
@@ -70,9 +72,8 @@ Each published diagnostic carries:
 
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
-- `code` — the 16-char cluster id (same one used in text/HTML reports; stable across runs).
-- `codeDescription.href` — `deslop://cluster/<id>` custom URI (see [LSP-VIRTUAL-DOC]).
-- `message` — the cluster's `interpretation` string (already agent-readable per [PRINCIPLES-AUDIENCE-AGENT]).
+- `data` — `{ "cluster_id": <16-char cluster id>, "taxonomy": <academic label> }`. The cluster id (stable across runs, same one used in text/HTML reports) rides the machine-facing `data` so an agent can call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); `code` and `codeDescription` are left unset, and the cluster's `deslop://cluster/<id>` view is reached through [LSP-VIRTUAL-DOC].
+- `message` — `"<bucket title> × <count> — <action sentence>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]).
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
@@ -80,6 +81,8 @@ Each published diagnostic carries:
 Diagnostics refresh on every `report/changed` notification from the daemon. Pull-based (LSP 3.17) because push-based diagnostics can interleave badly with buffer edits; `tower-lsp` gives us pull for free.
 
 ### [LSP-DIAGNOSTICS-SCOPE] Open-file vs. workspace publication
+
+**Status: ⏳ `workspace` mode is planned (#129).** Today only the default `open-files` pull behaviour ships; the `deslop.diagnostics.scope` setting and the `workspace`-mode push below are the target.
 
 Pull-based diagnostics only travel to the editor for files the client actively pulls — in practice, files the user has open. With no tab open the Problems panel is empty even when the workspace contains thousands of offenders, which contradicts the Top Offenders tree (always full) and surprises users who expect Problems to mirror the tree. The fix is a single workspace setting that selects the publication scope. Tracked by [#129](https://github.com/Nimblesite/Deslop/issues/129).
 
@@ -116,6 +119,18 @@ The clone card a user sees on hover is rendered **entirely client-side** by the 
 
 Editors without a Deslop client lose nothing essential: the same clone information is always available through diagnostics ([LSP-DIAGNOSTICS]) — whose `relatedInformation` links to the canonical occurrence — and the code-lens badges ([LSP-CODE-LENS]).
 
+### [LSP-EDITOR-SURFACES] Editor-neutral rendered surfaces
+
+Every Deslop surface that returns rendered content (cluster detail, report, schema
+doc) is produced server-side as editor-neutral markdown/text, so any LSP client —
+VS Code, Neovim, Helix, Zed — gets identical output without re-deriving it from
+the report structure. The `deslop/virtualDocument` method ([LSP-VIRTUAL-DOC]) is
+the canonical example: it resolves each `deslop://` URI into a string the client
+opens in a read-only buffer. Rendering is pure and lives in `deslop-core::render`
+(e.g. `render_cluster_markdown`, `render_text`); the LSP only supplies a
+filesystem source lookup. No surface ships a client-specific shape — the client
+chooses presentation (syntax highlighting, theming), never content.
+
 ### [LSP-VIRTUAL-DOC] Virtual document scheme
 
 The shell registers a `deslop://` URI scheme via `textDocument/didOpen` for paths the client resolves through the custom scheme. Three document types:
@@ -147,6 +162,19 @@ Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embedding
 
 The MCP-facing local IPC endpoint exposes the same live service for agent-side calls that do not travel through a full LSP client. Unix hosts use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`. The full method surface is documented in [LIVE-IPC-SOCKET]: five single-shot reads (`report/get`, `report/forFile`, `report/forRange`, `cluster/byId`, `session/config`), three single-shot computes (`duplicates/findSimilar`, `embedding/listModels`, `deslop.lsp.refreshReport`), and one long-lived subscription (`report/subscribe`) that fans `report/changed` notifications out to the MCP. `deslop.lsp.refreshReport` runs the same full-refresh command used by `workspace/executeCommand` so agent `rescan` calls force a re-analysis pass before the next `report/get`.
 
+### [LSP-WIRE-BUDGET] Keeping the live wire small
+
+Live responses must stay small enough to ship over JSON-RPC on every analysis
+pass, so the wire projection differs from the full in-memory report. Each
+cluster's `occurrences` is capped at `LIVE_WIRE_OCCURRENCE_CAP` (100) with the
+pre-cap total preserved as `occurrences_total`, and the fat derivable strings —
+`schema_doc`, per-cluster `summary` and `interpretation` — are blanked because
+clients regenerate them. The `schema_doc` is served lazily through its own
+`deslop/reportSchemaDoc` method rather than riding every `deslop/reportGet`.
+Clients that need the omitted detail page it back via `deslop/clusterById`; this
+keeps a pathological multi-thousand-occurrence cluster from blowing the wire from
+kilobytes into megabytes.
+
 ### [LSP-PUSH] Active push — the LSP never waits for the editor to ask
 
 **This is the most critical correctness property of the live surface.** The LSP must push `deslop/reportChanged` (and `deslop/analysisState`) the moment re-analysis completes — unconditionally, regardless of which actor caused the file change.
@@ -164,6 +192,17 @@ When the `Scheduler` finishes a pass it broadcasts `ReportChangedNotification` a
 **The VSIX must never rely on polling.** Stale UI after any external mutation — git, terminal, AI agent, CI — is a push-path correctness bug, not a refresh issue. Fix the push.
 
 The `LspBackend` struct owns `_watcher: LiveWatcher` and `_scheduler: Scheduler` for the session lifetime; dropping either stops the watch loop. Watcher startup failures (`LiveError::WatcherInit`) are fatal — the editor surfaces them through the standard "server crashed" notification.
+
+### [LSP-PUSH-NOTIFICATIONS] Server-initiated notifications
+
+Beyond responding to requests, the LSP pushes unsolicited JSON-RPC notifications
+the moment server-side state changes: `deslop/reportChanged` (a new analysis
+generation is ready) and `deslop/analysisState` (running/idle lifecycle). A
+background task drains the scheduler's broadcast channels and forwards each event
+to the client ([LSP-PUSH]), so editor surfaces stay live regardless of which actor
+mutated a file. Notifications are namespaced `deslop/*` ([LSP-CUSTOM-METHODS]);
+clients must never poll in their place, and a stale UI after an external mutation
+is a push-path bug, not a refresh issue ([vsix.md §VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant)).
 
 ### [LSP-EMBEDDING-CONSENT] Startup embedding behaviour
 

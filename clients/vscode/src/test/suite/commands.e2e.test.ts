@@ -5,6 +5,7 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
+// [VSIX-COMMANDS]
 suite("commands", () => {
   suiteSetup(async () => {
     const ext = vscode.extensions.getExtension("nimblesite.deslop-live");

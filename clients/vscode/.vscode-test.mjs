@@ -19,6 +19,8 @@ export default defineConfig({
       launchArgs: ["--disable-extensions"],
       env: {
         DESLOP_TEST_FIXTURE: fixture,
+        // [VSIX-BUNDLED-BINARY-TESTS] Clear the override env so resolution
+        // falls to ${extensionPath}/bin/<platform>/ — proves the bundle.
         DESLOP_BINARY_DIR: "",
         DESLOP_LSP_PATH: "",
         DESLOP_MCP_PATH: "",

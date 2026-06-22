@@ -1,5 +1,14 @@
 # Severity model
 
+> **Status: ⏳ Planned (#177).** This file specifies the *target* two-map severity
+> model. It is **not yet shipped**: today the LSP publishes a diagnostic for every
+> cluster with severity resolved from its bucket (`Identical → Error`, the rest
+> `→ Warning`, no `deslop.diagnostics.enabled` gate and no percentile floor — see
+> [lsp.md §LSP-SEVERITY-BUCKET](lsp.md#lsp-severity-bucket)), and the VSIX colours
+> surfaces from a rank-percentile scale, not the bucket-colour map below. The
+> configurable maps, the off-by-default gate, and the percentile floors are the
+> roadmap captured here so the build is unambiguous when #177 lands.
+
 Deslop owns a **severity** concept that is independent of any one editor surface. A cluster's severity is derived from its **bucket** ([taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets)) through user-configurable maps, and is then **projected** onto two surfaces that consume it differently. This file is the single source of truth for that model; [lsp.md §LSP-SEVERITY](lsp.md#lsp-severity) describes the diagnostic projection and [vsix.md §VSIX-SEVERITY-CONTROL](vsix.md#vsix-severity-control) describes the in-panel UI that drives it.
 
 ### [SEVERITY-MODEL] One identity, two maps, two projections

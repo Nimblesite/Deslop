@@ -1,4 +1,8 @@
 //! Deployment Toolkit binary version output helpers.
+//!
+//! [DEPLOY-VERSION-CONTRACT] Plain first line is `<component-id> <semver>`;
+//! `--version --json` emits the manifest (manifestVersion/name/version/kind/
+//! language/product) validating against the version-manifest schema.
 
 use serde::Serialize;
 

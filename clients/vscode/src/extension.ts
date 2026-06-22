@@ -77,6 +77,8 @@ export interface ExtensionApi {
   readonly reportStore: ReportStore | undefined;
 }
 
+// [VSIX-ACTIVATION] Entry point: resolve binaries, start the LSP client,
+// wire reports/commands/decorations before live analysis begins.
 export async function activate(
   context: vscode.ExtensionContext,
 ): Promise<ExtensionApi> {
@@ -167,6 +169,8 @@ export async function activate(
       currentBinarySettings(),
     );
     resolvedLsp = requireResolved(resolved, "deslop-lsp");
+    // [VSIX-MCP-INTEGRATION] Resolve the bundled deslop-mcp so VS Code's
+    // MCP-aware agent hosts drive the same live daemon as the UI.
     resolvedMcp = resolved["deslop-mcp"];
     log("lsp resolved", {
       path: resolvedLsp.path,
@@ -222,6 +226,8 @@ export async function activate(
   wireNotifications(client, reportStore);
   await seedInitialReport(client, reportStore);
   context.subscriptions.push(
+    // [VSIX-SETTINGS] Hot-reload deslop.* settings to the running LSP
+    // without a restart (embedding settings sync here).
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("deslop.embedding")) return;
       syncEmbeddingSettingsToLsp(reportStore, () => client).catch(
@@ -572,6 +578,8 @@ export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
       ? err.message
       : "Deslop failed to start its analysis server. See the Deslop output channel.";
   store?.setLifecycle({ kind: "failed", message });
+  // [VSIX-NOTIFICATIONS] Daemon startup failure → error toast with a
+  // "Reveal log" button (sparing notifications only).
   vscode.window.showErrorMessage(message, "Reveal log").then(
     (choice) => {
       if (choice === "Reveal log") initOutputChannel().show();

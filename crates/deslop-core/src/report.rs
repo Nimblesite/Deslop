@@ -260,6 +260,8 @@ fn cluster_is_hidden<S: BuildHasher>(
         return true;
     }
     let kind = classify(report_cluster);
+    // [DECISION-CROSS-LANGUAGE] Cross-language clusters stay hidden unless the
+    // opt-in is enabled — off by default, no heuristics or type-system bridges.
     let token_only_or_mega = (kind == ClusterKind::LooselySimilar
         || is_low_structure_embedding_mega_cluster(report_cluster))
         && !(inputs.exclusion.allows_cross_language_comparison()

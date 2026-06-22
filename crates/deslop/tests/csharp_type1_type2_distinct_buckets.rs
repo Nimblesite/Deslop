@@ -6,6 +6,7 @@
 //! identifiers) must NOT claim "every copy is the same". csharp-type1
 //! (two methods that are byte-identical) MUST have at least one cluster
 //! claiming "every copy is the same".
+//! Tests [CLONE-BUCKETS-IDENTICAL]
 
 use std::{fs, path::Path};
 

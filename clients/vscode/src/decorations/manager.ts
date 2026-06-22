@@ -40,6 +40,8 @@ export class DecorationManager implements vscode.Disposable {
       // unsaved edit reaches this via the dirty projection on visibleReport) or when
       // the set of visible editors changes. Deliberately NOT subscribed to
       // onDidChangeTextDocument: decorations do no work per keystroke.
+      // [VSIX-REACTIVITY-DECORATIONS] Signal-driven: the effect re-runs when
+      // the report changes; a removed cluster's decorations drop on diff.
       { dispose: effect(() => { void this.store.visibleReport.value; this.scheduleRedraw(); }) },
       vscode.window.onDidChangeVisibleTextEditors(() => this.scheduleRedraw()),
       { dispose: () => this.scheduleRedraw.cancel() },

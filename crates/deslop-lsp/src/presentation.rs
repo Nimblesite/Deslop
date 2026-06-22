@@ -18,6 +18,9 @@ pub fn diagnostic_message(cluster: &ReportCluster) -> String {
 }
 
 /// Stores machine-facing cluster identity outside visible diagnostic text.
+///
+/// [LSP-AGENT-FRIENDLY] The cluster id rides the machine-facing `data` so
+/// an agent can call `deslop/clusterById` without parsing the message text.
 #[must_use]
 pub fn diagnostic_data(cluster: &ReportCluster) -> Value {
     let labels = bucket_labels(classify(cluster));

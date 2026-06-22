@@ -55,12 +55,49 @@ When Deslop changes its deployment contract, update the private toolkit fixtures
 for `fixtures/manifests/deslop.json` and the Rust version-output fixtures in the
 same release workflow.
 
+## CI & supply-chain gates
+
+These gates run in `.github/workflows/` and `.deslop.toml` and fail the pipeline
+on drift. Coverage floors are owned by `coverage-thresholds.json`
+(`REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON]`).
+
+- **[CI-DESLOP] Self-hosted duplication gate** — Deslop dog-foods its own
+  detector: the `build` job runs the just-built release binary
+  (`./target/release/deslop . --no-color`) against this repository. The binary
+  reads the ratcheted `[threshold] max_duplication_percent` from `.deslop.toml`
+  (the single source of truth — never hardcoded in CI) and exits 3
+  ([pipeline.md §EXIT-CODES](pipeline.md)) the moment repo-wide weighted
+  duplication climbs past it. The same threshold surfaces as a single LSP startup
+  warning ([CI-DESLOP] is a CLI-only *gate*; the live LSP surface only *warns*).
+- **[GITHUB-CODE-SCANNING] CodeQL** — `codeql.yml` runs CodeQL
+  `security-extended` to feed GitHub code-scanning alerts (PRs to `main`, `v*`
+  tags, weekly), across the `rust` / `javascript-typescript` / `actions` matrix
+  with `build-mode: none`, gated on public-repo visibility. It is the sole owner
+  of vulnerable-code detection; `java-kotlin` (JetBrains) is deferred until a
+  `build-mode: manual` Gradle step exists.
+- **[GITHUB-DEP-REVIEW] Dependency review** — the `security` job in `ci.yml` runs
+  `actions/dependency-review-action` on every `pull_request`, blocking merges that
+  add a dependency with a known vulnerability at `fail-on-severity: high`. It is
+  the repo's only dependency vulnerability gate.
+- **[GITHUB-DEPENDABOT] Dependabot** — `.github/dependabot.yml` raises weekly
+  grouped updates for every ecosystem (github-actions, cargo, npm ×3, gradle).
+  Routine version bumps target the long-lived `dependabot-upgrades` staging branch
+  and are auto-squash-merged by `dependabot-automerge.yml`, so the expensive
+  CI + CodeQL matrix runs once on the single `dependabot-upgrades → main`
+  consolidation PR; security updates open against `main` directly.
+- **[SWR-SEC-ACTION-PINNING] Action SHA pinning** — security-critical workflows
+  pin third-party GitHub Actions to a full 40-character commit SHA with a trailing
+  `# vX.Y.Z` comment, because a floating tag can be re-pointed at malicious code
+  after review; `codeql.yml` is pinned today and the `github-actions` Dependabot
+  group keeps the pins current while the standard is rolled out to the remaining
+  workflows.
+
 ## Distribution channels
 
 A `v*` tag fans out to every channel from one workflow
 (`.github/workflows/release.yml`):
 
-- **VS Code Marketplace** — `publish-marketplace` runs one `vsce publish` per
+- **VS Code Marketplace** ([DEPLOY-VSCE-MARKETPLACE]) — `publish-marketplace` runs one `vsce publish` per
   platform-specific VSIX using Microsoft Entra OIDC, not a stored Marketplace
   PAT. The job runs in the protected `release` environment with
   `id-token: write`, signs in through the shared
@@ -98,6 +135,6 @@ exactly two sources, in order: the user override
 PATH, env-var, cargo-bin, package-manager, or GitHub-release fallback — the
 extension runs the binary it shipped with, or the one the user explicitly
 pointed at, or activation fails loudly. This is the `["user-setting", "bundled"]`
-source list in `shipwright.json` and `VSIX_HOST_SOURCES` in
-`clients/vscode/src/deployment/sources.ts`. See ADR-0002 (no silent PATH
-fallback) and [DEPLOY-RESOLVE-SOURCES].
+source list in `shipwright.json`, applied by the `candidates()` ordering in
+`clients/vscode/src/binary.ts`. See ADR-0002 (no silent PATH fallback) and
+[DEPLOY-RESOLVE-SOURCES].

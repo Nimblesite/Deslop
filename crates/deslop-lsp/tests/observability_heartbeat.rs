@@ -124,6 +124,7 @@ fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
 /// Audience: HUMAN. Issue #29. A maintainer must be able to ask a user
 /// to set `DESLOP_PROFILE_DIR`, reproduce the CPU spike, and attach the
 /// resulting Firefox-profiler JSON file.
+// Tests [LIVE-PROFILING]
 #[cfg(all(feature = "profiling", unix))]
 #[test]
 fn profile_dir_writes_non_empty_firefox_profile_on_shutdown() -> Result<()> {
