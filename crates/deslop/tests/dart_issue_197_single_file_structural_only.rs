@@ -56,14 +56,37 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
     let scan_root = fixture("dart-issue-197-settings-getters");
     let report = run_report(&scan_root)?;
 
-    let total_clusters = report
+    // [METRICS-REPO] The duplication metric counts only the clusters the
+    // report renders. Every family in this fixture is a hidden
+    // structural-only sibling-method family, so the metric must report zero
+    // duplication even though the families were detected (asserted via
+    // `clusters_hidden` below) — proving a structural-only shape match
+    // cannot inflate the percentage.
+    let visible_contributing = report
         .pointer("/metrics/clusters_total")
         .and_then(Value::as_u64)
         .unwrap_or_default();
+    assert_eq!(
+        visible_contributing, 0,
+        "every family here is hidden structural-only, so none may count as a \
+         visible contributing cluster: {report:#}"
+    );
+    let duplicated_loc = report
+        .pointer("/metrics/duplicated_loc")
+        .and_then(Value::as_u64)
+        .unwrap_or(u64::MAX);
+    assert_eq!(
+        duplicated_loc, 0,
+        "structural-only sibling families must add zero duplicated lines: {report:#}"
+    );
+    let duplication_percent = report
+        .pointer("/metrics/duplication_percent")
+        .and_then(Value::as_f64)
+        .unwrap_or(-1.0);
     assert!(
-        total_clusters >= 1,
-        "fixture must produce at least one cluster (visible or hidden) so the \
-         single-file structural_only demotion is actually exercised: {report:#}"
+        (0.0..=0.0001).contains(&duplication_percent),
+        "duplication_percent must be 0 when every cluster is hidden — the metric \
+         is not influenced by structural-only shape matches: got {duplication_percent}"
     );
 
     let clusters = report

@@ -58,15 +58,37 @@ fn issue_134_structural_only_clusters_are_not_nearly_identical() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = fixture("csharp-issue-134-structural-only");
     let report = run_report(tmp.path(), &scan_root)?;
-    let total_clusters = report
-        .get("metrics")
-        .and_then(|metrics| metrics.get("clusters_total"))
+    // [METRICS-REPO] `clusters_total` counts only the clusters the report
+    // renders. This fixture's sole family is a hidden structural-only
+    // cluster, so it contributes zero to the metric while still being
+    // detected (`clusters_hidden`) — a structural-only shape match cannot
+    // inflate the percentage.
+    let visible_contributing = report
+        .pointer("/metrics/clusters_total")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(u64::MAX);
+    assert_eq!(
+        visible_contributing, 0,
+        "hidden structural-only cluster must not count as a visible \
+         contributing cluster: {report}"
+    );
+    let clusters_hidden = report
+        .get("clusters_hidden")
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     assert!(
-        total_clusters >= 1,
-        "fixture must produce at least one cluster (visible or hidden) so \
+        clusters_hidden >= 1,
+        "fixture must produce at least one hidden structural-only cluster so \
          the bucketing rule is actually exercised: {report}"
+    );
+    let duplication_percent = report
+        .pointer("/metrics/duplication_percent")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(-1.0);
+    assert!(
+        (0.0..=0.0001).contains(&duplication_percent),
+        "structural-only shape matches must not influence duplication_percent: \
+         got {duplication_percent}"
     );
     let clusters = report
         .get("clusters")

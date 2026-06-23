@@ -11,7 +11,11 @@
 
 #![allow(dead_code)]
 
-use std::{fs, path::Path, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::anyhow;
 pub(crate) use anyhow::Result;
@@ -148,4 +152,75 @@ pub(crate) fn summaries_where(
         }
     }
     Ok(summaries)
+}
+
+/// Reads a scalar field off the report's `metrics` block ([METRICS-REPO]).
+pub(crate) fn metric_field<'a>(report: &'a Value, name: &str) -> &'a Value {
+    field(field(report, "metrics"), name)
+}
+
+/// `metrics.per_file` rows, or an empty slice when absent.
+pub(crate) fn per_file_metrics(report: &Value) -> &[Value] {
+    metric_field(report, "per_file")
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+}
+
+/// Count of a cluster's non-hidden (live) occurrences.
+pub(crate) fn live_occurrences(cluster: &Value) -> usize {
+    occurrences(cluster)
+        .iter()
+        .filter(|occurrence| !field(occurrence, "hidden").as_bool().unwrap_or(false))
+        .count()
+}
+
+/// Line-set cardinality as the `u64` the wire metric uses.
+pub(crate) fn line_count(lines: &BTreeSet<u64>) -> u64 {
+    u64::try_from(lines.len()).unwrap_or(u64::MAX)
+}
+
+/// Per-file set of line numbers covered by the non-hidden occurrences of the
+/// report's *visible* clusters — the exact line set [METRICS-REPO] requires
+/// the duplication metric to count. Keyed by the relative occurrence path so
+/// callers match it against the absolute metric path with `ends_with`.
+pub(crate) fn visible_duplicated_lines(report: &Value) -> BTreeMap<String, BTreeSet<u64>> {
+    let mut per_file: BTreeMap<String, BTreeSet<u64>> = BTreeMap::new();
+    for cluster in clusters(report) {
+        for occurrence in occurrences(cluster) {
+            if field(occurrence, "hidden").as_bool().unwrap_or(false) {
+                continue;
+            }
+            let Some(path) = field(occurrence, "path").as_str() else {
+                continue;
+            };
+            let start = field(occurrence, "start_line").as_u64().unwrap_or(0);
+            let end = field(occurrence, "end_line").as_u64().unwrap_or(0);
+            let entry = per_file.entry(path.to_owned()).or_default();
+            for line in start..=end {
+                let _inserted = entry.insert(line);
+            }
+        }
+    }
+    per_file
+}
+
+/// Total lines the report's visible clusters cover across every file — the
+/// repo-level `duplicated_loc` the metric must report ([METRICS-REPO]).
+pub(crate) fn visible_duplicated_loc(report: &Value) -> u64 {
+    visible_duplicated_lines(report)
+        .values()
+        .map(line_count)
+        .sum()
+}
+
+/// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
+/// into a freshly created `dir`: the minimal corpus for a fully-duplicated
+/// repo, used to prove the duplication metric is language-agnostic.
+pub(crate) fn write_identical_pair(dir: &Path, extension: &str, source: &str) -> Result<()> {
+    fs::create_dir_all(dir)?;
+    for stem in ["a", "b"] {
+        fs::write(dir.join(format!("{stem}.{extension}")), source)?;
+    }
+    Ok(())
 }

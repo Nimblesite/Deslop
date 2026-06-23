@@ -149,6 +149,17 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         .map(|cluster| materialise_cluster(cluster, &inputs, &parse_cache, policy))
         .collect();
     let clusters_hidden = materialised.iter().filter(|(_, hidden)| *hidden).count();
+    // The metric must count the same clusters the report renders, so it
+    // sees only the survivors of `materialise_cluster` — never a cluster
+    // dropped as report-hidden, noise, or structural-only sibling
+    // boilerplate. Aligned positionally with `inputs.clusters` because
+    // `materialised` was mapped over it in order ([METRICS-REPO]).
+    let visible_internal: Vec<&Cluster> = inputs
+        .clusters
+        .iter()
+        .zip(&materialised)
+        .filter_map(|(cluster, (_, hidden))| (!hidden).then_some(cluster))
+        .collect();
     let mut visible_clusters: Vec<ReportCluster> = materialised
         .into_iter()
         .filter_map(|(cluster, hidden)| if hidden { None } else { Some(cluster) })
@@ -156,7 +167,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
     reweigh_by_visible_occurrences(&mut visible_clusters, policy);
     log_bucket_distribution(&visible_clusters, clusters_hidden);
     let mut metrics = compute_repo_metrics(&MetricsInputs {
-        clusters: inputs.clusters,
+        clusters: &visible_internal,
         sources: inputs.sources,
         file_languages: inputs.file_languages,
         registry: inputs.registry,
