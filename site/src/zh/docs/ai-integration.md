@@ -73,7 +73,34 @@ args    = ["--root", "."]
 }
 ```
 
-> **不要让 MCP 客户端指向 `cargo install` 或 `target/release` 构建产物。** 从源码构建 Deslop 是为了测试你刚做的改动；它不是分发渠道。本仓库刻意不提供 `make install-binary` 目标。Deslop 支持的唯一通过 PATH 解析的形式是面向 CLI 用户的 `brew install nimblesite/tap/deslop` / `scoop install deslop`——这些包管理器会让二进制文件与发布版本步调一致地版本化。
+> **不要让 MCP 客户端指向 `cargo install` 或 `target/release` 构建产物。** 从源码构建 Deslop 是为了测试你刚做的改动；它不是分发渠道。本仓库刻意不提供 `make install-binary` 目标。
+
+## Homebrew / Scoop CLI 用户——指向 `$PATH` 上的裸 `deslop-mcp`
+
+如果你通过 `brew install nimblesite/tap/deslop` 或 `scoop install deslop` 安装了 CLI，该包还会把 **`deslop-mcp` 和 `deslop-lsp` 一并放到你的 `$PATH`** 上，与 `deslop` 并列——tap formula 和 Scoop manifest 会安装全部三个二进制文件，并与发布版本锁定。无需 VSIX、无需扩展目录、无需绝对路径。直接使用裸命令：
+
+```bash
+claude mcp add deslop -s user -- deslop-mcp --root .
+```
+
+```json
+{
+  "mcpServers": {
+    "deslop": {
+      "command": "deslop-mcp",
+      "args": ["--root", "."]
+    }
+  }
+}
+```
+
+同样的 `"command": "deslop-mcp"` 形式适用于 Codex（`~/.codex/config.toml`）、Cursor 和 Continue。它也是签入 `.mcp.json` 或团队共享配置的正确取值——每台机器都通过 `$PATH` 解析它。
+
+需要知道的三点：
+
+- **不存在 `deslop mcp` 子命令。** `deslop` CLI 只用于一次性运行和 CI 审计；MCP 由**独立的 `deslop-mcp` 二进制文件**提供。
+- **`$PATH` 上找不到 `deslop-mcp`？** 它是在 v0.13.0 加入 brew/scoop 包的。在较旧的安装上，运行 `brew upgrade deslop`（或 `scoop update deslop`）——当前发布版本会把 `deslop-mcp` 和 `deslop-lsp` 放到 `$PATH` 上。
+- **从源码构建不会把任何东西放到 `$PATH` 上。** 只有 `brew` / `scoop` 会这么做。这些包管理器会让二进制文件与发布版本步调一致地版本化；`cargo build` 不会。
 
 ## 预防胜于治疗——`find-similar` 是基石
 

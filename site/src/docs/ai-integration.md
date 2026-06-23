@@ -72,7 +72,34 @@ args    = ["--root", "."]
 }
 ```
 
-> **Do not point an MCP client at a `cargo install` or `target/release` build.** Building Deslop from source is for testing the change you just made; it is not a distribution channel. The repo deliberately ships no `make install-binary` target. The only PATH-resolved form Deslop supports is `brew install nimblesite/tap/deslop` / `scoop install deslop` for CLI users — those package managers version the binary lock-step with the release.
+> **Do not point an MCP client at a `cargo install` or `target/release` build.** Building Deslop from source is for testing the change you just made; it is not a distribution channel. The repo deliberately ships no `make install-binary` target.
+
+## Homebrew / Scoop CLI users — point at the bare `deslop-mcp` on `$PATH`
+
+If you installed the CLI with `brew install nimblesite/tap/deslop` or `scoop install deslop`, the package also puts **`deslop-mcp` and `deslop-lsp` on your `$PATH`** alongside `deslop` — the tap formula and Scoop manifest install all three binaries, version-locked to the release. No VSIX, no extension directory, no absolute path. Use the bare command:
+
+```bash
+claude mcp add deslop -s user -- deslop-mcp --root .
+```
+
+```json
+{
+  "mcpServers": {
+    "deslop": {
+      "command": "deslop-mcp",
+      "args": ["--root", "."]
+    }
+  }
+}
+```
+
+The same `"command": "deslop-mcp"` form works in Codex (`~/.codex/config.toml`), Cursor, and Continue. It is the right value for a checked-in `.mcp.json` or shared team config — every machine resolves it through `$PATH`.
+
+Three things to know:
+
+- **There is no `deslop mcp` subcommand.** The `deslop` CLI runs one-shot and CI audits only; MCP is served by the **separate `deslop-mcp` binary**.
+- **`deslop-mcp` not found on `$PATH`?** It was added to the brew/scoop packages in v0.13.0. On an older install, run `brew upgrade deslop` (or `scoop update deslop`) — the current release ships `deslop-mcp` and `deslop-lsp` on `$PATH`.
+- **Building from source does not put anything on `$PATH`.** Only `brew` / `scoop` do. Those package managers version the binary lock-step with the release; a `cargo build` does not.
 
 ## Prevention beats cure — `find-similar` is the keystone
 
