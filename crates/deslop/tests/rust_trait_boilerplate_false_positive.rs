@@ -2,6 +2,7 @@
 //! implement the same `LanguageParser` trait surface. That adapter
 //! boilerplate is required by the trait contract and must not rank as
 //! duplicate business logic.
+//! Tests [CLONE-NOISE-RUST-LANGPARSER]
 
 use std::{
     collections::BTreeSet,

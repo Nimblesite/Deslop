@@ -35,7 +35,31 @@ An agent that runs the CLI once at the start of a session sees a stale report af
 
 The MCP surface splits into **tools**, **resources**, and **notifications**.
 
+### [MCP-WIRE-FRAMING] JSON-RPC stdio framing
+
+The MCP stdio transport carries one JSON-RPC 2.0 message per line: each frame is
+UTF-8 JSON terminated by a single `\n`, written under one mutex so responses and
+server→client notifications never interleave. One frame in produces zero frames
+out for a notification (no `id`) or exactly one for a request. Error frames are
+strict JSON-RPC envelopes — `{ "jsonrpc": "2.0", "id": <n>, "error": { "code",
+"message", "data"? } }` with no extra top-level or error keys — using the
+canonical reserved codes: ParseError (-32700) for malformed JSON, InvalidRequest
+(-32600) for a wrong `jsonrpc` version, MethodNotFound (-32601) for an unknown
+method, and InvalidParams (-32602) for bad arguments. The strict shape is what
+keeps stricter clients (Codex's `rmcp_client`) from tripping on an unexpected
+envelope.
+
 ### [MCP-TOOLS] Six tools
+
+> **Status: ⏳ The six-tool surface is planned ([DECISION-MCP-SURFACE]).** The
+> shipped server still exposes the twelve-tool surface — `top-offenders`,
+> `report-get`, `report-query`, `report-for-file`, `report-for-range`,
+> `find-similar`, `cluster-by-id`, `rescan`, `schema-doc`, `session-config`,
+> `list-embedding-models`, `set-embedding-model`. The consolidation into
+> `duplicates` ([MCP-TOOL-DUPLICATES]), one `session` tool ([MCP-TOOL-SESSION]),
+> and the array-valued filter block ([MCP-TOOL-FILTERS]) has not landed; the
+> worst-first ranking, occurrence budget, consent gate, and registry-derived
+> enums those sections describe are implemented today on the current surface.
 
 **Exactly six tools** ([DECISION-MCP-SURFACE]). Two calls carry the product: **`find-similar`
 before writing code (prevention)** and **`duplicates` when fixing it (cure)**; the other four are
@@ -167,6 +191,22 @@ findings — is fully enumerable by paging until fewer than 100 come back.
 
 Tool descriptions lead with the budget so an LLM reading `tools/list` sees the contract before the
 first call. The budget behaviour is pinned by the issue-136 tests named in [MCP-TESTING].
+
+### [MCP-RESULT-SIZE-CAP] Defensive tool-result size cap
+
+Every `tools/call` result envelope is bounded at a fixed wire budget of **200 KB**
+(well under the ~512 KB most JSON-RPC clients tolerate, and below the smaller
+ceiling at which Codex's `rmcp_client` crashes — issue #136). This is the outer,
+last-resort guard layered on top of the per-call occurrence budget
+([MCP-OCCURRENCE-BUDGET]). When a serialized payload exceeds the cap the
+dispatcher drops clusters from the tail of the inner `clusters[]` array until it
+fits, then stamps the response with `truncated: true`, a human-readable
+`truncated_reason`, `truncated_at_bytes`, and a `next_action` pointer to the
+paginated report tool; payloads with no `clusters` array degrade to a stub
+carrying the same markers. Every truncation emits a `tracing::warn!` so operators
+can size their corpora. A companion budget keeps the whole `tools/list` payload
+≤16 KB with each description ≤200 chars so long-form rationale stays in the
+`deslop://schema` resource.
 
 ### [MCP-EMBEDDING-CONSENT] Embedding model consent
 

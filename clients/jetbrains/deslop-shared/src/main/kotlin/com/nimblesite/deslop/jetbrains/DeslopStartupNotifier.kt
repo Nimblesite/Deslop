@@ -4,6 +4,8 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
 
+// [DEPLOY-JETBRAINS-PACKAGE] Surfaces deslop-lsp startup/verification failure
+// through a JetBrains notification, per the package contract's failure-reporting.
 object DeslopStartupNotifier {
     private const val GROUP_ID = "Deslop"
 

@@ -1,9 +1,10 @@
 //! E2E tests for the state-file and IPC surfaces added by the
 //! MCP-architecture fix.
 //!
-//! [LIVE-STATE-FILE] The LSP writes `.deslop-cache/live-report.json`
-//! after every analysis pass so the MCP can read it without running its
-//! own pipeline.
+//! [LIVE-STATE-FILE] The LSP writes `.deslop-cache/live-report.json` on
+//! initialize and on each cold-pass install — never on incremental passes
+//! ([LIVE-SEED-CACHE]) — so the MCP can warm-start without running its own
+//! pipeline.
 //!
 //! [LSP-IPC] The LSP exposes `.deslop-cache/deslop.sock` (Unix only)
 //! so the MCP can delegate `duplicates/findSimilar` and

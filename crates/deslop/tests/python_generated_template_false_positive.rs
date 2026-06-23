@@ -1,6 +1,7 @@
 //! E2E regression for GH #126: generated-output headers and the
 //! generator template strings that produce them are intentionally
 //! related, but they are not actionable duplicate logic.
+//! Tests [CLONE-NOISE-PY-GENERATED-OUTPUT]
 
 mod common;
 

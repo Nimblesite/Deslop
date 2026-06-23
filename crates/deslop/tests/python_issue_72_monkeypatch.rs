@@ -1,5 +1,6 @@
 //! E2E regression for GH #72: `monkeypatch.setenv` setup patterns across
 //! config tests are scaffolding, not duplicate logic.
+//! Tests [CLONE-NOISE-PY-MONKEYPATCH]
 
 use std::fs;
 

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
+// [DEPLOY-JETBRAINS-PACKAGE] CI gate for the JetBrains plugin package contract.
 // Verifies the shipped JetBrains plugin zip. With no path argument it checks the
 // single :deslop-lsp4ij artifact (one LSP4IJ build serves Android Studio, IntelliJ
 // Community, and Rider/Ultimate), which bundles shipwright.json at its root plus a

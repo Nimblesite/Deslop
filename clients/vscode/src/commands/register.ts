@@ -45,6 +45,7 @@ interface CommandBinding {
   readonly run: (deps: CommandDeps, ...args: unknown[]) => unknown;
 }
 
+// [VSIX-COMMANDS] Single source of truth for every command-palette entry.
 const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.openReport", run: ({ context, store }) => openReportPanel(context, store) },
   { id: "deslop.openWorstCluster", run: ({ context, store }) => openWorstCluster(context, store) },
@@ -55,6 +56,8 @@ const COMMAND_BINDINGS: readonly CommandBinding[] = [
   { id: "deslop.toggleShowAllLenses", run: toggleShowAllLenses },
   { id: "deslop.showSchemaDoc", run: ({ context, store, clientOf }) => openSchemaDoc(context, store, clientOf) },
   { id: "deslop.revealCpuReport", run: ({ clientOf }) => openCpuReport(clientOf) },
+  // [VSIX-CODE-LENS] The lens "Jump" action cycles occurrences without
+  // routing through textDocument/definition ([LSP-NON-INTERFERENCE]).
   { id: "deslop.jumpToNextOccurrence", run: ({ store }, clusterId, occurrenceIndex) => jumpToNextOccurrence(store, clusterId, occurrenceIndex) },
   { id: "deslop.compareWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },
   { id: "deslop.compareOccurrenceWithCanonical", run: ({ store }, target) => compareWithCanonicalTarget(store, target) },

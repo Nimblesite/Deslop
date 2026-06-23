@@ -42,6 +42,8 @@ export function openClusterPanel(
   activePanels.set(key, { panel, kind: "cluster", storeSubscription: unsub });
 }
 
+// [VSIX-REPORT-WEBVIEW] Full report webview — the host pushes report
+// snapshots; the webview stays dumb and renders from store signals.
 export function openReportPanel(context: vscode.ExtensionContext, store: ReportStore): void {
   const key = "report";
   const existing = activePanels.get(key);

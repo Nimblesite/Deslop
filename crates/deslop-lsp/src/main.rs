@@ -1,4 +1,8 @@
 //! Process adapter for the `deslop-lsp` application layer.
+//!
+//! [LIVE-BINARY] `deslop-lsp` is the single executable that owns the live
+//! `AnalysisSession`, file watcher, and scheduler; the LSP client and the
+//! agent-facing MCP both delegate to this process.
 
 use std::{env, process::ExitCode};
 

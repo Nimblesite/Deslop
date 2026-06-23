@@ -256,6 +256,8 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
       // Never declare the codebase clean until the server confirms a
       // completed scan ("ready"); while scanning, show progress instead.
       if (indicator) return [indicator];
+      // [VSIX-PRINCIPLES] Silence when clean: a single calm empty-state row
+      // when there is no duplication (principle 2).
       return [new StatusNode("No duplication detected", "info")];
     }
     const roots = buildRoots(visibleReport.clusters);

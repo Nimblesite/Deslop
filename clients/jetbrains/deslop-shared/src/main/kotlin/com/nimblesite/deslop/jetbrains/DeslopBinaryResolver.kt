@@ -13,6 +13,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+// [DEPLOY-RESOLVER] JetBrains host resolver: loads shipwright.json, walks the
+// candidate sources, and proves each binary's component id + expected version.
 object DeslopBinaryResolver {
     fun resolveLsp(pluginId: String): DeslopResolvedBinary {
         val pluginRoot = pluginRoot(pluginId)

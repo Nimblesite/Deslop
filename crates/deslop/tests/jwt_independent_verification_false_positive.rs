@@ -2,6 +2,7 @@
 //! HS256 signing to verify a production JWT minter are intentionally
 //! duplicative. Extracting a shared helper would make the tests verify
 //! the same implementation they are meant to check.
+//! Tests [CLONE-NOISE-PY-JWT-HS256]
 
 use std::{collections::BTreeSet, fs, path::Path};
 

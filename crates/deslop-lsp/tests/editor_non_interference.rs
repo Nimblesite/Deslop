@@ -105,6 +105,7 @@ fn go_to_definition_is_never_answered_by_deslop() -> Result<()> {
     Ok(())
 }
 
+// Tests [LSP-HOVER]
 #[test]
 fn hover_is_never_answered_by_deslop() -> Result<()> {
     // Hover belongs to the editor's language server. The clone card is an

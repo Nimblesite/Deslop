@@ -1850,6 +1850,7 @@ fn set_embedding_model_unknown_provider_errors() -> Result<()> {
 
 #[test]
 fn session_config_reportsworkspace_root_and_languages() -> Result<()> {
+    // Tests [MCP-TOOL-SESSION]
     // [MCP-IPC-CLIENT] session-config goes over IPC to the running
     // LSP, so `min_nodes` is the LSP's default (30) — the fixture's
     // pre-committed value is no longer the wire source.
@@ -2269,6 +2270,7 @@ fn set_embedding_model_missing_model_id_returns_invalid_params() -> Result<()> {
 
 #[test]
 fn set_embedding_model_without_user_initiation_returns_invalid_params() -> Result<()> {
+    // Tests [MCP-EMBEDDING-CONSENT]
     let (child, response) = init_and_tool_response(
         "set-embedding-model",
         &json!({ "provider_id": "ollama", "model_id": "nomic-embed-text" }),

@@ -1,8 +1,9 @@
 //! Feature-gated CPU profiling support for `deslop-lsp`.
 //!
-//! The default binary has no profiler dependency. Builds compiled with the
-//! `profiling` feature can set `DESLOP_PROFILE_DIR` and get an attachable
-//! Firefox-profiler JSON profile when the LSP exits cleanly.
+//! [LIVE-PROFILING] The default binary has no profiler dependency. Builds
+//! compiled with the `profiling` feature can set `DESLOP_PROFILE_DIR` and
+//! get an attachable Firefox-profiler JSON profile when the LSP exits
+//! cleanly.
 
 #[cfg(all(feature = "profiling", unix))]
 use std::{

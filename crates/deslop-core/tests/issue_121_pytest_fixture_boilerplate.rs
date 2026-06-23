@@ -1,5 +1,7 @@
 //! Regression coverage for GH #121: repeated pytest fixture row builders
 //! are test setup boilerplate, not actionable duplication.
+//!
+//! Tests [CLONE-NOISE-PY-PYTEST-FIXTURE]
 
 use std::{
     collections::HashMap,

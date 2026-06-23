@@ -197,6 +197,7 @@ impl<B: McpBackend> McpServer<B> {
             },
             "serverInfo": {
                 "name": MCP_SERVER_NAME,
+                // [DEPLOY-PROTOCOL-VERSION] serverInfo.version must equal --version
                 "version": crate::version(),
             },
         })

@@ -95,6 +95,8 @@ export class BinaryMissingError extends Error {
   }
 }
 
+// [DEPLOY-MANIFEST] shipwright.json is the package authority for required
+// components, expected versions, and host startup checks.
 export function loadDeploymentManifest(extensionPath: string): DeploymentManifest {
   const manifestPath = deploymentManifestPath(extensionPath);
   const raw = fs.readFileSync(manifestPath, "utf8");
@@ -118,6 +120,8 @@ export function resolveHostBinaries(
   );
 }
 
+// [DEPLOY-RESOLVER] Every candidate (setting/env/bundled) must still prove
+// the manifest's component id and version before use; no source is a bypass.
 export function resolveBinary(
   extensionPath: string,
   kind: BinaryKind,
@@ -166,6 +170,8 @@ function handleMissing(candidate: Candidate, component?: DeploymentComponent): u
   return undefined;
 }
 
+// [DEPLOY-RESOLVE-SOURCES] Source order: user-setting first, then the
+// bundled binary (env-path/env-dir are off for VS Code's manifest).
 function candidates(
   extensionPath: string,
   component: DeploymentComponent,
