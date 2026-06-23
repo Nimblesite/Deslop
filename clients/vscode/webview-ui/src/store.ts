@@ -66,6 +66,8 @@ export type HostMessage =
   | { kind: "select/cluster"; id: string | null }
   | { kind: "filter/set"; filters: Filters };
 
+// [VSIX-REACTIVITY-WEBVIEW] The sole batched writer of webview signals:
+// the host posts messages, this folds them into the signal graph.
 export function applyHostMessage(message: HostMessage): void {
   batch(() => {
     switch (message.kind) {

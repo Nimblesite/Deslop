@@ -29,15 +29,33 @@
     "footer": {
       "product": "Product",
       "community": "Community",
+      "install": "Install",
       "gettingStarted": "Getting Started",
       "howItWorks": "How It Works",
       "aiIntegration": "AI Integration",
       "forAI": "For AI",
       "outputFormats": "Output Formats",
+      "configuration": "Configuration",
       "clusterPanel": "VS Code Cluster Panel",
       "releases": "Releases",
       "githubReleases": "GitHub Releases",
+      "vscodeMarketplace": "VS Code Marketplace",
+      "openVsx": "Open VSX Registry",
+      "discord": "Discord",
       "rss": "RSS"
+    },
+    "editors": {
+      "eyebrow": "Install",
+      "title": "Get Deslop in your editor.",
+      "lede": "One extension, published to every registry. Install it from yours below — then, if it earns its keep, leave a review so the next developer finds it too.",
+      "install": "Install",
+      "review": "Rate & review"
+    },
+    "community": {
+      "eyebrow": "Community",
+      "title": "Building Deslop in the open.",
+      "lede": "Questions, bug reports, feature requests, or just want to talk duplicate detection and AI codegen? Join the Deslop Discord — users and contributors both welcome.",
+      "cta": "Join the Discord"
     },
     "releases": {
       "title": "Releases",
@@ -86,15 +104,33 @@
     "footer": {
       "product": "产品",
       "community": "社区",
+      "install": "安装",
       "gettingStarted": "快速开始",
       "howItWorks": "工作原理",
       "aiIntegration": "AI 集成",
       "forAI": "面向 AI",
       "outputFormats": "输出格式",
+      "configuration": "配置",
       "clusterPanel": "VS Code 簇面板",
       "releases": "发布",
       "githubReleases": "GitHub 发布",
+      "vscodeMarketplace": "VS Code Marketplace",
+      "openVsx": "Open VSX 注册表",
+      "discord": "Discord",
       "rss": "RSS"
+    },
+    "editors": {
+      "eyebrow": "安装",
+      "title": "在你的编辑器中获取 Deslop。",
+      "lede": "同一个扩展，发布到每一个注册表。在下方从你所用的注册表安装——如果它物有所值，请留下评价，让下一位开发者也能找到它。",
+      "install": "安装",
+      "review": "评分并评价"
+    },
+    "community": {
+      "eyebrow": "社区",
+      "title": "在公开环境中构建 Deslop。",
+      "lede": "有问题、bug 报告、功能请求，或者只是想聊聊重复检测与 AI 代码生成？加入 Deslop Discord——欢迎用户与贡献者。",
+      "cta": "加入 Discord"
     },
     "releases": {
       "title": "发布",

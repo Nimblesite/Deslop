@@ -1,6 +1,41 @@
 <!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
+## Rule zero — query the Deslop MCP before you write code
+
+Deslop ships the duplicate-detector; its own code must be the cleanest in the
+fleet. That only holds if **every agent queries the live Deslop MCP before
+authoring code** — prevention, not cleanup.
+
+**LAW — call `find-similar` BEFORE writing any code unit** (function, method,
+class, helper, fixture, test setup, parser branch, error type, route handler,
+view model — anything past a few lines). Pass a byte range (`path`,
+`start_byte`, `end_byte`) or a snippet (`snippet`, `language`). Do NOT skip it
+because the code "looks new" — most clones are written by someone certain it
+was new.
+
+- `signals.fused ≥ 0.85`, or bucket `identical` / `nearly_identical` → **do not
+  write the copy.** Reuse the canonical occurrence; extract a helper if needed.
+- `fused < 0.6` (empty or structurally distant) → author it.
+- `0.6 ≤ fused < 0.85` → read the canonical occurrence and bias toward reuse.
+- `structural_only` → shape-only match, often sibling boilerplate — read first.
+
+**STOP DEAD if the MCP is unreachable or wrong.** If the Deslop MCP is
+unavailable, errors, returns stale data, or gives an answer you can tell is
+incorrect: **halt. Do not write code, do not guess, do not fall back to memory.**
+A duplicate that lands because the gate was down is the exact failure this repo
+exists to prevent. Tell the user and wait.
+
+**LOG A GH ISSUE for every Deslop defect.** False positive, wrong bucket, stale
+generation, missing cluster, MCP/IPC error — file it immediately with
+`gh issue create` (include the cluster id or the triggering snippet). Never
+silently work around a defect, widen thresholds, or mark clusters hidden. (`gh`
+is the GitHub CLI, not `git` — the one allowed exception to the no-git rule.)
+
+**Other Deslop tools:** dedup of *existing* duplicates → `top-offenders` then
+`cluster-by-id`; a whole file → `report-for-file`; a block → `report-for-range`;
+the JSON shapes → `schema-doc` once per session.
+
 ⚠️ **Never kill a VS Code process — including browser-hosted instances.** The user cannot recover from this; do not do it. ⚠️
 
 ⚠️ **Token discipline.** Check file size before reading. Prefer `Grep` over `Read`; use `offset`/`limit`. Make the smallest diff that solves the problem. Delete dead code, unused imports, and stale comments. Call out irrelevant context before proceeding — bloat degrades reasoning. ⚠️
@@ -15,60 +50,13 @@
 
 **Deslop** (a.k.a. Deslop Live) is a **live duplicate-code analysis server** for AI coding agents and the humans driving them. The shipping surfaces are `deslop-lsp` (LSP server feeding live clone warnings to any LSP-capable editor) and `deslop-mcp` (MCP server letting Claude Code / Cursor / Copilot / Continue / Codex query the running analysis mid-generation, *before* a copy-paste happens). The `deslop` CLI is the cold-cache fallback for CI gates and one-shot audits. All three binaries are thin shells over one `deslop-core` library — the LSP and MCP sit in the agent's inner loop, the CLI re-uses the same engine for batch runs. Ranking is **worst offenders first** (highest weighted duplication impact at the top). Detection and ranking ship today; AI-assisted and mechanical deduplication actions are on the roadmap. Languages today: **C#, Rust, Python, and Dart**; TypeScript/JavaScript and Go are on the roadmap. Parsing is always tree-sitter — regex on source is prohibited.
 
-## Prevention beats cure — `find-similar` is the keystone tool
+## Prevention beats cure
 
-**The point of Deslop is to prevent duplication, not just scrub it afterwards.** Post-hoc deduplication is what every static analyzer already does. Deslop's edge is being **live in the agent's inner loop** so a duplicate never lands in the first place.
-
-### LAW: call `find-similar` BEFORE you author new code
-
-Before you write any new function, method, class, helper, fixture, test setup,
-parser branch, error type, route handler, view model, or any other code unit
-larger than a few lines, you MUST call the `find-similar` MCP tool with the
-proposed code (or its byte range, if it already exists in a draft buffer) and
-inspect the response.
-
-- If the response shows a cluster with **`signals.fused ≥ 0.85`** *or* the
-  bucket is `identical` / `nearly_identical`, do NOT write the new copy.
-  A `structural_only` match means only the code shape lines up (no token
-  or semantic evidence) — read the match before deciding; it is often
-  sibling boilerplate rather than a reusable implementation.
-  Reuse the canonical occurrence the tool returns. Extract a helper if needed.
-- If the response is empty or the closest match is structurally distant
-  (`signals.fused < 0.6`), proceed with authoring.
-- If the response is borderline (`0.6 ≤ fused < 0.85`), read the canonical
-  occurrence and decide whether the new code is genuinely different. Bias
-  toward reuse.
-
-`find-similar` accepts either:
-- a **byte range** in an existing file (`path`, `start_byte`, `end_byte`), or
-- a **snippet** (`snippet`, `language`) — useful when you have a draft in your
-  scratchpad that has not been written to disk yet.
-
-### When to use the OTHER Deslop tools instead
-
-- **Fixing existing duplicates** (refactor / dedup work) → start with
-  `top-offenders`, then `cluster-by-id` for the cluster you'll merge. Don't
-  use `find-similar` for this — it answers a different question.
-- **Investigating a specific file** → `report-for-file`.
-- **Investigating a specific block before refactor** → `report-for-range`.
-- **Schema reference for the JSON shapes** → call `schema-doc` *once* per
-  session. Don't bundle it into every response.
-
-### Hard rules
-
-- Do NOT skip `find-similar` because "this looks new." Most clones are
-  introduced by people who genuinely thought the code was new. The tool exists
-  to override that intuition with evidence.
-- Do NOT silence Deslop warnings by widening thresholds, marking clusters
-  hidden, or splitting the code into trivially different shapes. If the tool
-  flags something, treat it as a real signal until you've shown otherwise.
-- Do NOT call `find-similar` after writing a duplicate "just to confirm." That
-  is cure, not prevention. Call it BEFORE the keystroke that creates the
-  duplicate.
-
-The MCP tool description leads with prevention ("Call BEFORE writing new code…"). Reports surface `find-similar` as the prevention path in their `action_hints`. This document and the user-facing `AGENTS.md` recipe teach this so agents pick it up without re-reading docstrings.
-
-Paste-ready snippet for users adding Deslop to their own project's `AGENTS.md` / `CLAUDE.md`: see [docs/snippets/agents-md-recipe.md](docs/snippets/agents-md-recipe.md).
+The whole point of Deslop is that a duplicate never lands — see **Rule zero** at
+the top of this file, which carries the `find-similar` LAW. Post-hoc scrubbing is
+what every static analyzer already does; Deslop's edge is being live in the
+agent's inner loop. Paste-ready recipe for other repos' `AGENTS.md` / `CLAUDE.md`:
+see [docs/snippets/agents-md-recipe.md](docs/snippets/agents-md-recipe.md).
 
 Full spec: [docs/specs/SPEC.md](docs/specs/SPEC.md). Execution plan and live TODO: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 - All spec sections have non-numeric, hierarchically structured IDs. All tests refer to spec IDs. All code refers to spec IDs.
@@ -117,7 +105,7 @@ Processes communicate over IPC. Generate IPC model code with [typeDiagram](https
 - **Files < 500 lines.** Refactor when over.
 **Wire models use typeDiagram.** Every model sent across the wire (IPC) is generated from a [typeDiagram](https://typediagram.dev/docs/language-reference.html) definition — never a hand-written wire struct.
 - **Act autonomously.** Do not stop mid-task for confirmation or approval. Choose the most reasonable default, record the assumption, and continue to completion.
-- **No git commands.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, etc. CI handles git.
+- **No git commands.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, etc. CI handles git. (`gh issue create` for Deslop defects is the sole exception — see Rule zero.)
 - **Git discipline:** never push to `main`, never list an AI/agent co-author, work on exactly one branch at a time, never start a new branch when a feature branch already exists, converge multiple feature branches before other work, and never use `git worktree`.
 - **Auto-memory is off.** `.claude/settings.json` sets `"autoMemoryEnabled": false`; durable rules go through reviewed changes to this file.
 - **Reduce code duplication — be aggressively DRY.** This tool detects duplication; its own codebase must be exemplary. Search before writing. Move code, don't copy.

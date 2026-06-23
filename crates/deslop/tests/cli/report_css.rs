@@ -50,15 +50,8 @@ fn render_html(tmp: &Path) -> Result<String> {
     fs::write(scan_root.join("Alpha.cs"), CSHARP_A)?;
     fs::write(scan_root.join("Beta.cs"), CSHARP_B)?;
     let out = outputs_under(tmp);
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--output")
-        .arg(tmp.join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&scan_root, &tmp.join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
     Ok(fs::read_to_string(&out.html)?)
 }
 

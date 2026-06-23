@@ -32,7 +32,7 @@ impl PipelineSession {
     ) -> Result<(), CoreError> {
         let absolute = self.canonicalise_reference(path);
         if !absolute.exists() {
-            self.drop_path(&absolute);
+            self.drop_subtree(&absolute);
             return Ok(());
         }
         let Some(language) = self.language_for(&absolute) else {
@@ -135,6 +135,27 @@ impl PipelineSession {
             self.apply_one_change(path, stats, embedding)?;
         }
         Ok(fresh.len())
+    }
+
+    /// Evicts every live file at or under `prefix`. A directory removal
+    /// reports only the directory path (no source extension, matching no
+    /// live leaf), so the session must drop each registered descendant
+    /// to keep the report in sync ([LIVE-WATCHER], #223). Component-wise
+    /// [`Path::starts_with`] means a removed `pkg` never evicts a
+    /// sibling `pkg_twin`. The prefix is reflexive, so an exact-leaf
+    /// deletion drops just that file. Reuses [`Self::drop_path`] per
+    /// match so all maps, boilerplate ranges, and `files_analysed` stay
+    /// consistent.
+    pub(super) fn drop_subtree(&mut self, prefix: &Path) {
+        let doomed: Vec<PathBuf> = self
+            .live_paths
+            .values()
+            .filter(|registered| registered.starts_with(prefix))
+            .cloned()
+            .collect();
+        for path in &doomed {
+            self.drop_path(path);
+        }
     }
 
     /// Removes a path from every in-memory map if present.

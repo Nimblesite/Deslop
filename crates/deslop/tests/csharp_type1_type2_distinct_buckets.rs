@@ -6,32 +6,19 @@
 //! identifiers) must NOT claim "every copy is the same". csharp-type1
 //! (two methods that are byte-identical) MUST have at least one cluster
 //! claiming "every copy is the same".
+//! Tests [CLONE-BUCKETS-IDENTICAL]
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
     let _assertion = cmd
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(tmp.join("report"))
+        .args(["--min-nodes", "30", "--embeddings", "off"])
         .assert()
         .success();
     let mut json_path = tmp.join("report");

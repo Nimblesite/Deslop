@@ -4,7 +4,7 @@ title: 研究背景 — 代码克隆检测算法
 description: Deslop 的研究脉络 — Baxter 1998、Chilowicz 2009 的 Merkle 指纹、Broder 1997 的 MinHash、Indyk-Motwani 1998 的 LSH、SSCD 2024 的 HNSW。每一条都对应一个真实文件。
 eleventyNavigation:
   key: 研究背景
-  order: 7
+  order: 8
 icon: science
 lang: zh
 ---
@@ -43,7 +43,7 @@ Deslop 遵循代码克隆文献中通用的标准克隆分类法：
 | Type-3 | 插入、删除或改动了语句的近似克隆 | 兄弟窗口指纹与 token MinHash LSH |
 | Type-4 | 行为相似但语法或结构不同 | 可选的嵌入余弦相似度 |
 
-公开报告的分桶在 `crates/deslop-core/src/buckets.rs` 中实现。代码将信号三元组映射到五个线上标签：`identical`、`nearly_identical`、`structural_only`、`loosely_similar` 和 `same_behavior`。`structural_only` 桶标记那些唯一证据是归一化 AST 形状的簇；它们默认在排名中降权。`same_behavior` 桶只有在嵌入信号足够强时才可达。
+公开报告的分桶在 `crates/deslop-core/src/buckets.rs` 中实现。代码将信号三元组映射到五个线协议标签：`identical`、`nearly_identical`、`structural_only`、`loosely_similar` 和 `same_behavior`。`structural_only` 桶标记那些唯一证据是归一化 AST 形状的簇；它们默认在排名中降权。`same_behavior` 桶只有在嵌入信号足够强时才可达。
 
 ## 算法基础
 
@@ -182,7 +182,7 @@ JSON 报告是规范输出。文本和 HTML 渲染器是基于该报告的派生
 
 - `session.rs` 拥有实时的 `AnalysisSession`。
 - `scheduler.rs` 串行化经过防抖的文件变更工作。
-- `debouncer.rs` 使用 250 ms 的静默窗口和 2000 ms 的上限。
+- `debouncer.rs` 以静默窗口与硬上限合并一连串文件变更事件。
 - `watcher.rs` 按解析器扩展名和排除项过滤文件系统事件。
 - `api.rs` 暴露报告、范围、簇、嵌入和配置操作。
 

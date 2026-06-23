@@ -11,7 +11,10 @@ use std::collections::BTreeSet;
 
 use tree_sitter::Node;
 
-use super::{parse_for, spans_multiple_files, trimmed_snippet_range, Snippet};
+use super::{
+    is_multi_member_language_cluster, parse_for, spans_multiple_files, trimmed_snippet_range,
+    Snippet,
+};
 use crate::{ast::ByteRange, state::FileId};
 
 /// Detects **issue #100**: ORM / dataclass / Pydantic constructor calls
@@ -21,7 +24,7 @@ use crate::{ast::ByteRange, state::FileId};
 /// fires only when at least one member uses a different keyword-name
 /// set, so genuine copy-paste of one constructor stays visible.
 pub(super) fn is_kwargs_only_constructor_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     let shapes: Option<Vec<KwargsCtorShape>> =
@@ -143,7 +146,7 @@ fn kwargs_ctor_shapes_differ(shapes: &[KwargsCtorShape]) -> bool {
 /// `mapped_column(...)` declaration or a contiguous block of them, and
 /// at least two members declare different attribute names.
 pub(super) fn is_sqlalchemy_mapped_column_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "python") {
+    if !is_multi_member_language_cluster(snippets, "python") {
         return false;
     }
     if snippets.iter().all(is_mapped_column_call_snippet) {

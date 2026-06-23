@@ -4,11 +4,14 @@
 import * as vscode from "vscode";
 import pino, { Logger, LogDescriptor } from "pino";
 
-let channel: vscode.OutputChannel | undefined;
+let channel: vscode.LogOutputChannel | undefined;
 let rootLogger: Logger | undefined;
 
-export function initOutputChannel(): vscode.OutputChannel {
-  channel ??= vscode.window.createOutputChannel("Deslop");
+// A LogOutputChannel (created with `{ log: true }`) is what the
+// LanguageClient's `outputChannel` option now requires; it is a superset
+// of OutputChannel, so the raw `append`/`show` writes below still work.
+export function initOutputChannel(): vscode.LogOutputChannel {
+  channel ??= vscode.window.createOutputChannel("Deslop", { log: true });
   return channel;
 }
 

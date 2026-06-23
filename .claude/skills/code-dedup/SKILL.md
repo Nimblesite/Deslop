@@ -11,11 +11,17 @@ Carefully search for duplicate code, duplicate tests, and dead code across the R
 
 ## Prerequisites — hard gate
 
-Before touching ANY code, verify these conditions. If any fail, stop and report why.
+Before touching ANY code:
 
-1. Run `make test` — all tests must pass. If tests fail, stop. Do not dedup a broken codebase.
-2. `make test` is fail-fast AND enforces the coverage threshold from [coverage-thresholds.json](coverage-thresholds.json) (REPO-STANDARDS-SPEC [TEST-RULES], [COVERAGE-THRESHOLDS-JSON]). If anything fails, stop and fix it before deduping.
-3. Rust is statically typed — proceed.
+1. **The Deslop MCP must be reachable and returning correct data.** This skill is
+   driven by the live MCP (`top-offenders`, `cluster-by-id`, `find-similar`). If
+   the MCP is unavailable, errors, or returns stale/wrong data, **STOP** — do not
+   dedup blind, and file a GitHub issue with `gh issue create` per
+   [CLAUDE.md](CLAUDE.md) Rule zero.
+2. **Do NOT run `make test` — or any test — as part of this skill.** Deduping is a
+   pure refactor. Tests run exactly once, at the very end, through the **ci-prep**
+   skill (Step 6) — never before or between dedup edits.
+3. Rust is statically typed — the compiler and ci-prep catch breakage.
 
 ## Steps
 
@@ -23,19 +29,21 @@ Copy this checklist and track progress:
 
 ```
 Dedup Progress:
-- [ ] Step 1: Prerequisites passed (tests green, coverage met)
+- [ ] Step 1: MCP reachable, duplicate surface inventoried
 - [ ] Step 2: Dead code scan complete
-- [ ] Step 3: Duplicate code scan complete
+- [ ] Step 3: Duplicate code scan complete (via Deslop MCP)
 - [ ] Step 4: Duplicate test scan complete
-- [ ] Step 5: Changes applied
-- [ ] Step 6: Verification passed (tests green, coverage stable)
+- [ ] Step 5: Changes applied (no tests run)
+- [ ] Step 6: ci-prep skill run AFTER dedup — green
 ```
 
-### Step 1 — Inventory test coverage
+### Step 1 — Inventory the duplicate surface
 
-1. Run `make test` to confirm green baseline. It is fail-fast and enforces the coverage threshold from [coverage-thresholds.json](coverage-thresholds.json). Non-zero exit = stop.
-2. Record the measured line-coverage percentage — this is the floor. It must not drop.
-3. Identify which files/modules have coverage and which do not. Only files WITH coverage are candidates for dedup. E2E tests live in [crates/deslop/tests](crates/deslop/tests) and drive the CLI black-box per [CLAUDE.md](CLAUDE.md).
+1. Query the Deslop MCP `top-offenders` (worst-first) and note the clusters you
+   intend to merge. This — not a test run — is where dedup starts.
+2. Identify which files have E2E coverage in [crates/deslop/tests](crates/deslop/tests);
+   prefer deduping covered files. ci-prep enforces the coverage floor at the end.
+3. Do NOT run `make test` here. Do not run it anywhere except via ci-prep in Step 6.
 
 ### Step 2 — Scan for dead code
 
@@ -48,7 +56,7 @@ Dedup Progress:
 1. Look for functions/methods with identical or near-identical logic across [crates/deslop-core/src](crates/deslop-core/src) and [crates/deslop/src](crates/deslop/src).
 2. Look for copy-pasted blocks (same structure, maybe different identifiers — Type-2 clones).
 3. Check across pipeline stages (discover → parse → normalize → fingerprint → cluster → LSH → embed → fuse → rank → render). Duplicates often hide between adjacent stages.
-4. Re-use the tool on itself: `cargo run --release -- <path>` against this repo and read [deslop-report.txt](deslop-report.txt). Dogfooding is the first-class duplicate signal.
+4. Dogfood the live Deslop MCP — `top-offenders`, then `cluster-by-id` for each cluster you'll merge. This is the first-class duplicate signal. Do not shell out to the CLI or run tests for this.
 5. For each duplicate pair: note both locations, what they do, and how they differ (if at all). Do NOT merge yet.
 
 ### Step 4 — Scan for duplicate tests
@@ -60,37 +68,40 @@ Dedup Progress:
 
 ### Step 5 — Apply changes (one at a time)
 
-For each change, follow: **change → `make test` → verify coverage → continue or revert**.
+Make one dedup change at a time so a mistake is easy to isolate. **Do NOT run
+`make test` between changes** — the compiler catches type breakage and ci-prep
+(Step 6) is the single validation gate.
 
 #### 5a. Remove dead code
 - Delete dead code identified in Step 2.
-- After each deletion: run `make test` (fail-fast + coverage + threshold).
-- If `make test` exits non-zero (test failure OR coverage drop): **revert immediately** and investigate.
 
 #### 5b. Merge duplicate code
-- For each duplicate pair: extract shared logic into [crates/deslop-core](crates/deslop-core) (the library owns all non-trivial logic — the binary is <50 LOC of glue per [CLAUDE.md](CLAUDE.md)).
+- Extract shared logic into [crates/deslop-core](crates/deslop-core) (the library
+  owns all non-trivial logic — the binary is <50 LOC of glue per [CLAUDE.md](CLAUDE.md)).
+  Shared test scaffolding belongs in each test crate's `tests/common/mod.rs`.
 - Update call sites to use the shared version.
-- After each merge: run `make test`.
-- If tests fail: **revert immediately**. The duplicates may have subtle differences you missed.
-- If coverage drops: add E2E tests exercising the shared code before proceeding.
 
 #### 5c. Remove duplicate tests
-- Delete the redundant test (keep the more thorough one). Never remove an assertion per [CLAUDE.md](CLAUDE.md).
-- After each deletion: run `make test`.
-- If coverage drops below threshold, **revert immediately** — the "duplicate" was covering something the other wasn't.
+- Delete the redundant test (keep the more thorough one). Never remove an
+  assertion per [CLAUDE.md](CLAUDE.md).
 
-### Step 6 — Final verification
+### Step 6 — Validate with ci-prep (AFTER all dedup)
 
-1. Run `make lint` — clippy must pass with zero warnings under `-D warnings`.
-2. Run `make test` — tests must pass AND coverage must remain ≥ the baseline from Step 1.
-3. If coverage rose, ratchet [coverage-thresholds.json](coverage-thresholds.json) up in the same PR (subtract 1% rounding buffer per [COVERAGE-THRESHOLDS-JSON]).
-4. Report: what was removed, what was merged, final coverage vs baseline.
+Run the **ci-prep** skill now — and only now. It runs lint, the full test suite,
+and the coverage gate exactly as CI does. This is the first and only time tests
+run in this workflow.
+
+1. Invoke the **ci-prep** skill. If it reports failures, fix them and re-run it
+   until green.
+2. If coverage rose, ratchet [coverage-thresholds.json](coverage-thresholds.json)
+   up in the same PR (−1% rounding buffer per [COVERAGE-THRESHOLDS-JSON]).
+3. Report: what was removed, what was merged, and the ci-prep result.
 
 ## Rules
 
 - **No test coverage = do not touch.** If a file has no E2E coverage, leave it alone entirely.
-- **Coverage must not drop.** The Step 1 floor is sacred. Revert on any regression.
-- **One change at a time.** Make one dedup change, run `make test`, verify coverage. Never batch.
+- **Coverage is enforced by ci-prep, at the end — not mid-dedup.** Never run `make test` while deduping. If ci-prep shows coverage dropped, the "duplicate" was covering something — restore it.
+- **One change at a time.** Make one dedup change, then the next. Never batch, so a mistake is easy to isolate when ci-prep runs.
 - **When in doubt, leave it.** False dedup is worse than duplication. Only merge when you are 100% sure behaviour is identical.
 - **Preserve public API surface.** Do not change public function signatures, crate-level exports, or CLI flags without a spec update in [docs/specs/SPEC.md](docs/specs/SPEC.md).
 - **Three similar lines is fine.** Only dedup when the shared logic is substantial (>10 lines) or there are 3+ copies.

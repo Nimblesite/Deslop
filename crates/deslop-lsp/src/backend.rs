@@ -5,13 +5,14 @@ use deslop_core::{
         DEFAULT_OLLAMA_ENDPOINT, DEFAULT_OLLAMA_MODEL, DEFAULT_PROVIDER_ID,
     },
     live::{
-        ChangeSummary, EmbeddingProgress, EmbeddingProgressReporter, LiveApi, LiveError,
-        LiveService, ReportChangedNotification,
+        read_report_snapshot, report_for_file_in, ChangeSummary, EmbeddingProgress,
+        EmbeddingProgressReporter, LiveError, LiveService, ReportChangedNotification,
     },
+    report::Report,
 };
 use std::{
-    path::PathBuf,
-    sync::{atomic::AtomicBool, Arc},
+    path::{Path, PathBuf},
+    sync::{atomic::AtomicBool, Arc, RwLock},
 };
 use tokio::sync::Mutex;
 use tower_lsp::{
@@ -21,10 +22,8 @@ use tower_lsp::{
         DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
         DocumentDiagnosticReport, DocumentDiagnosticReportResult, ExecuteCommandParams,
-        FullDocumentDiagnosticReport, GotoDefinitionParams, GotoDefinitionResponse, Hover,
-        HoverParams, HoverProviderCapability, InitializeParams, InitializeResult,
-        InitializedParams, Location, MessageType, OneOf, Range,
-        RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
+        FullDocumentDiagnosticReport, InitializeParams, InitializeResult, InitializedParams,
+        MessageType, RelatedFullDocumentDiagnosticReport, ServerCapabilities, ServerInfo,
         TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
     },
     Client, LanguageServer,
@@ -32,7 +31,7 @@ use tower_lsp::{
 
 use crate::notifications::{EmbeddingProgressNotification, ReportChangedLspNotification};
 use crate::observability::Observability;
-use crate::{code_lens, commands, diagnostics, hover, position};
+use crate::{code_lens, commands, diagnostics};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "deslop-lsp";
@@ -151,6 +150,16 @@ pub struct LspBackend {
     _ipc: Option<crate::ipc::IpcServer>,
     /// CPU/work observability recorder for `deslop/cpuReport`.
     observability: Observability,
+    /// Workspace root pinned at construction. Cached here so the
+    /// additive editor reads (`diagnostic`, `code_lens`) never call
+    /// `session_config()` — which would await the session mutex
+    /// ([LSP-NON-INTERFERENCE]).
+    workspace_root: PathBuf,
+    /// Lock-free handle to the latest report. The additive editor reads
+    /// answer from this snapshot without ever awaiting the session mutex
+    /// held by an in-flight `apply_changes` pass, so Deslop can never
+    /// freeze the editor ([LSP-NON-INTERFERENCE]).
+    report_snapshot: Arc<RwLock<Arc<Report>>>,
     /// True while the cache-seed cold pass is still running. Read in
     /// `initialized()` to push the correct startup analysis state to a
     /// late-connecting editor, closing the race where the cold pass's
@@ -206,8 +215,12 @@ impl LspBackend {
             resolved_mode,
         )?;
         session.set_embedding_progress_reporter(Some(progress_reporter(&client)));
-        // Capture the root before moving the session into the Arc.
+        // Capture the root and the lock-free report-snapshot handle
+        // before moving the session into the Arc — the additive editor
+        // reads use both without awaiting the session mutex
+        // ([LSP-NON-INTERFERENCE]).
         let root = session.root().to_path_buf();
+        let report_snapshot = session.report_snapshot_handle();
         let session = Arc::new(Mutex::new(session));
         let service = Arc::new(LiveService::new(Arc::clone(&session)));
         let (watcher, scheduler) =
@@ -248,6 +261,8 @@ impl LspBackend {
             _scheduler: scheduler,
             _ipc: ipc,
             observability,
+            workspace_root: root,
+            report_snapshot,
             cold_pass_active,
         })
     }
@@ -269,6 +284,14 @@ impl LspBackend {
     #[must_use]
     pub fn observability(&self) -> &Observability {
         &self.observability
+    }
+
+    /// Returns the workspace root that occurrence paths resolve against.
+    /// Command handlers pass it to the HTML renderer as the snippet
+    /// scan root.
+    #[must_use]
+    pub fn workspace_root(&self) -> &Path {
+        &self.workspace_root
     }
 
     /// Re-runs analysis for changed paths when VS Code sends file
@@ -319,6 +342,7 @@ impl LanguageServer for LspBackend {
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
         crate::parent_process::start_monitor(params.process_id);
         Ok(InitializeResult {
+            // [DEPLOY-PROTOCOL-VERSION] serverInfo.version must equal --version.
             server_info: Some(ServerInfo {
                 name: SERVER_NAME.to_owned(),
                 version: Some(deslop_core::version().to_owned()),
@@ -335,11 +359,17 @@ impl LanguageServer for LspBackend {
                         work_done_progress_options: WorkDoneProgressOptions::default(),
                     },
                 )),
-                hover_provider: Some(HoverProviderCapability::Simple(true)),
+                // [LSP-NON-INTERFERENCE] Deslop advertises ONLY additive
+                // surfaces — clone diagnostics, code-lens badges, and its
+                // own `deslop.*` commands. It deliberately does NOT
+                // advertise `hoverProvider`, `definitionProvider`,
+                // `referencesProvider`, `completionProvider`, or any other
+                // standard language-intelligence capability, so it can
+                // never intercept, suppress, or slow the editor's own
+                // Go To Definition / Hover / etc.
                 code_lens_provider: Some(CodeLensOptions {
                     resolve_provider: Some(false),
                 }),
-                definition_provider: Some(OneOf::Left(true)),
                 execute_command_provider: Some(commands::provider()),
                 ..ServerCapabilities::default()
             },
@@ -397,9 +427,12 @@ impl LanguageServer for LspBackend {
     ) -> LspResult<DocumentDiagnosticReportResult> {
         self.observability.record_handler("diagnostic");
         let path = url_to_path(&params.text_document.uri).unwrap_or_default();
-        let file_report = self.service.report_for_file(&path).await;
-        let workspace_root = self.service.session_config().await.workspace_root;
-        let items = diagnostics::build_for_file(&file_report, &workspace_root);
+        // [LSP-NON-INTERFERENCE-NONBLOCKING] Read the lock-free snapshot —
+        // never the session mutex — so clone diagnostics can never block
+        // behind an in-flight analysis pass.
+        let report = read_report_snapshot(&self.report_snapshot);
+        let file_report = report_for_file_in(&report, &path);
+        let items = diagnostics::build_for_file(&file_report, &self.workspace_root);
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                 related_documents: None,
@@ -411,76 +444,24 @@ impl LanguageServer for LspBackend {
         ))
     }
 
-    async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
-        self.observability.record_handler("hover");
-        let Some(path) = url_to_path(&params.text_document_position_params.text_document.uri)
-        else {
-            return Ok(None);
-        };
-        let Ok(source) = std::fs::read_to_string(&path) else {
-            return Ok(None);
-        };
-        let lsp_position = params.text_document_position_params.position;
-        let byte = position::byte_for_position(&source, lsp_position);
-        let clusters = self
-            .service
-            .report_for_range(&path, byte, byte.saturating_add(1))
-            .await;
-        if clusters.is_empty() {
-            return Ok(None);
-        }
-        let workspace_root = self.service.session_config().await.workspace_root;
-        Ok(hover::build_for_clusters_with_root(
-            &clusters,
-            &workspace_root,
-        ))
-    }
+    // [LSP-NON-INTERFERENCE] [LSP-HOVER] No `hover` or `goto_definition`
+    // handler: Deslop never answers `textDocument/hover` or
+    // `textDocument/definition`. Those belong to the editor's real
+    // language server. The clone card is surfaced by the VSIX's own
+    // additive `ClusterHoverProvider`; canonical navigation is offered
+    // by the `deslop.jumpToNextOccurrence` code lens, the
+    // `deslop.compareWithCanonical` command, and the Top Offenders tree.
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         let Some(path) = url_to_path(&params.text_document.uri) else {
             return Ok(None);
         };
-        let file_report = self.service.report_for_file(&path).await;
+        // [LSP-NON-INTERFERENCE-NONBLOCKING] Lock-free snapshot read —
+        // never the session mutex — so the additive badges never block the
+        // editor.
+        let report = read_report_snapshot(&self.report_snapshot);
+        let file_report = report_for_file_in(&report, &path);
         Ok(Some(code_lens::build_for_file(&file_report)))
-    }
-
-    async fn goto_definition(
-        &self,
-        params: GotoDefinitionParams,
-    ) -> LspResult<Option<GotoDefinitionResponse>> {
-        self.observability.record_handler("definition");
-        let td_params = params.text_document_position_params;
-        let Some(path) = url_to_path(&td_params.text_document.uri) else {
-            return Ok(None);
-        };
-        let Ok(source) = std::fs::read_to_string(&path) else {
-            return Ok(None);
-        };
-        let byte = position::byte_for_position(&source, td_params.position);
-        let clusters = self
-            .service
-            .report_for_range(&path, byte, byte.saturating_add(1))
-            .await;
-        let Some(cluster) = clusters.into_iter().next() else {
-            return Ok(None);
-        };
-        let workspace_root = self.service.session_config().await.workspace_root;
-        let Some(canonical) =
-            crate::navigation::pick_canonical(&cluster.occurrences, &workspace_root, &path, byte)
-        else {
-            return Ok(None);
-        };
-        let absolute = crate::navigation::absolute_path(&workspace_root, &canonical.path);
-        let target_source = std::fs::read_to_string(&absolute).unwrap_or_default();
-        let start = position::position_for_byte(&target_source, canonical.start_byte);
-        let end = position::position_for_byte(&target_source, canonical.end_byte);
-        let Ok(uri) = Url::from_file_path(&absolute) else {
-            return Ok(None);
-        };
-        Ok(Some(GotoDefinitionResponse::Scalar(Location {
-            uri,
-            range: Range { start, end },
-        })))
     }
 
     async fn execute_command(

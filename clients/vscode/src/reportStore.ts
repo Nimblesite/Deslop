@@ -118,9 +118,19 @@ export class ReportStore implements vscode.Disposable {
     });
   }
 
-  applyDelta(delta: ReportDelta): void {
+  /**
+   * Merges a delta onto the canonical report. Returns `false` without mutating
+   * when the delta cannot be applied safely — no seeded report, or the delta's
+   * `from_generation` does not match the store's current generation (#230). A
+   * mismatch means the client missed a `reportChanged` (lagged broadcast or an
+   * async gap), so the delta only carries the changes for a window the store
+   * never reached; merging it would leave clusters dropped in the skipped
+   * generations behind as phantoms. The caller falls back to a full snapshot.
+   */
+  applyDelta(delta: ReportDelta): boolean {
     const current = this._report.value;
-    if (!current) return;
+    if (!current) return false;
+    if (delta.from_generation !== this._generation.value) return false;
     const byId = new Map<string, ReportCluster>();
     for (const cluster of current.clusters) byId.set(cluster.id, cluster);
     for (const id of delta.clusters_removed) byId.delete(id);
@@ -131,6 +141,11 @@ export class ReportStore implements vscode.Disposable {
       this._report.value = {
         ...current,
         clusters,
+        // The server recomputes metrics every generation and ships them
+        // on the delta (#199). Without this the DUPLICATION headline +
+        // per-file rows freeze at the seed snapshot, since the delta path
+        // is the one almost always taken after the first report.
+        metrics: delta.metrics,
         cache_stats: delta.cache_stats,
         tool_version: delta.tool_version,
       };
@@ -141,6 +156,7 @@ export class ReportStore implements vscode.Disposable {
       this._pendingEmbeddingModel.value = null;
       this._embeddingProgress.value = null;
     });
+    return true;
   }
 
   /**

@@ -17,8 +17,10 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
+
+mod common;
+use crate::common::*;
 
 /// The hand-written copy-pasted logic clone, duplicated verbatim across two
 /// files. Six-statement method body, large enough to cluster at the test's
@@ -31,14 +33,6 @@ fn report_path(tmp: &Path, stem: &str) -> PathBuf {
     let mut path = tmp.join(stem);
     let _replaced = path.set_extension("json");
     path
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn occurrence_paths(cluster: &Value) -> Vec<&str> {
@@ -146,16 +140,9 @@ fn write_fixture(src: &Path) -> Result<()> {
 /// Runs the CLI against `src`, writing JSON (and text for the label
 /// assertion) to `<tmp>/<stem>.*`, and returns the parsed JSON report.
 fn run_cli(src: &Path, tmp: &Path, stem: &str, min_nodes: &str) -> Result<Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(src, &tmp.join(stem))?;
     let _assertion = cmd
-        .arg(src)
-        .arg("--min-nodes")
-        .arg(min_nodes)
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--nohtml")
-        .arg("--output")
-        .arg(tmp.join(stem))
+        .args(["--min-nodes", min_nodes, "--embeddings", "off", "--nohtml"])
         .assert()
         .success();
     let body = fs::read_to_string(report_path(tmp, stem))?;
@@ -302,17 +289,16 @@ fn invalid_data_clone_weight_is_rejected_with_a_clear_error() -> Result<()> {
         ("[ranking]\ndata_clone_weight = nan\n", "must be finite"),
     ] {
         write_ranking_config(&src, body)?;
-        let mut cmd = Command::cargo_bin("deslop")?;
+        let mut cmd = deslop_cmd(&src, &tmp.path().join("r"))?;
         let _assertion = cmd
-            .arg(&src)
-            .arg("--min-nodes")
-            .arg("30")
-            .arg("--embeddings")
-            .arg("off")
-            .arg("--notext")
-            .arg("--nohtml")
-            .arg("--output")
-            .arg(tmp.path().join("r"))
+            .args([
+                "--min-nodes",
+                "30",
+                "--embeddings",
+                "off",
+                "--notext",
+                "--nohtml",
+            ])
             .assert()
             .failure()
             .stderr(predicates::str::contains("data_clone_weight"))

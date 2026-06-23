@@ -15,7 +15,17 @@
         { "text": "AI Integration", "i18nKey": "footer.aiIntegration", "url": "/docs/ai-integration/" },
         { "text": "For AI", "i18nKey": "footer.forAI", "url": "/docs/for-ai/" },
         { "text": "Output Formats", "i18nKey": "footer.outputFormats", "url": "/docs/output-formats/" },
+        { "text": "Configuration", "i18nKey": "footer.configuration", "url": "/docs/configuration/" },
         { "text": "VS Code Cluster Panel", "i18nKey": "footer.clusterPanel", "url": "/docs/vscode-cluster-panel/" },
+        { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
+      ]
+    },
+    {
+      "title": "Install",
+      "i18nKey": "footer.install",
+      "items": [
+        { "text": "VS Code Marketplace", "i18nKey": "footer.vscodeMarketplace", "url": "https://marketplace.visualstudio.com/items?itemName=Nimblesite.deslop-live" },
+        { "text": "Open VSX Registry", "i18nKey": "footer.openVsx", "url": "https://open-vsx.org/extension/Nimblesite/deslop-live" },
         { "text": "Releases", "i18nKey": "footer.releases", "url": "/releases/" }
       ]
     },
@@ -23,6 +33,7 @@
       "title": "Community",
       "i18nKey": "footer.community",
       "items": [
+        { "text": "Discord", "i18nKey": "footer.discord", "url": "https://discord.gg/HUrTkEVR" },
         { "text": "GitHub", "url": "https://github.com/Nimblesite/Deslop" },
         { "text": "GitHub Releases", "i18nKey": "footer.githubReleases", "url": "https://github.com/Nimblesite/Deslop/releases" },
         { "text": "RSS", "i18nKey": "footer.rss", "url": "/feed.xml", "noLangPrefix": true }

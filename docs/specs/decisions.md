@@ -72,6 +72,8 @@ reproducible.
 
 ### [DECISION-MCP-SURFACE] Six MCP tools, not twelve
 
+> **Status: ⏳ Planned.** This records the *decision* to consolidate; the shipped server still exposes the twelve-tool surface ([mcp.md §MCP-TOOLS](mcp.md#mcp-tools)). The consolidation is the target, not yet landed.
+
 The twelve-tool surface grew by accretion: three overlapping report slicers (`top-offenders`,
 `report-get`, `report-query`) over one IPC snapshot, two spellings of one path-scoped predicate
 (`report-for-file`, `report-for-range`), and four plumbing tools. Agents had to learn that "full

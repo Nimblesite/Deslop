@@ -43,6 +43,8 @@ fn to_value<T: serde::Serialize>(value: &T) -> Value {
 /// the `max_occurrences` total-occurrence budget so a single response
 /// never blows up the agent's context window
 /// ([MCP-OCCURRENCE-BUDGET]).
+// [MCP-TOOL-DUPLICATES] current top-offenders surface; redesign
+// consolidates the report tools into one `duplicates` tool.
 pub(super) fn call_top_offenders(
     backend: &dyn McpBackend,
     args: &Value,
@@ -371,6 +373,8 @@ pub(super) fn call_set_embedding_model(
 }
 
 /// `session-config` forwarder.
+// [MCP-TOOL-SESSION] current session-config surface; redesign merges
+// the three session tools into one.
 pub(super) fn call_session_config(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
     let snapshot = backend.session_config().map_err(backend_to_rpc)?;
     let payload = McpSessionConfig {
@@ -386,6 +390,8 @@ pub(super) fn call_session_config(backend: &dyn McpBackend) -> Result<Value, Jso
 }
 
 /// Requires explicit user consent for model-changing tool calls.
+// [MCP-EMBEDDING-CONSENT] consent gate: set-embedding-model requires
+// user_initiated==true before mutating the embedding model.
 pub(super) fn require_user_initiated(args: &Value) -> Result<(), JsonRpcError> {
     if args
         .get("user_initiated")
@@ -413,6 +419,8 @@ pub(super) fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcErro
 /// Extracts the optional `report-query` filter knobs. Unknown / wrong-typed
 /// fields are quietly ignored — the JSON schema layer rejects them up
 /// front when a strict client is in use.
+// [MCP-TOOL-FILTERS] current scalar filter form; redesign adds array
+// buckets/categories.
 pub(super) fn extract_filters(args: &Value) -> ReportPageFilters {
     ReportPageFilters {
         language: args

@@ -94,7 +94,7 @@ this hot-fix pass. Tracked here so the architectural move isn't lost.
 ---
 
 ## Verification
-- `make vsix-test` green; VSIX line coverage ≥ **95 %** (gate raised to 95).
+- `make _vsix-test` green; VSIX line coverage ≥ **95 %** (gate raised to 95).
 - `make lint` (no suppressions) and `npx tsc --noEmit` clean.
 - New/updated unit tests: decoration debounce coalescing; single-buffer byte→range correctness;
   per-file memo in `locations` (label still `path:line:col`); cluster-panel effect ignores
@@ -117,5 +117,5 @@ DRY (one shared debounce util), no test weakened or deleted.
 - [x] **P2.3** `panels.ts`: narrow the cluster-panel effect to report/visibleReport deps.
 - [~] **P2.2** `panels.ts`: debounce report pushes — **dropped** (unnecessary after narrowing + memo).
 - [~] **P3.1** `reportStore.ts`: re-sort guard — **dropped** (not a hotspot; guard would always miss).
-- [ ] **V.1** Add/refresh unit tests for each phase; `make vsix-test` + `make lint` + `tsc` green; coverage ≥ 95 %.
+- [ ] **V.1** Add/refresh unit tests for each phase; `make _vsix-test` + `make lint` + `tsc` green; coverage ≥ 95 %.
 - [ ] **P4 (deferred)** Add `start_col`/`end_col` to `live-ipc.td`; compute server-side; drop all file reads from `locations.ts`.

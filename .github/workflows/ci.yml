@@ -10,8 +10,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Path classifier — decides whether the heavy Rust / VSIX / JetBrains / Windows
+  # gates need to run at all. A PR that only touches site/** (the Eleventy
+  # website) cannot affect those suites, so they are skipped; website content is
+  # still validated by the `site` job below. Any changed file outside site/ sets
+  # `code=true` and the full pipeline runs (a mixed PR runs everything).
+  #
+  # Gating uses job-level `if:` rather than workflow-level paths-ignore on
+  # purpose: a workflow skipped by path filtering leaves its required checks
+  # stuck "pending" and blocks merge forever, whereas a job skipped by an `if:`
+  # reports the "skipped" conclusion, which branch protection counts as a
+  # passing required status check.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      site: ${{ steps.classify.outputs.site }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Changed files in this PR:"
+          printf '%s\n' "$changed"
+          # site = at least one website file changed.
+          # code = at least one file OUTSIDE site/ changed.
+          # A mixed PR sets both, so the full pipeline runs.
+          if printf '%s\n' "$changed" | grep -qE '^site/'; then
+            echo "site=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "site=false" >> "$GITHUB_OUTPUT"
+          fi
+          if printf '%s\n' "$changed" | grep -qvE '^site/'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   ci:
     name: CI
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -132,6 +181,8 @@ jobs:
   # because TCP loopback is the production IPC transport on Windows.
   windows:
     name: Windows check + TCP IPC E2E
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -174,7 +225,8 @@ jobs:
 
   vsix:
     name: VSIX tests + coverage
-    needs: ci
+    needs: [changes, ci]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: builds the real LSP+MCP from source, installs Node
     # deps, then runs full E2E against headless VS Code Electron under xvfb —
@@ -216,15 +268,22 @@ jobs:
 
       # Builds the real deslop-lsp + deslop-mcp from the workspace
       # and installs Node deps for the extension + webview-ui.
-      - name: vsix-build
-        run: make vsix-build
+      - name: _vsix-build
+        run: make _vsix-build
 
       # Unit tests + coverage threshold. E2E spawns real VS Code Electron.
-      - name: vsix-coverage (unit + threshold)
-        run: xvfb-run -a make vsix-coverage
+      - name: _vsix-coverage (unit + threshold)
+        run: xvfb-run -a make _vsix-coverage
 
-      - name: vsix-test (full E2E against real LSP)
-        run: xvfb-run -a make vsix-test
+      - name: _vsix-test (full E2E against real LSP)
+        run: xvfb-run -a make _vsix-test
+
+      # Renders the standalone HTML report (the artifact every "Open HTML
+      # Report" button shows) and asserts the design-system CSS applies in a
+      # real browser. The target installs the Chromium headless shell with its
+      # OS libs (--with-deps), so the browser install lives in one place.
+      - name: _vsix-playwright-html (standalone HTML report CSS)
+        run: make _vsix-playwright-html
 
       - name: vsix-package deployment gate
         run: make vsix-package
@@ -240,12 +299,14 @@ jobs:
 
   jetbrains:
     name: JetBrains package gate
-    needs: ci
+    needs: [changes, ci]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB
-    # SDK and runs the resolver test against the real released deslop-lsp
-    # binary — well over the 10-minute default on a cold runner cache.
-    timeout-minutes: 20
+    # SDK plus the LSP4IJ plugin and packages the plugin artifact while running
+    # the resolver test against the real released deslop-lsp binary — well over
+    # the 10-minute default on a cold runner cache.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -276,12 +337,46 @@ jobs:
 
       # Resolver tests against the real released deslop-lsp binary —
       # proves the version contract end-to-end (DTK-MIG-DESLOP-JETBRAINS-RESOLVER).
-      - name: jetbrains-real-binary-test
-        run: make jetbrains-real-binary-test
+      - name: _jetbrains-real-binary-test
+        run: make _jetbrains-real-binary-test
 
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
         run: make jetbrains-package
+
+  # Website build + content gate. Runs whenever site/** changes — including on
+  # website-only PRs, where the heavy `ci` job is skipped. Cheap: Node + Eleventy,
+  # no Rust toolchain. This is the gate that keeps a website-only PR honest now
+  # that it no longer drags the full pipeline behind it.
+  site:
+    name: Website build
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      # Taxonomy content gate ([CLONE-BUCKETS-DUAL-LABEL]) scans site/src for
+      # bare Type-N labels. It normally runs inside `make lint` (the `ci` job);
+      # on a website-only PR that job is skipped, so the one gate that guards
+      # website copy runs here instead.
+      - name: Taxonomy content gate
+        run: bash scripts/taxonomy-gate.sh
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Build site
+        working-directory: site
+        run: npm run build
 
   # Dependency review ([GITHUB-DEP-REVIEW]) — blocks PRs that pull in
   # dependencies with known vulnerabilities. One owner per concern: this is the

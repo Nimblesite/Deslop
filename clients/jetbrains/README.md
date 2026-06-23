@@ -1,55 +1,74 @@
 # Deslop JetBrains Plugin
 
-IntelliJ Platform plugin for Deslop. Rider is the first product target, but the implementation stays on the platform LSP API so IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion can follow (commercial Ultimate-tier IDEs only — the plugin depends on `com.intellij.modules.ultimate`, so Community editions cannot load it).
+IntelliJ Platform plugin for Deslop, shipped as **a single artifact** that runs across every JetBrains IDE family via Red Hat's [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) client:
 
-Current slice:
+- **`deslop-lsp4ij`** — depends only on `com.intellij.modules.platform` + `com.redhat.devtools.lsp4ij`, so the one build reaches **Android Studio and IntelliJ Community** (which do not ship the platform's native LSP API) and, with the LSP4IJ plugin installed, **Rider / IntelliJ IDEA Ultimate** too.
 
-- Registers a `com.intellij.platform.lsp.serverSupportProvider`.
-- Starts `deslop-lsp` for `.cs`, `.rs`, and `.py` files.
-- Resolves the `deslop-lsp` binary from the bundled plugin `bin/<platform>/` directory first, then falls back to `PATH`. (`DESLOP_BINARY_DIR` is a build-time staging variable used to embed the binary into the plugin zip, not a runtime resolver source.)
-- Launches with embeddings off until a settings page and picker land.
+The surface module shares one `deslop-shared` module (binary resolution, settings, launch) and starts the `deslop-lsp` server, so the live analysis is identical everywhere.
 
-Build:
+[![The Deslop VS Code reference client on a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor, and a side-by-side Compare diff against the canonical occurrence.](../../site/src/assets/img/screenshot.webp)](https://deslop.live/docs/vscode-cluster-panel/)
 
-```bash
-make jetbrains-build
-```
+The screenshot above is the **VS Code reference client**. The JetBrains plugins start the same `deslop-lsp` server, so they surface the identical live analysis through each IDE's LSP pipeline. Full panel-by-panel walkthrough: [VS Code Cluster Panel](https://deslop.live/docs/vscode-cluster-panel/).
 
-Verify plugin metadata and structure:
+## Using the plugin
 
-```bash
-make jetbrains-verify
-```
+Once installed, the plugin runs automatically — minimal configuration:
 
-Build the release zip and run all local package gates:
+1. **Open a supported file** (`.cs`, `.rs`, `.py`, or `.dart`). This starts `deslop-lsp`. Nothing runs until a supported file is open — opening a project alone does nothing.
+2. **Read the live warnings.** Duplicated regions are underlined in the editor and listed in the **Problems** tool window with source `deslop`.
+3. **Open the full report.** Click the **Deslop** tool window (right-hand stripe) — it shows the worst-offenders report and renders it on first open. The toolbar **Refresh** button re-runs the analysis, and `Tools` → **Deslop: Open HTML Report** opens the same tool window.
+
+Deslop only flags *duplicated* code, so a project with no clones shows no warnings and an empty report — that is the correct result, not a failure.
+
+To confirm the server is running, open the **Language Servers** tool window (provided by LSP4IJ) and check that **Deslop** is started. If it is stopped with a binary-resolution error, the bundled `deslop-lsp` was not staged into the zip — rebuild with `DESLOP_BINARY_DIR` set (see the local smoke path below).
+
+Modules:
+
+- **`deslop-shared`** — binary resolution, settings, the `deslop-lsp` command line, and the shared report UI. Compiled against IntelliJ IDEA Community 2024.3 (the declared `since-build` floor) using only `com.intellij.modules.platform` APIs, so it loads in every IDE family. Owns the tests.
+- **`deslop-lsp4ij`** — registers a `com.redhat.devtools.lsp4ij.LanguageServerFactory` mapped to `*.cs;*.rs;*.py;*.dart`, plus the **Deslop** tool window.
+
+The surface starts `deslop-lsp` for `.cs`, `.rs`, `.py`, and `.dart` files, resolves the binary from the bundled plugin `bin/<platform>/` directory first (then `PATH`), and launches with embeddings off until a settings page and picker land. `DESLOP_BINARY_DIR` (host binary) and `DESLOP_LSP_BUNDLE_DIR` (all-platform release layout) are build-time staging variables, not runtime resolver sources.
+
+Build and verify the plugin zip (the public package gate):
 
 ```bash
 make jetbrains-package
 ```
 
-Run resolver tests:
+That composes `_jetbrains-build` (builds the zip), `_jetbrains-verify`
+(Gradle project + archive-structure checks), and
+`scripts/verify-jetbrains-package.mjs`. To build, install, and wire up the
+plugin (plus its LSP4IJ dependency) in one step on macOS, use:
 
 ```bash
-make jetbrains-test
+make android-studio-rebuild
 ```
 
-Run resolver tests AND prove the resolver accepts the real released
-`deslop-lsp` binary plus rejects manifest drift:
+The granular steps are internal `_`-prefixed targets — hidden from the IDE
+task list, run them directly when iterating:
 
-```bash
-make jetbrains-real-binary-test
-```
+- `make _jetbrains-build` — build the plugin zip.
+- `make _jetbrains-verify` — Gradle project + archive-structure checks.
+- `make _jetbrains-test` — run the `deslop-shared` resolver tests.
+- `make _jetbrains-real-binary-test` — resolver tests plus the real-binary
+  contract proof (accepts the released `deslop-lsp`, rejects manifest drift).
 
 Gradle is invoked via the checked-in wrapper at `clients/jetbrains/gradlew`
 (or `gradlew.bat` on Windows). A fresh checkout only needs a JDK on PATH —
 the wrapper downloads its own Gradle distribution. Override the binary by
 setting `GRADLE=/path/to/gradle` if you need a different runtime.
 
-Local Rider smoke path:
+Local smoke path (host platform only):
 
 ```bash
 cargo build --release -p deslop-lsp
-DESLOP_BINARY_DIR="$PWD/target/release" make jetbrains-build
+DESLOP_BINARY_DIR="$PWD/target/release" make _jetbrains-build
 ```
 
-Then install `clients/jetbrains/build/distributions/deslop-jetbrains-*.zip` into Rider 2026.1+ from disk.
+`make _jetbrains-build` writes the single zip:
+
+```text
+clients/jetbrains/deslop-lsp4ij/build/distributions/deslop-lsp4ij-*.zip   # all JetBrains IDE families
+```
+
+Install it from disk into Android Studio / IntelliJ Community (or Rider / IDEA Ultimate). Every target also needs the [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin installed.

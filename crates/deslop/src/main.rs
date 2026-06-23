@@ -44,6 +44,8 @@ struct Cli {
     path: PathBuf,
 
     /// Minimum AST subtree node count to consider a clone candidate.
+    // [DECISION-MIN-NODES] default 30; subtrees below this floor are
+    // excluded from fingerprinting, clustering, and embedding.
     #[arg(long, default_value_t = 30)]
     min_nodes: u32,
 
@@ -311,15 +313,8 @@ fn apply_threshold(args: &Cli, report: &mut Report) -> Result<()> {
         report.metrics.threshold = ThresholdSummary::none();
         return Ok(());
     }
-    let config_percent = resolve_config_threshold(args)?;
-    report.metrics.threshold = match config_percent {
-        Some(percent) => ThresholdSummary::resolve(
-            percent,
-            ThresholdSource::Config,
-            report.metrics.duplication_percent,
-        ),
-        None => ThresholdSummary::none(),
-    };
+    report.metrics.threshold =
+        load_run_config(args)?.resolve_threshold(report.metrics.duplication_percent);
     Ok(())
 }
 
@@ -333,14 +328,6 @@ fn load_run_config(args: &Cli) -> Result<ExclusionConfig> {
         None => ExclusionConfig::discover(&args.path)
             .with_context(|| format!("discover config in {}", args.path.display())),
     }
-}
-
-/// Loads `.deslop.toml` (if any) to surface the
-/// `[threshold] max_duplication_percent` key without mutating the
-/// pipeline path. Returns `None` when no config file exists or the
-/// key is absent.
-fn resolve_config_threshold(args: &Cli) -> Result<Option<f64>> {
-    Ok(load_run_config(args)?.fail_over_percent())
 }
 
 /// Resolves whether the HTML report splits by language: the CLI
@@ -377,6 +364,8 @@ const KNOWN_NON_CLI_TOOL_NAMES: &[&str] = &[
 /// tool name. Without this guard, `deslop top-offenders` silently
 /// "succeeds" with a clean-looking report against a non-existent
 /// directory ([Deslop#132]).
+// [CLI-SUBCOMMAND-LOOKALIKE] rejects a positional path that is actually
+// an MCP tool name / UI label with a named error (cli.md).
 fn validate_scan_path(path: &std::path::Path) -> Result<()> {
     if let Some(name) = path.to_str() {
         if KNOWN_NON_CLI_TOOL_NAMES.contains(&name) {

@@ -14,7 +14,7 @@
 use std::{
     fs,
     io::{BufRead, BufReader, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -154,6 +154,30 @@ pub fn wait_for_path(path: &Path, timeout: Duration) -> Result<()> {
     }
 }
 
+/// Spawns an initialized LSP against `root` and blocks until its IPC socket
+/// exists, returning a kill-on-drop guard for the LSP process. The caller
+/// MUST bind the returned `ChildKillOnDrop` to a live (named) local —
+/// dropping it early kills the LSP mid-test.
+pub fn spawn_lsp_and_wait_for_socket(root: &Path) -> Result<ChildKillOnDrop> {
+    let lsp = spawn_lsp_and_initialize(root)?;
+    let guard = ChildKillOnDrop(lsp);
+    let socket = root.join(".deslop-cache/deslop.sock");
+    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    Ok(guard)
+}
+
+/// Spawns an initialized LSP over a fresh copied fixture and blocks until
+/// its IPC socket exists, returning the workspace temp dir, a kill-on-drop
+/// guard for the LSP process, and the socket path. The caller MUST bind the
+/// returned `TempDir` and `ChildKillOnDrop` to live (named) locals — dropping
+/// either early deletes the workspace or kills the LSP mid-test.
+pub fn lsp_workspace_with_socket() -> Result<(TempDir, ChildKillOnDrop, PathBuf)> {
+    let workspace = copied_fixture()?;
+    let guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
+    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    Ok((workspace, guard, socket))
+}
+
 /// Spawned MCP child + an id-tracked JSON-RPC request loop.
 pub struct McpHandle {
     child: Child,
@@ -250,6 +274,16 @@ pub fn initialized_mcp(root: &Path) -> Result<McpHandle> {
     Ok(mcp)
 }
 
+/// Drives `tools/call` for `tool` with `arguments` and returns its
+/// `structuredContent` envelope, erroring if the call failed.
+pub fn call_tool(mcp: &mut McpHandle, tool: &str, arguments: &Value) -> Result<Value> {
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": tool, "arguments": arguments }),
+    )?;
+    structured_content(&response, tool)
+}
+
 /// Extracts the `structuredContent` envelope from a successful tools/call.
 pub fn structured_content(response: &Value, tool: &str) -> Result<Value> {
     ensure!(
@@ -260,4 +294,147 @@ pub fn structured_content(response: &Value, tool: &str) -> Result<Value> {
         .pointer("/result/structuredContent")
         .cloned()
         .ok_or_else(|| anyhow!("response missing structuredContent: {response}"))
+}
+
+/// Returns the cluster ids on a `report-get` page in stable order.
+pub fn cluster_ids(page: &Value) -> Vec<String> {
+    page.get("clusters")
+        .and_then(Value::as_array)
+        .map(|clusters| {
+            clusters
+                .iter()
+                .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Calls the `rescan` MCP tool and returns the structured payload.
+pub fn rescan_call(mcp: &mut McpHandle, paths: &[String]) -> Result<Value> {
+    let response = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "rescan",
+            "arguments": {
+                "paths": paths,
+                "n": 8,
+            }
+        }),
+    )?;
+    structured_content(&response, "rescan")
+}
+
+/// Resolves a JSON pointer in `value`, erroring when the path is absent.
+pub fn value_get(value: &Value, pointer: &str) -> Result<Value> {
+    value
+        .pointer(pointer)
+        .cloned()
+        .ok_or_else(|| anyhow!("pointer {pointer} not found in {value}"))
+}
+
+/// Extracts the `/error` frame and its string `message` from a JSON-RPC
+/// error response, erroring if either is absent.
+pub fn error_and_message(response: &Value) -> Result<(Value, String)> {
+    let error = response
+        .pointer("/error")
+        .ok_or_else(|| anyhow!("expected error frame, got: {response}"))?;
+    let message = error
+        .get("message")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("error missing string message: {error}"))?;
+    Ok((error.clone(), message.to_owned()))
+}
+
+/// Canonicalises `workspace` and returns the absolute
+/// `.deslop-cache/deslop.sock` path string the MCP backend connects to.
+pub fn expected_socket_fragment(workspace: &Path) -> Result<String> {
+    let canonical = std::fs::canonicalize(workspace)?;
+    Ok(canonical
+        .join(".deslop-cache")
+        .join("deslop.sock")
+        .display()
+        .to_string())
+}
+
+/// Read-only path to the bundled `csharp-mcp` MCP fixture template.
+pub fn fixture_root() -> &'static Path {
+    Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/csharp-mcp"
+    ))
+}
+
+/// Shell wrapper that launches `deslop-mcp` as a grandchild and prints its
+/// pid to stderr, so the orphan-exit suites can kill the launching parent
+/// while keeping the MCP child stdio open.
+#[cfg(unix)]
+pub const KILLABLE_PARENT_SCRIPT: &str = r#"exec 3<&0; "$1" --root "$2" <&3 2>/dev/null & mcp_pid=$!; printf '%s\n' "$mcp_pid" >&2; wait "$mcp_pid""#;
+
+/// Reads the MCP pid the killable-parent shell prints on its stderr line.
+#[cfg(unix)]
+pub fn read_mcp_pid(child: &mut Child) -> Result<u32> {
+    let stderr = child.stderr.take().context("parent stderr")?;
+    let mut stderr = BufReader::new(stderr);
+    let mut pid_line = String::new();
+    let bytes = stderr.read_line(&mut pid_line)?;
+    ensure!(bytes > 0, "parent shell did not report mcp pid");
+    pid_line
+        .trim()
+        .parse::<u32>()
+        .context("parse mcp pid from parent shell")
+}
+
+/// Polls until `pid` no longer exists, returning `false` on timeout.
+#[cfg(unix)]
+pub fn wait_for_pid_exit(pid: u32, duration: Duration) -> Result<bool> {
+    let started = Instant::now();
+    while started.elapsed() < duration {
+        if !pid_exists(pid)? {
+            return Ok(true);
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    Ok(false)
+}
+
+/// Probes whether `pid` is alive via `kill -0`.
+#[cfg(unix)]
+pub fn pid_exists(pid: u32) -> Result<bool> {
+    let status = Command::new("kill")
+        .arg("-0")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("probe process existence with kill -0")?;
+    Ok(status.success())
+}
+
+/// Best-effort terminate of an orphaned MCP pid: `SIGTERM`, then `SIGKILL`
+/// if it does not exit within a second.
+#[cfg(unix)]
+pub fn terminate_pid(pid: u32) -> Result<()> {
+    if !pid_exists(pid)? {
+        return Ok(());
+    }
+    let _term_status = Command::new("kill")
+        .arg("-TERM")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("terminate orphaned mcp pid")?;
+    if wait_for_pid_exit(pid, Duration::from_secs(1))? {
+        return Ok(());
+    }
+    let _kill_status = Command::new("kill")
+        .arg("-KILL")
+        .arg(pid.to_string())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("kill orphaned mcp pid")?;
+    let _exited = wait_for_pid_exit(pid, Duration::from_secs(1))?;
+    Ok(())
 }

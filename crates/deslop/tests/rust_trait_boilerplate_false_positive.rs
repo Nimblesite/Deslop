@@ -2,6 +2,7 @@
 //! implement the same `LanguageParser` trait surface. That adapter
 //! boilerplate is required by the trait contract and must not rank as
 //! duplicate business logic.
+//! Tests [CLONE-NOISE-RUST-LANGPARSER]
 
 use std::{
     collections::BTreeSet,
@@ -10,8 +11,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use assert_cmd::Command;
 use serde_json::Value;
+
+mod common;
+use crate::common::*;
 
 fn deslop_core_lang_dir() -> Result<PathBuf> {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -26,34 +29,12 @@ fn deslop_core_lang_dir() -> Result<PathBuf> {
 fn run_report(scan_root: &Path) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("30")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let _assertion = deslop_cmd(scan_root, &output)?
+        .args(["--min-nodes", "30", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
     Ok(serde_json::from_str(&body)?)
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
-fn occurrences(cluster: &Value) -> &[Value] {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn cluster_paths(cluster: &Value) -> BTreeSet<&str> {
@@ -79,14 +60,6 @@ fn occurrence_path(occurrence: &Value) -> Result<&str> {
         .get("path")
         .and_then(Value::as_str)
         .ok_or_else(|| anyhow!("reported occurrence is missing path"))
-}
-
-fn occurrence_byte(occurrence: &Value, field: &str) -> Result<usize> {
-    occurrence
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| anyhow!("reported occurrence is missing {field}"))
 }
 
 fn language_parser_adapter_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>> {

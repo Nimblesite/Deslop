@@ -27,6 +27,15 @@ Deslop 是一个**实时重复代码分析服务器** —— LSP + MCP，运行�
 
 该扩展捆绑了面向 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 和 `win32-x64` 的原生二进制文件 —— 系统会自动为你选择正确的那一个。
 
+<figure>
+  <a href="/assets/img/screenshot.webp">
+    <img src="/assets/img/screenshot.webp"
+         alt="Deslop VS Code 扩展正在分析实时工作区：侧边栏中以最严重优先排序的 Top Offenders 树与按目录划分的 Duplication 占比，编辑器中光标处的实时克隆警告，以及与规范出现位置的 Compare 差异对比。"
+         width="2560" height="1492" loading="lazy" decoding="async">
+  </a>
+  <figcaption>实时工作区中的扩展——侧边栏里以最严重优先排序的克隆簇与按目录划分的重复占比、光标处的实时克隆警告，以及与规范副本的 Compare 差异对比。<a href="/zh/docs/vscode-cluster-panel/">逐面板完整解读 →</a></figcaption>
+</figure>
+
 > **离线或隔离网络环境？** 从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取 `.vsix`，并通过**扩展面板 → `…` 菜单 → 从 VSIX 安装…**进行安装。
 
 ## 仅安装 CLI（Homebrew / Scoop）
@@ -110,6 +119,8 @@ report_hide = [
 ```
 
 `exclude` 完全跳过解析。`report_hide` 会解析但从最终排名中省略 —— 对于你仍希望保留在缓存中的训练集代码很有用。
+
+<span id="gate-ci-on-a-duplication-threshold"></span>
 
 ## 以重复阈值对 CI 设置门禁
 

@@ -83,7 +83,7 @@ Axis-by-axis, the bar we are held to — and the plus-one that wins the category
 #### vs. SonarLint / SonarQube (commercial IDE integration)
 
 - **Match:** VS Code extension with live in-editor feedback.
-- **Beat:** free and local-only by default (no SaaS account, no telemetry), Type-3/4 via embeddings (Sonar is token-only), code-lens with per-cluster signal breakdown, jump-across-occurrences via LSP `textDocument/definition`, stable cluster ids for cross-session diffing.
+- **Beat:** free and local-only by default (no SaaS account, no telemetry), Type-3/4 via embeddings (Sonar is token-only), code-lens with per-cluster signal breakdown, jump-across-occurrences via the Deslop-owned `deslop.jumpToNextOccurrence` code lens (never by overloading the editor's Go To Definition — see [LSP-NON-INTERFERENCE]), stable cluster ids for cross-session diffing.
 - **Category-winning feature:** **MCP shell + Ollama model picker** — neither SonarLint nor SonarQube expose an MCP surface or allow local embedding-model selection.
 
 #### vs. JetBrains "Duplicated Code" inspection (strongest IDE incumbent)

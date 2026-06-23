@@ -11,6 +11,10 @@
 //! human-readable chip, and the category-specific action hint, so every
 //! renderer (text, HTML, VSIX tree via JSON) agrees without re-deriving
 //! strings.
+//!
+//! [CLONE-CATEGORY-REGISTRY] The shipped registry is `Logic` + `DataTable`; the
+//! five literal-family categories and `CloneCategory::all()` in the spec table
+//! ship with the planned literal feature ([LITERAL-CATEGORY], literals.md).
 
 /// Whether a cluster's repetition is extractable logic or un-refactorable
 /// data. Travels to the report on `ReportCluster.category` ([RANK-CATEGORY]).

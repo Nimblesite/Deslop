@@ -1,3 +1,4 @@
+use crate::mock_ollama::MockOllama;
 use crate::support::*;
 
 // different default. Reports are parsed via `serde_json` so the
@@ -39,6 +40,34 @@ fn load_report_json(path: &Path) -> Result<serde_json::Value> {
     Ok(value)
 }
 
+/// Creates a temp dir and seeds `<tmp>/src` from the named fixture,
+/// returning the live `TempDir` (kept alive by the caller) and the
+/// `src` scan root. Embedding/cache tests need a mutable scan root so
+/// they can write cache siblings next to the sources.
+fn seed_scan(fixture_name: &str) -> Result<(tempfile::TempDir, PathBuf)> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture(fixture_name), &scan_root)?;
+    Ok((tmp, scan_root))
+}
+
+/// Runs the `deslop` binary over `scan_root` writing to `output_prefix`
+/// with the given trailing `args` against a freshly-spawned happy-path
+/// mock Ollama, asserting the process succeeds. The mock stays alive for
+/// the synchronous run; its deterministic vectors keep the cache
+/// round-trip tests converging across separate invocations.
+fn run_deslop(scan_root: &Path, output_prefix: &Path, args: &[&str]) -> Result<()> {
+    let server = MockOllama::spawn()?;
+    let mut cmd = deslop_command(scan_root, output_prefix)?;
+    let _assertion = cmd
+        .args(args)
+        .arg("--embedding-endpoint")
+        .arg(server.endpoint())
+        .assert()
+        .success();
+    Ok(())
+}
+
 // Implements [FUSION-EMBED-PROVIDER] Type-4 end-to-end: the fixture
 // pairs recursive and iterative implementations of factorial /
 // fibonacci / sum-to-n. Without embeddings the two files share no
@@ -48,20 +77,20 @@ fn load_report_json(path: &Path) -> Result<serde_json::Value> {
 // in the public confidence range.
 #[test]
 fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
+    let (tmp, scan_root) = seed_scan("csharp-type4")?;
     let out = outputs_under(tmp.path());
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
     let json = load_report_json(&out.json)?;
     let provenance = json
         .get("embedding_provenance")
@@ -143,20 +172,20 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
 // exercises the fallback direction against a dead endpoint.
 #[test]
 fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
+    let (tmp, scan_root) = seed_scan("csharp-small")?;
     let out = outputs_under(tmp.path());
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("auto")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "auto",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
     let json = load_report_json(&out.json)?;
     let provenance = json
         .get("embedding_provenance")
@@ -182,20 +211,20 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
 fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     use std::time::Instant;
 
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
+    let (tmp, scan_root) = seed_scan("csharp-type4")?;
 
-    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("first"),
+        &[
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
 
     let cache_root = scan_root
         .join(".deslop-cache")
@@ -222,16 +251,18 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     );
 
     let started = Instant::now();
-    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
-    let _assertion = second
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("second"),
+        &[
+            "--min-nodes",
+            "15",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
     let elapsed = started.elapsed();
     assert!(
         elapsed.as_secs() < 10,
@@ -257,20 +288,20 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
 // derived views against silent drift.
 #[test]
 fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
+    let (tmp, scan_root) = seed_scan("csharp-small")?;
     let out = outputs_under(tmp.path());
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("report"),
+        &[
+            "--min-nodes",
+            "8",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
     let text = fs::read_to_string(&out.txt)?;
     assert!(
         text.contains("embeddings: ollama/nomic-embed-text@"),
@@ -292,21 +323,21 @@ fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
 // from disk, producing the same cross-file cluster as a cold run.
 #[test]
 fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let scan_root = tmp.path().join("src");
-    seed_scan_root(&fixture("csharp-type4"), &scan_root)?;
+    let (tmp, scan_root) = seed_scan("csharp-type4")?;
 
-    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--incremental")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("first"),
+        &[
+            "--min-nodes",
+            "15",
+            "--incremental",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
 
     let first_json = load_report_json(&tmp.path().join("first.json"))?;
     let first_stats = first_json
@@ -326,17 +357,19 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         "first incremental run must register both files as misses",
     );
 
-    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
-    let _assertion = second
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--incremental")
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .assert()
-        .success();
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("second"),
+        &[
+            "--min-nodes",
+            "15",
+            "--incremental",
+            "--embeddings",
+            "required",
+            "--embedding-model",
+            "nomic-embed-text",
+        ],
+    )?;
     let second_json = load_report_json(&tmp.path().join("second.json"))?;
     let second_stats = second_json
         .get("cache_stats")

@@ -4,6 +4,12 @@
 //! `use crate::common::*;`. It centralises the fixture-path lookup, the
 //! `deslop` invocation, and the report-walking helpers that every
 //! per-issue false-positive test would otherwise copy verbatim.
+//!
+//! Each integration binary pulls in only the subset of helpers it needs,
+//! so the unused-symbol lint is silenced for this shared module (matching
+//! the `deslop-core` and `deslop-mcp` test commons).
+
+#![allow(dead_code)]
 
 use std::{fs, path::Path, path::PathBuf};
 
@@ -20,24 +26,64 @@ pub(crate) fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+/// Builds `deslop <scan_root> --output <output_prefix>`, ready for the
+/// caller to append scenario-specific flags before `.assert()`. Centralises
+/// the `cargo_bin` lookup + scan-root + output-prefix prefix that every
+/// invocation shares.
+pub(crate) fn deslop_cmd(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
+    let mut cmd = Command::cargo_bin("deslop")?;
+    let _cmd = cmd.arg(scan_root).arg("--output").arg(output_prefix);
+    Ok(cmd)
+}
+
+/// Runs `deslop <scan_root> <extra_args...> --output <tmp>/report` into a
+/// throwaway temp dir and returns the parsed JSON report after asserting the
+/// process exits successfully. The flexible-flag core behind [`run_report`].
+pub(crate) fn run_report_args(scan_root: &Path, extra_args: &[&str]) -> Result<Value> {
+    let tmp = tempfile::tempdir()?;
+    let output = tmp.path().join("report");
+    let mut cmd = deslop_cmd(scan_root, &output)?;
+    let _assertion = cmd.args(extra_args).assert().success();
+    load_json(&output.with_extension("json"))
+}
+
 /// Runs `deslop <scan_root> --min-nodes <min_nodes> --embeddings off` into
 /// a throwaway temp dir and returns the parsed JSON report. Asserts the
 /// process exits successfully before the report is read.
 pub(crate) fn run_report(scan_root: &Path, min_nodes: u32) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg(min_nodes.to_string())
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
+    let min_nodes = min_nodes.to_string();
+    run_report_args(
+        scan_root,
+        &["--min-nodes", min_nodes.as_str(), "--embeddings", "off"],
+    )
+}
+
+/// Parses the JSON document at `path` into a [`Value`].
+pub(crate) fn load_json(path: &Path) -> Result<Value> {
+    Ok(serde_json::from_str(&fs::read_to_string(path)?)?)
+}
+
+/// Reads a named field off `value`, returning [`Value::Null`] when absent so
+/// callers get a deterministic `!=` instead of a panic.
+pub(crate) fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
+    value.get(name).unwrap_or(&Value::Null)
+}
+
+/// Length of a named array-valued field, or `0` when missing / non-array (so
+/// the assertion trips with the full JSON printed rather than panicking).
+pub(crate) fn array_len(value: &Value, name: &str) -> usize {
+    field(value, name).as_array().map_or(0, Vec::len)
+}
+
+/// Copies every top-level entry in `src` into a freshly created `dst`. Used
+/// by tests that need a mutable scan root seeded from an immutable fixture.
+pub(crate) fn seed(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
+    }
+    Ok(())
 }
 
 /// The `clusters` array of a report, or an empty slice when absent.

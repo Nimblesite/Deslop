@@ -28,6 +28,16 @@ Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
 Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n). Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 
+### [PIPELINE-DETERMINISM] Cross-run determinism
+Two runs of the pipeline over an unchanged corpus produce bit-identical
+deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram
+ordering), identical fused signal scores (`token_jaccard` compared bit-for-bit),
+identical candidate sets, cluster ids, and ranking. Determinism is what makes the
+fingerprint cache ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across
+sessions. The embedding/ANN layer is the only approximate stage and is bounded
+separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall,
+never changes existing cluster content.
+
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 `weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
 

@@ -58,6 +58,7 @@ function component(id: string, kind: string, pathVar: string | undefined) {
   };
 }
 
+// [DEPLOY-RESOLVER]
 suite("binary resolver", () => {
   const tmp = resolve(tmpdir(), `deslop-binary-${process.pid}-${Date.now()}`);
   const envDir = resolve(tmp, "env");
@@ -104,6 +105,7 @@ suite("binary resolver", () => {
     assert.throws(() => resolveBinary(extDir, "lsp", manifest(), {}, env), /env-dir/);
   });
 
+  // [DEPLOY-RESOLVE-SOURCES]
   test("PATH candidates are ignored when the bundle is present", () => {
     const env: NodeJS.ProcessEnv = { PATH: pathDir };
     const resolved = resolveBinary(extDir, "lsp", manifest(), {}, env);
@@ -122,6 +124,7 @@ suite("binary resolver", () => {
     assert.equal(env["PATH"], before);
   });
 
+  // [VSIX-BUNDLED-BINARY-TESTS]
   test("bundled success resolves all VS Code activation checks", () => {
     const resolved = resolveHostBinaries(extDir, "vscode", manifest(), {}, { PATH: "" });
     assert.equal(resolved["deslop-lsp"]?.source, "bundled");

@@ -61,6 +61,7 @@ impl ReportDelta {
             clusters_added,
             clusters_removed,
             clusters_updated,
+            metrics: next.metrics.clone(),
             cache_stats: next.cache_stats,
             tool_version: next.tool_version.clone(),
         }

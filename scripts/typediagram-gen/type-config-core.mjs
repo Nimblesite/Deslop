@@ -273,6 +273,7 @@ export const CORE_TYPE_CONFIG = {
       clusters_added: "Clusters present in `to` but not in `from`, worst-first.",
       clusters_removed: "Cluster ids present in `from` but not in `to`.",
       clusters_updated: "Clusters present in both whose payload changed.",
+      metrics: "Repo-wide duplication totals recomputed for the later generation, so live consumers refresh the headline instead of freezing at the seed (#199).",
       cache_stats: "Cache telemetry for the generation-producing run.",
       tool_version: "Producer version stamped on the later snapshot.",
     },

@@ -8,8 +8,10 @@
 //! configuration is covered at unit test level inside the LSP crate
 //! but the CLI contract is owned here.
 
+mod common;
+
 use std::{
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read},
     process::{ChildStdin, ChildStdout, Command, Stdio},
     sync::atomic::{AtomicI64, Ordering},
     thread,
@@ -18,6 +20,8 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use serde_json::{json, Value};
+
+use crate::common::*;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(120_000);
 
@@ -161,29 +165,10 @@ fn lsp_nice_and_worker_knobs_preserve_idle_cpu_report() -> Result<()> {
     Ok(())
 }
 
-fn request(method: &str, params: &Value) -> Result<(i64, String)> {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let payload = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
-    Ok((id, serde_json::to_string(&payload)?))
-}
-
 fn request_without_params(method: &str) -> Result<(i64, String)> {
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let payload = json!({"jsonrpc":"2.0","id":id,"method":method});
     Ok((id, serde_json::to_string(&payload)?))
-}
-
-fn notification(method: &str, params: &Value) -> Result<String> {
-    let payload = json!({"jsonrpc":"2.0","method":method,"params":params});
-    Ok(serde_json::to_string(&payload)?)
-}
-
-fn write_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
 }
 
 fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {

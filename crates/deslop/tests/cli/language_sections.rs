@@ -63,8 +63,7 @@ fn render_polyglot_html(tmp: &Path, extra: &[&str]) -> Result<String> {
     let out = outputs_under(tmp);
     let mut cmd = deslop_command(&scan_root, &tmp.join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
+        .args(["--min-nodes", "8"])
         .args(extra.iter())
         .assert()
         .success();
@@ -132,7 +131,7 @@ fn html_report_splits_into_language_sections_via_config() -> Result<()> {
     )?;
     let out = outputs_under(tmp.path());
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let html = fs::read_to_string(&out.html)?;
     assert!(
         html.contains("<h2>Rust — ") && html.contains("<h2>Dart — "),
