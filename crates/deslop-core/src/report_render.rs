@@ -19,7 +19,7 @@ use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
     fingerprint::Fingerprint,
-    pair::{LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT},
+    pair::{PairScore, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT},
     report::{ReportCluster, ReportOccurrence, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
@@ -54,7 +54,9 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
             )
         })
         .collect();
-    let signals: ReportSignals = cluster.signals.into();
+    let raw_signals: ReportSignals = cluster.signals.into();
+    let kind = report_bucket_kind(raw_signals, &cluster.members, sources, file_languages);
+    let signals = proven_identical_signals(raw_signals, kind);
     let summary = summarise(
         cluster.members.len(),
         canonical_node_count,
@@ -63,7 +65,6 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         sources,
         signals,
     );
-    let kind = report_bucket_kind(signals, &cluster.members, sources, file_languages);
     let interpretation = interpret(kind);
     // The bucket is the wire label of the routed kind — including
     // `structural_only` ([RANK-STRUCTURAL-ONLY]), which issue #134
@@ -188,6 +189,41 @@ pub(crate) fn summarise(
         token = signals.token_jaccard,
         embed = signals.embedding_cos,
     )
+}
+
+/// Lowest `token_jaccard` [`classify_signals`] will tolerate while still
+/// labelling a cluster `Identical` on the signal alone. Any cluster that
+/// reaches [`ClusterKind::Identical`] with a value below this floor was
+/// promoted by the byte-equivalence upgrade in [`report_bucket_kind`], not
+/// by its token signal — the GH #232 fingerprint to correct.
+const PROVEN_IDENTICAL_TOKEN_JACCARD_FLOOR: f64 = 0.99;
+
+/// Corrects the reported `token_jaccard` for clusters the byte-equivalence
+/// upgrade in [`report_bucket_kind`] routed to [`ClusterKind::Identical`]
+/// (GH #232).
+///
+/// A synthetic sibling-window fingerprint matches no single AST node, so the
+/// non-language signature path resolves it to a byte-offset-seeded fallback
+/// signature; two byte-identical occurrences in different files then estimate
+/// `token_jaccard ≈ 0`. Once a cluster is *proven* `Identical` (its members'
+/// raw source slices are byte-equivalent), their normalised token multisets
+/// are identical by construction, so the true Jaccard is 1.0. We only touch
+/// the upgraded case: [`classify_signals`] never labels a cluster `Identical`
+/// below [`PROVEN_IDENTICAL_TOKEN_JACCARD_FLOOR`], so the demoted
+/// `structural_only` family (renamed, *not* byte-equivalent) keeps its
+/// unscored signal and its ranking demotion.
+fn proven_identical_signals(signals: ReportSignals, kind: ClusterKind) -> ReportSignals {
+    if kind != ClusterKind::Identical
+        || signals.token_jaccard >= PROVEN_IDENTICAL_TOKEN_JACCARD_FLOOR
+    {
+        return signals;
+    }
+    PairScore {
+        structural: signals.structural,
+        token_jaccard: 1.0,
+        embedding_cos: signals.embedding_cos,
+    }
+    .into()
 }
 
 /// Routes the signal triple into the report bucket and is the *single
