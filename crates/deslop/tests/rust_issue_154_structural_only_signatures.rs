@@ -84,6 +84,19 @@ fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()
          have no real evidence and must not appear in the ranked report. \
          Offending clusters: {offenders:#?}"
     );
+    // [METRICS-REPO] This fixture mixes visible near-miss clones with hidden
+    // structural_only families. The metric must count only the lines the
+    // visible clusters cover, so the suppressed families add nothing.
+    let reported = report
+        .pointer("/metrics/duplicated_loc")
+        .and_then(Value::as_u64)
+        .unwrap_or(u64::MAX);
+    assert_eq!(
+        reported,
+        visible_duplicated_loc(&report),
+        "duplicated_loc must equal the visible-cluster line union — hidden \
+         structural_only families must not inflate the metric: {report:#}"
+    );
     let hidden = report
         .get("clusters_hidden")
         .and_then(Value::as_u64)

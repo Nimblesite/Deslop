@@ -89,9 +89,13 @@ pub type AnalysedLines = HashMap<FileId, u64>;
 /// point past the 7-argument budget.
 #[derive(Debug)]
 pub struct MetricsInputs<'a, S: BuildHasher> {
-    /// Ranked cluster list produced by
-    /// [`crate::cluster::build_ranked_fused_clusters`].
-    pub clusters: &'a [Cluster],
+    /// The clusters that survive into the rendered report — the visible
+    /// set after [`crate::report::render_report`] drops report-hidden and
+    /// noise / structural-only clusters. The metric counts the same
+    /// clusters the report carries, never one the report dropped, so
+    /// per-file and repo percentages stay consistent with the cluster list
+    /// every surface renders ([METRICS-REPO]).
+    pub clusters: &'a [&'a Cluster],
     /// Per-file source bytes keyed by [`FileId`]. Used to convert
     /// `byte_range` to line numbers; only read, never mutated.
     pub sources: &'a HashMap<FileId, Vec<u8>>,
@@ -117,7 +121,7 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
     let analysed_loc: u64 = inputs.analysed_lines.values().copied().sum();
     let mut per_file_lines: HashMap<FileId, BTreeSet<u64>> = HashMap::new();
     let mut contributing_clusters: usize = 0;
-    for cluster in inputs.clusters {
+    for &cluster in inputs.clusters {
         if fold_cluster_lines(cluster, inputs, &mut per_file_lines) {
             contributing_clusters = contributing_clusters.saturating_add(1);
         }
