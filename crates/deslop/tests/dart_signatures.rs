@@ -27,27 +27,19 @@
 //!     arguments are suppressed (#70) — each paired with a genuine clone
 //!     that must still surface, proving the suppression stays targeted.
 
-use std::{fs, path::Path, path::PathBuf};
+use std::{fs, path::Path};
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_cli(fixture_name: &str, min_nodes: u32) -> Result<serde_json::Value> {
     let tmp = tempfile::tempdir()?;
     let out = tmp.path().join("report.json");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(fixture(fixture_name))
+    let _assertion = deslop_cmd(&fixture(fixture_name), &tmp.path().join("report"))?
         .arg("--min-nodes")
         .arg(min_nodes.to_string())
-        .arg("--output")
-        .arg(tmp.path().join("report"))
         .assert()
         .success();
     let json = fs::read_to_string(&out)?;

@@ -86,7 +86,29 @@ never whole-occurrence ranges) — all compared texts byte-equal → `Identical`
 field is authoritative. They never land in `StructuralOnly` / `LooselySimilar` / `SameBehavior`
 ([LITERAL-WIRE]).
 
+### [CLONE-BUCKETS-IDENTICAL] Byte-equivalence proof for the Identical bucket
+The `Identical` bucket asserts that every copy is byte-for-byte the same, so it is
+awarded only on raw-source proof, never on the signal triple alone — structural
+normalisation collapses identifiers and literals, so two snippets that differ in
+routes, handlers, or policy literals still reach `structural=1.00,
+token_jaccard=1.00`. `report_bucket_kind` is the single source of truth for the
+downgrade/upgrade: a cluster routed to `Identical` whose raw slices are *not*
+byte-equivalent (after collapsing ASCII whitespace runs) is downgraded to
+`NearlyIdentical`, and conversely a `NearlyIdentical` or `StructuralOnly` cluster
+at `structural ≥ 0.99` whose raw slices *are* byte-equivalent is upgraded to
+`Identical` ([CLONE-BUCKETS-ROUTING]) — byte proof beats the unscored token
+signal. When a member's source bytes are unavailable the cluster cannot prove
+equivalence and takes the downgrade, so every `Identical` label downstream
+(including the agent-facing `interpret` summary) reflects byte-equivalent source.
+
 ## [CLONE-CATEGORY-REGISTRY] Clone categories (single source of truth)
+
+> **Status: partially shipped.** The `CloneCategory` enum today ships `Logic` and
+> `DataTable` only. The five literal-family categories (`MagicLiteral`,
+> `ShadowedConstant`, `ConstantDuplicate`, `ConstantDrift`, `ConstantAlias`) and
+> the `CloneCategory::all()`-derived facet/schema enums land with the planned
+> literal feature ([LITERAL-CATEGORY], literals.md); the table below is the target
+> registry.
 
 The **category** axis is orthogonal to the bucket: bucket answers *"how textually similar?"*,
 category answers *"what kind of repetition?"*. The Rust `CloneCategory` enum is the identity; this

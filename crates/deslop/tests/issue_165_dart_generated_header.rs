@@ -13,21 +13,15 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
+
+mod common;
+use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
     let _replaced = path.set_extension("json");
     path
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn cluster_spans(cluster: &Value, left: &str, right: &str) -> bool {
@@ -74,17 +68,16 @@ fn dart_automatically_generated_banner_is_hidden() -> Result<()> {
     fs::write(src.join("plain_b.dart"), control_body)?;
 
     let report = report_path(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&src, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&src)
-        .arg("--min-nodes")
-        .arg("5")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--notext")
-        .arg("--nohtml")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
+        .args([
+            "--min-nodes",
+            "5",
+            "--embeddings",
+            "off",
+            "--notext",
+            "--nohtml",
+        ])
         .assert()
         .success();
 

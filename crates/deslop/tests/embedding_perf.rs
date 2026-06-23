@@ -15,9 +15,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use assert_cmd::Command;
 use serde_json::Value;
 
+mod common;
+use crate::common::deslop_cmd;
 use crate::mock_ollama::MockOllama;
 
 #[test]
@@ -26,21 +27,20 @@ fn duplicate_subtree_embeddings_are_collapsed_before_ann() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     write_duplicate_fixture(&scan_root, 8)?;
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .arg("--embeddings")
-        .arg("required")
-        .arg("--embedding-provider")
-        .arg("ollama")
-        .arg("--embedding-model")
-        .arg("nomic-embed-text")
-        .arg("--embedding-endpoint")
-        .arg(server.endpoint())
+        .args([
+            "--min-nodes",
+            "4",
+            "--embeddings",
+            "required",
+            "--embedding-provider",
+            "ollama",
+            "--embedding-model",
+            "nomic-embed-text",
+            "--embedding-endpoint",
+            server.endpoint(),
+        ])
         .assert()
         .success();
     let provenance = embedding_provenance(tmp.path())?;

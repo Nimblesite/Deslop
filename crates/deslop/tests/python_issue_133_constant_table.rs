@@ -15,45 +15,24 @@
 //! unrelated constant tables are hidden, and the verbatim copy stays
 //! visible across both files.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 
-use anyhow::{anyhow, Result};
-use assert_cmd::Command;
+use anyhow::Result;
 use serde_json::Value;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn run_report(scan_root: &Path) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assertion = Command::cargo_bin("deslop")?
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("4")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(&output)
+    let mut cmd = deslop_cmd(scan_root, &output)?;
+    let _assertion = cmd
+        .args(["--min-nodes", "4", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
     Ok(serde_json::from_str(&body)?)
-}
-
-fn clusters(report: &Value) -> &[Value] {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
 }
 
 fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
@@ -65,28 +44,6 @@ fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
         .iter()
         .map(|occurrence| occurrence_text(scan_root, occurrence))
         .collect()
-}
-
-fn occurrence_text(scan_root: &Path, occurrence: &Value) -> Result<String> {
-    let path = occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("occurrence missing path"))?;
-    let source = fs::read_to_string(scan_root.join(path))?;
-    let start = occurrence_byte(occurrence, "start_byte")?;
-    let end = occurrence_byte(occurrence, "end_byte")?;
-    source
-        .get(start..end)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow!("occurrence range invalid"))
-}
-
-fn occurrence_byte(occurrence: &Value, field: &str) -> Result<usize> {
-    occurrence
-        .get(field)
-        .and_then(Value::as_u64)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| anyhow!("occurrence missing {field}"))
 }
 
 fn occurrence_paths(cluster: &Value) -> Vec<String> {
@@ -102,6 +59,13 @@ fn occurrence_paths(cluster: &Value) -> Vec<String> {
                 .map(ToOwned::to_owned)
         })
         .collect()
+}
+
+/// Resolves the named fixture and runs the constant-table report over it.
+fn fixture_report(fixture_name: &str) -> Result<(std::path::PathBuf, Value)> {
+    let scan_root = fixture(fixture_name);
+    let report = run_report(&scan_root)?;
+    Ok((scan_root, report))
 }
 
 /// Collects every visible cluster whose occurrences contain `needle`.
@@ -121,8 +85,7 @@ fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<V
 // merely because both are runs of `NAME = <literal>` assignments.
 #[test]
 fn unrelated_constant_tables_do_not_cluster() -> Result<()> {
-    let scan_root = fixture("python-issue-133-constant-table");
-    let report = run_report(&scan_root)?;
+    let (scan_root, report) = fixture_report("python-issue-133-constant-table")?;
     let sql = clusters_touching(&report, &scan_root, "_PUBLIC_FUNCTIONS_SQL")?;
     let registry = clusters_touching(&report, &scan_root, "WORKSPACE_IMAGE_NAMESPACE")?;
     assert!(
@@ -140,8 +103,7 @@ fn unrelated_constant_tables_do_not_cluster() -> Result<()> {
 // shape alone.
 #[test]
 fn verbatim_copied_constants_still_surface() -> Result<()> {
-    let scan_root = fixture("python-issue-133-genuine-copy");
-    let report = run_report(&scan_root)?;
+    let (scan_root, report) = fixture_report("python-issue-133-genuine-copy")?;
     let copied = clusters_touching(&report, &scan_root, "DESLOP_GENUINE_COPY_MARKER")?;
     assert!(
         !copied.is_empty(),
@@ -177,8 +139,7 @@ fn verbatim_copied_constants_still_surface() -> Result<()> {
 // values, and anything that can carry logic keeps clustering for review.
 #[test]
 fn interpolated_template_modules_still_surface() -> Result<()> {
-    let scan_root = fixture("python-issue-133-precision");
-    let report = run_report(&scan_root)?;
+    let (scan_root, report) = fixture_report("python-issue-133-precision")?;
     let templated = clusters_touching(&report, &scan_root, "BANNER = f\"Welcome to")?;
     assert!(
         !templated.is_empty(),

@@ -8,6 +8,7 @@ import { render } from "preact";
 import { report, wireMessagePump } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
 import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
+import { thresholdStatus } from "../../../src/tree/threshold";
 
 function percentColor(percent: number): string {
   if (percent >= 30) return "#e5534b";
@@ -88,9 +89,8 @@ function DuplicationApp() {
   }
   const metrics = snapshot.metrics;
   const rows = buildFolderRollup(metrics.per_file, (file) => file.path);
-  const breach = metrics.threshold.breached
-    ? ` · ⚠ over ${metrics.threshold.percent.toFixed(1)}% gate`
-    : "";
+  const status = thresholdStatus(metrics.threshold);
+  const gate = status.configured ? ` · ${status.label}` : "";
   return (
     <main style={{ padding: "24px 32px" }}>
       <header style={{ display: "grid", gap: "12px", paddingBottom: "20px" }}>
@@ -120,7 +120,7 @@ function DuplicationApp() {
         </h1>
         <div class="mono" style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
           {metrics.duplicated_loc}/{metrics.analysed_loc} LOC · {metrics.clusters_total} clusters ·{" "}
-          {metrics.duplicated_files} files{breach}
+          {metrics.duplicated_files} files{gate}
         </div>
       </header>
       {rows.length === 0 ? (

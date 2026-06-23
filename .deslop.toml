@@ -30,4 +30,4 @@ exclude = [
 # duplication exceeds it. Seeded at the currently-measured value; the score is
 # inflated by the coarse E2E test suites and SHOULD be driven down over time.
 [threshold]
-max_duplication_percent = 25.8
+max_duplication_percent = 20

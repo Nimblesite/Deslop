@@ -1,19 +1,37 @@
 use crate::support::*;
 
-#[test]
-fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
+/// Runs the CLI against `fixture(fixture_name)` with `--min-nodes
+/// <min_nodes>`, asserts the process succeeded, and returns the raw
+/// JSON report text. Shared by every detection test that drives a
+/// fixture with an explicit `--min-nodes` and then asserts on the
+/// rendered report.
+fn run_min_nodes(fixture_name: &str, min_nodes: &str) -> Result<String> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("csharp-small"))
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_command(&fixture(fixture_name), &tmp.path().join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
+    Ok(fs::read_to_string(&out.json)?)
+}
+
+/// Runs the CLI against `fixture(fixture_name)` with default flags,
+/// asserts success, and returns the scan root plus the parsed JSON
+/// report. Shared by the issue-#34 prologue regressions, which need
+/// the scan root to read back the byte slices the report claims are
+/// clones.
+fn run_default(fixture_name: &str) -> Result<(PathBuf, serde_json::Value)> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let scan_root = fixture(fixture_name);
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd.assert().success();
     let json = fs::read_to_string(&out.json)?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    Ok((scan_root, report))
+}
+
+#[test]
+fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
+    let json = run_min_nodes("csharp-small", "8")?;
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains("Alpha.cs"));
     assert!(json.contains("Beta.cs"));
@@ -24,18 +42,7 @@ fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
 // Implements [PIPELINE-LANG-TRAIT] for Rust: Type-2 clone detection.
 #[test]
 fn detects_type2_clone_in_rust_fixture() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("rust-small"))
-        .arg("--min-nodes")
-        .arg("10")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("rust-small", "10")?;
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains("alpha.rs"));
     assert!(json.contains("beta.rs"));
@@ -46,18 +53,7 @@ fn detects_type2_clone_in_rust_fixture() -> Result<()> {
 // Implements [PIPELINE-LANG-TRAIT] for Python: Type-2 clone detection.
 #[test]
 fn detects_type2_clone_in_python_fixture() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("python-small"))
-        .arg("--min-nodes")
-        .arg("10")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("python-small", "10")?;
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains("alpha.py"));
     assert!(json.contains("beta.py"));
@@ -72,18 +68,7 @@ fn detects_type2_clone_in_python_fixture() -> Result<()> {
 // identically and cluster at structural = 1.0.
 #[test]
 fn detects_type2_clone_in_dart_fixture() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("dart-small"))
-        .arg("--min-nodes")
-        .arg("10")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("dart-small", "10")?;
     assert!(json.contains("\"files_analysed\": 2"));
     assert!(json.contains("alpha.dart"));
     assert!(json.contains("beta.dart"));
@@ -98,18 +83,7 @@ fn detects_type2_clone_in_dart_fixture() -> Result<()> {
 // Positive bound: every cluster's occurrences come from a single file.
 #[test]
 fn dissimilar_dart_functions_across_files_stay_in_separate_clusters() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("dart-dissimilar-functions"))
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("dart-dissimilar-functions", "8")?;
     let report: serde_json::Value = serde_json::from_str(&json)?;
     let clusters = report
         .pointer("/clusters")
@@ -158,18 +132,7 @@ fn dissimilar_dart_functions_across_files_stay_in_separate_clusters() -> Result<
 // legitimate and allowed.
 #[test]
 fn dissimilar_python_functions_across_files_stay_in_separate_clusters() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("python-dissimilar-functions"))
-        .arg("--min-nodes")
-        .arg("10")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("python-dissimilar-functions", "10")?;
     let report: serde_json::Value = serde_json::from_str(&json)?;
     let clusters = report
         .pointer("/clusters")
@@ -312,18 +275,7 @@ fn assert_no_cross_file_prologue_cluster(
 // fixture reproduces the symptom.
 #[test]
 fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let scan_root = fixture("python-prologue-false-positive");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let (scan_root, report) = run_default("python-prologue-false-positive")?;
     assert_no_cross_file_prologue_cluster(&report, &scan_root, "python prologue");
     Ok(())
 }
@@ -343,18 +295,7 @@ fn python_module_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
 // distinct files reproduce the same shape here.
 #[test]
 fn csharp_using_namespace_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let scan_root = fixture("csharp-prologue-false-positive");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let (scan_root, report) = run_default("csharp-prologue-false-positive")?;
     assert_no_cross_file_prologue_cluster(&report, &scan_root, "csharp prologue");
     Ok(())
 }
@@ -373,18 +314,7 @@ fn csharp_using_namespace_prologue_never_becomes_a_cross_file_cluster() -> Resul
 // from anchoring cross-file matches in any language we parse.
 #[test]
 fn rust_use_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let scan_root = fixture("rust-prologue-false-positive");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(&scan_root)
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let (scan_root, report) = run_default("rust-prologue-false-positive")?;
     assert_no_cross_file_prologue_cluster(&report, &scan_root, "rust prologue");
     Ok(())
 }
@@ -393,18 +323,7 @@ fn rust_use_prologue_never_becomes_a_cross_file_cluster() -> Result<()> {
 // in one run.
 #[test]
 fn handles_mixed_language_fixture() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("mixed-small"))
-        .arg("--min-nodes")
-        .arg("10")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("mixed-small", "10")?;
     assert!(json.contains("\"files_analysed\": 3"));
     assert!(json.contains("Lib.cs"));
     assert!(json.contains("lib.rs"));
@@ -416,18 +335,7 @@ fn handles_mixed_language_fixture() -> Result<()> {
 // Type-3 near-miss cross-file cluster with `structural=0.0`.
 #[test]
 fn detects_type3_clone_in_csharp_fixture() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
-    let out = outputs_under(tmp.path());
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(fixture("csharp-type3"))
-        .arg("--min-nodes")
-        .arg("15")
-        .arg("--output")
-        .arg(tmp.path().join("report"))
-        .assert()
-        .success();
-    let json = fs::read_to_string(&out.json)?;
+    let json = run_min_nodes("csharp-type3", "15")?;
     assert!(json.contains("Delta.cs"));
     assert!(json.contains("Epsilon.cs"));
     assert!(json.contains("\"structural\": 0.0"));

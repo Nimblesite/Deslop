@@ -13,6 +13,12 @@ use std::{
 use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
+mod common;
+use common::{
+    fixture_root, pid_exists, read_mcp_pid, terminate_pid, value_get, wait_for_pid_exit,
+    KILLABLE_PARENT_SCRIPT,
+};
+
 struct McpParent {
     child: Child,
     stdin: ChildStdin,
@@ -77,13 +83,6 @@ impl Drop for McpParent {
     }
 }
 
-fn fixture_root() -> &'static Path {
-    Path::new(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/csharp-mcp"
-    ))
-}
-
 fn init_session(parent: &mut McpParent) -> Result<Value> {
     parent.request(
         "initialize",
@@ -96,10 +95,9 @@ fn init_session(parent: &mut McpParent) -> Result<Value> {
 }
 
 fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
-    let script = r#"exec 3<&0; "$1" --root "$2" <&3 2>/dev/null & mcp_pid=$!; printf '%s\n' "$mcp_pid" >&2; wait "$mcp_pid""#;
     let mut child = Command::new("/bin/sh")
         .arg("-c")
-        .arg(script)
+        .arg(KILLABLE_PARENT_SCRIPT)
         .arg("deslop-mcp-parent")
         .arg(env!("CARGO_BIN_EXE_deslop-mcp"))
         .arg(root)
@@ -121,72 +119,6 @@ fn spawn_mcp_with_killable_parent(root: &Path) -> Result<(McpParent, u32)> {
         },
         mcp_pid,
     ))
-}
-
-fn read_mcp_pid(child: &mut Child) -> Result<u32> {
-    let stderr = child.stderr.take().context("parent stderr")?;
-    let mut stderr = BufReader::new(stderr);
-    let mut pid_line = String::new();
-    let bytes = stderr.read_line(&mut pid_line)?;
-    ensure!(bytes > 0, "parent shell did not report mcp pid");
-    pid_line
-        .trim()
-        .parse::<u32>()
-        .context("parse mcp pid from parent shell")
-}
-
-fn value_get(value: &Value, pointer: &str) -> Result<Value> {
-    value
-        .pointer(pointer)
-        .cloned()
-        .ok_or_else(|| anyhow!("pointer {pointer} not found in {value}"))
-}
-
-fn wait_for_pid_exit(pid: u32, duration: Duration) -> Result<bool> {
-    let started = Instant::now();
-    while started.elapsed() < duration {
-        if !pid_exists(pid)? {
-            return Ok(true);
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    Ok(false)
-}
-
-fn pid_exists(pid: u32) -> Result<bool> {
-    let status = Command::new("kill")
-        .arg("-0")
-        .arg(pid.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("probe process existence with kill -0")?;
-    Ok(status.success())
-}
-
-fn terminate_pid(pid: u32) -> Result<()> {
-    if !pid_exists(pid)? {
-        return Ok(());
-    }
-    let _term_status = Command::new("kill")
-        .arg("-TERM")
-        .arg(pid.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("terminate orphaned mcp pid")?;
-    if wait_for_pid_exit(pid, Duration::from_secs(1))? {
-        return Ok(());
-    }
-    let _kill_status = Command::new("kill")
-        .arg("-KILL")
-        .arg(pid.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("kill orphaned mcp pid")?;
-    let _exited = wait_for_pid_exit(pid, Duration::from_secs(1))?;
-    Ok(())
 }
 
 #[test]

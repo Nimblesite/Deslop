@@ -8,42 +8,12 @@
 //! - #142 [EXCLUSION-CONFIG]: generated Cargo dependency boilerplate
 //!   under `.cargo/` must never enter discovery as actionable code.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn report_path(tmp: &Path) -> PathBuf {
-    let mut path = tmp.join("report");
-    let _replaced = path.set_extension("json");
-    path
-}
-
-fn run_report(tmp: &Path, scan_root: &Path, min_nodes: &str) -> Result<serde_json::Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg(min_nodes)
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(tmp.join("report"))
-        .assert()
-        .success();
-    let body = fs::read_to_string(report_path(tmp))?;
-    Ok(serde_json::from_str(&body)?)
-}
-
-fn clusters(report: &serde_json::Value) -> &[serde_json::Value] {
-    report
-        .get("clusters")
-        .and_then(serde_json::Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
-}
+mod common;
+use crate::common::*;
 
 fn occurrence_paths(cluster: &serde_json::Value) -> Vec<String> {
     cluster
@@ -162,7 +132,7 @@ fn issue_140_visible_cluster_outranks_hidden_dominated_mixed_cluster() -> Result
         )?;
     }
 
-    let report = run_report(tmp.path(), &scan_root, "8")?;
+    let report = run_report(&scan_root, 8)?;
     let clusters = clusters(&report);
     assert!(
         clusters.len() >= 2,
@@ -256,7 +226,7 @@ fn issue_142_cargo_cache_paths_are_built_in_excluded() -> Result<()> {
         )?;
     }
 
-    let report = run_report(tmp.path(), &scan_root, "8")?;
+    let report = run_report(&scan_root, 8)?;
 
     // Exactly the two real workspace files must be analysed.
     let files_analysed = report

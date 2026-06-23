@@ -16,8 +16,8 @@ use std::collections::BTreeSet;
 use tree_sitter::Node;
 
 use super::{
-    enclosing_kind, node_intersects_range, parse_for, raw_snippet_texts_differ,
-    spans_multiple_files, trimmed_snippet_range, Snippet,
+    enclosing_kind, is_multi_member_language_cluster, node_intersects_range, parse_for,
+    raw_snippet_texts_differ, spans_multiple_files, trimmed_snippet_range, Snippet,
 };
 use crate::ast::ByteRange;
 
@@ -27,7 +27,7 @@ use crate::ast::ByteRange;
 /// and grammar functions, but the trait contract forces the same method
 /// outline, so the cluster is not actionable duplication.
 pub(super) fn is_rust_language_parser_adapter_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
+    if !is_multi_member_language_cluster(snippets, "rust") {
         return false;
     }
     if !spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id)) {
@@ -148,7 +148,7 @@ fn language_parser_method_names() -> BTreeSet<Vec<u8>> {
 /// `pub use ...;`). Module declarations cannot be macro-generated in
 /// Rust, so the cluster is not actionable.
 pub(super) fn is_rust_top_level_decl_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
+    if !is_multi_member_language_cluster(snippets, "rust") {
         return false;
     }
     let signatures: Option<Vec<DeclSignature>> = snippets.iter().map(decl_signature).collect();
@@ -162,7 +162,7 @@ pub(super) fn is_rust_top_level_decl_cluster(snippets: &[Snippet<'_>]) -> bool {
 /// `.iter().map(|x| x.field.method()).collect()` idiom and the cluster
 /// spans at least two distinct source files.
 pub(super) fn is_rust_iter_collect_idiom_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
+    if !is_multi_member_language_cluster(snippets, "rust") {
         return false;
     }
     spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
@@ -410,7 +410,7 @@ fn closure_body_matches_field_method(body: Node<'_>, source: &[u8], closure_arg:
 /// least two members differ in raw bytes, so a verbatim copy-pasted run
 /// of arms still surfaces as a genuine clone.
 pub(super) fn is_rust_match_dispatch_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if snippets.len() < 2 || !snippets.iter().all(|snippet| snippet.language == "rust") {
+    if !is_multi_member_language_cluster(snippets, "rust") {
         return false;
     }
     let patterns: Option<Vec<Vec<Vec<u8>>>> =

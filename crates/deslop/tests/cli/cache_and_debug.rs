@@ -1,12 +1,25 @@
 use crate::support::*;
 use std::fmt::Write as _;
 
+/// Runs an `--incremental` pass over `scan_root`, writing `<prefix>.json`
+/// (and siblings), asserts the process succeeded, and returns the JSON
+/// report body as a string. Centralises the seed-already-present
+/// run-and-read shape shared by the cache tests.
+fn run_incremental_pass(scan_root: &Path, output_prefix: &Path) -> Result<String> {
+    let mut cmd = deslop_command(scan_root, output_prefix)?;
+    let _assertion = cmd
+        .args(["--min-nodes", "8", "--incremental"])
+        .assert()
+        .success();
+    Ok(fs::read_to_string(with_ext(output_prefix, "json"))?)
+}
+
 #[test]
 fn output_path_with_missing_parent_is_created() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let base = tmp.path().join("a").join("b").join("c").join("report");
     let mut cmd = deslop_command(&fixture("csharp-small"), &base)?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     assert!(
         base.with_extension("json").exists(),
         "nested-parent json missing"
@@ -28,9 +41,7 @@ fn report_hide_drops_cluster_when_all_members_hidden() -> Result<()> {
     fs::write(&config, "[defaults]\nreport_hide = [\"**/*.cs\"]\n")?;
     let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--config")
+        .args(["--min-nodes", "8", "--config"])
         .arg(&config)
         .assert()
         .success();
@@ -64,14 +75,7 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
-        .assert()
-        .success();
-    let first_json = fs::read_to_string(tmp.path().join("first.json"))?;
+    let first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
     assert!(
         first_json.contains("\"hits\": 0"),
         "first run must be a clean miss: {first_json}"
@@ -86,14 +90,7 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
         "fingerprint cache directory missing: {}",
         cache_dir.display()
     );
-    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
-    let _assertion = second
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
-        .assert()
-        .success();
-    let second_json = fs::read_to_string(tmp.path().join("second.json"))?;
+    let second_json = run_incremental_pass(&scan_root, &tmp.path().join("second"))?;
     assert!(
         second_json.contains("\"hits\": 2"),
         "second run must hit the cache for both files: {second_json}"
@@ -127,7 +124,7 @@ fn default_run_skips_the_cache() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("8").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"hits\": 0"),
@@ -155,13 +152,7 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
-    let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
-        .assert()
-        .success();
+    let _first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
     let fingerprints_root = scan_root.join(".deslop-cache").join("fingerprints");
     for language_dir in fs::read_dir(&fingerprints_root)? {
         let language_path = language_dir?.path();
@@ -176,14 +167,7 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
             }
         }
     }
-    let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
-    let _assertion = second
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
-        .assert()
-        .success();
-    let second_json = fs::read_to_string(tmp.path().join("second.json"))?;
+    let second_json = run_incremental_pass(&scan_root, &tmp.path().join("second"))?;
     assert!(
         second_json.contains("\"misses\": 2"),
         "corrupt entries must be treated as misses: {second_json}"
@@ -238,9 +222,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     fs::set_permissions(&locked_dir, perms)?;
     let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
     let _assertion = cmd
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--incremental")
+        .args(["--min-nodes", "8", "--incremental"])
         .assert()
         .success();
     let mut restore = fs::metadata(&locked_dir)?.permissions();
@@ -289,7 +271,7 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
     }
     let started = Instant::now();
     let mut cmd = deslop_command(&corpus, &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("30").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "30"]).assert().success();
     let elapsed = started.elapsed();
     // 180 s is a regression guard, not a performance SLA. The real
     // budget is validated manually. A release-mode run against this
@@ -323,7 +305,7 @@ fn synthetic_corpus_scale_smoke_test() -> Result<()> {
 fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let mut cmd = deslop_command(&fixture("bug-empty-class"), &tmp.path().join("report"))?;
-    let _assertion = cmd.arg("--min-nodes").arg("4").assert().success();
+    let _assertion = cmd.args(["--min-nodes", "4"]).assert().success();
     let json = fs::read_to_string(tmp.path().join("report.json"))?;
     assert!(
         json.contains("\"files_analysed\": 1"),

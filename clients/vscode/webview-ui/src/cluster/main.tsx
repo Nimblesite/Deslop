@@ -279,6 +279,9 @@ function ClusterApp() {
                 </HelpedText>
               </div>
             </div>
+            {/* [VSIX-WEBVIEW-ACTIONS-CONTEXT] Open / Compare per occurrence
+                (prev/next cluster live in the footer); each posts a typed
+                message the host acts on. */}
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
               <span class="with-help">
                 <button

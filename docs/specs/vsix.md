@@ -214,18 +214,9 @@ Expand All and Collapse All are **provider-driven** (`TopOffendersProvider.setBu
 
 #### [VSIX-SEVERITY-CONTROL] Diagnostics toggle + severity configuration
 
-Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)), so turning them on must be a **one-click move in a prominent place**, not a hunt through Settings. The control lives in the Top Offenders title bar — the panel the user already has open while triaging duplication.
+**Status: ⏳ Planned (#177).** The shipped extension renders the always-on Deslop-severity colours on every surface but does not yet expose the diagnostics toggle or the severity QuickPick; the design below is the target once the [severity.md §SEVERITY-MODEL](severity.md#severity-model) two-map model lands.
 
-**The toggle (`navigation@0`).** A single title-bar button bound to `deslop.diagnostics.toggle`, which flips the `deslop.diagnostics.enabled` workspace setting:
-
-- **Off (default):** icon `$(bell-slash)`, title `Deslop: Diagnostics Off — click to publish to Problems`. The view also carries a one-line, dismissible header note `Diagnostics off — Problems panel quiet` so the state is legible without hovering the icon.
-- **On:** icon `$(bell)`, title `Deslop: Diagnostics On — click to silence Problems`.
-
-The two states are selected by a `when` clause on the `deslop:diagnosticsEnabled` context key, which the extension sets from the store whenever the setting changes — never from a second cached copy ([VSIX-STATE]). Writing targets the workspace configuration so the choice persists per-repo, exactly like the grouping/sort toggles ([VSIX-TOP-OFFENDERS-GROUPING]). Flipping it forwards `workspace/didChangeConfiguration` to the LSP, which re-resolves diagnostics for every open file in the same round-trip; there is no re-analysis ([VSIX-VIEW-STATE-UI-ONLY]) — the report is unchanged, only its diagnostic projection.
-
-**Severity configuration (`deslop.severity.configure`).** A companion gear at `navigation@0` (immediately right of the toggle) opens a QuickPick that edits both maps in flow, without leaving the panel. It lists every bucket from `ClusterKind::all()`, each row showing the bucket's plain title, its current **colour** level (`deslop.severity.*`) and its current **diagnostic** level (`deslop.diagnostics.severity.*`, or `none`). Selecting a bucket opens a second QuickPick to set each axis from `error · warning · information · hint` (plus `none` for the diagnostic axis). The QuickPick is the prominent in-flow editor; the VS Code Settings UI (filtered to `@ext:nimblesite.deslop-live severity`) remains the durable store both write to. Both targets are the workspace, so a team posture pinned in `.vscode/settings.json` wins per [VSIX-SETTINGS] precedence.
-
-The toggle changes only whether diagnostics publish; it never touches the bubble, tree, code-lens, or gutter colour, which are driven by the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)). A status-bar segment ([VSIX-STATUS-BAR]) mirrors the toggle state for users working away from the panel and is itself clickable to flip it.
+Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)), so turning them on is a one-click title-bar control in the Top Offenders panel: a `navigation@0` button bound to `deslop.diagnostics.toggle` flips the `deslop.diagnostics.enabled` workspace setting (`$(bell-slash)` ↔ `$(bell)`), its two states selected by a `when` clause on the `deslop:diagnosticsEnabled` context key the extension sets from the store ([VSIX-STATE]). Flipping it forwards `workspace/didChangeConfiguration` to the LSP, which re-resolves diagnostics for every open file with no re-analysis ([VSIX-VIEW-STATE-UI-ONLY]). A companion gear (`deslop.severity.configure`) opens a QuickPick over `ClusterKind::all()` that edits each bucket's **colour** (`deslop.severity.*`) and **diagnostic** level (`deslop.diagnostics.severity.*`, or `none`) in flow, writing the workspace config that VS Code Settings also edits. The toggle never touches the always-on colour map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)); a [VSIX-STATUS-BAR] segment mirrors and flips it.
 
 #### [VSIX-METRICS-PANEL] Duplication panel
 
@@ -245,7 +236,7 @@ The LSP's code lens ([LSP-CODE-LENS]) is the content source. The VSIX styles it 
 
 Each lens has three actions in its command array:
 
-- **"Jump"** — cycles `textDocument/definition` through remaining occurrences.
+- **"Jump"** — runs `deslop.jumpToNextOccurrence`, cycling through remaining occurrences. It never routes through `textDocument/definition`, so it cannot interfere with the editor's Go To Definition ([LSP-NON-INTERFERENCE]).
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
 - **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
 
@@ -301,7 +292,7 @@ Three hard guarantees, applied to every surface (tree included):
 
 `TopOffendersProvider`, `FocusedFileProvider`, `SessionProvider` — and any future tree — derive their `getChildren` output from the store's signals via a `computed()` view. Their `onDidChangeTreeData` event fires from one place: a `signals.effect()` watching the relevant computed value. **The tree must not call `reportGet` directly, must not maintain a parallel `clusters` array, and must not be refreshed from outside the signal graph.** Removing 500 lines from a watched file fires `deslop/reportChanged` → store applies delta → computed `topOffenders.value` recomputes → `onDidChangeTreeData` fires → VS Code calls `getChildren` → tree shows the new state. Any surface still showing a cluster that no longer exists in `report.clusters` is a correctness bug.
 
-**Re-analysis data retention.** When lifecycle transitions to `"analysing"` and the store already holds a report, every tree panel **keeps rendering the existing report** — it does not replace content with a spinner. The status bar carries the `(analysing…)` indicator; the tree panels are not cleared. A spinner placeholder is only shown when no report exists yet (`"starting"` with no data) or when the LSP has `"failed"`. Once `deslop/reportChanged` fires and the delta is applied, the tree updates atomically to the new state. Blanking the tree during re-analysis is a UX bug that breaks the "LIVE" brand promise.
+**Re-analysis data retention.** When lifecycle transitions to `"analysing"` and a report already exists, every tree panel **keeps rendering it** — the status bar shows `(analysing…)`, the panels are not cleared and not replaced with a spinner (a spinner shows only when no report exists yet or the LSP has `"failed"`). Once `deslop/reportChanged` fires the tree updates atomically; blanking the tree during re-analysis is a UX bug that breaks the "LIVE" brand promise.
 
 #### [VSIX-REACTIVITY-DECORATIONS] Decorations and bubble are signal-driven
 
@@ -309,37 +300,25 @@ Three hard guarantees, applied to every surface (tree included):
 
 #### [VSIX-REACTIVITY-WEBVIEW] Webviews mirror the signal graph
 
-**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`). The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state. Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle. No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed.
+**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`). The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state. Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle. No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed. (The webview-side store is also referenced in code as `[VSIX-WEBVIEW-REACTIVITY]`; the two ids name the same contract.)
 
 #### [VSIX-REACTIVITY-INVARIANT] Staleness is a correctness bug
 
-**Stale UI is a correctness bug, not a polish bug.** The whole product is "tell the developer they're duplicating right now" — if the tree is showing a cluster that was refuted 300 ms ago, we've broken the brand promise. Concrete acceptance test (E2E, against the real LSP binary): open a fixture workspace with N clusters; assert tree, decorations, and bubble all show N. Edit one of the duplicated files to delete a duplicate. After the [LIVE-WATCHER] debounce window plus one scheduler pass, assert tree, decorations, and bubble all show N − 1 **without any user-initiated refresh**. The test fails if any surface still references the removed cluster id. This invariant is enforced via that E2E and via lint rules in `clients/vscode/eslint.config.mjs` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` calls outside the bootstrap path, and `TreeDataProvider` implementations that don't subscribe to a store signal.
+**Stale UI is a correctness bug, not a polish bug** — showing a cluster that was refuted 300 ms ago breaks the brand promise. Concrete E2E (real LSP binary): open a fixture with N clusters; assert tree, decorations, and bubble all show N; delete one duplicate; after the [LIVE-WATCHER] debounce plus one scheduler pass, assert all three show N − 1 **without any user-initiated refresh** and that no surface still references the removed cluster id. Enforced by that E2E plus lint rules in `clients/vscode/eslint.config.mjs` that ban `setTimeout`-driven UI refresh, ad-hoc `reportGet` outside bootstrap, and `TreeDataProvider`s that don't subscribe to a store signal.
 
 ### [VSIX-CLUSTER-SYNC] Selected-cluster synchronisation
 
-There is **one** notion of "the cluster the user is looking at," held in a single `selectedClusterId` signal on the [VSIX-STATE] store — the same signal the decorations, bubble, and webview already read ([VSIX-REACTIVITY-DECORATIONS], [VSIX-REACTIVITY-WEBVIEW]). Every surface both **writes** it (when the user acts there) and **reacts** to it (when another surface changes it). No surface keeps a private "current cluster"; selection is never threaded through command arguments as a side channel.
+**Status: ⏳ Planned (#173).** Webview panels pin their own cluster today; the single cross-surface `selectedClusterId` signal and the editor-caret↔tree reveal below are the target, not yet wired on the extension host.
 
-**Writers — anything that focuses a cluster sets the signal:**
-
-- **Editor caret.** `onDidChangeTextEditorSelection` resolves the caret's byte position against the visible projection ([VSIX-STATE-DIRTY]); if it lands inside a clone occurrence, `selectedClusterId` is set to that cluster. Moving out of every clone range clears it. Debounced to coalesce with the bubble's own edit-cycle budget so a drag-select does not thrash the tree.
-- **`deslop.openCluster`.** Opening the cluster webview (from a code-lens "Open cluster", a hover link, a tree row, or the command palette) sets `selectedClusterId` to that id **before** the webview opens, so the selection is already correct when every other surface reacts.
-- **Tree row.** Selecting a Top Offenders row sets the signal; the webview's prev/next arrows set it through the same path ([VSIX-WEBVIEW-ACTIONS-CONTEXT]).
-
-**Reactors — every surface follows the signal in one microtask ([VSIX-REACTIVITY]):**
-
-- **Top Offenders tree.** An `effect()` over `selectedClusterId` calls `TreeView.reveal(node, { select: true, focus: false })` for the row that represents that cluster. This is the headline behaviour: **tapping "view cluster" selects the cluster in the Top Offenders panel**, and so does moving the caret into a duplicate in the editor — the editor and the panel stay locked together. Reveal must work in every grouping mode ([VSIX-TOP-OFFENDERS-GROUPING]), so the provider implements `getParent` (a hard requirement of `TreeView.reveal`) and resolves the cluster's row under whatever cluster/file/folder/language ancestry the current mode produces. If the selected cluster is not present in the active grouping/dirty projection, reveal is a no-op rather than an error. `focus: false` keeps the keyboard in the editor — selecting a row never steals the caret, honouring [VSIX-PRINCIPLES] principle 5.
-- **Decorations, bubble, webview.** Already signal-driven; they highlight / open the selected cluster with no extra wiring.
-
-Selection survives a `deslop/reportChanged` as long as the cluster id still exists (cluster ids are stable across deltas, [LIVE-DELTA]); if the selected cluster is retracted by the LSP, the signal clears in the same microtask the delta applies and no surface keeps a dangling highlight ([VSIX-REACTIVITY-INVARIANT]).
+There is **one** notion of "the cluster the user is looking at," held in a single `selectedClusterId` signal on the [VSIX-STATE] store — the same signal decorations, bubble, and webview read ([VSIX-REACTIVITY-DECORATIONS], [VSIX-REACTIVITY-WEBVIEW]). Every surface both **writes** it (the editor caret resolved against the visible projection [VSIX-STATE-DIRTY]; `deslop.openCluster`; a tree row or the webview's prev/next arrows, [VSIX-WEBVIEW-ACTIONS-CONTEXT]) and **reacts** to it: a Top Offenders `effect()` calls `TreeView.reveal(node, { select: true, focus: false })` for that cluster's row — working in every grouping mode via the provider's `getParent` ([VSIX-TOP-OFFENDERS-GROUPING]), a no-op when the cluster is absent — so moving the caret into a duplicate selects its row without stealing the caret ([VSIX-PRINCIPLES] principle 5). No surface keeps a private selection; it survives a `deslop/reportChanged` while the cluster id exists ([LIVE-DELTA]) and clears in the same microtask if the cluster is retracted ([VSIX-REACTIVITY-INVARIANT]).
 
 #### [VSIX-CLUSTER-SYNC-TESTS] Acceptance — sync is proven, not assumed
 
-Coarse E2E against the real LSP binary and a real extension host ([VSIX-TESTING]), each asserting the **same cluster id** across surfaces:
+**Status: ⏳ Planned (#173)** alongside [VSIX-CLUSTER-SYNC]. Coarse E2E against the real LSP binary and extension host ([VSIX-TESTING]) assert the **same cluster id** across surfaces: `deslop.openCluster` → `topOffendersView.selection[0]` in cluster/file/folder modes (proving `getParent` reveal under nesting); editor caret into a clone → tree selection with the caret unmoved, clearing on a clean line; webview↔tree round-trip identity; and retraction clearing every surface after a watcher + scheduler pass.
 
-- **View cluster → tree selection.** Run `deslop.openCluster` for a known cluster; assert `topOffendersView.selection[0]` is the node whose cluster id equals that cluster — in cluster mode, then again in file and folder modes, proving `getParent`-based reveal under nesting.
-- **Editor caret → tree selection.** Open a fixture file with a known clone; move the selection into the clone range; assert the Top Offenders selection becomes that cluster and that the caret stayed in the editor (`window.activeTextEditor` unchanged). Move the caret to a clean line; assert the selection clears.
-- **Round-trip identity.** With a cluster selected from the editor, assert the open cluster webview's `selectedClusterId` and the tree selection are equal — one signal, three surfaces, no drift.
-- **Retraction.** Select a cluster, then edit the fixture so the duplicate is deleted; after the watcher + scheduler pass, assert no surface still reports that id as selected.
+### [VSIX-PERF] Extension-host performance budget
+
+Every report-driven surface runs on VS Code's single extension-host thread, so the extension never does O(occurrences) blocking work per event. Source enrichment reads each file at most once and reuses it for all occurrences; bursts of store/editor events coalesce through a trailing-edge debounce; decorations repaint only when a fresh report lands or an editor becomes visible (never per keystroke), memoising per-report severity ranking and building each editor's byte→UTF-16 buffer once per redraw; webview feeds subscribe to the report signals alone so lifecycle and embedding-progress ticks do not re-push. These are correctness-adjacent: a synchronous-read or per-event-redraw regression stalls typing, which violates [VSIX-PRINCIPLES] ("never block an edit").
 
 ### [VSIX-WEBVIEW] Cluster detail webview
 
@@ -360,6 +339,14 @@ Navigation is keyboard-first: `j/k` move occurrence focus, `n/p` move cluster fo
 Cluster detail controls must either execute a real command or not render. `Open` dispatches `deslop.openOccurrence` for the row's occurrence. `Compare` dispatches `deslop.compareWithCanonical` for the row's cluster and stays disabled on the canonical occurrence because comparing the canonical row to itself is meaningless. `Previous cluster` and `Next cluster` update the webview's selected cluster through the same signal path as the `p` and `n` keyboard shortcuts; the extension host must not keep a second copy of cluster selection state.
 
 Every visible data item and action in the cluster detail webview carries a human-readable hover explanation. Signal labels explain what the score means and how to interpret high or low values. Occurrence rows explain the target file, line, column, hidden status, and whether the row is canonical. Rank, weight, size, occurrence count, bucket label, AI-match badge, and keyboard shortcut hints explain their purpose without exposing raw byte offsets as the primary user-facing location.
+
+#### [VSIX-CLUSTER-DOCUMENT] Cluster link documents
+
+Cluster references rendered anywhere (copy-for-AI payloads, hovers, report text) are emitted as `deslop://cluster/<id>` URIs. The extension registers a read-only `TextDocumentContentProvider` for the `deslop` scheme so clicking such a link opens a virtual document summarising that cluster — occurrence list, weight, and the structural/jaccard/embedding signals — drawn from the store's visible projection ([VSIX-STATE-DIRTY]); an unknown or unparseable id renders an explicit placeholder document rather than throwing.
+
+#### [VSIX-CLUSTER-ID-CONSISTENCY] One short identity across every surface
+
+Every cluster surface (Top Offenders tree, hover bubble, cluster webview, report webview) and the copy-for-AI payload identify a cluster by the same stable 7-hex slug from the single `clusterSlug()` helper — never two short forms, never the volatile `#N` rank as identity. The slug leads each rendered row and leads the AI payload ahead of the `rank:` line; the full 16-hex `cluster.id` is preserved separately for tooling round-trip. It is the cross-surface twin of [VSIX-TOP-OFFENDERS-CLUSTER-ID], which governs slug-vs-rank inside the tree.
 
 ### [VSIX-REPORT-WEBVIEW] Full report webview
 

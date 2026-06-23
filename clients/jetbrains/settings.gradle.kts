@@ -22,3 +22,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "deslop-jetbrains"
+
+include(":deslop-shared")
+include(":deslop-lsp4ij")

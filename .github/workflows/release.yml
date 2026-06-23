@@ -259,9 +259,81 @@ jobs:
           path: clients/vscode/deslop-live-*.vsix
           if-no-files-found: error
 
+  jetbrains:
+    name: Build JetBrains plugin
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB SDK
+    # plus the LSP4IJ plugin, then builds the plugin zip bundling the all-platform
+    # deslop-lsp binaries assembled from the release matrix artifacts.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Lock-step version: stamps shipwright.json (the staged manifest the plugin
+      # verifies its bundled binary against) to the tag version. The Gradle plugin
+      # version is passed via -PdeslopVersion so the zip filenames match.
+      - name: Stamp release version
+        run: node scripts/stamp-release-version.mjs "${{ needs.version.outputs.version }}"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      # The JetBrains plugin ships as a single zip bundling deslop-lsp for EVERY
+      # platform (JetBrains Marketplace cannot publish per-OS zips, so activation
+      # must not download executable code). Assemble the <platform>/deslop-lsp[.exe]
+      # layout the bundling task expects from the per-platform CLI archives the
+      # build matrix already produced.
+      - name: Assemble per-platform deslop-lsp bundle
+        run: |
+          set -euo pipefail
+          version="${{ needs.version.outputs.version }}"
+          mkdir -p bundle
+          for entry in "linux-x64:linux-x64" "linux-arm64:linux-arm64" \
+                       "macos-x64:darwin-x64" "macos-arm64:darwin-arm64" "windows-x64:win32-x64"; do
+            artifact="${entry%%:*}"; platform="${entry##*:}"
+            mkdir -p "bundle/${platform}"
+            if [ "${artifact}" = "windows-x64" ]; then
+              archive="$(find artifacts -name "deslop-${version}-${artifact}.zip" | head -n1)"
+              unzip -j "${archive}" "deslop-${version}-${artifact}/deslop-lsp.exe" -d "bundle/${platform}"
+            else
+              archive="$(find artifacts -name "deslop-${version}-${artifact}.tar.gz" | head -n1)"
+              tar -xzf "${archive}" -C "bundle/${platform}" --strip-components=1 \
+                "deslop-${version}-${artifact}/deslop-lsp"
+            fi
+          done
+
+      - name: Build the plugin zip (all platforms bundled)
+        working-directory: clients/jetbrains
+        run: |
+          DESLOP_LSP_BUNDLE_DIR="${GITHUB_WORKSPACE}/bundle" \
+            ./gradlew :deslop-lsp4ij:buildPlugin \
+            -PdeslopVersion="${{ needs.version.outputs.version }}"
+
+      - name: Verify the plugin package
+        run: node scripts/verify-jetbrains-package.mjs
+
+      - name: Upload JetBrains plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: jetbrains-plugins
+          path: |
+            clients/jetbrains/deslop-lsp4ij/build/distributions/*.zip
+          if-no-files-found: error
+
   release:
     name: Create GitHub release
-    needs: [version, build]
+    needs: [version, build, jetbrains]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

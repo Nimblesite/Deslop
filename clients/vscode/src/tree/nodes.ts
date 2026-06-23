@@ -21,6 +21,7 @@ import {
 } from "../types/report";
 import { languageDisplayName } from "./language";
 import { baseName, displayPath, representativePath } from "./paths";
+import type { ThresholdStatus } from "./threshold";
 
 // Re-exported so existing import sites (`../tree/nodes`) keep resolving
 // after the helpers moved to the cycle-free `./paths` leaf module.
@@ -252,19 +253,21 @@ export function formatPercent(percent: number): string {
 }
 
 // [VSIX-METRICS-PANEL] Headline row of the Duplication panel: the
-// repo-wide duplication percentage. Activating it opens the report
-// webview ([VSIX-METRICS-REPORT]).
+// repo-wide duplication percentage plus the configured duplication gate
+// (always shown when a gate exists, breached or not). Activating it opens
+// the report webview ([VSIX-METRICS-REPORT]).
 export class MetricsHeadlineNode extends vscode.TreeItem {
-  constructor(percent: number, detail: string, breached: boolean, gateLabel: string) {
+  constructor(percent: number, detail: string, status: ThresholdStatus) {
     super(`${formatPercent(percent)} duplicated`, vscode.TreeItemCollapsibleState.None);
-    this.description = breached ? `${detail} · ⚠ over ${gateLabel}` : detail;
+    this.description = status.configured ? `${detail} · ${status.label}` : detail;
     this.contextValue = "deslop.metricsHeadline";
     this.iconPath = new vscode.ThemeIcon(
-      breached ? "warning" : "graph",
-      breached ? new vscode.ThemeColor("errorForeground") : undefined,
+      status.breached ? "warning" : "graph",
+      status.breached ? new vscode.ThemeColor("errorForeground") : undefined,
     );
     this.tooltip = new vscode.MarkdownString(
       `**${formatPercent(percent)} of analysed lines are duplicated.**\n\n${detail}\n\n` +
+        (status.configured ? `${status.label}\n\n` : "") +
         "Open the full duplication report for the per-folder and per-file breakdown.",
     );
     this.command = {

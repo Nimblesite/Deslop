@@ -1,0 +1,34 @@
+<idea-plugin>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Deslop" displayType="BALLOON" />
+        <!-- LSP4IJ render path behind the shared DeslopReportRenderer seam, so the
+             tool window and action stay free of LSP4IJ client APIs. -->
+        <projectService
+            serviceInterface="com.nimblesite.deslop.jetbrains.DeslopReportRenderer"
+            serviceImplementation="com.nimblesite.deslop.jetbrains.DeslopLsp4ijReportRenderer" />
+        <toolWindow id="Deslop"
+                    anchor="right"
+                    factoryClass="com.nimblesite.deslop.jetbrains.DeslopReportToolWindowFactory" />
+    </extensions>
+
+    <actions>
+        <action id="Deslop.OpenHtmlReport"
+                class="com.nimblesite.deslop.jetbrains.DeslopRenderReportAction"
+                text="Deslop: Open HTML Report"
+                description="Render the live Deslop duplicate-code report in the Deslop tool window.">
+            <add-to-group group-id="ToolsMenu" anchor="last" />
+        </action>
+    </actions>
+
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server id="deslop"
+                name="Deslop"
+                factoryClass="com.nimblesite.deslop.jetbrains.DeslopLsp4ijServerFactory">
+            <description>Live duplicate-code analysis through the Deslop LSP server.</description>
+        </server>
+        <fileNamePatternMapping patterns="*.cs;*.rs;*.py;*.dart" serverId="deslop" />
+    </extensions>
+</idea-plugin>

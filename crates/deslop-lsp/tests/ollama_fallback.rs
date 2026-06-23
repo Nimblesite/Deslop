@@ -19,7 +19,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{call, copy_fixture, request, spawn_lsp, take_io, write_frame};
+use common::{call, request, spawn_lsp_on_fixture, write_frame};
 use serde_json::json;
 
 /// Loopback port nothing should listen on. Connection attempts fail with
@@ -50,9 +50,8 @@ fn unreachable_set_model() -> Result<(i64, String)> {
 /// on the child (never a blocking read) so a crash can never hang the harness.
 #[test]
 fn lsp_survives_when_configured_ollama_endpoint_is_unreachable() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let _init = common::handshake(&mut stdin, &mut stdout)?;
 
     let (_set_id, set_model) = unreachable_set_model()?;
@@ -84,9 +83,8 @@ fn lsp_survives_when_configured_ollama_endpoint_is_unreachable() -> Result<()> {
 /// at all proves the server processed the request and is still answering.
 #[test]
 fn lsp_survives_when_required_ollama_endpoint_is_unreachable() -> Result<()> {
-    let workspace = copy_fixture("csharp-small")?;
-    let mut child = spawn_lsp(workspace.path())?;
-    let (mut stdin, mut stdout, _stderr) = take_io(&mut child)?;
+    let (_workspace, mut child, mut stdin, mut stdout, _stderr) =
+        spawn_lsp_on_fixture("csharp-small")?;
     let _init = common::handshake(&mut stdin, &mut stdout)?;
 
     let reply = call(

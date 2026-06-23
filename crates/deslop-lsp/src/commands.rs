@@ -2,6 +2,7 @@
 //! ([LSP-COMMANDS]).
 
 use deslop_core::live::{ChangeSummary, LiveApi, LiveError, ReportChangedNotification};
+use deslop_core::render::render_html;
 use serde_json::{json, Value};
 use tower_lsp::{
     jsonrpc::{Error, Result as LspResult},
@@ -17,6 +18,9 @@ use crate::{backend::LspBackend, notifications::ReportChangedLspNotification};
 pub const REFRESH_REPORT: &str = "deslop.lsp.refreshReport";
 /// Opens the current report virtual document.
 pub const OPEN_REPORT: &str = "deslop.lsp.openReport";
+/// Renders the live report as a standalone HTML document and returns it
+/// so the client can show it in an in-editor browser tab ([LSP-COMMANDS]).
+pub const RENDER_HTML_REPORT: &str = "deslop.lsp.renderHtmlReport";
 /// Opens a cluster virtual document by id.
 pub const OPEN_CLUSTER: &str = "deslop.lsp.openCluster";
 /// Returns available embedding models for a client-side picker.
@@ -29,6 +33,7 @@ const COMMANDS: &[&str] = &[
     REFRESH_REPORT,
     OPEN_CLUSTER,
     OPEN_REPORT,
+    RENDER_HTML_REPORT,
     PICK_EMBEDDING_MODEL,
     TOGGLE_INCREMENTAL,
 ];
@@ -59,6 +64,7 @@ pub async fn execute(
     match params.command.as_str() {
         REFRESH_REPORT => refresh_report(backend).await,
         OPEN_REPORT => show_uri(backend, OPEN_REPORT, "deslop://report").await,
+        RENDER_HTML_REPORT => render_html_report(backend).await,
         OPEN_CLUSTER => open_cluster(backend, &params.arguments).await,
         PICK_EMBEDDING_MODEL => pick_embedding_model(backend).await,
         TOGGLE_INCREMENTAL => toggle_incremental(backend).await,
@@ -88,6 +94,15 @@ async fn refresh_report(backend: &LspBackend) -> LspResult<Option<Value>> {
         "clustersRemoved": delta.clusters_removed.len(),
         "clustersUpdated": delta.clusters_updated.len(),
     })))
+}
+
+/// Renders the live report as a single self-contained HTML document and
+/// returns it as a JSON string, so any client can open it in an embedded
+/// browser tab without re-implementing the renderer ([OUTPUT-HUMAN-HTML]).
+async fn render_html_report(backend: &LspBackend) -> LspResult<Option<Value>> {
+    let report = backend.service().report_get().await;
+    let html = render_html(&report, Some(backend.workspace_root()), false);
+    Ok(Some(Value::String(html)))
 }
 
 /// Pushes `deslop/reportChanged` only when refresh changed visible clusters.

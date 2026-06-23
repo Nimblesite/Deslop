@@ -14,8 +14,8 @@ use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_initialize, structured_content, wait_for_path,
-    ChildKillOnDrop, McpHandle, SOCKET_TIMEOUT,
+    cluster_ids, copied_fixture, initialized_mcp, lsp_workspace_with_socket,
+    spawn_lsp_and_wait_for_socket, structured_content, wait_for_path, McpHandle, SOCKET_TIMEOUT,
 };
 
 /// [MCP-IPC-CLIENT] T1 — read freshness without on-disk staleness.
@@ -28,11 +28,7 @@ use common::{
 /// updates no longer rewrite it ([LIVE-SEED-CACHE]).
 #[test]
 fn t1_report_get_reflects_lsp_state_immediately_after_rescan() -> Result<()> {
-    let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
     let mut mcp = initialized_mcp(workspace.path())?;
 
     let baseline = call_report_get(&mut mcp)?;
@@ -100,10 +96,7 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
         "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",
     )?;
 
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
     // Force a full refresh so the assertion does not race the cold
@@ -139,11 +132,8 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
 #[test]
 fn t6_seed_cache_does_not_advance_on_incremental_edits() -> Result<()> {
     let workspace = copied_fixture()?;
-    let lsp = spawn_lsp_and_initialize(workspace.path())?;
-    let _lsp_guard = ChildKillOnDrop(lsp);
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
     let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&socket, SOCKET_TIMEOUT).context("wait for ipc socket")?;
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for seed cache")?;
     // Let the initial-pass write settle before sampling mtime.
     std::thread::sleep(Duration::from_millis(200));
@@ -186,18 +176,4 @@ fn call_report_get(mcp: &mut McpHandle) -> Result<Value> {
         }),
     )?;
     structured_content(&response, "report-get")
-}
-
-/// Returns the cluster ids on a `report-get` page in stable order.
-fn cluster_ids(page: &Value) -> Vec<String> {
-    page.get("clusters")
-        .and_then(Value::as_array)
-        .map(|clusters| {
-            clusters
-                .iter()
-                .filter_map(|cluster| cluster.get("id").and_then(Value::as_str))
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
 }

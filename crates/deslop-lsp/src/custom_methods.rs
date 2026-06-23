@@ -329,7 +329,7 @@ fn into_jsonrpc(error: &deslop_core::live::LiveError) -> tower_lsp::jsonrpc::Err
 }
 
 /// Serves markdown for a `deslop://` virtual-document URI
-/// ([LSP-EDITOR-SURFACES]).
+/// ([LSP-EDITOR-SURFACES], [LSP-VIRTUAL-DOC]).
 ///
 /// # Errors
 ///

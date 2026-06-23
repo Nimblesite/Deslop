@@ -16,14 +16,9 @@ use std::{
 };
 
 use anyhow::Result;
-use assert_cmd::Command;
 
-fn fixture(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(name)
-}
+mod common;
+use crate::common::*;
 
 fn report_path(tmp: &Path) -> PathBuf {
     let mut path = tmp.join("report");
@@ -32,15 +27,9 @@ fn report_path(tmp: &Path) -> PathBuf {
 }
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
+    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
     let _assertion = cmd
-        .arg(scan_root)
-        .arg("--min-nodes")
-        .arg("8")
-        .arg("--embeddings")
-        .arg("off")
-        .arg("--output")
-        .arg(tmp.join("report"))
+        .args(["--min-nodes", "8", "--embeddings", "off"])
         .assert()
         .success();
     let body = fs::read_to_string(report_path(tmp))?;

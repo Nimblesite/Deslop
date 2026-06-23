@@ -10,6 +10,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import {
   copyClusterContextById,
   openClusterDetails,
+  openHtmlReport,
   openOccurrenceTarget,
   refreshReport,
   toggleShowAllLenses,
@@ -72,6 +73,25 @@ function storeWith(clusters: ReportCluster[]): ReportStore {
   return store;
 }
 
+const REPORT_TAB_LABEL = "Deslop HTML Report";
+
+function reportTabCount(): number {
+  return vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs)
+    .filter((tab) => tab.label === REPORT_TAB_LABEL).length;
+}
+
+// Webview tab open/close events reach window.tabGroups asynchronously, so poll
+// (bounded) for the expected count rather than asserting it synchronously.
+async function waitForReportTabCount(target: number): Promise<number> {
+  for (let attempt = 0; attempt < 200 && reportTabCount() !== target; attempt += 1) {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+  }
+  return reportTabCount();
+}
+
 suite("register command handlers", () => {
   test("toggleShowAllLenses flips the persisted workspace flag", async () => {
     const cfg = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration("deslop");
@@ -106,6 +126,62 @@ suite("register command handlers", () => {
 
   test("refreshReport is a no-op when no client is running", () => {
     assert.equal(refreshReport(() => undefined), undefined);
+  });
+
+  test("openHtmlReport renders via the LSP and shows the report tab", async () => {
+    const calls: Array<{ method: string; params: unknown }> = [];
+    const client = {
+      sendRequest: (method: string, params: unknown) => {
+        calls.push({ method, params });
+        return Promise.resolve("<!doctype html><html><body>report</body></html>");
+      },
+    } as unknown as LanguageClient;
+
+    await openHtmlReport(() => client);
+    assert.deepEqual(calls, [
+      {
+        method: "workspace/executeCommand",
+        params: { command: "deslop.lsp.renderHtmlReport", arguments: [] },
+      },
+    ]);
+    assert.equal(await waitForReportTabCount(1), 1, "rendering must open the HTML report tab");
+
+    // A second render refreshes the singleton in place — no duplicate tab.
+    await openHtmlReport(() => client);
+    assert.equal(await waitForReportTabCount(1), 1, "a re-render must not duplicate the report tab");
+
+    // Closing the tab disposes the panel and fires onDidDispose (which clears the
+    // singleton handle). No reopen here, so there is no disposed-handle reuse.
+    const reportTab = vscode.window.tabGroups.all
+      .flatMap((g) => g.tabs)
+      .find((t) => t.label === REPORT_TAB_LABEL);
+    assert.ok(reportTab, "the HTML report tab must be present before closing");
+    await vscode.window.tabGroups.close(reportTab);
+    assert.equal(await waitForReportTabCount(0), 0, "closing must dispose the report tab");
+  });
+
+  test("openHtmlReport opens no tab when no client is running", async () => {
+    const before = reportTabCount();
+    await openHtmlReport(() => undefined);
+    assert.equal(reportTabCount(), before, "no client → no report tab is opened");
+  });
+
+  test("openHtmlReport opens no tab when the report is empty", async () => {
+    const before = reportTabCount();
+    const client = {
+      sendRequest: () => Promise.resolve(""),
+    } as unknown as LanguageClient;
+    await openHtmlReport(() => client);
+    assert.equal(reportTabCount(), before, "empty report → no report tab is opened");
+  });
+
+  test("openHtmlReport opens no tab when the LSP returns a non-string", async () => {
+    const before = reportTabCount();
+    const client = {
+      sendRequest: () => Promise.resolve(null as unknown as string),
+    } as unknown as LanguageClient;
+    await openHtmlReport(() => client);
+    assert.equal(reportTabCount(), before, "non-string response → no report tab is opened");
   });
 
   test("copyClusterContextById copies the AI payload for a known cluster", async () => {

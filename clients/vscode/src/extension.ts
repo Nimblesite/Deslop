@@ -5,7 +5,6 @@ import * as vscode from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
-  Middleware,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
@@ -62,10 +61,6 @@ const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
 const DEFAULT_EMBEDDING_ENDPOINT = "http://127.0.0.1:11434";
 const DEFAULT_EMBEDDING_MODE = "off";
 
-const HOVER_SUPPRESSING_MIDDLEWARE = {
-  provideHover: () => null,
-} satisfies Middleware;
-
 interface EmbeddingSettings {
   readonly provider: typeof PRODUCTION_EMBEDDING_PROVIDER;
   readonly model: string;
@@ -82,6 +77,8 @@ export interface ExtensionApi {
   readonly reportStore: ReportStore | undefined;
 }
 
+// [VSIX-ACTIVATION] Entry point: resolve binaries, start the LSP client,
+// wire reports/commands/decorations before live analysis begins.
 export async function activate(
   context: vscode.ExtensionContext,
 ): Promise<ExtensionApi> {
@@ -172,6 +169,8 @@ export async function activate(
       currentBinarySettings(),
     );
     resolvedLsp = requireResolved(resolved, "deslop-lsp");
+    // [VSIX-MCP-INTEGRATION] Resolve the bundled deslop-mcp so VS Code's
+    // MCP-aware agent hosts drive the same live daemon as the UI.
     resolvedMcp = resolved["deslop-mcp"];
     log("lsp resolved", {
       path: resolvedLsp.path,
@@ -227,6 +226,8 @@ export async function activate(
   wireNotifications(client, reportStore);
   await seedInitialReport(client, reportStore);
   context.subscriptions.push(
+    // [VSIX-SETTINGS] Hot-reload deslop.* settings to the running LSP
+    // without a restart (embedding settings sync here).
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration("deslop.embedding")) return;
       syncEmbeddingSettingsToLsp(reportStore, () => client).catch(
@@ -309,9 +310,12 @@ export function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     },
     outputChannel: initOutputChannel(),
     initializationOptions: currentInitializationOptions(),
-    // The TypeScript ClusterHoverProvider owns the editor hover card.
-    // Suppress the LSP textDocument/hover so they don't stack in the popup.
-    middleware: HOVER_SUPPRESSING_MIDDLEWARE,
+    // [LSP-NON-INTERFERENCE] No middleware. Deslop's LSP advertises no
+    // hover/definition/etc. providers, so there is nothing to intercept
+    // or suppress — the editor's own language server owns those. The
+    // clone card is rendered by the additive ClusterHoverProvider
+    // (registered separately), which stacks alongside the language
+    // server's hover instead of replacing it.
   };
   return new LanguageClient("deslop", "Deslop", serverOptions, clientOptions);
 }
@@ -386,19 +390,23 @@ function embeddingSettingsFromConfiguration(
   };
 }
 
-async function refreshAfterChange(
+export async function refreshAfterChange(
   c: LanguageClient,
   store: ReportStore,
   payload: ReportChangedNotification,
 ): Promise<void> {
-  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta");
-  // applyDelta silently bails when no current report exists, which would
-  // strand the notification during the startup window before
-  // seedInitialReport completes. Fall back to the full snapshot in that case.
-  if (delta && store.current.report) {
-    store.applyDelta(delta);
-    return;
-  }
+  // Pull the delta spanning the store's own baseline (#230). Without a
+  // `since_generation` the server defaults to `current - 1`, which only spans
+  // one generation — so a client that missed a `reportChanged` (lagged
+  // broadcast or async gap) would merge a delta that never retracts the
+  // clusters dropped in the skipped generations, leaving them as phantoms.
+  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta", {
+    since_generation: store.current.generation,
+  });
+  // applyDelta rejects (returns false) when no report is seeded yet or the
+  // delta's baseline does not match the store's generation. Either way fall
+  // back to the full snapshot so the store converges to the live engine.
+  if (delta && store.applyDelta(delta)) return;
   const snapshot = await c.sendRequest<Report>("deslop/reportGet");
   store.setSnapshot(snapshot, payload.generation);
 }
@@ -570,6 +578,8 @@ export function surfaceStartupFailure(err: unknown, store?: ReportStore): void {
       ? err.message
       : "Deslop failed to start its analysis server. See the Deslop output channel.";
   store?.setLifecycle({ kind: "failed", message });
+  // [VSIX-NOTIFICATIONS] Daemon startup failure → error toast with a
+  // "Reveal log" button (sparing notifications only).
   vscode.window.showErrorMessage(message, "Reveal log").then(
     (choice) => {
       if (choice === "Reveal log") initOutputChannel().show();

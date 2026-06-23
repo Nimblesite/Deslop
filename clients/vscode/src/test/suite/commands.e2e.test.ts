@@ -5,6 +5,7 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { sleep } from "./helpers";
 
+// [VSIX-COMMANDS]
 suite("commands", () => {
   suiteSetup(async () => {
     const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
@@ -75,6 +76,17 @@ suite("commands", () => {
       const message = err instanceof Error ? err.message : String(err);
       assert.match(message, /Method not found|not registered|unknown/i);
     }
+  });
+
+  test("openHtmlReport renders the standalone report in a webview tab", async () => {
+    // True E2E: the real LSP renders the HTML via renderHtmlReport and the
+    // extension hosts it in a singleton "Deslop HTML Report" tab.
+    await vscode.commands.executeCommand("deslop.openHtmlReport");
+    await sleep(400);
+    const hasReportTab = vscode.window.tabGroups.all
+      .flatMap((g) => g.tabs)
+      .some((t) => t.label === "Deslop HTML Report");
+    assert.ok(hasReportTab, "the standalone HTML report tab must open");
   });
 
   test("revealActiveBinary fires the info modal without throwing", async () => {

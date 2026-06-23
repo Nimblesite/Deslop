@@ -10,31 +10,44 @@ Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSock
 
 ### [LSP-CAPABILITIES] Server capabilities
 
-Declared in the `initialize` response:
+#### [LSP-NON-INTERFERENCE] Deslop is additive — it never touches the editor's standard features
+
+> **Hard invariant — non-negotiable.** Deslop's LSP is a *duplication linter*, **not** a language server. It MUST NOT register, intercept, override, suppress, or slow **any** standard language-intelligence request — **Go To Definition (`textDocument/definition`), Hover (`textDocument/hover`), Find References, Go To Implementation/Type Definition, Completion, Rename, Signature Help, Formatting, Document Highlight, Document/Workspace Symbols** — not one of them. Those belong **exclusively** to the editor's real language server (the Dart Analysis Server, OmniSharp/Roslyn, rust-analyzer, Pyright, …). Pressing **F12**, hovering, or invoking any built-in editor command in a Deslop-analysed file must behave **exactly** as it would with Deslop uninstalled.
+
+Deslop's only `initialize` capabilities are therefore **purely additive** — each one contributes a Deslop-owned surface that stacks on top of the editor's features without replacing any of them:
 
 | Capability | Purpose |
 |---|---|
-| `textDocumentSync = Incremental` | Track in-memory edits so the daemon can analyse buffer contents before save. |
-| `codeLensProvider` | Inline "N copies of this block — click to see" badge at the head of every clone occurrence. |
-| `documentLinkProvider` | Turn the "other occurrence" entries in a code lens into navigable `textDocument/documentLink` targets. |
-| `hoverProvider` | On hover over a clone range: show cluster id, signal breakdown, interpretation, and a "jump to occurrence N" list. |
-| `definitionProvider` (overloaded) | "Go to definition" from inside a clone range jumps to the canonical occurrence of that cluster. Users keep the muscle memory. |
-| `executeCommandProvider` | Commands for: toggle daemon, refresh report, open full report, pick embedding model, extract-to-shared-function (future). |
-| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. **Off by default** ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)); when enabled, severity is determined by clone bucket ([LSP-SEVERITY]) and is fully user-configurable. |
+| `textDocumentSync = Incremental` | Track in-memory edits so the daemon can analyse buffer contents before save. Affects no editor command. |
+| `codeLensProvider` | Inline "N copies of this block — jump to next" badge at the head of every clone occurrence. A Deslop-owned lens, never a standard feature. |
+| `executeCommandProvider` | Deslop's own `deslop.*` verbs ([LSP-COMMANDS]): refresh report, open full report, pick embedding model, etc. |
+| `diagnosticProvider` (pull-based, LSP 3.17) | Publish clone occurrences as diagnostics. **Off by default** ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)); when enabled, severity is determined by clone bucket ([LSP-SEVERITY]) and is fully user-configurable. Additive Problems-panel entries — never replaces another tool's diagnostics. |
 | `workspace/didChangeWatchedFiles` | Register for writes outside the editor (build output, generated files, `git checkout`). |
-| Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS]. |
+| Custom: `deslop/*` | Methods listed in [LSP-CUSTOM-METHODS] — all namespaced; never a standard request. |
+
+**Deslop deliberately does NOT advertise** `hoverProvider`, `definitionProvider`, `documentLinkProvider`, `referencesProvider`, `completionProvider`, `renameProvider`, or any other standard provider.
+
+**Why this is a hard rule, not a style preference.** When two providers answer the same request, VS Code (and every LSP client) *merges* their results and *waits for the slowest one before it can act*. A duplication analyser registered as a `definitionProvider` would (a) **pollute** F12 results with clone-peer locations that are not the symbol's definition, and (b) **hang** the editor's F12/hover spinner whenever its analysis is mid-pass — exactly the freeze reported on large Flutter monorepos on Windows, where uninstalling Deslop was the only fix. The cure is structural: Deslop simply never registers the standard providers, so it is physically incapable of intercepting or delaying them.
+
+Canonical-occurrence navigation is still one keystroke away — but always through Deslop-owned, non-conflicting surfaces, never by hijacking a standard key: the `deslop.jumpToNextOccurrence` code lens, the clone card's **Compare with canonical** command (`deslop.compareWithCanonical`), and the Top Offenders tree.
+
+##### [LSP-NON-INTERFERENCE-NONBLOCKING] Even Deslop's own additive reads never block the editor
+
+Every Deslop request handler that reads the report (`diagnostic`, `codeLens`) answers from a lock-free `RwLock<Arc<Report>>` snapshot published by the analysis session — it **never awaits the session mutex**, which an in-flight `apply_changes` pass can hold for seconds on a churning monorepo. So even Deslop's additive surfaces cannot freeze the editor. The freshness-checked read path that re-stats files on demand is reserved for the agent-facing MCP/IPC queries, where a synchronous edit must be reflected immediately ([LIVE-READ-FRESHNESS]); it never runs on an editor request.
 
 ### [LSP-SEVERITY] Diagnostic severity — the Problems-panel projection
 
 The LSP is **one consumer** of the Deslop severity model defined in [severity.md §SEVERITY-MODEL](severity.md#severity-model). That file owns the bucket → severity maps; this section owns only how the **diagnostic** projection reaches the Problems panel. Diagnostics are resolved along two axes, applied in order, behind the master gate.
 
-#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket — diagnostics default OFF
+#### [LSP-SEVERITY-BUCKET] Primary axis: clone bucket → severity
 
-Diagnostic publication is **off by default** (`deslop.diagnostics.enabled = false`, the gate in [severity.md §SEVERITY-DIAGNOSTICS-GATE](severity.md#severity-diagnostics-gate)). When the user enables it, each bucket publishes at its `deslop.diagnostics.severity.*` level — defaults `Identical → Error`, the other three `→ Warning`, every one configurable to `"error" | "warning" | "information" | "hint" | "none"`. The full default table and the `none`-suppresses-this-bucket semantics live in [severity.md §SEVERITY-DIAGNOSTICS](severity.md#severity-diagnostics) and are not duplicated here.
+Every cluster publishes a diagnostic whose severity is resolved from its bucket: `Identical → Error`, and `NearlyIdentical` / `LooselySimilar` / `SameBehavior` → `Warning`. Resolution lives in `crates/deslop-lsp/src/diagnostics.rs::severity_for` and is the single source of truth — every client (VSIX, Neovim, Helix, agents) consumes the published diagnostics rather than recomputing them from raw weights. A cluster stays fully visible and **coloured** in the tree, code lens, hover, and live bubble regardless of this diagnostic projection; colour is an always-on VSIX concern, independent of whether a diagnostic is published.
 
-A suppressed or gated-off cluster stays fully visible and **coloured** in the tree, code lens, hover, and live bubble — colour comes from the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), not from this diagnostic projection. Suppression only removes the Problems-panel entry and the squiggle.
+**Status: ⏳ The configurable model is planned (#177).** The `deslop.diagnostics.enabled` master gate (diagnostics off by default), the per-bucket `deslop.diagnostics.severity.*` levels with `none`-suppression, the weight-percentile floors ([LSP-SEVERITY-PERCENTILE]), and the bucket-colour map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)) are specified in [severity.md §SEVERITY-MODEL](severity.md#severity-model) but not yet shipped; today every cluster publishes at its bucket default with no gate and no percentile floor.
 
 #### [LSP-SEVERITY-PERCENTILE] Secondary axis: weight-percentile thresholds
+
+**Status: ⏳ Planned (#177).** Percentile floors are not yet implemented; today every cluster in its bucket publishes a diagnostic. The model below is the target.
 
 Within each bucket, a cluster is only published as a diagnostic if its weight percentile (across the whole live report) meets the configured floor. This prevents noise from trivial clusters of the same type drowning out the worst offenders.
 
@@ -59,9 +72,8 @@ Each published diagnostic carries:
 
 - `range` — derived from `(start_byte, end_byte)` of the occurrence on this file, using the open buffer's line-index.
 - `severity` — per [LSP-SEVERITY].
-- `code` — the 16-char cluster id (same one used in text/HTML reports; stable across runs).
-- `codeDescription.href` — `deslop://cluster/<id>` custom URI (see [LSP-VIRTUAL-DOC]).
-- `message` — the cluster's `interpretation` string (already agent-readable per [PRINCIPLES-AUDIENCE-AGENT]).
+- `data` — `{ "cluster_id": <16-char cluster id>, "taxonomy": <academic label> }`. The cluster id (stable across runs, same one used in text/HTML reports) rides the machine-facing `data` so an agent can call `deslop/clusterById` without parsing the message ([LSP-AGENT-FRIENDLY]); `code` and `codeDescription` are left unset, and the cluster's `deslop://cluster/<id>` view is reached through [LSP-VIRTUAL-DOC].
+- `message` — `"<bucket title> × <count> — <action sentence>"`, the same human-readable, agent-readable line the other surfaces show ([PRINCIPLES-AUDIENCE-AGENT]).
 - `source` — `"deslop"`.
 - `tags` — never `Unnecessary` or `Deprecated`; duplication isn't dead code.
 - `relatedInformation` — one entry per *other* occurrence of the cluster, with its `Location` and "occurrence N of M" label. This is what makes the Problems panel jumpable across occurrences.
@@ -69,6 +81,8 @@ Each published diagnostic carries:
 Diagnostics refresh on every `report/changed` notification from the daemon. Pull-based (LSP 3.17) because push-based diagnostics can interleave badly with buffer edits; `tower-lsp` gives us pull for free.
 
 ### [LSP-DIAGNOSTICS-SCOPE] Open-file vs. workspace publication
+
+**Status: ⏳ `workspace` mode is planned (#129).** Today only the default `open-files` pull behaviour ships; the `deslop.diagnostics.scope` setting and the `workspace`-mode push below are the target.
 
 Pull-based diagnostics only travel to the editor for files the client actively pulls — in practice, files the user has open. With no tab open the Problems panel is empty even when the workspace contains thousands of offenders, which contradicts the Top Offenders tree (always full) and surprises users who expect Problems to mirror the tree. The fix is a single workspace setting that selects the publication scope. Tracked by [#129](https://github.com/Nimblesite/Deslop/issues/129).
 
@@ -95,19 +109,27 @@ At the first line of every clone occurrence, a code lens reading:
 
 The leading glyph (`●●`) is a two-dot severity badge whose colour matches the diagnostic severity. It's Unicode, not ANSI — LSP clients render their own. The text carries the same signal breakdown that appears in the JSON report so a user reading inline has parity with an agent reading the JSON.
 
-Clicking the lens cycles `textDocument/definition` through the remaining occurrences, wrapping at the end. Shift-click runs `deslop.openCluster` (see [LSP-CUSTOM-METHODS]).
+Clicking the lens runs the Deslop-owned `deslop.jumpToNextOccurrence` command, which cycles through the remaining occurrences, wrapping at the end. It deliberately does **not** route through `textDocument/definition` ([LSP-NON-INTERFERENCE]) — the code lens carries its own command so canonical navigation never touches the editor's Go To Definition. Shift-click runs `deslop.openCluster` (see [LSP-CUSTOM-METHODS]).
 
-### [LSP-HOVER] Hover
+### [LSP-HOVER] No LSP hover — the clone card is an additive client surface
 
-Hovering inside a clone range returns a `MarkupContent` (`markdown`) body:
+**The LSP does not register `hoverProvider`** ([LSP-NON-INTERFERENCE]). Deslop must never answer `textDocument/hover`, because hover results from every provider stack into one popup and the editor waits on the slowest — a duplication linter has no business sitting in that path.
 
-- **Header:** cluster id, weight, rank (`#12 of 2040`), severity badge.
-- **Interpretation:** one-liner from `cluster.interpretation`.
-- **Signals:** table of `structural / token_jaccard / embedding_cos / fused`.
-- **Occurrences:** clickable list of all `path:start-end` locations (markdown links to `deslop://cluster/<id>?occurrence=<i>`).
-- **Action hints:** matching entries from `report.action_hints` — the same playbook surfaced in the JSON header.
+The clone card a user sees on hover is rendered **entirely client-side** by the VSIX's `ClusterHoverProvider` ([VSIX-HOVER-PROVIDER]), registered as an ordinary `vscode.languages.registerHoverProvider`. VS Code *stacks* it alongside the language server's own hover, so it **adds** Deslop's clone information (cluster id, signal breakdown, "Compare with canonical" link) without ever replacing or suppressing the editor's hover. It reads the in-memory report the LSP already pushes via `deslop/reportChanged`, so it needs no LSP hover round-trip.
 
-No snippets in the hover — snippets are in the virtual doc ([LSP-VIRTUAL-DOC]). Keeping the hover narrow keeps it usable in small editor windows.
+Editors without a Deslop client lose nothing essential: the same clone information is always available through diagnostics ([LSP-DIAGNOSTICS]) — whose `relatedInformation` links to the canonical occurrence — and the code-lens badges ([LSP-CODE-LENS]).
+
+### [LSP-EDITOR-SURFACES] Editor-neutral rendered surfaces
+
+Every Deslop surface that returns rendered content (cluster detail, report, schema
+doc) is produced server-side as editor-neutral markdown/text, so any LSP client —
+VS Code, Neovim, Helix, Zed — gets identical output without re-deriving it from
+the report structure. The `deslop/virtualDocument` method ([LSP-VIRTUAL-DOC]) is
+the canonical example: it resolves each `deslop://` URI into a string the client
+opens in a read-only buffer. Rendering is pure and lives in `deslop-core::render`
+(e.g. `render_cluster_markdown`, `render_text`); the LSP only supplies a
+filesystem source lookup. No surface ships a client-specific shape — the client
+chooses presentation (syntax highlighting, theming), never content.
 
 ### [LSP-VIRTUAL-DOC] Virtual document scheme
 
@@ -140,6 +162,19 @@ Notifications (`deslop/reportChanged`, `deslop/analysisState`, `deslop/embedding
 
 The MCP-facing local IPC endpoint exposes the same live service for agent-side calls that do not travel through a full LSP client. Unix hosts use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`. The full method surface is documented in [LIVE-IPC-SOCKET]: five single-shot reads (`report/get`, `report/forFile`, `report/forRange`, `cluster/byId`, `session/config`), three single-shot computes (`duplicates/findSimilar`, `embedding/listModels`, `deslop.lsp.refreshReport`), and one long-lived subscription (`report/subscribe`) that fans `report/changed` notifications out to the MCP. `deslop.lsp.refreshReport` runs the same full-refresh command used by `workspace/executeCommand` so agent `rescan` calls force a re-analysis pass before the next `report/get`.
 
+### [LSP-WIRE-BUDGET] Keeping the live wire small
+
+Live responses must stay small enough to ship over JSON-RPC on every analysis
+pass, so the wire projection differs from the full in-memory report. Each
+cluster's `occurrences` is capped at `LIVE_WIRE_OCCURRENCE_CAP` (100) with the
+pre-cap total preserved as `occurrences_total`, and the fat derivable strings —
+`schema_doc`, per-cluster `summary` and `interpretation` — are blanked because
+clients regenerate them. The `schema_doc` is served lazily through its own
+`deslop/reportSchemaDoc` method rather than riding every `deslop/reportGet`.
+Clients that need the omitted detail page it back via `deslop/clusterById`; this
+keeps a pathological multi-thousand-occurrence cluster from blowing the wire from
+kilobytes into megabytes.
+
 ### [LSP-PUSH] Active push — the LSP never waits for the editor to ask
 
 **This is the most critical correctness property of the live surface.** The LSP must push `deslop/reportChanged` (and `deslop/analysisState`) the moment re-analysis completes — unconditionally, regardless of which actor caused the file change.
@@ -157,6 +192,17 @@ When the `Scheduler` finishes a pass it broadcasts `ReportChangedNotification` a
 **The VSIX must never rely on polling.** Stale UI after any external mutation — git, terminal, AI agent, CI — is a push-path correctness bug, not a refresh issue. Fix the push.
 
 The `LspBackend` struct owns `_watcher: LiveWatcher` and `_scheduler: Scheduler` for the session lifetime; dropping either stops the watch loop. Watcher startup failures (`LiveError::WatcherInit`) are fatal — the editor surfaces them through the standard "server crashed" notification.
+
+### [LSP-PUSH-NOTIFICATIONS] Server-initiated notifications
+
+Beyond responding to requests, the LSP pushes unsolicited JSON-RPC notifications
+the moment server-side state changes: `deslop/reportChanged` (a new analysis
+generation is ready) and `deslop/analysisState` (running/idle lifecycle). A
+background task drains the scheduler's broadcast channels and forwards each event
+to the client ([LSP-PUSH]), so editor surfaces stay live regardless of which actor
+mutated a file. Notifications are namespaced `deslop/*` ([LSP-CUSTOM-METHODS]);
+clients must never poll in their place, and a stale UI after an external mutation
+is a push-path bug, not a refresh issue ([vsix.md §VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant)).
 
 ### [LSP-EMBEDDING-CONSENT] Startup embedding behaviour
 
@@ -182,7 +228,7 @@ No `extract-to-function` command in v1 — that's an edit action that belongs do
 
 This LSP is used by AI agents (Claude Code, Cursor, Continue) the same way it's used by a human editor. Two implications:
 
-- **Hover, code lens, and diagnostics all carry the cluster id.** An agent reading a diagnostic can call `deslop/clusterById` and get the full JSON cluster (with signals, interpretation, action hints) without re-parsing a hover string.
+- **Code lens and diagnostics carry the cluster id** (as does the VSIX's additive clone-hover card). An agent reading a diagnostic can call `deslop/clusterById` and get the full JSON cluster (with signals, interpretation, action hints) without re-parsing a rendered string.
 - **`deslop/duplicatesFindSimilar` is documented as the agent-facing entry point.** Before the agent commits new code, it can ask "is this block already present elsewhere?" and get back concrete clusters to refactor into. See [MCP-TOOL-FINDSIMILAR] for the MCP equivalent.
 
 The LSP does not attempt to auto-surface clone warnings to the agent — the agent asks. This keeps the protocol predictable and the agent in control of its own context budget.
