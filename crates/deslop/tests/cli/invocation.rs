@@ -119,6 +119,40 @@ fn default_run_emits_all_three_formats() -> Result<()> {
     Ok(())
 }
 
+// Regression for the schema_doc output-bloat report: the CLI report must NOT
+// inline the multi-kilobyte static schema_doc. It drowns the actual report
+// content on inspection and duplicates a document #110/#111 already moved
+// behind `schema-doc` / `deslop://schema` (served on demand, never inlined in
+// a report). The `schema_doc` field stays present-but-empty so the wire
+// contract is unchanged.
+#[test]
+fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
+    let json = fs::read_to_string(&out.json)?;
+    let value: Value = serde_json::from_str(&json)?;
+    let schema_doc = value
+        .get("schema_doc")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            anyhow::anyhow!("schema_doc field must remain present in the wire contract")
+        })?;
+    assert!(
+        schema_doc.is_empty(),
+        "the CLI report must not inline the static schema_doc (it drowns the \
+         report and is served on demand via schema-doc / deslop://schema); got \
+         {} chars",
+        schema_doc.len()
+    );
+    assert!(
+        !json.contains("Deslop Report Context"),
+        "the schema_doc markdown must not appear inline in the CLI report body"
+    );
+    Ok(())
+}
+
 // Implements [OUTPUT-HUMAN-HTML] preview cap: snippets longer than the
 // soft cap render the first window inline and fold the remainder into a
 // `<details>` summary so a 300-line clone does not stretch the page.

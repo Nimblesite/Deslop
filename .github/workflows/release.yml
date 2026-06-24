@@ -118,7 +118,12 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-${{ matrix.target }}-release-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          # Key on Cargo.lock only: the release version-stamp rewrites Cargo.toml
+          # on every tag, which would bust an exact key each release — forcing a
+          # fresh ~GB cache save and thrashing the 10 GB cache LRU into cold
+          # rebuilds on the 10x macOS legs. Cargo.lock is the true dependency
+          # fingerprint; cargo's own fingerprinting recompiles changed crates.
+          key: ${{ runner.os }}-${{ matrix.target }}-release-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-release-
 
@@ -251,6 +256,10 @@ jobs:
             dist/deslop-*.zip
             dist/deslop-*.zip.sha256
           if-no-files-found: error
+          # Intermediate build output: consumed by the release/publish jobs in
+          # this same run, then attached to the GitHub Release. Nothing needs it
+          # afterward, so expire it next day instead of the 90-day default.
+          retention-days: 1
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
@@ -258,6 +267,8 @@ jobs:
           name: vsix-${{ matrix.vsix_target }}
           path: clients/vscode/deslop-live-*.vsix
           if-no-files-found: error
+          # See "Upload CLI artifact": transient, published to the Release.
+          retention-days: 1
 
   jetbrains:
     name: Build JetBrains plugin
@@ -278,6 +289,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          # Cache the Gradle user home (IntelliJ-Platform SDK + LSP4IJ + deps).
+          # The cold dependency resolve dominates this job; caching keeps every
+          # gate running while skipping the multi-hundred-MB SDK re-download.
+          cache: gradle
 
       # Lock-step version: stamps shipwright.json (the staged manifest the plugin
       # verifies its bundled binary against) to the tag version. The Gradle plugin
@@ -330,6 +345,8 @@ jobs:
           path: |
             clients/jetbrains/deslop-lsp4ij/build/distributions/*.zip
           if-no-files-found: error
+          # See "Upload CLI artifact": transient, published to the Release.
+          retention-days: 1
 
   release:
     name: Create GitHub release

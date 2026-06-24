@@ -20,6 +20,7 @@ use std::{
 use crate::{
     buckets::{bucket_labels, classify, ClusterKind},
     clone_category::CloneCategory,
+    pipeline::language_for_path,
     render::{
         highlight::highlight_snippet,
         html_css::{REPORT_CSS, SITE_CSS},
@@ -597,22 +598,4 @@ fn digits(value: usize) -> usize {
         n /= 10;
     }
     count
-}
-
-/// Maps a file extension to a language id understood by the
-/// highlighter. Unknown extensions return `"unknown"`, which the
-/// highlighter degrades to plain escaped text.
-fn language_for_path(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
-        Some("cs") => "csharp",
-        Some("rs") => "rust",
-        Some("py") => "python",
-        Some("dart") => "dart",
-        _ => "unknown",
-    }
 }
