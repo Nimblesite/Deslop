@@ -21,18 +21,6 @@ use anyhow::{Context, Result};
 mod common;
 use crate::common::*;
 
-fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
-    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "30", "--embeddings", "off"])
-        .assert()
-        .success();
-    let mut json_path = tmp.join("report");
-    let _replaced = json_path.set_extension("json");
-    let body = fs::read_to_string(&json_path)?;
-    Ok(serde_json::from_str(&body)?)
-}
-
 fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {
     cluster
         .get("occurrences")
@@ -129,9 +117,8 @@ fn identical_clusters_with_different_source(
 // matches.
 #[test]
 fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
     let scan_root = fixture("csharp-unrelated-xunit-tests");
-    let report = run_report(tmp.path(), &scan_root)?;
+    let report = run_report(&scan_root, 30)?;
     let clusters = report
         .get("clusters")
         .and_then(serde_json::Value::as_array)
@@ -160,9 +147,8 @@ fn unrelated_csharp_xunit_classes_are_never_nearly_identical() -> Result<()> {
 // code`. A user-facing identical bucket must only contain byte-identical slices.
 #[test]
 fn csharp_assertion_blocks_with_different_literals_are_not_identical() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
     let scan_root = fixture("csharp-unrelated-xunit-tests");
-    let report = run_report(tmp.path(), &scan_root)?;
+    let report = run_report(&scan_root, 30)?;
     let offenders = identical_clusters_with_different_source(&report, &scan_root)?;
     assert!(
         offenders.is_empty(),

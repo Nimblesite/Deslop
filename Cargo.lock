@@ -392,6 +392,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "deslop-core",
+ "deslop-test-support",
  "predicates",
  "serde_json",
  "tempfile",
@@ -435,6 +436,7 @@ dependencies = [
  "assert_cmd",
  "async-trait",
  "deslop-core",
+ "deslop-test-support",
  "futures",
  "fxprof-processed-profile",
  "pprof",
@@ -457,6 +459,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "deslop-core",
+ "deslop-test-support",
  "nix 0.29.0",
  "notify",
  "predicates",
@@ -466,6 +469,15 @@ dependencies = [
  "thiserror 1.0.63",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "deslop-test-support"
+version = "0.0.0-dev"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "serde_json",
 ]
 
 [[package]]

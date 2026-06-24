@@ -215,13 +215,7 @@ impl McpChild {
 /// `initialize`+`initialized` handshake so the IPC socket is ready
 /// before the MCP child connects.
 fn spawn_companion_lsp(root: &Path) -> Result<Child> {
-    let bin = cargo_bin("deslop-lsp");
-    let mut child = Command::new(bin)
-        .arg(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
+    let mut child = deslop_test_support::spawn_deslop_lsp(root, Stdio::piped())
         .context("spawn companion deslop-lsp")?;
     let mut stdin = child.stdin.take().context("lsp stdin")?;
     let mut stdout = BufReader::new(child.stdout.take().context("lsp stdout")?);
@@ -247,31 +241,12 @@ fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) ->
 
 /// Writes one LSP-framed JSON-RPC message.
 fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
+    deslop_test_support::write_lsp_frame(stdin, payload)
 }
 
 /// Reads one LSP-framed JSON-RPC response and returns it as JSON.
 fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    use std::io::Read as _;
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    let length = content_length.ok_or_else(|| anyhow!("missing Content-Length"))?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
+    deslop_test_support::read_lsp_frame(reader)
 }
 
 /// Polls until `<root>/.deslop-cache/deslop.sock` exists. Failure
@@ -533,15 +508,7 @@ fn prints_json_version_contract() -> Result<()> {
 }
 
 fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
-    assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
-    assert_eq!(value.get("name"), Some(&Value::from(name)));
-    assert_eq!(
-        value.get("version").and_then(Value::as_str),
-        Some(expected_version())
-    );
-    assert_eq!(value.get("kind"), Some(&Value::from(kind)));
-    assert_eq!(value.get("language"), Some(&Value::from("rust")));
-    assert_eq!(value.get("product"), Some(&Value::from("deslop")));
+    deslop_test_support::assert_version_manifest(value, name, kind, expected_version());
 }
 
 fn call_tool(child: &mut McpChild, name: &str, arguments: &Value) -> Result<Value> {

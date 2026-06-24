@@ -27,15 +27,7 @@ fn prints_json_version_contract() -> Result<()> {
 }
 
 fn assert_version_manifest(value: &Value, name: &str, kind: &str) {
-    assert_eq!(value.get("manifestVersion"), Some(&Value::from(1)));
-    assert_eq!(value.get("name"), Some(&Value::from(name)));
-    assert_eq!(
-        value.get("version").and_then(Value::as_str),
-        Some(expected_version())
-    );
-    assert_eq!(value.get("kind"), Some(&Value::from(kind)));
-    assert_eq!(value.get("language"), Some(&Value::from("rust")));
-    assert_eq!(value.get("product"), Some(&Value::from("deslop")));
+    deslop_test_support::assert_version_manifest(value, name, kind, expected_version());
 }
 
 fn expected_version() -> &'static str {

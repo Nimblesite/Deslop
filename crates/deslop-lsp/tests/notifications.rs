@@ -51,10 +51,7 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
 fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
-    let frames = spawn_frame_reader(stdout);
-    frame_handshake(&mut stdin, &frames)?;
-    let initial = frame_report_get(&mut stdin, &frames)?;
+    let (_guard, mut stdin, frames, initial) = spawn_lsp_with_initial_report(workspace.path())?;
     ensure!(
         cluster_count(&initial) > 0,
         "fixture must start with duplicate clusters"
@@ -88,10 +85,7 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
 fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
     let beta = workspace.path().join("Beta.cs");
-    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
-    let frames = spawn_frame_reader(stdout);
-    frame_handshake(&mut stdin, &frames)?;
-    let initial = frame_report_get(&mut stdin, &frames)?;
+    let (_guard, _stdin, frames, initial) = spawn_lsp_with_initial_report(workspace.path())?;
     ensure!(
         cluster_count(&initial) > 0,
         "fixture must start with duplicate clusters"
@@ -126,10 +120,7 @@ fn report_changed_fires_for_each_external_save_of_the_same_path() -> Result<()> 
 fn report_changed_fires_for_external_save_of_dart_file() -> Result<()> {
     let workspace = copy_fixture("dart-small")?;
     let beta = workspace.path().join("beta.dart");
-    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
-    let frames = spawn_frame_reader(stdout);
-    frame_handshake(&mut stdin, &frames)?;
-    let initial = frame_report_get(&mut stdin, &frames)?;
+    let (_guard, _stdin, frames, initial) = spawn_lsp_with_initial_report(workspace.path())?;
     ensure!(
         cluster_count(&initial) > 0,
         "dart fixture must start with duplicate clusters"
@@ -165,10 +156,7 @@ fn threshold_breach_pushes_non_blocking_warning_on_startup() -> Result<()> {
         workspace.path().join(".deslop.toml"),
         "[threshold]\nmax_duplication_percent = 5.0\n",
     )?;
-    let (_guard, mut stdin, stdout) = spawn_lsp_guarded(workspace.path())?;
-    let frames = spawn_frame_reader(stdout);
-    frame_handshake(&mut stdin, &frames)?;
-    let initial = frame_report_get(&mut stdin, &frames)?;
+    let (_guard, mut stdin, frames, initial) = spawn_lsp_with_initial_report(workspace.path())?;
     let measured = initial
         .pointer("/result/metrics/duplication_percent")
         .and_then(serde_json::Value::as_f64)
@@ -249,6 +237,23 @@ fn frame_report_get(
     frames: &Receiver<FrameResult>,
 ) -> Result<serde_json::Value> {
     request_response(stdin, frames, "deslop/reportGet", &serde_json::json!({}))
+}
+
+/// Spawns a guarded LSP, starts its frame reader, completes the handshake, and
+/// returns the guard, stdin, frame channel, and the initial `deslop/reportGet`.
+fn spawn_lsp_with_initial_report(
+    workspace: &Path,
+) -> Result<(
+    LspGuard,
+    ChildStdin,
+    Receiver<FrameResult>,
+    serde_json::Value,
+)> {
+    let (guard, mut stdin, stdout) = spawn_lsp_guarded(workspace)?;
+    let frames = spawn_frame_reader(stdout);
+    frame_handshake(&mut stdin, &frames)?;
+    let initial = frame_report_get(&mut stdin, &frames)?;
+    Ok((guard, stdin, frames, initial))
 }
 
 /// Reads frames on a background thread so tests can time out waiting

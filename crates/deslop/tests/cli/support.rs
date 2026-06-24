@@ -40,15 +40,7 @@ pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<C
 
 /// Appends `.<ext>` to `base` by cloning and replacing the file name.
 pub(crate) fn with_ext(base: &Path, ext: &str) -> PathBuf {
-    let mut path = base.to_path_buf();
-    let mut name = path
-        .file_name()
-        .map(std::ffi::OsStr::to_os_string)
-        .unwrap_or_default();
-    name.push(".");
-    name.push(ext);
-    path.set_file_name(name);
-    path
+    deslop_test_support::with_ext(base, ext)
 }
 
 /// Copies every top-level entry in `src` into a freshly created `dst`.
