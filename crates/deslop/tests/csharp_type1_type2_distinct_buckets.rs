@@ -8,24 +8,10 @@
 //! claiming "every copy is the same".
 //! Tests [CLONE-BUCKETS-IDENTICAL]
 
-use std::{fs, path::Path};
-
 use anyhow::Result;
 
 mod common;
 use crate::common::*;
-
-fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
-    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "30", "--embeddings", "off"])
-        .assert()
-        .success();
-    let mut json_path = tmp.join("report");
-    let _replaced = json_path.set_extension("json");
-    let body = fs::read_to_string(&json_path)?;
-    Ok(serde_json::from_str(&body)?)
-}
 
 fn cluster_interpretations(report: &serde_json::Value) -> Vec<String> {
     report
@@ -51,11 +37,8 @@ fn cluster_interpretations(report: &serde_json::Value) -> Vec<String> {
 // "every copy is the same". Currently both get the same Identical label.
 #[test]
 fn type2_clusters_render_distinct_action_from_type1() -> Result<()> {
-    let tmp1 = tempfile::tempdir()?;
-    let tmp2 = tempfile::tempdir()?;
-
-    let type2_report = run_report(tmp1.path(), &fixture("csharp-small"))?;
-    let type1_report = run_report(tmp2.path(), &fixture("csharp-type1"))?;
+    let type2_report = run_report(&fixture("csharp-small"), 30)?;
+    let type1_report = run_report(&fixture("csharp-type1"), 30)?;
 
     let type2_interpretations = cluster_interpretations(&type2_report);
     let type1_interpretations = cluster_interpretations(&type1_report);

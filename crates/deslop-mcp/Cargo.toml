@@ -32,6 +32,7 @@ nix = { version = "0.29", default-features = false, features = ["process"] }
 anyhow.workspace = true
 assert_cmd.workspace = true
 deslop-core = { path = "../deslop-core", features = ["live", "test-support"] }
+deslop-test-support = { path = "../deslop-test-support" }
 predicates.workspace = true
 tempfile.workspace = true
 

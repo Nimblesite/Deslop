@@ -12,30 +12,15 @@
 //! `bucket=nearly_identical` together with `structural >= 0.99`,
 //! `token_jaccard < 0.05`, and `embedding_cos < 0.05`.
 
-use std::{fs, path::Path};
-
 use anyhow::Result;
 
 mod common;
 use crate::common::*;
 
-fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
-    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
-    let _assertion = cmd
-        .args(["--min-nodes", "30", "--embeddings", "off"])
-        .assert()
-        .success();
-    let mut json_path = tmp.join("report");
-    let _replaced = json_path.set_extension("json");
-    let body = fs::read_to_string(&json_path)?;
-    Ok(serde_json::from_str(&body)?)
-}
-
 #[test]
 fn issue_134_structural_only_clusters_are_not_nearly_identical() -> Result<()> {
-    let tmp = tempfile::tempdir()?;
     let scan_root = fixture("csharp-issue-134-structural-only");
-    let report = run_report(tmp.path(), &scan_root)?;
+    let report = run_report(&scan_root, 30)?;
     // [METRICS-REPO] `clusters_total` counts only the clusters the report
     // renders. This fixture's sole family is a hidden structural-only
     // cluster, so it contributes zero to the metric while still being

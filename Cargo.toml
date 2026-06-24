@@ -6,6 +6,7 @@ members = [
     "crates/deslop",
     "crates/deslop-lsp",
     "crates/deslop-mcp",
+    "crates/deslop-test-support",
 ]
 
 [workspace.package]

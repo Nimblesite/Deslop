@@ -13,7 +13,7 @@
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     thread,
@@ -111,29 +111,11 @@ fn lsp_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout>) ->
 }
 
 fn write_lsp_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
+    deslop_test_support::write_lsp_frame(stdin, payload)
 }
 
 fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    let length = content_length.ok_or_else(|| anyhow!("missing Content-Length"))?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
+    deslop_test_support::read_lsp_frame(reader)
 }
 
 /// Polls until `path` exists, failing after `timeout`.

@@ -41,6 +41,7 @@ rustix = { version = "=0.38.44", features = ["process"] }
 anyhow.workspace = true
 assert_cmd.workspace = true
 deslop-core = { path = "../deslop-core", features = ["live", "test-support"] }
+deslop-test-support = { path = "../deslop-test-support" }
 tempfile.workspace = true
 tower-lsp.workspace = true
 

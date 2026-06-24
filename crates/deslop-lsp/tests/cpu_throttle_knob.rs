@@ -11,7 +11,7 @@
 mod common;
 
 use std::{
-    io::{BufRead, BufReader, Read},
+    io::BufReader,
     process::{ChildStdin, ChildStdout, Command, Stdio},
     sync::atomic::{AtomicI64, Ordering},
     thread,
@@ -171,29 +171,8 @@ fn request_without_params(method: &str) -> Result<(i64, String)> {
     Ok((id, serde_json::to_string(&payload)?))
 }
 
-fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let read = reader.read_line(&mut line)?;
-        if read == 0 {
-            return Err(anyhow!("stdout closed before Content-Length"));
-        }
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
-}
-
 fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
-    let length = read_content_length(reader)?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
+    deslop_test_support::read_lsp_frame(reader)
 }
 
 fn send_and_recv(

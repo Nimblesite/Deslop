@@ -10,9 +10,9 @@
 
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::BufReader,
     path::{Path, PathBuf},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio},
+    process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
     sync::atomic::{AtomicI64, Ordering},
 };
 
@@ -47,13 +47,7 @@ pub fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
 
 /// Spawns the LSP binary against `workspace_root`.
 pub fn spawn_lsp(workspace_root: &Path) -> Result<Child> {
-    let bin = assert_cmd::cargo::cargo_bin("deslop-lsp");
-    Ok(Command::new(bin)
-        .arg(workspace_root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?)
+    deslop_test_support::spawn_deslop_lsp(workspace_root, Stdio::piped())
 }
 
 /// Acquires child stdio handles after a successful spawn.
@@ -95,35 +89,12 @@ pub fn spawn_lsp_on_fixture(
 
 /// Writes one LSP framed payload.
 pub fn write_frame(stdin: &mut ChildStdin, payload: &str) -> Result<()> {
-    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
-    stdin.write_all(header.as_bytes())?;
-    stdin.write_all(payload.as_bytes())?;
-    stdin.flush()?;
-    Ok(())
+    deslop_test_support::write_lsp_frame(stdin, payload)
 }
 
 /// Reads one framed JSON-RPC response.
 pub fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<serde_json::Value> {
-    let length = read_content_length(reader)?;
-    let mut buf = vec![0_u8; length];
-    reader.read_exact(&mut buf)?;
-    Ok(serde_json::from_slice(&buf)?)
-}
-
-/// Reads the `Content-Length` header block.
-fn read_content_length(reader: &mut BufReader<ChildStdout>) -> Result<usize> {
-    let mut content_length: Option<usize> = None;
-    loop {
-        let mut line = String::new();
-        let _read = reader.read_line(&mut line)?;
-        if line == "\r\n" {
-            break;
-        }
-        if let Some(rest) = line.strip_prefix("Content-Length: ") {
-            content_length = Some(rest.trim().parse::<usize>()?);
-        }
-    }
-    content_length.ok_or_else(|| anyhow!("missing Content-Length"))
+    deslop_test_support::read_lsp_frame(reader)
 }
 
 /// Sends a request and waits for the matching response id.

@@ -273,15 +273,7 @@ fn occurrence_path_contains(cluster: &Value, needle: &str) -> bool {
 }
 
 fn with_ext(base: &Path, ext: &str) -> PathBuf {
-    let mut path = base.to_path_buf();
-    let mut name = path
-        .file_name()
-        .map(std::ffi::OsStr::to_os_string)
-        .unwrap_or_default();
-    name.push(".");
-    name.push(ext);
-    path.set_file_name(name);
-    path
+    deslop_test_support::with_ext(base, ext)
 }
 
 const GENERATED_ALPHA: &str = r"
