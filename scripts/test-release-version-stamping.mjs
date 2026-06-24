@@ -13,6 +13,7 @@ const version = "9.8.7-test.1";
 const tests = [
   sourceProjectsUseVersionPlaceholder,
   stamperSetsEveryProjectVersion,
+  stamperStampsEveryWorkspaceCrateInLock,
   stamperRejectsInvalidVersion,
 ];
 
@@ -74,6 +75,32 @@ function stamperSetsEveryProjectVersion(work) {
   assertJsonVersion(work, "clients/vscode/webview-ui/package-lock.json", version);
   assertJsonVersion(work, "site/package.json", version);
   assertJsonVersion(work, "site/package-lock.json", version);
+}
+
+// Every workspace/path crate (a Cargo.lock `[[package]]` with no `source =`
+// line, i.e. not from a registry/git) must be stamped. A hardcoded crate list
+// silently skips any crate it omits, leaving Cargo.lock out of sync with the
+// stamped Cargo.toml so the release's `cargo build --locked` fails — the
+// regression a new workspace crate (deslop-test-support) introduced.
+function stamperStampsEveryWorkspaceCrateInLock(work) {
+  copyStampInputs(work);
+  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+
+  const lock = read(work, "Cargo.lock");
+  let workspaceCrates = 0;
+  for (const block of lock.split("[[package]]").slice(1)) {
+    const name = block.match(/\nname = "([^"]+)"/)?.[1];
+    if (!name || /\nsource = /.test(block)) continue;
+    workspaceCrates++;
+    const lockVersion = block.match(/\nversion = "([^"]+)"/)?.[1];
+    if (lockVersion !== version) {
+      throw new Error(
+        `workspace crate ${name} left at ${lockVersion} in Cargo.lock, expected ${version}`,
+      );
+    }
+  }
+  if (workspaceCrates === 0) throw new Error("Cargo.lock had no workspace crates to stamp");
 }
 
 function stamperRejectsInvalidVersion(work) {
