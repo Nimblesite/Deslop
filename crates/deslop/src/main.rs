@@ -271,6 +271,11 @@ fn run_cli() -> Result<()> {
     };
     let mut report = outcome.report;
     apply_threshold(&args, &mut report)?;
+    // The static schema_doc is served on demand (schema-doc / deslop://schema,
+    // #110/#111); inlining ~13 KB of it into every rendered report drowns the
+    // actual content and bloats the file. Drop it from the CLI output — the
+    // wire field stays present-but-empty.
+    report.schema_doc.clear();
     let split_by_language = resolve_split_by_language(&args)?;
     let mut written = emit_all(&report, &formats, &output, &args.path, split_by_language)?;
     if let Some(delta) = outcome.delta.as_ref() {

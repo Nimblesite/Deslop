@@ -105,8 +105,13 @@ fn write_boilerplate_hints(out: &mut String, report: &Report, escape: fn(&str) -
 }
 
 /// Embedded schema-doc markdown so agents can self-document the JSON
-/// schema without a second round-trip.
+/// schema without a second round-trip. Skipped when the report omits the
+/// `schema_doc` (the CLI drops it — it is served on demand, #110/#111), so a
+/// human HTML report never carries an empty schema section.
 fn write_schema(out: &mut String, report: &Report, escape: fn(&str) -> String) {
+    if report.schema_doc.is_empty() {
+        return;
+    }
     let _ = write!(
         out,
         "<h3>Schema reference</h3><pre>{doc}</pre>",

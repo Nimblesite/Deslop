@@ -8,9 +8,8 @@
 //! by id is what keeps a single page survivable on a real workspace
 //! (where the unsliced report has hit 4 MB+ in production).
 
-use std::path::Path;
-
 use deslop_core::{
+    pipeline::language_for_path,
     report::{Report, ReportCluster},
     wire_generated::{
         ClusterSummary, OccurrenceSummary, ReportPage, ReportPageFilters, ReportPageInfo,
@@ -153,22 +152,5 @@ fn cluster_summary_from(cluster: &ReportCluster) -> ClusterSummary {
         occurrence_count,
         language: language.to_owned(),
         first_occurrence,
-    }
-}
-
-/// Maps a file extension to a registered language id. Mirrors the
-/// renderer's `language_for_path` so MCP summaries stay consistent
-/// with the HTML report.
-fn language_for_path(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
-        Some("cs") => "csharp",
-        Some("rs") => "rust",
-        Some("py") => "python",
-        _ => "unknown",
     }
 }

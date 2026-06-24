@@ -234,12 +234,13 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_constants::is_module_constant_table_cluster(snippets)
 }
 
-/// All Rust idiom noise filters (issues #75/#147/#150/#176).
+/// All Rust idiom noise filters (issues #75/#147/#150/#176/#224).
 fn rust_noise(snippets: &[Snippet<'_>]) -> bool {
     rust::is_rust_language_parser_adapter_cluster(snippets)
         || rust::is_rust_top_level_decl_cluster(snippets)
         || rust::is_rust_iter_collect_idiom_cluster(snippets)
         || rust::is_rust_match_dispatch_cluster(snippets)
+        || rust::is_rust_struct_field_declaration_cluster(snippets)
 }
 
 /// Decides whether an embedding-dominant `same_behavior` cluster pairs

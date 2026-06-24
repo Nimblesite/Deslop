@@ -291,6 +291,27 @@ pub fn language_ids() -> Vec<&'static str> {
     default_parsers().iter().map(|parser| parser.id()).collect()
 }
 
+/// Detected display language id for a source path, derived from the parser
+/// registry's declared extensions, or `"unknown"`. The single labeling map
+/// shared by every human/agent surface (the HTML report highlighter, MCP page
+/// summaries) so the detected language can never drift between them — or from
+/// the registry when a language is added ([PIPELINE-LANG-TRAIT], #164).
+#[must_use]
+pub fn language_for_path(path: &Path) -> &'static str {
+    let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
+        return "unknown";
+    };
+    default_parsers()
+        .iter()
+        .find(|parser| {
+            parser
+                .file_extensions()
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(extension))
+        })
+        .map_or("unknown", |parser| parser.id())
+}
+
 /// Source-file extensions of every registered parser, in registry order.
 /// Single source of truth for any surface that filters filesystem events
 /// by extension — e.g. the LSP live watcher — so the watched set can

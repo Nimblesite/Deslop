@@ -148,7 +148,7 @@ jobs:
           path: |
             lcov.info
             target/llvm-cov/
-          retention-days: 7
+          retention-days: 1
 
       - name: Build
         run: make build
@@ -171,7 +171,7 @@ jobs:
           path: |
             target/release/deslop
             target/release/deslop.exe
-          retention-days: 7
+          retention-days: 1
 
   # Windows compile + transport gate ([LIVE-IPC-TCP]). Until now,
   # cfg(windows) code paths were only compiled by the release matrix —
@@ -295,7 +295,7 @@ jobs:
           name: vsix-coverage
           path: |
             clients/vscode/coverage/
-          retention-days: 7
+          retention-days: 1
 
   jetbrains:
     name: JetBrains package gate
@@ -331,6 +331,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          # Cache the Gradle user home (IntelliJ-Platform SDK + LSP4IJ + deps).
+          # The cold resolve dominates this gate (~378 job-min/month). Caching
+          # keeps _jetbrains-real-binary-test running on every PR — it just stops
+          # re-downloading the SDK each run.
+          cache: gradle
 
       # The Gradle wrapper at clients/jetbrains/gradlew is the source of truth.
       # No external setup-gradle step needed.

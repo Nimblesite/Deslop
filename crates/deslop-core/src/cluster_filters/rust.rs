@@ -497,3 +497,118 @@ fn field_expression_projects_closure_arg(
     node.child_by_field_name("field")
         .is_some_and(|field| field.kind() == "field_identifier")
 }
+
+/// Detects **issue #224** [CLONE-NOISE-RUST-STRUCT-FIELDS]: clusters whose
+/// every member covers only Rust struct field declarations. A field list
+/// encodes a data model's *shape*, not extractable duplicate logic — after
+/// identifier, type, and literal normalisation `pub a: Option<String>`
+/// collapses to the same subtree as `pub b: Option<String>`, so unrelated
+/// field runs (and whole structs that are nothing but such fields) cluster as
+/// `structural_only`. No refactor removes them, yet they dominate the
+/// duplication metric on serde-heavy repos. This is the Rust counterpart of
+/// the Dart class-field filter (#169).
+///
+/// Guarded by `raw_snippet_texts_differ` exactly like the Dart filter: a
+/// byte-identical copy-pasted struct still surfaces as genuine duplication
+/// rather than being mistaken for a run of distinct fields.
+pub(super) fn is_rust_struct_field_declaration_cluster(snippets: &[Snippet<'_>]) -> bool {
+    is_multi_member_language_cluster(snippets, "rust")
+        && snippets.iter().all(covers_only_struct_field_declarations)
+        && raw_snippet_texts_differ(snippets)
+}
+
+/// Returns true when `snippet.range` covers only Rust struct field
+/// declarations — a run of sibling fields inside one `field_declaration_list`,
+/// or one whole `struct_item` whose body is nothing but field declarations.
+/// Any method, impl, or other item body fails the check and keeps clustering.
+fn covers_only_struct_field_declarations(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
+    let root = tree.root_node();
+    // A run of sibling fields inside one struct's field list.
+    if let Some(list) = enclosing_kind(root, range, &["field_declaration_list"]) {
+        return field_list_range_is_all_fields(list, range);
+    }
+    // Otherwise the range is a whole-struct window: the smallest node spanning
+    // it is the struct itself (range hugs one `struct_item`), its field list,
+    // or a container holding one or more whole structs plus their leading
+    // `#[derive]` / `#[serde]` attribute siblings.
+    let Some(container) = root.descendant_for_byte_range(range.start, range.end) else {
+        return false;
+    };
+    match container.kind() {
+        "field_declaration_list" => field_list_range_is_all_fields(container, range),
+        "struct_item" => struct_body_in_range_is_all_fields(container, range),
+        _ => range_covers_only_field_structs(container, range),
+    }
+}
+
+/// Returns true when one `struct_item`'s body covers only field declarations
+/// within `range`.
+fn struct_body_in_range_is_all_fields(struct_item: Node<'_>, range: ByteRange) -> bool {
+    field_declaration_list_of(struct_item)
+        .is_some_and(|list| field_list_range_is_all_fields(list, range))
+}
+
+/// Returns true when every named child of `container` that `range` covers is a
+/// whole struct whose in-range body is only field declarations, or a leading
+/// attribute sibling — and at least one field is covered. Any function, impl,
+/// or other item keeps the cluster.
+fn range_covers_only_field_structs(container: Node<'_>, range: ByteRange) -> bool {
+    let mut cursor = container.walk();
+    let mut saw_field = false;
+    for child in container.named_children(&mut cursor) {
+        if !node_intersects_range(child, range) {
+            continue;
+        }
+        match child.kind() {
+            "struct_item" => {
+                let Some(list) = field_declaration_list_of(child) else {
+                    return false;
+                };
+                if node_intersects_range(list, range) {
+                    if !field_list_range_is_all_fields(list, range) {
+                        return false;
+                    }
+                    saw_field = true;
+                }
+            }
+            "attribute_item" => {}
+            kind if kind.ends_with("comment") => {}
+            _ => return false,
+        }
+    }
+    saw_field
+}
+
+/// Returns the direct `field_declaration_list` child of a `struct_item`, or
+/// `None` for a tuple/unit struct that has none.
+fn field_declaration_list_of(struct_item: Node<'_>) -> Option<Node<'_>> {
+    let mut cursor = struct_item.walk();
+    let list = struct_item
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == "field_declaration_list");
+    list
+}
+
+/// Returns true when every named child of `list` that intersects `range` is a
+/// `field_declaration` or its `attribute_item`, with at least one field
+/// present.
+fn field_list_range_is_all_fields(list: Node<'_>, range: ByteRange) -> bool {
+    let mut cursor = list.walk();
+    let mut fields = 0_usize;
+    for member in list.named_children(&mut cursor) {
+        if !node_intersects_range(member, range) {
+            continue;
+        }
+        match member.kind() {
+            "field_declaration" => fields = fields.saturating_add(1),
+            "attribute_item" => {}
+            kind if kind.ends_with("comment") => {}
+            _ => return false,
+        }
+    }
+    fields >= 1
+}

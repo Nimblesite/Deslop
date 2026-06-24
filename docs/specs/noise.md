@@ -246,6 +246,21 @@ when every member is a contiguous run of `match` arms under a single
 bytes. The distinct-pattern and byte-divergence guards keep a verbatim
 copy-pasted run of arms visible as a genuine clone.
 
+### [CLONE-NOISE-RUST-STRUCT-FIELDS] Struct field-declaration runs
+A struct's field list encodes a data model's *shape*, not extractable duplicate
+logic: after identifier, type, and literal normalisation `pub a: Option<String>`
+collapses to the same subtree as `pub b: Option<String>`, so unrelated runs of
+distinct fields — and whole structs that are nothing but such fields — cluster as
+`structural_only` on serde-heavy or polyglot repos and dominate the duplication
+metric with matches no refactor can remove. A cluster is suppressed when every
+member covers only Rust struct field declarations — a run of sibling fields
+inside one `field_declaration_list`, or one or more whole `struct_item`s whose
+in-range body is nothing but `field_declaration` nodes (their `#[derive]` /
+`#[serde]` attributes and doc comments are trivia) — and at least two members
+differ in raw bytes. The byte-divergence guard keeps a verbatim copy-pasted
+struct visible as a genuine clone. This is the Rust counterpart of the Dart
+class-field filter ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]); see GH #224.
+
 ## Performance
 
 ### [CLONE-NOISE-REPARSE-CACHE] Parse-once filter cache
