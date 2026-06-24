@@ -15,13 +15,13 @@
 
 use std::fs;
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 mod common;
 use common::{
     copied_fixture, initialized_mcp, lsp_workspace_with_socket, spawn_lsp_and_wait_for_socket,
-    structured_content, wait_for_path, McpHandle, SOCKET_TIMEOUT,
+    structured_content, wait_for_state_then_init_mcp, McpHandle,
 };
 
 /// [MCP-IPC-CLIENT] When the LSP is running, MCP must delegate
@@ -31,10 +31,7 @@ use common::{
 #[test]
 fn find_similar_via_mcp_delegates_to_running_lsp() -> Result<()> {
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     let response = mcp.request(
         "tools/call",
@@ -200,10 +197,7 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
     let beta = workspace.path().join("Beta.cs");
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
     fs::write(
         &beta,
         b"namespace Solo { class Only { public int Go() => 1; } }\n",

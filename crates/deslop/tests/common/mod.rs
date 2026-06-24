@@ -108,13 +108,81 @@ pub(crate) fn occurrences(cluster: &Value) -> &[Value] {
         .unwrap_or_default()
 }
 
+/// A cluster's `bucket` label (e.g. `identical`), or `"?"` when absent.
+pub(crate) fn cluster_bucket(cluster: &Value) -> &str {
+    field(cluster, "bucket").as_str().unwrap_or("?")
+}
+
+/// A cluster's stable `id`, or `"?"` when absent.
+pub(crate) fn cluster_id(cluster: &Value) -> &str {
+    field(cluster, "id").as_str().unwrap_or("?")
+}
+
+/// A cluster's `size` (its occurrence count), or `0` when absent.
+pub(crate) fn cluster_size(cluster: &Value) -> u64 {
+    field(cluster, "size").as_u64().unwrap_or(0)
+}
+
+/// One component of a cluster's fused `signals` block (e.g. `token_jaccard`),
+/// or `0.0` when the named signal is absent.
+pub(crate) fn signal(cluster: &Value, key: &str) -> f64 {
+    cluster
+        .pointer(&format!("/signals/{key}"))
+        .and_then(Value::as_f64)
+        .unwrap_or_default()
+}
+
+/// Number of clusters the report rendered — the [METRICS-REPO] visible set.
+pub(crate) fn cluster_count(report: &Value) -> usize {
+    array_len(report, "clusters")
+}
+
+/// The report's `clusters_hidden` count (suppressed-cluster telemetry), or
+/// `0` when absent.
+pub(crate) fn clusters_hidden(report: &Value) -> u64 {
+    field(report, "clusters_hidden").as_u64().unwrap_or(0)
+}
+
+/// The relative path of a single occurrence, erroring when absent.
+pub(crate) fn occurrence_path(occurrence: &Value) -> Result<&str> {
+    field(occurrence, "path")
+        .as_str()
+        .ok_or_else(|| anyhow!("reported occurrence is missing path"))
+}
+
+/// The relative paths of every occurrence in `cluster`, in report order.
+pub(crate) fn occurrence_paths(cluster: &Value) -> Vec<String> {
+    occurrences(cluster)
+        .iter()
+        .filter_map(|occurrence| field(occurrence, "path").as_str().map(ToOwned::to_owned))
+        .collect()
+}
+
+/// The bare file names (no directory) of every occurrence in `cluster`.
+pub(crate) fn occurrence_files(cluster: &Value) -> Vec<String> {
+    occurrences(cluster)
+        .iter()
+        .filter_map(|occurrence| {
+            field(occurrence, "path")
+                .as_str()
+                .and_then(|path| Path::new(path).file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .collect()
+}
+
+/// The source slice each occurrence in `cluster` points at, in report order.
+pub(crate) fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
+    occurrences(cluster)
+        .iter()
+        .map(|occurrence| occurrence_text(scan_root, occurrence))
+        .collect()
+}
+
 /// Reads the source slice an occurrence points at, resolving its `path`
 /// relative to `scan_root` and slicing `[start_byte, end_byte)`.
 pub(crate) fn occurrence_text(scan_root: &Path, occurrence: &Value) -> Result<String> {
-    let path = occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("reported occurrence is missing path"))?;
+    let path = occurrence_path(occurrence)?;
     let source = fs::read_to_string(scan_root.join(path))?;
     let start = occurrence_byte(occurrence, "start_byte")?;
     let end = occurrence_byte(occurrence, "end_byte")?;

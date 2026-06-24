@@ -51,22 +51,6 @@ fn cluster_paths(cluster: &serde_json::Value) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
-fn cluster_id(cluster: &serde_json::Value) -> String {
-    cluster
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?")
-        .to_owned()
-}
-
-fn cluster_bucket(cluster: &serde_json::Value) -> String {
-    cluster
-        .get("bucket")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?")
-        .to_owned()
-}
-
 fn occurrence_slices(cluster: &serde_json::Value, scan_root: &Path) -> Result<Vec<Vec<u8>>> {
     let Some(occurrences) = cluster
         .get("occurrences")

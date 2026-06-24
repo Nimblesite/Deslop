@@ -24,13 +24,6 @@ fn run_report(fixture_name: &str) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn cluster_count(report: &Value) -> usize {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len)
-}
-
 #[test]
 fn rust_mod_and_use_declarations_do_not_cluster_as_duplicates() -> Result<()> {
     let report = run_report("rust-issue-150-mod-declarations")?;

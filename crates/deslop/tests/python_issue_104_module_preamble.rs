@@ -32,32 +32,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn occurrence_paths(cluster: &Value) -> Vec<String> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|occ| {
-            occ.get("path")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-        })
-        .collect()
-}
-
-fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .map(|occurrence| occurrence_text(scan_root, occurrence))
-        .collect()
-}
-
 /// Collects every visible cluster whose occurrences contain `needle`.
 fn clusters_touching(report: &Value, scan_root: &Path, needle: &str) -> Result<Vec<Vec<String>>> {
     let mut hits = Vec::new();

@@ -42,10 +42,7 @@ fn dispatch_report_for_file(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| json!({"code": -32602, "message": "missing path"}))?;
+    let path = required_str_param(params, "path")?;
     let file_report = handle.block_on(service.report_for_file(Path::new(path)));
     serde_json::to_value(&file_report).map_err(|err| rpc_serialise_error(&err))
 }
@@ -56,18 +53,9 @@ fn dispatch_report_for_range(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let path = params
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| json!({"code": -32602, "message": "missing path"}))?;
-    let start_byte = params
-        .get("start_byte")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| json!({"code": -32602, "message": "missing start_byte"}))?;
-    let end_byte = params
-        .get("end_byte")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| json!({"code": -32602, "message": "missing end_byte"}))?;
+    let path = required_str_param(params, "path")?;
+    let start_byte = required_u64_param(params, "start_byte")?;
+    let end_byte = required_u64_param(params, "end_byte")?;
     let start = usize::try_from(start_byte)
         .map_err(|_| json!({"code": -32602, "message": "start_byte overflow"}))?;
     let end = usize::try_from(end_byte)
@@ -82,10 +70,7 @@ fn dispatch_cluster_by_id(
     service: &Arc<LiveService>,
     handle: &Handle,
 ) -> Result<Value, Value> {
-    let id = params
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| json!({"code": -32602, "message": "missing id"}))?;
+    let id = required_str_param(params, "id")?;
     let cluster = handle
         .block_on(service.cluster_by_id(id))
         .map_err(|err| json!({"code": -32603, "message": err.to_string()}))?;
@@ -143,6 +128,27 @@ fn dispatch_refresh_report(service: &Arc<LiveService>, handle: &Handle) -> Resul
             "clustersUpdated": delta.clusters_updated.len(),
         }))
     })
+}
+
+/// Builds the JSON-RPC `-32602` (invalid params) error for a missing field.
+fn missing_param_error(key: &str) -> Value {
+    json!({"code": -32602, "message": format!("missing {key}")})
+}
+
+/// Reads a required string parameter `key`, or the standard `-32602` error.
+fn required_str_param<'a>(params: &'a Value, key: &str) -> Result<&'a str, Value> {
+    params
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| missing_param_error(key))
+}
+
+/// Reads a required `u64` parameter `key`, or the standard `-32602` error.
+fn required_u64_param(params: &Value, key: &str) -> Result<u64, Value> {
+    params
+        .get(key)
+        .and_then(Value::as_u64)
+        .ok_or_else(|| missing_param_error(key))
 }
 
 /// Maps a serialisation failure to a JSON-RPC internal-error envelope.

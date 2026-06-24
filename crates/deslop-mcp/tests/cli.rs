@@ -24,7 +24,7 @@ use serde_json::{json, Value};
 use tempfile::TempDir;
 
 mod common;
-use common::{fixture_root, value_get};
+use common::{fixture_root, value_array, value_get};
 #[cfg(unix)]
 use common::{pid_exists, read_mcp_pid, terminate_pid, wait_for_pid_exit, KILLABLE_PARENT_SCRIPT};
 
@@ -1246,10 +1246,7 @@ fn report_get_clusters_are_slim_summaries_only() -> Result<()> {
 fn report_get_first_occurrence_belongs_to_full_cluster() -> Result<()> {
     let (mut child, page) =
         init_and_tool_payload("report-get", &json!({ "offset": 0, "limit": 10 }))?;
-    let clusters = value_get(&page, "/clusters")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("clusters not array"))?;
+    let clusters = value_array(&page, "/clusters")?;
     assert!(!clusters.is_empty(), "fixture should produce >= 1 cluster");
     for summary in &clusters {
         assert_first_occurrence_matches_full_cluster(&mut child, summary)?;
@@ -1266,10 +1263,7 @@ fn assert_first_occurrence_matches_full_cluster(
     let first = value_get(summary, "/first_occurrence")?;
     let cluster =
         structured_tool_result(&call_tool(child, "cluster-by-id", &json!({ "id": id }))?)?;
-    let occurrences = value_get(&cluster, "/occurrences")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("occurrences not array"))?;
+    let occurrences = value_array(&cluster, "/occurrences")?;
     assert!(
         occurrences.iter().any(|occ| same_occurrence(occ, &first)),
         "first_occurrence must be present in cluster-by-id occurrences: {summary}"
@@ -1402,10 +1396,7 @@ fn report_query_filters_by_path_contains() -> Result<()> {
         "report-query",
         &json!({ "offset": 0, "limit": 50, "path_contains": "Alpha" }),
     )?;
-    let array = value_get(&page, "/clusters")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("clusters not array"))?;
+    let array = value_array(&page, "/clusters")?;
     assert!(
         !array.is_empty(),
         "Alpha.cs participates in the planted clone family"
@@ -1561,10 +1552,7 @@ fn report_query_filters_by_matching_bucket_includes_clusters() -> Result<()> {
         "report-query",
         &json!({ "offset": 0, "limit": 50, "bucket": "nearly_identical" }),
     )?;
-    let clusters = value_get(&page, "/clusters")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("clusters not array"))?;
+    let clusters = value_array(&page, "/clusters")?;
     assert!(
         !clusters.is_empty(),
         "fixture has at least one nearly-identical cluster"
@@ -1708,10 +1696,7 @@ fn find_similar_range_finds_clone_on_alpha() -> Result<()> {
             }
         }),
     )?;
-    let clusters = value_get(&response, "/result/structuredContent/clusters")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+    let clusters = value_array(&response, "/result/structuredContent/clusters")?;
     assert!(
         !clusters.is_empty(),
         "find-similar on Alpha.cs must return at least the Beta sibling cluster: {response}",
@@ -1758,10 +1743,7 @@ fn list_embedding_models_excludes_stub_when_ollama_unreachable() -> Result<()> {
     // listing must come back empty — the deterministic stub is test
     // infrastructure and never appears in production payloads.
     let (child, response) = init_and_tool_response("list-embedding-models", &json!({}))?;
-    let models = value_get(&response, "/result/structuredContent/models")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    let models = value_array(&response, "/result/structuredContent/models")?;
     let has_stub = models
         .iter()
         .any(|model| model.get("provider_id") == Some(&json!("stub")));
@@ -2113,10 +2095,7 @@ fn find_similar_with_top_n_zero_falls_back_to_default() -> Result<()> {
             "arguments": { "path": "Alpha.cs", "start_byte": 0, "end_byte": source.len(), "top_n": 0 }
         }),
     )?;
-    let clusters = value_get(&response, "/result/structuredContent/clusters")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("clusters must be an array: {response}"))?;
+    let clusters = value_array(&response, "/result/structuredContent/clusters")?;
     assert!(
         !clusters.is_empty(),
         "find-similar with top_n=0 must fall back to default and return clusters: {response}",
@@ -2144,10 +2123,7 @@ fn find_similar_snippet_with_empty_source_returns_empty_result() -> Result<()> {
         Some(true),
         "empty snippet must report below_min_nodes=true: {response}"
     );
-    let clusters = value_get(&response, "/result/structuredContent/clusters")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("clusters must be array: {response}"))?;
+    let clusters = value_array(&response, "/result/structuredContent/clusters")?;
     assert!(
         clusters.is_empty(),
         "empty snippet must return no clusters: {response}"
@@ -2643,10 +2619,7 @@ fn list_embedding_models_response_omits_legacy_keys_and_stub() -> Result<()> {
         "tools/call",
         &json!({ "name": "list-embedding-models", "arguments": {} }),
     )?;
-    let models = value_get(&response, "/result/structuredContent/models")?
-        .as_array()
-        .cloned()
-        .ok_or_else(|| anyhow!("models must be an array: {response}"))?;
+    let models = value_array(&response, "/result/structuredContent/models")?;
     let has_stub = models
         .iter()
         .any(|model| model.get("provider_id") == Some(&json!("stub")));

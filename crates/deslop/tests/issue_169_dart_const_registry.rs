@@ -25,17 +25,6 @@ fn report_path(tmp: &Path) -> PathBuf {
     path
 }
 
-fn occurrence_paths(cluster: &Value) -> Vec<&str> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|occ| occ.get("path").and_then(Value::as_str))
-        .collect()
-}
-
 fn any_cluster_touches(report: &Value, file_name: &str) -> bool {
     clusters(report).iter().any(|cluster| {
         occurrence_paths(cluster)

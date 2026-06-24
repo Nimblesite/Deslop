@@ -62,14 +62,6 @@ fn cluster_occurrences(cluster: &serde_json::Value) -> Vec<Occurrence> {
         .unwrap_or_default()
 }
 
-fn cluster_id(cluster: &serde_json::Value) -> String {
-    cluster
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?")
-        .to_owned()
-}
-
 fn ranges_overlap(left: &Occurrence, right: &Occurrence) -> bool {
     left.path == right.path && left.start < right.end && right.start < left.end
 }
@@ -85,7 +77,7 @@ fn first_subsumed_pair(report: &serde_json::Value) -> Option<String> {
     let clusters = report.get("clusters")?.as_array()?;
     let occurrence_sets: Vec<(String, Vec<Occurrence>)> = clusters
         .iter()
-        .map(|cluster| (cluster_id(cluster), cluster_occurrences(cluster)))
+        .map(|cluster| (cluster_id(cluster).to_owned(), cluster_occurrences(cluster)))
         .collect();
     for (outer_index, (outer_id, outer)) in occurrence_sets.iter().enumerate() {
         for (inner_id, inner) in occurrence_sets.iter().skip(outer_index.saturating_add(1)) {

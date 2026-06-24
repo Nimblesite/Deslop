@@ -92,10 +92,11 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
         ],
     )?;
     let json = load_report_json(&out.json)?;
-    let provenance = json
-        .get("embedding_provenance")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| anyhow::anyhow!("embedding_provenance missing or not an object"))?;
+    let provenance = object_field(
+        &json,
+        "embedding_provenance",
+        "embedding_provenance missing or not an object",
+    )?;
     assert_eq!(
         provenance.get("provider_id").and_then(|v| v.as_str()),
         Some("ollama"),
@@ -125,10 +126,7 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
         find_cross_file_cluster(&json, &["Recursive.cs", "Iterative.cs"]).ok_or_else(|| {
             anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs")
         })?;
-    let signals = cluster
-        .get("signals")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| anyhow::anyhow!("cluster missing signals object"))?;
+    let signals = object_field(&cluster, "signals", "cluster missing signals object")?;
     let embedding_cos = signals
         .get("embedding_cos")
         .and_then(serde_json::Value::as_f64)
@@ -187,12 +185,11 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
         ],
     )?;
     let json = load_report_json(&out.json)?;
-    let provenance = json
-        .get("embedding_provenance")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| {
-            anyhow::anyhow!("auto mode with reachable Ollama must populate provenance")
-        })?;
+    let provenance = object_field(
+        &json,
+        "embedding_provenance",
+        "auto mode with reachable Ollama must populate provenance",
+    )?;
     assert_eq!(
         provenance.get("provider_id").and_then(|v| v.as_str()),
         Some("ollama"),
@@ -270,10 +267,7 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     );
 
     let json = load_report_json(&tmp.path().join("second.json"))?;
-    let provenance = json
-        .get("embedding_provenance")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| anyhow::anyhow!("second run lost provenance"))?;
+    let provenance = object_field(&json, "embedding_provenance", "second run lost provenance")?;
     assert_eq!(
         provenance.get("model_id").and_then(|v| v.as_str()),
         Some("nomic-embed-text"),
@@ -340,10 +334,7 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
     )?;
 
     let first_json = load_report_json(&tmp.path().join("first.json"))?;
-    let first_stats = first_json
-        .get("cache_stats")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| anyhow::anyhow!("first run missing cache_stats"))?;
+    let first_stats = object_field(&first_json, "cache_stats", "first run missing cache_stats")?;
     assert_eq!(
         first_stats.get("hits").and_then(serde_json::Value::as_u64),
         Some(0),
@@ -371,10 +362,11 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         ],
     )?;
     let second_json = load_report_json(&tmp.path().join("second.json"))?;
-    let second_stats = second_json
-        .get("cache_stats")
-        .and_then(|v| v.as_object())
-        .ok_or_else(|| anyhow::anyhow!("second run missing cache_stats"))?;
+    let second_stats = object_field(
+        &second_json,
+        "cache_stats",
+        "second run missing cache_stats",
+    )?;
     assert_eq!(
         second_stats.get("hits").and_then(serde_json::Value::as_u64),
         Some(2),

@@ -36,21 +36,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn cluster_bucket(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
-}
-
-fn signal(cluster: &Value, key: &str) -> f64 {
-    cluster
-        .pointer(&format!("/signals/{key}"))
-        .and_then(Value::as_f64)
-        .unwrap_or_default()
-}
-
-fn cluster_size(cluster: &Value) -> u64 {
-    cluster.get("size").and_then(Value::as_u64).unwrap_or(0)
-}
-
 #[test]
 fn single_file_structural_only_method_families_do_not_top_the_report() -> Result<()> {
     let scan_root = fixture("dart-issue-197-settings-getters");

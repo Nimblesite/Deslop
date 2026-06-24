@@ -31,28 +31,6 @@ fn run_report(tmp: &Path, scan_root: &Path) -> Result<serde_json::Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn signal(cluster: &serde_json::Value, key: &str) -> f64 {
-    cluster
-        .get("signals")
-        .and_then(|signals| signals.get(key))
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default()
-}
-
-fn cluster_bucket(cluster: &serde_json::Value) -> &str {
-    cluster
-        .get("bucket")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?")
-}
-
-fn cluster_id(cluster: &serde_json::Value) -> &str {
-    cluster
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or("?")
-}
-
 #[test]
 fn issue_134_structural_only_clusters_are_not_nearly_identical() -> Result<()> {
     let tmp = tempfile::tempdir()?;

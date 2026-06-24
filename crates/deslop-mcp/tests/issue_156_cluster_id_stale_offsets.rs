@@ -17,10 +17,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::{json, Value};
 
 mod common;
-use common::{
-    call_tool, initialized_mcp, lsp_workspace_with_socket, rescan_call, wait_for_path,
-    SOCKET_TIMEOUT,
-};
+use common::{call_tool, lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
 
 /// Issue #156: after rescanning, the cluster payload returned by
 /// `cluster-by-id` must contain occurrence byte ranges that map onto
@@ -29,10 +26,7 @@ use common::{
 #[test]
 fn issue_156_cluster_by_id_returns_post_edit_offsets() -> Result<()> {
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     // Force a refresh first so the baseline is deterministic.
     let baseline = rescan_call(&mut mcp, &[])?;
