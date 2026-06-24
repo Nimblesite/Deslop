@@ -136,7 +136,9 @@ fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
     let schema_doc = value
         .get("schema_doc")
         .and_then(Value::as_str)
-        .ok_or_else(|| anyhow::anyhow!("schema_doc field must remain present in the wire contract"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("schema_doc field must remain present in the wire contract")
+        })?;
     assert!(
         schema_doc.is_empty(),
         "the CLI report must not inline the static schema_doc (it drowns the \
