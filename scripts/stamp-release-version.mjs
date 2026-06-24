@@ -5,7 +5,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
-const workspacePackages = new Set(["deslop", "deslop-core", "deslop-lsp", "deslop-mcp"]);
 const nodeProjects = [
   "clients/vscode",
   "clients/vscode/webview-ui",
@@ -92,22 +91,21 @@ function replaceWorkspaceVersion(text, versionValue) {
 }
 
 function replaceLockVersions(text, versionValue) {
-  let currentPackage = "";
-  const seen = new Set();
-  const lines = text.split("\n").map((line) => {
-    if (line === "[[package]]") currentPackage = "";
-    const name = line.match(/^name = "([^"]+)"$/)?.[1];
-    if (name) currentPackage = name;
-    if (workspacePackages.has(currentPackage) && /^version = "/.test(line)) {
-      seen.add(currentPackage);
-      return `version = "${versionValue}"`;
-    }
-    return line;
+  // A workspace/path crate is a `[[package]]` block with no `source =` line
+  // (registry/git crates carry one). Deriving the set from the lock — rather
+  // than a hardcoded crate list — means a newly added workspace crate can never
+  // silently desync Cargo.lock from the stamped Cargo.toml and break the
+  // release's `cargo build --locked` (the deslop-test-support regression, #248).
+  const segments = text.split("[[package]]");
+  let stamped = 0;
+  const out = segments.map((segment, index) => {
+    if (index === 0 || /\nsource = /.test(segment)) return segment;
+    const replaced = segment.replace(/(\nversion = ")[^"]+(")/, `$1${versionValue}$2`);
+    if (replaced !== segment) stamped++;
+    return replaced;
   });
-  for (const packageName of workspacePackages) {
-    if (!seen.has(packageName)) throw new Error(`Cargo.lock is missing ${packageName}`);
-  }
-  return lines.join("\n");
+  if (stamped === 0) throw new Error("Cargo.lock has no workspace crates to stamp");
+  return out.join("[[package]]");
 }
 
 function parseArgs(args) {
