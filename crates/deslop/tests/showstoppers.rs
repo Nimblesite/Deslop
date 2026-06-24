@@ -15,22 +15,6 @@ use anyhow::Result;
 mod common;
 use crate::common::*;
 
-fn occurrence_paths(cluster: &serde_json::Value) -> Vec<String> {
-    cluster
-        .get("occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map_or_else(Vec::new, |values| {
-            values
-                .iter()
-                .filter_map(|occ| {
-                    occ.get("path")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::to_owned)
-                })
-                .collect()
-        })
-}
-
 fn visible_count(cluster: &serde_json::Value) -> usize {
     cluster
         .get("occurrences")

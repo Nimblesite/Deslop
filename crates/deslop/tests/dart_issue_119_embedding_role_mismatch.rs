@@ -63,26 +63,6 @@ fn bucket(cluster: &Value) -> &str {
     cluster.get("bucket").and_then(Value::as_str).unwrap_or("")
 }
 
-fn clusters_hidden(report: &Value) -> u64 {
-    report
-        .get("clusters_hidden")
-        .and_then(Value::as_u64)
-        .unwrap_or_default()
-}
-
-/// Collects the raw source text of every occurrence in `cluster`.
-fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
-    let occurrences = cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default();
-    occurrences
-        .iter()
-        .map(|occurrence| occurrence_text(scan_root, occurrence))
-        .collect()
-}
-
 /// Returns visible clusters that pair the Dart class with the top-level
 /// function. An occurrence covering a class field (`alpha = 0`) plus
 /// another covering the function body (`saved.bind`) is the role-mismatch

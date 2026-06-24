@@ -127,6 +127,21 @@ pub(crate) fn read_json_report(path: &Path) -> Result<serde_json::Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
+/// The JSON object at `key` in `value`, erroring with `context` when the key
+/// is absent or its value is not an object. Centralises the
+/// `get(key).and_then(as_object).ok_or_else(...)` idiom while preserving each
+/// call site's bespoke error message.
+pub(crate) fn object_field<'a>(
+    value: &'a Value,
+    key: &str,
+    context: &str,
+) -> Result<&'a serde_json::Map<String, Value>> {
+    value
+        .get(key)
+        .and_then(Value::as_object)
+        .ok_or_else(|| anyhow::anyhow!("{context}"))
+}
+
 /// Looks up a named field on `value`; returns `Value::Null` when the
 /// field is absent so callers get a deterministic `!=` instead of a
 /// panic ([TESTS-NO-INDEXING]).

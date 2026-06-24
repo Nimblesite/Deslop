@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use serde_json::Value;
 
 mod common;
@@ -42,24 +42,6 @@ fn cluster_paths(cluster: &Value) -> BTreeSet<&str> {
         .iter()
         .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
         .collect()
-}
-
-fn occurrence_text(scan_root: &Path, occurrence: &Value) -> Result<String> {
-    let path = occurrence_path(occurrence)?;
-    let source = fs::read_to_string(scan_root.join(path))?;
-    let start = occurrence_byte(occurrence, "start_byte")?;
-    let end = occurrence_byte(occurrence, "end_byte")?;
-    source
-        .get(start..end)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow!("reported occurrence range is invalid for {path}"))
-}
-
-fn occurrence_path(occurrence: &Value) -> Result<&str> {
-    occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("reported occurrence is missing path"))
 }
 
 fn language_parser_adapter_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>> {

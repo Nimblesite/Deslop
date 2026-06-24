@@ -26,28 +26,16 @@ fn run_report(fixture_name: &str) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn cluster_count(report: &Value) -> usize {
-    report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len)
-}
-
 fn cluster_occurrence_paths(cluster: &Value) -> std::collections::BTreeSet<String> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map_or_else(Default::default, |values| {
-            values
-                .iter()
-                .filter_map(|occurrence| {
-                    occurrence
-                        .get("path")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned)
-                })
-                .collect()
+    occurrences(cluster)
+        .iter()
+        .filter_map(|occurrence| {
+            occurrence
+                .get("path")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
         })
+        .collect()
 }
 
 #[test]

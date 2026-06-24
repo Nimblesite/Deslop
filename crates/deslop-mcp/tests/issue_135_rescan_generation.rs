@@ -8,13 +8,13 @@
 
 #![cfg(unix)]
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Result};
 use serde_json::{json, Value};
 
 mod common;
 use common::{
-    copied_fixture, initialized_mcp, spawn_lsp_and_wait_for_socket, structured_content,
-    wait_for_path, McpHandle, SOCKET_TIMEOUT,
+    copied_fixture, spawn_lsp_and_wait_for_socket, structured_content,
+    wait_for_state_then_init_mcp, McpHandle,
 };
 
 /// Issue #135: `rescan`, `session-config`, and `report-get` must all
@@ -25,10 +25,7 @@ fn issue_135_rescan_generation_matches_report_get_and_session_config() -> Result
     let beta = workspace.path().join("Beta.cs");
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
 
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     // Edit Beta.cs so the LSP must do at least one re-analysis when
     // rescan asks it to refresh. This bumps the LSP-internal generation

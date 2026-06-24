@@ -35,32 +35,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn occurrence_texts(scan_root: &Path, cluster: &Value) -> Result<Vec<String>> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .map(|occurrence| occurrence_text(scan_root, occurrence))
-        .collect()
-}
-
-fn occurrence_paths(cluster: &Value) -> Vec<String> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|occ| {
-            occ.get("path")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-        })
-        .collect()
-}
-
 /// Resolves the named fixture and runs the constant-table report over it.
 fn fixture_report(fixture_name: &str) -> Result<(std::path::PathBuf, Value)> {
     let scan_root = fixture(fixture_name);

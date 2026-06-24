@@ -256,6 +256,18 @@ impl Drop for ChildKillOnDrop {
     }
 }
 
+/// Workspace-relative path of the live-report state file the LSP publishes.
+pub const LIVE_REPORT_STATE_FILE: &str = ".deslop-cache/live-report.json";
+
+/// Waits for the LSP to publish its live-report state file under `workspace`,
+/// then returns an initialized MCP handle — the standard preamble shared by
+/// every MCP-over-live-LSP test.
+pub fn wait_for_state_then_init_mcp(workspace: &Path) -> Result<McpHandle> {
+    let state_file = workspace.join(LIVE_REPORT_STATE_FILE);
+    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
+    initialized_mcp(workspace)
+}
+
 /// Spawns + initializes an MCP child against `root`.
 pub fn initialized_mcp(root: &Path) -> Result<McpHandle> {
     let mut mcp = McpHandle::spawn(root)?;
@@ -331,6 +343,15 @@ pub fn value_get(value: &Value, pointer: &str) -> Result<Value> {
         .pointer(pointer)
         .cloned()
         .ok_or_else(|| anyhow!("pointer {pointer} not found in {value}"))
+}
+
+/// Resolves a JSON pointer in `value` and clones the array it points at,
+/// erroring when the pointer is absent or does not name an array.
+pub fn value_array(value: &Value, pointer: &str) -> Result<Vec<Value>> {
+    value_get(value, pointer)?
+        .as_array()
+        .cloned()
+        .ok_or_else(|| anyhow!("pointer {pointer} is not an array in {value}"))
 }
 
 /// Extracts the `/error` frame and its string `message` from a JSON-RPC

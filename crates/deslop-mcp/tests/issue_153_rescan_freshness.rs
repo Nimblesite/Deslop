@@ -16,9 +16,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use serde_json::Value;
 
 mod common;
-use common::{
-    initialized_mcp, lsp_workspace_with_socket, rescan_call, wait_for_path, SOCKET_TIMEOUT,
-};
+use common::{lsp_workspace_with_socket, rescan_call, wait_for_state_then_init_mcp};
 
 /// One unique C# file body that shares no normalised subtrees with
 /// the rest of the corpus, so writing it eliminates any cluster the
@@ -36,10 +34,7 @@ fn unique_body(seed: u32) -> String {
 #[test]
 fn issue_153_single_rescan_reflects_post_edit_state() -> Result<()> {
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     // Baseline must have at least one cluster — otherwise the test
     // cannot prove the rescan is doing real work.
@@ -90,10 +85,7 @@ fn issue_153_single_rescan_reflects_post_edit_state() -> Result<()> {
 #[test]
 fn issue_153_rescan_occurrence_offsets_reflect_post_edit_file() -> Result<()> {
     let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
-    wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for state file")?;
-
-    let mut mcp = initialized_mcp(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
 
     // Insert a long leading comment block into Alpha.cs so the
     // surviving Alpha occurrence shifts down by many bytes. The

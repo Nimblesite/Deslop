@@ -33,17 +33,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
     Ok(serde_json::from_str(&body)?)
 }
 
-fn cluster_bucket(cluster: &Value) -> &str {
-    cluster.get("bucket").and_then(Value::as_str).unwrap_or("?")
-}
-
-fn signal(cluster: &Value, key: &str) -> f64 {
-    cluster
-        .pointer(&format!("/signals/{key}"))
-        .and_then(Value::as_f64)
-        .unwrap_or_default()
-}
-
 #[test]
 fn structural_only_signature_clusters_are_dropped_from_the_report() -> Result<()> {
     let scan_root = fixture("rust-issue-154-structural-only");

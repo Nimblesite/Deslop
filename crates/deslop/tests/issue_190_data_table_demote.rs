@@ -35,17 +35,6 @@ fn report_path(tmp: &Path, stem: &str) -> PathBuf {
     path
 }
 
-fn occurrence_paths(cluster: &Value) -> Vec<&str> {
-    cluster
-        .get("occurrences")
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|occ| occ.get("path").and_then(Value::as_str))
-        .collect()
-}
-
 fn cluster_touches(cluster: &Value, file_name: &str) -> bool {
     occurrence_paths(cluster)
         .iter()
@@ -86,13 +75,6 @@ fn weight_of(report: &Value, file_name: &str) -> f64 {
         .and_then(|cluster| cluster.get("weight"))
         .and_then(Value::as_f64)
         .unwrap_or(0.0)
-}
-
-fn clusters_hidden(report: &Value) -> u64 {
-    report
-        .get("clusters_hidden")
-        .and_then(Value::as_u64)
-        .unwrap_or(0)
 }
 
 /// Writes a fixture repo with a data table (≥3 differing constructor rows in

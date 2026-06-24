@@ -92,11 +92,7 @@ fn dart_verbatim_field_block_copy_stays_visible() -> Result<()> {
 
     let report = run(&src, tmp.path(), "5")?;
     let spans_both = clusters(&report).iter().any(|cluster| {
-        let paths: Vec<&str> = cluster
-            .get("occurrences")
-            .and_then(Value::as_array)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
+        let paths: Vec<&str> = occurrences(cluster)
             .iter()
             .filter_map(|occ| occ.get("path").and_then(Value::as_str))
             .collect();

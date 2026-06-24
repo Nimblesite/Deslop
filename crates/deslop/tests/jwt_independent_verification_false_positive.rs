@@ -6,7 +6,7 @@
 
 use std::{collections::BTreeSet, fs, path::Path};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde_json::Value;
 
 mod common;
@@ -22,24 +22,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
         .success();
     let body = fs::read_to_string(output.with_extension("json"))?;
     Ok(serde_json::from_str(&body)?)
-}
-
-fn occurrence_path(occurrence: &Value) -> Result<&str> {
-    occurrence
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("reported occurrence is missing path"))
-}
-
-fn occurrence_text(scan_root: &Path, occurrence: &Value) -> Result<String> {
-    let path = occurrence_path(occurrence)?;
-    let source = fs::read_to_string(scan_root.join(path))?;
-    let start = occurrence_byte(occurrence, "start_byte")?;
-    let end = occurrence_byte(occurrence, "end_byte")?;
-    source
-        .get(start..end)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow!("reported occurrence range is invalid for {path}"))
 }
 
 fn jwt_verifier_clusters(report: &Value, scan_root: &Path) -> Result<Vec<String>> {
