@@ -1,10 +1,10 @@
 # Pipeline design — hybrid, not pure-RAG
 
-### [FUSION-POLICY-HYBRID] The state of the art is HYBRID, not pure-RAG
+**Research note: the state of the art is hybrid, not pure-RAG.**
 
 **The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** Deslop is hybrid.
 
-### [FUSION-POLICY-NO-PURE-RAG] No paper recommends pure embeddings / pure RAG
+**Research note: no paper recommends pure embeddings / pure RAG.**
 
 **No.** Across every 2024–2026 paper surveyed, no top-performing system is pure vector search. The strongest embedding-only approach (SSCD, Wiley 2024) frames itself as *"a BERT-based clone detection approach that targets high recall of Type 3 and Type 4 clones at scale"* — i.e. a **recall layer**, explicitly paired with structural/token methods in the surrounding pipeline. Every system that reports SOTA numbers fuses at least two representations.
 
@@ -22,7 +22,7 @@ Concretely:
 
 The pattern is consistent: **structure (AST/graph) + learned representation (embedding) + sometimes a third verification signal (execution, normalization, ensembling).**
 
-### [FUSION-RATIONALE-AGAINST-PURE-RAG] Why pure-RAG loses
+**Research note: why pure-RAG loses.**
 - **Empirical Study of LLM-Based Clone Detection** (arXiv 2511.01176, 2025): LLMs hit F1 0.943 on CodeNet but **drop significantly on BigCloneBench**. Pure-learned approaches are dataset-brittle. Structural signals anchor them.
 - **Cross-Lingual LLM Clone Detection Struggles** (arXiv 2408.04430): *"Embedding models enable the training of classifiers that outperform LLMs by ~1–20 percentage points"* — and those classifiers take structural features as input.
 - **Smaller embedding sizes beat larger ones** for clone detection. This directly contradicts the "bigger vector DB = better" intuition of pure-RAG.
@@ -49,15 +49,6 @@ All three run by default. The research doesn't support shipping without embeddin
 - **Index granularity: AST subtrees above min-node threshold**, not whole files. We already have those subtrees from the structural pass — embed them directly. This keeps embeddings byte-range-addressable and dramatically reduces the N in k-NN.
 - **Determinism caveat.** Embedding + ANN is approximate. Mitigate by: (a) recording `provider_id`, `model_id`, and `model_version` in the `.deslop-cache` header and the report, (b) using deterministic ANN parameters (fixed seed, fixed ef_construction), (c) final ranking is still computed over the *union* of structural + LSH + embedding candidates, so a missed ANN neighbor only loses recall, never changes existing cluster content.
 
-### [REMOVE-STUB] Test-only stub provider must never ship
-The deterministic BLAKE3 stub embedding provider named in [FUSION-EMBED-PROVIDER]
-exists purely so E2E tests can exercise the embedding path without a live model.
-It lives behind the `test-support` Cargo feature, is **never** registered in
-`ProviderRegistry::production`, and is barred from the shipped VSIX by a packaging
-gate. `[REMOVE-STUB]` tags the code sites that enforce this boundary so a grep
-proves the stub cannot leak into a release; any new stub-touching code must carry
-the tag and stay test-only.
-
 ### [FUSION-STRATEGY-MAX-SUM] Fusion strategy (how the three signals combine)
 
 Per the ensemble-LLM 2025 findings (max/sum with normalization):
@@ -69,3 +60,12 @@ Per the ensemble-LLM 2025 findings (max/sum with normalization):
 5. Weight each cluster by the ranking formula in §4 for "worst offenders first."
 
 This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*.
+
+### [REMOVE-STUB] Test-only stub provider must never ship
+The deterministic BLAKE3 stub embedding provider named in [FUSION-EMBED-PROVIDER]
+exists purely so E2E tests can exercise the embedding path without a live model.
+It lives behind the `test-support` Cargo feature, is **never** registered in
+`ProviderRegistry::production`, and is barred from the shipped VSIX by a packaging
+gate. `[REMOVE-STUB]` tags the code sites that enforce this boundary so a grep
+proves the stub cannot leak into a release; any new stub-touching code must carry
+the tag and stay test-only.

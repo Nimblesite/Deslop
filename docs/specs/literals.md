@@ -7,9 +7,10 @@ existing cluster machinery end-to-end — every finding **is** a `ReportCluster`
 occurrence budgets, `cluster-by-id`, `report_hide`, and every UI surface work unchanged.
 
 Why the family was missing, and the evidence base for every default here: [DECISION-LITERALS]
-(decisions.md), [READ-LIST-LITERALS] (reading-list.md). Ranking policy: [RANK-LITERAL-FAMILY] and
-[RANK-UNUSED-PUBLIC] (pipeline.md). Category registry: [CLONE-CATEGORY-REGISTRY] (taxonomy.md).
-Surfaces: [FACET-MODEL] (facets.md), [MCP-TOOL-DUPLICATES] (mcp.md).
+(decisions.md) and [reading-list.md](reading-list.md#read-list-literals). Ranking policy:
+[RANK-LITERAL-FAMILY] and [RANK-UNUSED-PUBLIC] (pipeline.md). Category registry:
+[CLONE-CATEGORY-REGISTRY] (taxonomy.md). Surfaces: [FACET-MODEL] (facets.md),
+[MCP-TOOL-DUPLICATES] (mcp.md).
 
 ### [LITERAL-DETECT] Site capture rides the existing walk
 
@@ -163,7 +164,8 @@ gates as `magic_literal`, so `ZERO`/`NIL` pairs over `0` never fire.
 
 ### [LITERAL-NOISE] Noise suppression defaults
 
-Source-verified from shipping analysers ([READ-LIST-LITERALS]); every named default is a
+Source-verified from shipping analysers ([reading-list.md](reading-list.md#read-list-literals));
+every named default is a
 `[literals]` config knob unless marked hardcoded.
 
 - **Bool / null / `None` literals** — never findings (hardcoded).

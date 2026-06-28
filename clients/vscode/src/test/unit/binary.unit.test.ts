@@ -105,7 +105,7 @@ suite("binary resolver", () => {
     assert.throws(() => resolveBinary(extDir, "lsp", manifest(), {}, env), /env-dir/);
   });
 
-  // [DEPLOY-RESOLVE-SOURCES]
+  // [DEPLOY-RESOLVER]
   test("PATH candidates are ignored when the bundle is present", () => {
     const env: NodeJS.ProcessEnv = { PATH: pathDir };
     const resolved = resolveBinary(extDir, "lsp", manifest(), {}, env);

@@ -38,6 +38,23 @@ sessions. The embedding/ANN layer is the only approximate stage and is bounded
 separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall,
 never changes existing cluster content.
 
+### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
+Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
+
+**Activation.** Enabled with `--incremental` (off by default so read-only checkouts never get mutated). Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
+
+**Layout.** `<root>/.deslop-cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop-cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
+
+**Format.** `u32` magic, then a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint. No serde, no schema drift: the magic + tool-version path segment bracket every format change.
+
+**Failure modes.**
+
+- Corrupt or truncated blob → treated as a miss, logged at `warn!`, overwritten by the next successful parse.
+- Cache directory unavailable (permissions, read-only fs) → `FingerprintCache::open` fails, the pipeline falls back to the full parse path for the affected language, logs `warn!`, keeps running.
+- Blob write fails (e.g. disk full) → `warn!`, return the in-memory result, pipeline continues.
+
+Zero-zero stats indicate the pass ran without the cache (`--incremental` not passed or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
+
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 `weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
 
@@ -87,7 +104,8 @@ visible occurrences is dropped and counted in `clusters_hidden`, matching the fr
 The linear occurrence term follows Sonar's per-occurrence remediation model; the file-spread log
 term mirrors the existing `spanned_loc` factor and rewards the cross-file repetition that the
 literature ties to faults. Micro-findings are **not** down-ranked for being small — micro-clones
-are measurably more bug-prone than regular clones ([READ-LIST-LITERALS]); a 40-site magic URL
+are measurably more bug-prone than regular clones
+([reading-list.md](reading-list.md#read-list-literals)); a 40-site magic URL
 belongs in top offenders.
 
 Policy knobs in `[ranking]` (same `keep | demote | ignore` enum, validation, and
@@ -148,6 +166,14 @@ Top level:
 
 The default invocation writes all three formats to disk (`deslop-report.{json,txt,html}` in CWD, or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
 
+### [OUTPUT-HUMAN-HTML] Human-readable HTML mode
+
+The default HTML renderer embeds, for each occurrence, the source bytes covered by `[start_byte, end_byte)` inside a collapsible `<details>` panel with line numbers and tree-sitter-driven syntax highlighting (server-side, no JS). Snippets are computed at render time from the source tree — not added to the JSON schema. `--human=off` falls back to the terse byte-offset-only HTML.
+
+#### [OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS] Per-language sections
+
+`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single flat "Duplicate groups" list. With the flag **off** the output is byte-identical to the single-list form — a hard no-regression invariant. With it **on**, `write_clusters` groups clusters by their canonical occurrence's `language_for_path(...)`, emits one `<h2>` per language carrying the language's display name and its group count, preserves worst-first order within each section, and orders sections by their worst cluster weight. The intro summary line ([OUTPUT-HUMAN-HTML]) gains a per-language breakdown. Each cluster is single-language ([CONFIG-CROSS-LANGUAGE]), so every group lands in exactly one section.
+
 ### [METRICS-REPO] Repo-wide duplication metrics
 
 One honest number, computed deterministically from the same cluster set the report already carries. Lives at `Report.metrics` and drives the fail-over threshold in [EXIT-CODES].
@@ -189,46 +215,3 @@ Threshold sources, highest precedence first:
 A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip.
 
 The renderer always states the active threshold in the report header (`threshold: 10.00% (breached)` / `threshold: 10.00% (ok)` / `threshold: none`) so the report is self-explanatory when read out of context. The threshold value and breach flag are carried on `Report.metrics.threshold { percent: f64, breached: bool, source: "cli" | "config" | "none" }` so downstream tools do not re-derive the verdict.
-
-### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
-Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
-
-**Activation.** Enabled with `--incremental` (off by default so read-only checkouts never get mutated). Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
-
-**Layout.** `<root>/.deslop-cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop-cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
-
-**Format.** `u32` magic, then a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint. No serde, no schema drift: the magic + tool-version path segment bracket every format change.
-
-**Failure modes.**
-
-- Corrupt or truncated blob → treated as a miss, logged at `warn!`, overwritten by the next successful parse.
-- Cache directory unavailable (permissions, read-only fs) → `FingerprintCache::open` fails, the pipeline falls back to the full parse path for the affected language, logs `warn!`, keeps running.
-- Blob write fails (e.g. disk full) → `warn!`, return the in-memory result, pipeline continues.
-
-Zero-zero stats indicate the pass ran without the cache (`--incremental` not passed or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
-
-### [OUTPUT-HUMAN-HTML] Human-readable HTML mode
-
-The default HTML renderer embeds, for each occurrence, the source bytes covered by `[start_byte, end_byte)` inside a collapsible `<details>` panel with line numbers and tree-sitter-driven syntax highlighting (server-side, no JS). Snippets are computed at render time from the source tree — not added to the JSON schema. `--human=off` falls back to the terse byte-offset-only HTML.
-
-#### [OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS] Per-language sections
-
-`[report] split_by_language` in `.deslop.toml` (default `false`, with a `--split-by-language` CLI mirror) divides the report body into one `<section>` per language instead of the single flat "Duplicate groups" list. With the flag **off** the output is byte-identical to the single-list form — a hard no-regression invariant. With it **on**, `write_clusters` groups clusters by their canonical occurrence's `language_for_path(...)`, emits one `<h2>` per language carrying the language's display name and its group count, preserves worst-first order within each section, and orders sections by their worst cluster weight. The intro summary line ([OUTPUT-HUMAN-HTML]) gains a per-language breakdown. Each cluster is single-language ([CONFIG-CROSS-LANGUAGE]), so every group lands in exactly one section.
-
-## Pipeline summary (numbered)
-
-1. **Parser:** tree-sitter per language (C#, Rust, Python) — already mandated by CLAUDE.md.
-2. **Normalization:** strip identifiers, literals, comments, whitespace. Keep operators, keywords, and structural node kinds. Per-language rules; identical output format across languages so downstream layers are language-agnostic.
-3. **Structural fingerprint:** bottom-up Merkle hash of every AST subtree with ≥ N nodes (configurable, default ~30). Each node stores `(hash, size, byte_range, file_id)`.
-4. **Exact-clone clustering:** group subtrees by hash. O(n) after hashing. Covers Type-1 and normalized Type-2.
-5. **Near-clone extension:** for each exact cluster, extend matches over adjacent sibling subtrees (Chilowicz's approach). Catches a chunk of Type-3 without tree-edit-distance.
-6. **Token MinHash/LSH pass:** normalized k-grams → MinHash → LSH buckets. Catches Type-3 where structure diverged but token bag is close. Deterministic.
-7. **Embedding pass (pluggable provider, local-by-default):** embed every AST subtree from step 3 through the configured `EmbeddingProvider`. Provider (`--embedding-provider`, default `ollama`) and model (`--embedding-model`, default `nomic-embed-code`) are runtime-selectable — never hard-coded. Index via HNSW (`usearch` or `instant-distance`, both pure Rust). For each subtree, retrieve top-k neighbors above a cosine threshold. Catches Type-3 and Type-4 the prior passes miss. **First-class pipeline stage, not optional.**
-8. **Candidate union + fusion:** union the pairs produced by steps 4, 6, 7. Drop pairs whose fingerprints come from different language ids unless [CONFIG-CROSS-LANGUAGE] is explicitly enabled. For each remaining pair compute `(structural_sim, token_jaccard, embedding_cos)`, normalize, combine via **max-normalized sum** (per ensemble-LLM 2025). Cluster by transitive closure above a threshold.
-9. **Ranking score:** `weight = clone_node_count × (cluster_size − 1) × log(total_spanned_loc) × fusion_score`. Sort descending. `cluster_size − 1` ensures singletons score zero.
-10. **Output (agent-first):** JSON is canonical; text is a pretty-printer over the same struct. Each cluster: exact byte ranges, file paths, canonical representative snippet, per-signal scores (structural / LSH / embedding), a short agent-oriented `summary`, and a refactor hint where reliably inferrable. ASCII-only text format; no colour codes, no paging. See "Audience for the report" above.
-11. **Incremental cache:** `(file_content_hash, provider_id, model_id, model_version) → (parse_tree, subtree_fingerprints, embeddings)`. Re-runs with unchanged files skip all inference. v1 uses this to make batch runs cheap; v2 uses the same keys for a watcher-driven update loop. Switching embedding provider/model invalidates only the embedding layer, not the structural/LSH caches.
-12. **Library vs binary split:** `deslop-core` owns the pipeline. `deslop` binary is a thin shell. An MCP/LSP daemon binary is a later sibling shell over the same crate — no pipeline code moves.
-13. **Incremental update entry point from day one:** `deslop-core` exposes `update_files(changed: &[FileId]) -> ReportDelta` as a first-class API, even though v1's only caller is `main`. This is the function the future file watcher will call.
-14. **Embedding disable flag:** `--embeddings={auto,required,off}`. `off` runs the deterministic two-pass pipeline only; the report header notes reduced Type-4 recall. `auto` (default) uses embeddings when the configured provider is reachable and falls back with a `tracing::warn!` otherwise. `required` hard-fails if the provider is unreachable.
-15. **Provider/model pinning:** `provider_id`, `model_id`, and `model_version` are written into the cache header and into every report. Changing any of them invalidates the embedding layer deterministically and explicitly.

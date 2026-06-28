@@ -55,7 +55,7 @@ When Deslop changes its deployment contract, update the private toolkit fixtures
 for `fixtures/manifests/deslop.json` and the Rust version-output fixtures in the
 same release workflow.
 
-## CI & supply-chain gates
+**CI and supply-chain gates.**
 
 These gates run in `.github/workflows/` and `.deslop.toml` and fail the pipeline
 on drift. Coverage floors are owned by `coverage-thresholds.json`
@@ -92,7 +92,7 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
   group keeps the pins current while the standard is rolled out to the remaining
   workflows.
 
-## Distribution channels
+**Distribution channels.**
 
 A `v*` tag fans out to every channel from one workflow
 (`.github/workflows/release.yml`):
@@ -126,7 +126,7 @@ A `v*` tag fans out to every channel from one workflow
   GitHub Releases with `GITHUB_TOKEN`, and renders `/releases/` plus
   `/zh/releases/` from the current release metadata on every website publish.
 
-## Binary resolution — bundled, no fallback
+**Binary resolution — bundled, no fallback.**
 
 The VSIX bundles `deslop`, `deslop-lsp`, and `deslop-mcp` per platform under
 `bin/<platform>/`. The editor host resolves `deslop-lsp`/`deslop-mcp` from
@@ -137,4 +137,4 @@ extension runs the binary it shipped with, or the one the user explicitly
 pointed at, or activation fails loudly. This is the `["user-setting", "bundled"]`
 source list in `shipwright.json`, applied by the `candidates()` ordering in
 `clients/vscode/src/binary.ts`. See ADR-0002 (no silent PATH fallback) and
-[DEPLOY-RESOLVE-SOURCES].
+[DEPLOY-RESOLVER].

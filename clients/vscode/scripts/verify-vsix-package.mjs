@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { assertNoStubProvider, PACKAGE_ENTRY } from "./stub-gate.mjs";
 
+// Verifies [DEPLOY-VSIX-PACKAGE] against the produced .vsix, not the
+// staging directory, so release artifacts cannot hide manifest or binary drift.
 const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
 const vsixArg = process.argv[2] ?? "deslop-live.vsix";

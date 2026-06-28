@@ -71,8 +71,9 @@ suite("ReportStore", () => {
     assert.equal(store.current.generation, 7);
   });
 
-  // [VSIX reactivity] An empty report may be a cache seed or a mid-scan
-  // snapshot, so it must NOT settle the lifecycle to "ready" — otherwise
+  // [PRINCIPLES-LIVE-IS-REACTIVE] [VSIX reactivity] An empty report may be a
+  // cache seed or a mid-scan snapshot, so it must NOT settle the lifecycle to
+  // "ready" — otherwise
   // the panel declares "No duplication detected" while a scan is still
   // running. Only the server's analysisState idle signal settles it.
   test("setSnapshot leaves an in-flight lifecycle alone when the report is empty", () => {
@@ -285,6 +286,7 @@ suite("ReportStore", () => {
   });
 
   // Regression: #130 (VSIX-STATE-DIRTY). Editor-side dirty tracking must not
+  // [PRINCIPLES-LIVE-IS-REACTIVE] Dirty-file projection must not
   // mutate the canonical report. Commands that resolve a cluster by id
   // (compareWithCanonical, openCluster, openOccurrence, ...) read
   // store.current.report and break the moment a 2-occurrence cluster loses one

@@ -4,7 +4,7 @@ Thin Model Context Protocol shell that delegates **every** read and compute call
 
 Crate: `crates/deslop-mcp`. Transport: JSON-RPC 2.0 over stdio per MCP spec. Under 100 LOC of glue.
 
-### [MCP-EXTERNAL-CLIENT] External MCP client wiring
+**External MCP client wiring.**
 
 External MCP clients — Claude Code (CLI), Claude Desktop, Codex, Cursor,
 Continue — run outside the VS Code host process and do not inherit the

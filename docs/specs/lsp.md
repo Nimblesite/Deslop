@@ -33,7 +33,7 @@ Canonical-occurrence navigation is still one keystroke away — but always throu
 
 ##### [LSP-NON-INTERFERENCE-NONBLOCKING] Even Deslop's own additive reads never block the editor
 
-Every Deslop request handler that reads the report (`diagnostic`, `codeLens`) answers from a lock-free `RwLock<Arc<Report>>` snapshot published by the analysis session — it **never awaits the session mutex**, which an in-flight `apply_changes` pass can hold for seconds on a churning monorepo. So even Deslop's additive surfaces cannot freeze the editor. The freshness-checked read path that re-stats files on demand is reserved for the agent-facing MCP/IPC queries, where a synchronous edit must be reflected immediately ([LIVE-READ-FRESHNESS]); it never runs on an editor request.
+Every Deslop request handler that reads the report (`diagnostic`, `codeLens`) answers from a lock-free `RwLock<Arc<Report>>` snapshot published by the analysis session — it **never awaits the session mutex**, which an in-flight `apply_changes` pass can hold for seconds on a churning monorepo. So even Deslop's additive surfaces cannot freeze the editor. The freshness-checked read path that re-stats files on demand is reserved for the agent-facing MCP/IPC queries, where a synchronous edit must be reflected immediately ([LIVE-CLUSTER-OFFSET-FRESHNESS]); it never runs on an editor request.
 
 ### [LSP-SEVERITY] Diagnostic severity — the Problems-panel projection
 

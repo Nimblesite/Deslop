@@ -1,6 +1,6 @@
 # Autofix — AI-assisted Extract Method (Type-2 / Type-3) — implementation plan
 
-> **Spec is the source of truth.** [autofix-extract.md §[AUTOFIX-EXTRACT-AI]](../specs/autofix-extract.md#autofix-extract-ai-ai-assisted-extraction-for-type-2-and-type-3) defines the mechanical scaffold, the AI slot, the MCP tool pair, validation rules, and non-goals. This file describes only **how** to build it.
+> **Spec is the source of truth.** [autofix-extract.md §[AUTOFIX-EXTRACT-AI]](../specs/autofix-extract.md#autofix-extract-ai-ai-assisted-extraction-for-type-2-and-type-3) defines the mechanical scaffold, the AI slot, the MCP tool pair, validation rules, non-goals, and dependencies: `[AUTOFIX-EXTRACT-AI-NORTH-STAR]`, `[AUTOFIX-EXTRACT-AI-SCAFFOLD]`, `[AUTOFIX-EXTRACT-AI-MCP-TOOLS]`, `[AUTOFIX-EXTRACT-AI-PRECONDITIONS]`, `[AUTOFIX-EXTRACT-AI-VALIDATION]`, `[AUTOFIX-EXTRACT-AI-NON-GOALS]`, `[AUTOFIX-EXTRACT-AI-DEPENDENCIES]`. This file describes only **how** to build it.
 
 ## Scope
 

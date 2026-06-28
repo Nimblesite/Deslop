@@ -36,7 +36,7 @@ Ship both passes. Sibling-extension runs first because it is cheaper and produce
 fragment-clone detection (Baxter, Chilowicz, SourcererCC, NiCad, Roy/Cordy Type-1..4) — whose unit
 of analysis is the code fragment. Duplicate-literal findings live in a parallel industrial lineage
 (PMD `AvoidDuplicateLiterals`, SonarSource S1192/S109, Checkstyle `MagicNumber`, ESLint
-`no-magic-numbers`, goconst) that the landscape survey and [COMPETE-LANDSCAPE] never sampled. Two
+`no-magic-numbers`, goconst) that the landscape survey in [comparison.md](comparison.md) never sampled. Two
 pipeline mechanisms then made literals structurally undetectable, each sufficient alone:
 [PIPELINE-NORMALIZE-AST] rewrites every literal to `__literal__` before any fingerprint exists, and
 [DECISION-MIN-NODES] floors fingerprinting at 30 nodes while a literal is a 1-node leaf. The
@@ -53,7 +53,8 @@ and keep [DECISION-MIN-NODES] intact for fragment clones with this family as the
 carve-out (size floors guard structural matching, not value indexing — micro-clone literature shows
 sub-floor fragments carry *more* maintenance burden, not less).
 
-**Evidence-pinned defaults** (sources in [READ-LIST-LITERALS]): duplicate **strings** ship on by
+**Evidence-pinned defaults** (sources in [reading-list.md](reading-list.md#read-list-literals)):
+duplicate **strings** ship on by
 default (S1192 is the only literal rule any major vendor enables by default, across four languages
 incl. Dart); magic **numbers** ship opt-in (unanimous vendor verdict: S109 in no default profile,
 ESLint rule frozen, clippy's standing refusal, go-mnd opt-in); string threshold 3 occurrences /

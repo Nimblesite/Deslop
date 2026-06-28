@@ -1,5 +1,6 @@
 //! Filesystem watcher startup and scheduler-to-LSP notification
 //! forwarding ([LIVE-WATCHER], [LSP-PUSH]).
+//! Implements [PRINCIPLES-LIVE-IS-REACTIVE].
 //!
 //! ## Why this module exists
 //!

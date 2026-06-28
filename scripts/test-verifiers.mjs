@@ -1,4 +1,5 @@
-// Proof tests for Shipwright verifier scripts. Each fake artifact
+// Proof tests for Shipwright verifier scripts. Tests [DEPLOY-VSIX-PACKAGE].
+// Each fake artifact
 // violates one Shipwright contract rule so verifier failures have bite.
 
 import { spawnSync } from "node:child_process";
