@@ -28,7 +28,9 @@ URLs:
 - [Source Code Plagiarism via AST Fingerprinting, IEEE 2022](https://ieeexplore.ieee.org/document/9960266)
 - [ASPDup: AST-Sequence Progressive Duplicate Detection (ACM)](https://dl.acm.org/doi/10.1145/3457913.3457938)
 
-### [TECH-HASH-PRIMITIVES] Near-duplicate hashing primitives (the plumbing)
+<a id="tech-hash-primitives"></a>
+
+**Near-duplicate hashing primitives (the plumbing).**
 
 These are the building blocks used inside token-based and AST-based detectors for fast approximate matching at scale:
 
@@ -62,7 +64,9 @@ URLs:
 - [CloReCo: Benchmarking Platform for Clone Detection, 2025 (PDF)](https://www.scitepress.org/Papers/2025/136449/136449.pdf)
 - [Generalizability of Clone Detection on CodeBERT, ASE 2022 (ACM)](https://dl.acm.org/doi/abs/10.1145/3551349.3561165)
 
-### [TECH-LLM-HYBRID] LLM + execution / hybrid approaches (Type-4 frontier)
+<a id="tech-llm-hybrid"></a>
+
+**LLM + execution / hybrid approaches (Type-4 frontier).**
 
 - **HyClone** (arXiv 2508.01357, 2025) — two-stage: (1) LLM filters obvious non-clones, (2) LLM-generated test inputs drive **cross-execution validation** of remaining pairs. Targets Python Type-4.
 - **Rator** (Springer Cybersecurity 2025) — tree-encoding by **node degrees-of-freedom** → vector per subtree → similarity features → ML classifier. F1 = 0.99 on BigCloneBench, 0.91 on Google Code Jam, **93× faster than ASTNN**. Also provides *fine-grained* localization (Top-2/Top-3 ranking of the specific clone subtree).

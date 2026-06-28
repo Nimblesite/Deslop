@@ -16,7 +16,9 @@ Once installed, the plugin runs automatically — minimal configuration:
 
 1. **Open a supported file** (`.cs`, `.rs`, `.py`, or `.dart`). This starts `deslop-lsp`. Nothing runs until a supported file is open — opening a project alone does nothing.
 2. **Read the live warnings.** Duplicated regions are underlined in the editor and listed in the **Problems** tool window with source `deslop`.
-3. **Open the full report.** Click the **Deslop** tool window (right-hand stripe) — it shows the worst-offenders report and renders it on first open. The toolbar **Refresh** button re-runs the analysis, and `Tools` → **Deslop: Open HTML Report** opens the same tool window.
+3. **Open the full report.** Click the **Deslop** tool window (right-hand stripe) — it shows the worst-offenders report and renders it on first open. It then **refreshes live**: as you edit, the server pushes `deslop/reportChanged` and the panel re-renders in place (without stealing focus), exactly like the VS Code client. The toolbar **Refresh** button forces a full re-analysis, and `Tools` → **Deslop: Open HTML Report** opens the same tool window.
+
+> Can't find the panel? It's on the **right** edge, not the bottom-left `…` overflow. Open it with **Find Action** (`Cmd/Ctrl+Shift+A` → type `Deslop: Open HTML Report`) or `View → Tool Windows → Deslop`.
 
 Deslop only flags *duplicated* code, so a project with no clones shows no warnings and an empty report — that is the correct result, not a failure.
 

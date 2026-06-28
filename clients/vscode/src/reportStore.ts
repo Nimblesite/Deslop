@@ -1,6 +1,7 @@
 // Centralised VSIX state store ([VSIX-STATE]).
-// Signals are the primary reactive primitive — every surface that
-// shows report data derives from them via effect() or computed().
+// Implements [PRINCIPLES-LIVE-IS-REACTIVE]: signals are the primary reactive
+// primitive — every surface that shows report data derives from them via
+// effect() or computed().
 // onDidChange is a compatibility shim for places that have not yet
 // migrated to effect() — it skips the initial synchronous run so
 // subscriber counts in existing tests stay correct.

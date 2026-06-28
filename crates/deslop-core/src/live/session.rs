@@ -101,7 +101,7 @@ pub struct AnalysisSession {
     /// Monotonic id for queued embedding refreshes.
     embedding_refresh_revision: u64,
     /// Mtime ledger consulted before every IPC read
-    /// ([LIVE-READ-FRESHNESS], [Deslop#153], [Deslop#156]). Refreshed
+    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS], [Deslop#153], [Deslop#156]). Refreshed
     /// after every analysis pass so a stale-mtime read forces a
     /// synchronous `apply_changes` ahead of serving the response.
     freshness: FreshnessTracker,
@@ -222,7 +222,7 @@ impl AnalysisSession {
         self.pipeline = Some(pipeline);
         self.generation = self.generation.saturating_add(1);
         self.publish_report(Arc::new(report));
-        // [LIVE-READ-FRESHNESS] / [Deslop#153] Record the on-disk mtime
+        // [LIVE-CLUSTER-OFFSET-FRESHNESS] / [Deslop#153] Record the on-disk mtime
         // of every file in the freshly-installed report so the next
         // read does not falsely refire a refresh.
         self.freshness
@@ -400,7 +400,7 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.publish_report(Arc::clone(&next_arc));
-        // [LIVE-READ-FRESHNESS] Refresh the mtime ledger so a follow-up
+        // [LIVE-CLUSTER-OFFSET-FRESHNESS] Refresh the mtime ledger so a follow-up
         // read of the same files does not re-trigger this same pass.
         self.freshness
             .record_from_report(&self.root, &self.latest_report);
@@ -415,7 +415,7 @@ impl AnalysisSession {
         ))
     }
 
-    /// [LIVE-READ-FRESHNESS] / [Deslop#153] / [Deslop#156].
+    /// [LIVE-CLUSTER-OFFSET-FRESHNESS] / [Deslop#153] / [Deslop#156].
     ///
     /// Detects files whose on-disk mtime is newer than what the
     /// analyser last observed, and runs a synchronous
@@ -571,7 +571,7 @@ impl AnalysisSession {
         self.generation = self.generation.saturating_add(1);
         let provenance = report.embedding_provenance.clone();
         self.publish_report(Arc::new(report));
-        // [LIVE-READ-FRESHNESS] keep the mtime ledger aligned with the
+        // [LIVE-CLUSTER-OFFSET-FRESHNESS] keep the mtime ledger aligned with the
         // freshly-committed report so reads do not loop-refire.
         self.freshness
             .record_from_report(&self.root, &self.latest_report);

@@ -45,9 +45,40 @@ jobs:
       - name: Validate deployment manifest
         run: node scripts/verify-deployment-manifest.mjs shipwright.json
 
+  # Change-sensitive release classifier (proposed Shipwright spec SWR-REL-CHANGES).
+  # Diffs the pushed tag against the prior v* release and decides which surfaces
+  # changed, so a release skips building/publishing the components that did not.
+  # Native git diff — NOT tj-actions/changed-files, whose CVEs SWR-SEC-ACTION-PINNING
+  # exists to prevent. The single-version contract (SWR-REL-VERSION) plus per-host
+  # activation-verify (onMismatch: error) means any shipped component bundles binaries
+  # at the tag version, so a rust change is a full release; only the website decouples.
+  changes:
+    name: Classify changed release surfaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.classify.outputs.rust }}
+      vscode: ${{ steps.classify.outputs.vscode }}
+      jetbrains: ${{ steps.classify.outputs.jetbrains }}
+      website: ${{ steps.classify.outputs.website }}
+      full: ${{ steps.classify.outputs.full }}
+      any_component: ${{ steps.classify.outputs.any_component }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history + tags so the classifier can diff against the prior release.
+          fetch-depth: 0
+      - name: Classify changed surfaces vs prior release
+        id: classify
+        run: python3 scripts/release-changes.py --head "${{ github.ref_name }}"
+
   build:
     name: Build (${{ matrix.artifact_name }})
-    needs: version
+    needs: [version, changes]
+    # Skip the whole 5-platform binary matrix (incl. the 10x macOS legs) when only
+    # the website changed. Any shipped component bundles binaries at the tag version,
+    # so vscode/jetbrains/rust all need the matrix; website-only does not.
+    if: ${{ needs.changes.outputs.any_component == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -272,7 +303,9 @@ jobs:
 
   jetbrains:
     name: Build JetBrains plugin
-    needs: [version, build]
+    needs: [version, build, changes]
+    # Only when the plugin or its bundled deslop-lsp binary changed (rust -> full).
+    if: ${{ needs.changes.outputs.full == 'true' || needs.changes.outputs.jetbrains == 'true' }}
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB SDK
     # plus the LSP4IJ plugin, then builds the plugin zip bundling the all-platform
@@ -350,7 +383,10 @@ jobs:
 
   release:
     name: Create GitHub release
-    needs: [version, build, jetbrains]
+    needs: [version, build, jetbrains, changes]
+    # Runs whenever any component was built. jetbrains is skipped on a vscode-only
+    # release, so guard explicitly instead of via the implicit needs-success rule.
+    if: ${{ !cancelled() && needs.changes.outputs.any_component == 'true' && needs.version.result == 'success' && needs.build.result == 'success' && (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -384,12 +420,16 @@ jobs:
 
   deploy-pages:
     name: Deploy website to GitHub Pages
-    needs: release
+    # Depend on (but tolerate a skipped) release so a full release still deploys the
+    # site AFTER the GitHub Release exists, while a website-only tag — where release
+    # is skipped — still deploys.
+    needs: [version, changes, release]
     # Only stable tags publish the site. SemVer prerelease tags
     # (v0.1.0-rc.1, v0.1.0-beta, …) contain a hyphen and are skipped, so a
-    # prerelease never overwrites the live site. Triggered by the v* tag —
-    # never by a push to main.
-    if: ${{ !contains(github.ref_name, '-') }}
+    # prerelease never overwrites the live site. Deploy when the website changed or
+    # on any full release (the site embeds version-derived content). Triggered by the
+    # v* tag — never by a push to main.
+    if: ${{ !cancelled() && !contains(github.ref_name, '-') && (needs.changes.outputs.website == 'true' || needs.changes.outputs.full == 'true') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     permissions:
       contents: read
       pages: write
@@ -398,7 +438,9 @@ jobs:
 
   publish-homebrew:
     name: Publish Homebrew formula
-    needs: [version, release]
+    needs: [version, release, changes]
+    # Homebrew ships the CLI binary — only update it on a full (rust/infra) release.
+    if: ${{ !cancelled() && needs.changes.outputs.full == 'true' && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -504,7 +546,9 @@ jobs:
 
   publish-scoop:
     name: Publish Scoop manifest
-    needs: [version, release]
+    needs: [version, release, changes]
+    # Scoop ships the CLI binary — only update it on a full (rust/infra) release.
+    if: ${{ !cancelled() && needs.changes.outputs.full == 'true' && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -579,7 +623,9 @@ jobs:
 
   publish-marketplace:
     name: Publish VSIX to VS Code Marketplace
-    needs: [version, release]
+    needs: [version, release, changes]
+    # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
+    if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Passwordless publish via Microsoft Entra ID OIDC: the release environment
@@ -640,7 +686,9 @@ jobs:
 
   publish-openvsx:
     name: Publish VSIX to Open VSX
-    needs: [version, release]
+    needs: [version, release, changes]
+    # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
+    if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Open VSX has no OIDC trusted-publishing path today, so this uses a

@@ -18,6 +18,10 @@ version = providers.gradleProperty("deslopVersion").getOrElse("0.1.0")
 
 dependencies {
     implementation(project(":deslop-shared"))
+    testImplementation(kotlin("test-junit5"))
+    // Satisfies the 2024.3 platform's JUnit5 LauncherSessionListener, which
+    // hard-references JUnit4 at session open (see the deslop-shared note).
+    testRuntimeOnly("junit:junit:4.13.2")
 
     intellijPlatform {
         intellijIdeaCommunity("2024.3")
@@ -30,6 +34,10 @@ kotlin {
     jvmToolchain(17)
 }
 
+tasks.test {
+    useJUnitPlatform()
+}
+
 intellijPlatform {
     buildSearchableOptions = false
     pluginConfiguration {
@@ -39,7 +47,15 @@ intellijPlatform {
         description =
             "Live duplicate-code analysis for Android Studio and IntelliJ Community, " +
             "bridging the Deslop LSP server through LSP4IJ."
-        changeNotes = "First Android Studio / IntelliJ Community build via LSP4IJ."
+        changeNotes =
+            "<ul>" +
+            "<li>Live <b>Deslop</b> tool window (right-hand stripe): the worst-offenders " +
+            "report renders from the same engine as the VS Code client and refreshes " +
+            "in place as you edit.</li>" +
+            "<li>Duplicate regions surface as native diagnostics for " +
+            "<code>.cs</code>, <code>.rs</code>, <code>.py</code>, and <code>.dart</code>.</li>" +
+            "<li>First Android Studio / IntelliJ Community build via LSP4IJ.</li>" +
+            "</ul>"
         ideaVersion {
             // 243 = IntelliJ 2024.3 = Android Studio Meerkat. Android Studio trails
             // the IntelliJ platform by several releases, so the previous 261 (IDEA

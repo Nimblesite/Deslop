@@ -190,7 +190,7 @@ Goldens live under `crates/deslop-lsp/tests/fixtures/code_action/`. Test referen
 
 ## [AUTOFIX-MERGE] Mechanical call-site merge (leaf-gap Type-2 / constrained Type-3)
 
-The 50+-call-site case: N occurrences sharing one skeleton, differing only in a handful of leaf positions. Merge them into a single parameterised helper whose differing leaves become parameters, and rewrite every site. Bibliography: [reading-list.md §READ-LIST-MERGE](reading-list.md#read-list-merge).
+The 50+-call-site case: N occurrences sharing one skeleton, differing only in a handful of leaf positions. Merge them into a single parameterised helper whose differing leaves become parameters, and rewrite every site. Bibliography: [reading-list.md mechanical merge references](reading-list.md#read-list-merge).
 
 **Reuses, without restating:** the free-variable walk ([AUTOFIX-EXTRACT-FREE-VARS]); the slot-alignment + scaffold machinery ([AUTOFIX-EXTRACT-AI-SCAFFOLD], plus the slot bullets of [AUTOFIX-EXTRACT-AI-NORTH-STAR]); the per-language emitter trait; and the `WorkspaceEdit` assembly ([AUTOFIX-EXTRACT-WORKSPACE-EDIT]). `[AUTOFIX-MERGE]` **is** that scaffold with the AI name-selection step replaced by mechanical name derivation + default-value computation.
 

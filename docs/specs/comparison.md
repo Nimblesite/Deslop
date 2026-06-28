@@ -2,7 +2,7 @@
 
 Clone detection is a 20-year-old problem; a dozen tools exist. None of them ship the four-way combination Deslop targets: **deterministic hybrid core + long-running LSP daemon + MCP for AI agents + first-class VSIX with live Ollama model selection**. This doc inventories the field and locks in the feature bar we must clear to be the default choice.
 
-### [COMPETE-LANDSCAPE] The field (2024–2026)
+### The field (2024–2026)
 
 #### Established detectors
 
@@ -53,7 +53,7 @@ unused-public-constant marker ([LITERAL-UNUSED-MARKER]) that no linter in this t
 | **GitHub Advanced Security / CodeQL** | No first-party clone detection. |
 | **Copilot / Cursor / Claude Code** | Conversational "find duplicates" only — no index, no ranking, no watcher, no deterministic output. |
 
-### [COMPETE-GAP] The unclaimed combination
+### The unclaimed combination
 
 Breaking the niche into four axes:
 
@@ -64,7 +64,7 @@ Breaking the niche into four axes:
 
 **Deslop is the only product that ships all four.** Anyone building the same combination has to rebuild the hybrid core — and we already spent P0–P6 on that.
 
-### [COMPETE-FEATURE-BAR] Features we must clear
+### Features we must clear
 
 Axis-by-axis, the bar we are held to — and the plus-one that wins the category:
 
@@ -104,7 +104,7 @@ Axis-by-axis, the bar we are held to — and the plus-one that wins the category
 - **Beat:** deterministic ranked index (not token-guessing from chat context), stable cluster ids, cross-repo scan, watcher-driven re-analysis, exact byte ranges, signal-breakdown explainability — everything required for an agent to act reliably rather than guess.
 - **Category-winning feature:** **agent-facing MCP tool schema** designed around when the agent should call each tool (see [MCP-AGENT-PROMPT-GUIDANCE]), not a general-purpose code search.
 
-### [COMPETE-MUST-BEAT] Must-beat feature checklist
+### Must-beat feature checklist
 
 Things no competitor does that we commit to ship. If any of these slip, we are no longer the obvious choice on our axis:
 
@@ -120,7 +120,7 @@ Things no competitor does that we commit to ship. If any of these slip, we are n
 - [ ] **Free + OSS licence** — undercuts every commercial competitor on friction.
 - [ ] **VS Code extension UX that's worth opening for its own sake** — [VSIX-PRINCIPLES]; the reference client should be one Marketplace reviewers call out.
 
-### [COMPETE-NON-FEATURES] What we deliberately don't chase
+### What we deliberately don't chase
 
 Feature-superiority is bounded. The following are explicit non-goals, and we decline to build them even if a competitor has them:
 
@@ -130,7 +130,7 @@ Feature-superiority is bounded. The following are explicit non-goals, and we dec
 - **Execution-based Type-4 validation (HyClone-style).** Research-interesting, product-risky. [DECISION-CROSS-LANGUAGE] and [fusion.md](fusion.md) explain the scope cut.
 - **Cloud-hosted embedding provider by default.** We allow one via [FUSION-EMBED-PROVIDER] but we never ship it as the default. Privacy is a feature.
 
-### [COMPETE-POSITIONING] One-sentence positioning
+### One-sentence positioning
 
 > "The only clone detector that runs as a live daemon in your editor and as an MCP tool for your AI agent — deterministic AST + token fusion + your choice of local Ollama embedding model — no SaaS, no telemetry, no licence."
 

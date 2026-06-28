@@ -2,19 +2,13 @@
 
 This doc indexes the formal research and design spec for Deslop. **Primary goal:** build a **live duplicate-code analysis server** (LSP + MCP) that stays fast enough to sit in an AI coding agent's inner loop and an editor's live edit loop — incremental, per-file, byte-range-addressable, cheap to keep live under a file watcher, and accurate across the five clone buckets in [CLONE-BUCKETS] (canonical human-facing labels; academic Type-1 → Type-4 mapping preserved in the same table). The CLI is a secondary surface — same engine, run once, emit a report — used for CI gates and cold-cache audits. Every design decision is judged against whether the pipeline still works when it runs a thousand times per minute, not once per PR.
 
-## Live = Reactive
-
-**This is the load-bearing invariant of the entire product.** *Live* means *reactive*: the moment a change to a watched file produces a new pipeline output, every reader of that output — every editor surface, every webview, every agent — observes the new state **immediately**. Not on the next save. Not when the editor refreshes. Not on a polling timer. Not after a manual command. **Immediately**, in the same microtask that the LSP fires `deslop/reportChanged`. A cluster removed from the source cannot remain visible in the tree, in the bubble, in a hover, in a code lens, in the status bar, in an MCP response, or in any future surface. The CLI is the **only** non-reactive surface in the product — it is the cold-cache fallback for CI gates and one-shot audits, and it exists because reactivity has no meaning for a process that exits before its caller reads the result. Every other surface is reactive by construction; "stale UI" is not a polish defect, it is a correctness bug that fails the brand promise. See [principles.md §[PRINCIPLES-LIVE-IS-REACTIVE]](principles.md#principles-live-is-reactive) for the enforcing rule, [live.md §[LIVE-NOTIFICATIONS]](live.md#live-notifications) for the wire contract, and [vsix.md §[VSIX-REACTIVITY-INVARIANT]](vsix.md#vsix-reactivity-invariant) for the editor-side acceptance test.
+**Live = Reactive.** *Live* means *reactive*: the moment a change to a watched file produces a new pipeline output, every reader of that output — every editor surface, every webview, every agent — observes the new state **immediately**. Not on the next save. Not when the editor refreshes. Not on a polling timer. Not after a manual command. **Immediately**, in the same microtask that the LSP fires `deslop/reportChanged`. A cluster removed from the source cannot remain visible in the tree, in the bubble, in a hover, in a code lens, in the status bar, in an MCP response, or in any future surface. The CLI is the **only** non-reactive surface in the product — it is the cold-cache fallback for CI gates and one-shot audits, and it exists because reactivity has no meaning for a process that exits before its caller reads the result. Every other surface is reactive by construction; "stale UI" is not a polish defect, it is a correctness bug that fails the brand promise. See [principles.md §[PRINCIPLES-LIVE-IS-REACTIVE]](principles.md#principles-live-is-reactive) for the enforcing rule, [live.md §[LIVE-NOTIFICATIONS]](live.md#live-notifications) for the wire contract, and [vsix.md §[VSIX-REACTIVITY-INVARIANT]](vsix.md#vsix-reactivity-invariant) for the editor-side acceptance test.
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 
-## Canonical clone buckets
+**Canonical clone buckets.** Every user-facing surface (HTML report, CLI summary, VS Code extension) labels clusters with the five buckets defined in **[taxonomy.md §[CLONE-BUCKETS]](taxonomy.md)** — `Identical`, `NearlyIdentical`, `StructuralOnly`, `LooselySimilar`, `SameBehavior`. That table is the single source of truth. The dual-labelling policy in [CLONE-BUCKETS-DUAL-LABEL] explains when the academic `Type-1 → Type-4` labels appear (JSON + agent-facing surfaces) and when they must not (human UI).
 
-Every user-facing surface (HTML report, CLI summary, VS Code extension) labels clusters with the five buckets defined in **[taxonomy.md §[CLONE-BUCKETS]](taxonomy.md)** — `Identical`, `NearlyIdentical`, `StructuralOnly`, `LooselySimilar`, `SameBehavior`. That table is the single source of truth. The dual-labelling policy in [CLONE-BUCKETS-DUAL-LABEL] explains when the academic `Type-1 → Type-4` labels appear (JSON + agent-facing surfaces) and when they must not (human UI).
-
-## Architecture at a glance
-
-Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it delegates reads and compute calls to the running LSP over the local IPC endpoint. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
+**Architecture at a glance.** Every binary is a **thin shell over one shared library** (`deslop-core`). Live analysis is a feature-gated `live` module inside that crate, owned exclusively by `deslop-lsp`. `deslop-mcp` runs no analysis — it delegates reads and compute calls to the running LSP over the local IPC endpoint. A language is added once, in the core, and every shell inherits it. See [live.md §[LIVE-PACKAGING]](live.md) for the full flow chart.
 
 Every shippable executable and editor package is governed by the Deployment Toolkit manifest contract in [deployment.md](deployment.md).
 
@@ -86,7 +80,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [cli.md](cli.md) — `[CLI-*]`, `[UX-*]`, `[OUTPUT-FORMAT-DERIVED]` the one-shot `deslop` binary: invocation contract (path / help / version / `--embeddings`), derived output formats, and terminal UX (preamble, plain vs `--technical` summary, colour and logging controls).
 - [exclusion.md](exclusion.md) — `[EXCLUSION-CONFIG]` `.deslop.toml` `exclude` / `report_hide` tiers and per-language overlays; `[CONFIG-CROSS-LANGUAGE]` candidate-pair language scope.
 - [decisions.md](decisions.md) — `[DECISION-*]` defaults with fallback rules (`--min-nodes`, cross-language, two-pass Type-3 recall).
-- [reading-list.md](reading-list.md) — `[READ-LIST-DEDUPED]` deduplicated bibliography.
+- [reading-list.md](reading-list.md) — deduplicated bibliography.
 - [live.md](live.md) — `[LIVE-*]` in-process analysis session inside the LSP: lifecycle, watcher, scheduler, state file, IPC socket, delta protocol, `LiveApi` query surface, push notifications.
 - [lsp.md](lsp.md) — `[LSP-*]` Language Server Protocol shell: capabilities, diagnostics, code lens, hover, virtual docs, custom methods.
 - [severity.md](severity.md) — `[SEVERITY-*]` the bucket → severity model: the always-on Deslop-severity colour map, the opt-in diagnostic map, the master `deslop.diagnostics.enabled` gate (diagnostics **off by default**), and the colour-vs-percentile projection consumed by lsp.md and vsix.md.
@@ -94,12 +88,10 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 - [deployment.md](deployment.md) — `[DEPLOY-*]` Deployment Toolkit manifest, executable version contract, editor-host binary resolvers, VSIX / JetBrains package contents, and release gates.
 - [vsix.md](vsix.md) — `[VSIX-*]` VS Code extension: tree view, decorations, webviews, embedding-model picker (Ollama integration), status bar, settings.
 - [jetbrains.md](jetbrains.md) — `[JETBRAINS-*]` IntelliJ Platform plugin: Rider-first LSP client, binary resolution, native IDE surfaces, packaging, and testing.
-- [comparison.md](comparison.md) — `[COMPETE-*]` landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
+- [comparison.md](comparison.md) — landscape of clone-detection tooling (CPD, Simian, jscpd, Sonar CPD, NiCad, ConQAT, SourcererCC) and where Deslop beats them.
 - [autofix-extract.md](autofix-extract.md) — `[AUTOFIX-*]` the mechanical (zero-risk, no-AI) deduplication family: `[AUTOFIX-EXTRACT]` Type-1 verbatim extract, `[AUTOFIX-MERGE]` leaf-gap Type-2/3 call-site merge via anti-unification with default-valued parameters, `[AUTOFIX-CONSOLIDATE]` cross-file identical-definition consolidation, the `[AUTOFIX-CATALOG]` of further fixes, and the `[AUTOFIX-EXTRACT-AI]` fallback. Safety is underwritten by the static type checker (`[AUTOFIX-ZERO-RISK]`; Dart/C#/Rust first, Python under strict typing).
 
-## Algorithm implementation status
-
-The pipeline draws on a small handful of clone-detection research lines. Every algorithm called out in [landscape.md](landscape.md) and [fusion.md](fusion.md) is mapped here to the file that implements it (✅) or to the plan file that tracks it (⏳). Status markers are mechanical; they reflect what `cargo build` and `make ci` produce today, not aspirations.
+**Implementation map.** The pipeline draws on a small handful of clone-detection research lines. Every algorithm called out in [landscape.md](landscape.md) and [fusion.md](fusion.md) is mapped here to the file that implements it (✅) or to the plan file that tracks it (⏳). Status markers are mechanical; they reflect what `cargo build` and `make ci` produce today, not aspirations.
 
 | Research line | Status | Implementation pointer |
 | --- | --- | --- |
@@ -135,8 +127,8 @@ The pipeline draws on a small handful of clone-detection research lines. Every a
 | Mechanical call-site merge — anti-unification + default params ([AUTOFIX-MERGE]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
 | Cross-file identical-definition consolidation ([AUTOFIX-CONSOLIDATE]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
 | Autofix AI-assisted Extract — fallback after [AUTOFIX-MERGE] | ⏳ | [`plans/autofix-extract-ai-plan.md`](../plans/autofix-extract-ai-plan.md) |
-| Rator-style node degrees-of-freedom encoding ([TECH-LLM-HYBRID]) | 🚫 not implemented | research only — would replace LSH if adopted |
-| HyClone-style execution-validated Type-4 ([TECH-LLM-HYBRID]) | 🚫 not implemented | research only — Python-specific |
+| Rator-style node degrees-of-freedom encoding | 🚫 not implemented | research only — would replace LSH if adopted; background in [landscape.md](landscape.md#tech-llm-hybrid) |
+| HyClone-style execution-validated Type-4 | 🚫 not implemented | research only — Python-specific; background in [landscape.md](landscape.md#tech-llm-hybrid) |
 | LLM-ensemble embedding fusion (multi-model max/sum) | 🚫 not implemented | single embedding model today; provider trait keeps this open |
 | Winnowing / SimHash primitives | 🚫 not used | MinHash chosen per [In Defense of MinHash Over SimHash](http://proceedings.mlr.press/v33/shrivastava14.pdf) |
 

@@ -170,7 +170,7 @@ function handleMissing(candidate: Candidate, component?: DeploymentComponent): u
   return undefined;
 }
 
-// [DEPLOY-RESOLVE-SOURCES] Source order: user-setting first, then the
+// [DEPLOY-RESOLVER] Source order: user-setting first, then the
 // bundled binary (env-path/env-dir are off for VS Code's manifest).
 function candidates(
   extensionPath: string,

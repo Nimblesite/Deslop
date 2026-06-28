@@ -1,6 +1,8 @@
 # Reading list
 
-### [READ-LIST-DEDUPED] Deduplicated reading list
+<a id="read-list-deduped"></a>
+
+**Deduplicated reading list.**
 
 Canonical:
 - [Baxter et al. 1998 — AST clone detection](https://leodemoura.github.io/files/ICSM98.pdf)
@@ -27,7 +29,9 @@ Surveys:
 - [A Survey of Software Clone Detection from Security Perspective](https://www.semanticscholar.org/paper/A-Survey-of-Software-Clone-Detection-From-Security-Zhang-Sakurai/c834d313a2dca5747245c895b1a7c53e503ca8f6)
 - [Survey of Clone Detection Techniques, Types I–IV](https://www.semanticscholar.org/paper/The-Survey-of-the-Code-Clone-Detection-Techniques-(-Kaur-Sharma/f5600f495f863fd9f62ed29873d509939cd09ca0)
 
-### [READ-LIST-LITERALS] Micro-clones, magic values, and constant drift
+<a id="read-list-literals"></a>
+
+**Micro-clones, magic values, and constant drift.**
 
 Grounds [literals.md](literals.md), [RANK-LITERAL-FAMILY], and [DECISION-LITERALS] — the
 value-level lineage the canonical fragment-clone list above does not cover.
@@ -60,7 +64,9 @@ Unused-symbol detection (the [LITERAL-UNUSED-MARKER] grounding):
 - [Romano et al. 2018 — A multi-study investigation into dead code (TSE)](https://doi.org/10.1109/TSE.2018.2842781) — developers distrust deletion of possibly-dynamically-used code
 - [rust-lang/rust #120079 — dead_code does not cover pub items across a workspace](https://github.com/rust-lang/rust/issues/120079) · [Knip — includeEntryExports](https://knip.dev/reference/configuration#includeentryexports)
 
-### [READ-LIST-MERGE] Mechanical merge & behaviour-preserving refactoring
+<a id="read-list-merge"></a>
+
+**Mechanical merge & behaviour-preserving refactoring.**
 
 Grounds `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]` in [autofix-extract.md](autofix-extract.md). Every link below was verified to resolve with a faithful claim. (Baxter et al. 1998 — the differing-leaf `Similarity = 2S/(2S+L+R)` and leaf-ignoring hash — is already listed under *Canonical* above.)
 

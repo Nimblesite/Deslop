@@ -188,7 +188,7 @@ Required gates:
 When shared `deploy-toolkit` CLI commands are available, Deslop should call
 them directly. Until then, product-local tests must prove the same behavior.
 
-### [DEPLOY-PRIVATE-DTK-DOCS] Private Deployment Toolkit docs
+**Private Deployment Toolkit docs.**
 
 Deployment Toolkit documentation and fixtures live in the private
 `Nimblesite/Shipwright` repository (formerly `MelbourneDeveloper/deployment_toolkit`).

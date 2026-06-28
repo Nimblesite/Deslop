@@ -45,8 +45,9 @@ fn vscode_core_notifications_are_implemented_or_explicitly_nooped() -> Result<()
     Ok(())
 }
 
-/// [LIVE-NOTIFICATIONS] A pure-removal edit must push reportChanged
-/// and expose the removed cluster ids through reportDelta.
+/// [LIVE-NOTIFICATIONS] [PRINCIPLES-LIVE-IS-REACTIVE]
+/// A pure-removal edit must push reportChanged and expose the removed cluster
+/// ids through reportDelta.
 #[test]
 fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     let workspace = copy_fixture("csharp-small")?;
@@ -75,7 +76,8 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     Ok(())
 }
 
-/// [LIVE-WATCHER] Pure-fs edits — without any LSP `didChangeWatchedFiles`
+/// [LIVE-WATCHER] [PRINCIPLES-LIVE-IS-REACTIVE]
+/// Pure-fs edits — without any LSP `didChangeWatchedFiles`
 /// notification — must each push a `deslop/reportChanged` so AI agents
 /// editing files outside the editor still drive the VSIX tree update
 /// ([VSIX-REACTIVITY-TREE]). Two consecutive saves of the same path

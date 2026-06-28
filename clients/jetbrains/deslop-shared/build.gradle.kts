@@ -1,3 +1,5 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+
 // Shared library for the Deslop LSP4IJ plugin. The `.module` sub-plugin puts the
 // IntelliJ Platform on the compile classpath but emits no plugin.xml / sandbox /
 // buildPlugin tasks. Compiles against IntelliJ IDEA Community 2024.3 — the build
@@ -28,6 +30,10 @@ dependencies {
 
     intellijPlatform {
         intellijIdeaCommunity("2024.3")
+        // Headless IDE Application fixture (TestApplicationManager + EdtTestUtil) for
+        // the panel launch test, so the report panel is proven against a real IDE
+        // runtime — not a hand-rolled stub.
+        testFramework(TestFrameworkType.Platform)
     }
 }
 
@@ -37,6 +43,11 @@ kotlin {
 
 tasks.test {
     useJUnitPlatform()
+    // BasePlatformTestCase boots a shared IDE Application that installs global
+    // thread/logging assertions and is never torn down between tests. Forking a
+    // fresh JVM per test class keeps that platform state from leaking into the pure
+    // resolver/descriptor tests (which spawn subprocesses and parse XML off-EDT).
+    setForkEvery(1)
     // Repository root, so tests can find shipwright.json and the sibling LSP4IJ
     // plugin.xml regardless of which module dir Gradle runs them from.
     // rootProject is clients/jetbrains → parentFile clients → parentFile repo root.

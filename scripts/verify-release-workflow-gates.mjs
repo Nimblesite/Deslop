@@ -1,4 +1,5 @@
 // Static lint for the release workflow ([.github/workflows/release.yml]).
+// Implements the release-workflow side of [DEPLOY-VSIX-PACKAGE].
 // Tied to DTK-MIG-DESLOP-CI-GATES (#41). The CI workflow gates on PR / merge,
 // but the release workflow is what actually publishes — if it skips the
 // Shipwright verifiers a tag push can ship a manifest-mismatched binary or a

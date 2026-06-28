@@ -43,6 +43,10 @@ coverage.out
 coverage-summary.json
 TestResults/
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Secrets / local overrides
 .env
 .env.local

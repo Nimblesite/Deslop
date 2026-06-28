@@ -1,5 +1,6 @@
 //! `LiveBackend` — [`McpBackend`] implementation that calls the LSP
 //! IPC endpoint on every read ([MCP-WHY-LIVE], [MCP-IPC-CLIENT]).
+//! Implements [PRINCIPLES-LIVE-IS-REACTIVE] for agent-facing reads.
 //!
 //! Single source of truth: the LSP's in-memory `latest_report`
 //! ([LIVE-IPC-SOCKET]). The MCP never touches

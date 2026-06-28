@@ -232,7 +232,35 @@ async fn assert_render_html_report_command(
         .as_str()
         .ok_or_else(|| anyhow!("renderHtmlReport must return an HTML string: {response}"))?;
     assert_well_formed_report_html(html);
+    assert_report_shows_real_clusters(html);
     Ok(())
+}
+
+/// Asserts the rendered report is not an empty styled shell but carries the
+/// fixture's real worst-offender: the `csharp-small` clone is two renamed copies
+/// of one method, so a populated `cluster-card` element — with a title, the
+/// two-occurrence count, and a real source path — must appear. This is the exact
+/// content every editor panel (the VS Code webview, the IDE tool window) displays,
+/// so it guards against the "panel shows nothing" regression at the data source
+/// ([OUTPUT-HUMAN-HTML]).
+fn assert_report_shows_real_clusters(html: &str) {
+    assert!(
+        html.contains("<article class=\"cluster-card"),
+        "report must render a populated cluster-card element, not just the stylesheet rule"
+    );
+    assert!(
+        html.contains("cluster-card__title"),
+        "the populated cluster card must carry its title heading"
+    );
+    assert!(
+        html.contains("in 2 places"),
+        "the csharp-small clone spans exactly two occurrences: {}",
+        &html[..html.len().min(160)]
+    );
+    assert!(
+        html.contains("Alpha.cs") || html.contains("Beta.cs"),
+        "the card must reference a real fixture occurrence (Alpha.cs / Beta.cs)"
+    );
 }
 
 /// Asserts the rendered string is the self-contained, CSS-bearing HTML

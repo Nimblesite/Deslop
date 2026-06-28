@@ -1,9 +1,19 @@
 # Literal & constant duplication + facets + MCP consolidation — execution plan
 
-Specs (read first, in this order): [literals.md](../specs/literals.md),
+Specs (read first, in this order): [literals.md](../specs/literals.md)
+(`[LITERAL-DETECT]`, `[LITERAL-DETECT-SITES]`, `[LITERAL-VALUE-NORM]`,
+`[LITERAL-CATEGORY-MAGIC]`, `[LITERAL-CATEGORY-SHADOWED]`,
+`[LITERAL-CATEGORY-CONST-DUP]`, `[LITERAL-CATEGORY-CONST-DRIFT]`,
+`[LITERAL-CATEGORY-CONST-ALIAS]`, `[LITERAL-NOISE]`, `[LITERAL-CANONICAL]`,
+`[LITERAL-WIRE]`, `[LITERAL-CACHE]`, `[LITERAL-UNUSED-MARKER]`,
+`[LITERAL-CONFIG]`, `[LITERAL-CENSUS]`, `[LITERAL-TESTING]`),
 [taxonomy.md §CLONE-CATEGORY-REGISTRY](../specs/taxonomy.md#clone-category-registry),
 [pipeline.md §RANK-LITERAL-FAMILY / §RANK-UNUSED-PUBLIC](../specs/pipeline.md#rank-literal-family),
-[facets.md](../specs/facets.md), [mcp.md](../specs/mcp.md),
+[facets.md](../specs/facets.md)
+(`[FACET-MODEL]`, `[FACET-TOP-OFFENDERS-FILTER]`,
+`[FACET-TOP-OFFENDERS-FILTER-EMPTY]`, `[FACET-GROUP-BY-TYPE]`,
+`[FACET-REPORT-WEBVIEW]`, `[FACET-HTML]`, `[FACET-CLI]`, `[FACET-MCP]`,
+`[FACET-TESTING]`), [mcp.md](../specs/mcp.md),
 [decisions.md §DECISION-LITERALS / §DECISION-MCP-SURFACE](../specs/decisions.md#decision-literals).
 
 Two tracks; land A0 first either way. **Sequencing rule:** B1 depends on A1 steps 3 and 5 for
@@ -154,7 +164,8 @@ no codegen):
 
 ### B2 — VSIX facets (M)
 
-[FACET-TOP-OFFENDERS-FILTER] (+ -EMPTY), [FACET-GROUP-BY-TYPE], [FACET-REPORT-WEBVIEW]:
+[FACET-TOP-OFFENDERS-FILTER], [FACET-TOP-OFFENDERS-FILTER-EMPTY],
+[FACET-GROUP-BY-TYPE], [FACET-REPORT-WEBVIEW]:
 `filterBuckets`/`filterCategories` settings + `chooseFilter` QuickPick + context key + status row;
 `groupBy: "type"` reusing the bucket-group node machinery; webview bucket/category selects +
 registry-derived language options (Dart) + shared severity helper; category chips/icons through the

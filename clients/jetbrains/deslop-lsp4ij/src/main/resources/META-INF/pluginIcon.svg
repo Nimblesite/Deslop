@@ -1,0 +1,7 @@
+<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Deslop">
+  <title>Deslop</title>
+  <!-- Two overlapping code blocks: Deslop's duplicate-detection mark, in the
+       report accent colour. Monochrome so it reads on light and dark backgrounds. -->
+  <rect x="5" y="5" width="20" height="20" rx="4.5" fill="#ff6464" opacity="0.45"/>
+  <rect x="15" y="15" width="20" height="20" rx="4.5" fill="#ff6464"/>
+</svg>

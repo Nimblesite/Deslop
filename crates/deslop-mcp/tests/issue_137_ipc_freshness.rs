@@ -1,5 +1,6 @@
 //! Cross-process freshness invariants for the LSP→MCP IPC architecture
 //! ([MCP-IPC-CLIENT], [LIVE-IPC-SOCKET], [LIVE-SEED-CACHE]).
+//! Tests [PRINCIPLES-LIVE-IS-REACTIVE] for MCP reads.
 //!
 //! These tests pin the showstopper behaviour from issue #137: the MCP
 //! must serve whatever the LSP's in-memory `latest_report` says **right

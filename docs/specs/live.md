@@ -164,31 +164,6 @@ Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is sta
 - **Platform-neutral by construction.** The TCP path is plain `std::net` compiled on every platform, and the E2E suite (`crates/deslop-mcp/tests/tcp_transport.rs`) forces it on Unix CI — the code Windows runs in production is the code CI tests everywhere.
 - The transport choice lives in `deslop_core::live::transport::IpcMode` (`platform_default()`: Unix socket where available, otherwise TCP).
 
-### [MCP-IPC-DISCOVERY] Client endpoint discovery
-
-The MCP resolves the endpoint per call: try the Unix socket where the platform has one; when it is absent or refuses, read the discovery record and dial loopback (presenting the token). When neither endpoint answers, every IPC call returns `LspNotRunning` naming **both** candidate paths so `--root` mismatches stay diagnosable ([Deslop#151]). A stale discovery record whose port no longer listens maps to the same `LspNotRunning`, never a hang.
-
-**Single-shot methods** (one request → one response, connection closes):
-
-| Method | MCP tool consumer |
-|---|---|
-| `report/get` | `report-get`, `report-query`, top-offenders bookkeeping |
-| `report/forFile` | `report-for-file` |
-| `report/forRange` | `report-for-range` |
-| `cluster/byId` | `cluster-by-id` |
-| `session/config` | `session-config` |
-| `duplicates/findSimilar` | `find-similar` |
-| `embedding/listModels` | `list-embedding-models` |
-| `deslop.lsp.refreshReport` | `rescan` |
-
-**Long-lived subscription**:
-
-| Method | MCP behaviour |
-|---|---|
-| `report/subscribe` | One frame per generation bump until the subscriber disconnects. The MCP forwards each frame as `notifications/deslop/reportChanged` to its own client. |
-
-If no endpoint is live ([MCP-IPC-DISCOVERY]), every IPC call returns `LspNotRunning` immediately. The MCP exposes that variant to its own client with an actionable message; it does **not** fall back to a second pipeline. CI / one-shot audits use the `deslop` CLI instead.
-
 ### [LIVE-WATCHER] File watcher
 
 **The watcher runs only in `deslop-lsp`.** `deslop-mcp` watches only `.deslop-cache/live-report.json` (a single file) for change notifications — it never watches the workspace.
@@ -272,7 +247,7 @@ A `cluster/byId` read (and `report/forFile` / `report/forRange` /
 `duplicates/findSimilar`) returns occurrence byte and line ranges that map onto
 the current on-disk file, even when the agent has edited files without an explicit
 `rescan` between reads. The session re-stats every occurrence path on each IPC
-read ([LIVE-READ-FRESHNESS]) and synchronously re-analyses any file whose mtime is
+read ([LIVE-CLUSTER-OFFSET-FRESHNESS]) and synchronously re-analyses any file whose mtime is
 newer than last observed, before resolving the cluster. A stale offset that
 overshoots the post-edit file length would corrupt agent context, so this gate is
 mandatory on every agent-facing read path, not just `rescan`.
@@ -308,6 +283,35 @@ display layer translates them.
 
 Missed budgets → `tracing::warn!` with timing breakdown. Ratchet only.
 
+**Rules inherited.**
+
+No regex on source, no `unwrap`, no panics, `thiserror` for library errors, structured `tracing` only, 500-line file budget, coarse E2E tests only. E2E tests drive the real LSP binary over stdio with a fixture workspace and assert against rendered deltas — never reach into `AnalysisSession` internals.
+
+### [MCP-IPC-DISCOVERY] Client endpoint discovery
+
+The MCP resolves the endpoint per call: try the Unix socket where the platform has one; when it is absent or refuses, read the discovery record and dial loopback (presenting the token). When neither endpoint answers, every IPC call returns `LspNotRunning` naming **both** candidate paths so `--root` mismatches stay diagnosable ([Deslop#151]). A stale discovery record whose port no longer listens maps to the same `LspNotRunning`, never a hang.
+
+**Single-shot methods** (one request → one response, connection closes):
+
+| Method | MCP tool consumer |
+|---|---|
+| `report/get` | `report-get`, `report-query`, top-offenders bookkeeping |
+| `report/forFile` | `report-for-file` |
+| `report/forRange` | `report-for-range` |
+| `cluster/byId` | `cluster-by-id` |
+| `session/config` | `session-config` |
+| `duplicates/findSimilar` | `find-similar` |
+| `embedding/listModels` | `list-embedding-models` |
+| `deslop.lsp.refreshReport` | `rescan` |
+
+**Long-lived subscription**:
+
+| Method | MCP behaviour |
+|---|---|
+| `report/subscribe` | One frame per generation bump until the subscriber disconnects. The MCP forwards each frame as `notifications/deslop/reportChanged` to its own client. |
+
+If no endpoint is live ([MCP-IPC-DISCOVERY]), every IPC call returns `LspNotRunning` immediately. The MCP exposes that variant to its own client with an actionable message; it does **not** fall back to a second pipeline. CI / one-shot audits use the `deslop` CLI instead.
+
 ### [PERF-BUDGET-TYPE12] Batch CLI cold-pass budget (Type-1/2, no embeddings)
 A cold-cache `deslop` batch run over a 100 K-LOC C# corpus with embeddings
 disabled (structural + token LSH passes only) completes in **< 30 s** on a release
@@ -317,7 +321,3 @@ pass is excluded because Ollama latency dominates and is bounded separately
 build on a real corpus — coverage-instrumented `cargo test` triples runtime, so
 the E2E suite carries only a lax anti-quadratic regression guard plus correctness
 assertions (every file analysed, ≥ 1 ranked cluster). Ratchet only.
-
-### [LIVE-NO-REGEX-NO-SHORTCUTS] Rules inherited
-
-No regex on source, no `unwrap`, no panics, `thiserror` for library errors, structured `tracing` only, 500-line file budget, coarse E2E tests only. E2E tests drive the real LSP binary over stdio with a fixture workspace and assert against rendered deltas — never reach into `AnalysisSession` internals.
