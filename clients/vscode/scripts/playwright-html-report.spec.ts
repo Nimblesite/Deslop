@@ -30,9 +30,12 @@ const viewports: readonly ViewportCase[] = [
 ];
 
 let reportUrl = "";
+let unstyledUrl = "";
 
 test.beforeAll(() => {
-  reportUrl = pathToFileURL(generateReport()).href;
+  const realHtmlPath = generateReport();
+  reportUrl = pathToFileURL(realHtmlPath).href;
+  unstyledUrl = pathToFileURL(makeUnstyledTwin(realHtmlPath)).href;
 });
 
 test.describe("standalone HTML report", () => {
@@ -53,6 +56,25 @@ test.describe("standalone HTML report", () => {
       });
     });
   }
+
+  // Negative control: prove the guard above has teeth. The unstyled twin
+  // reproduces the exact pre-fix failure ([OUTPUT-HUMAN-HTML], #192) — a
+  // <style> block carrying only the dangling `@import url("base.css")`
+  // aggregator, so on a file:// report every design token collapses to the
+  // browser default (transparent body, serif text, no accent borders). The
+  // same assertions that pass on the real report MUST fail here, or they
+  // could silently pass a zero-CSS report and never catch a regression.
+  test("the design-system CSS guard rejects an unstyled report", async ({ page }) => {
+    await page.goto(unstyledUrl, { waitUntil: "load" });
+    const styles = await readStyles(page);
+    assert.throws(
+      () => {
+        assertThemeAndStylesheet(styles);
+        assertLayoutAndAccents(styles);
+      },
+      "the CSS guard must FAIL on a report whose design-system stylesheet did not load",
+    );
+  });
 });
 
 interface ReportStyles {
@@ -147,6 +169,29 @@ function generateReport(): string {
   const htmlPath = path.join(outDir, "report.html");
   if (!fs.existsSync(htmlPath)) throw new Error(`deslop did not produce ${htmlPath}`);
   return htmlPath;
+}
+
+// The four `@import` statements the report's `<style>` carried before the
+// design system was inlined (#192). Beside a file:// report with no sibling
+// stylesheets they resolve to nothing, collapsing every design token.
+const DANGLING_IMPORTS =
+  '@import url("base.css");@import url("home.css");' +
+  '@import url("prose.css");@import url("syntax.css");';
+
+// Writes an unstyled twin of the real report — identical markup, but its
+// inline `<style>` is replaced with the dangling-`@import` aggregator — into
+// the same temp dir (where no `base.css` exists, so the imports 404 exactly as
+// in the wild). Used as the negative control proving the CSS guard has teeth.
+// A plain index splice, not a regex, keeps to the repo's no-regex rule.
+function makeUnstyledTwin(realHtmlPath: string): string {
+  const realHtml = fs.readFileSync(realHtmlPath, "utf8");
+  const open = realHtml.indexOf("<style>");
+  const close = realHtml.indexOf("</style>", open);
+  if (open < 0 || close < 0) throw new Error(`no <style> block to break in ${realHtmlPath}`);
+  const broken = `${realHtml.slice(0, open)}<style>${DANGLING_IMPORTS}${realHtml.slice(close)}`;
+  const twinPath = path.join(path.dirname(realHtmlPath), "report-unstyled.html");
+  fs.writeFileSync(twinPath, broken);
+  return twinPath;
 }
 
 function resolveCliBinary(): string {

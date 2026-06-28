@@ -44,14 +44,22 @@ jobs:
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
           # site = at least one website file changed.
-          # code = at least one file OUTSIDE site/ changed.
-          # A mixed PR sets both, so the full pipeline runs.
+          # code = at least one file OUTSIDE site/ changed, OR a
+          #        design-system stylesheet that deslop-core compiles into
+          #        the standalone HTML report via include_str!
+          #        (crates/deslop-core/src/render/html_css.rs). Those CSS
+          #        files live under site/ but ARE a build input to the
+          #        binary: editing one changes the report's inline <style>,
+          #        so the code pipeline — including the _vsix-playwright-html
+          #        report-CSS guard — must run, or a broken/unstyled report
+          #        could ship unverified. A mixed PR sets both.
           if printf '%s\n' "$changed" | grep -qE '^site/'; then
             echo "site=true" >> "$GITHUB_OUTPUT"
           else
             echo "site=false" >> "$GITHUB_OUTPUT"
           fi
-          if printf '%s\n' "$changed" | grep -qvE '^site/'; then
+          if printf '%s\n' "$changed" | grep -qvE '^site/' \
+             || printf '%s\n' "$changed" | grep -qE '^site/src/assets/css/'; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
