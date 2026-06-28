@@ -57,6 +57,15 @@ internal class DeslopPluginDescriptorTest {
     }
 
     @Test
+    fun registersTheDeslopNotificationGroup() {
+        assertEquals(
+            listOf("Deslop"),
+            PluginDescriptor.attributeValues(document, "notificationGroup", "id"),
+            "DeslopStartupNotifier reports binary-resolution failures through the Deslop group",
+        )
+    }
+
+    @Test
     fun registersTheLsp4ijServerFactory() {
         assertEquals(
             listOf("deslop"),

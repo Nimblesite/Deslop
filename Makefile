@@ -414,9 +414,10 @@ jetbrains-package: _jetbrains-build
 	@$(MAKE) _jetbrains-verify
 	node scripts/verify-jetbrains-package.mjs
 
-# _jetbrains-test: Run the JetBrains shared-module tests via the wrapper.
+# _jetbrains-test: Run the JetBrains tests via the wrapper — the shared-module
+#   resolver/descriptor/panel tests plus the LSP4IJ surface's reactive-wiring tests.
 _jetbrains-test:
-	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-shared:test --no-daemon
+	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-shared:test :deslop-lsp4ij:test --no-daemon
 
 # _jetbrains-real-binary-test: Run the resolver tests AND the real-binary
 #   contract test, which copies target/release/deslop-lsp into a synthetic
