@@ -34,7 +34,8 @@ discover → parse → normalize → fingerprint → cluster
 | Rust | v1 |
 | Python | v1 |
 | Dart | v1 |
-| TypeScript / JavaScript | 路线图 |
+| JavaScript | v1 |
+| TypeScript / TSX | v1 |
 | Go | 路线图 |
 
 解析器产出一棵 AST。这条流水线上从不会有任何源代码级别的正则参与 —— 永远不会。

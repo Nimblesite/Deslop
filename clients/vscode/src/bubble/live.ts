@@ -64,7 +64,16 @@ export class LiveBubble implements vscode.Disposable {
       this.bubbleDecoration,
       this.ghostDecoration,
       vscode.languages.registerInlayHintsProvider(
-        [{ language: "csharp" }, { language: "rust" }, { language: "python" }, { language: "dart" }],
+        [
+          { language: "csharp" },
+          { language: "rust" },
+          { language: "python" },
+          { language: "dart" },
+          { language: "javascript" },
+          { language: "javascriptreact" },
+          { language: "typescript" },
+          { language: "typescriptreact" },
+        ],
         this.inlayProvider,
       ),
       // effect() tracks store.report (read inside clearRemovedActiveCluster).

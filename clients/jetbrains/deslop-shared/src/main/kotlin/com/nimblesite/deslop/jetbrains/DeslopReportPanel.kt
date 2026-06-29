@@ -17,7 +17,9 @@ internal const val JCEF_UNAVAILABLE: String =
 private const val PLACEHOLDER_HTML =
     "<html><body style='font-family:sans-serif;padding:1rem;color:#888'>" +
         "<p>No Deslop report yet. Open a supported file " +
-        "(<code>.cs</code> <code>.rs</code> <code>.py</code> <code>.dart</code>) to start " +
+        "(<code>.cs</code> <code>.rs</code> <code>.py</code> <code>.dart</code> " +
+        "<code>.js</code> <code>.mjs</code> <code>.cjs</code> <code>.jsx</code> " +
+        "<code>.ts</code> <code>.tsx</code>) to start " +
         "analysis, then click <b>Refresh</b>.</p></body></html>"
 
 /**

@@ -81,7 +81,7 @@ jobs:
       - name: Verify grammar pins
         run: |
           set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart; do
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript; do
             line=$(grep -E "^${dep} = " Cargo.toml || true)
             if [ -z "${line}" ]; then
               echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
@@ -96,7 +96,8 @@ jobs:
 
       # Rust toolchain + components. Grammar versions (tree-sitter,
       # tree-sitter-c-sharp, tree-sitter-rust, tree-sitter-python,
-      # tree-sitter-dart) are pinned with `=x.y.z` in the workspace
+      # tree-sitter-dart, tree-sitter-typescript, tree-sitter-javascript)
+      # are pinned with `=x.y.z` in the workspace
       # `Cargo.toml`; the step above verifies the pins stay exact.
       - uses: dtolnay/rust-toolchain@stable
         with:

@@ -12,9 +12,12 @@ use crate::{ast::NormalizedNode, error::CoreError, state::FileId};
 
 pub mod csharp;
 pub mod dart;
+pub(crate) mod ecmascript;
+pub mod javascript;
 pub mod python;
 pub mod rust_lang;
 pub mod shared;
+pub mod typescript;
 
 /// A language plugin. One instance per language per pipeline run.
 pub trait LanguageParser: std::fmt::Debug + Send + Sync {

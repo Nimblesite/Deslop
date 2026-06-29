@@ -46,6 +46,6 @@ Tree-sitter is not a convenience in Deslop — it is the entire foundation. Ever
 
 - **Rename refactors do not hide duplication.** A cluster survives an identifier rename because the fingerprint runs on the normalized AST.
 - **Formatting changes do not create false positives.** Reformatting a file with `rustfmt` does not change what Deslop sees.
-- **Language parity is real.** The same fingerprinting logic runs on C#, Rust, Python, Dart, and every language added later. Cross-language comparisons (when they make sense) use the same math.
+- **Language parity is real.** The same fingerprinting logic runs on C#, Rust, Python, Dart, JavaScript, TypeScript, and every language added later. Cross-language comparisons (when they make sense) use the same math.
 
 Line-matching is a 1990s compromise with hardware that no longer exists. Tree-sitter is the upgrade. Deslop ships the upgrade as the baseline, not a premium tier.

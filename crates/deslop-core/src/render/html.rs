@@ -378,6 +378,9 @@ fn language_display_name(language: &str) -> &'static str {
         "rust" => "Rust",
         "python" => "Python",
         "dart" => "Dart",
+        "javascript" => "JavaScript",
+        "typescript" => "TypeScript",
+        "tsx" => "TSX",
         _ => "Other",
     }
 }

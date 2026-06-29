@@ -23,7 +23,7 @@ project, stage the real `deslop-lsp`, and assert.
 
 - Plugin loads on the target platform version (`since-build` 243). *(Descriptor +
   structure tests guard the registrations today; a launch test would prove load.)*
-- Opening a supported `.cs`/`.rs`/`.py`/`.dart` file starts `deslop-lsp`.
+- Opening a supported parser file (`.cs`, `.rs`, `.py`, `.dart`, `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, or `.tsx`) starts `deslop-lsp`.
 - Native diagnostics appear for a known duplicate fixture.
 - Code lens is available when the platform exposes it.
 - Settings changes restart or reconfigure the LSP with the expected arguments.

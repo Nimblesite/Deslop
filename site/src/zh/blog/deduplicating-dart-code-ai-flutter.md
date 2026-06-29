@@ -96,7 +96,7 @@ Flutter 对这一切都有很好的答案。你可以抽取自定义 widget，�
 
 ### Deslop 支持 Dart 吗？
 
-支持。Dart 如今是一等公民语言，与 C#、Rust 和 Python 一样用 tree-sitter 解析。TypeScript 和 Go 在路线图上。
+支持。Dart 如今是一等公民语言，与 C#、Rust、Python、JavaScript 和 TypeScript 一样用 tree-sitter 解析。Go 在路线图上。
 
 ### 重复代码总是技术债务吗？
 

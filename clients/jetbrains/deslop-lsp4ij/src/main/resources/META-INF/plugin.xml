@@ -29,6 +29,6 @@
                 factoryClass="com.nimblesite.deslop.jetbrains.DeslopLsp4ijServerFactory">
             <description>Live duplicate-code analysis through the Deslop LSP server.</description>
         </server>
-        <fileNamePatternMapping patterns="*.cs;*.rs;*.py;*.dart" serverId="deslop" />
+        <fileNamePatternMapping patterns="*.cs;*.rs;*.py;*.dart;*.js;*.mjs;*.cjs;*.jsx;*.ts;*.tsx" serverId="deslop" />
     </extensions>
 </idea-plugin>

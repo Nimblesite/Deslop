@@ -323,28 +323,29 @@ code + e2e fixture + AST golden + grammar pin in `Cargo.toml`,
 - [x] Verify grammar-pin-drift check still accepts exact `=x.y.z`
       runtime and grammar pins; no CI regex edit required.
 
-### Phase P-LANG-1 — TypeScript + TSX
+### Phase P-LANG-1 — TypeScript + TSX — COMPLETE
 
-- [ ] Add `tree-sitter-typescript = "=0.23.2"` (or newer if a 0.25-compat
+- [x] Add `tree-sitter-typescript = "=0.23.2"` (or newer if a 0.25-compat
       release ships).
-- [ ] `crates/deslop-core/src/lang/typescript.rs` — two impls:
+- [x] `crates/deslop-core/src/lang/typescript.rs` — two impls:
       `TypeScriptParser` (id `"typescript"`, exts `["ts"]`) and
       `TsxParser` (id `"tsx"`, exts `["tsx"]`). Both call the shared
-      `normalise_kind` defined in the same module.
-- [ ] Fixtures: `tests/fixtures/typescript-small/`,
+      `normalise_kind` defined in the shared ECMAScript module.
+- [x] Fixtures: `tests/fixtures/typescript-small/`,
       `tests/fixtures/tsx-small/`, `tests/fixtures/typescript-type3/`.
-- [ ] AST goldens for both grammars.
-- [ ] Activation in `clients/vscode/package.json`:
-      `onLanguage:{typescript,typescriptreact}` +
-      `workspaceContains:**/*.{ts,tsx}`.
+- [x] AST goldens for both grammars.
+- [x] Activation in `clients/vscode/package.json`:
+      `onLanguage:{typescript,typescriptreact}` plus `.ts` / `.tsx`
+      `workspaceContains` entries.
 
-### Phase P-LANG-2 — JavaScript
+### Phase P-LANG-2 — JavaScript — COMPLETE
 
-- [ ] Add `tree-sitter-javascript = "=0.25.0"`.
-- [ ] `crates/deslop-core/src/lang/javascript.rs` — one impl, exts
+- [x] Add `tree-sitter-javascript = "=0.25.0"`.
+- [x] `crates/deslop-core/src/lang/javascript.rs` — one impl, exts
       `["js", "mjs", "cjs", "jsx"]`.
-- [ ] Fixture + golden.
-- [ ] VS Code activation: `onLanguage:{javascript,javascriptreact}`.
+- [x] Fixture + golden.
+- [x] VS Code activation: `onLanguage:{javascript,javascriptreact}` plus
+      `.js` / `.mjs` / `.cjs` / `.jsx` `workspaceContains` entries.
 
 ### Phase P-LANG-3 — Go
 

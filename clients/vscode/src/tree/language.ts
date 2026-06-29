@@ -11,6 +11,12 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
   rs: "rust",
   py: "python",
   dart: "dart",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascript",
+  ts: "typescript",
+  tsx: "tsx",
 };
 
 /** Language id for a file path, derived from its extension. Unknown
@@ -26,6 +32,9 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
   rust: "Rust",
   python: "Python",
   dart: "Dart",
+  javascript: "JavaScript",
+  typescript: "TypeScript",
+  tsx: "TSX",
 };
 
 /** Human display name for a language id used in group headings. */

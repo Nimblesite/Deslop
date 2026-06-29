@@ -52,8 +52,8 @@ intellijPlatform {
             "<li>Live <b>Deslop</b> tool window (right-hand stripe): the worst-offenders " +
             "report renders from the same engine as the VS Code client and refreshes " +
             "in place as you edit.</li>" +
-            "<li>Duplicate regions surface as native diagnostics for " +
-            "<code>.cs</code>, <code>.rs</code>, <code>.py</code>, and <code>.dart</code>.</li>" +
+            "<li>Duplicate regions surface as native diagnostics for C#, Rust, Python, " +
+            "Dart, JavaScript, and TypeScript files.</li>" +
             "<li>First Android Studio / IntelliJ Community build via LSP4IJ.</li>" +
             "</ul>"
         ideaVersion {
