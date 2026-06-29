@@ -4,7 +4,7 @@ export type Status = {
   active?: boolean;
 };
 
-export function renderStatus(user: Status): string {
+export function renderStatus(user: Status, clock: Intl.DateTimeFormat): string {
   const label = `${user.name}:${user.count + 1}`;
-  return user.active ? label : "idle";
+  return user.active ? label : clock.format();
 }

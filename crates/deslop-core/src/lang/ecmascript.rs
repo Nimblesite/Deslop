@@ -50,13 +50,16 @@ fn is_comment_kind(raw: &str) -> bool {
 }
 
 /// Returns true for identifier-like JS / TS nodes whose spelling should
-/// not affect Type-2 clone detection.
+/// not affect Type-2 clone detection. Only leaf identifier kinds collapse,
+/// matching the Dart / C# / Python providers: the structural multi-segment
+/// nodes `nested_identifier` and `nested_type_identifier` (e.g. `React.FC`,
+/// `<Foo.Bar/>`) intentionally stay structural via interning so a qualified
+/// name keeps a shape distinct from a bare identifier while its leaf
+/// segments still collapse for rename-invariance.
 fn is_identifier_kind(raw: &str) -> bool {
     matches!(
         raw,
         "identifier"
-            | "nested_identifier"
-            | "nested_type_identifier"
             | "private_property_identifier"
             | "property_identifier"
             | "shorthand_property_identifier"
@@ -68,12 +71,20 @@ fn is_identifier_kind(raw: &str) -> bool {
 
 /// Returns true for literal-like JS / TS nodes collapsed by
 /// normalisation. Template substitutions stay structural so the
-/// interpolated expression shape is still fingerprinted.
+/// interpolated expression shape is still fingerprinted, while the
+/// `regex` wrapper is collapsed together with its `regex_pattern` /
+/// `regex_flags` children so a regex is fully value-erased. `jsx_text`
+/// and `html_character_reference` are the textual content of JSX
+/// elements — collapsing both keeps `<p>Tom &amp; Jerry</p>` and
+/// `<p>Tom and Jerry</p>` fingerprinting identically rather than letting
+/// an HTML entity leak into the clone shape (the textual sibling of
+/// `string_fragment` and `escape_sequence`).
 fn is_literal_kind(raw: &str) -> bool {
     matches!(
         raw,
         "escape_sequence"
             | "false"
+            | "html_character_reference"
             | "jsx_text"
             | "null"
             | "number"
