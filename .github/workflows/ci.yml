@@ -272,20 +272,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install xvfb (headless VS Code)
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+      # xvfb gives Electron a display; dbus gives it a session bus. Without the
+      # bus, the updated ubuntu-latest image floods "Failed to connect to the
+      # bus" and the extension-host subprocess never shuts down cleanly, so its
+      # V8 coverage file is never flushed — extension.ts read as ~0% covered and
+      # tanked the threshold even though all 384 E2E tests passed.
+      - name: Install xvfb + dbus (headless VS Code)
+        run: sudo apt-get update && sudo apt-get install -y xvfb dbus dbus-x11
 
       # Builds the real deslop-lsp + deslop-mcp from the workspace
       # and installs Node deps for the extension + webview-ui.
       - name: _vsix-build
         run: make _vsix-build
 
-      # Unit tests + coverage threshold. E2E spawns real VS Code Electron.
+      # Unit tests + coverage threshold. E2E spawns real VS Code Electron — run
+      # it inside a private session bus so extension-host coverage flushes.
       - name: _vsix-coverage (unit + threshold)
-        run: xvfb-run -a make _vsix-coverage
+        run: xvfb-run -a dbus-run-session -- make _vsix-coverage
 
       - name: _vsix-test (full E2E against real LSP)
-        run: xvfb-run -a make _vsix-test
+        run: xvfb-run -a dbus-run-session -- make _vsix-test
 
       # Renders the standalone HTML report (the artifact every "Open HTML
       # Report" button shows) and asserts the design-system CSS applies in a
