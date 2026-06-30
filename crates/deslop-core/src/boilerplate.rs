@@ -144,23 +144,35 @@ fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNod
     }
 }
 
-/// A re-export barrel (`export { a } from "./m"`, `export * from "./m"`,
-/// `export { a, b }`) is module scaffolding, not duplicate logic — the
-/// JS/TS analogue of Dart's `library_export`. It is an `export_statement`
-/// whose direct children are exclusively re-export machinery, so an
-/// `export_statement` wrapping a `function_declaration`, `lexical_declaration`,
-/// `class_declaration`, or any value is never matched and stays in the report.
+/// A re-export barrel (`export { a } from "./m"`, `export { a, b }`,
+/// `export * as ns from "./m"`) is module scaffolding, not duplicate logic
+/// — the JS/TS analogue of Dart's `library_export`. It must carry a named
+/// export clause or namespace re-export; a bare-literal `export_statement`
+/// is NOT a barrel, because after normalisation `export default "x"`, a
+/// default-exported template literal, and `export default /re/` all reduce
+/// to an `export_statement` over a single `__literal__` — indistinguishable from
+/// `export * from "m"` — and suppressing those would erase real exported
+/// logic. Requiring the export clause keeps every value export (and any
+/// `function`/`class`/`const` declaration export) in the report; the only
+/// barrel left unsuppressed is the few-node `export * from "m"`, which sits
+/// far below any `min-nodes` and so never clusters anyway.
 fn is_ecmascript_reexport(node: &NormalizedNode) -> bool {
     node.kind == "export_statement"
-        && !node.children.is_empty()
+        && node.children.iter().any(is_ecmascript_export_list)
         && node.children.iter().all(is_ecmascript_reexport_child)
+}
+
+/// The named export clause or namespace re-export that distinguishes a
+/// re-export barrel from a value export.
+fn is_ecmascript_export_list(node: &NormalizedNode) -> bool {
+    matches!(node.kind, "export_clause" | "namespace_export")
 }
 
 /// Direct children allowed inside a re-export barrel: the named export
 /// clause, a namespace re-export, and the `from "..."` module-source
 /// literal. Anything else marks a real exported declaration.
 fn is_ecmascript_reexport_child(node: &NormalizedNode) -> bool {
-    matches!(node.kind, "export_clause" | "namespace_export") || node.kind == LITERAL_KIND
+    is_ecmascript_export_list(node) || node.kind == LITERAL_KIND
 }
 
 /// Python module docstrings and guarded import blocks are prologue syntax.

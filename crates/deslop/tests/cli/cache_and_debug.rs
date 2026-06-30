@@ -400,6 +400,16 @@ fn debug_ast_dump_matches_committed_golden_tsx() -> Result<()> {
     assert_ast_golden("ast-golden-tsx", "Sample.tsx")
 }
 
+// [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript
+// grammar's JSX path normalises identically — and pins that JSX text AND
+// html_character_reference entities (`&amp;`, `&copy;`) both collapse to
+// the literal placeholder rather than leaking entity structure into the
+// fingerprint.
+#[test]
+fn debug_ast_dump_matches_committed_golden_jsx() -> Result<()> {
+    assert_ast_golden("ast-golden-jsx", "Sample.jsx")
+}
+
 // Implements [PIPELINE-NORMALIZE-AST] unsupported-extension: running
 // `--debug-ast` on a file whose extension no parser claims must exit
 // non-zero with a clear error, not panic or emit an empty dump.

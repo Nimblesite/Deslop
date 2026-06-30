@@ -137,6 +137,73 @@ pub(crate) fn cluster_count(report: &Value) -> usize {
     array_len(report, "clusters")
 }
 
+/// True when `value` lies within `1e-9` of `target`. Lets a test pin an
+/// exact fused-signal value (typically `0.0` or `1.0`) without tripping
+/// the float-equality lint or carrying its own epsilon.
+pub(crate) fn approx(value: f64, target: f64) -> bool {
+    (value - target).abs() <= 1e-9
+}
+
+/// The sorted, de-duplicated bare file names a cluster's occurrences span.
+pub(crate) fn cluster_file_set(cluster: &Value) -> BTreeSet<String> {
+    occurrence_files(cluster).into_iter().collect()
+}
+
+/// The first cluster whose occurrences cover every name in `files`, or
+/// `None`. Lets a test target the specific cross-file clone it cares about
+/// regardless of report ordering or unrelated clusters.
+pub(crate) fn cluster_spanning<'a>(report: &'a Value, files: &[&str]) -> Option<&'a Value> {
+    clusters(report).iter().find(|cluster| {
+        files
+            .iter()
+            .all(|name| cluster_file_set(cluster).contains(*name))
+    })
+}
+
+/// Like [`cluster_spanning`] but fails the test with the full report when
+/// no matching cluster exists, so the failure message is actionable.
+pub(crate) fn expect_cluster_spanning<'a>(report: &'a Value, files: &[&str]) -> Result<&'a Value> {
+    cluster_spanning(report, files)
+        .ok_or_else(|| anyhow!("expected a clone spanning {files:?}: {report:#}"))
+}
+
+/// Drives `deslop` over `fixture_dir` at `min_nodes` and asserts the
+/// cross-file clone spanning `files` exists with `structural == 1.0`, the
+/// expected `bucket`, and the token signal that bucket implies: a full
+/// token signal for `identical` / `nearly_identical`, a near-zero one for
+/// the structural-only routing (#134). Centralises the renamed-clone
+/// assertion every per-feature E2E test would otherwise repeat.
+pub(crate) fn assert_bucketed_clone(
+    fixture_dir: &str,
+    min_nodes: u32,
+    files: &[&str],
+    bucket: &str,
+) -> Result<()> {
+    let report = run_report(&fixture(fixture_dir), min_nodes)?;
+    let clone = expect_cluster_spanning(&report, files)?;
+    assert_eq!(
+        cluster_bucket(clone),
+        bucket,
+        "{fixture_dir} clone bucket mismatch: {report:#}"
+    );
+    assert!(
+        approx(signal(clone, "structural"), 1.0),
+        "{fixture_dir} renamed clone must reach structural identity: {report:#}"
+    );
+    if bucket == "structural_only" {
+        assert!(
+            signal(clone, "token_jaccard") < 0.05,
+            "{fixture_dir} structural_only routing needs a near-zero token signal: {report:#}"
+        );
+    } else {
+        assert!(
+            approx(signal(clone, "token_jaccard"), 1.0),
+            "{fixture_dir} token layer must also be rename-invariant: {report:#}"
+        );
+    }
+    Ok(())
+}
+
 /// The report's `clusters_hidden` count (suppressed-cluster telemetry), or
 /// `0` when absent.
 pub(crate) fn clusters_hidden(report: &Value) -> u64 {

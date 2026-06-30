@@ -4,10 +4,10 @@
 //! same logical input must yield the same percentage in every language.
 //!
 //! Two byte-identical source files are a fully-duplicated repo. For C#,
-//! Rust, Python, and Dart this asserts the metric reports exactly 100% — the
-//! same reasonable value across all four — and that the repo `duplicated_loc`
-//! equals the lines the visible clusters cover, so a hidden / structural-only
-//! match could never inflate it.
+//! Rust, Python, Dart, JavaScript, and TypeScript this asserts the metric
+//! reports exactly 100% — the same reasonable value across all six — and
+//! that the repo `duplicated_loc` equals the lines the visible clusters
+//! cover, so a hidden / structural-only match could never inflate it.
 
 mod common;
 
@@ -43,6 +43,16 @@ const CASES: &[LangCase] = &[
         language: "dart",
         extension: "dart",
         source: "int combine(int a, int b) {\n  var x = a + b;\n  var y = x * a;\n  return y - b + x;\n}\n",
+    },
+    LangCase {
+        language: "javascript",
+        extension: "js",
+        source: "export function combine(a, b) {\n  const x = a + b;\n  const y = x * a;\n  return y - b + x;\n}\n",
+    },
+    LangCase {
+        language: "typescript",
+        extension: "ts",
+        source: "export function combine(a: number, b: number): number {\n  const x = a + b;\n  const y = x * a;\n  return y - b + x;\n}\n",
     },
 ];
 

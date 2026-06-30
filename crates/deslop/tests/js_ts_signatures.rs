@@ -22,6 +22,7 @@ fn javascript_type2_clone_has_structural_signal_of_one() -> Result<()> {
         "alpha.js",
         "beta.js",
         TokenCheck::StructuralOnly,
+        "structural_only",
     )
 }
 
@@ -33,6 +34,7 @@ fn typescript_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()
         "alpha.ts",
         "beta.ts",
         TokenCheck::Required,
+        "nearly_identical",
     )
 }
 
@@ -44,6 +46,7 @@ fn tsx_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
         "Card.tsx",
         "Tile.tsx",
         TokenCheck::Required,
+        "nearly_identical",
     )
 }
 
@@ -57,20 +60,33 @@ fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
     assert_type3_clone("typescript-type3", 8, "delta.ts", "epsilon.ts")
 }
 
-/// Asserts that a renamed Type-2 fixture has perfect structural and
-/// optional token signals in its top-ranked cluster.
+/// Asserts that a renamed Type-2 fixture has perfect structural identity,
+/// the expected canonical `bucket`, and the token signal that bucket
+/// implies — a full Jaccard when the `MinHash` layer paired the clone, a
+/// near-zero one when only the structural Merkle layer did (the #134
+/// `structural_only` routing) — in its top-ranked cluster.
 fn assert_type2_clone(
     fixture_name: &str,
     min_nodes: u32,
     left: &str,
     right: &str,
     token: TokenCheck,
+    bucket: &str,
 ) -> Result<()> {
     let report = run_report(&fixture(fixture_name), min_nodes)?;
     let top = top_cluster(&report, fixture_name)?;
     assert!(is_exact_one(signal(top, "structural")));
-    if matches!(token, TokenCheck::Required) {
-        assert!(is_exact_one(signal(top, "token_jaccard")));
+    assert_eq!(
+        cluster_bucket(top),
+        bucket,
+        "{fixture_name} top cluster bucket mismatch: {report:#}"
+    );
+    match token {
+        TokenCheck::Required => assert!(is_exact_one(signal(top, "token_jaccard"))),
+        TokenCheck::StructuralOnly => assert!(
+            signal(top, "token_jaccard") < 0.05,
+            "{fixture_name} structural_only routing needs a near-zero token signal: {report:#}"
+        ),
     }
     assert!(spans_both(top, left, right));
     Ok(())
@@ -80,24 +96,25 @@ fn assert_type2_clone(
 /// the top cluster in addition to the structural Merkle layer.
 #[derive(Clone, Copy)]
 enum TokenCheck {
-    /// Structural identity is enough for this fixture.
+    /// Only the structural Merkle layer paired this clone, so its token
+    /// Jaccard must stay near zero (`structural_only` routing).
     StructuralOnly,
     /// The fixture must also have exact token Jaccard.
     Required,
 }
 
-/// Asserts that a Type-3 near miss surfaces a cross-file shared
-/// subtree cluster with a positive token signal.
+/// Asserts that a Type-3 near miss surfaces a token-supported
+/// `nearly_identical` cross-file cluster with full structural and token
+/// signals over the shared subtree.
 fn assert_type3_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
     let report = run_report(&fixture(fixture_name), min_nodes)?;
-    let Some(cluster) = clusters(&report)
-        .iter()
-        .find(|cluster| spans_both(cluster, left, right))
-    else {
-        anyhow::bail!("{fixture_name} must cluster {left} with {right}: {report:#}");
+    let Some(cluster) = clusters(&report).iter().find(|cluster| {
+        spans_both(cluster, left, right) && cluster_bucket(cluster) == "nearly_identical"
+    }) else {
+        anyhow::bail!("{fixture_name} must report a nearly_identical clone spanning {left} and {right}: {report:#}");
     };
     assert!(is_exact_one(signal(cluster, "structural")));
-    assert!(signal(cluster, "token_jaccard") > 0.0);
+    assert!(is_exact_one(signal(cluster, "token_jaccard")));
     Ok(())
 }
 

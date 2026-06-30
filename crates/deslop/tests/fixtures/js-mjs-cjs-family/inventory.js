@@ -1,3 +1,5 @@
+import { clampLow } from "./bounds.js";
+
 export function reconcileInventory(records) {
   const adjustments = [];
   for (const record of records) {
@@ -11,5 +13,5 @@ export function reconcileInventory(records) {
     }
     adjustments.push({ sku: record.sku, balance });
   }
-  return adjustments.filter((entry) => entry.balance >= 0);
+  return adjustments.filter((entry) => clampLow(entry.balance) >= 0);
 }

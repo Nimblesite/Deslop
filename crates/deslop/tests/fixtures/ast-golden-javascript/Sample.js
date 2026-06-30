@@ -4,6 +4,9 @@ export function renderStatus(user, count) {
   return {
     label,
     state,
+    ready: count > 0 ? true : false,
+    parent: user.parent ?? null,
+    note: user.note === undefined ? "n/a\t" : user.note,
     match: /ready-\d+/gi.test(label),
   };
 }

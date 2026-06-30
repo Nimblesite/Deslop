@@ -74,11 +74,11 @@ fn is_identifier_kind(raw: &str) -> bool {
 /// interpolated expression shape is still fingerprinted, while the
 /// `regex` wrapper is collapsed together with its `regex_pattern` /
 /// `regex_flags` children so a regex is fully value-erased. `jsx_text`
-/// and `html_character_reference` are the textual content of JSX
-/// elements — collapsing both keeps `<p>Tom &amp; Jerry</p>` and
-/// `<p>Tom and Jerry</p>` fingerprinting identically rather than letting
-/// an HTML entity leak into the clone shape (the textual sibling of
-/// `string_fragment` and `escape_sequence`).
+/// and `html_character_reference` are both textual JSX content, so
+/// collapsing the entity (the textual sibling of `string_fragment` and
+/// `escape_sequence`) stops its node kind from leaking into the clone
+/// shape: `<b>&amp;</b>` and `<b>plus</b>` then fingerprint as the same
+/// single-literal element instead of an entity node versus a text node.
 fn is_literal_kind(raw: &str) -> bool {
     matches!(
         raw,

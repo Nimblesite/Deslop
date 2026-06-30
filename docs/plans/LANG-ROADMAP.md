@@ -103,7 +103,7 @@ the report output.
 
 ## [LANG-ROADMAP-CANDIDATES] Per-language findings
 
-### [LANG-CAND-TYPESCRIPT] TypeScript — PRIORITY 1
+### [LANG-CAND-TYPESCRIPT] TypeScript — ✅ SHIPPED (=0.23.2)
 
 - **Crate.** `tree-sitter-typescript = "=0.23.2"` (tree-sitter org).
 - **Runtime.** `tree-sitter ^0.24` — forces [LANG-ROADMAP-RUNTIME-UPGRADE].
@@ -130,7 +130,7 @@ the report output.
 - **Estimate.** 2–3 days including the runtime upgrade. TS alone ~1 day
   once the upgrade lands.
 
-### [LANG-CAND-JAVASCRIPT] JavaScript — PRIORITY 2 (rides with TS if possible)
+### [LANG-CAND-JAVASCRIPT] JavaScript — ✅ SHIPPED (=0.25.0)
 
 - **Crate.** `tree-sitter-javascript = "=0.25.0"` (tree-sitter org).
 - **Runtime.** `tree-sitter ^0.25`. Fully compatible with the upgrade.

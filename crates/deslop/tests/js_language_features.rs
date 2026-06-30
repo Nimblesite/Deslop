@@ -1,0 +1,96 @@
+//! JavaScript language-feature E2E tests ([LANG-CAND-JAVASCRIPT],
+//! [PIPELINE-NORMALIZE-AST]).
+//!
+//! Each fixture is a renamed clone built around one JavaScript feature —
+//! classes, async/await, generators, template and tagged-template literals,
+//! optional chaining, destructuring, and regex literals — proving the
+//! feature parses through `tree-sitter-javascript` and that identifier and
+//! literal normalisation keeps the clone detectable across the rename. The
+//! bucket asserted for each is the real value the engine produced: token-
+//! rich shapes reach `nearly_identical`, placeholder-dominated ones route to
+//! `structural_only` by design (#134).
+
+use anyhow::Result;
+
+mod common;
+use crate::common::*;
+
+#[test]
+fn javascript_class_method_clone_is_detected() -> Result<()> {
+    assert_bucketed_clone(
+        "js-classes",
+        8,
+        &["account.js", "wallet.js"],
+        "structural_only",
+    )
+}
+
+#[test]
+fn javascript_async_await_clone_is_detected() -> Result<()> {
+    assert_bucketed_clone(
+        "js-async",
+        8,
+        &["fetch_team.js", "fetch_user.js"],
+        "structural_only",
+    )
+}
+
+#[test]
+fn javascript_generator_clone_is_nearly_identical() -> Result<()> {
+    assert_bucketed_clone(
+        "js-generators",
+        8,
+        &["range_gen.js", "walk_gen.js"],
+        "nearly_identical",
+    )
+}
+
+#[test]
+fn javascript_template_literal_clone_is_detected() -> Result<()> {
+    assert_bucketed_clone(
+        "js-template-literals",
+        8,
+        &["render_email.js", "render_receipt.js"],
+        "structural_only",
+    )
+}
+
+#[test]
+fn javascript_tagged_template_clone_is_nearly_identical() -> Result<()> {
+    assert_bucketed_clone(
+        "js-tagged-templates",
+        8,
+        &["group_query.js", "user_query.js"],
+        "nearly_identical",
+    )
+}
+
+#[test]
+fn javascript_optional_chaining_clone_is_detected() -> Result<()> {
+    assert_bucketed_clone(
+        "js-optional-chaining",
+        8,
+        &["read_config.js", "read_options.js"],
+        "structural_only",
+    )
+}
+
+#[test]
+fn javascript_destructuring_clone_is_detected() -> Result<()> {
+    assert_bucketed_clone(
+        "js-destructuring",
+        8,
+        &["build_point.js", "build_vertex.js"],
+        "structural_only",
+    )
+}
+
+#[test]
+fn javascript_regex_literal_clone_is_detected() -> Result<()> {
+    assert_bucketed_clone(
+        "js-regex",
+        8,
+        &["validate_email.js", "validate_handle.js"],
+        "structural_only",
+    )
+}

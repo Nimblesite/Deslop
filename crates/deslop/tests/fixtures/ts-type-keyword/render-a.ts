@@ -1,4 +1,4 @@
-export function render(items: ReadonlyArray<string>): string {
+export function renderItems(items: ReadonlyArray<string>): string {
   let output: string = "";
   let total: number = 0;
   for (const item of items) {

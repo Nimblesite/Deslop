@@ -690,8 +690,8 @@ async fn exercise_error_paths(service: &LiveService, _first_id: &str) {
     assert!(matches!(miss, Err(LiveError::UnknownCluster { .. })));
     let unsupported = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
-            snippet: "function f() {}".to_owned(),
-            language: "javascript".to_owned(),
+            snippet: "func main() {}".to_owned(),
+            language: "go".to_owned(),
         },
         max_results: None,
     };
