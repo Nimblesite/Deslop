@@ -4,15 +4,10 @@
 //
 // Single source of truth: ../../coverage-thresholds.json → .vsix.default_threshold.
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
+import { loadThresholds, thresholdsPath, vsixRoot } from "./coverage-paths.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const vsixRoot = resolve(here, "..");
-const repoRoot = resolve(vsixRoot, "..", "..");
-const thresholdsPath = resolve(repoRoot, "coverage-thresholds.json");
-
-const thresholds = JSON.parse(readFileSync(thresholdsPath, "utf8"));
+const thresholds = loadThresholds();
 const vsixCfg = thresholds.vsix;
 if (!vsixCfg || !Number.isFinite(Number(vsixCfg.default_threshold))) {
   console.error(`${thresholdsPath} is missing .vsix.default_threshold`);

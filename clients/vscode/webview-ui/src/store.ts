@@ -3,12 +3,12 @@
 // no stale UI. The extension process posts messages; this is the only writer.
 
 import { signal, computed, batch } from "@preact/signals";
+import { severityOf } from "../../src/types/report";
 import type {
   AnalysisState,
   Report,
   ReportCluster,
   Severity,
-  severityOf,
 } from "../../src/types/report";
 
 export type Filters = {

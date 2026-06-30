@@ -1,6 +1,10 @@
 import esbuild from "esbuild";
 
 const watch = process.argv.includes("--watch");
+// Coverage mode emits unminified bundles with an inline sourcemap so the
+// Playwright V8 coverage pass can map executed ranges back to webview-ui/src
+// (minified single-line output collapses every statement onto one line).
+const coverage = process.argv.includes("--coverage");
 
 const ctx = await esbuild.context({
   entryPoints: {
@@ -13,8 +17,8 @@ const ctx = await esbuild.context({
   platform: "browser",
   target: "es2022",
   format: "esm",
-  sourcemap: true,
-  minify: !watch,
+  sourcemap: coverage ? "inline" : true,
+  minify: !watch && !coverage,
   jsx: "automatic",
   jsxImportSource: "preact",
   loader: { ".css": "text" },

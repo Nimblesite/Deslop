@@ -515,6 +515,7 @@
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts",
     "test:playwright:html": "playwright test scripts/playwright-html-report.spec.ts",
+    "coverage:webview": "node ./scripts/webview-coverage.mjs",
     "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"

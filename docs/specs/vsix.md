@@ -65,7 +65,7 @@ The VSIX ships:
 - A pre-built `deslop-lsp` binary per platform (darwin-arm64, darwin-x64, linux-x64, linux-arm64, win32-x64). Download-on-first-activate is **not** acceptable — the extension either works offline immediately or it doesn't install.
 - A pre-built `deslop-mcp` binary per platform, colocated, registered with any MCP-aware VS Code host (Claude Code, Copilot Chat with MCP, etc.) via the extension's MCP contribution point.
 - `shipwright.json` at the VSIX extension root. The manifest is the package authority for required executable components, expected versions, host startup checks, and allowed native files under `bin/<platform>/`.
-- The shared `deslop-report-view` webview bundle (preact + no external CSS framework; see [VSIX-WEBVIEW]).
+- The shared `deslop-report-view` webview bundle (preact + no external CSS framework; see [webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)).
 - The extension's own `schema_doc.md` pulled from `docs/specs/REPORTING-CONTEXT.md` at build time — the same `include_str!` content the report embeds. Drift is impossible.
 
 ### [VSIX-BINARY-VERSIONING] Binary versioning + PATH exposure
@@ -124,7 +124,7 @@ A dedicated activity bar icon (a stylised "dd" mark, the same one used in the Ma
   - Grey description tail: `rank #N · N copies`. The literal word **rank** appears on every surface that shows `#N` (description, tooltip, accessibility label, copy-for-AI) so neither humans nor AI agents confuse the volatile rank for the stable id ([VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
   - Full 16-hex `cluster.id` is preserved in the tooltip (`cluster id: \`...\``) and in every command argument; only the visible label is shortened.
   - Children: one node per occurrence, shown as `path:line:column` for humans. Clicking opens the file at that occurrence's file, line, and column. Raw byte ranges remain available to AI/report consumers but are not rendered in the normal tree label.
-- **Duplication** panel ([VSIX-METRICS-PANEL]) — the codebase duplication summary that replaces the former Focused File tree: a headline duplication score over the whole corpus, then a per-folder → per-file breakdown of how much of each is duplicated. The headline opens the full [VSIX-METRICS-REPORT] webview.
+- **Duplication** panel ([VSIX-METRICS-PANEL]) — the codebase duplication summary that replaces the former Focused File tree: a headline duplication score over the whole corpus, then a per-folder → per-file breakdown of how much of each is duplicated. The headline opens the full [webview-runtime.md §VSIX-METRICS-REPORT](webview-runtime.md#vsix-metrics-report) webview.
 - **Session** panel — compact footer with: active embedding model (linkable, opens the picker), `cache_stats`, `files_analysed`, daemon state (`idle` / `running`).
 
 Tree refresh is driven by `deslop/reportChanged`; the webview uses the same notification to bump its own state.
@@ -222,13 +222,13 @@ Diagnostics are off by default ([severity.md §SEVERITY-DIAGNOSTICS-GATE](severi
 
 The **Duplication** tree (`deslop.metrics`) replaces the former Focused File panel and answers one question at a glance: *how duplicated is this codebase, and where?* It renders from the last analysed snapshot's repo metrics (`Report.metrics`, [METRICS-REPO]) and refreshes on `deslop/reportChanged`.
 
-- **Headline row** — the overall duplication percentage (`duplication_percent`) as the bold label, with the grey description carrying `analysed_loc`, `duplicated_loc`, `clusters_total`, and `duplicated_files` in plain language. When `metrics.threshold.breached`, the row shows a warning glyph and names the gate it crossed. Activating the row opens the [VSIX-METRICS-REPORT] webview.
+- **Headline row** — the overall duplication percentage (`duplication_percent`) as the bold label, with the grey description carrying `analysed_loc`, `duplicated_loc`, `clusters_total`, and `duplicated_files` in plain language. When `metrics.threshold.breached`, the row shows a warning glyph and names the gate it crossed. Activating the row opens the [webview-runtime.md §VSIX-METRICS-REPORT](webview-runtime.md#vsix-metrics-report) webview.
 - **Per-folder → per-file breakdown** — below the headline, a tree of folders (rolled up from `metrics.per_file` by path prefix, summing numerator and denominator so each folder percentage is exact) expanding to the files within, each row showing its own duplication percentage in the grey description. Worst-first by percentage, path `localeCompare` tiebreaker; rows with zero duplication are omitted from display. Single-child folder chains are path-compressed, matching folder mode.
 - **Clean / empty** — when there is no duplication, the panel shows a single "No duplication detected" row, honouring [VSIX-PRINCIPLES] principle 2.
 
-#### [VSIX-METRICS-REPORT] Duplication report webview
+#### Duplication report webview
 
-Activating the headline opens a webview (`deslop.openDuplicationReport`) styled like the existing report webview ([VSIX-REPORT-WEBVIEW]). It presents the same data with more room: the headline totals and threshold verdict, then a sortable per-folder / per-file table of duplication percentages. It renders from the `report/snapshot` the panel host already pushes — now carrying `metrics.per_file` — so the webview stays dumb and the extension host owns all data shaping ([VSIX-PRINCIPLES] principle 4).
+Activating the headline opens the duplication report webview — moved to [webview-runtime.md §VSIX-METRICS-REPORT](webview-runtime.md#vsix-metrics-report) along with the rest of the webview runtime.
 
 ### [VSIX-CODE-LENS] Code lens
 
@@ -238,7 +238,7 @@ Each lens has three actions in its command array:
 
 - **"Jump"** — runs `deslop.jumpToNextOccurrence`, cycling through remaining occurrences. It never routes through `textDocument/definition`, so it cannot interfere with the editor's Go To Definition ([LSP-NON-INTERFERENCE]).
 - **"Compare"** — opens VS Code's diff view between this occurrence and the canonical occurrence of the cluster.
-- **"Open cluster"** — opens the webview ([VSIX-WEBVIEW]) pinned to this cluster.
+- **"Open cluster"** — opens the webview ([webview-runtime.md §VSIX-WEBVIEW](webview-runtime.md#vsix-webview)) pinned to this cluster.
 
 The lens is coloured by the always-on Deslop-severity map ([severity.md §SEVERITY-COLOR](severity.md#severity-color)), independent of whether diagnostics are enabled. It is hidden only for clusters below the configured percentile floor ([LSP-SEVERITY-PERCENTILE]); users widen it via `deslop.showAllLenses` (off by default — this is the silent-when-clean principle in action). A bucket's diagnostic map being `"none"` quietens the Problems panel but does **not** remove the lens — the lens is a pure-visual surface.
 
@@ -298,9 +298,9 @@ Three hard guarantees, applied to every surface (tree included):
 
 `DecorationManager` and `LiveBubble` `effect()` over `report` + `selectedClusterId` + `editorVisibleRanges`. When `deslop/reportChanged` removes a cluster, the corresponding decorations and bubbles disappear in the same microtask without an explicit `clear()` call from any handler — the effect re-runs, finds the cluster gone, and the diff drops the decoration set.
 
-#### [VSIX-REACTIVITY-WEBVIEW] Webviews mirror the signal graph
+#### Webviews mirror the signal graph
 
-**Webviews are built with Preact + `@preact/signals`, not plain React, not manual `useState` ceremony, not event emitters.** `clients/vscode/webview-ui/src/store.ts` exports the `signal<T>` collection: `report`, `selectedClusterId`, `analysisState`, `filters`, `severityByClusterId` (a `computed` over `report`). The extension process posts `postMessage` updates that the webview handler writes into signals; no other path mutates webview state. Components are function components using `@preact/signals` — `const cluster = selectedCluster.value` — not effects, not refs, not class lifecycle. No direct DOM manipulation, no untyped `any` escapes, no `setTimeout`-driven state. If a piece of UI feels like it needs imperative wiring, it's wrong — fold it into a signal or a computed. (The webview-side store is also referenced in code as `[VSIX-WEBVIEW-REACTIVITY]`; the two ids name the same contract.)
+Webviews are reactive too: they mirror the extension-host signal graph through `postMessage`. The store/signals model — and the `[VSIX-WEBVIEW-REACTIVITY]` alias for the webview-side store — now live in [webview-runtime.md §VSIX-REACTIVITY-WEBVIEW](webview-runtime.md#vsix-reactivity-webview).
 
 #### [VSIX-REACTIVITY-INVARIANT] Staleness is a correctness bug
 
@@ -310,7 +310,7 @@ Three hard guarantees, applied to every surface (tree included):
 
 **Status: ⏳ Planned (#173).** Webview panels pin their own cluster today; the single cross-surface `selectedClusterId` signal and the editor-caret↔tree reveal below are the target, not yet wired on the extension host.
 
-There is **one** notion of "the cluster the user is looking at," held in a single `selectedClusterId` signal on the [VSIX-STATE] store — the same signal decorations, bubble, and webview read ([VSIX-REACTIVITY-DECORATIONS], [VSIX-REACTIVITY-WEBVIEW]). Every surface both **writes** it (the editor caret resolved against the visible projection [VSIX-STATE-DIRTY]; `deslop.openCluster`; a tree row or the webview's prev/next arrows, [VSIX-WEBVIEW-ACTIONS-CONTEXT]) and **reacts** to it: a Top Offenders `effect()` calls `TreeView.reveal(node, { select: true, focus: false })` for that cluster's row — working in every grouping mode via the provider's `getParent` ([VSIX-TOP-OFFENDERS-GROUPING]), a no-op when the cluster is absent — so moving the caret into a duplicate selects its row without stealing the caret ([VSIX-PRINCIPLES] principle 5). No surface keeps a private selection; it survives a `deslop/reportChanged` while the cluster id exists ([LIVE-DELTA]) and clears in the same microtask if the cluster is retracted ([VSIX-REACTIVITY-INVARIANT]).
+There is **one** notion of "the cluster the user is looking at," held in a single `selectedClusterId` signal on the [VSIX-STATE] store — the same signal decorations, bubble, and webview read ([VSIX-REACTIVITY-DECORATIONS], [webview-runtime.md §VSIX-REACTIVITY-WEBVIEW](webview-runtime.md#vsix-reactivity-webview)). Every surface both **writes** it (the editor caret resolved against the visible projection [VSIX-STATE-DIRTY]; `deslop.openCluster`; a tree row or the webview's prev/next arrows, [webview-runtime.md §VSIX-WEBVIEW-ACTIONS-CONTEXT](webview-runtime.md#vsix-webview-actions-context)) and **reacts** to it: a Top Offenders `effect()` calls `TreeView.reveal(node, { select: true, focus: false })` for that cluster's row — working in every grouping mode via the provider's `getParent` ([VSIX-TOP-OFFENDERS-GROUPING]), a no-op when the cluster is absent — so moving the caret into a duplicate selects its row without stealing the caret ([VSIX-PRINCIPLES] principle 5). No surface keeps a private selection; it survives a `deslop/reportChanged` while the cluster id exists ([LIVE-DELTA]) and clears in the same microtask if the cluster is retracted ([VSIX-REACTIVITY-INVARIANT]).
 
 #### [VSIX-CLUSTER-SYNC-TESTS] Acceptance — sync is proven, not assumed
 
@@ -320,37 +320,9 @@ There is **one** notion of "the cluster the user is looking at," held in a singl
 
 Every report-driven surface runs on VS Code's single extension-host thread, so the extension never does O(occurrences) blocking work per event. Source enrichment reads each file at most once and reuses it for all occurrences; bursts of store/editor events coalesce through a trailing-edge debounce; decorations repaint only when a fresh report lands or an editor becomes visible (never per keystroke), memoising per-report severity ranking and building each editor's byte→UTF-16 buffer once per redraw; webview feeds subscribe to the report signals alone so lifecycle and embedding-progress ticks do not re-push. These are correctness-adjacent: a synchronous-read or per-event-redraw regression stalls typing, which violates [VSIX-PRINCIPLES] ("never block an edit").
 
-### [VSIX-WEBVIEW] Cluster detail webview
+### Webview runtime
 
-Command `deslop.openCluster` opens a webview tab. The tab renders a single cluster with:
-
-- Header: cluster id, rank, weight, size, severity badge, jump-to-next-cluster / jump-to-prev-cluster arrows.
-- Interpretation and action hints (the same fields the JSON carries).
-- Signal breakdown as four tiny bars: structural, token Jaccard, embedding cosine, fused. Each labelled with its numeric value to two decimals.
-- One collapsible panel per occurrence, each containing:
-  - File path plus human position (`line:column`), clickable to open the file at that exact editor position.
-  - Line-numbered, syntax-highlighted source snippet (reusing the [OUTPUT-HUMAN-HTML] rendering path — the daemon returns the snippet as pre-highlighted HTML so the webview stays dumb).
-  - "Open in editor" and "Reveal in Explorer" buttons.
-
-Navigation is keyboard-first: `j/k` move occurrence focus, `n/p` move cluster focus, `Enter` opens the file at the focused occurrence, `?` shows the shortcut help. The webview is self-contained — no network fetches, no external CDNs, CSP locked to the extension origin.
-
-#### [VSIX-WEBVIEW-ACTIONS-CONTEXT] Action wiring and hover context
-
-Cluster detail controls must either execute a real command or not render. `Open` dispatches `deslop.openOccurrence` for the row's occurrence. `Compare` dispatches `deslop.compareWithCanonical` for the row's cluster and stays disabled on the canonical occurrence because comparing the canonical row to itself is meaningless. `Previous cluster` and `Next cluster` update the webview's selected cluster through the same signal path as the `p` and `n` keyboard shortcuts; the extension host must not keep a second copy of cluster selection state.
-
-Every visible data item and action in the cluster detail webview carries a human-readable hover explanation. Signal labels explain what the score means and how to interpret high or low values. Occurrence rows explain the target file, line, column, hidden status, and whether the row is canonical. Rank, weight, size, occurrence count, bucket label, AI-match badge, and keyboard shortcut hints explain their purpose without exposing raw byte offsets as the primary user-facing location.
-
-#### [VSIX-CLUSTER-DOCUMENT] Cluster link documents
-
-Cluster references rendered anywhere (copy-for-AI payloads, hovers, report text) are emitted as `deslop://cluster/<id>` URIs. The extension registers a read-only `TextDocumentContentProvider` for the `deslop` scheme so clicking such a link opens a virtual document summarising that cluster — occurrence list, weight, and the structural/jaccard/embedding signals — drawn from the store's visible projection ([VSIX-STATE-DIRTY]); an unknown or unparseable id renders an explicit placeholder document rather than throwing.
-
-#### [VSIX-CLUSTER-ID-CONSISTENCY] One short identity across every surface
-
-Every cluster surface (Top Offenders tree, hover bubble, cluster webview, report webview) and the copy-for-AI payload identify a cluster by the same stable 7-hex slug from the single `clusterSlug()` helper — never two short forms, never the volatile `#N` rank as identity. The slug leads each rendered row and leads the AI payload ahead of the `rank:` line; the full 16-hex `cluster.id` is preserved separately for tooling round-trip. It is the cross-surface twin of [VSIX-TOP-OFFENDERS-CLUSTER-ID], which governs slug-vs-rank inside the tree.
-
-### [VSIX-REPORT-WEBVIEW] Full report webview
-
-Command `deslop.openReport` opens a second webview with the full ranked list — essentially a live-refreshing version of the HTML renderer from [OUTPUT-SCHEMA-JSON], but wired to the daemon's notification stream so it stays current as the user types. Filters: by language, by severity, by file-path glob. Sort is fixed (worst-first) because the whole product premise is worst-first.
+Webview runtime sections — the cluster detail webview, the full report webview, the duplication report webview, the Preact signal store, the host↔webview message protocol, action wiring, cluster link documents, and the webview coverage gate — now live in their own centralised doc: [webview-runtime.md](webview-runtime.md). Anchors: [§VSIX-WEBVIEW](webview-runtime.md#vsix-webview) (cluster detail), [§VSIX-WEBVIEW-ACTIONS-CONTEXT](webview-runtime.md#vsix-webview-actions-context), [§VSIX-CLUSTER-DOCUMENT](webview-runtime.md#vsix-cluster-document), [§VSIX-CLUSTER-ID-CONSISTENCY](webview-runtime.md#vsix-cluster-id-consistency), [§VSIX-REPORT-WEBVIEW](webview-runtime.md#vsix-report-webview), [§VSIX-METRICS-REPORT](webview-runtime.md#vsix-metrics-report), [§VSIX-REACTIVITY-WEBVIEW](webview-runtime.md#vsix-reactivity-webview), and [§VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage). The cross-surface invariants ([VSIX-STATE], [VSIX-STATE-DIRTY], [VSIX-REACTIVITY], [VSIX-CLUSTER-SYNC]) stay here because they span every surface, not just the webviews.
 
 ### [VSIX-EMBED-PICKER] Embedding model picker
 

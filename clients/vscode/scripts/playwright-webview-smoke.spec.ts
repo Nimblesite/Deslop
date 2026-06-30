@@ -1,6 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+
+// `test`/`expect` come from the coverage fixture so this same suite records the
+// webview V8 coverage when WEBVIEW_COVERAGE=1 (no separate rendering harness).
+import { expect, test } from "./webview-coverage-fixture";
 
 type ViewKind = "cluster" | "duplication" | "report";
 

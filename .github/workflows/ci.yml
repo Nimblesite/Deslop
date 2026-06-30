@@ -294,6 +294,13 @@ jobs:
       - name: _vsix-playwright-html (standalone HTML report CSS)
         run: make _vsix-playwright-html
 
+      # Webview V8 coverage gate ([VSIX-WEBVIEW-COVERAGE]). The webview bundle is
+      # invisible to the c8 pass in _vsix-coverage (extension host only); this
+      # drives the bundle in a real browser, maps coverage back to webview-ui/src,
+      # and enforces .vsix.webview_threshold. Closes the blind spot behind #254.
+      - name: _vsix-webview-coverage (webview V8 coverage threshold)
+        run: make _vsix-webview-coverage
+
       - name: vsix-package deployment gate
         run: make vsix-package
 
