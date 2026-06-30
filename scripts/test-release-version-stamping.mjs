@@ -13,6 +13,7 @@ const version = "9.8.7-test.1";
 const tests = [
   sourceProjectsUseVersionPlaceholder,
   stamperSetsEveryProjectVersion,
+  stamperStampsGeneratedVsixManifest,
   stamperStampsEveryWorkspaceCrateInLock,
   stamperRejectsInvalidVersion,
 ];
@@ -44,7 +45,6 @@ function sourceProjectsUseVersionPlaceholder() {
   assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop"\nversion = "${placeholder}"`);
   assertIncludes(read(repoRoot, "Cargo.lock"), `name = "deslop-mcp"\nversion = "${placeholder}"`);
   assertJsonVersion(repoRoot, "shipwright.json", placeholder);
-  assertJsonVersion(repoRoot, "clients/vscode/shipwright.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/package-lock.json", placeholder);
   assertJsonVersion(repoRoot, "clients/vscode/webview-ui/package.json", placeholder);
@@ -62,7 +62,6 @@ function stamperSetsEveryProjectVersion(work) {
   assertIncludes(read(work, "Cargo.lock"), `name = "deslop"\nversion = "${version}"`);
   assertIncludes(read(work, "Cargo.lock"), `name = "deslop-lsp"\nversion = "${version}"`);
   assertJsonVersion(work, "shipwright.json", version);
-  assertJsonVersion(work, "clients/vscode/shipwright.json", version);
   // The VSIX package version is the Marketplace-legal core MAJOR.MINOR.PATCH;
   // every other project keeps the full version including the prerelease suffix.
   const marketplace = version.split(/[-+]/, 1)[0];
@@ -75,6 +74,19 @@ function stamperSetsEveryProjectVersion(work) {
   assertJsonVersion(work, "clients/vscode/webview-ui/package-lock.json", version);
   assertJsonVersion(work, "site/package.json", version);
   assertJsonVersion(work, "site/package-lock.json", version);
+}
+
+function stamperStampsGeneratedVsixManifest(work) {
+  copyStampInputs(work);
+  const stagedManifest = "clients/vscode/shipwright.json";
+  const dest = join(work, stagedManifest);
+  mkdirSync(dirname(dest), { recursive: true });
+  copyFileSync(join(work, "shipwright.json"), dest);
+
+  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+
+  assertJsonVersion(work, stagedManifest, version);
 }
 
 // Every workspace/path crate (a Cargo.lock `[[package]]` with no `source =`
@@ -115,7 +127,6 @@ function copyStampInputs(work) {
     "Cargo.toml",
     "Cargo.lock",
     "shipwright.json",
-    "clients/vscode/shipwright.json",
     "clients/vscode/package.json",
     "clients/vscode/package-lock.json",
     "clients/vscode/webview-ui/package.json",
