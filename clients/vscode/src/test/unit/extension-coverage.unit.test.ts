@@ -14,6 +14,7 @@ import {
 } from "../../extension";
 import { LifecyclePhase, ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
+import { repoMetrics } from "./report.helpers";
 
 function reportWithEmbedding(
   embedding: Report["embedding_provenance"] = undefined,
@@ -24,15 +25,7 @@ function reportWithEmbedding(
     files_analysed: 0,
     clusters_hidden: 0,
     cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 0,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: 0,
-      duplicated_files: 0,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
+    metrics: repoMetrics(),
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],

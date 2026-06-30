@@ -33,7 +33,8 @@ Each language ships a grammar via tree-sitter:
 | Rust | v1 |
 | Python | v1 |
 | Dart | v1 |
-| TypeScript / JavaScript | roadmap |
+| JavaScript | v1 |
+| TypeScript / TSX | v1 |
 | Go | roadmap |
 
 A parser produces an AST. No source-level regex touches this pipeline — ever.

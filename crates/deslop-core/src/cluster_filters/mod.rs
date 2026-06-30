@@ -110,6 +110,7 @@ mod calls;
 mod dart;
 mod dart_data_table;
 mod declaration_family;
+mod ecmascript;
 mod python;
 mod python_class_shapes;
 mod python_constants;
@@ -210,6 +211,9 @@ fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
         "dart" => dart::is_dart_class_field_declaration_cluster(snippets),
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets),
+        "javascript" | "typescript" | "tsx" => {
+            ecmascript::is_ecmascript_data_shape_cluster(snippets)
+        }
         _ => false,
     }
 }
@@ -515,6 +519,17 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
         // `body` field, so the signature-only filter (#154) can compare
         // bodies after a signature-only structural match.
         b"dart" => &["function_declaration", "method_declaration"],
+        // JS/TS/TSX function forms that expose a `body` field, so the
+        // signature-only (#154) and polymorphic-signature (#69) filters can
+        // compare bodies after a signature-only structural match — parity
+        // with the other languages.
+        b"javascript" | b"typescript" | b"tsx" => &[
+            "function_declaration",
+            "generator_function_declaration",
+            "method_definition",
+            "function_expression",
+            "arrow_function",
+        ],
         _ => &[],
     }
 }

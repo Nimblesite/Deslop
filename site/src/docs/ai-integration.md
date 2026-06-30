@@ -182,7 +182,7 @@ The LSP fires `deslop/reportChanged` over the LSP wire and `resources/updated` +
 
 ## JetBrains plugin (in development)
 
-The JetBrains plugin in `clients/jetbrains/` registers an IntelliJ Platform `lsp.serverSupportProvider` and starts `deslop-lsp` for `.cs`, `.rs`, and `.py` files. Rider is the first product target; IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion follow on the same platform LSP API. The plugin is Gradle-built, has real-binary tests against the released `deslop-lsp`, and ships with the same binary-resolution rules as the VS Code extension. Zed and Neovim plugins are on the roadmap — both LSP-capable, both wire-compatible with `deslop-lsp` today.
+The JetBrains plugin in `clients/jetbrains/` registers an IntelliJ Platform `lsp.serverSupportProvider` and starts `deslop-lsp` for C#, Rust, Python, Dart, JavaScript, and TypeScript files. Rider is the first product target; IntelliJ IDEA, PyCharm, WebStorm, RustRover, and CLion follow on the same platform LSP API. The plugin is Gradle-built, has real-binary tests against the released `deslop-lsp`, and ships with the same binary-resolution rules as the VS Code extension. Zed and Neovim plugins are on the roadmap — both LSP-capable, both wire-compatible with `deslop-lsp` today.
 
 ## What Deslop deliberately does not do
 

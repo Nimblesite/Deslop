@@ -11,6 +11,7 @@ import { compareWithCanonicalTarget } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
 import { OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster } from "../../types/report";
+import { reportWithClusters } from "./report.helpers";
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -27,27 +28,11 @@ async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
 }
 
 function report(clusters: ReportCluster[]): Report {
-  return {
-    tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 1,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 10,
-      duplicated_loc: 5,
-      duplication_percent: 50,
-      clusters_total: clusters.length,
-      duplicated_files: 1,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
+  return reportWithClusters(
     clusters,
-  };
+    {},
+    { analysed_loc: 10, duplicated_loc: 5, duplication_percent: 50, duplicated_files: 1 },
+  );
 }
 
 function cluster(

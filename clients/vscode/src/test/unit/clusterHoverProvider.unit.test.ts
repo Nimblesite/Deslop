@@ -9,29 +9,10 @@ import * as vscode from "vscode";
 import { ClusterHoverProvider } from "../../decorations/clusterHoverProvider";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
+import { reportWithClusters } from "./report.helpers";
 
 function reportWith(clusters: ReportCluster[]): Report {
-  return {
-    tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 1,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 0,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: clusters.length,
-      duplicated_files: 0,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
-    clusters,
-  };
+  return reportWithClusters(clusters);
 }
 
 function clusterAt(path: string, startByte: number, endByte: number): ReportCluster {

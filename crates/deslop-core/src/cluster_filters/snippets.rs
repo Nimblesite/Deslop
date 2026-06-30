@@ -130,6 +130,9 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
         "csharp" => Some(tree_sitter_c_sharp::LANGUAGE.into()),
         "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
         "dart" => Some(tree_sitter_dart::LANGUAGE.into()),
+        "javascript" => Some(tree_sitter_javascript::LANGUAGE.into()),
+        "typescript" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
+        "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         _ => None,
     }
 }

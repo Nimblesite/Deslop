@@ -11,6 +11,7 @@ import {
   reportWithDisplayLocations,
 } from "../../locations";
 import { Report, ReportCluster } from "../../types/report";
+import { reportWithClusters } from "./report.helpers";
 
 suite("occurrence display locations", () => {
   test("projects a byte offset to one-indexed line and column", () => {
@@ -135,25 +136,9 @@ function cluster(file: string, startByte: number): ReportCluster {
 }
 
 function report(clusters: ReportCluster[]): Report {
-  return {
-    tool_version: "test",
-    min_nodes: 1,
-    files_analysed: 1,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 1 },
-    metrics: {
-      analysed_loc: 1,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: clusters.length,
-      duplicated_files: 1,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
+  return reportWithClusters(
     clusters,
-  };
+    { tool_version: "test", min_nodes: 1, cache_stats: { hits: 0, misses: 1 } },
+    { analysed_loc: 1, duplicated_files: 1 },
+  );
 }

@@ -9,7 +9,7 @@ object DeslopSupportedFiles {
      * match exactly — the native surface and the LSP4IJ surface must agree on which
      * files start the server. Keep in lockstep with the languages deslop-lsp parses.
      */
-    val extensions = setOf("cs", "rs", "py", "dart")
+    val extensions = setOf("cs", "rs", "py", "dart", "js", "mjs", "cjs", "jsx", "ts", "tsx")
 
     fun includes(file: VirtualFile): Boolean =
         !file.isDirectory && supportsExtension(file.extension)

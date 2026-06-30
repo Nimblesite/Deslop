@@ -17,6 +17,7 @@ import {
   openCpuReport,
   renderCpuReport,
 } from "../../commands/register";
+import { reportWithClusters } from "./report.helpers";
 import {
   aiPayloadForCluster,
   aiPayloadForOccurrence,
@@ -106,27 +107,11 @@ function clusterWithRanges(
 }
 
 function report(clusters: ReportCluster[]): Report {
-  return {
-    tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 1,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 10,
-      duplicated_loc: 5,
-      duplication_percent: 50,
-      clusters_total: clusters.length,
-      duplicated_files: 1,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "# docs",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
+  return reportWithClusters(
     clusters,
-  };
+    { schema_doc: "# docs" },
+    { analysed_loc: 10, duplicated_loc: 5, duplication_percent: 50, duplicated_files: 1 },
+  );
 }
 
 function extensionRoot(): string {

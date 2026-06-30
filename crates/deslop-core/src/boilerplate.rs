@@ -31,6 +31,7 @@ pub fn is_import_boilerplate_carrier(language: &str, kind: &str) -> bool {
         "python" => python_carrier(kind),
         "rust" => rust_carrier(kind),
         "dart" => dart_carrier(kind),
+        "javascript" | "typescript" | "tsx" => ecmascript_carrier(kind),
         _ => false,
     }
 }
@@ -125,9 +126,53 @@ fn dart_carrier(kind: &str) -> bool {
     matches!(kind, "import_or_export")
 }
 
+/// JavaScript / TypeScript / TSX import carriers. An ES `import_statement`
+/// is pure module prologue. Re-export barrels are handled as a subtree in
+/// [`is_ecmascript_reexport`] rather than here because `export_statement`
+/// also wraps real exported declarations (`export function`, `export
+/// const`) that must never be suppressed.
+fn ecmascript_carrier(kind: &str) -> bool {
+    matches!(kind, "import_statement")
+}
+
 /// Language-specific wrappers whose children encode prologue-only syntax.
 fn is_language_specific_boilerplate_subtree(language: &str, node: &NormalizedNode) -> bool {
-    matches!(language, "python") && is_python_prologue_subtree(node)
+    match language {
+        "python" => is_python_prologue_subtree(node),
+        "javascript" | "typescript" | "tsx" => is_ecmascript_reexport(node),
+        _ => false,
+    }
+}
+
+/// A re-export barrel (`export { a } from "./m"`, `export { a, b }`,
+/// `export * as ns from "./m"`) is module scaffolding, not duplicate logic
+/// — the JS/TS analogue of Dart's `library_export`. It must carry a named
+/// export clause or namespace re-export; a bare-literal `export_statement`
+/// is NOT a barrel, because after normalisation `export default "x"`, a
+/// default-exported template literal, and `export default /re/` all reduce
+/// to an `export_statement` over a single `__literal__` — indistinguishable from
+/// `export * from "m"` — and suppressing those would erase real exported
+/// logic. Requiring the export clause keeps every value export (and any
+/// `function`/`class`/`const` declaration export) in the report; the only
+/// barrel left unsuppressed is the few-node `export * from "m"`, which sits
+/// far below any `min-nodes` and so never clusters anyway.
+fn is_ecmascript_reexport(node: &NormalizedNode) -> bool {
+    node.kind == "export_statement"
+        && node.children.iter().any(is_ecmascript_export_list)
+        && node.children.iter().all(is_ecmascript_reexport_child)
+}
+
+/// The named export clause or namespace re-export that distinguishes a
+/// re-export barrel from a value export.
+fn is_ecmascript_export_list(node: &NormalizedNode) -> bool {
+    matches!(node.kind, "export_clause" | "namespace_export")
+}
+
+/// Direct children allowed inside a re-export barrel: the named export
+/// clause, a namespace re-export, and the `from "..."` module-source
+/// literal. Anything else marks a real exported declaration.
+fn is_ecmascript_reexport_child(node: &NormalizedNode) -> bool {
+    is_ecmascript_export_list(node) || node.kind == LITERAL_KIND
 }
 
 /// Python module docstrings and guarded import blocks are prologue syntax.

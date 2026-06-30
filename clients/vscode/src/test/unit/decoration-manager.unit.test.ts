@@ -9,6 +9,7 @@ import { DecorationManager } from "../../decorations/manager";
 import { ReportStore } from "../../reportStore";
 import { ScheduleFn } from "../../util/debounce";
 import { Report, ReportCluster } from "../../types/report";
+import { reportWithClusters } from "./report.helpers";
 
 // Runs the debounced flush synchronously so each redraw path executes inline.
 const immediate: ScheduleFn = (callback) => {
@@ -63,27 +64,11 @@ function cluster(path: string): ReportCluster {
 }
 
 function report(clusters: ReportCluster[]): Report {
-  return {
-    tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 1,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 10,
-      duplicated_loc: 1,
-      duplication_percent: 1,
-      clusters_total: clusters.length,
-      duplicated_files: 1,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
+  return reportWithClusters(
     clusters,
-  };
+    {},
+    { analysed_loc: 10, duplicated_loc: 1, duplication_percent: 1, duplicated_files: 1 },
+  );
 }
 
 suite("DecorationManager redraw", () => {

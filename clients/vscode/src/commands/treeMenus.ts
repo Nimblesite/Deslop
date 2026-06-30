@@ -277,8 +277,11 @@ const LANGUAGE_BY_EXT: Record<string, string> = {
   ".rs": "rust",
   ".py": "python",
   ".ts": "typescript",
-  ".tsx": "typescript",
+  ".tsx": "tsx",
   ".js": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".jsx": "javascript",
   ".dart": "dart",
 };
 

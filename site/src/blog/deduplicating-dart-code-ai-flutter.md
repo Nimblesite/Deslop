@@ -95,7 +95,7 @@ The mistake is not accepting duplication. The mistake is accepting it *accidenta
 
 ### Does Deslop support Dart?
 
-Yes. Dart is a first-class language today, parsed with tree-sitter alongside C#, Rust, and Python. TypeScript and Go are on the roadmap.
+Yes. Dart is a first-class language today, parsed with tree-sitter alongside C#, Rust, Python, JavaScript, and TypeScript. Go is on the roadmap.
 
 ### Is duplicate code always technical debt?
 

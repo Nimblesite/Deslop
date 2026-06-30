@@ -54,6 +54,10 @@ const ANALYSED_DOCUMENTS = [
   { language: "rust", scheme: "file" },
   { language: "python", scheme: "file" },
   { language: "dart", scheme: "file" },
+  { language: "javascript", scheme: "file" },
+  { language: "javascriptreact", scheme: "file" },
+  { language: "typescript", scheme: "file" },
+  { language: "typescriptreact", scheme: "file" },
 ];
 
 const PRODUCTION_EMBEDDING_PROVIDER = "ollama";

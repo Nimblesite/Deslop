@@ -28,7 +28,9 @@
     "csharp",
     "rust",
     "python",
-    "dart"
+    "dart",
+    "javascript",
+    "typescript"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -38,10 +40,20 @@
     "onLanguage:rust",
     "onLanguage:python",
     "onLanguage:dart",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
     "workspaceContains:**/*.py",
-    "workspaceContains:**/*.dart"
+    "workspaceContains:**/*.dart",
+    "workspaceContains:**/*.js",
+    "workspaceContains:**/*.mjs",
+    "workspaceContains:**/*.cjs",
+    "workspaceContains:**/*.jsx",
+    "workspaceContains:**/*.ts",
+    "workspaceContains:**/*.tsx"
   ],
   "contributes": {
     "commands": [

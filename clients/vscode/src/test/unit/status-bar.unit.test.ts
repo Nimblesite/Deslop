@@ -6,6 +6,7 @@ import * as assert from "node:assert/strict";
 import { StatusBar, sameFile, shortPath } from "../../commands/statusBar";
 import { ReportStore } from "../../reportStore";
 import { Report } from "../../types/report";
+import { repoMetrics } from "./report.helpers";
 
 function report(): Report {
   return {
@@ -14,15 +15,13 @@ function report(): Report {
     files_analysed: 5,
     clusters_hidden: 0,
     cache_stats: { hits: 1, misses: 2 },
-    metrics: {
+    metrics: repoMetrics({
       analysed_loc: 200,
       duplicated_loc: 50,
       duplication_percent: 25,
       clusters_total: 2,
       duplicated_files: 1,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
+    }),
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],

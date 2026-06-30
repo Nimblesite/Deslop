@@ -816,6 +816,10 @@ fn extension_to_language(path: &Path) -> Option<&'static str> {
         "cs" => Some("csharp"),
         "rs" => Some("rust"),
         "py" => Some("python"),
+        "dart" => Some("dart"),
+        "js" | "mjs" | "cjs" | "jsx" => Some("javascript"),
+        "ts" => Some("typescript"),
+        "tsx" => Some("tsx"),
         _ => None,
     }
 }

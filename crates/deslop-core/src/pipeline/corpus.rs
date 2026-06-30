@@ -272,13 +272,21 @@ pub fn parser_for_language<'a>(
 #[must_use]
 pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
     use crate::lang::{
-        csharp::CSharpParser, dart::DartParser, python::PythonParser, rust_lang::RustParser,
+        csharp::CSharpParser,
+        dart::DartParser,
+        javascript::JavaScriptParser,
+        python::PythonParser,
+        rust_lang::RustParser,
+        typescript::{TsxParser, TypeScriptParser},
     };
     vec![
         Box::new(CSharpParser::new()),
         Box::new(RustParser::new()),
         Box::new(PythonParser::new()),
         Box::new(DartParser::new()),
+        Box::new(JavaScriptParser::new()),
+        Box::new(TypeScriptParser::new()),
+        Box::new(TsxParser::new()),
     ]
 }
 

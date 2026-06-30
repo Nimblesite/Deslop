@@ -1,0 +1,10 @@
+export type Status = {
+  name: string;
+  count: number;
+  active?: boolean;
+};
+
+export function renderStatus(user: Status, clock: Intl.DateTimeFormat): string {
+  const label = `${user.name}:${user.count + 1}`;
+  return user.active ? label : clock.format();
+}
