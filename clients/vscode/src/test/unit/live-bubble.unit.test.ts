@@ -6,6 +6,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
+import { repoMetrics } from "./report.helpers";
 
 function cluster(
   id: string,
@@ -45,15 +46,13 @@ function report(): Report {
     files_analysed: 2,
     clusters_hidden: 0,
     cache_stats: { hits: 0, misses: 0 },
-    metrics: {
+    metrics: repoMetrics({
       analysed_loc: 10,
       duplicated_loc: 2,
       duplication_percent: 20,
       clusters_total: 1,
       duplicated_files: 2,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
+    }),
     schema_doc: "",
     action_hints: [],
     boilerplate_hints: [],
@@ -208,15 +207,9 @@ suite("LiveBubble render", () => {
         clusters_added: [],
         clusters_removed: ["c-a"],
         clusters_updated: [],
-        metrics: {
+        metrics: repoMetrics({
           analysed_loc: 10,
-          duplicated_loc: 0,
-          duplication_percent: 0,
-          clusters_total: 0,
-          duplicated_files: 0,
-          threshold: { percent: 0, breached: false, source: "none" },
-          per_file: [],
-        },
+        }),
         cache_stats: { hits: 0, misses: 0 },
         tool_version: "v2",
       });

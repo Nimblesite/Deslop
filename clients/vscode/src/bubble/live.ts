@@ -11,6 +11,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { clusterHoverMarkdown, clusterSlug } from "../clusterHover";
 import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
+import { shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity } from "../severity";
 import {
@@ -21,6 +22,8 @@ import {
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
+
+export { shortPath } from "../pathUtils";
 
 const DEBOUNCE_MS = 250;
 const BUDGET_MS = 250;
@@ -346,11 +349,6 @@ export function signalStrip(cluster: ReportCluster): string {
 }
 
 const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
-
-export function shortPath(p: string): string {
-  const slash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
-  return slash >= 0 ? p.slice(slash + 1) : p;
-}
 
 // Bubble hover: full card with slug, canonical, and dismiss link.
 export function bubbleHover(

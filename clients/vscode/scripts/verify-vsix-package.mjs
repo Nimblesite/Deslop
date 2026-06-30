@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { assertNoStubProvider, PACKAGE_ENTRY } from "./stub-gate.mjs";
+import { currentPlatformTarget } from "./platform.mjs";
 
 // Verifies [DEPLOY-VSIX-PACKAGE] against the produced .vsix, not the
 // staging directory, so release artifacts cannot hide manifest or binary drift.
@@ -11,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const vsixRoot = resolve(here, "..");
 const vsixArg = process.argv[2] ?? "deslop-live.vsix";
 const vsixPath = isAbsolute(vsixArg) ? vsixArg : resolve(vsixRoot, vsixArg);
-const targetPlatform = process.argv[3] ?? currentPlatform();
+const targetPlatform = process.argv[3] ?? currentPlatformTarget();
 const packageEntry = PACKAGE_ENTRY;
 const manifestEntry = "extension/shipwright.json";
 
@@ -81,7 +82,7 @@ function componentForEntry(entry, components) {
 }
 
 function assertVersion(binaryPath, component) {
-  if (targetPlatform !== currentPlatform()) return;
+  if (targetPlatform !== currentPlatformTarget()) return;
   // macOS security scanning of freshly compiled binaries can take ~500 ms under load;
   // 10 s is generous enough to survive a heavy parallel build without false failures.
   const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 10_000 });
@@ -134,13 +135,4 @@ function firstLine(text) {
   const end = text.indexOf("\n");
   const line = end >= 0 ? text.slice(0, end) : text;
   return line.endsWith("\r") ? line.slice(0, -1) : line;
-}
-
-function currentPlatform() {
-  if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
-  if (process.platform === "darwin" && process.arch === "x64") return "darwin-x64";
-  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
-  if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
-  if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
-  throw new Error(`unsupported platform ${process.platform}-${process.arch}`);
 }

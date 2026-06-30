@@ -14,6 +14,7 @@ import {
 } from "../../commands/embeddingPicker";
 import { ReportStore } from "../../reportStore";
 import { EmbeddingModelInfo, ReportDelta } from "../../types/report";
+import { repoMetrics } from "./report.helpers";
 
 function newStore(embedding?: {
   provider_id: string;
@@ -29,15 +30,7 @@ function newStore(embedding?: {
       files_analysed: 0,
       clusters_hidden: 0,
       cache_stats: { hits: 0, misses: 0 },
-      metrics: {
-        analysed_loc: 0,
-        duplicated_loc: 0,
-        duplication_percent: 0,
-        clusters_total: 0,
-        duplicated_files: 0,
-        threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-      },
+      metrics: repoMetrics(),
       schema_doc: "",
       action_hints: [],
       boilerplate_hints: [],
@@ -484,15 +477,7 @@ function emptyDelta(toGeneration: number): ReportDelta {
     clusters_added: [],
     clusters_removed: [],
     clusters_updated: [],
-    metrics: {
-      analysed_loc: 0,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: 0,
-      duplicated_files: 0,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
+    metrics: repoMetrics(),
     cache_stats: { hits: 0, misses: 0 },
     tool_version: "x",
   };

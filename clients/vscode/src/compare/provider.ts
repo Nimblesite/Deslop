@@ -9,6 +9,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { ReportOccurrence } from "../types/report";
+import { resolveWorkspacePath } from "../pathUtils";
 
 export const COMPARE_SCHEME = "deslop-compare";
 
@@ -64,7 +65,7 @@ export function parseCompareUri(uri: vscode.Uri): CompareCoordinates {
 export class CompareContentProvider implements vscode.TextDocumentContentProvider {
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     const coords = parseCompareUri(uri);
-    const sourcePath = resolveCompareSourcePath(coords.sourcePath);
+    const sourcePath = resolveWorkspacePath(coords.sourcePath);
     const source = await readCompareSource(sourcePath, coords);
     if (source.kind === "unavailable") return source.text;
     const buffer = source.buffer;
@@ -87,12 +88,6 @@ async function readCompareSource(
   } catch (err) {
     return { kind: "unavailable", text: compareUnavailableText(coords, err) };
   }
-}
-
-function resolveCompareSourcePath(sourcePath: string): string {
-  if (path.isAbsolute(sourcePath)) return sourcePath;
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  return root ? path.join(root, sourcePath) : sourcePath;
 }
 
 function compareUnavailableText(coords: CompareCoordinates, err: unknown): string {

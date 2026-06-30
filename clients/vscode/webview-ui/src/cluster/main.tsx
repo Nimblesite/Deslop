@@ -12,6 +12,7 @@ import {
   wireMessagePump,
 } from "../store";
 import { COLOR, FONT, GLOBAL_CSS, SEVERITY_COLOR } from "../theme";
+import { HelpAction } from "../components/HelpAction";
 import { SignalStrip } from "../components/SignalStrip";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
@@ -283,7 +284,7 @@ function ClusterApp() {
                 (prev/next cluster live in the footer); each posts a typed
                 message the host acts on. */}
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-              <span class="with-help">
+              <HelpAction topic="open-action">
                 <button
                   onClick={() => post({ kind: "open/occurrence", occurrence: o })}
                   title={openTitle(o)}
@@ -291,9 +292,8 @@ function ClusterApp() {
                 >
                   Open
                 </button>
-                <HelpBubble topic="open-action" />
-              </span>
-              <span class="with-help">
+              </HelpAction>
+              <HelpAction topic="compare-action">
                 <button
                   class={i === 0 ? "" : "primary"}
                   onClick={() => {
@@ -307,8 +307,7 @@ function ClusterApp() {
                 >
                   Compare
                 </button>
-                <HelpBubble topic="compare-action" />
-              </span>
+              </HelpAction>
             </div>
           </article>
         ))}
@@ -323,7 +322,7 @@ function ClusterApp() {
             flexWrap: "wrap",
           }}
         >
-          <span class="with-help">
+          <HelpAction topic="cluster-navigation">
             <button
               onClick={() => selectPreviousCluster(list, rank)}
               title="Previous cluster: move to the cluster ranked immediately before this one. Same behavior as the p keyboard shortcut."
@@ -331,9 +330,8 @@ function ClusterApp() {
             >
               ← prev cluster (p)
             </button>
-            <HelpBubble topic="cluster-navigation" />
-          </span>
-          <span class="with-help">
+          </HelpAction>
+          <HelpAction topic="cluster-navigation">
             <button
               onClick={() => selectNextCluster(list, rank)}
               title="Next cluster: move to the cluster ranked immediately after this one. Same behavior as the n keyboard shortcut."
@@ -341,8 +339,7 @@ function ClusterApp() {
             >
               next cluster (n) →
             </button>
-            <HelpBubble topic="cluster-navigation" />
-          </span>
+          </HelpAction>
         </footer>
         <HotkeyHelp accent={SEVERITY_COLOR[severity]} />
       </div>

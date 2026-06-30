@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 
-const target = argValue("--target") ?? currentTarget();
+import { currentPlatformTarget } from "./platform.mjs";
+
+const target = argValue("--target") ?? currentPlatformTarget();
 const output = argValue("--out") ?? `deslop-live-${target}.vsix`;
 
 run("npm", ["run", "build"]);
@@ -19,13 +21,4 @@ function argValue(name) {
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: "inherit", shell: process.platform === "win32" });
   if (result.status !== 0) process.exit(result.status ?? 1);
-}
-
-function currentTarget() {
-  if (process.platform === "darwin" && process.arch === "arm64") return "darwin-arm64";
-  if (process.platform === "darwin" && process.arch === "x64") return "darwin-x64";
-  if (process.platform === "linux" && process.arch === "x64") return "linux-x64";
-  if (process.platform === "linux" && process.arch === "arm64") return "linux-arm64";
-  if (process.platform === "win32" && process.arch === "x64") return "win32-x64";
-  throw new Error(`unsupported platform ${process.platform}-${process.arch}`);
 }

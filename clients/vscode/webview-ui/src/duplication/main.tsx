@@ -7,6 +7,7 @@ import { render } from "preact";
 
 import { report, wireMessagePump } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
+import { MetricHeading } from "../components/MetricHeading";
 import { buildFolderRollup, type RollupChild } from "../../../src/tree/rollup";
 import { thresholdStatus } from "../../../src/tree/threshold";
 
@@ -97,27 +98,7 @@ function DuplicationApp() {
         <div class="label" style={{ fontFamily: FONT.mono, color: COLOR.onSurfaceMuted }}>
           DESLOP · DUPLICATION · {snapshot.tool_version}
         </div>
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: FONT.ui,
-            fontSize: "3rem",
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-          }}
-        >
-          {metrics.duplication_percent.toFixed(1)}%
-          <span
-            style={{
-              fontSize: "1rem",
-              fontFamily: FONT.mono,
-              color: COLOR.onSurfaceMuted,
-              marginLeft: "16px",
-            }}
-          >
-            duplicated
-          </span>
-        </h1>
+        <MetricHeading value={metrics.duplication_percent} label="duplicated" />
         <div class="mono" style={{ fontSize: "12px", color: COLOR.onSurfaceMuted }}>
           {metrics.duplicated_loc}/{metrics.analysed_loc} LOC · {metrics.clusters_total} clusters ·{" "}
           {metrics.duplicated_files} files{gate}

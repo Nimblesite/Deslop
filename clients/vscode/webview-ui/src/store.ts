@@ -8,6 +8,7 @@ import type {
   Report,
   ReportCluster,
   Severity,
+  severityOf,
 } from "../../src/types/report";
 
 export type Filters = {
@@ -31,7 +32,7 @@ export const severityByClusterId = computed<Map<string, Severity>>(() => {
   list.forEach((cluster, i) => {
     const rank = i + 1;
     const pct = total <= 1 ? 0 : 1 - (rank - 1) / (total - 1);
-    out.set(cluster.id, pct >= 0.99 ? "worst" : pct >= 0.9 ? "top10" : pct >= 0.5 ? "mid" : "faint");
+    out.set(cluster.id, severityOf(pct));
   });
   return out;
 });

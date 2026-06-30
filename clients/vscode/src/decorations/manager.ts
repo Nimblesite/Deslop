@@ -15,6 +15,7 @@ import { effect } from "@preact/signals-core";
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity, SEVERITY_COLOR } from "../severity";
+import { sameFile } from "../pathUtils";
 import { debounce, Debounced, ScheduleFn } from "../util/debounce";
 import { Report, ReportCluster, ReportOccurrence, Severity, visibleOccurrenceCount } from "../types/report";
 
@@ -136,7 +137,4 @@ export function rangeFromBuffer(
   return new vscode.Range(start, end);
 }
 
-export function sameFile(reportPath: string, editorPath: string): boolean {
-  if (reportPath === editorPath) return true;
-  return editorPath.endsWith(reportPath) || reportPath.endsWith(editorPath);
-}
+export { sameFile } from "../pathUtils";
