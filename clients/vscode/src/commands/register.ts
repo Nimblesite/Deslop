@@ -104,17 +104,24 @@ export function refreshReport(clientOf: ClientFactory): Thenable<unknown> | unde
 
 // [OUTPUT-HUMAN-HTML] Asks the LSP to render the full standalone HTML report
 // and shows it in an in-editor browser tab. The renderer lives in the engine,
-// so neither this client nor the JetBrains plugins re-implement it.
+// so neither this client nor the JetBrains plugins re-implement it. The render
+// is synchronous on the LSP side and can be slow on large workspaces, so the
+// round-trip runs under a progress notification that clears when the tab opens
+// or on error — otherwise the click reads as a frozen UI (#256).
 export async function openHtmlReport(clientOf: ClientFactory): Promise<void> {
   const client = clientOf();
   if (!client) {
     void vscode.window.showInformationMessage("Deslop: LSP client is not ready.");
     return;
   }
-  const html = await client.sendRequest<string>("workspace/executeCommand", {
-    command: LSP_RENDER_HTML_REPORT_COMMAND,
-    arguments: [],
-  });
+  const html = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: "Deslop: rendering HTML report…" },
+    () =>
+      client.sendRequest<string>("workspace/executeCommand", {
+        command: LSP_RENDER_HTML_REPORT_COMMAND,
+        arguments: [],
+      }),
+  );
   if (typeof html !== "string" || html.length === 0) {
     void vscode.window.showInformationMessage("Deslop: no HTML report available yet.");
     return;

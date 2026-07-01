@@ -184,6 +184,51 @@ suite("register command handlers", () => {
     assert.equal(reportTabCount(), before, "non-string response → no report tab is opened");
   });
 
+  test("openHtmlReport shows a progress spinner while the LSP renders (#256)", async () => {
+    // Regression: a large render blocks for a long time, so the awaited round-trip
+    // must run inside vscode.window.withProgress — otherwise the UI reads as frozen
+    // with no sign the click registered.
+    const win = vscode.window as unknown as { withProgress: unknown };
+    const original = win.withProgress;
+    const spinners: string[] = [];
+    win.withProgress = (
+      options: vscode.ProgressOptions,
+      task: (
+        progress: vscode.Progress<{ message?: string }>,
+        token: vscode.CancellationToken,
+      ) => Thenable<unknown>,
+    ) => {
+      spinners.push(`${options.location as number}:${options.title ?? ""}`);
+      const progress = { report: () => undefined } as vscode.Progress<{ message?: string }>;
+      const token = {
+        isCancellationRequested: false,
+        onCancellationRequested: () => ({ dispose: () => undefined }),
+      } as unknown as vscode.CancellationToken;
+      return task(progress, token);
+    };
+
+    const client = {
+      sendRequest: () => Promise.resolve("<!doctype html><html><body>report</body></html>"),
+    } as unknown as LanguageClient;
+
+    try {
+      await openHtmlReport(() => client);
+      assert.equal(spinners.length, 1, "the render must be wrapped in exactly one progress indicator");
+      assert.equal(
+        spinners[0],
+        `${vscode.ProgressLocation.Notification}:Deslop: rendering HTML report…`,
+        "the spinner is a notification carrying a human-readable render message",
+      );
+      assert.equal(await waitForReportTabCount(1), 1, "the report tab still opens once the render resolves");
+    } finally {
+      win.withProgress = original;
+      const reportTab = vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .find((t) => t.label === REPORT_TAB_LABEL);
+      if (reportTab) await vscode.window.tabGroups.close(reportTab);
+    }
+  });
+
   test("copyClusterContextById copies the AI payload for a known cluster", async () => {
     const store = storeWith([cluster("alpha"), cluster("beta")]);
     await vscode.env.clipboard.writeText("sentinel");
