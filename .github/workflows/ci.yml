@@ -236,7 +236,12 @@ jobs:
     name: VSIX tests + coverage
     needs: [changes, ci]
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    # Pinned to 22.04: the ubuntu-latest bump to 24.04 stopped @vscode/test-cli
+    # from collecting extension-host V8 coverage (activate() read as ~0% despite
+    # all E2E passing), dropping the line-coverage gate below threshold. 22.04 is
+    # the last image where host coverage flushes correctly. Revisit when the
+    # test-cli / 24.04 coverage-collection incompatibility is resolved.
+    runs-on: ubuntu-22.04
     # TIMEOUT EXCEPTION: builds the real LSP+MCP from source, installs Node
     # deps, then runs full E2E against headless VS Code Electron under xvfb —
     # the 10-minute default is too tight for the Electron download + E2E run.
