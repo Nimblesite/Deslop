@@ -449,3 +449,22 @@ Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) ca
 - VSIX archive package tests prove `extension/shipwright.json` exists, `deslop`, `deslop-lsp`, and `deslop-mcp` are under the single target `extension/bin/<platform>/`, no other platform binary directory is present, no undeclared executable is present there, and every host-executable bundled binary reports the manifest `expectedVersion`.
 
 Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `vscode-test` matrix. Per CLAUDE.md, these are coarse end-to-end tests, not unit tests.
+
+#### [VSIX-TESTING-COVERAGE] Extension-host coverage gate
+
+`make _vsix-coverage` (`npm run coverage`) runs the same unit + E2E suites
+under `@vscode/test-cli` with c8 line coverage over the tsc output in
+`out/**`, then enforces `.vsix.default_threshold` from the repo-root
+`coverage-thresholds.json` (1% rounding slack, ratchet-up-only) via
+`scripts/check-coverage.mjs`.
+
+The packaged extension activates from `dist/extension.js` (the esbuild
+bundle), whose execution cannot be soundly attributed to the measured `out/**`
+files (c8 filters scripts before sourcemap remap, and istanbul cannot merge
+esbuild-mapped and tsc-mapped entries for the same source). So the coverage
+run — and only the coverage run — swaps `package.json` `main` to
+`out/extension.js` via `scripts/extension-coverage.mjs`, which restores the
+manifest afterwards. `make _vsix-test` still runs the full suite against the
+production `dist` bundle, so the shipped artifact stays E2E-validated. The
+webview bundle has its own gate: [webview-runtime.md
+§VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).

@@ -272,11 +272,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # xvfb gives Electron a display; dbus gives it a session bus. Without the
-      # bus, the updated ubuntu-latest image floods "Failed to connect to the
-      # bus" and the extension-host subprocess never shuts down cleanly, so its
-      # V8 coverage file is never flushed — extension.ts read as ~0% covered and
-      # tanked the threshold even though all 384 E2E tests passed.
+      # xvfb gives Electron a display; dbus gives it a session bus so
+      # ubuntu-latest stops flooding "Failed to connect to the bus" from the
+      # Electron subprocesses. (activate() coverage attribution is a separate
+      # concern, handled by the entry swap — [VSIX-TESTING-COVERAGE].)
       - name: Install xvfb + dbus (headless VS Code)
         run: sudo apt-get update && sudo apt-get install -y xvfb dbus dbus-x11
 
@@ -286,7 +285,7 @@ jobs:
         run: make _vsix-build
 
       # Unit tests + coverage threshold. E2E spawns real VS Code Electron — run
-      # it inside a private session bus so extension-host coverage flushes.
+      # it inside a private session bus to keep the Electron processes quiet.
       - name: _vsix-coverage (unit + threshold)
         run: xvfb-run -a dbus-run-session -- make _vsix-coverage
 
