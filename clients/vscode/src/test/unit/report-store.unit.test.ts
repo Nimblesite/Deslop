@@ -183,6 +183,41 @@ suite("ReportStore", () => {
     assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta");
   });
 
+  // #196: the Duplication panel gates on metrics.duplicated_loc while Top
+  // Offenders gates on clusters.length. When the seed snapshot is empty (a
+  // cache seed or mid-scan snapshot) its metrics are zero, and the live
+  // loop then streams clusters in via deltas. If applyDelta failed to carry
+  // the delta's recomputed metrics, Top Offenders would light up while the
+  // Duplication panel stayed pinned at "No duplication detected". Assert the
+  // zero-seed -> delta transition moves metrics off zero AND populates
+  // clusters, so the two panels can no longer disagree.
+  test("applyDelta moves metrics off a zero seed when a delta brings clusters (#196)", () => {
+    const store = new ReportStore();
+    store.setSnapshot(emptyReport(), 1);
+    assert.equal(store.current.report?.metrics.duplicated_loc, 0, "seed starts clean");
+    const delta: ReportDelta = {
+      from_generation: 1,
+      to_generation: 2,
+      clusters_added: [
+        cluster("71a9ee9", 6191, [
+          occurrence("crates/osprey-codegen/src/collections.rs", 0, 10),
+          occurrence("crates/osprey-codegen/src/strings.rs", 0, 10),
+        ]),
+      ],
+      clusters_removed: [],
+      clusters_updated: [],
+      metrics: metrics({ analysed_loc: 9367, duplicated_loc: 1046, duplication_percent: 11.2 }),
+      cache_stats: { hits: 0, misses: 0 },
+      tool_version: "tool-v1",
+    };
+    store.applyDelta(delta);
+    const out = store.current.report;
+    assert.ok(out, "report must exist after applyDelta");
+    assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta off zero");
+    assert.equal(out.metrics.duplication_percent, 11.2, "headline percent must reflect the delta");
+    assert.equal(out.clusters.length, 1, "the delta's cluster must populate Top Offenders");
+  });
+
   test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {
     const store = new ReportStore();
     let fired = 0;

@@ -27,7 +27,7 @@ use crate::{
         JsonRpcRequest, RequestId, JSONRPC_VERSION,
     },
     resources::{read_resource, resources_list_payload},
-    tools::{dispatch_tool_call, tools_list_payload, wrap_tool_result},
+    tools::{advertised_languages, dispatch_tool_call, tools_list_payload, wrap_tool_result},
     MCP_PROTOCOL_VERSION, MCP_SERVER_NAME,
 };
 
@@ -139,7 +139,9 @@ impl<B: McpBackend> McpServer<B> {
             "initialize" => Ok(Self::handle_initialize()),
             "initialized" | "notifications/initialized" | "ping" => Ok(json!({})),
             "shutdown" => Ok(json!(null)),
-            "tools/list" => Ok(tools_list_payload()),
+            "tools/list" => Ok(tools_list_payload(&advertised_languages(
+                self.backend.as_ref(),
+            ))),
             "tools/call" => self.handle_tool_call(&params),
             "resources/list" => Ok(resources_list_payload()),
             "resources/read" => self.handle_resource_read(&params),
