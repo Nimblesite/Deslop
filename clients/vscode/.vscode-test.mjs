@@ -11,6 +11,12 @@ const fixture = path.join(here, "out", "test", "fixtures", "csharp-small");
 export default defineConfig({
   tests: [
     {
+      // Pin the VS Code build: 1.127.0 broke @vscode/test-cli's extension-host
+      // V8 coverage collection — activate() reads as ~0% covered even though the
+      // whole E2E suite passes, sinking the line-coverage gate below threshold.
+      // 1.119.0 is the last build where host coverage flushes correctly; revisit
+      // when the test-cli / newer-VS-Code coverage-collection regression is fixed.
+      version: "1.119.0",
       // Excludes `out/test/ollama/**` — those run only via
       // `.vscode-test-ollama.mjs` / `npm run test:ollama` /
       // `make _vsix-test-ollama`. See docs/specs/vsix.md.
