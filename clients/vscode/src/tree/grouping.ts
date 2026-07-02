@@ -7,11 +7,10 @@
 
 import {
   Bucket,
-  CATEGORIES,
+  BUCKETS,
   ReportCluster,
   ReportOccurrence,
   resolveBucket,
-  resolveCategory,
   Severity,
 } from "../types/report";
 import {
@@ -20,7 +19,6 @@ import {
   FileNode,
   GroupNode,
   Node,
-  TypeGroupNode,
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
 import { compareWeightedPath, SortBy } from "./sort";
@@ -65,6 +63,25 @@ function rankClusters(
   return clusters.map((cluster) => ({ cluster, rank: rankIndex.get(cluster.id) ?? 0 }));
 }
 
+// Shared display ordering for cluster mode and type mode: impact keeps
+// the report's worst-first order; path re-orders by representative file
+// path with weight desc as the tie-break ([VSIX-TOP-OFFENDERS-SORT]).
+function rankAndOrder(
+  clusters: ReportCluster[],
+  rankIndex: Map<string, number>,
+  sortBy: SortBy,
+): RankedCluster[] {
+  const ranked = rankClusters(clusters, rankIndex);
+  if (sortBy === "path") {
+    ranked.sort(
+      (left, right) =>
+        representativePath(left.cluster).localeCompare(representativePath(right.cluster)) ||
+        right.cluster.weight - left.cluster.weight,
+    );
+  }
+  return ranked;
+}
+
 // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Roots are clusters. The sort axis
 // orders the DISPLAY: impact keeps the report's worst-first order; path
 // orders by representative file path. The global rank #N is read from
@@ -77,15 +94,7 @@ export function buildClusterMode(
   rankIndex: Map<string, number>,
   sortBy: SortBy,
 ): Node[] {
-  const ranked = rankClusters(clusters, rankIndex);
-  if (sortBy === "path") {
-    ranked.sort(
-      (left, right) =>
-        representativePath(left.cluster).localeCompare(representativePath(right.cluster)) ||
-        right.cluster.weight - left.cluster.weight,
-    );
-  }
-  return ranked.map(({ cluster, rank }) => {
+  return rankAndOrder(clusters, rankIndex, sortBy).map(({ cluster, rank }) => {
     const severity = severities.get(cluster.id) ?? "faint";
     return new ClusterNode(cluster, rank, severity, { showFile: true });
   });
@@ -201,7 +210,7 @@ export function getFileNodeChildren(file: FileNode): Node[] {
 }
 
 // Per-GroupNode side tables — one machinery for BOTH group axes
-// (file-mode bucket sections and type-mode category roots,
+// (file-mode bucket sections and type-mode bucket roots,
 // [FACET-GROUP-BY-TYPE]). Lists are stored in final display order; the
 // creation sites own the ordering.
 const groupRanked = new WeakMap<GroupNode, RankedCluster[]>();
@@ -230,30 +239,29 @@ export function getGroupNodeChildren(group: GroupNode): Node[] {
   });
 }
 
-// [FACET-GROUP-BY-TYPE] Roots are one group per category present, in
-// registry order, empty groups omitted. Under the impact axis clusters
-// stay worst-first inside each group; the path axis orders them by
-// representative path, exactly like cluster mode. Rank #N stays global.
+// [FACET-GROUP-BY-TYPE] Roots are one flat group per bucket present, in
+// registry order, empty groups omitted (#258) — every Identical cluster
+// surfaces together with no file/folder layer in between. Under the
+// impact axis clusters stay worst-first inside each group; the path axis
+// orders them by representative path, exactly like cluster mode. Rank #N
+// stays global.
 export function buildTypeMode(
   clusters: ReportCluster[],
   severities: Map<string, Severity>,
   rankIndex: Map<string, number>,
   sortBy: SortBy,
 ): Node[] {
-  const ranked = rankClusters(clusters, rankIndex);
-  if (sortBy === "path") {
-    ranked.sort(
-      (left, right) =>
-        representativePath(left.cluster).localeCompare(representativePath(right.cluster)) ||
-        right.cluster.weight - left.cluster.weight,
-    );
-  }
-  return CATEGORIES.map((category) => ({
-    category,
-    list: ranked.filter((entry) => resolveCategory(entry.cluster) === category),
+  const ranked = rankAndOrder(clusters, rankIndex, sortBy);
+  return BUCKETS.map((bucket) => ({
+    bucket,
+    list: ranked.filter((entry) => resolveBucket(entry.cluster) === bucket),
   }))
     .filter(({ list }) => list.length > 0)
-    .map(({ category, list }) =>
-      registerGroup(new TypeGroupNode(category, list.map((entry) => entry.cluster)), list, severities),
+    .map(({ bucket, list }) =>
+      registerGroup(
+        new BucketGroupNode(bucket, list.map((entry) => entry.cluster), true),
+        list,
+        severities,
+      ),
     );
 }

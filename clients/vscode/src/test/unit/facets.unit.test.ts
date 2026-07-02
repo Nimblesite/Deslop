@@ -1,7 +1,7 @@
 // Unit: the facet model ([FACET-MODEL] / [FACET-TOP-OFFENDERS-FILTER] /
 // [FACET-GROUP-BY-TYPE]). Covers the shared filter slice every listing
 // surface funnels through, the sanitizer's typo fallback, and the
-// type-grouping mode's category roots.
+// type-grouping mode's flat bucket roots (#258).
 
 import * as assert from "node:assert/strict";
 
@@ -14,7 +14,7 @@ import {
   buildTypeMode,
   getGroupNodeChildren,
 } from "../../tree/grouping";
-import { ClusterNode, TypeGroupNode } from "../../tree/nodes";
+import { BucketGroupNode, ClusterNode } from "../../tree/nodes";
 import { StatusTicker, TopOffendersProvider } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
 import { cluster, labelText, report, withSetting } from "./tree.helpers";
@@ -63,36 +63,45 @@ suite("facet filter slice ([FACET-TOP-OFFENDERS-FILTER])", () => {
 suite("type grouping mode ([FACET-GROUP-BY-TYPE])", () => {
   const severities = new Map([[identicalLogic.id, "worst" as const]]);
 
-  test("roots are one group per category present, registry order, empty omitted", () => {
+  // #258: type mode groups by BUCKET, not category — every Identical
+  // cluster surfaces together in one flat group, with no category or
+  // file/folder sub-grouping in between.
+  test("roots are one flat group per bucket present, so all Identical clusters sit together", () => {
     const roots = buildTypeMode(ALL, severities, buildRankIndex(ALL), "impact");
-    assert.equal(roots.length, 2, "logic and data groups, nothing for absent categories");
-    const [logicGroup, dataGroup] = roots as [TypeGroupNode, TypeGroupNode];
-    assert.ok(logicGroup instanceof TypeGroupNode);
+    assert.equal(roots.length, 2, "identical + nearly-identical groups; absent buckets omitted");
+    const [identicalGroup, nearlyGroup] = roots as [BucketGroupNode, BucketGroupNode];
+    assert.ok(identicalGroup instanceof BucketGroupNode);
     assert.equal(
-      labelText(logicGroup),
-      "Code clones (2)",
-      "the chip-less logic category uses the plain group title with a live count",
+      labelText(identicalGroup),
+      "Identical code (2)",
+      "groups are labelled by the shared bucket plain title with a live count",
     );
-    assert.equal(
-      labelText(dataGroup),
-      "data table (1)",
-      "chip-carrying categories are labelled by the shared chip",
+    assert.equal(labelText(nearlyGroup), "Nearly identical code (1)");
+    const identicalChildren = getGroupNodeChildren(identicalGroup) as ClusterNode[];
+    assert.deepEqual(
+      identicalChildren.map((node) => node.cluster.id),
+      [identicalLogic.id, identicalData.id],
+      "logic and data clusters share the Identical group — bucket grouping crosses categories, flat",
+    );
+    assert.ok(
+      identicalChildren.every((node) => node instanceof ClusterNode),
+      "children are cluster rows directly — no intermediate file/folder layer",
     );
   });
 
-  test("logic-only reports render a single group", () => {
-    const logicOnly = [identicalLogic, nearlyLogic];
-    const roots = buildTypeMode(logicOnly, severities, buildRankIndex(logicOnly), "impact");
+  test("single-bucket reports render a single group, absent buckets never render empty", () => {
+    const identicalOnly = [identicalLogic, identicalData];
+    const roots = buildTypeMode(identicalOnly, severities, buildRankIndex(identicalOnly), "impact");
     assert.equal(roots.length, 1);
-    assert.equal(labelText(roots[0] as TypeGroupNode), "Code clones (2)");
+    assert.equal(labelText(roots[0] as BucketGroupNode), "Identical code (2)");
   });
 
   test("children keep the GLOBAL rank (gaps allowed) and show their file", () => {
     const rankIndex = buildRankIndex(ALL);
     const roots = buildTypeMode(ALL, severities, rankIndex, "impact");
-    const dataChildren = getGroupNodeChildren(roots[1] as TypeGroupNode);
-    assert.equal(dataChildren.length, 1);
-    const child = dataChildren[0] as ClusterNode;
+    const identicalChildren = getGroupNodeChildren(roots[0] as BucketGroupNode);
+    assert.equal(identicalChildren.length, 2);
+    const child = identicalChildren[1] as ClusterNode;
     assert.ok(child instanceof ClusterNode);
     assert.equal(child.rank, 3, "rank #3 from the global worst-first list, not renumbered");
     assert.ok(
@@ -102,12 +111,16 @@ suite("type grouping mode ([FACET-GROUP-BY-TYPE])", () => {
   });
 
   test("the path sort axis orders clusters inside groups by representative path", () => {
-    const roots = buildTypeMode(ALL, severities, buildRankIndex(ALL), "path");
-    const logicChildren = getGroupNodeChildren(roots[0] as TypeGroupNode) as ClusterNode[];
+    // d.cs carries the heaviest weight so path order and impact order
+    // disagree inside the Identical group — the axis must win.
+    const identicalHeavy = cluster("ddddddd4", 20, "d.cs", 0, 20, "identical");
+    const withHeavy = [...ALL, identicalHeavy];
+    const roots = buildTypeMode(withHeavy, severities, buildRankIndex(withHeavy), "path");
+    const identicalChildren = getGroupNodeChildren(roots[0] as BucketGroupNode) as ClusterNode[];
     assert.deepEqual(
-      logicChildren.map((node) => node.cluster.id),
-      [identicalLogic.id, nearlyLogic.id],
-      "a.cs before b.cs under the path axis",
+      identicalChildren.map((node) => node.cluster.id),
+      [identicalLogic.id, identicalData.id, identicalHeavy.id],
+      "a.cs before c.dart before d.cs under the path axis, weight order ignored",
     );
   });
 });

@@ -12,8 +12,6 @@ import { SEVERITY_DOT } from "../severity";
 import {
   Bucket,
   bucketLabels,
-  Category,
-  categoryLabels,
   FileMetric,
   occurrenceCount,
   ReportCluster,
@@ -180,7 +178,7 @@ export class FileNode extends vscode.TreeItem {
 }
 
 // Shared group-row machinery for the two grouping axes: file-mode
-// bucket sections and type-mode category roots render through this one
+// bucket sections and type-mode bucket roots render through this one
 // base ([FACET-GROUP-BY-TYPE] "one implementation, two group axes").
 // Display-only: clusters carry the navigation command; the group row
 // carries the shared label and live count.
@@ -204,32 +202,24 @@ export abstract class GroupNode extends vscode.TreeItem {
   }
 }
 
-// [VSIX-TOP-OFFENDERS-FILE-MODE] Bucket section under a FileNode.
+// [VSIX-TOP-OFFENDERS-FILE-MODE] Bucket section under a FileNode, and
+// [FACET-GROUP-BY-TYPE] bucket root in type grouping mode (#258) — one
+// node for both axes, labelled by the shared bucket plain title.
+// `showFileInChildren` is true only for type-mode roots, where no file
+// ancestor implies the file.
 export class BucketGroupNode extends GroupNode {
   constructor(
     readonly bucket: Bucket,
     clusters: ReportCluster[],
+    showFileInChildren = false,
   ) {
     super(
       bucketLabels(bucket).plainTitle,
       clusters,
       "deslop.bucketGroup",
-      false,
+      showFileInChildren,
       categoryIcon(bucket),
     );
-  }
-}
-
-// [FACET-GROUP-BY-TYPE] Category root in type grouping mode. Labelled
-// by the shared category group title ("Code clones" for the chip-less
-// logic category); child cluster rows keep their bucket icon/colour so
-// the two axes stay distinguishable.
-export class TypeGroupNode extends GroupNode {
-  constructor(
-    readonly category: Category,
-    clusters: ReportCluster[],
-  ) {
-    super(categoryLabels(category).groupTitle, clusters, "deslop.typeGroup", true);
   }
 }
 

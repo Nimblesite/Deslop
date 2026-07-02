@@ -64,7 +64,6 @@ export {
   OccurrenceNode,
   SessionFieldNode,
   StatusNode,
-  TypeGroupNode,
 } from "./nodes";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];

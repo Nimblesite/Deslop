@@ -462,7 +462,7 @@
           ],
           "default": "cluster",
           "scope": "window",
-          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree; 'type' groups by finding category. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree; 'type' groups flat by duplicate type (Identical, Nearly identical, ...). Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
         },
         "deslop.topOffenders.filterBuckets": {
           "type": "array",

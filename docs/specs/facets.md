@@ -76,16 +76,20 @@ the filtered state are distinct renders.
 ### [FACET-GROUP-BY-TYPE] `type` grouping mode
 
 In the `"type"` grouping mode ([VSIX-TOP-OFFENDERS-GROUPING] owns the `groupBy` enum), roots are
-one group per **category** present in the report (registry order, empty groups omitted). Grouping
-by category — not by bucket, which #195's wording asked for — is a recorded decision: bucket
-isolation is the filter's job ([FACET-TOP-OFFENDERS-FILTER]) and file mode already nests bucket
-sub-groups, so the grouping axis answers the orthogonal "what kind of repetition" question the
-filter cannot express. Group roots are labelled by the shared category chip + live count; the
-chip-less `logic` category uses the plain group title **"Code clones"** (its cluster rows carry no
-chip). Each group contains its clusters worst-first and composes with the sort axis and language
-split exactly like the other modes. Cluster rows inside a type group keep their bucket icon/colour
-so the two axes stay distinguishable. Type groups and file-mode bucket groups render through the
-same group-node machinery — one implementation, two group axes.
+one **flat** group per **bucket** present in the report (registry order, empty groups omitted):
+all Identical clusters in one group, all Nearly identical clusters in the next, with cluster rows
+as direct children — no category, file, or folder layer in between. This reverses the original
+category-keyed decision (#258 overrode it, restoring #195's ask): most Identical clusters can be
+removed mechanically, so surfacing them together in one place is the fastest path to bulk dedup,
+and a filter is not a substitute for seeing the whole partition at once. The filter axes
+([FACET-TOP-OFFENDERS-FILTER]) still slice by bucket *and* category; category insight also
+survives on the rows themselves via the shared category chip. Group roots are labelled by the
+shared bucket plain title + live count and carry the bucket icon/colour. Each group contains its
+clusters worst-first, keeps the global rank #N, and composes with the sort axis and language split
+exactly like the other modes. Type-mode roots and file-mode bucket sections render through the
+same bucket-group node — one implementation, two group axes; only type-mode roots show the file
+suffix on child rows (no file ancestor implies it). The grouping matches the HTML report's
+per-bucket expanders ([FACET-HTML], #257) so the panel and report controls agree.
 
 ### [FACET-REPORT-WEBVIEW] Full-report webview filters
 

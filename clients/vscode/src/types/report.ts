@@ -272,9 +272,9 @@ export type Category = "logic" | "data";
 export const CATEGORIES: readonly Category[] = ["logic", "data"] as const;
 
 export interface CategoryLabels {
-  // Plain group title for facet and grouping surfaces: the shared chip
-  // for chip-carrying categories, "Code clones" for the chip-less
-  // logic default ([FACET-GROUP-BY-TYPE]).
+  // Plain title for facet surfaces (filter QuickPick, webview category
+  // options, HTML facet chips): the shared chip for chip-carrying
+  // categories, "Code clones" for the chip-less logic default.
   groupTitle: string;
   // Short chip shown next to bucket titles; null for logic — the
   // absence of a chip already communicates "ordinary logic clone".
