@@ -8,13 +8,13 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as vscode from "vscode";
 
 import {
   OccurrenceDisplayLocation,
   Report,
   ReportOccurrence,
 } from "./types/report";
+import { resolveWorkspacePath } from "./pathUtils";
 
 export function occurrenceDisplayLocation(
   occurrence: ReportOccurrence,
@@ -66,16 +66,10 @@ function displayLocationFrom(
 
 function readOccurrenceSource(occurrencePath: string): string | undefined {
   try {
-    return fs.readFileSync(resolveOccurrencePath(occurrencePath), "utf8");
+    return fs.readFileSync(resolveWorkspacePath(occurrencePath), "utf8");
   } catch {
     return undefined;
   }
-}
-
-function resolveOccurrencePath(occurrencePath: string): string {
-  if (path.isAbsolute(occurrencePath)) return occurrencePath;
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  return root ? path.join(root, occurrencePath) : occurrencePath;
 }
 
 function positionForByte(source: string, byte: number): { line: number; column: number } {

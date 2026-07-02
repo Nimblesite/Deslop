@@ -6,7 +6,10 @@
 import * as vscode from "vscode";
 import { signal, effect } from "@preact/signals-core";
 
+import { sameFile, shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
+
+export { sameFile, shortPath } from "../pathUtils";
 
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -64,14 +67,4 @@ export class StatusBar implements vscode.Disposable {
         `Click to jump to the worst offender.`,
     );
   }
-}
-
-export function sameFile(a: string, b: string): boolean {
-  if (a === b) return true;
-  return a.endsWith(b) || b.endsWith(a);
-}
-
-export function shortPath(p: string): string {
-  const slash = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
-  return slash >= 0 ? p.slice(slash + 1) : p;
 }

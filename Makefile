@@ -255,24 +255,37 @@ _kill-deslop-processes:
 # [DEPLOY-EXTERNAL-MCP-CONSUMER] No install-binary target by design; this scrub
 #   keeps external MCP clients on the VSIX-bundled binary by absolute path.
 # _delete-path-binaries: Remove any Deslop binaries that have leaked onto the
-#   user's PATH (e.g. from a stray `cargo install`). The VSIX is the only
-#   legitimate distribution surface — the VS Code extension, Claude Code MCP,
-#   Codex MCP, and any other host MUST resolve `deslop`, `deslop-lsp`, and
-#   `deslop-mcp` from the unpacked VSIX `bin/<platform>/` directory by absolute
-#   path. PATH resolution would let a locally-built binary shadow the
-#   shipright-versioned bundle. Invoked by every `_vsix-*` and `test` target so a
-#   developer machine that previously ran `cargo install` is auto-scrubbed.
+#   user's PATH (e.g. from `cargo install` or a package-manager install). The
+#   VSIX is the only legitimate distribution surface. The VS Code extension,
+#   Claude Code MCP, Codex MCP, and any other host MUST resolve `deslop`,
+#   `deslop-lsp`, and `deslop-mcp` from the unpacked VSIX `bin/<platform>/`
+#   directory by absolute path. PATH resolution would let a locally-built binary
+#   shadow the Shipwright-versioned bundle. Invoked by every `_vsix-*` and
+#   `test` target so a developer machine that previously installed Deslop is
+#   auto-scrubbed.
 _delete-path-binaries:
-	@echo "==> Removing cargo-installed Deslop binaries from PATH..."
+	@echo "==> Removing Deslop binaries from PATH..."
+	@if command -v brew >/dev/null 2>&1; then \
+	  brew uninstall --force deslop >/dev/null 2>&1 || true; \
+	fi
 	@for _bin in deslop deslop-lsp deslop-mcp; do \
-	  cargo uninstall $$_bin 2>/dev/null || true; \
+	  cargo uninstall $$_bin >/dev/null 2>&1 || true; \
 	  $(RM) "$(HOME)/.cargo/bin/$$_bin" "$(HOME)/.cargo/bin/$$_bin.exe"; \
-	  _found=$$(command -v $$_bin 2>/dev/null || true); \
-	  if [ -n "$$_found" ]; then \
-	    echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
-	    echo "Remove it before running tests; extension tests must use bundled binaries by absolute path."; \
-	    exit 1; \
-	  fi; \
+	  hash -r 2>/dev/null || true; \
+	  _attempts=0; \
+	  while _found=$$(command -v $$_bin 2>/dev/null || true); [ -n "$$_found" ]; do \
+	    if [ "$$_attempts" -ge 10 ]; then \
+	      echo "FAIL: $$_bin still resolves on PATH at $$_found"; \
+	      echo "Remove it before running tests; extension tests must use bundled binaries by absolute path."; \
+	      exit 1; \
+	    fi; \
+	    case "$$_found" in \
+	      */*) echo "    deleting $$_bin at $$_found"; $(RM) "$$_found" ;; \
+	      *) echo "FAIL: $$_bin resolved to non-file command $$_found"; exit 1 ;; \
+	    esac; \
+	    hash -r 2>/dev/null || true; \
+	    _attempts=$$(( _attempts + 1 )); \
+	  done; \
 	done
 
 # _vsix-install: Install Node deps for clients/vscode + webview-ui.
@@ -366,12 +379,22 @@ _vsix-clean:
 	$(RM) clients/vscode/shipwright.json
 	$(RM) clients/vscode/coverage
 
-# _vsix-install-code: Install the packaged clients/vscode/deslop-live.vsix into
-#   the local `code` CLI. Skips with a warning if `code` isn't on PATH.
+# _vsix-install-code: Replace the installed Deslop.live extension with the
+#   freshly packaged clients/vscode/deslop-live.vsix. Stale Marketplace folders
+#   must be removed first; VS Code otherwise keeps loading the higher released
+#   version even after `code --install-extension --force` reports success.
+#   Skips with a warning if `code` isn't on PATH.
 _vsix-install-code:
 	@if command -v code >/dev/null 2>&1; then \
 	  _vsix=$$(ls clients/vscode/deslop-live-*.vsix 2>/dev/null | head -n1); \
 	  if [ -z "$$_vsix" ]; then echo "FAIL: no clients/vscode/deslop-live-*.vsix found"; exit 1; fi; \
+	  echo "==> Removing installed Deslop.live VS Code extension copies..."; \
+	  code --uninstall-extension nimblesite.deslop-live --force >/dev/null 2>&1 || true; \
+	  for _extensions in "$(HOME)/.vscode/extensions" "$(HOME)/.vscode-insiders/extensions"; do \
+	    if [ -d "$$_extensions" ]; then \
+	      find "$$_extensions" -maxdepth 1 -type d -name 'nimblesite.deslop-live*' -print -exec rm -rf {} +; \
+	    fi; \
+	  done; \
 	  echo "==> Installing $$_vsix into the VS Code CLI..."; \
 	  code --install-extension "$$_vsix" --force; \
 	else \

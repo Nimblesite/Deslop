@@ -32,7 +32,7 @@ Non-surface code — binary resolution, settings, launch, and the shared report 
 
 `clients/jetbrains` is a Gradle build with two modules: a shared library (`deslop-shared`) and one thin LSP surface over it (`deslop-lsp4ij`) producing the plugin zip. All binary resolution, settings, launch, and report-view logic live in the shared module.
 
-- **LSP4IJ surface (`deslop-lsp4ij`).** Registers a `com.redhat.devtools.lsp4ij.LanguageServerFactory` (extension namespace `com.redhat.devtools.lsp4ij`) plus a `fileNamePatternMapping` of `*.cs;*.rs;*.py;*.dart` to that server, launching `deslop-lsp` through an `OSProcessStreamConnectionProvider`. A test asserts the glob equals the shared supported-extension set so the two cannot drift.
+- **LSP4IJ surface (`deslop-lsp4ij`).** Registers a `com.redhat.devtools.lsp4ij.LanguageServerFactory` (extension namespace `com.redhat.devtools.lsp4ij`) plus a `fileNamePatternMapping` covering the parser extension set (`.cs`, `.rs`, `.py`, `.dart`, JavaScript, and TypeScript variants) to that server, launching `deslop-lsp` through an `OSProcessStreamConnectionProvider`. A test asserts the glob equals the shared supported-extension set so the two cannot drift.
 
 The surface launches the binary with the workspace root only — min-node and embedding settings are read by the LSP from `.deslop.toml`, never passed as flags (#83):
 

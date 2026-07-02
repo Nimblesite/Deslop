@@ -74,7 +74,7 @@ The batch CLI and live services both run through `PipelineSession`. The batch en
 
 `crates/deslop-core/src/discover.rs::discover_files` walks the target root with the `ignore` crate, applies standard ignore filters, does not follow symlinks, filters by registered language extensions, applies `.deslop.toml` exclusion rules, and registers surviving files in a `FileRegistry`.
 
-Supported language parsers are currently registered by `crates/deslop-core/src/pipeline/corpus.rs::default_parsers`: C#, Rust, Python, and Dart. TypeScript, JavaScript, Go, and other languages are not registered in the current core pipeline.
+Supported language parsers are currently registered by `crates/deslop-core/src/pipeline/corpus.rs::default_parsers`: C#, Rust, Python, Dart, JavaScript, TypeScript, and TSX. Go and other languages are not registered in the current core pipeline.
 
 ### 2. Parse and normalize
 
@@ -86,6 +86,8 @@ Normalization is language-specific:
 - Rust: `crates/deslop-core/src/lang/rust_lang.rs`
 - Python: `crates/deslop-core/src/lang/python.rs`
 - Dart: `crates/deslop-core/src/lang/dart.rs`
+- JavaScript: `crates/deslop-core/src/lang/javascript.rs`
+- TypeScript / TSX: `crates/deslop-core/src/lang/typescript.rs`
 
 The shared constants are `__ident__` for identifier-like nodes and `__literal__` for literal-like nodes. Comments and trivia are dropped by returning `None` from the language-specific normalizer. This is the mechanism that makes renamed Type-2 clones hash together.
 
@@ -193,7 +195,7 @@ The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and
 
 | Claim | Verify in code | Useful tests |
 | --- | --- | --- |
-| C#, Rust, Python, and Dart are registered today. | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_rust_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_python_fixture` |
+| C#, Rust, Python, Dart, JavaScript, TypeScript, and TSX are registered today. | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test js_ts_signatures`, `cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture` |
 | Type-2 normalization collapses identifiers and literals. | `crates/deslop-core/src/lang/shared.rs`, language parser files | `cargo test -p deslop --test cli debug_ast_dump_matches_committed_golden` |
 | Structural clones are BLAKE3 Merkle subtree hashes. | `crates/deslop-core/src/fingerprint.rs` | `cargo test -p deslop --test sibling_dedup` |
 | Type-3 recall uses sibling windows and MinHash LSH. | `crates/deslop-core/src/sibling.rs`, `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/lsh.rs` | `cargo test -p deslop --test sibling_ranking` |

@@ -74,7 +74,7 @@ imports = "report"
 
 ## `[language.<name>]`
 
-按语言的覆盖区段。名称是解析器的语言 id：`csharp`、`rust`、`python`、`dart`。这里的模式**扩展**默认值 — 永不替换 — 因此一个 `.cs` 文件会同时针对 `defaults.exclude` **加上** `language.csharp.exclude` 进行测试。
+按语言的覆盖区段。名称是解析器的语言 id：`csharp`、`rust`、`python`、`dart`、`javascript`、`typescript` 或 `tsx`。这里的模式**扩展**默认值 — 永不替换 — 因此一个 `.cs` 文件会同时针对 `defaults.exclude` **加上** `language.csharp.exclude` 进行测试。
 
 ```toml
 [language.csharp]

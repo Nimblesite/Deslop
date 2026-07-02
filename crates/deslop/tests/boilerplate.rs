@@ -68,7 +68,9 @@ fn import_boilerplate_is_suppressed_but_real_clones_still_report() -> Result<()>
     let out = run_report(&scan_root, tmp.path(), None)?;
     let report = load_json(&out.json)?;
     assert_no_prologue_clusters(&report, &prologues)?;
-    assert_real_csharp_clone_survives(&report, &prologues)?;
+    assert_real_clone_survives(&report, &prologues, &["Alpha.cs", "Beta.cs"])?;
+    assert_real_clone_survives(&report, &prologues, &["alpha.js", "beta.js"])?;
+    assert_real_clone_survives(&report, &prologues, &["alpha.ts", "beta.ts"])?;
     assert_eq!(hint_count(&report), 0, "default mode must stay quiet");
     Ok(())
 }
@@ -83,7 +85,10 @@ fn import_boilerplate_report_mode_emits_low_noise_hints() -> Result<()> {
     let out = run_report(&scan_root, tmp.path(), Some(&config))?;
     let report = load_json(&out.json)?;
     assert_no_prologue_clusters(&report, &prologues)?;
-    assert_hint_languages(&report, ["csharp", "python", "rust"])?;
+    assert_hint_languages(
+        &report,
+        ["csharp", "python", "rust", "javascript", "typescript"],
+    )?;
     assert_csharp_global_using_nudge(&report)?;
     assert!(fs::read_to_string(&out.txt)?.contains("boilerplate hints"));
     Ok(())
@@ -114,12 +119,13 @@ fn assert_no_prologue_clusters(report: &Value, prologues: &BTreeMap<String, usiz
     Ok(())
 }
 
-fn assert_real_csharp_clone_survives(
+fn assert_real_clone_survives(
     report: &Value,
     prologues: &BTreeMap<String, usize>,
+    files: &[&str],
 ) -> Result<()> {
-    let cluster = find_cluster(report, &["Alpha.cs", "Beta.cs"])
-        .ok_or_else(|| anyhow!("expected the real C# clone below imports to survive"))?;
+    let cluster = find_cluster(report, files)
+        .ok_or_else(|| anyhow!("expected the real clone below imports to survive: {files:?}"))?;
     for occurrence in cluster_occurrences(cluster)? {
         let name = occurrence_name(occurrence).unwrap_or_default();
         let prologue_end = prologues.get(name).copied().unwrap_or_default();
@@ -224,7 +230,7 @@ fn assert_contains(value: &Value, key: &str, needle: &str) {
     );
 }
 
-fn sources() -> [SourceSpec; 6] {
+fn sources() -> [SourceSpec; 10] {
     [
         SourceSpec {
             name: "Alpha.cs",
@@ -255,6 +261,26 @@ fn sources() -> [SourceSpec; 6] {
             name: "beta.py",
             body_marker: "class",
             source: PYTHON_BETA,
+        },
+        SourceSpec {
+            name: "alpha.js",
+            body_marker: "export function shared",
+            source: JS_ALPHA,
+        },
+        SourceSpec {
+            name: "beta.js",
+            body_marker: "export function shared",
+            source: JS_BETA,
+        },
+        SourceSpec {
+            name: "alpha.ts",
+            body_marker: "export function shared",
+            source: TS_ALPHA,
+        },
+        SourceSpec {
+            name: "beta.ts",
+            body_marker: "export function shared",
+            source: TS_BETA,
         },
     ]
 }
@@ -333,3 +359,43 @@ class Beta:
     def __init__(self, name):
         self.name = name
 ";
+
+const JS_ALPHA: &str = r#"import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
+
+export function shared(value) {
+  const total = value + 1;
+  return total * 3;
+}
+"#;
+
+const JS_BETA: &str = r#"import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
+
+export function shared(amount) {
+  const sum = amount + 1;
+  return sum * 3;
+}
+"#;
+
+const TS_ALPHA: &str = r#"import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
+
+export function shared(value: number): number {
+  const total = value + 1;
+  return total * 3;
+}
+"#;
+
+const TS_BETA: &str = r#"import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
+
+export function shared(amount: number): number {
+  const sum = amount + 1;
+  return sum * 3;
+}
+"#;

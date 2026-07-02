@@ -1,0 +1,1 @@
+export default `Invoice total: ${lines.reduce((acc, line) => acc + line.price * line.qty, 0)} due ${customer.active ? customer.rate * basePrice : basePrice} on ${new Date().toISOString()} for ${customer.name} (${customer.id})`;

@@ -1,0 +1,1 @@
+export default `Invoice total: ${rows.reduce((sum, row) => sum + row.cost * row.count, 0)} due ${client.enabled ? client.factor * basis : basis} on ${new Date().toISOString()} for ${client.label} (${client.code})`;

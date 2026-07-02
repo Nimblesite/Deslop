@@ -12,6 +12,7 @@ import { openClusterPanel } from "../../webview/panels";
 import { ReportStore } from "../../reportStore";
 import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "../../clusterSelection";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
+import { reportWithClusters } from "./report.helpers";
 
 interface PostedMessage {
   kind?: string;
@@ -94,27 +95,7 @@ function clusterOf(id: string, weight: number, occurrences: ReportOccurrence[]):
 }
 
 function reportOf(clusters: ReportCluster[]): Report {
-  return {
-    tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 4,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 0,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: clusters.length,
-      duplicated_files: 0,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
-    clusters,
-  };
+  return reportWithClusters(clusters, { files_analysed: 4 });
 }
 
 function lastOfKind(messages: PostedMessage[], kind: string): PostedMessage | undefined {

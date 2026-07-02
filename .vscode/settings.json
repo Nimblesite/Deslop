@@ -8,6 +8,7 @@
   },
   "deslop.embedding.provider": "ollama",
   "deslop.embedding.model": "nomic-embed-text",
-  "deslop.topOffenders.splitByLanguage": false,
-  "deslop.topOffenders.sortBy": "impact"
+  "deslop.topOffenders.splitByLanguage": true,
+  "deslop.topOffenders.sortBy": "impact",
+  "deslop.topOffenders.groupBy": "cluster"
 }

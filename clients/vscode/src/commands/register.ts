@@ -6,6 +6,7 @@ import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore } from "../reportStore";
+import { sameFile } from "../pathUtils";
 import { openClusterPanel, openDuplicationReportPanel, openReportPanel } from "../webview/panels";
 import { showHtmlReport } from "../webview/htmlReport";
 import { pickEmbeddingModel } from "./embeddingPicker";
@@ -516,9 +517,4 @@ export function utf8ByteOffset(doc: vscode.TextDocument, position: vscode.Positi
     doc.getText(new vscode.Range(new vscode.Position(0, 0), position)),
     "utf8",
   );
-}
-
-function sameFile(a: string, b: string): boolean {
-  if (a === b) return true;
-  return a.endsWith(b) || b.endsWith(a);
 }

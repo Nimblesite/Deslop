@@ -376,6 +376,40 @@ fn debug_ast_dump_matches_committed_golden_dart() -> Result<()> {
     assert_ast_golden("ast-golden-dart", "Sample.dart")
 }
 
+// [LANG-CAND-JAVASCRIPT] golden: Sample.js exercises the shared
+// ECMAScript-family identifier/literal/comment normalisation path with
+// template strings, object shorthand, ternaries, and regex literals.
+#[test]
+fn debug_ast_dump_matches_committed_golden_javascript() -> Result<()> {
+    assert_ast_golden("ast-golden-javascript", "Sample.js")
+}
+
+// [LANG-CAND-TYPESCRIPT] golden: Sample.ts exercises the shared
+// ECMAScript-family normaliser plus TypeScript-only type alias,
+// optional property, type annotation, and generic wrapper nodes.
+#[test]
+fn debug_ast_dump_matches_committed_golden_typescript() -> Result<()> {
+    assert_ast_golden("ast-golden-typescript", "Sample.ts")
+}
+
+// [LANG-CAND-TYPESCRIPT] golden: Sample.tsx proves TSX reaches the
+// same normaliser through the separate TSX grammar entry point and
+// preserves JSX structure while collapsing JSX text/literals.
+#[test]
+fn debug_ast_dump_matches_committed_golden_tsx() -> Result<()> {
+    assert_ast_golden("ast-golden-tsx", "Sample.tsx")
+}
+
+// [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript
+// grammar's JSX path normalises identically — and pins that JSX text AND
+// html_character_reference entities (`&amp;`, `&copy;`) both collapse to
+// the literal placeholder rather than leaking entity structure into the
+// fingerprint.
+#[test]
+fn debug_ast_dump_matches_committed_golden_jsx() -> Result<()> {
+    assert_ast_golden("ast-golden-jsx", "Sample.jsx")
+}
+
 // Implements [PIPELINE-NORMALIZE-AST] unsupported-extension: running
 // `--debug-ast` on a file whose extension no parser claims must exit
 // non-zero with a clear error, not panic or emit an empty dump.

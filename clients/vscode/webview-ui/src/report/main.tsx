@@ -11,6 +11,7 @@ import {
   wireMessagePump,
 } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
+import { MetricHeading } from "../components/MetricHeading";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
   bucketLabels,
@@ -64,27 +65,7 @@ function ReportApp() {
             gap: "24px",
           }}
         >
-          <h1
-            style={{
-              margin: 0,
-              fontFamily: FONT.ui,
-              fontSize: "3rem",
-              fontWeight: 700,
-              letterSpacing: "-0.03em",
-            }}
-          >
-            {snapshot.metrics.duplication_percent.toFixed(1)}%
-            <span
-              style={{
-                fontSize: "1rem",
-                fontFamily: FONT.mono,
-                color: COLOR.onSurfaceMuted,
-                marginLeft: "16px",
-              }}
-            >
-              duplicated
-            </span>
-          </h1>
+          <MetricHeading value={snapshot.metrics.duplication_percent} label="duplicated" />
           <div
             style={{
               textAlign: "right",

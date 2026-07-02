@@ -23,7 +23,7 @@ Deslop 是一个**实时重复代码分析服务器** —— LSP + MCP，运行�
 - **命令行：** `code --install-extension nimblesite.deslop-live`
 - **浏览器：** 打开 [Deslop.live Marketplace 页面](https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live) 并点击**安装**。
 
-随后打开一个 `.cs` / `.rs` / `.py` / `.dart` 文件。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
+随后打开一个受支持的源文件（`.cs`、`.rs`、`.py`、`.dart`、`.js`、`.mjs`、`.cjs`、`.jsx`、`.ts` 或 `.tsx`）。实时气泡会立即生效，并且随着文件监视器触发，**Top Offenders** 树状视图会随之填充。
 
 该扩展捆绑了面向 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 和 `win32-x64` 的原生二进制文件 —— 系统会自动为你选择正确的那一个。
 

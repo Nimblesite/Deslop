@@ -68,7 +68,8 @@ fn member_is_declaration_context(snippet: &Snippet<'_>) -> bool {
 }
 
 /// CST node kinds that are themselves a single top-level declaration across
-/// the four supported grammars.
+/// the supported grammars. (`class_declaration` / `interface_declaration` /
+/// `method_signature` are shared with the JS/TS family below.)
 fn is_declaration_kind(kind: &str) -> bool {
     matches!(
         kind,
@@ -97,6 +98,15 @@ fn is_declaration_kind(kind: &str) -> bool {
             | "function_signature"
             | "declaration"
             | "extension_declaration"
+            // JavaScript / TypeScript / TSX
+            | "method_definition"
+            | "public_field_definition"
+            | "function_declaration"
+            | "generator_function_declaration"
+            | "abstract_class_declaration"
+            | "type_alias_declaration"
+            | "enum_declaration"
+            | "property_signature"
     )
 }
 
@@ -109,11 +119,15 @@ fn is_declaration_body_kind(kind: &str) -> bool {
         "declaration_list"
             | "compilation_unit"
             | "source_file"
-            // Dart
+            // Dart (`class_body` / `enum_body` / `program` shared with JS/TS)
             | "class_body"
             | "extension_body"
             | "mixin_body"
             | "enum_body"
             | "program"
+            // JavaScript / TypeScript / TSX
+            | "interface_body"
+            | "object_type"
+            | "statement_block"
     )
 }
