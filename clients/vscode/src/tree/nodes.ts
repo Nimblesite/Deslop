@@ -12,6 +12,8 @@ import { SEVERITY_DOT } from "../severity";
 import {
   Bucket,
   bucketLabels,
+  Category,
+  categoryLabels,
   FileMetric,
   occurrenceCount,
   ReportCluster,
@@ -177,25 +179,57 @@ export class FileNode extends vscode.TreeItem {
   }
 }
 
-// [VSIX-TOP-OFFENDERS-FILE-MODE] Bucket section under a FileNode.
-// Display-only: clusters carry the navigation command; the bucket
-// group carries the type label and category icon.
-export class BucketGroupNode extends vscode.TreeItem {
-  constructor(
-    readonly bucket: Bucket,
+// Shared group-row machinery for the two grouping axes: file-mode
+// bucket sections and type-mode category roots render through this one
+// base ([FACET-GROUP-BY-TYPE] "one implementation, two group axes").
+// Display-only: clusters carry the navigation command; the group row
+// carries the shared label and live count.
+export abstract class GroupNode extends vscode.TreeItem {
+  protected constructor(
+    title: string,
     readonly clusters: ReportCluster[],
+    contextValue: string,
+    /** Whether child cluster rows show their file suffix — true when
+     * the group is a root (no file ancestor implies the file). */
+    readonly showFileInChildren: boolean,
+    icon?: vscode.ThemeIcon,
   ) {
-    const labels = bucketLabels(bucket);
-    super(
-      `${labels.plainTitle} (${clusters.length})`,
-      vscode.TreeItemCollapsibleState.Expanded,
-    );
-    this.contextValue = "deslop.bucketGroup";
-    this.iconPath = categoryIcon(bucket);
+    super(`${title} (${clusters.length})`, vscode.TreeItemCollapsibleState.Expanded);
+    this.contextValue = contextValue;
+    if (icon) this.iconPath = icon;
     this.accessibilityInformation = {
-      label: `${labels.plainTitle}, ${clusters.length} clusters`,
+      label: `${title}, ${clusters.length} clusters`,
       role: "treeitem",
     };
+  }
+}
+
+// [VSIX-TOP-OFFENDERS-FILE-MODE] Bucket section under a FileNode.
+export class BucketGroupNode extends GroupNode {
+  constructor(
+    readonly bucket: Bucket,
+    clusters: ReportCluster[],
+  ) {
+    super(
+      bucketLabels(bucket).plainTitle,
+      clusters,
+      "deslop.bucketGroup",
+      false,
+      categoryIcon(bucket),
+    );
+  }
+}
+
+// [FACET-GROUP-BY-TYPE] Category root in type grouping mode. Labelled
+// by the shared category group title ("Code clones" for the chip-less
+// logic category); child cluster rows keep their bucket icon/colour so
+// the two axes stay distinguishable.
+export class TypeGroupNode extends GroupNode {
+  constructor(
+    readonly category: Category,
+    clusters: ReportCluster[],
+  ) {
+    super(categoryLabels(category).groupTitle, clusters, "deslop.typeGroup", true);
   }
 }
 

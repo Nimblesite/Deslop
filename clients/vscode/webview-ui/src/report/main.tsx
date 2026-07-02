@@ -11,28 +11,56 @@ import {
   wireMessagePump,
 } from "../store";
 import { COLOR, FONT, GLOBAL_CSS } from "../theme";
+import { FilterSelect } from "../components/FilterSelect";
 import { MetricHeading } from "../components/MetricHeading";
 import { SeverityBadge } from "../components/SeverityBadge";
 import {
+  BUCKETS,
   bucketLabels,
+  CATEGORIES,
+  categoryLabels,
   clusterSlug,
   occurrenceCount,
   resolveBucket,
+  SEVERITIES,
+  severityLabel,
+  type Bucket,
+  type Category,
   type Severity,
 } from "../../../src/types/report";
+import { LANGUAGES, languageDisplayName } from "../../../src/types/languages";
 
-const LANG_OPTIONS: { label: string; value: string | null }[] = [
-  { label: "Any language", value: null },
-  { label: "C#", value: ".cs" },
-  { label: "Rust", value: ".rs" },
-  { label: "Python", value: ".py" },
+// [FACET-REPORT-WEBVIEW] Every option list derives from the shared
+// registries (the #170/#198 anti-drift rule): languages from the
+// language registry, severities from SEVERITIES, buckets/categories
+// from the canonical mirrors. `null` = no filter on that axis.
+const LANG_OPTIONS = [
+  { label: "Any language", value: null as string | null },
+  ...LANGUAGES.map((id) => ({ label: languageDisplayName(id), value: id as string | null })),
 ];
 
-const SEVERITY_OPTIONS: { label: string; value: Severity | null }[] = [
-  { label: "All severities", value: null },
-  { label: "Worst 1%", value: "worst" },
-  { label: "Top 10%", value: "top10" },
-  { label: "Mid 40%", value: "mid" },
+const SEVERITY_OPTIONS = [
+  { label: "All severities", value: null as Severity | null },
+  ...SEVERITIES.map((severity) => ({
+    label: severityLabel(severity),
+    value: severity as Severity | null,
+  })),
+];
+
+const BUCKET_OPTIONS = [
+  { label: "All clone types", value: null as Bucket | null },
+  ...BUCKETS.map((bucket) => ({
+    label: bucketLabels(bucket).plainTitle,
+    value: bucket as Bucket | null,
+  })),
+];
+
+const CATEGORY_OPTIONS = [
+  { label: "All categories", value: null as Category | null },
+  ...CATEGORIES.map((category) => ({
+    label: categoryLabels(category).groupTitle,
+    value: category as Category | null,
+  })),
 ];
 
 function ReportApp() {
@@ -94,31 +122,26 @@ function ReportApp() {
           paddingBottom: "16px",
         }}
       >
-        <select
-          value={filters.value.language ?? ""}
-          onChange={(event) => {
-            const raw = (event.currentTarget as HTMLSelectElement).value;
-            filters.value = { ...filters.value, language: raw === "" ? null : raw };
-          }}
-        >
-          {LANG_OPTIONS.map((o) => (
-            <option key={o.label} value={o.value ?? ""}>{o.label}</option>
-          ))}
-        </select>
-        <select
-          value={filters.value.severity ?? ""}
-          onChange={(event) => {
-            const raw = (event.currentTarget as HTMLSelectElement).value;
-            filters.value = {
-              ...filters.value,
-              severity: raw === "" ? null : (raw as Severity),
-            };
-          }}
-        >
-          {SEVERITY_OPTIONS.map((o) => (
-            <option key={o.label} value={o.value ?? ""}>{o.label}</option>
-          ))}
-        </select>
+        <FilterSelect
+          options={LANG_OPTIONS}
+          value={filters.value.language}
+          onChange={(language) => (filters.value = { ...filters.value, language })}
+        />
+        <FilterSelect
+          options={SEVERITY_OPTIONS}
+          value={filters.value.severity}
+          onChange={(severity) => (filters.value = { ...filters.value, severity })}
+        />
+        <FilterSelect
+          options={BUCKET_OPTIONS}
+          value={filters.value.bucket}
+          onChange={(bucket) => (filters.value = { ...filters.value, bucket })}
+        />
+        <FilterSelect
+          options={CATEGORY_OPTIONS}
+          value={filters.value.category}
+          onChange={(category) => (filters.value = { ...filters.value, category })}
+        />
         <input
           type="text"
           placeholder="path glob (e.g. src/)"

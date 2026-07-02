@@ -118,10 +118,11 @@ literal-family clause when those clusters exist ("…plus 12 magic values, 3 dup
 
 ### [FACET-CLI] CLI summary breakdown
 
-The stderr summary's cluster breakdown includes a second line counting literal-family categories
-when non-zero, driven by `CloneCategory::all()` through the existing breakdown plumbing. The CLI
-has no presentation filter flags — agents consume the JSON or the MCP surface
-([MCP-TOOL-FILTERS]); the summary is for humans.
+The stderr summary's cluster breakdown includes a second line counting non-logic categories when
+non-zero (e.g. `2 × data table`; the literal families join automatically when [LITERAL-CATEGORY]
+ships), driven by `CloneCategory::all()` through the existing breakdown plumbing. Logic is the
+implicit default and never prints. The CLI has no presentation filter flags — agents consume the
+JSON or the MCP surface ([MCP-TOOL-FILTERS]); the summary is for humans.
 
 ### [FACET-MCP] MCP
 

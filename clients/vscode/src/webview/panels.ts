@@ -126,7 +126,17 @@ function wirePanel(
   // [VSIX-STATE-DIRTY]: webviews mirror the visible projection so an
   // unsaved edit hides occurrences in lock-step with the tree. Commands
   // that need cluster-id lookup go through canonical separately.
-  return { dispose: effect(() => pushReport(store.visibleReport.value)) };
+  // [FACET-TOP-OFFENDERS-FILTER] The workspace facet filter rides along
+  // so the webview's cluster list agrees with the filtered tree.
+  return {
+    dispose: effect(() => {
+      void panel.webview.postMessage({
+        kind: "facetFilter/set",
+        filter: store.facetFilter.value,
+      });
+      pushReport(store.visibleReport.value);
+    }),
+  };
 }
 
 // The cluster detail panel pins to a stable anchor instead of the volatile

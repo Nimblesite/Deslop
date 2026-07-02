@@ -3,24 +3,44 @@
 // no stale UI. The extension process posts messages; this is the only writer.
 
 import { signal, computed, batch } from "@preact/signals";
-import type {
-  AnalysisState,
-  Report,
-  ReportCluster,
-  Severity,
+import {
+  applyFacetFilter,
+  resolveBucket,
+  resolveCategory,
+  type AnalysisState,
+  type Bucket,
+  type Category,
+  type FacetFilter,
+  type Report,
+  type ReportCluster,
+  type Severity,
   severityOf,
 } from "../../src/types/report";
+import { languageForPath } from "../../src/types/languages";
 
 export type Filters = {
   language: string | null;
   severity: Severity | null;
+  bucket: Bucket | null;
+  category: Category | null;
   pathGlob: string;
+};
+
+export const EMPTY_FILTERS: Filters = {
+  language: null,
+  severity: null,
+  bucket: null,
+  category: null,
+  pathGlob: "",
 };
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
 export const analysisState = signal<AnalysisState>("idle");
-export const filters = signal<Filters>({ language: null, severity: null, pathGlob: "" });
+export const filters = signal<Filters>(EMPTY_FILTERS);
+// [FACET-TOP-OFFENDERS-FILTER] Workspace facet filter pushed by the
+// extension host so this list agrees with the filtered tree.
+export const facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
 export const lastUpdatedAt = signal<number>(0);
 
 export const clusters = computed<ReportCluster[]>(() => report.value?.clusters ?? []);
@@ -44,14 +64,18 @@ export const selectedCluster = computed<ReportCluster | null>(() => {
 });
 
 export const filteredClusters = computed<ReportCluster[]>(() => {
-  const { language, severity, pathGlob } = filters.value;
+  const { language, severity, bucket, category, pathGlob } = filters.value;
   const byId = severityByClusterId.value;
   const glob = pathGlob.trim().toLowerCase();
-  return clusters.value.filter((cluster) => {
-    if (language && !cluster.occurrences.some((o) => o.path.toLowerCase().endsWith(language))) {
+  // Base slice: the workspace facet filter, shared with the tree and
+  // status bar; the webview's own selects refine it below.
+  return applyFacetFilter(clusters.value, facetFilter.value).filter((cluster) => {
+    if (language && !cluster.occurrences.some((o) => languageForPath(o.path) === language)) {
       return false;
     }
     if (severity && byId.get(cluster.id) !== severity) return false;
+    if (bucket && resolveBucket(cluster) !== bucket) return false;
+    if (category && resolveCategory(cluster) !== category) return false;
     if (glob && !cluster.occurrences.some((o) => o.path.toLowerCase().includes(glob))) {
       return false;
     }
@@ -65,7 +89,8 @@ export type HostMessage =
   | { kind: "report/delta"; report: Report }
   | { kind: "analysis/state"; state: AnalysisState }
   | { kind: "select/cluster"; id: string | null }
-  | { kind: "filter/set"; filters: Filters };
+  | { kind: "filter/set"; filters: Filters }
+  | { kind: "facetFilter/set"; filter: FacetFilter };
 
 // [VSIX-REACTIVITY-WEBVIEW] The sole batched writer of webview signals:
 // the host posts messages, this folds them into the signal graph.
@@ -85,6 +110,9 @@ export function applyHostMessage(message: HostMessage): void {
         break;
       case "filter/set":
         filters.value = message.filters;
+        break;
+      case "facetFilter/set":
+        facetFilter.value = message.filter;
         break;
     }
   });

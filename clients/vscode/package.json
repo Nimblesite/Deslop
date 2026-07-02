@@ -157,6 +157,26 @@
         "icon": "$(folder)"
       },
       {
+        "command": "deslop.topOffenders.showByType",
+        "title": "Deslop: Group Top Offenders by Type",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "deslop.topOffenders.chooseFilter",
+        "title": "Deslop: Filter Top Offenders by Clone Type",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "deslop.topOffenders.chooseFilterActive",
+        "title": "Deslop: Filter Top Offenders by Clone Type (filter active)",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "deslop.topOffenders.clearFilter",
+        "title": "Deslop: Clear Top Offenders Filter",
+        "icon": "$(filter-filled)"
+      },
+      {
         "command": "deslop.topOffenders.sortByImpact",
         "title": "Deslop: Sort Top Offenders by Impact",
         "icon": "$(arrow-down)"
@@ -215,8 +235,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "deslop.topOffenders.showByCluster",
+          "command": "deslop.topOffenders.showByType",
           "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'folder'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deslop.topOffenders.showByCluster",
+          "when": "view == deslop.topOffenders && deslop.topOffendersGroupBy == 'type'",
           "group": "navigation@1"
         },
         {
@@ -235,24 +260,34 @@
           "group": "navigation@3"
         },
         {
-          "command": "deslop.topOffenders.expandAll",
-          "when": "view == deslop.topOffenders",
+          "command": "deslop.topOffenders.chooseFilter",
+          "when": "view == deslop.topOffenders && !deslop.topOffendersFiltered",
           "group": "navigation@4"
         },
         {
-          "command": "deslop.topOffenders.collapseAll",
+          "command": "deslop.topOffenders.chooseFilterActive",
+          "when": "view == deslop.topOffenders && deslop.topOffendersFiltered",
+          "group": "navigation@4"
+        },
+        {
+          "command": "deslop.topOffenders.expandAll",
           "when": "view == deslop.topOffenders",
           "group": "navigation@5"
         },
         {
-          "command": "deslop.refresh",
+          "command": "deslop.topOffenders.collapseAll",
           "when": "view == deslop.topOffenders",
           "group": "navigation@6"
         },
         {
-          "command": "deslop.openHtmlReport",
+          "command": "deslop.refresh",
           "when": "view == deslop.topOffenders",
           "group": "navigation@7"
+        },
+        {
+          "command": "deslop.openHtmlReport",
+          "when": "view == deslop.topOffenders",
+          "group": "navigation@8"
         },
         {
           "command": "deslop.refresh",
@@ -422,11 +457,30 @@
           "enum": [
             "cluster",
             "file",
-            "folder"
+            "folder",
+            "type"
           ],
           "default": "cluster",
           "scope": "window",
-          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+          "description": "Top Offenders grouping. 'cluster' shows worst clusters as roots; 'file' groups by file then by clone type; 'folder' is a folder tree; 'type' groups by finding category. Workspace settings override the user-level default. See [VSIX-TOP-OFFENDERS-GROUPING] in docs/specs/vsix.md."
+        },
+        "deslop.topOffenders.filterBuckets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "window",
+          "description": "Show only clusters in these clone buckets (wire labels, e.g. 'identical'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
+        },
+        "deslop.topOffenders.filterCategories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "window",
+          "description": "Show only clusters in these clone categories (wire labels, e.g. 'data'). Empty shows all; unknown values are ignored. See [FACET-TOP-OFFENDERS-FILTER] in docs/specs/facets.md."
         },
         "deslop.topOffenders.sortBy": {
           "type": "string",

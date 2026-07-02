@@ -400,7 +400,7 @@ pub(super) fn write_cluster_card(
     };
     let _ = write!(
         out,
-        "<article class=\"cluster-card {kind_class}\">\
+        "<article class=\"cluster-card {kind_class} cat-{category_class}\">\
          <header class=\"cluster-card__head\">\
          <h3 class=\"cluster-card__title\">{title}</h3>\
          {ai_badge}{category_chip}\
@@ -408,6 +408,7 @@ pub(super) fn write_cluster_card(
          </header>\
          <p class=\"cluster-card__action\">{action}</p>",
         kind_class = kind_class(kind),
+        category_class = category.wire_label(),
         title = escape(&kind_title(kind, occurrences.len())),
         category_chip = category_chip(category),
         cost = escape(&cost_chip(cluster)),

@@ -5,6 +5,8 @@
 //! the shared bucket registry so the report and the VS Code panel speak
 //! the same words ([CLONE-BUCKETS-DUAL-LABEL]).
 
+use deslop_test_support::write_dart_data_table_fixture;
+
 use crate::language_sections::{RUST_A, RUST_B};
 use crate::support::*;
 
@@ -121,6 +123,81 @@ fn html_report_groups_clusters_into_bucket_expanders_with_facets() -> Result<()>
     assert!(
         !html.contains("<script"),
         "the report must stay script-free ([OUTPUT-HUMAN-HTML])"
+    );
+    // Single-category corpus: the category axis contributes no controls
+    // and leaves zero traces — a filter with one choice filters nothing.
+    assert!(
+        !html.contains("facet-cat-"),
+        "a single-category report gets no category facet controls"
+    );
+    Ok(())
+}
+
+/// The `category` wire labels of every cluster in `report`, in rank order.
+fn cluster_categories(report: &Value) -> Vec<String> {
+    field(report, "clusters")
+        .as_array()
+        .map(|clusters| {
+            clusters
+                .iter()
+                .filter_map(|cluster| field(cluster, "category").as_str())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+// Implements [FACET-HTML] / [FACET-MODEL]: the category axis facets the
+// report alongside the bucket axis — every card carries a `cat-<wire>`
+// class, and a CSS-only chip per category present hides that category's
+// cards. Labels come from the shared registry (`group_title`), so the
+// chip-less logic category reads "Code clones" here and in the panel.
+#[test]
+fn html_report_carries_category_facets_and_card_classes() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    write_dart_data_table_fixture(&scan_root)?;
+    let out = outputs_under(tmp.path());
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let assertion = cmd.args(["--min-nodes", "30"]).assert().success();
+    // [FACET-CLI]: the stderr summary carries a category breakdown line
+    // for non-logic categories, driven by the same registry as the chips.
+    let stderr = String::from_utf8_lossy(&assertion.get_output().stderr).into_owned();
+    assert!(
+        stderr.contains("1 × data table"),
+        "stderr summary must carry the category breakdown line, got:\n{stderr}"
+    );
+    let html = fs::read_to_string(&out.html)?;
+    let json = read_json_report(&out.json)?;
+
+    // Corpus guard: both categories must be present, otherwise the facet
+    // assertions below would fail for the wrong reason.
+    let categories = cluster_categories(&json);
+    assert!(
+        categories.iter().any(|category| category == "data")
+            && categories.iter().any(|category| category == "logic"),
+        "corpus must yield one data and one logic cluster, got {categories:?}"
+    );
+
+    assert!(
+        html.contains(" cat-data\"") && html.contains(" cat-logic\""),
+        "every cluster card carries its category class"
+    );
+    assert!(
+        html.contains("id=\"facet-cat-data\"") && html.contains("id=\"facet-cat-logic\""),
+        "a category facet checkbox is rendered per category present"
+    );
+    assert!(
+        html.contains("<label class=\"facet-chip\" for=\"facet-cat-logic\">Code clones</label>"),
+        "the chip-less logic category uses the shared plain group title"
+    );
+    assert!(
+        html.contains("<label class=\"facet-chip\" for=\"facet-cat-data\">data table</label>"),
+        "the data category chip reuses the shared category chip label"
+    );
+    assert!(
+        html.contains(".facet-cat-data:not(:checked)~section .cluster-card.cat-data{display:none;}"),
+        "the inline CSS hides a category's cards when its facet is unchecked"
     );
     Ok(())
 }

@@ -8,6 +8,7 @@ import { signal, effect } from "@preact/signals-core";
 
 import { sameFile, shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
+import { applyFacetFilter } from "../types/report";
 
 export { sameFile, shortPath } from "../pathUtils";
 
@@ -47,12 +48,18 @@ export class StatusBar implements vscode.Disposable {
       this.item.tooltip = "Deslop is warming up";
       return;
     }
+    // [FACET-TOP-OFFENDERS-FILTER] The status-bar count must agree with
+    // the filtered tree it summarises (#195's consistency clause).
+    const visibleClusters = applyFacetFilter(
+      report.clusters,
+      this.store.current.facetFilter,
+    );
     const editorPath = vscode.window.activeTextEditor?.document.uri.fsPath;
     const clustersInFile = editorPath
-      ? report.clusters.filter((c) => c.occurrences.some((o) => sameFile(o.path, editorPath)))
-      : report.clusters;
+      ? visibleClusters.filter((c) => c.occurrences.some((o) => sameFile(o.path, editorPath)))
+      : visibleClusters;
     const n = clustersInFile.length;
-    const worst = report.clusters[0];
+    const worst = visibleClusters[0];
     const worstLabel = worst
       ? ` · #1=${shortPath(worst.occurrences[0]?.path ?? "?")}`
       : "";
@@ -61,7 +68,7 @@ export class StatusBar implements vscode.Disposable {
     this.item.text = `dedup · ${n}${worstLabel} · embed=${embed}${analysingSuffix}`;
     this.item.tooltip = new vscode.MarkdownString(
       `**Deslop**\n\n` +
-        `${report.clusters.length} clusters total, ${n} in this file\n\n` +
+        `${visibleClusters.length} clusters total, ${n} in this file\n\n` +
         `duplication: \`${report.metrics.duplication_percent.toFixed(1)}%\` ` +
         `(${report.metrics.duplicated_loc}/${report.metrics.analysed_loc} LOC)\n\n` +
         `Click to jump to the worst offender.`,

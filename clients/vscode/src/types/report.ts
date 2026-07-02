@@ -106,6 +106,22 @@ export type {
 // "what kind of clone is it?".
 export type Severity = "worst" | "top10" | "mid" | "faint";
 
+/** Every severity level in rank order. Filter surfaces enumerate this
+ * instead of hand-listing levels ([FACET-REPORT-WEBVIEW]). */
+export const SEVERITIES: readonly Severity[] = ["worst", "top10", "mid", "faint"] as const;
+
+const SEVERITY_LABELS: Record<Severity, string> = {
+  worst: "Worst 1%",
+  top10: "Top 10%",
+  mid: "Mid 40%",
+  faint: "Faint",
+};
+
+/** Human label for a severity level, shared by every filter surface. */
+export function severityLabel(severity: Severity): string {
+  return SEVERITY_LABELS[severity];
+}
+
 export function severityOf(weightPercentile: number): Severity {
   if (weightPercentile >= 0.99) return "worst";
   if (weightPercentile >= 0.9) return "top10";
@@ -241,6 +257,85 @@ export function resolveBucket(cluster: ReportCluster): Bucket {
     return cluster.bucket as Bucket;
   }
   return classifyCluster(cluster.signals);
+}
+
+// ---------------------------------------------------------------------------
+// Canonical clone categories — mirrors deslop-core::clone_category.
+// Orthogonal to Bucket per [FACET-MODEL]: bucket = "how similar",
+// category = "what kind of repetition". The shipped registry is
+// logic + data; the literal families join when [LITERAL-CATEGORY] ships.
+// ---------------------------------------------------------------------------
+
+// Wire label carried in JSON `cluster.category`.
+export type Category = "logic" | "data";
+
+export const CATEGORIES: readonly Category[] = ["logic", "data"] as const;
+
+export interface CategoryLabels {
+  // Plain group title for facet and grouping surfaces: the shared chip
+  // for chip-carrying categories, "Code clones" for the chip-less
+  // logic default ([FACET-GROUP-BY-TYPE]).
+  groupTitle: string;
+  // Short chip shown next to bucket titles; null for logic — the
+  // absence of a chip already communicates "ordinary logic clone".
+  chip: string | null;
+}
+
+const CATEGORY_LABELS: Record<Category, CategoryLabels> = {
+  logic: { groupTitle: "Code clones", chip: null },
+  data: { groupTitle: "data table", chip: "data table" },
+};
+
+export function categoryLabels(category: Category): CategoryLabels {
+  return CATEGORY_LABELS[category];
+}
+
+// Resolves a cluster's category from the wire label, defaulting to
+// "logic" for absent or unknown values — mirrors
+// deslop-core::clone_category::from_wire_label.
+export function resolveCategory(cluster: ReportCluster): Category {
+  return cluster.category === "data" ? "data" : "logic";
+}
+
+/** A sanitized facet filter: only registry-known values survive. */
+export interface FacetFilter {
+  buckets: Bucket[];
+  categories: Category[];
+}
+
+// [FACET-TOP-OFFENDERS-FILTER] Drops unknown values from the persisted
+// filter arrays (the typo fallback — a bad value must never yield an
+// empty tree). Both lists empty means the filter is inactive.
+export function sanitizeFacetFilter(
+  filterBuckets: readonly string[],
+  filterCategories: readonly string[],
+): FacetFilter {
+  return {
+    buckets: filterBuckets.filter((value): value is Bucket =>
+      (BUCKETS as readonly string[]).includes(value),
+    ),
+    categories: filterCategories.filter((value): value is Category =>
+      (CATEGORIES as readonly string[]).includes(value),
+    ),
+  };
+}
+
+// [FACET-TOP-OFFENDERS-FILTER] The one facet-filter slice shared by the
+// Top Offenders tree, the report webview, and the status-bar count so
+// the three surfaces always agree. An empty value list means "show all"
+// for that axis; the two axes compose as an AND. Presentation-only:
+// never mutates the report.
+export function applyFacetFilter(
+  clusters: ReportCluster[],
+  filter: FacetFilter,
+): ReportCluster[] {
+  const { buckets, categories } = filter;
+  if (buckets.length === 0 && categories.length === 0) return clusters;
+  return clusters.filter(
+    (cluster) =>
+      (buckets.length === 0 || buckets.includes(resolveBucket(cluster))) &&
+      (categories.length === 0 || categories.includes(resolveCategory(cluster))),
+  );
 }
 
 // Returns the cluster's interpretation line, falling back to the

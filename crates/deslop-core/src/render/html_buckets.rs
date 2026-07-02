@@ -14,6 +14,7 @@ use std::{collections::HashMap, fmt::Write as _, hash::Hash};
 
 use crate::{
     buckets::{bucket_labels, classify, ClusterKind},
+    clone_category::CloneCategory,
     render::{
         html::{write_cluster_card, SnippetLoader},
         html_escape::escape,
@@ -84,50 +85,101 @@ fn buckets_present(clusters: &[ReportCluster]) -> Vec<ClusterKind> {
         .collect()
 }
 
-/// Writes the facet controls: one visually-hidden checkbox per bucket
-/// present (direct children of the report shell, so the sibling
-/// selectors in [`facet_css`] can reach the sections that follow) plus
-/// a labelled chip row. A report with fewer than two buckets gets no
-/// controls — a filter with one choice filters nothing.
+/// Categories present in `clusters`, in canonical registry order.
+fn categories_present(clusters: &[ReportCluster]) -> Vec<CloneCategory> {
+    CloneCategory::all()
+        .into_iter()
+        .filter(|category| {
+            clusters
+                .iter()
+                .any(|cluster| CloneCategory::from_wire_label(&cluster.category) == *category)
+        })
+        .collect()
+}
+
+/// One CSS-only facet chip: a checkbox input class, its visible label,
+/// and the selector fragment its unchecked state hides.
+struct FacetChip {
+    /// Class (and id) of the hidden checkbox, e.g. `facet-identical`.
+    input_class: String,
+    /// Human label from the shared registry helpers.
+    label: &'static str,
+    /// Selector the unchecked state hides, e.g. `.bucket-group.kind-identical`.
+    hide_target: String,
+}
+
+/// Chips for both facet axes ([FACET-MODEL]), each axis contributing
+/// only when at least two of its values are present — a filter with one
+/// choice filters nothing. Bucket chips hide their whole group;
+/// category chips hide individual cards, so the two axes compose as an
+/// AND without any shared state.
+fn facet_chips(clusters: &[ReportCluster]) -> Vec<FacetChip> {
+    let buckets = buckets_present(clusters);
+    let categories = categories_present(clusters);
+    let mut chips = Vec::new();
+    if buckets.len() >= 2 {
+        chips.extend(buckets.into_iter().map(|kind| {
+            let labels = bucket_labels(kind);
+            FacetChip {
+                input_class: format!("facet-{}", labels.css_suffix),
+                label: labels.plain_title,
+                hide_target: format!(".bucket-group.kind-{}", labels.css_suffix),
+            }
+        }));
+    }
+    if categories.len() >= 2 {
+        chips.extend(categories.into_iter().map(|category| FacetChip {
+            input_class: format!("facet-cat-{}", category.wire_label()),
+            label: category.group_title(),
+            hide_target: format!(".cluster-card.cat-{}", category.wire_label()),
+        }));
+    }
+    chips
+}
+
+/// Writes the facet controls: one visually-hidden checkbox per chip
+/// (direct children of the report shell, so the sibling selectors in
+/// [`facet_css`] can reach the sections that follow) plus a labelled
+/// chip row. A report with no filterable axis gets no controls.
 pub(super) fn write_facet_controls(out: &mut String, clusters: &[ReportCluster]) {
-    let present = buckets_present(clusters);
-    if present.len() < 2 {
+    let chips = facet_chips(clusters);
+    if chips.is_empty() {
         return;
     }
-    for kind in &present {
-        let suffix = bucket_labels(*kind).css_suffix;
+    for chip in &chips {
         let _ = write!(
             out,
-            "<input type=\"checkbox\" id=\"facet-{suffix}\" class=\"facet-input facet-{suffix}\" checked>",
+            "<input type=\"checkbox\" id=\"{id}\" class=\"facet-input {id}\" checked>",
+            id = chip.input_class,
         );
     }
     out.push_str("<div class=\"facet-bar\"><span class=\"facet-bar__label\">Show:</span>");
-    for kind in &present {
-        let labels = bucket_labels(*kind);
+    for chip in &chips {
         let _ = write!(
             out,
-            "<label class=\"facet-chip\" for=\"facet-{suffix}\">{title}</label>",
-            suffix = labels.css_suffix,
-            title = escape(labels.plain_title),
+            "<label class=\"facet-chip\" for=\"{id}\">{label}</label>",
+            id = chip.input_class,
+            label = escape(chip.label),
         );
     }
     out.push_str("</div>");
 }
 
-/// Per-bucket facet CSS: one hide rule (an unchecked facet hides its
-/// bucket's groups in every following section) and one checked-chip
-/// highlight rule per bucket present in the report. Derived from the
-/// canonical registry via [`buckets_present`] so the selector set can
-/// never drift, and absent buckets leave zero facet traces in the page.
+/// Per-chip facet CSS: one hide rule (an unchecked facet hides its
+/// chip's target in every following section) and one checked-chip
+/// highlight rule. Derived from the canonical registries via
+/// [`facet_chips`] so the selector set can never drift, and absent
+/// values leave zero facet traces in the page.
 pub(super) fn facet_css(clusters: &[ReportCluster]) -> String {
-    buckets_present(clusters)
+    facet_chips(clusters)
         .into_iter()
-        .fold(String::new(), |mut css, kind| {
-            let suffix = bucket_labels(kind).css_suffix;
+        .fold(String::new(), |mut css, chip| {
             let _ = write!(
                 css,
-                ".facet-{suffix}:not(:checked)~section .bucket-group.kind-{suffix}{{display:none;}}\
-                 .facet-{suffix}:checked~.facet-bar>[for=facet-{suffix}]{{background:var(--secondary-container);color:var(--on-secondary-container);}}"
+                ".{id}:not(:checked)~section {target}{{display:none;}}\
+                 .{id}:checked~.facet-bar>[for={id}]{{background:var(--secondary-container);color:var(--on-secondary-container);}}",
+                id = chip.input_class,
+                target = chip.hide_target,
             );
             css
         })
