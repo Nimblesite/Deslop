@@ -79,7 +79,10 @@ fn html_report_groups_clusters_into_bucket_expanders_with_facets() -> Result<()>
         html.contains("<details class=\"bucket-group kind-nearly-identical\""),
         "nearly-identical clusters must render inside a collapsible bucket group"
     );
-    let identical_count = buckets.iter().filter(|bucket| *bucket == "identical").count();
+    let identical_count = buckets
+        .iter()
+        .filter(|bucket| *bucket == "identical")
+        .count();
     let nearly_count = buckets
         .iter()
         .filter(|bucket| *bucket == "nearly_identical")
@@ -196,7 +199,9 @@ fn html_report_carries_category_facets_and_card_classes() -> Result<()> {
         "the data category chip reuses the shared category chip label"
     );
     assert!(
-        html.contains(".facet-cat-data:not(:checked)~section .cluster-card.cat-data{display:none;}"),
+        html.contains(
+            ".facet-cat-data:not(:checked)~section .cluster-card.cat-data{display:none;}"
+        ),
         "the inline CSS hides a category's cards when its facet is unchecked"
     );
     Ok(())
