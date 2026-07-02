@@ -98,8 +98,18 @@ helper — never a webview-local map. Sort is fixed worst-first (the product pre
 
 ### [FACET-HTML] HTML report facets (CSS-only)
 
-The static HTML report ([OUTPUT-HUMAN-HTML]) facets via checkbox inputs + sibling selectors over
-the per-card classes — the no-JS invariant holds. Every cluster card carries both a bucket class
+The static HTML report ([OUTPUT-HUMAN-HTML]) groups cluster cards into one
+`<details class="bucket-group kind-<css_suffix>">` expander per bucket present (#257), inside every
+section (the flat "Duplicate groups" section and each per-language section alike). Group order is
+first-seen over the worst-first list, so groups come out worst-weight-desc; the first (worst) group
+renders `open`, the rest start collapsed. Each summary carries the bucket's shared plain title and
+its live group count. Filtering happens via checkbox inputs + sibling selectors over the group and
+per-card classes — the no-JS invariant holds (the artifact must stay inert on `file://` and in the
+VSIX's script-disabled report tab). Facet checkboxes and their per-bucket CSS rules render only for
+buckets present in the report, and only when at least two buckets are present (a filter with one
+choice filters nothing); the selectors and labels derive from the canonical registry, never
+hand-listed. Group-summary counts are static text — a CSS-only page cannot re-count when a facet
+hides cards — a recorded, accepted limitation. Every cluster card carries both a bucket class
 (`kind-<css_suffix>`) and a category class (`cat-<wire_label>`); one selector rule per registry
 value, counted against the inlined report CSS budget. The intro breakdown sentence includes a
 literal-family clause when those clusters exist ("…plus 12 magic values, 3 duplicate constants,

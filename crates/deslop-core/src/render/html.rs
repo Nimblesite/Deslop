@@ -23,6 +23,7 @@ use crate::{
     pipeline::language_for_path,
     render::{
         highlight::highlight_snippet,
+        html_buckets::{facet_css, group_by_first_seen, write_bucket_groups, write_facet_controls},
         html_css::{REPORT_CSS, SITE_CSS},
         html_escape::escape,
         html_footer::write_run_details,
@@ -49,6 +50,7 @@ pub fn render_html(report: &Report, scan_root: Option<&Path>, split_by_language:
     write_head(&mut out, report);
     let _ = write!(out, "</head><body><main class=\"report-shell\">");
     write_intro(&mut out, report, split_by_language);
+    write_facet_controls(&mut out, &report.clusters);
     let mut snippets = SnippetLoader::new(scan_root);
     write_clusters(&mut out, report, &mut snippets, split_by_language);
     write_run_details(&mut out, report, escape);
@@ -58,7 +60,7 @@ pub fn render_html(report: &Report, scan_root: Option<&Path>, split_by_language:
 
 /// Reads source files lazily and caches them so a cluster with many
 /// occurrences in the same file does only one disk read.
-struct SnippetLoader<'a> {
+pub(super) struct SnippetLoader<'a> {
     /// Directory occurrence paths resolve against. `None` disables disk
     /// reads entirely.
     scan_root: Option<&'a Path>,
@@ -131,7 +133,11 @@ fn write_head(out: &mut String, report: &Report) {
         clusters = report.clusters.len(),
         files = report.files_analysed,
     );
-    let _ = write!(out, "<style>{SITE_CSS}{REPORT_CSS}</style>");
+    let _ = write!(
+        out,
+        "<style>{SITE_CSS}{REPORT_CSS}{facets}</style>",
+        facets = facet_css(&report.clusters),
+    );
 }
 
 /// Writes the page title and a one-paragraph plain-English summary
@@ -291,23 +297,22 @@ fn write_clusters(
     }
 }
 
-/// Writes the single "Duplicate groups" section with every cluster card
-/// in global worst-first order.
+/// Writes the single "Duplicate groups" section, its cards grouped into
+/// per-bucket expanders ([FACET-HTML]) in global worst-first order.
 fn write_clusters_flat(out: &mut String, report: &Report, snippets: &mut SnippetLoader<'_>) {
     let _ = write!(out, "<section><h2>Duplicate groups</h2>");
     if report.clusters.is_empty() {
         let _ = write!(out, "<p class=\"empty\">No duplication detected.</p>");
     }
-    for cluster in &report.clusters {
-        write_cluster_card(out, cluster, snippets);
-    }
+    write_bucket_groups(out, &report.clusters, snippets);
     let _ = write!(out, "</section>");
 }
 
 /// Writes one `<section>` per language, each headed by the language
-/// display name and its group count. Sections are ordered by worst
-/// cluster weight (first-seen in the globally worst-first list) and
-/// clusters keep their worst-first order within each section.
+/// display name and its group count, its cards grouped into per-bucket
+/// expanders ([FACET-HTML]). Sections are ordered by worst cluster
+/// weight (first-seen in the globally worst-first list) and clusters
+/// keep their worst-first order within each section.
 fn write_clusters_by_language(out: &mut String, report: &Report, snippets: &mut SnippetLoader<'_>) {
     for (language, clusters) in group_clusters_by_language(&report.clusters) {
         let _ = write!(
@@ -316,35 +321,19 @@ fn write_clusters_by_language(out: &mut String, report: &Report, snippets: &mut 
             name = escape(language_display_name(language)),
             count = clusters.len(),
         );
-        for cluster in clusters {
-            write_cluster_card(out, cluster, snippets);
-        }
+        write_bucket_groups(out, clusters, snippets);
         let _ = write!(out, "</section>");
     }
 }
 
 /// Buckets clusters by their canonical occurrence's language, preserving
-/// the input worst-first order within each bucket. The returned order is
-/// first-seen — and because the input is globally worst-first, the
-/// first language seen owns the worst cluster, so sections come out
-/// ordered by worst weight desc.
+/// the input worst-first order within each bucket. Delegates to the
+/// shared first-seen grouper so language sections and bucket groups
+/// order identically.
 fn group_clusters_by_language(
     clusters: &[ReportCluster],
 ) -> Vec<(&'static str, Vec<&ReportCluster>)> {
-    let mut order: Vec<&'static str> = Vec::new();
-    let mut buckets: HashMap<&'static str, Vec<&ReportCluster>> = HashMap::new();
-    for cluster in clusters {
-        let language = canonical_language(cluster);
-        let bucket = buckets.entry(language).or_insert_with(|| {
-            order.push(language);
-            Vec::new()
-        });
-        bucket.push(cluster);
-    }
-    order
-        .into_iter()
-        .filter_map(|language| buckets.remove(language).map(|list| (language, list)))
-        .collect()
+    group_by_first_seen(clusters, canonical_language)
 }
 
 /// Language id of a cluster's canonical (first) occurrence, or
@@ -391,7 +380,11 @@ fn language_display_name(language: &str) -> &'static str {
 /// the header and the category-specific builder/asset action sentence, both
 /// sourced from [`CloneCategory`] so the HTML, text, and tree surfaces render
 /// identical words.
-fn write_cluster_card(out: &mut String, cluster: &ReportCluster, snippets: &mut SnippetLoader<'_>) {
+pub(super) fn write_cluster_card(
+    out: &mut String,
+    cluster: &ReportCluster,
+    snippets: &mut SnippetLoader<'_>,
+) {
     let kind = classify(cluster);
     let labels = bucket_labels(kind);
     let category = CloneCategory::from_wire_label(&cluster.category);
