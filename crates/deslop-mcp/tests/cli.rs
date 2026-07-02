@@ -998,6 +998,25 @@ fn issue_113_find_similar_description_leads_with_prevention() -> Result<()> {
             "issue #170/#198: find-similar language enum must include {expected}, got {languages:?}"
         );
     }
+    // Issue #255: the advertised enum must equal the engine's *live*
+    // registered languages, not the MCP binary's compile-time set — the
+    // two silently drifted under MCP/engine version skew and disabled the
+    // Rule-zero gate for newly detected languages. `session-config`
+    // reports the live set, so the enum must match it exactly.
+    let mut advertised: Vec<String> = languages.iter().map(|value| (*value).to_owned()).collect();
+    let session = structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    let mut detected: Vec<String> = value_get(&session, "/languages")?
+        .as_array()
+        .ok_or_else(|| anyhow!("session-config languages must be an array"))?
+        .iter()
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect();
+    detected.sort();
+    advertised.sort();
+    assert_eq!(
+        advertised, detected,
+        "issue #255: find-similar language enum must equal the engine's detected languages"
+    );
     let _ = child.finish();
     Ok(())
 }
