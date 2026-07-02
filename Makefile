@@ -163,9 +163,13 @@ clean:
 	$(RM) .deslop-cache
 
 ## ci: fmt + lint + Rust test + build + deployment-verify + VSIX coverage +
-##     HTML-report CSS (Playwright). Full CI simulation. Runs every non-Ollama
-##     test suite, Rust and VSIX, and enforces per-crate + VSIX coverage
-##     thresholds. Ollama-gated suites run via `make ci-ollama`.
+##     VSIX E2E + webview coverage + HTML-report CSS (Playwright). Full CI
+##     simulation mirroring the .github/workflows/ci.yml vsix job. Runs every
+##     non-Ollama test suite, Rust and VSIX, and enforces per-crate + VSIX +
+##     webview coverage thresholds. `_vsix-coverage` runs the unit + E2E suite
+##     under c8 ([VSIX-TESTING-COVERAGE]); `_vsix-test` re-runs the same E2E
+##     against the packaged bundle without coverage. Ollama-gated suites run
+##     via `make ci-ollama`.
 ci:
 	@$(MAKE) fmt CHECK=1
 	@$(MAKE) lint
@@ -173,6 +177,7 @@ ci:
 	@$(MAKE) build
 	@$(MAKE) deployment-verify
 	@$(MAKE) _vsix-coverage
+	@$(MAKE) _vsix-test
 	@$(MAKE) _vsix-webview-coverage
 	@$(MAKE) _vsix-playwright-html
 
@@ -300,7 +305,7 @@ _vsix-install:
 #   so the gitignored wire-generated.ts exists before tsc runs.
 _vsix-build: _vsix-install typediagram-gen
 	cargo build --release -p deslop-lsp -p deslop-mcp -p deslop
-	cd clients/vscode/webview-ui && npm run build
+	cd clients/vscode/webview-ui && npm run typecheck && npm run build
 	cd clients/vscode && npm run build
 
 # _vsix-test: Run VS Code E2E tests against bundled extension binaries only.
@@ -334,7 +339,9 @@ _vsix-playwright-html: _vsix-install
 #   with V8 coverage on, map executed ranges back to webview-ui/src via inline
 #   sourcemaps, and enforce .vsix.webview_threshold from coverage-thresholds.json.
 #   The webview is invisible to the vscode-test c8 pass (extension host only);
-#   this closes that blind spot (#254). Leaves the production bundle rebuilt.
+#   this closes that blind spot (#254). The script rebuilds the production
+#   bundle in a finally, so a coverage build is never left staged for packaging
+#   — even if the Playwright run or mapping fails.
 _vsix-webview-coverage: _vsix-install
 	cd clients/vscode && npx playwright install --with-deps chromium && npm run coverage:webview
 

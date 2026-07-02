@@ -274,8 +274,7 @@ jobs:
 
       # xvfb gives Electron a display; dbus gives it a session bus so
       # ubuntu-latest stops flooding "Failed to connect to the bus" from the
-      # Electron subprocesses. (activate() coverage attribution is a separate
-      # concern, handled by the entry swap — [VSIX-TESTING-COVERAGE].)
+      # Electron subprocesses.
       - name: Install xvfb + dbus (headless VS Code)
         run: sudo apt-get update && sudo apt-get install -y xvfb dbus dbus-x11
 

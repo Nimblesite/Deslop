@@ -452,19 +452,15 @@ Tests run in CI on every platform shipped in [VSIX-BUNDLE] via GitHub Actions `v
 
 #### [VSIX-TESTING-COVERAGE] Extension-host coverage gate
 
-`make _vsix-coverage` (`npm run coverage`) runs the same unit + E2E suites
+`make _vsix-coverage` (`npm run coverage`) runs the full unit + E2E suite
 under `@vscode/test-cli` with c8 line coverage over the tsc output in
 `out/**`, then enforces `.vsix.default_threshold` from the repo-root
 `coverage-thresholds.json` (1% rounding slack, ratchet-up-only) via
-`scripts/check-coverage.mjs`.
+`scripts/check-coverage.mjs`. The c8 config uses `includeAll` so every
+non-test `out/**` module counts toward the floor whether or not a test loads
+it — an unexercised module drags the total down rather than hiding.
 
-The packaged extension activates from `dist/extension.js` (the esbuild
-bundle), whose execution cannot be soundly attributed to the measured `out/**`
-files (c8 filters scripts before sourcemap remap, and istanbul cannot merge
-esbuild-mapped and tsc-mapped entries for the same source). So the coverage
-run — and only the coverage run — swaps `package.json` `main` to
-`out/extension.js` via `scripts/extension-coverage.mjs`, which restores the
-manifest afterwards. `make _vsix-test` still runs the full suite against the
-production `dist` bundle, so the shipped artifact stays E2E-validated. The
+`make _vsix-test` (`npm test`) re-runs the same suite against the packaged
+bundle without coverage, so the shipped artifact stays E2E-validated. The
 webview bundle has its own gate: [webview-runtime.md
 §VSIX-WEBVIEW-COVERAGE](webview-runtime.md#vsix-webview-coverage).

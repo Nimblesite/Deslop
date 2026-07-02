@@ -7,13 +7,12 @@
 // repo-root coverage-thresholds.json (.vsix.webview_threshold). Same ratchet +
 // 1% rounding slack as check-coverage.mjs and the Rust _coverage_check.
 
-import { spawnSync } from "node:child_process";
 import { readFileSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, relative, sep } from "node:path";
 import v8toIstanbul from "v8-to-istanbul";
 import libCoverage from "istanbul-lib-coverage";
-import { loadThresholds, vsixRoot } from "./coverage-paths.mjs";
+import { enforceLineThreshold, loadThresholds, runTool, vsixRoot } from "./coverage-paths.mjs";
 
 const webviewSrc = resolve(vsixRoot, "webview-ui", "src");
 const rawDir = resolve(vsixRoot, "coverage", "webview", "raw");
@@ -26,50 +25,64 @@ if (!Number.isFinite(target)) {
   process.exit(1);
 }
 
-function run(cmd, args, env) {
-  const result = spawnSync(cmd, args, { cwd: vsixRoot, stdio: "inherit", env: { ...process.env, ...env } });
-  if (result.status !== 0) process.exit(result.status ?? 1);
+// Build the instrumentable (unminified, inline-sourcemap) bundle, drive the
+// smoke suite with V8 coverage on, and map the executed ranges back to source.
+// Any failure in here must still restore the production bundle (finally), or a
+// coverage build would be left staged in media/webview for packaging/tests.
+function collect() {
+  rmSync(rawDir, { recursive: true, force: true });
+  let status = runTool("npm", ["--prefix", "webview-ui", "run", "build", "--", "--coverage"]);
+  if (status !== 0) process.exit(status);
+  status = runTool("npx", ["playwright", "test", "scripts/playwright-webview-smoke.spec.ts"], {
+    WEBVIEW_COVERAGE: "1",
+  });
+  if (status !== 0) process.exit(status);
+  return mapCoverage();
 }
 
-// 1. Coverage build + 2. drive the real smoke suite with V8 coverage on.
-rmSync(rawDir, { recursive: true, force: true });
-run("npm", ["--prefix", "webview-ui", "run", "build", "--", "--coverage"]);
-run("npx", ["playwright", "test", "scripts/playwright-webview-smoke.spec.ts"], { WEBVIEW_COVERAGE: "1" });
-
-// 3. Convert every raw V8 dump and merge into one istanbul map.
 const isWebviewSource = (file) => {
   const rel = relative(webviewSrc, file);
   return rel.length > 0 && !rel.startsWith("..") && !rel.includes(`node_modules${sep}`);
 };
 
-const map = libCoverage.createCoverageMap({});
-let rawFiles = [];
-try {
-  rawFiles = readdirSync(rawDir).filter((name) => name.endsWith(".json"));
-} catch {
-  console.error(`no raw coverage written to ${rawDir} — did the Playwright run produce any?`);
-  process.exit(1);
-}
-
 // Relative sourcemap sources (e.g. ../../webview-ui/src/cluster/main.tsx) are
 // resolved against the bundle's own directory, so anchor the converter there.
-const bundleBase = resolve(vsixRoot, "media", "webview", "bundle.js");
-for (const name of rawFiles) {
-  const entries = JSON.parse(readFileSync(resolve(rawDir, name), "utf8"));
-  for (const entry of entries) {
-    const converter = v8toIstanbul(bundleBase, 0, { source: entry.source });
-    await converter.load();
-    converter.applyCoverage(entry.functions);
-    const data = converter.toIstanbul();
-    for (const [file, fileCov] of Object.entries(data)) {
-      const abs = file.startsWith("file://") ? fileURLToPath(file) : file;
-      if (isWebviewSource(abs)) map.merge({ [abs]: { ...fileCov, path: abs } });
+async function mapCoverage() {
+  const map = libCoverage.createCoverageMap({});
+  let rawFiles = [];
+  try {
+    rawFiles = readdirSync(rawDir).filter((name) => name.endsWith(".json"));
+  } catch {
+    console.error(`no raw coverage written to ${rawDir} — did the Playwright run produce any?`);
+    process.exit(1);
+  }
+  const bundleBase = resolve(vsixRoot, "media", "webview", "bundle.js");
+  for (const name of rawFiles) {
+    const entries = JSON.parse(readFileSync(resolve(rawDir, name), "utf8"));
+    for (const entry of entries) {
+      const converter = v8toIstanbul(bundleBase, 0, { source: entry.source });
+      await converter.load();
+      converter.applyCoverage(entry.functions);
+      const data = converter.toIstanbul();
+      for (const [file, fileCov] of Object.entries(data)) {
+        const abs = file.startsWith("file://") ? fileURLToPath(file) : file;
+        if (isWebviewSource(abs)) map.merge({ [abs]: { ...fileCov, path: abs } });
+      }
     }
   }
+  return map;
 }
 
-// 4. Summarise per file + total, write coverage-summary.json, enforce the floor.
-const summary = { total: libCoverage.createCoverageSummary().toJSON() };
+let map;
+try {
+  map = await collect();
+} finally {
+  // A coverage run must never leave the unminified inline-sourcemap output
+  // staged for packaging — restore the production bundle on every path.
+  runTool("npm", ["--prefix", "webview-ui", "run", "build"]);
+}
+
+// Summarise per file + total, write coverage-summary.json, enforce the floor.
 const totalSummary = libCoverage.createCoverageSummary();
 const perFile = [];
 for (const file of map.files()) {
@@ -77,13 +90,11 @@ for (const file of map.files()) {
   totalSummary.merge(fileSummary);
   perFile.push([relative(webviewSrc, file), fileSummary.lines.pct]);
 }
-summary.total = totalSummary.toJSON();
 mkdirSync(outDir, { recursive: true });
-writeFileSync(resolve(outDir, "coverage-summary.json"), JSON.stringify(summary, null, 2));
-
-// Restore the production (minified, external-sourcemap) bundle — a coverage run
-// must never leave the unminified inline-sourcemap output staged for packaging.
-run("npm", ["--prefix", "webview-ui", "run", "build"]);
+writeFileSync(
+  resolve(outDir, "coverage-summary.json"),
+  JSON.stringify({ total: totalSummary.toJSON() }, null, 2),
+);
 
 perFile.sort((a, b) => a[1] - b[1]);
 console.log("\nWebview line coverage by file:");
@@ -94,9 +105,5 @@ if (perFile.length === 0 || !Number.isFinite(pct)) {
   console.error("FAIL: no webview-ui/src coverage was mapped — the harness is broken, not passing by default");
   process.exit(1);
 }
-console.log(`\nWebview line coverage: ${pct.toFixed(1)}% (threshold: ${target}% + 1% slack)`);
-if (pct + 1.0 < target) {
-  console.error(`FAIL: ${pct.toFixed(1)}% + 1% slack < ${target}%`);
-  process.exit(1);
-}
-console.log(`OK: ${pct.toFixed(1)}% + 1% slack >= ${target}%`);
+console.log("");
+process.exit(enforceLineThreshold(pct, target, "Webview"));

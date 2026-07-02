@@ -1,8 +1,7 @@
 // Shared plumbing for the VSIX coverage gates (check-coverage.mjs = extension
-// host, extension-coverage.mjs = entry swap, webview-coverage.mjs = webview
-// bundle): path roots, the repo-root coverage-thresholds.json loader, the
-// spawn wrapper, and the threshold enforcement — one copy each, per the
-// aggressively-DRY rule.
+// host, webview-coverage.mjs = webview bundle): path roots, the repo-root
+// coverage-thresholds.json loader, the spawn wrapper, and the threshold
+// enforcement — one copy each, per the aggressively-DRY rule.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
