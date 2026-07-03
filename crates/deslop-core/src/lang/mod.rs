@@ -14,6 +14,7 @@ pub mod csharp;
 pub mod dart;
 pub(crate) mod ecmascript;
 pub mod javascript;
+pub mod php;
 pub mod python;
 pub mod rust_lang;
 pub mod shared;

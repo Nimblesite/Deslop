@@ -400,6 +400,16 @@ fn debug_ast_dump_matches_committed_golden_tsx() -> Result<()> {
     assert_ast_golden("ast-golden-tsx", "Sample.tsx")
 }
 
+// [PARSE-PHP-NORMALIZE] golden: Sample.php exercises identifier collapse
+// (`name`), literal collapse (string, integer, float, boolean, null),
+// comment and doc-comment drop, and the PHP structural forms most likely
+// to shift between grammar patch releases (class, method, for-loop,
+// cast). Any grammar bump or `normalise_kind` edit trips this check.
+#[test]
+fn debug_ast_dump_matches_committed_golden_php() -> Result<()> {
+    assert_ast_golden("ast-golden-php", "Sample.php")
+}
+
 // [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript
 // grammar's JSX path normalises identically — and pins that JSX text AND
 // html_character_reference entities (`&amp;`, `&copy;`) both collapse to

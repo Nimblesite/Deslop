@@ -275,6 +275,7 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
         csharp::CSharpParser,
         dart::DartParser,
         javascript::JavaScriptParser,
+        php::PhpParser,
         python::PythonParser,
         rust_lang::RustParser,
         typescript::{TsxParser, TypeScriptParser},
@@ -287,6 +288,7 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
         Box::new(JavaScriptParser::new()),
         Box::new(TypeScriptParser::new()),
         Box::new(TsxParser::new()),
+        Box::new(PhpParser::new()),
     ]
 }
 
