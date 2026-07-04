@@ -77,13 +77,7 @@ fn normalise_kind(raw: &str) -> Option<&'static str> {
         // Identifier-like tokens — collapse for Type-2 renamed-clone detection
         "name" => Some(IDENTIFIER_KIND),
         // Literals — collapse so constant edits do not perturb fingerprints
-        "integer"
-        | "float"
-        | "boolean"
-        | "null"
-        | "string"
-        | "encapsed_string"
-        | "heredoc"
+        "integer" | "float" | "boolean" | "null" | "string" | "encapsed_string" | "heredoc"
         | "nowdoc" => Some(LITERAL_KIND),
         // All structural kinds pass through unchanged
         other => Some(intern_kind(other)),
