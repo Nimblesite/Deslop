@@ -96,7 +96,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 
 | Research line | Status | Implementation pointer |
 | --- | --- | --- |
-| Tree-sitter parsing per language ([PIPELINE-LANG-TRAIT]) | ✅ C# / Rust / Python / Dart / JavaScript / TypeScript / TSX | [`crates/deslop-core/src/lang/`](../../crates/deslop-core/src/lang/) — `csharp.rs`, `rust_lang.rs`, `python.rs`, `dart.rs`, `javascript.rs`, `typescript.rs`, `ecmascript.rs`, `shared.rs` |
+| Tree-sitter parsing per language ([PIPELINE-LANG-TRAIT]) | ✅ C# / Rust / Python / Dart / JavaScript / TypeScript / TSX / PHP / F# | [`crates/deslop-core/src/lang/`](../../crates/deslop-core/src/lang/) — `csharp.rs`, `rust_lang.rs`, `python.rs`, `dart.rs`, `javascript.rs`, `typescript.rs`, `ecmascript.rs`, `php.rs`, `fsharp.rs`, `shared.rs` |
 | Baxter-style AST normalization ([PIPELINE-NORMALIZE-AST]) | ✅ | `crates/deslop-core/src/lang/shared.rs::build_normalised_root` |
 | Boilerplate-only filter ([PIPELINE-BOILERPLATE-FILTER]) | ✅ | `crates/deslop-core/src/boilerplate.rs` (called from `fingerprint.rs` + `sibling.rs`) |
 | Chilowicz Merkle subtree fingerprints ([PIPELINE-FINGERPRINT-MERKLE]) | ✅ BLAKE3 | `crates/deslop-core/src/fingerprint.rs::collect_non_boilerplate_fingerprints` |

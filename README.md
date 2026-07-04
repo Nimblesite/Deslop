@@ -59,7 +59,7 @@ The CLI is the **cold-cache fallback** for one-shot audits and CI gates. Every o
 - **VS Code extension** — bundles the LSP + MCP binaries; surfaces the live bubble, **Top Offenders** tree, focused-file view, session panel, cluster webview, status bar, hover, code lens, decorations, and a Compare action.
 - **CLI (`deslop`)** — cold-cache fallback. Same engine, emits `.json`, `.txt`, `.html` reports for CI gates and bulk audits.
 
-**Languages today:** C#, Rust, Python, Dart, JavaScript, TypeScript, TSX — all tree-sitter grammars. **No regex on source. Ever.** Go is on the roadmap.
+**Languages today:** C#, Rust, Python, Dart, JavaScript, TypeScript, TSX, PHP, F# — all tree-sitter grammars. **No regex on source. Ever.** Go is on the roadmap.
 
 **IDE extensions in development:**
 
@@ -78,7 +78,7 @@ Every detection algorithm in the table below is a real file, not a future plan:
 
 | Research line | What it implements | Code |
 | --- | --- | --- |
-| Tree-sitter parsing (Baxter 1998) | C# / Rust / Python / Dart / JavaScript / TypeScript / TSX AST per language | [`crates/deslop-core/src/lang/`](crates/deslop-core/src/lang/) |
+| Tree-sitter parsing (Baxter 1998) | C# / Rust / Python / Dart / JavaScript / TypeScript / TSX / PHP / F# AST per language | [`crates/deslop-core/src/lang/`](crates/deslop-core/src/lang/) |
 | AST normalization | Type-2 collapse: `__ident__` / `__literal__` + comment/trivia drop | [`lang/shared.rs`](crates/deslop-core/src/lang/shared.rs) |
 | Merkle subtree fingerprints (Chilowicz 2009) | Bottom-up BLAKE3 over normalized AST | [`fingerprint.rs`](crates/deslop-core/src/fingerprint.rs) |
 | Sibling-window extension | Type-3 recall over widths 2–8 | [`sibling.rs`](crates/deslop-core/src/sibling.rs) |
