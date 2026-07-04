@@ -1,6 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+
+// `test`/`expect` come from the coverage fixture so this same suite records the
+// webview V8 coverage when WEBVIEW_COVERAGE=1 (no separate rendering harness).
+import { expect, test } from "./webview-coverage-fixture";
 
 type ViewKind = "cluster" | "duplication" | "report";
 
@@ -92,6 +96,23 @@ test.describe("VSIX webview bundles", () => {
       await expectHealthyRender(page, errors, `duplication-${viewport.name}`);
     });
   }
+
+  test("selecting a cluster renders its detail, never the empty state (#254)", async ({ page }) => {
+    // Regression #254: `severityOf` was imported type-only, so esbuild erased
+    // it from the bundle; the `severityByClusterId` computed threw on the first
+    // selected-cluster render, Preact aborted the update, and every cluster
+    // panel froze on "No cluster selected." Drive the real bundle exactly as
+    // the host does and require the selected cluster's detail to render.
+    const errors = await loadView(page, "cluster", viewports[0]);
+
+    await postHostMessage(page, { kind: "report/snapshot", report: sampleReport });
+    await postHostMessage(page, { kind: "select/cluster", id: sampleReport.clusters[0].id });
+
+    await expect(page.getByRole("heading", { name: "Same behavior, different code" })).toBeVisible();
+    await expect(page.getByText("CLUSTER").first()).toBeVisible();
+    await expect(page.getByText("No cluster selected.")).toHaveCount(0);
+    expect(errors, errors.join("\n")).toEqual([]);
+  });
 });
 
 async function loadView(

@@ -7,7 +7,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { openSchemaDoc } from "../../commands/register";
 import { ReportStore } from "../../reportStore";
-import { sleep } from "./helpers";
+import { activateExtension, sleep } from "./helpers";
 
 function extensionRoot(): string {
   return path.resolve(__dirname, "../../..");
@@ -28,6 +28,10 @@ function fakeCtx(): vscode.ExtensionContext {
 }
 
 suite("webviews", () => {
+  suiteSetup(async () => {
+    await activateExtension();
+  });
+
   test("openReport command opens a webview", async () => {
     await vscode.commands.executeCommand("deslop.openReport");
     await sleep(300);

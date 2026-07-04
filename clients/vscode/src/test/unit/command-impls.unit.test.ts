@@ -34,6 +34,7 @@ import {
 } from "../../commands/treeMenus";
 import { buildCompareUri } from "../../compare/provider";
 import { ReportStore } from "../../reportStore";
+import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 
@@ -134,9 +135,7 @@ function fakeCtx(): vscode.ExtensionContext {
 
 suite("register command implementations", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-    assert.ok(ext, "extension must be discoverable in the test host");
-    await ext.activate();
+    await activateExtension();
   });
 
   test("openWorstCluster shows info when store is empty", () => {
@@ -652,9 +651,7 @@ suite("tree menu renderers", () => {
 
 suite("tree menu handlers", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-    assert.ok(ext, "extension must be discoverable in the test host");
-    await ext.activate();
+    await activateExtension();
   });
 
   test("copyHumanLocation copies path:line:column for the occurrence", async () => {

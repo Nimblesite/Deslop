@@ -95,7 +95,7 @@ function ClusterApp() {
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
-        opacity: analysisState.value === "errored" ? 0.5 : 1,
+        opacity: analysisState.value.state === "errored" ? 0.5 : 1,
         transition: "opacity 120ms",
       }}
     >

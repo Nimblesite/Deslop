@@ -10,6 +10,7 @@ import * as vscode from "vscode";
 
 import { Bucket, ReportCluster, ReportOccurrence } from "../../types/report";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
+import { activateExtension } from "./helpers";
 
 function cluster(
   id: string,
@@ -48,9 +49,7 @@ function occurrenceNode(o: ReportOccurrence): OccurrenceNode {
 
 suite("tree context menu commands", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-    assert.ok(ext, "extension must be discoverable in the test host");
-    await ext.activate();
+    await activateExtension();
   });
 
   test("deslop.copyHumanLocation writes path:line:column to the clipboard", async () => {
