@@ -1,13 +1,14 @@
 # Language Expansion Roadmap
 
 > Scope: plan the order in which Deslop picks up new source languages beyond
-> the v1 set (C#, Rust, Python). TypeScript is the top priority; JavaScript
-> rides with it if the grammar permits. Dart is desired but gated on grammar
-> quality. Remaining slots go to low-hanging, high-impact languages whose
-> tree-sitter grammars are already production-grade.
+> the original v1 set (C#, Rust, Python). Shipped since: TypeScript, TSX,
+> JavaScript, Dart, PHP, and F# — the last added by explicit user directive
+> (see [LANG-CAND-FSHARP]), overriding its earlier rejection. Remaining slots
+> go to low-hanging, high-impact languages whose tree-sitter grammars are
+> already production-grade.
 
-Research conducted 2026-04-23. Version/status rows reflect crates.io +
-docs.rs + GitHub state at that date.
+Core research conducted 2026-04-23; F# addendum 2026-07-05. Version/status
+rows reflect crates.io + docs.rs + GitHub state at those dates.
 
 ---
 
@@ -66,13 +67,14 @@ plan is complete; this roadmap keeps the durable baseline.
 | tree-sitter-c                | 0.24.2         | ^0.1       | ✅               |
 | tree-sitter-ruby             | 0.23.1         | ^0.1       | ✅               |
 | tree-sitter-bash             | 0.25.1         | ^0.1       | ✅               |
-| tree-sitter-php              | 0.24.2         | ^0.1       | ✅               |
+| tree-sitter-php              | 0.24.2         | ^0.1       | ✅ SHIPPED (=0.24.2) |
 | tree-sitter-dart (nielsenko) | 0.2.0          | ^0.1       | ✅ SHIPPED (=0.2.0) |
+| tree-sitter-fsharp (ionide)  | 0.3.1          | ^0.1       | ✅ SHIPPED (=0.3.1) |
 | tree-sitter-swift            | 0.7.1          | *(ts ^0.23)* | ⚠ generated-file workaround |
 | tree-sitter-kotlin (fwcd)    | 0.3.8          | *(ts 0.21–0.22)* | ❌ incompatible |
 
 **Implication.** TypeScript (and Go / Java / C++ / Ruby / Bash / PHP /
-Dart) can now build on the modern `LanguageFn` grammar surface.
+Dart / F#) can now build on the modern `LanguageFn` grammar surface.
 Kotlin is still stuck on the old runtime and Swift has a build-script
 caveat — both deferred per [LANG-DECISIONS].
 
@@ -97,7 +99,9 @@ Four signals:
 
 Weighted combination: `demand * 0.5 + maturity * 0.3 + (1/complexity) * 0.1
 + (1/drift) * 0.1`. Worst-offender-first ranking, same philosophy as
-the report output.
+the report output. (Note: scoring ranks the *default* queue. An explicit
+user directive can override it — that is how F#, a rejected candidate,
+shipped ahead of Go.)
 
 ---
 
@@ -150,7 +154,78 @@ the report output.
   AST golden.
 - **Estimate.** 0.5 day on top of TS.
 
-### [LANG-CAND-DART] Dart — PRIORITY 3 (gated on grammar audit)
+### [LANG-CAND-FSHARP] F# — ✅ SHIPPED (=0.3.1)
+
+Added 2026-07-05 by explicit user directive, overriding the earlier
+`[LANG-CAND-REJECTED]` placement. F# demand is modest, but the grammar
+turned out to clear every constraint on the first pass, so the
+implementation cost was ~half a day — the cost argument that justified
+the rejection no longer held.
+
+- **Crate.** `tree-sitter-fsharp = "=0.3.1"` (ionide org — the same team
+  behind the Ionide F# tooling). Published to crates.io; not a git-dep.
+- **Runtime.** Depends on the `tree-sitter-language ^0.1` shim and
+  dev-deps `tree-sitter 0.26.8` — exactly Deslop's pinned runtime. Loads
+  natively via the modern `LANGUAGE_*` (`LanguageFn`) surface, no
+  binding-version hacks.
+- **Exports TWO grammars.** `LANGUAGE_FSHARP` (`.fs` implementation +
+  `.fsx` script files) and `LANGUAGE_SIGNATURE` (`.fsi` signature files —
+  the signature grammar extends the source grammar). We ship **one**
+  `FSharpParser` on `LANGUAGE_FSHARP` covering `.fs`/`.fsx`, where all
+  real F# code and its duplication live. The `.fsi` signature parser is a
+  documented follow-up — see [LANG-CAND-FSHARP-FSI].
+- **Normalisation knowns** ([PARSE-FSHARP-NORMALIZE], derived from the
+  196-kind named grammar vocabulary, not a sampled subset):
+  - `identifier`, `op_identifier` → `__ident__`. The compound wrappers
+    (`long_identifier`, `long_identifier_or_op`, `identifier_pattern`)
+    stay structural, so a dotted path `A.B.C` keeps its shape while each
+    segment collapses (parity with the Python / TypeScript member-access
+    handling).
+  - `int`, `xint` (hex/oct/bin), `float`, `char`, `bool`, `unit` (`()`),
+    and every string form — `string`, `triple_quoted_string`,
+    `format_string`, `format_triple_quoted_string`, `verbatim_string` →
+    `__literal__`. The interpolation-hole container `format_string_eval`
+    stays structural, so `$"{a}"` and `$"{b}"` still match through the
+    collapsed identifiers while a plain string reduces to a constant
+    `__literal__` subtree (same treatment as Dart,
+    [LANG-CAND-DART-RESULT]).
+  - `line_comment`, `block_comment`, `xml_doc` dropped as trivia.
+- **Grammar-map wiring — a latent gap F# surfaced.** The CST re-parse map
+  `cluster_filters::snippets::grammar_for` is a *second* language→grammar
+  table, separate from `default_parsers`, that the signature-only (#154)
+  and other CST-walking filters depend on. F# was added there too, so the
+  signature-only false positive (`let f (_: int) : int` headers
+  collapsing identically, bodies differing) is correctly suppressed.
+  (PHP is still missing from that map — a pre-existing gap, out of scope
+  for the F# change.)
+- **Fixtures.**
+  - `fsharp-small/{alpha,beta}.fs` — Type-2 renamed clone (accumulate
+    loop); clusters at structural = 1.0 at `--min-nodes 10`.
+  - `fsharp-type3/{delta,epsilon}.fs` — Type-3 near-miss (loop body of two
+    statements vs one); shared body subtrees cluster cross-file at
+    structural = 1.0 at `--min-nodes 8`, signature-only match suppressed.
+  - `fsharp-dissimilar-functions/{tally,describe}.fs` — zero-false-positive
+    guard (`Map`-fold vs `if`/`elif` cascade); never clusters cross-file.
+  - `ast-golden-fsharp/Sample.fs(.expected.ast)` — byte-for-byte golden
+    exercising every literal form, all three comment kinds, and the nested
+    `let … in` desugaring.
+- **Zero `ERROR`/`MISSING` nodes** across all fixtures, covering idiomatic
+  F#: `mutable`, `for … in … do`, `if`/`elif`/`else`, the pipe operator
+  `|>`, `Map` operations, generic type annotations (`string list`,
+  `Map<string, int>`), and every string-quote variant.
+- **Estimate (actual).** ~half a day; the grammar cleared every gate on
+  the first pass.
+
+#### [LANG-CAND-FSHARP-FSI] `.fsi` signature files — follow-up
+
+`tree-sitter-fsharp` also exports `LANGUAGE_SIGNATURE` for `.fsi`
+signature files. Signature files declare types/contracts and carry little
+copy-paste duplication, so they are deferred: a second
+`FSharpSignatureParser` (id `fsharp_signature`, ext `fsi`, sharing
+`normalise_kind`) mirroring the TS/TSX two-impl split, plus its own
+fixtures + golden. Not blocking; low value.
+
+### [LANG-CAND-DART] Dart — ✅ SHIPPED (=0.2.0)
 
 - **Crate.** Two real candidates:
   - `tree-sitter-dart = "0.1.0"` (nielsenko fork) — Dart 3.11 support,
@@ -170,10 +245,9 @@ the report output.
   3. Verify null-aware operators and nullable types.
   4. Confirm the `LanguageFn` surface matches `tree-sitter ^0.25`
      without binding-version hacks.
-- **If the spike fails any of those:** park Dart. The user explicitly
-  flagged this — "if the tree sitter is not very good, we may need to
-  pause this one." Spec-ID `[LANG-CAND-DART-PARKED]` in the TODO log.
-- **Fixtures (if we proceed).** `tests/fixtures/dart-small/{alpha,beta}.dart`,
+- **Outcome.** Spike passed on the newer `0.2.0` — see
+  [LANG-CAND-DART-RESULT] in the execution log.
+- **Fixtures.** `tests/fixtures/dart-small/{alpha,beta}.dart`,
   `tests/fixtures/dart-type3/{delta,epsilon}.dart`, AST golden.
 - **Estimate.** 1 day spike + 1 day implementation if green.
 
@@ -228,14 +302,14 @@ the report output.
   → `__ident__`.
 - **Estimate.** 1 day.
 
-### [LANG-CAND-PHP] PHP — PRIORITY 9
+### [LANG-CAND-PHP] PHP — ✅ SHIPPED (=0.24.2)
 
 - **Crate.** `tree-sitter-php = "=0.24.2"` (tree-sitter org). `^0.24`.
   Exposes both `LANGUAGE_PHP` (full PHP with HTML) and
-  `LANGUAGE_PHP_ONLY` (pure PHP, no HTML interleaving). We use
-  `LANGUAGE_PHP_ONLY` — `.php` files in agent-generated code are
-  overwhelmingly pure PHP and the HTML-interleaved mode introduces
-  noisy `text` nodes we'd have to special-case.
+  `LANGUAGE_PHP_ONLY` (pure PHP, no HTML interleaving). The roadmap
+  originally planned `LANGUAGE_PHP_ONLY`; the shipped `php.rs` uses
+  `LANGUAGE_PHP`, which handles the `<?php … ?>`-tagged files agents
+  actually emit. (Revisit if HTML-interleaved `text` nodes prove noisy.)
 - **Estimate.** 1 day.
 
 ### [LANG-CAND-BASH] Bash — PRIORITY 10
@@ -268,8 +342,11 @@ the report output.
 
 ### [LANG-CAND-REJECTED] Languages we explicitly skip
 
-- **Scala, Haskell, OCaml, Elixir, Clojure, F#, Nim, Zig** — low demand
-  in AI-coding workloads relative to the implementation cost.
+- **Scala, Haskell, OCaml, Elixir, Clojure, Nim, Zig** — low demand
+  in AI-coding workloads relative to the implementation cost. (F# was in
+  this list until 2026-07-05, when it shipped by user directive — the
+  ionide grammar cleared every gate, so the cost argument no longer held.
+  See [LANG-CAND-FSHARP].)
 - **SQL, HTML, CSS, Markdown, YAML, JSON, TOML** — structural but not
   "code" in the duplicate-detection sense. Clone reports on YAML are
   noise.
@@ -282,89 +359,146 @@ the report output.
    separate grammars.** TSX is a second TS impl sharing
    `normalise_kind`. See [LANG-CAND-JAVASCRIPT] for the rejected
    merge-into-one-grammar alternative.
-2. **The tree-sitter runtime gets upgraded to `=0.25.x` before any new
+2. **The tree-sitter runtime gets upgraded to `=0.26.x` before any new
    language lands.** Alternative — back-port grammars to 0.22 — is not
    feasible; most modern grammars don't publish 0.22-compatible
    versions and the legacy `::language()` API is gone.
 3. **Dart is gated on a spike, not a commitment.** User flagged the
-   risk explicitly. Spike task is `[LANG-CAND-DART-SPIKE]`; if it
-   fails, Dart parks until a better grammar lands.
+   risk explicitly. Spike passed on `0.2.0` ([LANG-CAND-DART-RESULT]).
 4. **Kotlin is deferred** because its grammar is stuck on tree-sitter
    0.21–0.22 and its corpus parity is 61%.
 5. **Swift is deferred** because the grammar requires a generated-file
    workaround in the build script.
+6. **F# ships despite its earlier rejection.** Added 2026-07-05 by user
+   directive. One `FSharpParser` on `LANGUAGE_FSHARP` handles `.fs`/`.fsx`;
+   the `.fsi` signature grammar (`LANGUAGE_SIGNATURE`) is a documented
+   follow-up ([LANG-CAND-FSHARP-FSI]). Adding F# also required wiring it
+   into `cluster_filters::snippets::grammar_for` — the CST re-parse map the
+   signature-only (#154) filter depends on, distinct from `default_parsers`.
 
 ---
 
-## [LANG-EXECUTION] Phased execution
+## [LANG-PER-LANG-CHECKLIST] Every new language must ship
+
+A new-language PR is not done until all of the following are green:
+
+- [ ] Grammar crate added with exact `=x.y.z` pin in
+      `Cargo.toml`, `.github/workflows/ci.yml`, `.devcontainer/`.
+- [ ] `LanguageParser` impl in `crates/deslop-core/src/lang/<name>.rs`
+      (< 100 LOC; `normalise_kind` is the only language-specific logic;
+      all shared plumbing reused from `lang::shared`).
+- [ ] Registered in the pipeline's parser registry (`lang::mod`
+      re-export + `pipeline::corpus::default_parsers`).
+- [ ] Added to `cluster_filters::mod::function_kinds` (function-body node
+      kinds) and `cluster_filters::snippets::grammar_for` (CST re-parse
+      map) so the signature-only (#154) and CST filters apply.
+- [ ] Human display name in `render::html::language_display_name` and the
+      live extension map in `live::session::extension_to_language`.
+- [ ] File-extension filter contributes to the discovery stage.
+- [ ] E2E Type-2 fixture (renamed clone) — cluster asserted in report.
+- [ ] E2E Type-3 fixture where a shared body subtree clusters cross-file
+      while the signature-only sibling match is suppressed.
+- [ ] E2E dissimilar-functions fixture — structurally unrelated functions
+      never form a cross-file cluster (zero-false-positive guard).
+- [ ] AST-golden fixture under
+      `tests/fixtures/ast-golden-<name>/Sample.<ext>.expected.ast`
+      with byte-for-byte equality test. Grammar bumps must trip this.
+- [ ] Boilerplate classification documented for imports / module
+      headers per [pipeline.md §PIPELINE-BOILERPLATE](../specs/pipeline.md).
+- [ ] VS Code extension `package.json` activation event
+      (`onLanguage:<id>` + `workspaceContains:**/*.<ext>`).
+- [ ] README / site docs mention the language in the supported-set
+      list.
+- [ ] Coverage threshold in `coverage-thresholds.json` does not drop.
+
+---
+
+## [LANG-OPEN-QUESTIONS] Things still to decide
+
+- **Cross-language clone comparison scope.** Current default per
+  [CONFIG-CROSS-LANGUAGE] is language-scoped. Should TS↔JS compare by
+  default (they share a grammar family)? Proposal: yes, opt-out via
+  `.deslop.toml`. Same question for C↔C++ and `.fs`↔`.fsi`. Still open —
+  TS/JS shipped language-scoped for now.
+- **TS type-annotation nodes — structural or trivia?** Initial
+  recommendation is structural (a method with a type annotation is
+  genuinely different from one without). Revisit after fixtures expose
+  false positives.
+- **JSX component name identifiers** — currently collapse to
+  `__ident__`. That means `<Card />` and `<Tile />` fingerprint identical,
+  which is usually what we want for Type-2 detection but may over-merge
+  on component libraries. Flag to revisit with real-world React
+  corpora.
+
+---
+
+*Research sources consulted 2026-04-23:*
+
+- [tree-sitter-typescript on docs.rs](https://docs.rs/tree-sitter-typescript)
+- [tree-sitter-javascript on docs.rs](https://docs.rs/tree-sitter-javascript)
+- [tree-sitter-go on docs.rs](https://docs.rs/tree-sitter-go)
+- [tree-sitter-java on docs.rs](https://docs.rs/tree-sitter-java)
+- [tree-sitter-cpp on docs.rs](https://docs.rs/tree-sitter-cpp)
+- [tree-sitter-c on docs.rs](https://docs.rs/tree-sitter-c)
+- [tree-sitter-ruby on docs.rs](https://docs.rs/tree-sitter-ruby)
+- [tree-sitter-bash on docs.rs](https://docs.rs/tree-sitter-bash)
+- [tree-sitter-php on docs.rs](https://docs.rs/tree-sitter-php)
+- [tree-sitter-swift on docs.rs](https://docs.rs/tree-sitter-swift)
+- [tree-sitter-kotlin on docs.rs](https://docs.rs/tree-sitter-kotlin)
+- [tree-sitter-dart on docs.rs](https://docs.rs/tree-sitter-dart)
+- [nielsenko/tree-sitter-dart on GitHub](https://github.com/nielsenko/tree-sitter-dart)
+- [UserNobody14/tree-sitter-dart on GitHub](https://github.com/UserNobody14/tree-sitter-dart)
+- [fwcd/tree-sitter-kotlin on GitHub](https://github.com/fwcd/tree-sitter-kotlin)
+- [alex-pinkus/tree-sitter-swift on GitHub](https://github.com/alex-pinkus/tree-sitter-swift)
+
+*F# addendum sources consulted 2026-07-05:*
+
+- [tree-sitter-fsharp on crates.io](https://crates.io/crates/tree-sitter-fsharp) (0.3.1)
+- [ionide/tree-sitter-fsharp on GitHub](https://github.com/ionide/tree-sitter-fsharp)
+
+---
+
+## [LANG-EXECUTION] Phased execution — live TODO
 
 All phases follow the existing PLAN.md shape: each bullet produces
 code + e2e fixture + AST golden + grammar pin in `Cargo.toml`,
 `.github/workflows/ci.yml`, and `.devcontainer/`.
 
-### Phase P-LANG-0 — tree-sitter runtime upgrade (COMPLETE, CI GREEN)
+### Shipped
 
-- [x] Bump `tree-sitter = "=0.26.8"` in workspace `Cargo.toml`.
-- [x] Migrate `csharp.rs`, `rust_lang.rs`, `python.rs` to newer grammar
-      versions that target the modern `LanguageFn` surface:
-      - `tree-sitter-c-sharp` → `=0.23.5`.
-      - `tree-sitter-rust` → `=0.24.2`.
-      - `tree-sitter-python` → `=0.25.0`.
-      Rust AST goldens were refreshed for the new
-      `lifetime_parameter` / `type_parameter` wrappers; C# and Python
-      stayed stable.
-- [x] Audit `lang::shared::parse_source` against the 0.26 API.
-      `Parser::set_language` still takes `&Language`, so the shared
-      signature remains unchanged.
-- [x] Re-run validation. `make test` passes and Rust-side coverage rose
-      from 96.0% to 96.1%. Full `make ci` is green after the follow-up
-      VSIX coverage push: VSIX line coverage is 90.11% against the
-      ratcheted 90% threshold.
-- [x] Verify grammar-pin-drift check still accepts exact `=x.y.z`
-      runtime and grammar pins; no CI regex edit required.
+- **P-LANG-0 — tree-sitter runtime upgrade** (COMPLETE, CI GREEN).
+  Workspace `tree-sitter = "=0.26.8"`; `csharp` → `=0.23.5`, `rust` →
+  `=0.24.2`, `python` → `=0.25.0` migrated to the modern `LANGUAGE`
+  surface (Rust AST goldens refreshed for the new
+  `lifetime_parameter`/`type_parameter` wrappers; C#/Python stable);
+  `shared::parse_source` audited against the 0.26 API (`set_language`
+  still takes `&Language`, unchanged); grammar-pin-drift check still
+  accepts exact `=x.y.z`. `make ci` green — Rust coverage 96.1%, VSIX
+  line coverage 90.11% against the ratcheted 90% floor.
+- **P-LANG-1 — TypeScript + TSX** (COMPLETE). Two impls
+  (`TypeScriptParser` id `typescript` ext `ts`; `TsxParser` id `tsx` ext
+  `tsx`) sharing the `lang::ecmascript` normaliser; `typescript-small`,
+  `tsx-small`, `typescript-type3` fixtures + goldens for both grammars;
+  VS Code `onLanguage:{typescript,typescriptreact}` activation.
+- **P-LANG-2 — JavaScript** (COMPLETE). One impl, exts
+  `js`/`mjs`/`cjs`/`jsx`; fixture + golden; VS Code
+  `onLanguage:{javascript,javascriptreact}` activation.
+- **P-LANG-4 — Dart** (COMPLETE, spike GREEN — see
+  [LANG-CAND-DART-RESULT]). `tree-sitter-dart = "=0.2.0"`;
+  [`dart.rs`](../../crates/deslop-core/src/lang/dart.rs); `dart-small`,
+  `dart-type3`, `dart-dissimilar-functions`, `ast-golden-dart`.
+- **P-LANG-PHP — PHP** (COMPLETE, #265). `tree-sitter-php = "=0.24.2"`
+  on `LANGUAGE_PHP`; `php.rs`; `php-small` + `ast-golden-php`. (Not yet
+  wired into `grammar_for`/display-name maps — a follow-up.)
+- **P-LANG-FSHARP — F#** (COMPLETE, 2026-07-05 — see [LANG-CAND-FSHARP]).
+  `tree-sitter-fsharp = "=0.3.1"` on `LANGUAGE_FSHARP`;
+  [`fsharp.rs`](../../crates/deslop-core/src/lang/fsharp.rs); `fsharp-small`,
+  `fsharp-type3`, `fsharp-dissimilar-functions`, `ast-golden-fsharp`;
+  wired into `default_parsers`, `function_kinds`, `grammar_for`, the HTML
+  display-name map, and the live extension map; VS Code `onLanguage:fsharp`
+  + `.fs`/`.fsx` activation. All four e2e tests green.
 
-### Phase P-LANG-1 — TypeScript + TSX — COMPLETE
-
-- [x] Add `tree-sitter-typescript = "=0.23.2"` (or newer if a 0.25-compat
-      release ships).
-- [x] `crates/deslop-core/src/lang/typescript.rs` — two impls:
-      `TypeScriptParser` (id `"typescript"`, exts `["ts"]`) and
-      `TsxParser` (id `"tsx"`, exts `["tsx"]`). Both call the shared
-      `normalise_kind` defined in the shared ECMAScript module.
-- [x] Fixtures: `tests/fixtures/typescript-small/`,
-      `tests/fixtures/tsx-small/`, `tests/fixtures/typescript-type3/`.
-- [x] AST goldens for both grammars.
-- [x] Activation in `clients/vscode/package.json`:
-      `onLanguage:{typescript,typescriptreact}` plus `.ts` / `.tsx`
-      `workspaceContains` entries.
-
-### Phase P-LANG-2 — JavaScript — COMPLETE
-
-- [x] Add `tree-sitter-javascript = "=0.25.0"`.
-- [x] `crates/deslop-core/src/lang/javascript.rs` — one impl, exts
-      `["js", "mjs", "cjs", "jsx"]`.
-- [x] Fixture + golden.
-- [x] VS Code activation: `onLanguage:{javascript,javascriptreact}` plus
-      `.js` / `.mjs` / `.cjs` / `.jsx` `workspaceContains` entries.
-
-### Phase P-LANG-3 — Go
-
-- [ ] Add `tree-sitter-go = "=0.25.0"`.
-- [ ] `crates/deslop-core/src/lang/go.rs`.
-- [ ] Fixture + golden.
-
-### Phase P-LANG-4 — Dart (SPIKE FIRST) — COMPLETE, SPIKE GREEN
-
-- [x] `[LANG-CAND-DART-SPIKE]` — grammar audit per [LANG-CAND-DART].
-      Outcome documented under `[LANG-CAND-DART-RESULT]`.
-- [x] Spike passed: added `tree-sitter-dart = "=0.2.0"`, implemented
-      [`dart.rs`](../../crates/deslop-core/src/lang/dart.rs), shipped
-      fixtures (`dart-small`, `dart-type3`, `dart-dissimilar-functions`,
-      `ast-golden-dart`) and e2e tests.
-- [x] `[LANG-CAND-DART-PARKED]` not needed — the grammar cleared every
-      spike gate.
-
-### [LANG-CAND-DART-RESULT] Spike outcome (2026-05-30) — GREEN
+### [LANG-CAND-DART-RESULT] Dart spike outcome (2026-05-30) — GREEN
 
 The nielsenko `tree-sitter-dart` grammar shipped **`0.2.0`** on
 2026-04-26 (after the 2026-04-23 research above), superseding the
@@ -405,85 +539,19 @@ End-to-end: Type-2 renamed clones reach `structural = 1.0` and
 cluster with `token_jaccard > 0`; structurally-unrelated functions
 never cluster across files.
 
-### Phase P-LANG-5 — Java
+### Remaining
 
-- [ ] `tree-sitter-java = "=0.23.5"` + plugin + fixtures.
-
-### Phase P-LANG-6 — C / C++
-
-- [ ] `tree-sitter-cpp = "=0.23.4"` + `tree-sitter-c = "=0.24.2"` +
-      both plugins + fixtures.
-
-### Phase P-LANG-7 — Ruby
-
-### Phase P-LANG-8 — PHP
-
-### Phase P-LANG-9 — Bash
-
-### (Deferred) Swift, Kotlin
-
----
-
-## [LANG-PER-LANG-CHECKLIST] Every new language must ship
-
-A new-language PR is not done until all of the following are green:
-
-- [ ] Grammar crate added with exact `=x.y.z` pin in
-      `Cargo.toml`, `.github/workflows/ci.yml`, `.devcontainer/`.
-- [ ] `LanguageParser` impl in `crates/deslop-core/src/lang/<name>.rs`
-      (< 100 LOC; `normalise_kind` is the only language-specific logic;
-      all shared plumbing reused from `lang::shared`).
-- [ ] Registered in the pipeline's parser registry (`lang::mod`
-      re-export + wherever the default set is assembled).
-- [ ] File-extension filter contributes to the discovery stage.
-- [ ] E2E Type-2 fixture (renamed clone) — cluster asserted in report.
-- [ ] E2E Type-3 fixture where structural sim < 1.0 and token jaccard > 0.
-- [ ] AST-golden fixture under
-      `tests/fixtures/ast-golden-<name>/Sample.<ext>.expected.ast`
-      with byte-for-byte equality test. Grammar bumps must trip this.
-- [ ] Boilerplate classification documented for imports / module
-      headers per [pipeline.md §PIPELINE-BOILERPLATE](../specs/pipeline.md).
-- [ ] VS Code extension `package.json` activation event
-      (`onLanguage:<id>` + `workspaceContains:**/*.<ext>`).
-- [ ] README / site docs mention the language in the supported-set
-      list.
-- [ ] Coverage threshold in `coverage-thresholds.json` does not drop.
-
----
-
-## [LANG-OPEN-QUESTIONS] Things still to decide
-
-- **Cross-language clone comparison scope.** Current default per
-  [CONFIG-CROSS-LANGUAGE] is language-scoped. Should TS↔JS compare by
-  default (they share a grammar family)? Proposal: yes, opt-out via
-  `.deslop.toml`. Same question for C↔C++. Decide before P-LANG-2 ships.
-- **TS type-annotation nodes — structural or trivia?** Initial
-  recommendation is structural (a method with a type annotation is
-  genuinely different from one without). Revisit after fixtures expose
-  false positives.
-- **JSX component name identifiers** — currently collapse to
-  `__ident__`. That means `<Card />` and `<Tile />` fingerprint identical,
-  which is usually what we want for Type-2 detection but may over-merge
-  on component libraries. Flag to revisit with real-world React
-  corpora.
-
----
-
-*Research sources consulted 2026-04-23:*
-
-- [tree-sitter-typescript on docs.rs](https://docs.rs/tree-sitter-typescript)
-- [tree-sitter-javascript on docs.rs](https://docs.rs/tree-sitter-javascript)
-- [tree-sitter-go on docs.rs](https://docs.rs/tree-sitter-go)
-- [tree-sitter-java on docs.rs](https://docs.rs/tree-sitter-java)
-- [tree-sitter-cpp on docs.rs](https://docs.rs/tree-sitter-cpp)
-- [tree-sitter-c on docs.rs](https://docs.rs/tree-sitter-c)
-- [tree-sitter-ruby on docs.rs](https://docs.rs/tree-sitter-ruby)
-- [tree-sitter-bash on docs.rs](https://docs.rs/tree-sitter-bash)
-- [tree-sitter-php on docs.rs](https://docs.rs/tree-sitter-php)
-- [tree-sitter-swift on docs.rs](https://docs.rs/tree-sitter-swift)
-- [tree-sitter-kotlin on docs.rs](https://docs.rs/tree-sitter-kotlin)
-- [tree-sitter-dart on docs.rs](https://docs.rs/tree-sitter-dart)
-- [nielsenko/tree-sitter-dart on GitHub](https://github.com/nielsenko/tree-sitter-dart)
-- [UserNobody14/tree-sitter-dart on GitHub](https://github.com/UserNobody14/tree-sitter-dart)
-- [fwcd/tree-sitter-kotlin on GitHub](https://github.com/fwcd/tree-sitter-kotlin)
-- [alex-pinkus/tree-sitter-swift on GitHub](https://github.com/alex-pinkus/tree-sitter-swift)
+- **P-LANG-3 — Go** — `tree-sitter-go = "=0.25.0"` + `go.rs` + fixtures.
+  The easiest remaining language (trivial normalisation, glacial grammar).
+- **P-LANG-5 — Java** — `tree-sitter-java = "=0.23.5"` + plugin + fixtures.
+- **P-LANG-6 — C / C++** — `tree-sitter-cpp = "=0.23.4"` +
+  `tree-sitter-c = "=0.24.2"` + both plugins + fixtures.
+- **P-LANG-7 — Ruby** — `tree-sitter-ruby = "=0.23.1"` + plugin + fixtures.
+- **P-LANG-8 — Bash** — `tree-sitter-bash = "=0.25.1"` + plugin + fixtures.
+- **P-LANG-FSHARP-FSI — F# `.fsi` signatures** — second parser on
+  `LANGUAGE_SIGNATURE` ([LANG-CAND-FSHARP-FSI]); low priority.
+- **P-LANG-PHP-WIRING — PHP filter parity** — add PHP to
+  `cluster_filters::snippets::grammar_for` and the HTML/live maps so it
+  reaches parity with the other languages.
+- **(Deferred) Swift, Kotlin** — grammar/runtime blockers per
+  [LANG-CAND-SWIFT], [LANG-CAND-KOTLIN].

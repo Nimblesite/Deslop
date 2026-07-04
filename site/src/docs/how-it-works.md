@@ -35,6 +35,8 @@ Each language ships a grammar via tree-sitter:
 | Dart | v1 |
 | JavaScript | v1 |
 | TypeScript / TSX | v1 |
+| PHP | v1 |
+| F# | v1 |
 | Go | roadmap |
 
 A parser produces an AST. No source-level regex touches this pipeline — ever.

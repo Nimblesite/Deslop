@@ -140,10 +140,13 @@ fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
             .collect();
         files.contains("delta.fs") && files.contains("epsilon.fs")
     });
-    let cluster = cross_file.expect(
-        "fsharp-type3 must produce a cross-file cluster spanning delta.fs and epsilon.fs \
-         (genuine Type-3 body near-miss); the signature-only match must not be the only cluster",
-    );
+    let Some(cluster) = cross_file else {
+        anyhow::bail!(
+            "fsharp-type3 must produce a cross-file cluster spanning delta.fs and epsilon.fs \
+             (genuine Type-3 body near-miss); the signature-only match must not be the only \
+             cluster; got clusters: {clusters:#?}"
+        );
+    };
     let structural = cluster.pointer("/signals/structural").and_then(serde_json::Value::as_f64);
     assert_eq!(
         structural,
