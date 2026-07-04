@@ -12,6 +12,7 @@ on:
   workflow_call:
 
 permissions:
+  actions: write
   contents: read
   pages: write
   id-token: write
@@ -27,7 +28,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,9 +50,38 @@ jobs:
 
       - uses: actions/configure-pages@v4
 
+      - name: Remove stale Pages artifact from rerun
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${REPOSITORY}/actions/runs/${RUN_ID}/artifacts" --paginate --jq '.artifacts[] | select(.name == "github-pages") | .id' |
+            while IFS= read -r artifact_id; do
+              [ -n "${artifact_id}" ] || continue
+              gh api -X DELETE "repos/${REPOSITORY}/actions/artifacts/${artifact_id}"
+            done
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/_site
 
       - uses: actions/deploy-pages@v4
         id: deploy
+        continue-on-error: true
+
+      - name: Pause before retrying Pages deploy
+        if: ${{ steps.deploy.outcome == 'failure' }}
+        run: sleep 30
+
+      - uses: actions/deploy-pages@v4
+        id: deploy_retry
+        if: ${{ steps.deploy.outcome == 'failure' }}
+        continue-on-error: true
+
+      - name: Fail if Pages deployment did not recover
+        if: ${{ steps.deploy.outcome == 'failure' && steps.deploy_retry.outcome == 'failure' }}
+        run: |
+          echo "GitHub Pages deployment failed after retry."
+          exit 1

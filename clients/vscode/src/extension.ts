@@ -54,6 +54,8 @@ let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
 let activeReportStore: ReportStore | undefined;
 
+const REPORT_READY_CONTEXT = "deslop.reportReady";
+
 const ANALYSED_DOCUMENTS = [
   { language: "csharp", scheme: "file" },
   { language: "rust", scheme: "file" },
@@ -117,6 +119,7 @@ export async function activate(
   // synchronously BEFORE the tree view is created so the title-bar
   // toggles have `when`-clause values to match against on cold start.
   syncTopOffendersContext();
+  syncReportReadyContext(reportStore);
   // [FACET-TOP-OFFENDERS-FILTER] Seed the store's facet-filter mirror so
   // the status bar and webviews slice correctly from the first render.
   reportStore.setFacetFilter(readTopOffendersFilter());
@@ -175,6 +178,7 @@ export async function activate(
       reportStore.setFacetFilter(readTopOffendersFilter());
       topOffenders.refresh();
     }),
+    reportStore.onDidChange(() => syncReportReadyContext(reportStore)),
   );
 
   try {
@@ -301,6 +305,14 @@ export function syncTopOffendersContext(): void {
     "setContext",
     "deslop.topOffendersFiltered",
     isTopOffendersFilterActive(),
+  );
+}
+
+export function syncReportReadyContext(store: ReportStore): void {
+  void vscode.commands.executeCommand(
+    "setContext",
+    REPORT_READY_CONTEXT,
+    store.current.report !== null,
   );
 }
 

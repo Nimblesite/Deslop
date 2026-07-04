@@ -286,7 +286,7 @@
         },
         {
           "command": "deslop.openHtmlReport",
-          "when": "view == deslop.topOffenders",
+          "when": "view == deslop.topOffenders && deslop.reportReady",
           "group": "navigation@8"
         },
         {
