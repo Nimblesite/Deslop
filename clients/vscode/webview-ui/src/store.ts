@@ -36,7 +36,7 @@ export const EMPTY_FILTERS: Filters = {
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
-export const analysisState = signal<AnalysisState>("idle");
+export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>(EMPTY_FILTERS);
 // [FACET-TOP-OFFENDERS-FILTER] Workspace facet filter pushed by the
 // extension host so this list agrees with the filtered tree.

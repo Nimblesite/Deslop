@@ -21,9 +21,7 @@ export function FilterSelect<T extends string>(props: {
       }}
     >
       {props.options.map((option) => (
-        <option key={option.label} value={option.value ?? ""}>
-          {option.label}
-        </option>
+        <option key={option.label} label={option.label} value={option.value ?? ""} />
       ))}
     </select>
   );
