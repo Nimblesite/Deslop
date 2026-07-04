@@ -76,6 +76,21 @@ fn detects_type2_clone_in_dart_fixture() -> Result<()> {
     Ok(())
 }
 
+// Implements [PIPELINE-LANG-TRAIT] for PHP ([PARSE-PHP-NORMALIZE]):
+// Type-2 renamed-clone detection. `alpha.php` and `beta.php` implement
+// the same accumulate loop with every identifier renamed; PHP
+// normalisation collapses identifiers/literals so the two functions
+// fingerprint identically and cluster at structural = 1.0.
+#[test]
+fn detects_type2_clone_in_php_fixture() -> Result<()> {
+    let json = run_min_nodes("php-small", "10")?;
+    assert!(json.contains("\"files_analysed\": 2"));
+    assert!(json.contains("alpha.php"));
+    assert!(json.contains("beta.php"));
+    assert!(json.contains("\"structural\": 1.0"));
+    Ok(())
+}
+
 // Audience: HUMAN. Zero-false-positive guard for Dart ([LANG-CAND-DART]).
 // `tally()` builds a map inside a for-each loop; `describe()` is a chain
 // of `if (code …) return …` early exits. The two share no real shape, so

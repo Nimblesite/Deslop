@@ -530,6 +530,10 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
             "function_expression",
             "arrow_function",
         ],
+        // PHP functions and class methods that expose a `body` field so the
+        // signature-only (#154) and polymorphic-signature (#69) filters can
+        // compare bodies after a signature-only structural match.
+        b"php" => &["function_definition", "method_declaration"],
         _ => &[],
     }
 }
