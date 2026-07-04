@@ -10,7 +10,9 @@
 //! rationale and worked examples live in the `deslop://schema`
 //! resource — agents fetch it on demand via `schema-doc`.
 
+use deslop_core::pipeline::language_ids;
 use serde_json::{json, Value};
+use tracing::debug;
 
 use crate::backend::McpBackend;
 use crate::protocol::{jsonrpc_error, JsonRpcError};
@@ -113,11 +115,27 @@ const TOOLS: [ToolDefinition; 12] = [
     },
 ];
 
-/// Renders the tool registry into the JSON shape MCP's `tools/list`
-/// response expects.
+/// Live language ids the running engine registers, or the compiled
+/// fallback set when the engine is unreachable. `tools/list` must
+/// advertise this set so the `language` enum can never claim a language
+/// the runtime validator would reject under MCP/engine version skew
+/// (gh #255).
 #[must_use]
-pub fn tools_list_payload() -> Value {
-    let items: Vec<Value> = TOOLS
+pub fn advertised_languages(backend: &dyn McpBackend) -> Vec<String> {
+    backend.session_config().map_or_else(
+        |_| language_ids().into_iter().map(str::to_owned).collect(),
+        |config| config.languages,
+    )
+}
+
+/// Renders the tool registry into the JSON shape MCP's `tools/list`
+/// response expects. `languages` is the live engine's registered set
+/// (see [`advertised_languages`]); every schema `language` enum is
+/// rewritten to it so the advertised gate matches the validator (gh #255).
+#[must_use]
+pub fn tools_list_payload(languages: &[String]) -> Value {
+    debug!(language_count = languages.len(), "tools_list_advertised");
+    let mut items: Vec<Value> = TOOLS
         .iter()
         .map(|tool| {
             json!({
@@ -127,7 +145,23 @@ pub fn tools_list_payload() -> Value {
             })
         })
         .collect();
+    apply_live_language_enum(&mut items, languages);
     json!({ "tools": items })
+}
+
+/// Rewrites the closed `language` enum of every tool schema that filters
+/// by language (`find-similar`, `report-query`) to `languages` — the
+/// live engine's registered set. Schemas ship a compile-time enum as a
+/// fallback; this override keeps the advertised gate in lock-step with
+/// the runtime validator so it can never reject a language the engine
+/// supports (gh #255).
+fn apply_live_language_enum(tools: &mut [Value], languages: &[String]) {
+    let enum_values: Vec<Value> = languages.iter().cloned().map(Value::from).collect();
+    for tool in tools {
+        if let Some(slot) = tool.pointer_mut("/inputSchema/properties/language/enum") {
+            *slot = Value::Array(enum_values.clone());
+        }
+    }
 }
 
 /// Wraps a tool result in the MCP `tools/call` response envelope.
