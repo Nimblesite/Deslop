@@ -55,7 +55,7 @@ impl ParseCache {
     /// Returns the cached CST for `file_id`, parsing `source` with the
     /// `language` grammar on first request. `None` when the language has
     /// no registered grammar here or parsing fails.
-    fn tree_for(
+    pub(crate) fn tree_for(
         &self,
         file_id: FileId,
         language: &'static str,

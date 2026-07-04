@@ -11,13 +11,24 @@
 
 #![allow(dead_code)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Context, Result};
+use deslop_core::{
+    ast::ByteRange,
+    cluster::Cluster,
+    fingerprint::Fingerprint,
+    pair::PairScore,
+    render_report,
+    report::CacheStats,
+    report_metrics::AnalysedLines,
+    state::{FileId, FileRegistry},
+    EmbeddingProvenance, ExclusionConfig, ReportInputs,
+};
 use tracing::{
     field::{Field, Visit},
     span::{Attributes, Id, Record},
@@ -216,5 +227,137 @@ impl Visit for FieldCollector {
 
     fn record_bool(&mut self, field: &Field, value: bool) {
         self.record_value(field, value.to_string());
+    }
+}
+
+/// Shared `render_report` fixture for the report-rendering regression
+/// suites (`issue_98_99_108_120_122_thresholds`,
+/// `issue_121_pytest_fixture_boilerplate`, `issue_239_csharp_reparse`).
+/// Registers
+/// sources under one scan root, stamps every file with a single
+/// `language`, and renders fabricated clusters through the production
+/// [`render_report`] path. Consolidated here from the byte-identical
+/// copies previously duplicated per test file (Deslop cluster
+/// `a59932844b88648e`).
+pub(crate) struct ReportFixture {
+    scan_root: PathBuf,
+    language: &'static str,
+    registry: FileRegistry,
+    file_languages: HashMap<FileId, &'static str>,
+    sources: HashMap<FileId, Vec<u8>>,
+    analysed_lines: AnalysedLines,
+}
+
+impl ReportFixture {
+    /// Creates an empty fixture whose files all carry `language`.
+    pub(crate) fn new(scan_root: &Path, language: &'static str) -> Self {
+        Self {
+            scan_root: scan_root.to_owned(),
+            language,
+            registry: FileRegistry::new(),
+            file_languages: HashMap::new(),
+            sources: HashMap::new(),
+            analysed_lines: HashMap::new(),
+        }
+    }
+
+    /// Registers `path` with `source` bytes exactly once and returns its
+    /// [`FileId`]. Use with [`ReportFixture::fingerprint_at`] when one
+    /// file must carry several cluster members at distinct byte ranges —
+    /// `FileRegistry::register` appends unconditionally, so registering
+    /// per member would fork the same path into divergent ids.
+    pub(crate) fn file(&mut self, path: &str, source: &str) -> FileId {
+        let file_id = self.registry.register(self.scan_root.join(path));
+        let _old = self.sources.insert(file_id, source.as_bytes().to_vec());
+        let _old = self.file_languages.insert(file_id, self.language);
+        let _old = self.analysed_lines.insert(
+            file_id,
+            u64::try_from(source.lines().count()).unwrap_or(u64::MAX),
+        );
+        file_id
+    }
+
+    /// Builds a member fingerprint covering `byte_range` of a file
+    /// previously registered via [`ReportFixture::file`].
+    pub(crate) fn fingerprint_at(
+        file_id: FileId,
+        byte_range: ByteRange,
+        node_count: usize,
+        hash_seed: usize,
+    ) -> Fingerprint {
+        Fingerprint {
+            hash: [u8::try_from(hash_seed).unwrap_or(u8::MAX); 32],
+            file_id,
+            byte_range,
+            node_count,
+        }
+    }
+
+    /// Registers one whole-file source per snippet and clusters them.
+    pub(crate) fn cluster(
+        &mut self,
+        id: &str,
+        snippets: Vec<(&str, &str)>,
+        node_count: usize,
+        signals: PairScore,
+    ) -> Cluster {
+        let members = snippets
+            .into_iter()
+            .enumerate()
+            .map(|(index, (path, source))| self.member(path, source, node_count, index))
+            .collect::<Vec<_>>();
+        Cluster {
+            id: id.to_owned(),
+            members,
+            weight: 10_000.0,
+            signals,
+        }
+    }
+
+    /// Registers `source` at `path` and returns a whole-file member.
+    fn member(
+        &mut self,
+        path: &str,
+        source: &str,
+        node_count: usize,
+        hash_seed: usize,
+    ) -> Fingerprint {
+        let file_id = self.file(path, source);
+        Self::fingerprint_at(
+            file_id,
+            ByteRange {
+                start: 0,
+                end: source.len(),
+            },
+            node_count,
+            hash_seed,
+        )
+    }
+
+    /// Renders `clusters` through the production report pipeline.
+    pub(crate) fn render(&self, clusters: &[Cluster]) -> deslop_core::Report {
+        let exclusion = ExclusionConfig::empty();
+        render_report(ReportInputs {
+            clusters,
+            registry: &self.registry,
+            file_languages: &self.file_languages,
+            files_analysed: self.sources.len(),
+            min_nodes: 15,
+            scan_root: &self.scan_root,
+            exclusion: &exclusion,
+            embedding_provenance: Some(EmbeddingProvenance {
+                provider_id: "stub".to_owned(),
+                model_id: "report-fixture".to_owned(),
+                model_version: "test".to_owned(),
+                dimensions: 3,
+                attempted_subtrees: self.sources.len(),
+                indexed_subtrees: self.sources.len(),
+                failed_subtrees: 0,
+            }),
+            cache_stats: CacheStats::default(),
+            sources: &self.sources,
+            analysed_lines: &self.analysed_lines,
+            boilerplate_ranges: &[],
+        })
     }
 }
