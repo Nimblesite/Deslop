@@ -13,6 +13,7 @@ use crate::{ast::NormalizedNode, error::CoreError, state::FileId};
 pub mod csharp;
 pub mod dart;
 pub(crate) mod ecmascript;
+pub mod fsharp;
 pub mod javascript;
 pub mod php;
 pub mod python;

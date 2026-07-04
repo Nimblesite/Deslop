@@ -3,13 +3,14 @@ package com.nimblesite.deslop.jetbrains
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Disposer
-import com.intellij.ui.components.JBLabel
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import javax.swing.JComponent
-import javax.swing.SwingConstants
 
-/** Shown in place of the report when the IDE runtime has no embedded browser. */
+/**
+ * Shown at the top of the no-JCEF fallback surface: explains why the report is not
+ * embedded here before offering to open it in the system browser instead.
+ */
 internal const val JCEF_UNAVAILABLE: String =
     "Deslop cannot show the report here: the embedded browser (JCEF) is unavailable in this IDE runtime."
 
@@ -27,12 +28,19 @@ private const val PLACEHOLDER_HTML =
  * browser. The tool window hosts one of these, and any future report surface reuses
  * it, so report rendering is never duplicated (the "do not duplicate the rendering"
  * UI rule). Renderer output is self-contained (inline CSS, no scripts), so [load]
- * is a one-shot replace.
+ * is a one-shot replace. When the IDE runtime has no embedded browser (JBCef
+ * unsupported, e.g. some Android Studio builds) the panel installs a
+ * [DeslopExternalReportFallback] instead, so the report stays reachable in the
+ * system browser rather than dead-ending.
  */
 internal class DeslopReportPanel(parentDisposable: Disposable) :
     SimpleToolWindowPanel(true, true), Disposable {
 
     private val browser: JBCefBrowser? = if (JBCefApp.isSupported()) JBCefBrowser() else null
+
+    // Built only when there is no embedded browser (its sole access sites are guarded
+    // by `browser == null`), so JCEF-capable IDEs never construct the fallback UI.
+    private val fallback: DeslopExternalReportFallback by lazy { DeslopExternalReportFallback() }
 
     init {
         Disposer.register(parentDisposable, this)
@@ -41,14 +49,18 @@ internal class DeslopReportPanel(parentDisposable: Disposable) :
     }
 
     private fun reportComponent(): JComponent {
-        val available = browser ?: return JBLabel(JCEF_UNAVAILABLE, SwingConstants.CENTER)
+        val available = browser ?: return fallback.component
         available.loadHTML(PLACEHOLDER_HTML)
         return available.component
     }
 
-    /** Replaces the displayed report with [html]; a no-op when JCEF is unavailable. */
+    /**
+     * Shows [html]: replaced in the embedded browser, or retained by the fallback for
+     * on-demand opening in the system browser when JCEF is unavailable.
+     */
     fun load(html: String) {
-        browser?.loadHTML(html)
+        val available = browser
+        if (available != null) available.loadHTML(html) else fallback.retain(html)
     }
 
     override fun dispose() = Unit

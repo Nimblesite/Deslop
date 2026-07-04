@@ -6,6 +6,7 @@ import com.intellij.testFramework.TestApplicationManager
 import com.intellij.ui.jcef.JBCefApp
 import java.awt.Container
 import java.util.concurrent.atomic.AtomicReference
+import javax.swing.JButton
 import javax.swing.JLabel
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -50,6 +51,43 @@ internal class DeslopReportPanelTest {
                 Disposer.dispose(disposable)
             }
         }
+    }
+
+    /**
+     * Without an embedded browser (JCEF) the report must stay reachable: after a
+     * report is loaded the panel must offer an enabled control to open it in the
+     * system browser, rather than dead-ending on a static message with a no-op
+     * [DeslopReportPanel.load]. This is the whole-IDE-family gap Android Studio hits,
+     * where `JBCefApp.isSupported()` is false and the report is otherwise unviewable.
+     */
+    @Test
+    fun panelOffersExternalBrowserWhenJcefUnavailable() {
+        TestApplicationManager.getInstance()
+        runOnEdt {
+            val disposable = Disposer.newDisposable("deslop-report-panel-external-test")
+            try {
+                val panel = DeslopReportPanel(disposable)
+
+                panel.load(REPORT_HTML)
+
+                if (!JBCefApp.isSupported()) {
+                    assertTrue(
+                        enabledButtonTexts(panel).any { it.contains("browser", ignoreCase = true) },
+                        "without an embedded browser the panel must offer to open the report externally, not dead-end",
+                    )
+                }
+            } finally {
+                Disposer.dispose(disposable)
+            }
+        }
+    }
+}
+
+/** Texts of every enabled [JButton] in [root]'s tree — the fallback actions offered to the user. */
+private fun enabledButtonTexts(root: Container): List<String> = buildList {
+    for (child in root.components) {
+        if (child is JButton && child.isEnabled) child.text?.let(::add)
+        if (child is Container) addAll(enabledButtonTexts(child))
     }
 }
 

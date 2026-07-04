@@ -30,7 +30,8 @@
     "python",
     "dart",
     "javascript",
-    "typescript"
+    "typescript",
+    "fsharp"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -44,6 +45,7 @@
     "onLanguage:javascriptreact",
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
+    "onLanguage:fsharp",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
     "workspaceContains:**/*.py",
@@ -53,7 +55,9 @@
     "workspaceContains:**/*.cjs",
     "workspaceContains:**/*.jsx",
     "workspaceContains:**/*.ts",
-    "workspaceContains:**/*.tsx"
+    "workspaceContains:**/*.tsx",
+    "workspaceContains:**/*.fs",
+    "workspaceContains:**/*.fsx"
   ],
   "contributes": {
     "commands": [

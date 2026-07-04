@@ -534,6 +534,12 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
         // signature-only (#154) and polymorphic-signature (#69) filters can
         // compare bodies after a signature-only structural match.
         b"php" => &["function_definition", "method_declaration"],
+        // F# `let`/`member` bindings both expose a `body` field so the
+        // signature-only (#154) and polymorphic-signature (#69) filters can
+        // compare bodies after a signature-only structural match. Only
+        // `method_or_prop_defn` carries a `name` field (members), so #69 is
+        // limited to members; top-level `let` bindings still get #154.
+        b"fsharp" => &["function_or_value_defn", "method_or_prop_defn"],
         _ => &[],
     }
 }

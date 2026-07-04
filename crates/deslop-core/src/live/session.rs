@@ -820,6 +820,7 @@ fn extension_to_language(path: &Path) -> Option<&'static str> {
         "js" | "mjs" | "cjs" | "jsx" => Some("javascript"),
         "ts" => Some("typescript"),
         "tsx" => Some("tsx"),
+        "fs" | "fsx" => Some("fsharp"),
         _ => None,
     }
 }

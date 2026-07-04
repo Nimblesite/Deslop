@@ -91,6 +91,122 @@ fn detects_type2_clone_in_php_fixture() -> Result<()> {
     Ok(())
 }
 
+// Implements [PIPELINE-LANG-TRAIT] for F# ([PARSE-FSHARP-NORMALIZE]):
+// Type-2 renamed-clone detection. `alpha.fs` and `beta.fs` implement the
+// same accumulate loop with every identifier renamed and the integer
+// literals changed; F# normalisation collapses identifiers/literals so the
+// two functions fingerprint identically and cluster at structural = 1.0.
+#[test]
+fn detects_type2_clone_in_fsharp_fixture() -> Result<()> {
+    let json = run_min_nodes("fsharp-small", "10")?;
+    assert!(json.contains("\"files_analysed\": 2"));
+    assert!(json.contains("alpha.fs"));
+    assert!(json.contains("beta.fs"));
+    assert!(json.contains("\"structural\": 1.0"));
+    Ok(())
+}
+
+// Implements [FUSION-SIGNALS-THREE-LAYER] for F#: a genuine Type-3
+// near-miss. `delta.fs`'s loop body runs two accumulator updates per
+// iteration; `epsilon.fs`'s runs one. The shared control-flow subtrees
+// (`_ < 0 then 0`, `_ <- _ + _`, `_ in 0 .. _`) surface as a cross-file
+// cluster at structural = 1.0, while the signature-only sibling match
+// (`f (_: int) : int`, whose bodies differ) is correctly suppressed
+// ([CLONE-NOISE-SIGNATURE-ONLY], #154) — proving both the structural
+// near-miss path and the signature filter are wired for F#.
+#[test]
+fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
+    let json = run_min_nodes("fsharp-type3", "8")?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let cross_file = clusters.iter().find(|cluster| {
+        let files: std::collections::BTreeSet<String> = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|occurrence| occurrence.get("path").and_then(serde_json::Value::as_str))
+            .map(|path| {
+                Path::new(path).file_name().map_or_else(
+                    || path.to_owned(),
+                    |name| name.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        files.contains("delta.fs") && files.contains("epsilon.fs")
+    });
+    let cluster = cross_file.expect(
+        "fsharp-type3 must produce a cross-file cluster spanning delta.fs and epsilon.fs \
+         (genuine Type-3 body near-miss); the signature-only match must not be the only cluster",
+    );
+    let structural = cluster.pointer("/signals/structural").and_then(serde_json::Value::as_f64);
+    assert_eq!(
+        structural,
+        Some(1.0),
+        "the F# near-miss cluster must reach structural = 1.0 on the shared body subtree, \
+         got {structural:?}",
+    );
+    let occurrences = cluster
+        .pointer("/occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    assert!(
+        occurrences >= 2,
+        "a clone cluster must have at least two occurrences, got {occurrences}",
+    );
+    assert!(
+        cluster.pointer("/signals/token_jaccard").is_some(),
+        "the cross-file F# cluster must carry a token_jaccard signal",
+    );
+    Ok(())
+}
+
+// Audience: HUMAN. Zero-false-positive guard for F#. `tally()` folds a
+// word-count `Map` inside a `for` loop; `describe()` is an `if`/`elif`
+// cascade of early string returns. The two share no real shape, so a
+// human reading the report must never see them paired as duplicates.
+// Positive bound: every cluster's occurrences come from a single file.
+#[test]
+fn dissimilar_fsharp_functions_across_files_stay_in_separate_clusters() -> Result<()> {
+    let json = run_min_nodes("fsharp-dissimilar-functions", "8")?;
+    let report: serde_json::Value = serde_json::from_str(&json)?;
+    let clusters = report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    for (index, cluster) in clusters.iter().enumerate() {
+        let occurrences = cluster
+            .get("occurrences")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for occurrence in &occurrences {
+            let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            let basename = Path::new(path).file_name().map_or_else(
+                || path.to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            );
+            let _inserted = files.insert(basename);
+        }
+        assert_eq!(
+            files.len(),
+            1,
+            "cluster #{index} spans multiple files {files:?}; the two F# functions are \
+             structurally unrelated and must not be reported as duplicates",
+        );
+    }
+    Ok(())
+}
+
 // Audience: HUMAN. Zero-false-positive guard for Dart ([LANG-CAND-DART]).
 // `tally()` builds a map inside a for-each loop; `describe()` is a chain
 // of `if (code …) return …` early exits. The two share no real shape, so
