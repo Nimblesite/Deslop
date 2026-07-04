@@ -5,17 +5,31 @@
 // TreeItem construction. Folder-mode building lives in `./folder`,
 // which reuses `groupByFile` / `fileNodeWithChildren` from here.
 
-import { ReportCluster, ReportOccurrence, Severity, resolveBucket, Bucket } from "../types/report";
+import {
+  Bucket,
+  BUCKETS,
+  ReportCluster,
+  ReportOccurrence,
+  resolveBucket,
+  Severity,
+} from "../types/report";
 import {
   BucketGroupNode,
   ClusterNode,
   FileNode,
+  GroupNode,
   Node,
 } from "./nodes";
 import { displayPath, representativePath } from "./paths";
 import { compareWeightedPath, SortBy } from "./sort";
 
-export type GroupBy = "cluster" | "file" | "folder";
+export type GroupBy = "cluster" | "file" | "folder" | "type";
+
+/** Normalizes a persisted groupBy value. Unknown / missing values fall
+ * back to `"cluster"` — never panic ([VSIX-TOP-OFFENDERS-GROUPING]). */
+export function normalizeGroupBy(raw: string | undefined): GroupBy {
+  return raw === "file" || raw === "folder" || raw === "type" ? raw : "cluster";
+}
 
 export interface RankedCluster {
   cluster: ReportCluster;
@@ -49,6 +63,25 @@ function rankClusters(
   return clusters.map((cluster) => ({ cluster, rank: rankIndex.get(cluster.id) ?? 0 }));
 }
 
+// Shared display ordering for cluster mode and type mode: impact keeps
+// the report's worst-first order; path re-orders by representative file
+// path with weight desc as the tie-break ([VSIX-TOP-OFFENDERS-SORT]).
+function rankAndOrder(
+  clusters: ReportCluster[],
+  rankIndex: Map<string, number>,
+  sortBy: SortBy,
+): RankedCluster[] {
+  const ranked = rankClusters(clusters, rankIndex);
+  if (sortBy === "path") {
+    ranked.sort(
+      (left, right) =>
+        representativePath(left.cluster).localeCompare(representativePath(right.cluster)) ||
+        right.cluster.weight - left.cluster.weight,
+    );
+  }
+  return ranked;
+}
+
 // [VSIX-TOP-OFFENDERS-CLUSTER-MODE] Roots are clusters. The sort axis
 // orders the DISPLAY: impact keeps the report's worst-first order; path
 // orders by representative file path. The global rank #N is read from
@@ -61,15 +94,7 @@ export function buildClusterMode(
   rankIndex: Map<string, number>,
   sortBy: SortBy,
 ): Node[] {
-  const ranked = rankClusters(clusters, rankIndex);
-  if (sortBy === "path") {
-    ranked.sort(
-      (left, right) =>
-        representativePath(left.cluster).localeCompare(representativePath(right.cluster)) ||
-        right.cluster.weight - left.cluster.weight,
-    );
-  }
-  return ranked.map(({ cluster, rank }) => {
+  return rankAndOrder(clusters, rankIndex, sortBy).map(({ cluster, rank }) => {
     const severity = severities.get(cluster.id) ?? "faint";
     return new ClusterNode(cluster, rank, severity, { showFile: true });
   });
@@ -160,7 +185,8 @@ const fileNodeRanked = new WeakMap<FileNode, RankedCluster[]>();
 const fileNodeSeverities = new WeakMap<FileNode, Map<string, Severity>>();
 
 // Children of a FileNode: one BucketGroupNode per bucket present,
-// sorted by max cluster weight desc.
+// sorted by max cluster weight desc, each group's clusters pre-ordered
+// weight desc.
 export function getFileNodeChildren(file: FileNode): Node[] {
   const ranked = fileNodeRanked.get(file);
   if (!ranked) return [];
@@ -173,35 +199,69 @@ export function getFileNodeChildren(file: FileNode): Node[] {
   }
   const groups = Array.from(byBucket.entries()).map(([bucket, list]) => ({
     bucket,
-    list,
+    list: list.slice().sort((left, right) => right.cluster.weight - left.cluster.weight),
     maxWeight: list.reduce((max, entry) => Math.max(max, entry.cluster.weight), 0),
   }));
   groups.sort((left, right) => right.maxWeight - left.maxWeight);
-  return groups.map(({ bucket, list }) => {
-    const node = new BucketGroupNode(bucket, list.map((entry) => entry.cluster));
-    bucketGroupRanked.set(node, list);
-    bucketGroupSeverities.set(node, fileNodeSeverities.get(file) ?? new Map<string, Severity>());
-    return node;
+  const severities = fileNodeSeverities.get(file) ?? new Map<string, Severity>();
+  return groups.map(({ bucket, list }) =>
+    registerGroup(new BucketGroupNode(bucket, list.map((entry) => entry.cluster)), list, severities),
+  );
+}
+
+// Per-GroupNode side tables — one machinery for BOTH group axes
+// (file-mode bucket sections and type-mode bucket roots,
+// [FACET-GROUP-BY-TYPE]). Lists are stored in final display order; the
+// creation sites own the ordering.
+const groupRanked = new WeakMap<GroupNode, RankedCluster[]>();
+const groupSeverities = new WeakMap<GroupNode, Map<string, Severity>>();
+
+/** Stashes a group's pre-ordered entries + severities and returns it. */
+function registerGroup(
+  node: GroupNode,
+  list: RankedCluster[],
+  severities: Map<string, Severity>,
+): GroupNode {
+  groupRanked.set(node, list);
+  groupSeverities.set(node, severities);
+  return node;
+}
+
+// Children of any GroupNode: ClusterNodes in the group's stored display
+// order, with the file suffix driven by the group's axis.
+export function getGroupNodeChildren(group: GroupNode): Node[] {
+  const ranked = groupRanked.get(group);
+  if (!ranked) return [];
+  const severities = groupSeverities.get(group) ?? new Map<string, Severity>();
+  return ranked.map(({ cluster, rank }) => {
+    const severity = severities.get(cluster.id) ?? "faint";
+    return new ClusterNode(cluster, rank, severity, { showFile: group.showFileInChildren });
   });
 }
 
-const bucketGroupRanked = new WeakMap<BucketGroupNode, RankedCluster[]>();
-const bucketGroupSeverities = new WeakMap<
-  BucketGroupNode,
-  Map<string, Severity>
->();
-
-// Children of a BucketGroupNode: ClusterNodes sorted by weight desc,
-// with the file suffix dropped from the label.
-export function getBucketGroupChildren(group: BucketGroupNode): Node[] {
-  const ranked = bucketGroupRanked.get(group);
-  if (!ranked) return [];
-  const severities = bucketGroupSeverities.get(group) ?? new Map<string, Severity>();
-  return ranked
-    .slice()
-    .sort((left, right) => right.cluster.weight - left.cluster.weight)
-    .map(({ cluster, rank }) => {
-      const severity = severities.get(cluster.id) ?? "faint";
-      return new ClusterNode(cluster, rank, severity, { showFile: false });
-    });
+// [FACET-GROUP-BY-TYPE] Roots are one flat group per bucket present, in
+// registry order, empty groups omitted (#258) — every Identical cluster
+// surfaces together with no file/folder layer in between. Under the
+// impact axis clusters stay worst-first inside each group; the path axis
+// orders them by representative path, exactly like cluster mode. Rank #N
+// stays global.
+export function buildTypeMode(
+  clusters: ReportCluster[],
+  severities: Map<string, Severity>,
+  rankIndex: Map<string, number>,
+  sortBy: SortBy,
+): Node[] {
+  const ranked = rankAndOrder(clusters, rankIndex, sortBy);
+  return BUCKETS.map((bucket) => ({
+    bucket,
+    list: ranked.filter((entry) => resolveBucket(entry.cluster) === bucket),
+  }))
+    .filter(({ list }) => list.length > 0)
+    .map(({ bucket, list }) =>
+      registerGroup(
+        new BucketGroupNode(bucket, list.map((entry) => entry.cluster), true),
+        list,
+        severities,
+      ),
+    );
 }

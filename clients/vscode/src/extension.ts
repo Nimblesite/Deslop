@@ -25,6 +25,11 @@ import { log, logError, initOutputChannel } from "./logging";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
 import {
+  isTopOffendersFilterActive,
+  readTopOffendersFilter,
+} from "./commands/topOffendersView";
+import { normalizeGroupBy } from "./tree/grouping";
+import {
   TopOffendersProvider,
   MetricsProvider,
   SessionProvider,
@@ -112,6 +117,9 @@ export async function activate(
   // synchronously BEFORE the tree view is created so the title-bar
   // toggles have `when`-clause values to match against on cold start.
   syncTopOffendersContext();
+  // [FACET-TOP-OFFENDERS-FILTER] Seed the store's facet-filter mirror so
+  // the status bar and webviews slice correctly from the first render.
+  reportStore.setFacetFilter(readTopOffendersFilter());
 
   const topOffenders = new TopOffendersProvider(reportStore, ticker);
   const metrics = new MetricsProvider(reportStore, ticker);
@@ -155,11 +163,16 @@ export async function activate(
       if (
         !event.affectsConfiguration("deslop.topOffenders.groupBy") &&
         !event.affectsConfiguration("deslop.topOffenders.sortBy") &&
-        !event.affectsConfiguration("deslop.topOffenders.splitByLanguage")
+        !event.affectsConfiguration("deslop.topOffenders.splitByLanguage") &&
+        !event.affectsConfiguration("deslop.topOffenders.filterBuckets") &&
+        !event.affectsConfiguration("deslop.topOffenders.filterCategories")
       ) {
         return;
       }
       syncTopOffendersContext();
+      // [FACET-TOP-OFFENDERS-FILTER] Mirror the filter into the store so
+      // the status-bar count and webviews slice in lock-step with the tree.
+      reportStore.setFacetFilter(readTopOffendersFilter());
       topOffenders.refresh();
     }),
   );
@@ -267,14 +280,14 @@ export function currentApi(): ExtensionApi {
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] / [VSIX-TOP-OFFENDERS-SORT] /
-// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] Mirror the three persisted view
-// axes onto context keys so the title-bar toggles' mutually exclusive
-// `when` clauses can render the right buttons. Unknown / missing values
-// fall back to the spec defaults — never throws.
+// [VSIX-TOP-OFFENDERS-LANGUAGE-GROUP] / [FACET-TOP-OFFENDERS-FILTER]
+// Mirror the persisted view axes onto context keys so the title-bar
+// toggles' mutually exclusive `when` clauses can render the right
+// buttons, and the filter button its active-filter icon state. Unknown
+// / missing values fall back to the spec defaults — never throws.
 export function syncTopOffendersContext(): void {
   const cfg = vscode.workspace.getConfiguration("deslop");
-  const rawGroup = cfg.get<string>("topOffenders.groupBy", "cluster");
-  const groupBy = rawGroup === "file" ? "file" : rawGroup === "folder" ? "folder" : "cluster";
+  const groupBy = normalizeGroupBy(cfg.get<string>("topOffenders.groupBy", "cluster"));
   const sortBy = cfg.get<string>("topOffenders.sortBy", "impact") === "path" ? "path" : "impact";
   const splitByLanguage = cfg.get<boolean>("topOffenders.splitByLanguage", false) === true;
   void vscode.commands.executeCommand("setContext", "deslop.topOffendersGroupBy", groupBy);
@@ -283,6 +296,11 @@ export function syncTopOffendersContext(): void {
     "setContext",
     "deslop.topOffendersSplitByLanguage",
     splitByLanguage,
+  );
+  void vscode.commands.executeCommand(
+    "setContext",
+    "deslop.topOffendersFiltered",
+    isTopOffendersFilterActive(),
   );
 }
 

@@ -9,13 +9,21 @@ import type { LanguageClient } from "vscode-languageclient/node";
 
 import { ReportStore, LifecyclePhase } from "../reportStore";
 import { indexedSeverity } from "../severity";
-import { ReportCluster, RepoMetrics } from "../types/report";
 import {
-  BucketGroupNode,
+  applyFacetFilter,
+  bucketLabels,
+  categoryLabels,
+  FacetFilter,
+  ReportCluster,
+  RepoMetrics,
+} from "../types/report";
+import { readTopOffendersFilter } from "../commands/topOffendersView";
+import {
   ClusterNode,
   FileNode,
   FolderMetricNode,
   FolderNode,
+  GroupNode,
   LanguageGroupNode,
   MetricsHeadlineNode,
   Node,
@@ -27,9 +35,11 @@ import {
   buildClusterMode,
   buildFileMode,
   buildRankIndex,
-  getBucketGroupChildren,
+  buildTypeMode,
   getFileNodeChildren,
+  getGroupNodeChildren,
   GroupBy,
+  normalizeGroupBy,
   orderedOccurrences,
 } from "./grouping";
 import { buildFolderMode } from "./folder";
@@ -48,6 +58,7 @@ export {
   FileNode,
   FolderMetricNode,
   FolderNode,
+  GroupNode,
   LanguageGroupNode,
   MetricsHeadlineNode,
   OccurrenceNode,
@@ -206,15 +217,11 @@ abstract class LifecycleAwareProvider implements vscode.TreeDataProvider<Node>, 
 }
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Reads `deslop.topOffenders.groupBy`
-// (cluster | file | folder, default cluster). Unknown / missing values
-// fall back to "cluster" — never panic.
+// (cluster | file | folder | type, default cluster).
 function readGroupBy(): GroupBy {
-  const raw = vscode.workspace
-    .getConfiguration("deslop")
-    .get<string>("topOffenders.groupBy", "cluster");
-  if (raw === "file") return "file";
-  if (raw === "folder") return "folder";
-  return "cluster";
+  return normalizeGroupBy(
+    vscode.workspace.getConfiguration("deslop").get<string>("topOffenders.groupBy", "cluster"),
+  );
 }
 
 // [VSIX-TOP-OFFENDERS-SORT] Reads `deslop.topOffenders.sortBy`.
@@ -237,7 +244,9 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
   getChildren(node?: Node): Node[] {
     if (node instanceof FolderNode || node instanceof LanguageGroupNode) return node.children;
     if (node instanceof FileNode) return getFileNodeChildren(node);
-    if (node instanceof BucketGroupNode) return getBucketGroupChildren(node);
+    // One machinery for both group axes: file-mode bucket sections and
+    // type-mode category roots ([FACET-GROUP-BY-TYPE]).
+    if (node instanceof GroupNode) return getGroupNodeChildren(node);
     if (node instanceof ClusterNode) {
       // [VSIX-TOP-OFFENDERS-SORT] Order occurrences by the active axis while
       // keeping each one's original index so the canonical badge stays put.
@@ -277,26 +286,52 @@ export class TopOffendersProvider extends LifecycleAwareProvider {
 
 // [VSIX-TOP-OFFENDERS-GROUPING] Builds the root rows: dispatches on the
 // grouping mode + sort axis, then wraps in per-language groups when the
-// split is on. Global rank is precomputed once so it never re-numbers.
+// split is on. Global rank is precomputed from the UNFILTERED list
+// before the facet slice, so a filtered view shows stable rank gaps
+// ([FACET-TOP-OFFENDERS-FILTER] extends [VSIX-TOP-OFFENDERS-RANK-GLOBAL]).
 function buildRoots(clusters: ReportCluster[]): Node[] {
   const rankIndex = buildRankIndex(clusters);
   const severities = indexedSeverity(clusters);
   const groupBy = readGroupBy();
   const sortBy = readSortBy();
+  const filter = readTopOffendersFilter();
+  const visible = applyFacetFilter(clusters, filter);
   const build = (subset: ReportCluster[]): Node[] => {
     if (groupBy === "file") return buildFileMode(subset, severities, rankIndex, sortBy);
     if (groupBy === "folder") return buildFolderMode(subset, severities, rankIndex, sortBy);
+    if (groupBy === "type") return buildTypeMode(subset, severities, rankIndex, sortBy);
     return buildClusterMode(subset, severities, rankIndex, sortBy);
   };
-  if (!readSplitByLanguage()) return build(clusters);
-  return groupByLanguage(clusters).map(({ language, clusters: members }) =>
-    new LanguageGroupNode(
-      language,
-      build(members),
-      members.reduce((max, cluster) => Math.max(max, cluster.weight), 0),
-      members.length,
-    ),
+  const roots = readSplitByLanguage()
+    ? groupByLanguage(visible).map(({ language, clusters: members }) =>
+        new LanguageGroupNode(
+          language,
+          build(members),
+          members.reduce((max, cluster) => Math.max(max, cluster.weight), 0),
+          members.length,
+        ),
+      )
+    : build(visible);
+  return [...filterStatusRow(filter), ...roots];
+}
+
+// [FACET-TOP-OFFENDERS-FILTER-EMPTY] A non-collapsible status row leads
+// the tree whenever a facet filter is active, with the clear action
+// bound — a filtered-empty tree must never be mistakable for the
+// "No duplication detected" clean state.
+function filterStatusRow(filter: FacetFilter): Node[] {
+  const parts = [
+    ...filter.buckets.map((bucket) => bucketLabels(bucket).plainTitle),
+    ...filter.categories.map((category) => categoryLabels(category).groupTitle),
+  ];
+  if (parts.length === 0) return [];
+  const row = new StatusNode(
+    `Filtered: ${parts.join(" · ")} — Clear filter`,
+    "info",
+    "Only clusters matching the facet filter are shown. Click to clear the filter.",
   );
+  row.command = { command: "deslop.topOffenders.clearFilter", title: "Clear filter" };
+  return [row];
 }
 
 // [VSIX-METRICS-PANEL] The Duplication panel — replaces the former

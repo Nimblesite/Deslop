@@ -1,7 +1,8 @@
 use crate::support::*;
 
 // Two Rust files that are renamed (Type-2) clones of one function.
-const RUST_A: &str = "pub fn accumulate(limit: i64) -> i64 {\n\
+// Shared with `bucket_groups` as its nearly-identical seed pair.
+pub(crate) const RUST_A: &str = "pub fn accumulate(limit: i64) -> i64 {\n\
                       let mut total = 0;\n\
                       let mut index = 0;\n\
                       while index < limit {\n\
@@ -10,7 +11,7 @@ const RUST_A: &str = "pub fn accumulate(limit: i64) -> i64 {\n\
                       }\n\
                       total\n\
                       }\n";
-const RUST_B: &str = "pub fn summate(bound: i64) -> i64 {\n\
+pub(crate) const RUST_B: &str = "pub fn summate(bound: i64) -> i64 {\n\
                       let mut acc = 0;\n\
                       let mut cursor = 0;\n\
                       while cursor < bound {\n\
