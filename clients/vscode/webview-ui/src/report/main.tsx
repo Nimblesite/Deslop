@@ -81,7 +81,7 @@ function ReportApp() {
             <div>
               cache {snapshot.cache_stats.hits} hit · {snapshot.cache_stats.misses} miss
             </div>
-            <div>analysis: {state}</div>
+            <div>analysis: {state.state}</div>
           </div>
         </div>
       </header>

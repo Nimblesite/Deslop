@@ -272,20 +272,24 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install xvfb (headless VS Code)
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+      # xvfb gives Electron a display; dbus gives it a session bus so
+      # ubuntu-latest stops flooding "Failed to connect to the bus" from the
+      # Electron subprocesses.
+      - name: Install xvfb + dbus (headless VS Code)
+        run: sudo apt-get update && sudo apt-get install -y xvfb dbus dbus-x11
 
       # Builds the real deslop-lsp + deslop-mcp from the workspace
       # and installs Node deps for the extension + webview-ui.
       - name: _vsix-build
         run: make _vsix-build
 
-      # Unit tests + coverage threshold. E2E spawns real VS Code Electron.
+      # Unit tests + coverage threshold. E2E spawns real VS Code Electron — run
+      # it inside a private session bus to keep the Electron processes quiet.
       - name: _vsix-coverage (unit + threshold)
-        run: xvfb-run -a make _vsix-coverage
+        run: xvfb-run -a dbus-run-session -- make _vsix-coverage
 
       - name: _vsix-test (full E2E against real LSP)
-        run: xvfb-run -a make _vsix-test
+        run: xvfb-run -a dbus-run-session -- make _vsix-test
 
       # Renders the standalone HTML report (the artifact every "Open HTML
       # Report" button shows) and asserts the design-system CSS applies in a
@@ -293,6 +297,13 @@ jobs:
       # OS libs (--with-deps), so the browser install lives in one place.
       - name: _vsix-playwright-html (standalone HTML report CSS)
         run: make _vsix-playwright-html
+
+      # Webview V8 coverage gate ([VSIX-WEBVIEW-COVERAGE]). The webview bundle is
+      # invisible to the c8 pass in _vsix-coverage (extension host only); this
+      # drives the bundle in a real browser, maps coverage back to webview-ui/src,
+      # and enforces .vsix.webview_threshold. Closes the blind spot behind #254.
+      - name: _vsix-webview-coverage (webview V8 coverage threshold)
+        run: make _vsix-webview-coverage
 
       - name: vsix-package deployment gate
         run: make vsix-package

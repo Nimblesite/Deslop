@@ -3,14 +3,12 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { sleep } from "./helpers";
+import { activateExtension, sleep } from "./helpers";
 
 // [VSIX-COMMANDS]
 suite("commands", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-    assert.ok(ext, "extension should be registered");
-    await ext.activate();
+    await activateExtension();
     // Give the LSP a beat to produce the initial report.
     await sleep(1500);
   });

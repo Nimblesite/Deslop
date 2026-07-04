@@ -1,0 +1,14 @@
+{
+  // Static type gate for the webview bundle. The esbuild build (build.mjs)
+  // strips types without checking them, so a wire-shape/UI mismatch — a value
+  // erased by `import type` (#254), or reading a tagged-union AnalysisState as a
+  // bare string — ships silently. This config runs `tsc --noEmit` over the same
+  // sources with rootDir widened to clients/vscode so the shared ../../src/types
+  // and ../../src/tree imports resolve without TS6059. Wired into `npm run
+  // typecheck` and `make _vsix-build`. See [VSIX-WEBVIEW-COVERAGE].
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".."
+  }
+}

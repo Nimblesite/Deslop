@@ -515,6 +515,7 @@
     "coverage": "vscode-test --coverage && node ./scripts/check-coverage.mjs",
     "test:playwright": "playwright test scripts/playwright-webview-smoke.spec.ts",
     "test:playwright:html": "playwright test scripts/playwright-html-report.spec.ts",
+    "coverage:webview": "node ./scripts/webview-coverage.mjs",
     "test:scripts": "node --test scripts/*.test.mjs",
     "verify:package": "node ./scripts/verify-vsix-package.mjs",
     "package": "node ./scripts/package-vsix.mjs"
@@ -538,8 +539,10 @@
     "esbuild": "^0.28.1",
     "eslint": "^10.2.1",
     "glob": "^11.0.0",
+    "istanbul-lib-coverage": "^3.2.2",
     "mocha": "^10.8.2",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.59.0"
+    "typescript-eslint": "^8.59.0",
+    "v8-to-istanbul": "^9.3.0"
   }
 }

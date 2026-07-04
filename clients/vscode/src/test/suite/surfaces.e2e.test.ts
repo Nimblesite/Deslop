@@ -4,7 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { sleep } from "./helpers";
+import { activateExtension, sleep } from "./helpers";
 
 async function openFixture(name: string): Promise<vscode.TextEditor> {
   const fixture = process.env["DESLOP_TEST_FIXTURE"];
@@ -17,9 +17,7 @@ async function openFixture(name: string): Promise<vscode.TextEditor> {
 
 suite("surfaces", () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-    assert.ok(ext, "extension must be installed");
-    await ext.activate();
+    await activateExtension();
     await sleep(1500);
   });
 

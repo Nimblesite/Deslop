@@ -3,12 +3,12 @@
 // no stale UI. The extension process posts messages; this is the only writer.
 
 import { signal, computed, batch } from "@preact/signals";
+import { severityOf } from "../../src/types/report";
 import type {
   AnalysisState,
   Report,
   ReportCluster,
   Severity,
-  severityOf,
 } from "../../src/types/report";
 
 export type Filters = {
@@ -19,7 +19,7 @@ export type Filters = {
 
 export const report = signal<Report | null>(null);
 export const selectedClusterId = signal<string | null>(null);
-export const analysisState = signal<AnalysisState>("idle");
+export const analysisState = signal<AnalysisState>({ state: "idle" });
 export const filters = signal<Filters>({ language: null, severity: null, pathGlob: "" });
 export const lastUpdatedAt = signal<number>(0);
 
@@ -59,7 +59,9 @@ export const filteredClusters = computed<ReportCluster[]>(() => {
   });
 });
 
-// Message schema — the extension is the only legitimate writer.
+// [VSIX-WEBVIEW-PROTOCOL] Host→webview message schema — the authoritative set
+// the webview accepts (docs/specs/webview-runtime.md). The extension host is the
+// only legitimate writer; any payload without a string `kind` is ignored.
 export type HostMessage =
   | { kind: "report/snapshot"; report: Report }
   | { kind: "report/delta"; report: Report }

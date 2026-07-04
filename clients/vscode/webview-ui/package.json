@@ -5,6 +5,7 @@
   "description": "Preact + @preact/signals bundle for the Deslop webviews.",
   "type": "module",
   "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "build": "node build.mjs",
     "watch": "node build.mjs --watch"
   },

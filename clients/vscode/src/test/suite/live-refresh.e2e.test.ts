@@ -10,13 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import type { ExtensionApi } from "../../extension";
-
-async function getApi(): Promise<ExtensionApi> {
-  const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-  assert.ok(ext, "extension must be installed");
-  return await (ext.activate() as Promise<ExtensionApi>);
-}
+import { activateExtension } from "./helpers";
 
 async function waitFor<T>(
   predicate: () => T | undefined,
@@ -40,14 +34,14 @@ suite("live tree refresh", () => {
     const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
     fixtureDir = fixture;
-    const api = await getApi();
+    const api = await activateExtension();
     const store = api.reportStore;
     assert.ok(store, "reportStore must be exposed on ExtensionApi");
     await waitFor(() => (store.current.report ? true : undefined), 30_000);
   });
 
   test("editing a watched file on disk advances the report generation", async () => {
-    const api = await getApi();
+    const api = await activateExtension();
     const store = api.reportStore;
     assert.ok(store);
     const initialGeneration = store.current.generation;
@@ -82,7 +76,7 @@ suite("live tree refresh", () => {
   });
 
   test("editing a file via the editor advances the report generation", async () => {
-    const api = await getApi();
+    const api = await activateExtension();
     const store = api.reportStore;
     assert.ok(store);
     const initialGeneration = store.current.generation;
@@ -117,7 +111,7 @@ suite("live tree refresh", () => {
   // one keystroke. Walk three sequential saves and assert each one bumps
   // the generation.
   test("repeated edits to the same file each advance the generation", async () => {
-    const api = await getApi();
+    const api = await activateExtension();
     const store = api.reportStore;
     assert.ok(store);
 

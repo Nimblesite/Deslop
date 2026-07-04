@@ -6,17 +6,12 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { LanguageClient } from "vscode-languageclient/node";
+import type { ExtensionApi } from "../../extension";
 import type { Report, ReportCluster } from "../../types/report";
-import { sleep } from "./helpers";
+import { activateExtension, sleep } from "./helpers";
 
-interface ExtensionExports {
-  readonly client?: LanguageClient;
-}
-
-async function waitForReport(): Promise<ExtensionExports> {
-  const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-  assert.ok(ext, "extension must be installed");
-  const api = await ext.activate() as ExtensionExports;
+async function waitForReport(): Promise<ExtensionApi> {
+  const api = await activateExtension();
   // Initial report seeding takes time over stdio.
   for (let i = 0; i < 20; i++) {
     await sleep(250);
@@ -58,7 +53,7 @@ async function waitForDiffTab(): Promise<vscode.TabInputTextDiff> {
 }
 
 suite("cluster navigation", () => {
-  let api: ExtensionExports;
+  let api: ExtensionApi;
 
   suiteSetup(async () => {
     api = await waitForReport();

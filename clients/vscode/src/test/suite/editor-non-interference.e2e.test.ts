@@ -10,7 +10,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { sleep } from "./helpers";
+import { activateExtension, sleep } from "./helpers";
 
 async function codeLenses(uri: vscode.Uri): Promise<vscode.CodeLens[]> {
   return (
@@ -25,9 +25,7 @@ suite("editor non-interference", () => {
   let alpha: vscode.Uri;
 
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension("nimblesite.deslop-live");
-    assert.ok(ext, "extension must be installed");
-    await ext.activate();
+    await activateExtension();
     const fixture = process.env["DESLOP_TEST_FIXTURE"];
     assert.ok(fixture, "fixture path must be set");
     alpha = vscode.Uri.file(`${fixture}/Alpha.cs`);
