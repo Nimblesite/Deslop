@@ -44,24 +44,17 @@ dependencies {
 // The source set compiles against the IntelliJ Platform + test framework + LSP4IJ only.
 val integrationTest: SourceSet = sourceSets.create("integrationTest")
 
-// intellijPlatformClasspath = the extracted IDE product jars (ApplicationManager,
-// ToolWindowEP, ActionManager, LSP4IJ); intellijPlatformTestClasspath = the platform test
-// framework (TestApplicationManager). Main gets the former, `test` the latter, so a custom
-// source set needs both to compile the IDE-level assertions.
-listOf(
-    integrationTest.compileClasspathConfigurationName,
-    integrationTest.runtimeClasspathConfigurationName,
-).forEach { configurationName ->
-    configurations[configurationName].extendsFrom(
-        configurations["intellijPlatformClasspath"],
-        configurations["intellijPlatformTestClasspath"],
-    )
-}
-
 dependencies {
+    // Compile-time only: the extracted IDE product jars (ApplicationManager, ToolWindowEP,
+    // ActionManager, PluginManagerCore) and the platform test framework (TestApplicationManager).
+    // These files() resolve each config with its own attributes — enough to COMPILE against —
+    // while the complete RUNTIME platform comes from the TestIdeTask's own platformPath below
+    // (the raw configs omit testFramework.jar, which the platform's session listener needs).
+    add(integrationTest.compileOnlyConfigurationName, files(configurations["intellijPlatformClasspath"]))
+    add(integrationTest.compileOnlyConfigurationName, files(configurations["intellijPlatformTestClasspath"]))
     add(integrationTest.implementationConfigurationName, kotlin("test-junit5"))
-    // Same JUnit4 shim the sibling modules pin: the 2024.3 platform's JUnit5
-    // LauncherSessionListener hard-references JUnit4 at session open.
+    // The 2024.3 platform's JUnit5 session listener hard-references JUnit4 at session open,
+    // so JUnit4 must be on the runtime classpath even though the tests are pure JUnit5.
     add(integrationTest.runtimeOnlyConfigurationName, "junit:junit:4.13.2")
 }
 
@@ -94,7 +87,33 @@ intellijPlatformTesting {
             task {
                 useJUnitPlatform()
                 testClassesDirs = integrationTest.output.classesDirs
-                classpath = integrationTest.runtimeClasspath
+                // CRUCIAL: IPGP's test runtime defaults plugins on idea.plugins.path to the core
+                // (flat test) classloader, which would resolve the plugin's classes off THIS
+                // classpath and make the sandbox lib/ vs lib/modules/ layout irrelevant — the
+                // exact blind spot that lets the packaging bug slip through. Forcing false gives
+                // the installed plugin its own PluginClassLoader that scans its sandbox lib/, so
+                // the flatten (or its absence) actually decides whether the extensions resolve.
+                systemProperty("idea.use.core.classloader.for.plugin.path", "false")
+                // Reuse the `test` task's COMPLETE, IPGP-curated IntelliJ Platform runtime
+                // classpath (core lib + the exact bundled product modules — booting the headless
+                // app needs e.g. intellij.platform.settings.local, and loading every lib/modules
+                // jar instead double-registers module descriptors). Then strip EVERY Deslop
+                // production artifact: the two modules' build outputs AND the plugin jars the test
+                // task stages into its sandbox (deslop-lsp4ij-<v>.jar, deslop-jetbrains.*.jar). If
+                // any stayed on this flat classpath, the installed plugin's classloader would
+                // delegate to it and resolve the tool window factory + action even under the
+                // broken lib/modules/ layout — masking the very bug this test exists to catch. The
+                // installed plugin (loaded from its own sandbox via idea.plugins.path) is the ONLY
+                // sanctioned source; the test's own classes are added back explicitly.
+                val pluginBuildDirs = listOf(
+                    layout.buildDirectory.get().asFile.absolutePath,
+                    project(":deslop-shared").layout.buildDirectory.get().asFile.absolutePath,
+                )
+                classpath = integrationTest.output +
+                    tasks.test.get().classpath.filter { file ->
+                        !file.name.startsWith("deslop") &&
+                            pluginBuildDirs.none { file.absolutePath.startsWith(it) }
+                    }
             }
         }
     }

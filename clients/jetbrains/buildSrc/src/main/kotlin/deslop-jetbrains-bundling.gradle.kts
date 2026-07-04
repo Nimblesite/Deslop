@@ -33,23 +33,22 @@ val prepareSandbox = tasks.named<PrepareSandboxTask>("prepareSandbox")
 // the parent cannot see, and this flat plugin declares no <content>, so those classes never
 // load and both extensions silently vanish (no Deslop tool window, no "Deslop: Open HTML
 // Report" action). LSP still works because its factory is in the top-level jar.
-fun flattenContentModuleJars(libDir: File) {
-    val modulesDir = libDir.resolve("modules")
-    modulesDir.listFiles { file -> file.isFile && file.extension == "jar" }?.forEach { jar ->
-        Files.move(jar.toPath(), libDir.resolve(jar.name).toPath(), StandardCopyOption.REPLACE_EXISTING)
-    }
-    modulesDir.delete()
-}
-
-// Apply the flatten to EVERY PrepareSandboxTask — the shipped zip (buildPlugin), runIde,
-// and the intellijPlatformTesting testIde sandbox — so this single fix governs every
-// sandbox layout. That is exactly what lets the deslop-lsp4ij integrationTest prove the
-// contract at the IDE level: comment this block out and that test fails (the tool window
-// and action never register), which is the regression the fix prevents.
+//
+// Applied to EVERY PrepareSandboxTask — the shipped zip (buildPlugin), runIde, and the
+// intellijPlatformTesting testIde sandbox — so this single fix governs every sandbox layout.
+// That is exactly what lets the deslop-lsp4ij integrationTest prove the contract at the IDE
+// level: comment this block out and that test fails (the tool window and action never
+// register), which is the regression the fix prevents. Logic is inlined (no shared helper)
+// so the doLast stays serializable for the configuration cache.
 tasks.withType<PrepareSandboxTask>().configureEach {
     val pluginDir = pluginDirectory
     doLast {
-        flattenContentModuleJars(pluginDir.get().asFile.resolve("lib"))
+        val libDir = pluginDir.get().asFile.resolve("lib")
+        val modulesDir = libDir.resolve("modules")
+        modulesDir.listFiles { file -> file.isFile && file.extension == "jar" }?.forEach { jar ->
+            Files.move(jar.toPath(), libDir.resolve(jar.name).toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+        modulesDir.delete()
     }
 }
 
