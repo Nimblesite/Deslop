@@ -108,3 +108,61 @@ pub fn spawn_deslop_lsp(root: &Path, stderr: Stdio) -> Result<Child> {
         .stderr(stderr)
         .spawn()?)
 }
+
+/// The hand-written copy-pasted logic clone used by the shared Dart
+/// fixture below: a six-statement method body, duplicated verbatim, large
+/// enough to cluster at the suites' `--min-nodes` floors.
+const DUPLICATED_DART_METHOD: &str = "  int score(int v) {\n    final w = v * 3;\n    \
+     final z = w + v;\n    final q = z - w;\n    final r = q * z;\n    \
+     return r + w - v;\n  }\n";
+
+/// Writes the shared "data table + copy-pasted logic" Dart fixture
+/// ([RANK-CATEGORY] / [CLONE-NOISE-DART-DATA-TABLE-LITERAL]): a top-level
+/// `List<HighlightData>` of near-identical constructor rows that the engine
+/// labels `category="data"`, plus a verbatim-duplicated method across
+/// `scorer_a.dart` / `scorer_b.dart` that stays `category="logic"`. Used by
+/// the #190 demotion suite and the facet-surface suites ([FACET-TESTING])
+/// so both categories exist in one corpus.
+///
+/// # Errors
+///
+/// Returns an error when the fixture directory or files cannot be written.
+pub fn write_dart_data_table_fixture(src: &Path) -> Result<()> {
+    use std::fmt::Write as _;
+    std::fs::create_dir_all(src)?;
+    let mut table = String::from(
+        "class HighlightData {\n  const HighlightData({required this.title, \
+         required this.wonder, required this.artifactId, required this.culture, \
+         required this.date});\n  final String title;\n  final String wonder;\n  \
+         final String artifactId;\n  final String culture;\n  final String date;\n}\n\n\
+         const List<HighlightData> highlights = [\n",
+    );
+    let rows: &[(&str, &str, &str, &str)] = &[
+        ("Pyramid", "Giza", "Egyptian", "2560 BC"),
+        ("Great Wall", "China", "Chinese", "700 BC"),
+        ("Petra", "Jordan", "Nabataean", "312 BC"),
+        ("Colosseum", "Rome", "Roman", "80 AD"),
+        ("Machu Picchu", "Peru", "Inca", "1450 AD"),
+        ("Taj Mahal", "India", "Mughal", "1653 AD"),
+        ("Chichen Itza", "Mexico", "Mayan", "600 AD"),
+        ("Christ Redeemer", "Brazil", "Brazilian", "1931 AD"),
+    ];
+    for (index, (title, wonder, culture, date)) in rows.iter().enumerate() {
+        let _ = writeln!(
+            table,
+            "  HighlightData(title: \"{title}\", wonder: \"{wonder}\", \
+             artifactId: \"a{index}\", culture: \"{culture}\", date: \"{date}\"),"
+        );
+    }
+    table.push_str("];\n");
+    std::fs::write(src.join("highlight_data.dart"), table)?;
+    std::fs::write(
+        src.join("scorer_a.dart"),
+        format!("class ScorerA {{\n{DUPLICATED_DART_METHOD}}}\n"),
+    )?;
+    std::fs::write(
+        src.join("scorer_b.dart"),
+        format!("class ScorerB {{\n{DUPLICATED_DART_METHOD}}}\n"),
+    )?;
+    Ok(())
+}

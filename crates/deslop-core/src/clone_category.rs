@@ -32,6 +32,25 @@ pub enum CloneCategory {
 }
 
 impl CloneCategory {
+    /// Every shipped variant in canonical registry order. Facet surfaces
+    /// iterate this instead of hand-listing values ([FACET-MODEL] rule 1);
+    /// the literal-family variants join here when [LITERAL-CATEGORY] ships.
+    #[must_use]
+    pub const fn all() -> [Self; 2] {
+        [Self::Logic, Self::DataTable]
+    }
+
+    /// Plain group title for facet and grouping surfaces: the shared
+    /// [`Self::chip`] when one exists, or `"Code clones"` for the
+    /// chip-less logic category ([FACET-GROUP-BY-TYPE]).
+    #[must_use]
+    pub fn group_title(self) -> &'static str {
+        match self.chip() {
+            Some(chip) => chip,
+            None => "Code clones",
+        }
+    }
+
     /// Stable `snake_case` wire label carried on `ReportCluster.category`
     /// so agents can pattern-match without deserialising the enum. The
     /// `data` value reconstructs the human-readable chip and action hint

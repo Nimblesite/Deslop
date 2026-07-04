@@ -11,12 +11,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use tree_sitter::{Node, Parser};
+use tree_sitter::Node;
 
 use crate::{
     ast::ByteRange,
     buckets::{bucket_labels, classify_signals, is_structural_only_signals, ClusterKind},
     cluster::Cluster,
+    cluster_filters::ParseCache,
     config::ExclusionConfig,
     fingerprint::Fingerprint,
     pair::{PairScore, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT},
@@ -33,6 +34,7 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     scan_root: &Path,
     exclusion: &ExclusionConfig,
     sources: &HashMap<FileId, Vec<u8>>,
+    parse_cache: &ParseCache,
 ) -> ReportCluster {
     let canonical_node_count = cluster
         .members
@@ -55,7 +57,13 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         })
         .collect();
     let raw_signals: ReportSignals = cluster.signals.into();
-    let kind = report_bucket_kind(raw_signals, &cluster.members, sources, file_languages);
+    let kind = report_bucket_kind(
+        raw_signals,
+        &cluster.members,
+        sources,
+        file_languages,
+        parse_cache,
+    );
     let signals = proven_identical_signals(raw_signals, kind);
     let summary = summarise(
         cluster.members.len(),
@@ -242,13 +250,15 @@ pub(crate) fn report_bucket_kind(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+    parse_cache: &ParseCache,
 ) -> ClusterKind {
     let kind = if is_csharp_lsh_type3_near_miss(signals, members, file_languages) {
         ClusterKind::NearlyIdentical
     } else {
         classify_signals(signals)
     };
-    let equivalent = source_slices_are_equivalent_for_language(members, sources, file_languages);
+    let equivalent =
+        source_slices_are_equivalent_for_language(members, sources, file_languages, parse_cache);
     // `StructuralOnly` joins `NearlyIdentical` in the byte-equivalence
     // upgrade: an exact-structural cluster whose raw source slices are
     // equivalent is a proven Type-1/2 clone regardless of the unscored
@@ -371,16 +381,22 @@ fn source_slices_are_equivalent_for_language(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+    parse_cache: &ParseCache,
 ) -> bool {
     source_slices_are_equivalent(members, sources)
-        || csharp_method_declarations_are_equivalent(members, sources, file_languages)
+        || csharp_method_declarations_are_equivalent(members, sources, file_languages, parse_cache)
 }
 
 /// Compares contained C# methods when the clone range includes wrappers.
+/// Member CSTs come from the shared per-render `parse_cache` so a file is
+/// parsed at most once per report regardless of cluster or member count —
+/// re-parsing per member pinned the LSP for minutes on large C# corpora
+/// (GH #239, [CLONE-NOISE-REPARSE-CACHE]).
 fn csharp_method_declarations_are_equivalent(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
+    parse_cache: &ParseCache,
 ) -> bool {
     if !members
         .iter()
@@ -393,7 +409,10 @@ fn csharp_method_declarations_are_equivalent(
         let Some(source) = sources.get(&member.file_id) else {
             return false;
         };
-        method_sets.push(csharp_methods_in_range(source, member.byte_range));
+        let Some(tree) = parse_cache.tree_for(member.file_id, "csharp", source) else {
+            return false;
+        };
+        method_sets.push(csharp_methods_in_range(&tree, source, member.byte_range));
     }
     equivalent_method_sets(&method_sets)
 }
@@ -407,18 +426,16 @@ fn language_is(
     file_languages.get(&member.file_id).copied() == Some(language)
 }
 
-/// Extracts canonical C# method declarations contained by `range`.
-fn csharp_methods_in_range(source: &[u8], range: ByteRange) -> Vec<Vec<u8>> {
-    let mut parser = Parser::new();
-    let language = tree_sitter_c_sharp::LANGUAGE.into();
-    if parser.set_language(&language).is_err() {
-        return Vec::new();
-    }
-    parser.parse(source, None).map_or_else(Vec::new, |tree| {
-        let mut out = Vec::new();
-        collect_csharp_methods(tree.root_node(), range, source, &mut out);
-        out
-    })
+/// Extracts canonical C# method declarations contained by `range` from a
+/// cached CST.
+fn csharp_methods_in_range(
+    tree: &tree_sitter::Tree,
+    source: &[u8],
+    range: ByteRange,
+) -> Vec<Vec<u8>> {
+    let mut out = Vec::new();
+    collect_csharp_methods(tree.root_node(), range, source, &mut out);
+    out
 }
 
 /// Collects method declarations fully contained in `range`.
@@ -535,7 +552,13 @@ mod tests {
 
         assert!(!source_slices_are_equivalent(&members, &sources));
         assert_eq!(
-            report_bucket_kind(identical_signals(), &members, &sources, &file_languages),
+            report_bucket_kind(
+                identical_signals(),
+                &members,
+                &sources,
+                &file_languages,
+                &ParseCache::new(),
+            ),
             ClusterKind::NearlyIdentical
         );
     }

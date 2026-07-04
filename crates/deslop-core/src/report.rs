@@ -222,6 +222,7 @@ fn materialise_cluster<S: BuildHasher>(
         inputs.scan_root,
         inputs.exclusion,
         inputs.sources,
+        parse_cache,
     );
     let category = classify_clone_category(
         &cluster.members,

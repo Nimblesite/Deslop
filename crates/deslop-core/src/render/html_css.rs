@@ -71,6 +71,15 @@ pub const REPORT_CSS: &str = "\
 .also-list li{font-family:var(--font-mono);font-size:0.8125rem;color:var(--on-surface-variant);}\
 .also-list li.is-hidden{color:var(--secondary-fixed-dim);}\
 .also-list .also-loc{color:var(--secondary-fixed-dim);margin-left:var(--space-2);}\
+.facet-input{position:absolute;width:1px;height:1px;opacity:0;}\
+.facet-bar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2);margin:0 0 var(--space-6);}\
+.facet-bar__label{font-family:var(--font-mono);font-size:0.75rem;color:var(--secondary-fixed-dim);text-transform:uppercase;letter-spacing:0.08em;}\
+.facet-chip{cursor:pointer;font-family:var(--font-mono);font-size:0.75rem;padding:0.25rem var(--space-3);border-radius:var(--radius-sm);background:var(--surface-container-low);color:var(--secondary-fixed-dim);user-select:none;}\
+.bucket-group{margin-bottom:var(--space-6);}\
+.bucket-group>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) 0;font-family:var(--font-head);font-size:1.25rem;font-weight:700;color:var(--on-surface);}\
+.bucket-group>summary::-webkit-details-marker{display:none;}\
+.bucket-group>summary::after{content:\"\\25B8\";font-size:0.875rem;color:var(--secondary-fixed-dim);}\
+.bucket-group[open]>summary::after{content:\"\\25BE\";}\
 .also-toggle{margin-top:var(--space-2);}\
 .also-toggle>summary{cursor:pointer;font-family:var(--font-mono);font-size:0.75rem;color:var(--primary);text-transform:uppercase;letter-spacing:0.08em;list-style:none;}\
 .also-toggle>summary::-webkit-details-marker{display:none;}\

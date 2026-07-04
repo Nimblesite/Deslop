@@ -10,6 +10,7 @@
 
 use deslop_core::{
     buckets::{bucket_labels, classify, ClusterKind},
+    clone_category::CloneCategory,
     report::ReportCluster,
     report::ReportOccurrence,
     Report,
@@ -47,6 +48,7 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
         return;
     }
     write_breakdown_line(&theme, report, technical);
+    write_category_line(&theme, report);
     write_worst_offender_line(&theme, report);
     eprintln!();
     write_top_clusters_header(&theme, report, technical);
@@ -191,6 +193,35 @@ fn write_breakdown_line(theme: &Theme, report: &Report, _technical: bool) {
         return;
     }
     eprintln!("  {}", parts.join("  ·  "));
+}
+
+/// Category breakdown line ([FACET-CLI]) — one dim segment per
+/// non-logic category present, e.g. `2 × data table`. Logic is the
+/// implicit default so it never prints; the literal families join
+/// automatically through `CloneCategory::all()` when [LITERAL-CATEGORY]
+/// ships. Silent when every cluster is ordinary logic.
+fn write_category_line(theme: &Theme, report: &Report) {
+    let parts: Vec<String> = CloneCategory::all()
+        .into_iter()
+        .filter_map(|category| {
+            let chip = category.chip()?;
+            let count = report
+                .clusters
+                .iter()
+                .filter(|cluster| CloneCategory::from_wire_label(&cluster.category) == category)
+                .count();
+            (count > 0).then(|| format!("{count} × {chip}"))
+        })
+        .collect();
+    if parts.is_empty() {
+        return;
+    }
+    eprintln!(
+        "  {dim}{line}{reset}",
+        dim = theme.dim,
+        line = parts.join("  ·  "),
+        reset = theme.reset,
+    );
 }
 
 /// Theme colour for a bucket. Mirrors the card band in the HTML
