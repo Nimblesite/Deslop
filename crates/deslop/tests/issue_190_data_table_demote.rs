@@ -11,23 +11,16 @@
 //! rendered JSON / text reports only.
 
 use std::{
-    fmt::Write as _,
     fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::Result;
+use deslop_test_support::write_dart_data_table_fixture;
 use serde_json::Value;
 
 mod common;
 use crate::common::*;
-
-/// The hand-written copy-pasted logic clone, duplicated verbatim across two
-/// files. Six-statement method body, large enough to cluster at the test's
-/// `--min-nodes` floor.
-const DUPLICATED_METHOD: &str = "  int score(int v) {\n    final w = v * 3;\n    \
-     final z = w + v;\n    final q = z - w;\n    final r = q * z;\n    \
-     return r + w - v;\n  }\n";
 
 fn report_path(tmp: &Path, stem: &str) -> PathBuf {
     let mut path = tmp.join(stem);
@@ -77,48 +70,6 @@ fn weight_of(report: &Value, file_name: &str) -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Writes a fixture repo with a data table (≥3 differing constructor rows in
-/// a top-level `List`) plus a genuinely copy-pasted method across two files.
-fn write_fixture(src: &Path) -> Result<()> {
-    fs::create_dir_all(src)?;
-    let mut table = String::from(
-        "class HighlightData {\n  const HighlightData({required this.title, \
-         required this.wonder, required this.artifactId, required this.culture, \
-         required this.date});\n  final String title;\n  final String wonder;\n  \
-         final String artifactId;\n  final String culture;\n  final String date;\n}\n\n\
-         const List<HighlightData> highlights = [\n",
-    );
-    let rows: &[(&str, &str, &str, &str)] = &[
-        ("Pyramid", "Giza", "Egyptian", "2560 BC"),
-        ("Great Wall", "China", "Chinese", "700 BC"),
-        ("Petra", "Jordan", "Nabataean", "312 BC"),
-        ("Colosseum", "Rome", "Roman", "80 AD"),
-        ("Machu Picchu", "Peru", "Inca", "1450 AD"),
-        ("Taj Mahal", "India", "Mughal", "1653 AD"),
-        ("Chichen Itza", "Mexico", "Mayan", "600 AD"),
-        ("Christ Redeemer", "Brazil", "Brazilian", "1931 AD"),
-    ];
-    for (index, (title, wonder, culture, date)) in rows.iter().enumerate() {
-        let _ = writeln!(
-            table,
-            "  HighlightData(title: \"{title}\", wonder: \"{wonder}\", \
-             artifactId: \"a{index}\", culture: \"{culture}\", date: \"{date}\"),"
-        );
-    }
-    table.push_str("];\n");
-    fs::write(src.join("highlight_data.dart"), table)?;
-
-    fs::write(
-        src.join("scorer_a.dart"),
-        format!("class ScorerA {{\n{DUPLICATED_METHOD}}}\n"),
-    )?;
-    fs::write(
-        src.join("scorer_b.dart"),
-        format!("class ScorerB {{\n{DUPLICATED_METHOD}}}\n"),
-    )?;
-    Ok(())
-}
-
 /// Runs the CLI against `src`, writing JSON (and text for the label
 /// assertion) to `<tmp>/<stem>.*`, and returns the parsed JSON report.
 fn run_cli(src: &Path, tmp: &Path, stem: &str, min_nodes: &str) -> Result<Value> {
@@ -140,7 +91,7 @@ fn write_ranking_config(src: &Path, body: &str) -> Result<()> {
 fn default_demotes_data_table_below_logic_clone() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    write_fixture(&src)?;
+    write_dart_data_table_fixture(&src)?;
 
     // [RANK-CATEGORY] assertion 1 (core proof): with the DEFAULT policy the
     // logic clone outranks the data table even though the table has a larger
@@ -198,7 +149,7 @@ fn default_demotes_data_table_below_logic_clone() -> Result<()> {
 fn ignore_mode_drops_data_table_keeps_logic_clone() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    write_fixture(&src)?;
+    write_dart_data_table_fixture(&src)?;
     write_ranking_config(&src, "[ranking]\ndata_clones = \"ignore\"\n")?;
 
     // [RANK-CATEGORY] assertion 3: ignore mode drops the data table entirely
@@ -228,7 +179,7 @@ fn ignore_mode_drops_data_table_keeps_logic_clone() -> Result<()> {
 fn keep_mode_restores_data_table_to_the_top() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let src = tmp.path().join("src");
-    write_fixture(&src)?;
+    write_dart_data_table_fixture(&src)?;
     write_ranking_config(&src, "[ranking]\ndata_clone_weight = 1.0\n")?;
 
     // [RANK-CATEGORY] assertion 4: data_clone_weight = 1.0 restores the prior

@@ -4,43 +4,13 @@
 // the VSIX and the HTML report agree on language ids.
 
 import { ReportCluster } from "../types/report";
+import { languageForPath } from "../types/languages";
 import { representativePath } from "./paths";
 
-const EXTENSION_LANGUAGE: Record<string, string> = {
-  cs: "csharp",
-  rs: "rust",
-  py: "python",
-  dart: "dart",
-  js: "javascript",
-  mjs: "javascript",
-  cjs: "javascript",
-  jsx: "javascript",
-  ts: "typescript",
-  tsx: "tsx",
-};
-
-/** Language id for a file path, derived from its extension. Unknown
- * extensions map to `"unknown"`. */
-export function languageForPath(filePath: string): string {
-  const dot = filePath.lastIndexOf(".");
-  if (dot < 0) return "unknown";
-  return EXTENSION_LANGUAGE[filePath.slice(dot + 1).toLowerCase()] ?? "unknown";
-}
-
-const LANGUAGE_DISPLAY: Record<string, string> = {
-  csharp: "C#",
-  rust: "Rust",
-  python: "Python",
-  dart: "Dart",
-  javascript: "JavaScript",
-  typescript: "TypeScript",
-  tsx: "TSX",
-};
-
-/** Human display name for a language id used in group headings. */
-export function languageDisplayName(language: string): string {
-  return LANGUAGE_DISPLAY[language] ?? "Other";
-}
+// The registry itself lives in the vscode-free `types/languages` module
+// so the webview bundles can share it; re-exported here so existing
+// tree-side import sites keep resolving.
+export { languageDisplayName, languageForPath } from "../types/languages";
 
 /** Reads the persisted split-by-language toggle. Defaults off; unknown
  * values are treated as off — never throws. */

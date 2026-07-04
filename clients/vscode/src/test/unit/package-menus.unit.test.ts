@@ -142,6 +142,58 @@ suite("package menu contributions", () => {
     );
   });
 
+  // [FACET-TESTING] Pin the [VSIX-TOP-OFFENDERS-TOOLBAR] order exactly:
+  // grouping/sort/split @1–@3, Choose Filter @4, then Expand All /
+  // Collapse All / Refresh adjacent at @5/@6/@7.
+  test("Choose Filter sits at navigation@4, ahead of expand/collapse/refresh", () => {
+    const pkg = extensionPackage();
+    const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter((item) =>
+      item.when?.includes("view == deslop.topOffenders"),
+    );
+    const at = (command: string): number[] =>
+      titleItems.filter((item) => item.command === command).map((item) => navigationOrder(item.group));
+    assert.deepEqual(at("deslop.topOffenders.chooseFilter"), [4]);
+    assert.deepEqual(
+      at("deslop.topOffenders.chooseFilterActive"),
+      [4],
+      "the active-filter icon variant shares slot @4",
+    );
+    const inactive = titleItems.find((i) => i.command === "deslop.topOffenders.chooseFilter");
+    const active = titleItems.find((i) => i.command === "deslop.topOffenders.chooseFilterActive");
+    assert.ok(
+      inactive?.when?.includes("!deslop.topOffendersFiltered"),
+      "plain filter button renders only while the filter is inactive",
+    );
+    assert.ok(
+      active?.when?.includes("deslop.topOffendersFiltered") &&
+        !active.when.includes("!deslop.topOffendersFiltered"),
+      "filled filter button renders only while the filter is active",
+    );
+    assert.deepEqual(at("deslop.topOffenders.expandAll"), [5]);
+    assert.deepEqual(at("deslop.topOffenders.collapseAll"), [6]);
+    assert.deepEqual(at("deslop.refresh"), [7]);
+  });
+
+  // [FACET-GROUP-BY-TYPE] The grouping toggle cycles all four modes:
+  // cluster → file → folder → type → cluster.
+  test("grouping cycle includes the type mode", () => {
+    const pkg = extensionPackage();
+    const titleItems = (pkg.contributes.menus["view/title"] ?? []).filter(
+      (item) =>
+        item.when?.includes("view == deslop.topOffenders") && item.group === "navigation@1",
+    );
+    const whenOf = (command: string): string =>
+      titleItems.find((item) => item.command === command)?.when ?? "";
+    assert.ok(whenOf("deslop.topOffenders.showByFile").includes("== 'cluster'"));
+    assert.ok(whenOf("deslop.topOffenders.showByFolder").includes("== 'file'"));
+    assert.ok(whenOf("deslop.topOffenders.showByType").includes("== 'folder'"));
+    assert.ok(whenOf("deslop.topOffenders.showByCluster").includes("== 'type'"));
+    assert.equal(
+      commandTitle(pkg, "deslop.topOffenders.showByType"),
+      "Deslop: Group Top Offenders by Type",
+    );
+  });
+
   test("CPU report command is contributed for issue #29 diagnostics", () => {
     const pkg = extensionPackage();
     assert.equal(

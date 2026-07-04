@@ -26,6 +26,7 @@ import { signal, batch, effect, computed, ReadonlySignal } from "@preact/signals
 
 import {
   EmbeddingProgress,
+  FacetFilter,
   ReportCluster,
   Report,
   ReportDelta,
@@ -46,6 +47,10 @@ export interface ReportState {
   lifecycle: LifecyclePhase;
   pendingEmbeddingModel: string | null;
   embeddingProgress: EmbeddingProgress | null;
+  /** Workspace facet filter mirrored from configuration
+   * ([FACET-TOP-OFFENDERS-FILTER]) so the status bar and webviews slice
+   * in lock-step with the tree. */
+  facetFilter: FacetFilter;
 }
 
 export class ReportStore implements vscode.Disposable {
@@ -55,6 +60,7 @@ export class ReportStore implements vscode.Disposable {
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
+  private readonly _facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
 
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
     projectVisible(this._report.value, this._dirtyFiles.value),
@@ -64,6 +70,9 @@ export class ReportStore implements vscode.Disposable {
   readonly report: ReadonlySignal<Report | null> = this._report;
   /** Visible projection signal — surfaces render from this so unsaved edits hide stale rows. */
   readonly visibleReport: ReadonlySignal<Report | null> = this._visibleReport;
+
+  /** Workspace facet-filter signal ([FACET-TOP-OFFENDERS-FILTER]). */
+  readonly facetFilter: ReadonlySignal<FacetFilter> = this._facetFilter;
   /** Signal for direct use in effect() — re-renders only when lifecycle changes. */
   readonly lifecycle: ReadonlySignal<LifecyclePhase> = this._lifecycle;
   /** Signal for direct use in effect() — re-renders when embedding model pending changes. */
@@ -80,7 +89,14 @@ export class ReportStore implements vscode.Disposable {
       lifecycle: this._lifecycle.value,
       pendingEmbeddingModel: this._pendingEmbeddingModel.value,
       embeddingProgress: this._embeddingProgress.value,
+      facetFilter: this._facetFilter.value,
     };
+  }
+
+  /** Mirrors the persisted facet filter into the signal graph. Called
+   * by extension.ts on activation and on configuration changes. */
+  setFacetFilter(filter: FacetFilter): void {
+    this._facetFilter.value = filter;
   }
 
   /**

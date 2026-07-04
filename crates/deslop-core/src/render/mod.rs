@@ -8,6 +8,7 @@
 pub mod ast;
 pub mod highlight;
 pub mod html;
+mod html_buckets;
 mod html_css;
 mod html_escape;
 mod html_footer;

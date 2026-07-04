@@ -11,6 +11,7 @@ export function cluster(
   startByte = 0,
   endByte = 20,
   bucket: Bucket = "identical",
+  category?: string,
 ): ReportCluster {
   return {
     id,
@@ -19,6 +20,7 @@ export function cluster(
     canonical_node_count: 4,
     signals: bucketSignals(bucket),
     bucket,
+    ...(category === undefined ? {} : { category }),
     occurrences: [
       { path: occurrencePath, start_byte: startByte, end_byte: endByte, hidden: false },
       {
@@ -133,7 +135,7 @@ export async function withSetting<T>(
 }
 
 export function withGroupBy(
-  value: "cluster" | "file" | "folder",
+  value: "cluster" | "file" | "folder" | "type",
   body: () => Promise<void> | void,
 ): Promise<void> {
   return withSetting("topOffenders.groupBy", value, body);
