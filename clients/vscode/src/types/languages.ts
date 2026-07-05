@@ -16,6 +16,9 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
   jsx: "javascript",
   ts: "typescript",
   tsx: "tsx",
+  fs: "fsharp",
+  fsx: "fsharp",
+  php: "php",
 };
 
 /** Language id for a file path, derived from its extension. Unknown
@@ -34,6 +37,8 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
   javascript: "JavaScript",
   typescript: "TypeScript",
   tsx: "TSX",
+  fsharp: "F#",
+  php: "PHP",
 };
 
 /** Human display name for a language id used in group headings and
@@ -64,4 +69,6 @@ export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
   "javascriptreact",
   "typescript",
   "typescriptreact",
+  "fsharp",
+  "php",
 ];
