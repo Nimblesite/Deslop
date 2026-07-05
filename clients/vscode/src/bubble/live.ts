@@ -14,6 +14,7 @@ import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
 import { shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
 import { indexedSeverity } from "../severity";
+import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
 import {
   FUSED_THRESHOLD,
   ReportCluster,
@@ -67,16 +68,7 @@ export class LiveBubble implements vscode.Disposable {
       this.bubbleDecoration,
       this.ghostDecoration,
       vscode.languages.registerInlayHintsProvider(
-        [
-          { language: "csharp" },
-          { language: "rust" },
-          { language: "python" },
-          { language: "dart" },
-          { language: "javascript" },
-          { language: "javascriptreact" },
-          { language: "typescript" },
-          { language: "typescriptreact" },
-        ],
+        ANALYSED_LANGUAGE_IDS.map((language) => ({ language })),
         this.inlayProvider,
       ),
       // effect() tracks store.report (read inside clearRemovedActiveCluster).

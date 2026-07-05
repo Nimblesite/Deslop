@@ -16,6 +16,9 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
   jsx: "javascript",
   ts: "typescript",
   tsx: "tsx",
+  fs: "fsharp",
+  fsx: "fsharp",
+  php: "php",
 };
 
 /** Language id for a file path, derived from its extension. Unknown
@@ -34,6 +37,8 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
   javascript: "JavaScript",
   typescript: "TypeScript",
   tsx: "TSX",
+  fsharp: "F#",
+  php: "PHP",
 };
 
 /** Human display name for a language id used in group headings and
@@ -46,3 +51,24 @@ export function languageDisplayName(language: string): string {
  * extensions share one id). Drives filter `<select>` options so a newly
  * registered language appears everywhere with zero per-surface edits. */
 export const LANGUAGES: readonly string[] = [...new Set(Object.values(EXTENSION_LANGUAGE))];
+
+/** VS Code *editor* language IDs that Deslop attaches its additive surfaces
+ * to — the hover clone-card, the inlay bubble, and the LSP document sync.
+ * These are editor IDs, not Deslop language ids: `.jsx`/`.tsx` surface as
+ * `javascriptreact`/`typescriptreact`, and F# as `fsharp`. Single source of
+ * truth so a newly supported language lights up every editor surface at once
+ * instead of drifting per call site ([FACET-MODEL] anti-drift, #170/#198).
+ * Mirrors the core parser registry
+ * (crates/deslop-core/src/pipeline/corpus.rs::default_parsers). */
+export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
+  "csharp",
+  "rust",
+  "python",
+  "dart",
+  "javascript",
+  "javascriptreact",
+  "typescript",
+  "typescriptreact",
+  "fsharp",
+  "php",
+];

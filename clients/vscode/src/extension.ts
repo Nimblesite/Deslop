@@ -35,6 +35,7 @@ import {
   SessionProvider,
   StatusTicker,
 } from "./tree/providers";
+import { ANALYSED_LANGUAGE_IDS } from "./types/languages";
 import { ClusterHoverProvider } from "./decorations/clusterHoverProvider";
 import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
@@ -54,16 +55,15 @@ let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
 let activeReportStore: ReportStore | undefined;
 
-const ANALYSED_DOCUMENTS = [
-  { language: "csharp", scheme: "file" },
-  { language: "rust", scheme: "file" },
-  { language: "python", scheme: "file" },
-  { language: "dart", scheme: "file" },
-  { language: "javascript", scheme: "file" },
-  { language: "javascriptreact", scheme: "file" },
-  { language: "typescript", scheme: "file" },
-  { language: "typescriptreact", scheme: "file" },
-];
+const REPORT_READY_CONTEXT = "deslop.reportReady";
+
+// Derived from the single language registry so a newly supported language
+// reaches the hover card and LSP document sync without a per-site edit
+// ([FACET-MODEL] anti-drift). See ANALYSED_LANGUAGE_IDS in types/languages.
+const ANALYSED_DOCUMENTS = ANALYSED_LANGUAGE_IDS.map((language) => ({
+  language,
+  scheme: "file",
+}));
 
 const PRODUCTION_EMBEDDING_PROVIDER = "ollama";
 const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
@@ -117,6 +117,7 @@ export async function activate(
   // synchronously BEFORE the tree view is created so the title-bar
   // toggles have `when`-clause values to match against on cold start.
   syncTopOffendersContext();
+  syncReportReadyContext(reportStore);
   // [FACET-TOP-OFFENDERS-FILTER] Seed the store's facet-filter mirror so
   // the status bar and webviews slice correctly from the first render.
   reportStore.setFacetFilter(readTopOffendersFilter());
@@ -175,6 +176,7 @@ export async function activate(
       reportStore.setFacetFilter(readTopOffendersFilter());
       topOffenders.refresh();
     }),
+    reportStore.onDidChange(() => syncReportReadyContext(reportStore)),
   );
 
   try {
@@ -301,6 +303,14 @@ export function syncTopOffendersContext(): void {
     "setContext",
     "deslop.topOffendersFiltered",
     isTopOffendersFilterActive(),
+  );
+}
+
+export function syncReportReadyContext(store: ReportStore): void {
+  void vscode.commands.executeCommand(
+    "setContext",
+    REPORT_READY_CONTEXT,
+    store.current.report !== null,
   );
 }
 

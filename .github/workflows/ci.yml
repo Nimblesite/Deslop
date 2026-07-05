@@ -81,7 +81,7 @@ jobs:
       - name: Verify grammar pins
         run: |
           set -euo pipefail
-          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php; do
+          for dep in tree-sitter tree-sitter-c-sharp tree-sitter-rust tree-sitter-python tree-sitter-dart tree-sitter-typescript tree-sitter-javascript tree-sitter-php tree-sitter-fsharp; do
             line=$(grep -E "^${dep} = " Cargo.toml || true)
             if [ -z "${line}" ]; then
               echo "MISSING PIN: ${dep} must appear in workspace.dependencies"
@@ -97,7 +97,7 @@ jobs:
       # Rust toolchain + components. Grammar versions (tree-sitter,
       # tree-sitter-c-sharp, tree-sitter-rust, tree-sitter-python,
       # tree-sitter-dart, tree-sitter-typescript, tree-sitter-javascript,
-      # tree-sitter-php) are pinned with `=x.y.z` in the workspace
+      # tree-sitter-php, tree-sitter-fsharp) are pinned with `=x.y.z` in the workspace
       # `Cargo.toml`; the step above verifies the pins stay exact.
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -323,10 +323,10 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # TIMEOUT EXCEPTION: a cold Gradle/IntelliJ-Platform build resolves the JB
-    # SDK plus the LSP4IJ plugin and packages the plugin artifact while running
-    # the resolver test against the real released deslop-lsp binary — well over
-    # the 10-minute default on a cold runner cache.
-    timeout-minutes: 25
+    # SDK plus the LSP4IJ plugin, packages the plugin artifact, runs the resolver
+    # test against the real released deslop-lsp binary, AND boots a headless IDE
+    # for the integration test — well over the 10-minute default on a cold cache.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -365,9 +365,18 @@ jobs:
       - name: _jetbrains-real-binary-test
         run: make _jetbrains-real-binary-test
 
+      # Real IDE-level test ([JETBRAINS-TESTING]): boots a headless IntelliJ Platform
+      # with the ASSEMBLED plugin installed and asserts the Deslop tool window + Tools
+      # action register through the shipped classloader layout — catches the
+      # lib/modules/ content-module regression the descriptor test cannot. Invoked
+      # through the Gradle wrapper directly (not a make target) to keep the Makefile
+      # unchanged; every other jetbrains step goes through make.
+      - name: jetbrains integration test (IDE-level UI registration)
+        run: cd clients/jetbrains && ./gradlew :deslop-lsp4ij:integrationTest --no-daemon
+
       # Uses the checked-in Gradle wrapper via the Makefile default.
       - name: jetbrains-package deployment gate
-        run: make jetbrains-package
+        run: make _jetbrains-package
 
   # Website build + content gate. Runs whenever site/** changes — including on
   # website-only PRs, where the heavy `ci` job is skipped. Cheap: Node + Eleventy,

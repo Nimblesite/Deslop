@@ -75,7 +75,7 @@ Deslop 遵循代码克隆文献中通用的标准克隆分类法：
 
 `crates/deslop-core/src/discover.rs::discover_files` 使用 `ignore` crate 遍历目标根目录，应用标准的忽略过滤器，不跟随符号链接，按已注册的语言扩展名过滤，应用 `.deslop.toml` 排除规则，并将存活下来的文件注册到 `FileRegistry` 中。
 
-当前由 `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` 注册的受支持语言解析器有：C#、Rust、Python、Dart、JavaScript、TypeScript 和 TSX。Go 及其他语言尚未在当前核心流水线中注册。
+当前由 `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` 注册的受支持语言解析器有：C#、Rust、Python、Dart、JavaScript、TypeScript、TSX、PHP 和 F#。Go 及其他语言尚未在当前核心流水线中注册。
 
 ### 2. 解析与归一化
 
@@ -89,6 +89,8 @@ Deslop 遵循代码克隆文献中通用的标准克隆分类法：
 - Dart：`crates/deslop-core/src/lang/dart.rs`
 - JavaScript：`crates/deslop-core/src/lang/javascript.rs`
 - TypeScript / TSX：`crates/deslop-core/src/lang/typescript.rs`
+- PHP：`crates/deslop-core/src/lang/php.rs`
+- F#：`crates/deslop-core/src/lang/fsharp.rs`
 
 共享常量是用于类标识符节点的 `__ident__` 和用于类字面量节点的 `__literal__`。注释和琐碎内容通过让语言相关的归一化器返回 `None` 而被丢弃。这正是使被重命名的 Type-2 克隆能够哈希到一起的机制。
 
@@ -196,7 +198,7 @@ JSON 报告是规范输出。文本和 HTML 渲染器是基于该报告的派生
 
 | 主张 | 在代码中验证 | 有用的测试 |
 | --- | --- | --- |
-| C#、Rust、Python、Dart、JavaScript、TypeScript 和 TSX 目前已注册。 | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test js_ts_signatures`、`cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture` |
+| C#、Rust、Python、Dart、JavaScript、TypeScript、TSX、PHP 和 F# 目前已注册。 | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test js_ts_signatures`、`cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture`、`cargo test -p deslop --test cli detects_type2_clone_in_php_fixture`、`cargo test -p deslop --test cli detects_type2_clone_in_fsharp_fixture` |
 | Type-2 归一化折叠标识符和字面量。 | `crates/deslop-core/src/lang/shared.rs`、语言解析器文件 | `cargo test -p deslop --test cli debug_ast_dump_matches_committed_golden` |
 | 结构克隆是 BLAKE3 Merkle 子树哈希。 | `crates/deslop-core/src/fingerprint.rs` | `cargo test -p deslop --test sibling_dedup` |
 | Type-3 召回使用兄弟窗口和 MinHash LSH。 | `crates/deslop-core/src/sibling.rs`、`crates/deslop-core/src/tokens.rs`、`crates/deslop-core/src/lsh.rs` | `cargo test -p deslop --test sibling_ranking` |

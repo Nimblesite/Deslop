@@ -174,6 +174,24 @@ suite("package menu contributions", () => {
     assert.deepEqual(at("deslop.refresh"), [7]);
   });
 
+  test("Open HTML Report title action waits until a report is ready", () => {
+    const pkg = extensionPackage();
+    const titleItems = pkg.contributes.menus["view/title"] ?? [];
+    const item = titleItems.find(
+      (candidate) => candidate.command === "deslop.openHtmlReport",
+    );
+
+    assert.ok(item, "Open HTML Report must be a contributed title action");
+    assert.ok(
+      item.when?.includes("view == deslop.topOffenders"),
+      `Open HTML Report must stay scoped to Top Offenders, got: ${item.when ?? ""}`,
+    );
+    assert.ok(
+      item.when?.includes("deslop.reportReady"),
+      `Open HTML Report must stay hidden until a report exists, got: ${item.when ?? ""}`,
+    );
+  });
+
   // [FACET-GROUP-BY-TYPE] The grouping toggle cycles all four modes:
   // cluster → file → folder → type → cluster.
   test("grouping cycle includes the type mode", () => {

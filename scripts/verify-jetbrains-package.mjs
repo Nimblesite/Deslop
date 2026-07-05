@@ -31,7 +31,34 @@ function verifyPackage(packagePath) {
   for (const entry of binEntries(entries, root)) {
     if (!componentForEntry(entry, manifest)) throw new Error(`Undeclared JetBrains binary: ${entry}`);
   }
+  verifyFlatClasspath(entries, root, packagePath);
   console.log(`Verified JetBrains package ${packagePath} for ${platform}`);
+}
+
+// [DEPLOY-JETBRAINS-PACKAGE] Fast structural gate for the classloader contract. The tool
+// window and Tools action are declared in the main plugin.xml, so their classes must load
+// from the main plugin classloader — a top-level lib/*.jar. A jar under lib/modules/ is a
+// content module behind a child classloader the parent cannot see, so those extensions
+// silently vanish. This flat plugin declares no <content>, so it must ship the shared UI
+// jar directly under lib/ and nothing under lib/modules/. (Real IDE-level registration is
+// covered by the deslop-lsp4ij integration test; this keeps the regression cheap in CI.)
+function verifyFlatClasspath(entries, root, packagePath) {
+  const contentModuleJars = entries.filter(
+    (entry) => entry.startsWith(`${root}/lib/modules/`) && entry.endsWith(".jar"),
+  );
+  if (contentModuleJars.length > 0) {
+    throw new Error(
+      `${packagePath} bundles ${contentModuleJars.join(", ")} under lib/modules/; this flat plugin ` +
+        `declares no <content>, so those classes never load and the Deslop tool window + Tools action ` +
+        `silently vanish. Bundle shared code in a top-level lib/*.jar.`,
+    );
+  }
+  const sharedUiJar = entries.find(
+    (entry) => entry.startsWith(`${root}/lib/`) && /shared[^/]*\.jar$/.test(entry),
+  );
+  if (!sharedUiJar) {
+    throw new Error(`${packagePath} is missing the shared UI jar (deslop-*shared*.jar) directly under ${root}/lib/`);
+  }
 }
 
 function defaultPackages() {

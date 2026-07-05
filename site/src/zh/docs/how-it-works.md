@@ -30,12 +30,14 @@ discover → parse → normalize → fingerprint → cluster
 
 | 语言 | 状态 |
 | --- | --- |
-| C# | v1 |
-| Rust | v1 |
-| Python | v1 |
-| Dart | v1 |
-| JavaScript | v1 |
-| TypeScript / TSX | v1 |
+| [C#](https://learn.microsoft.com/en-us/dotnet/csharp/) | v1 |
+| [Rust](https://www.rust-lang.org/) | v1 |
+| [Python](https://www.python.org/) | v1 |
+| [Dart](https://dart.dev/) | v1 |
+| [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) | v1 |
+| [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
+| [PHP](https://www.php.net/) | v1 |
+| [F#](https://fsharp.org/) | v1 |
 | Go | 路线图 |
 
 解析器产出一棵 AST。这条流水线上从不会有任何源代码级别的正则参与 —— 永远不会。

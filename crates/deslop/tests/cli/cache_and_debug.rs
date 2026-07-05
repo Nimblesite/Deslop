@@ -410,6 +410,18 @@ fn debug_ast_dump_matches_committed_golden_php() -> Result<()> {
     assert_ast_golden("ast-golden-php", "Sample.php")
 }
 
+// [PARSE-FSHARP-NORMALIZE] golden: Sample.fs exercises identifier collapse
+// (`identifier`/`op_identifier` under the `long_identifier` wrappers),
+// literal collapse (string, float, bool, char, hex `int`, and the unit
+// value `()`), line / xml-doc / block comment drop, and the F# structural
+// forms most likely to shift between grammar patch releases (module,
+// nested `let ... in` desugaring, typed binding, if/else). Any grammar
+// bump or `normalise_kind` edit trips this byte-for-byte check.
+#[test]
+fn debug_ast_dump_matches_committed_golden_fsharp() -> Result<()> {
+    assert_ast_golden("ast-golden-fsharp", "Sample.fs")
+}
+
 // [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript
 // grammar's JSX path normalises identically — and pins that JSX text AND
 // html_character_reference entities (`&amp;`, `&copy;`) both collapse to

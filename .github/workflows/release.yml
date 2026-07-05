@@ -431,6 +431,7 @@ jobs:
     # v* tag — never by a push to main.
     if: ${{ !cancelled() && !contains(github.ref_name, '-') && (needs.changes.outputs.website == 'true' || needs.changes.outputs.full == 'true') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
     permissions:
+      actions: write
       contents: read
       pages: write
       id-token: write

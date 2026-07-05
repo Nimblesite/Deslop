@@ -9,9 +9,9 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild jetbrains-package android-studio-rebuild typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-test _jetbrains-real-binary-test _android-studio-install
+.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
-JETBRAINS_DIR := clients/jetbrains
+_JETBRAINS_DIR := clients/jetbrains
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -35,7 +35,7 @@ endif
 # Coverage — single source of truth is coverage-thresholds.json
 # See docs/specs/SPEC.md and REPO-STANDARDS-SPEC [COVERAGE-THRESHOLDS-JSON].
 # ---------------------------------------------------------------------------
-COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
+_COVERAGE_THRESHOLDS_FILE := coverage-thresholds.json
 
 # =============================================================================
 # Standard Targets
@@ -69,7 +69,7 @@ typediagram-gen:
 test: _delete-path-binaries typediagram-gen
 	@echo "==> Testing (fail-fast + coverage + per-crate threshold)..."
 	rustup component add llvm-tools-preview 2>/dev/null || true
-	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
 	    --lcov --output-path lcov.info -- --skip ollama_
@@ -78,16 +78,16 @@ test: _delete-path-binaries typediagram-gen
 _coverage_check:
 	@_lcov="$${RUST_LCOV:-lcov.info}"; \
 	 if [ ! -f "$$_lcov" ]; then echo "FAIL: $$_lcov not found"; exit 1; fi; \
-	 if [ ! -f "$(COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
-	 _default=$$(jq -r '.rust.default_threshold' "$(COVERAGE_THRESHOLDS_FILE)"); \
+	 if [ ! -f "$(_COVERAGE_THRESHOLDS_FILE)" ]; then echo "FAIL: $(_COVERAGE_THRESHOLDS_FILE) not found"; exit 1; fi; \
+	 _default=$$(jq -r '.rust.default_threshold' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	 if [ "$$_default" = "null" ] || [ -z "$$_default" ]; then \
-	   echo "FAIL: $(COVERAGE_THRESHOLDS_FILE) missing .rust.default_threshold"; exit 1; \
+	   echo "FAIL: $(_COVERAGE_THRESHOLDS_FILE) missing .rust.default_threshold"; exit 1; \
 	 fi; \
 	 _failed=0; \
 	 for _crate in deslop-core deslop deslop-lsp deslop-mcp; do \
-	   _threshold=$$(jq -r ".rust.crates.\"$$_crate\" // .rust.default_threshold" "$(COVERAGE_THRESHOLDS_FILE)"); \
+	   _threshold=$$(jq -r ".rust.crates.\"$$_crate\" // .rust.default_threshold" "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	   if [ "$$_threshold" = "null" ] || [ -z "$$_threshold" ]; then \
-	     echo "FAIL: no threshold for crate $$_crate in $(COVERAGE_THRESHOLDS_FILE)"; \
+	     echo "FAIL: no threshold for crate $$_crate in $(_COVERAGE_THRESHOLDS_FILE)"; \
 	     _failed=1; \
 	     continue; \
 	   fi; \
@@ -438,25 +438,27 @@ vsix-rebuild:
 #   families). LSP4IJ reaches Android Studio, IntelliJ Community, and Rider/Ultimate
 #   from one build, so there is no separate native-LSP artifact.
 _jetbrains-build:
-	$(RM) $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
+	$(RM) $(_JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
 	cargo build --release -p deslop-lsp
-	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-lsp4ij:buildPlugin
+	cd $(_JETBRAINS_DIR) && $(GRADLE) :deslop-lsp4ij:buildPlugin
 
 # _jetbrains-verify: Verify JetBrains plugin project and archive structure.
 _jetbrains-verify:
-	cd $(JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
+	cd $(_JETBRAINS_DIR) && $(GRADLE) verifyPluginProjectConfiguration verifyPluginStructure
 
-## jetbrains-package: Build the JetBrains plugin zip (single LSP4IJ artifact),
-##                    verify project/structure, and assert the packaged
-##                    artifact via scripts/verify-jetbrains-package.mjs.
-jetbrains-package: _jetbrains-build
+# _jetbrains-package: CI/release packaging gate — build the JetBrains plugin zip
+#   (single LSP4IJ artifact), verify project/structure, and assert the packaged
+#   artifact via scripts/verify-jetbrains-package.mjs. Headless (no IDE install);
+#   invoked by .github/workflows/ci.yml. Local devs use android-studio-rebuild or
+#   android-studio-rebuild-reinstall to actually load the plugin into the IDE.
+_jetbrains-package: _jetbrains-build
 	@$(MAKE) _jetbrains-verify
 	node scripts/verify-jetbrains-package.mjs
 
 # _jetbrains-test: Run the JetBrains tests via the wrapper — the shared-module
 #   resolver/descriptor/panel tests plus the LSP4IJ surface's reactive-wiring tests.
 _jetbrains-test:
-	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-shared:test :deslop-lsp4ij:test --no-daemon
+	cd $(_JETBRAINS_DIR) && $(GRADLE) :deslop-shared:test :deslop-lsp4ij:test --no-daemon
 
 # _jetbrains-real-binary-test: Run the resolver tests AND the real-binary
 #   contract test, which copies target/release/deslop-lsp into a synthetic
@@ -464,22 +466,33 @@ _jetbrains-test:
 #   Requires a release build of deslop-lsp.
 _jetbrains-real-binary-test:
 	cargo build --release -p deslop-lsp
-	cd $(JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
+	cd $(_JETBRAINS_DIR) && DESLOP_LSP_REAL_BINARY="$(CURDIR)/target/release/deslop-lsp" \
 	  $(GRADLE) :deslop-shared:test --no-daemon --rerun-tasks
 
-## android-studio-rebuild: The Android Studio analogue of vsix-rebuild (macOS).
-##                         Kills stale Deslop processes, builds every release
-##                         binary, packages the Android Studio / Community plugin
-##                         (LSP4IJ surface) with the host deslop-lsp bundled, and
-##                         installs it into Android Studio together with its
-##                         required LSP4IJ dependency.
+## android-studio-rebuild: Rebuild the Android Studio (LSP4IJ) plugin and install
+##                         it (macOS). Kills stale Deslop processes, builds the
+##                         plugin zip via _jetbrains-build (host deslop-lsp
+##                         bundled), and installs it into Android Studio with its
+##                         required LSP4IJ dependency. For a full clean + uninstall
+##                         first, use android-studio-rebuild-reinstall.
 android-studio-rebuild:
 	@$(MAKE) _kill-deslop-processes
-	$(RM) $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/*.zip
-	cargo build --release -p deslop -p deslop-lsp -p deslop-mcp
-	cd $(JETBRAINS_DIR) && $(GRADLE) :deslop-lsp4ij:buildPlugin
+	@$(MAKE) _jetbrains-build
 	@$(MAKE) _android-studio-install
 	@echo "==> Restart Android Studio to load the rebuilt plugin."
+
+## android-studio-rebuild-reinstall: Full clean + uninstall + rebuild + reinstall
+##                         of the Android Studio (LSP4IJ) plugin — the JetBrains
+##                         analogue of vsix-rebuild (macOS). Kills stale Deslop
+##                         processes, cleans every build artifact, uninstalls the
+##                         currently installed plugin from Android Studio, then
+##                         rebuilds and reinstalls it via android-studio-rebuild.
+##                         Use when "why isn't my change showing up" strikes.
+android-studio-rebuild-reinstall:
+	@$(MAKE) _kill-deslop-processes
+	@$(MAKE) clean
+	@$(MAKE) _android-studio-uninstall
+	@$(MAKE) android-studio-rebuild
 
 # _android-studio-install: Install the freshly built plugin into the newest
 #   Android Studio config on this Mac, plus its LSP4IJ dependency (pinned to the
@@ -487,7 +500,7 @@ android-studio-rebuild:
 #   sync). Without LSP4IJ, Android Studio disables Deslop. Warns (does not fail)
 #   when Android Studio has never been launched here.
 _android-studio-install:
-	@_zip=$$(ls $(JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/deslop-lsp4ij-*.zip 2>/dev/null | head -n1); \
+	@_zip=$$(ls $(_JETBRAINS_DIR)/deslop-lsp4ij/build/distributions/deslop-lsp4ij-*.zip 2>/dev/null | head -n1); \
 	 if [ -z "$$_zip" ]; then echo "FAIL: no deslop-lsp4ij-*.zip found (the build step failed)"; exit 1; fi; \
 	 _cfg=$$(ls -d "$(HOME)/Library/Application Support/Google/AndroidStudio"* 2>/dev/null | sort | tail -n1); \
 	 if [ -z "$$_cfg" ]; then \
@@ -512,6 +525,23 @@ _android-studio-install:
 	 unzip -q -o "$$_zip" -d "$$_plugins"; \
 	 echo "    Installed into $$(basename "$$_cfg") with its LSP4IJ dependency."
 
+# _android-studio-uninstall: Remove the installed deslop-lsp4ij plugin from the
+#   newest Android Studio config on this Mac. Warns (does not fail) when Android
+#   Studio has never been launched here or the plugin isn't installed. Leaves the
+#   shared LSP4IJ dependency in place — it is a Marketplace plugin, not ours.
+_android-studio-uninstall:
+	@_cfg=$$(ls -d "$(HOME)/Library/Application Support/Google/AndroidStudio"* 2>/dev/null | sort | tail -n1); \
+	 if [ -z "$$_cfg" ]; then \
+	   echo "WARN: no Android Studio config dir - nothing to uninstall."; exit 0; \
+	 fi; \
+	 _plugin="$$_cfg/plugins/deslop-lsp4ij"; \
+	 if [ -d "$$_plugin" ]; then \
+	   echo "==> Uninstalling deslop-lsp4ij from $$(basename "$$_cfg")"; \
+	   $(RM) "$$_plugin"; \
+	 else \
+	   echo "    (deslop-lsp4ij not installed in $$(basename "$$_cfg") - nothing to remove)"; \
+	 fi
+
 ## help: List all available targets
 help:
 	@echo "Standard targets:"
@@ -530,7 +560,7 @@ help:
 	@echo "  ci-ollama              - make ci plus make test-ollama"
 	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"
-	@echo "  jetbrains-package      - Build the JetBrains plugin zip + verify the package"
-	@echo "  android-studio-rebuild - Build binaries + package + install the Android Studio plugin (macOS)"
+	@echo "  android-studio-rebuild - Rebuild + install the Android Studio (LSP4IJ) plugin (macOS)"
+	@echo "  android-studio-rebuild-reinstall - Clean + uninstall + rebuild + reinstall the plugin (macOS)"
 	@echo ""
 	@echo "Internal '_'-prefixed targets (CI steps / plumbing) are hidden; read the Makefile for them."

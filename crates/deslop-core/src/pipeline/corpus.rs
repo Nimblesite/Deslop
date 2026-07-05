@@ -274,6 +274,7 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
     use crate::lang::{
         csharp::CSharpParser,
         dart::DartParser,
+        fsharp::FSharpParser,
         javascript::JavaScriptParser,
         php::PhpParser,
         python::PythonParser,
@@ -289,6 +290,7 @@ pub fn default_parsers() -> Vec<Box<dyn LanguageParser>> {
         Box::new(TypeScriptParser::new()),
         Box::new(TsxParser::new()),
         Box::new(PhpParser::new()),
+        Box::new(FSharpParser::new()),
     ]
 }
 

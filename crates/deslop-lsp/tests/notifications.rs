@@ -76,6 +76,46 @@ fn report_changed_fires_for_pure_removal_delta() -> Result<()> {
     Ok(())
 }
 
+/// [LSP-PUSH-NOTIFICATIONS] The LSP client console must show that Deslop
+/// is working. Every analysis pass surfaces a human-readable
+/// `window/logMessage`, not only a `tracing` line on stderr the LSP
+/// client never renders. Regression for "there is no logging": the
+/// LSP4IJ Logs tab (and the VS Code output channel) showed a single
+/// `deslop-lsp initialised` line at startup and then stayed silent while
+/// Deslop re-analysed the workspace on every save, so the running engine
+/// looked dead. An external save must push an Info `window/logMessage`
+/// naming the pass and its cluster delta.
+#[test]
+fn analysis_pass_surfaces_a_window_log_message() -> Result<()> {
+    let workspace = copy_fixture("csharp-small")?;
+    let beta = workspace.path().join("Beta.cs");
+    let (_guard, _stdin, frames, initial) = spawn_lsp_with_initial_report(workspace.path())?;
+    ensure!(
+        cluster_count(&initial) > 0,
+        "fixture must start with duplicate clusters"
+    );
+
+    // Break the clone pair on disk. The watcher runs a fresh analysis
+    // pass, which must announce itself on the LSP log channel.
+    fs::write(&beta, unrelated_csharp())?;
+    let logged = recv_method(&frames, "window/logMessage", Duration::from_secs(10))?;
+    let message_type = json_u64(&logged, "/params/type")?;
+    ensure!(
+        message_type == 3,
+        "an analysis-pass log must be Info (LSP MessageType 3), got {message_type}: {logged}"
+    );
+    let message = logged
+        .pointer("/params/message")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| anyhow!("logMessage frame carries no message: {logged}"))?;
+    ensure!(
+        message.contains("Deslop") && message.contains("pass") && message.contains("removed"),
+        "the analysis-pass log must name Deslop, the pass, and its cluster delta so the \
+         console shows real activity: {message}"
+    );
+    Ok(())
+}
+
 /// [LIVE-WATCHER] [PRINCIPLES-LIVE-IS-REACTIVE]
 /// Pure-fs edits — without any LSP `didChangeWatchedFiles`
 /// notification — must each push a `deslop/reportChanged` so AI agents

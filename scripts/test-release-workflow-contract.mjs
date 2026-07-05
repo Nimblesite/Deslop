@@ -10,12 +10,15 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
+const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
 const workflow = readFileSync(workflowPath, "utf8");
+const deployWorkflow = readFileSync(deployWorkflowPath, "utf8");
 
 const tests = [
   releaseBuildsTaggedSourceWithoutPostTagVersionCommit,
   releaseArchivesContainPackageManagerDeclaredBinaries,
   releaseBuildsPlatformSpecificVsixArtifacts,
+  pagesDeployCleansRerunArtifactsAndRetries,
 ];
 
 let failed = 0;
@@ -100,6 +103,46 @@ function releaseBuildsPlatformSpecificVsixArtifacts() {
   );
 }
 
+function pagesDeployCleansRerunArtifactsAndRetries() {
+  const deployPagesJob = sectionBetween("  deploy-pages:", "  publish-homebrew:");
+  assertIncludes(
+    deployPagesJob,
+    "actions: write",
+    "release workflow must let the called Pages workflow delete stale github-pages artifacts on rerun",
+  );
+  assertIncludes(
+    deployWorkflow,
+    "actions: write",
+    "Pages deploy workflow must grant actions:write so stale github-pages artifacts can be deleted",
+  );
+  assertIncludes(
+    deployWorkflow,
+    "Remove stale Pages artifact from rerun",
+    "Pages deploy workflow must remove stale github-pages artifacts before uploading a new one",
+  );
+  assertIncludes(
+    deployWorkflow,
+    'select(.name == "github-pages")',
+    "Pages deploy workflow must delete only the Pages artifact from the current run",
+  );
+  assertOccurrenceCount(
+    deployWorkflow,
+    "actions/deploy-pages@v4",
+    2,
+    "Pages deploy workflow must retry a transient deploy-pages failure in the same job",
+  );
+  assertIncludes(
+    deployWorkflow,
+    "steps.deploy.outcome == 'failure'",
+    "Pages deploy retry must be gated by the first deploy-pages outcome",
+  );
+  assertIncludes(
+    deployWorkflow,
+    "steps.deploy_retry.outcome == 'failure'",
+    "Pages deploy workflow must fail only when the retry also fails",
+  );
+}
+
 function assertAbsent(pattern, message) {
   if (pattern.test(workflow)) throw new Error(message);
 }
@@ -116,10 +159,15 @@ function assertIncludes(value, expected, message) {
   if (!value.includes(expected)) throw new Error(message);
 }
 
-function sectionBetween(start, end) {
-  const startIndex = workflow.indexOf(start);
+function assertOccurrenceCount(value, expected, count, message) {
+  const actual = value.split(expected).length - 1;
+  if (actual !== count) throw new Error(`${message}; found ${actual}`);
+}
+
+function sectionBetween(start, end, source = workflow) {
+  const startIndex = source.indexOf(start);
   if (startIndex < 0) throw new Error(`missing workflow section ${start}`);
-  const endIndex = workflow.indexOf(end, startIndex + start.length);
+  const endIndex = source.indexOf(end, startIndex + start.length);
   if (endIndex < 0) throw new Error(`missing workflow section ${end}`);
-  return workflow.slice(startIndex, endIndex);
+  return source.slice(startIndex, endIndex);
 }
