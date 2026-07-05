@@ -11,7 +11,6 @@ tags:
   - ai-coding-agents
   - duplicate-code
 category: engineering
-noTranslation: true
 description: "How Deslop's live MCP + LSP server lets coding agents call find-similar before writing code, preventing duplicate code while the repo is still changing."
 keywords: "Model Context Protocol, MCP server, AI coding tools, coding agent, duplicate code, code duplication, duplicate-code analysis, technical debt, AI-generated code, LSP server, find-similar"
 excerpt: "MCP gives coding agents tools. Deslop gives them live repository memory: call find-similar before writing, then reuse the code that already exists."

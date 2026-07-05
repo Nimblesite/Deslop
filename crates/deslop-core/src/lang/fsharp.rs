@@ -26,6 +26,14 @@
 //! - `line_comment`, `block_comment`, and `xml_doc` are dropped as trivia.
 //! - All other named node kinds pass through unchanged.
 //!
+//! The F# idioms the normaliser deliberately keeps structural — active
+//! patterns, computation expressions (`async`/`seq`/`task`), pipelines
+//! (`|>`), units of measure, and quotations — are catalogued in
+//! `docs/plans/LANG-ROADMAP.md` under `[LANG-CAND-FSHARP]`, cross-checked
+//! against the F# language reference
+//! (<https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/>)
+//! and the grammar's `node-types.json`.
+//!
 //! Shared walking / interning plumbing lives in [`super::shared`].
 
 use crate::{

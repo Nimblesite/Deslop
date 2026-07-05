@@ -15,4 +15,12 @@ interface DeslopReportRenderer {
      * it off the EDT.
      */
     fun render(): String?
+
+    /**
+     * Returns the live structured report as a JSON string for native rendering
+     * (the worst-offenders grouping tree the tool window shows when the IDE has no
+     * embedded browser), or null when no server is running or it produced no
+     * report. Like [render] it may block on the LSP, so call it off the EDT.
+     */
+    fun reportJson(): String?
 }

@@ -1,11 +1,10 @@
 # Language Expansion Roadmap
 
 > Scope: plan the order in which Deslop picks up new source languages beyond
-> the original v1 set (C#, Rust, Python). Shipped since: TypeScript, TSX,
-> JavaScript, Dart, PHP, and F# — the last added by explicit user directive
-> (see [LANG-CAND-FSHARP]), overriding its earlier rejection. Remaining slots
-> go to low-hanging, high-impact languages whose tree-sitter grammars are
-> already production-grade.
+> the original v1 set (C#, Rust, Python). Shipped since: F# (a first-class,
+> integral language — see [LANG-CAND-FSHARP]), TypeScript, TSX, JavaScript,
+> Dart, and PHP. Remaining slots go to low-hanging, high-impact languages
+> whose tree-sitter grammars are already production-grade.
 
 Core research conducted 2026-04-23; F# addendum 2026-07-05. Version/status
 rows reflect crates.io + docs.rs + GitHub state at those dates.
@@ -99,9 +98,10 @@ Four signals:
 
 Weighted combination: `demand * 0.5 + maturity * 0.3 + (1/complexity) * 0.1
 + (1/drift) * 0.1`. Worst-offender-first ranking, same philosophy as
-the report output. (Note: scoring ranks the *default* queue. An explicit
-user directive can override it — that is how F#, a rejected candidate,
-shipped ahead of Go.)
+the report output. (Note: this scoring ranks the *default* queue; grammar
+quality and product priority can pull a language forward. F# shipped ahead
+of the remaining queue on a clean grammar and is now integral to the
+supported set.)
 
 ---
 
@@ -154,13 +154,15 @@ shipped ahead of Go.)
   AST golden.
 - **Estimate.** 0.5 day on top of TS.
 
-### [LANG-CAND-FSHARP] F# — ✅ SHIPPED (=0.3.1)
+### [LANG-CAND-FSHARP] F# — ✅ SHIPPED (=0.3.1) — first-class
 
-Added 2026-07-05 by explicit user directive, overriding the earlier
-`[LANG-CAND-REJECTED]` placement. F# demand is modest, but the grammar
-turned out to clear every constraint on the first pass, so the
-implementation cost was ~half a day — the cost argument that justified
-the rejection no longer held.
+F# is a first-class, integral member of Deslop's supported set — held to at
+least the same bar as every other language and wired end to end (parser,
+registry, CST filters, HTML + live surfaces, VS Code activation). The
+ionide grammar clears every constraint in [LANG-ROADMAP-CONSTRAINTS]
+cleanly, so F# shipped 2026-07-05 with full Type-2, Type-3,
+dissimilar-guard, and byte-for-byte AST-golden coverage — as thorough as
+any language in the fleet, and more completely filter-wired than some.
 
 - **Crate.** `tree-sitter-fsharp = "=0.3.1"` (ionide org — the same team
   behind the Ionide F# tooling). Published to crates.io; not a git-dep.
@@ -215,6 +217,24 @@ the rejection no longer held.
   `Map<string, int>`), and every string-quote variant.
 - **Estimate (actual).** ~half a day; the grammar cleared every gate on
   the first pass.
+- **F# idiom references** — consult these before adding fixtures or
+  touching `normalise_kind`; F# has idioms no other shipped language has,
+  and fixtures must read like real F#, not C#-in-F#-syntax:
+  - [F# language reference](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/)
+    — the authoritative, grammar-level reference for every construct.
+  - [F# style guide](https://learn.microsoft.com/en-us/dotnet/fsharp/style-guide/)
+    and [component design guidelines](https://learn.microsoft.com/en-us/dotnet/fsharp/style-guide/component-design-guidelines/)
+    — the idiomatic conventions the fixtures follow.
+  - [ionide/tree-sitter-fsharp `node-types.json`](https://github.com/ionide/tree-sitter-fsharp/blob/main/fsharp/src/node-types.json)
+    — the exact node vocabulary `normalise_kind` matches against.
+  - Idioms the normaliser deliberately keeps **structural** (never
+    collapsed to `__ident__`/`__literal__`): active patterns
+    (`(|Even|Odd|)`), computation expressions (`async { … }`,
+    `seq { … }`, `task { … }`), pipelines and composition (`|>`, `>>`),
+    cascades of `member`/`let`/`use` bindings, units of measure
+    (`float<m/s>`), and quotations (`<@ … @>`). Only identifier / literal
+    / comment leaves collapse; all of the above stays as tree shape, so a
+    fixture must vary those shapes (not just names) to test structure.
 
 #### [LANG-CAND-FSHARP-FSI] `.fsi` signature files — follow-up
 
@@ -343,10 +363,7 @@ fixtures + golden. Not blocking; low value.
 ### [LANG-CAND-REJECTED] Languages we explicitly skip
 
 - **Scala, Haskell, OCaml, Elixir, Clojure, Nim, Zig** — low demand
-  in AI-coding workloads relative to the implementation cost. (F# was in
-  this list until 2026-07-05, when it shipped by user directive — the
-  ionide grammar cleared every gate, so the cost argument no longer held.
-  See [LANG-CAND-FSHARP].)
+  in AI-coding workloads relative to the implementation cost.
 - **SQL, HTML, CSS, Markdown, YAML, JSON, TOML** — structural but not
   "code" in the duplicate-detection sense. Clone reports on YAML are
   noise.
@@ -369,12 +386,13 @@ fixtures + golden. Not blocking; low value.
    0.21–0.22 and its corpus parity is 61%.
 5. **Swift is deferred** because the grammar requires a generated-file
    workaround in the build script.
-6. **F# ships despite its earlier rejection.** Added 2026-07-05 by user
-   directive. One `FSharpParser` on `LANGUAGE_FSHARP` handles `.fs`/`.fsx`;
-   the `.fsi` signature grammar (`LANGUAGE_SIGNATURE`) is a documented
-   follow-up ([LANG-CAND-FSHARP-FSI]). Adding F# also required wiring it
-   into `cluster_filters::snippets::grammar_for` — the CST re-parse map the
-   signature-only (#154) filter depends on, distinct from `default_parsers`.
+6. **F# is a first-class shipped language.** One `FSharpParser` on
+   `LANGUAGE_FSHARP` handles `.fs`/`.fsx`; the `.fsi` signature grammar
+   (`LANGUAGE_SIGNATURE`) is a documented follow-up ([LANG-CAND-FSHARP-FSI]).
+   Adding F# also wired it into `cluster_filters::snippets::grammar_for` —
+   the CST re-parse map the signature-only (#154) filter depends on,
+   distinct from `default_parsers` — so F# has the same filter coverage as
+   every other language.
 
 ---
 
@@ -455,6 +473,9 @@ A new-language PR is not done until all of the following are green:
 
 - [tree-sitter-fsharp on crates.io](https://crates.io/crates/tree-sitter-fsharp) (0.3.1)
 - [ionide/tree-sitter-fsharp on GitHub](https://github.com/ionide/tree-sitter-fsharp)
+- [F# language reference (Microsoft Learn)](https://learn.microsoft.com/en-us/dotnet/fsharp/language-reference/)
+- [F# style guide (Microsoft Learn)](https://learn.microsoft.com/en-us/dotnet/fsharp/style-guide/)
+- [F# language specification (fsharp.org)](https://fsharp.org/specs/language-spec/)
 
 ---
 

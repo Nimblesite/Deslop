@@ -177,6 +177,7 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
     assert_advertised_commands(&init)?;
     assert_open_report_command(&mut service, &mut socket).await?;
     assert_render_html_report_command(&mut service, &mut socket).await?;
+    assert_report_json_command(&mut service, &mut socket).await?;
     assert_open_cluster_command(&mut service, &mut socket).await?;
     assert_toggle_incremental_command(&mut service, &mut socket).await?;
     assert_pick_embedding_model_command(&mut service, &mut socket).await?;
@@ -188,11 +189,12 @@ async fn execute_command_handlers_run_in_process_for_coverage() -> Result<()> {
 
 fn assert_advertised_commands(init: &Value) -> Result<()> {
     let commands = advertised_commands(init)?;
-    assert_eq!(commands.len(), 6, "unexpected command list: {commands:?}");
+    assert_eq!(commands.len(), 7, "unexpected command list: {commands:?}");
     assert!(commands.contains(&"deslop.lsp.refreshReport".to_owned()));
     assert!(commands.contains(&"deslop.lsp.openCluster".to_owned()));
     assert!(commands.contains(&"deslop.lsp.openReport".to_owned()));
     assert!(commands.contains(&"deslop.lsp.renderHtmlReport".to_owned()));
+    assert!(commands.contains(&"deslop.lsp.reportJson".to_owned()));
     assert!(commands.contains(&"deslop.lsp.pickEmbeddingModel".to_owned()));
     assert!(commands.contains(&"deslop.lsp.toggleIncremental".to_owned()));
     Ok(())
@@ -233,6 +235,50 @@ async fn assert_render_html_report_command(
         .ok_or_else(|| anyhow!("renderHtmlReport must return an HTML string: {response}"))?;
     assert_well_formed_report_html(html);
     assert_report_shows_real_clusters(html);
+    Ok(())
+}
+
+/// Exercises `deslop.lsp.reportJson`: the structured report the JetBrains
+/// tool window groups natively when the IDE has no embedded browser. Locks
+/// the contract that native surface depends on — a JSON string carrying a
+/// worst-first `clusters` array, each cluster with a clone-type `bucket` and
+/// located `occurrences` — and the lean wire shape (no `schema_doc`).
+async fn assert_report_json_command(
+    service: &mut LspService<LspBackend>,
+    socket: &mut ClientSocket,
+) -> Result<()> {
+    let (response, shows) = execute_in_process(
+        service,
+        socket,
+        json!({ "command": "deslop.lsp.reportJson" }),
+    )
+    .await?;
+    assert!(shows.is_empty(), "reportJson must not open documents");
+    let json = response
+        .as_str()
+        .ok_or_else(|| anyhow!("reportJson must return a JSON string: {response}"))?;
+    let report: Value = serde_json::from_str(json)?;
+    assert_report_json_shape(&report)
+}
+
+/// Asserts the native-tree wire contract on a parsed `reportJson` payload.
+fn assert_report_json_shape(report: &Value) -> Result<()> {
+    let clusters = report
+        .get("clusters")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow!("reportJson needs a clusters array: {report}"))?;
+    let first = clusters
+        .first()
+        .ok_or_else(|| anyhow!("csharp-small must yield clusters: {report}"))?;
+    let bucket = first.get("bucket").and_then(Value::as_str);
+    assert!(bucket.is_some(), "cluster needs a clone-type bucket: {first}");
+    let path = first.pointer("/occurrences/0/path").and_then(Value::as_str);
+    assert!(path.is_some(), "cluster occurrence needs a path: {first}");
+    let schema_doc = report.get("schema_doc").and_then(Value::as_str);
+    assert!(
+        schema_doc.map_or(true, str::is_empty),
+        "reportJson must strip schema_doc for the lean wire shape",
+    );
     Ok(())
 }
 

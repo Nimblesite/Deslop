@@ -3,6 +3,7 @@
 
 use deslop_core::live::{ChangeSummary, LiveApi, LiveError, ReportChangedNotification};
 use deslop_core::render::render_html;
+use deslop_core::report::{Report, LIVE_WIRE_OCCURRENCE_CAP};
 use serde_json::{json, Value};
 use tower_lsp::{
     jsonrpc::{Error, Result as LspResult},
@@ -21,6 +22,11 @@ pub const OPEN_REPORT: &str = "deslop.lsp.openReport";
 /// Renders the live report as a standalone HTML document and returns it
 /// so the client can show it in an in-editor browser tab ([LSP-COMMANDS]).
 pub const RENDER_HTML_REPORT: &str = "deslop.lsp.renderHtmlReport";
+/// Returns the live structured report as a JSON string so a client without
+/// an embedded browser (the JetBrains tool window on a JCEF-less IDE such as
+/// Android Studio) can render the worst offenders natively instead of the
+/// HTML surface ([LSP-COMMANDS], [OUTPUT-SCHEMA-JSON]).
+pub const REPORT_JSON: &str = "deslop.lsp.reportJson";
 /// Opens a cluster virtual document by id.
 pub const OPEN_CLUSTER: &str = "deslop.lsp.openCluster";
 /// Returns available embedding models for a client-side picker.
@@ -34,6 +40,7 @@ const COMMANDS: &[&str] = &[
     OPEN_CLUSTER,
     OPEN_REPORT,
     RENDER_HTML_REPORT,
+    REPORT_JSON,
     PICK_EMBEDDING_MODEL,
     TOGGLE_INCREMENTAL,
 ];
@@ -65,6 +72,7 @@ pub async fn execute(
         REFRESH_REPORT => refresh_report(backend).await,
         OPEN_REPORT => show_uri(backend, OPEN_REPORT, "deslop://report").await,
         RENDER_HTML_REPORT => render_html_report(backend).await,
+        REPORT_JSON => report_json(backend).await,
         OPEN_CLUSTER => open_cluster(backend, &params.arguments).await,
         PICK_EMBEDDING_MODEL => pick_embedding_model(backend).await,
         TOGGLE_INCREMENTAL => toggle_incremental(backend).await,
@@ -103,6 +111,25 @@ async fn render_html_report(backend: &LspBackend) -> LspResult<Option<Value>> {
     let report = backend.service().report_get().await;
     let html = render_html(&report, Some(backend.workspace_root()), false);
     Ok(Some(Value::String(html)))
+}
+
+/// Serialises the live report in its lean wire shape (occurrence-capped,
+/// `schema_doc` stripped) to a JSON string, so a native client can group the
+/// worst offenders without an embedded browser ([OUTPUT-SCHEMA-JSON]). The
+/// string is double-encoded inside the JSON-RPC result exactly like
+/// [`render_html_report`], so both share the client's string coercion.
+async fn report_json(backend: &LspBackend) -> LspResult<Option<Value>> {
+    let report = backend.service().report_get().await;
+    let slim: Report = (*report).clone().truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
+    let json = serde_json::to_string(&slim).map_err(serialisation_error)?;
+    Ok(Some(Value::String(json)))
+}
+
+/// Maps a report serialisation failure onto a JSON-RPC internal error.
+fn serialisation_error(error: serde_json::Error) -> Error {
+    let mut out = Error::internal_error();
+    out.message = error.to_string().into();
+    out
 }
 
 /// Pushes `deslop/reportChanged` only when refresh changed visible clusters.

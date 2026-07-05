@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.ui.jcef.JBCefApp
 import javax.swing.JComponent
 
 /** Tool window id; matches the `<toolWindow id="Deslop">` registration in plugin.xml. */
@@ -26,12 +27,8 @@ internal const val DESLOP_RENDER_REPORT_ACTION_ID: String = "Deslop.OpenHtmlRepo
  */
 internal class DeslopReportToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        installDeslopReportPanel(toolWindow)
-        renderInitialReport(project)
-    }
-
-    private fun renderInitialReport(project: Project) {
-        renderDeslopReport(project) { html -> openDeslopHtmlReport(project, html) }
+        installDeslopReportPanel(project, toolWindow)
+        refreshDeslopReport(project, activate = false)
     }
 }
 
@@ -41,8 +38,8 @@ internal class DeslopReportToolWindowFactory : ToolWindowFactory, DumbAware {
  * Separated from the best-effort initial render so the deterministic panel wiring
  * is provable in a platform test without spawning the off-EDT render.
  */
-internal fun installDeslopReportPanel(toolWindow: ToolWindow): DeslopReportPanel {
-    val panel = DeslopReportPanel(toolWindow.disposable)
+internal fun installDeslopReportPanel(project: Project, toolWindow: ToolWindow): DeslopReportPanel {
+    val panel = DeslopReportPanel(project, toolWindow.disposable)
     panel.toolbar = buildReportToolbar(panel).component
     val content = toolWindow.contentManager.factory.createContent(panel, "", false)
     content.isCloseable = false
@@ -59,36 +56,41 @@ private fun buildReportToolbar(target: JComponent): ActionToolbar {
 }
 
 /**
- * Renders the live report off the EDT through the [DeslopReportRenderer] service
- * and hands a non-empty result to [onHtml]. The single place the render service is
- * consumed for a best-effort refresh, so the first-open render and the reactive
- * `deslop/reportChanged` refresh never duplicate the pooled-render dance. Render
- * failures are swallowed here (best effort); the user-invoked action reports them.
+ * Fetches the report payload the tool-window surface renders: structured JSON for the
+ * native worst-offenders tree (IDEs without an embedded browser) or the self-contained
+ * HTML document for the JCEF browser. Keying both the fetch and the [DeslopReportPanel]
+ * surface off `JBCefApp.isSupported()` keeps them in lock-step. May block on the LSP,
+ * so call it off the EDT. Null when no server is running or it produced no report.
  */
-internal fun renderDeslopReport(project: Project, onHtml: (String) -> Unit) {
+internal fun fetchDeslopReportPayload(renderer: DeslopReportRenderer): String? =
+    if (JBCefApp.isSupported()) renderer.render() else renderer.reportJson()
+
+/**
+ * Refreshes the report off the EDT through the [DeslopReportRenderer] service and shows
+ * it in the tool window, foregrounding it when [activate]. The single place the render
+ * service is consumed for a best-effort refresh, so first-open and the reactive
+ * `deslop/reportChanged` refresh never duplicate the pooled-fetch dance. Fetch failures
+ * are swallowed here (best effort); the user-invoked action reports them.
+ */
+internal fun refreshDeslopReport(project: Project, activate: Boolean) {
     ApplicationManager.getApplication().executeOnPooledThread {
-        val html = runCatching { project.service<DeslopReportRenderer>().render() }.getOrNull()
-        if (!html.isNullOrEmpty()) onHtml(html)
+        val service = project.service<DeslopReportRenderer>()
+        val payload = runCatching { fetchDeslopReportPayload(service) }.getOrNull()
+        if (!payload.isNullOrEmpty()) showDeslopReport(project, payload, activate)
     }
 }
 
 /**
- * Shows [html] in the Deslop tool window and brings it to the foreground — the
- * explicit "Open HTML Report" action and the first-open render, where surfacing
- * the panel is the point.
+ * Shows [payload] in the Deslop tool window's panel on the EDT, bringing the tool
+ * window to the foreground when [activate] (the explicit action and first-open render,
+ * where surfacing the panel is the point) and refreshing in place otherwise (the
+ * reactive path, so a live edit never yanks the tool window forward).
  */
-internal fun openDeslopHtmlReport(project: Project, html: String) {
-    withDeslopToolWindow(project) { toolWindow -> toolWindow.activate { reportPanel(toolWindow)?.load(html) } }
-}
-
-/**
- * Refreshes the report in place without stealing focus — the reactive
- * `deslop/reportChanged` path, so a live edit never yanks the tool window to the
- * foreground. A no-op until the panel has been opened once, because there is no
- * on-screen surface to update yet (the first open renders the fresh report itself).
- */
-internal fun updateDeslopReport(project: Project, html: String) {
-    withDeslopToolWindow(project) { toolWindow -> reportPanel(toolWindow)?.load(html) }
+internal fun showDeslopReport(project: Project, payload: String, activate: Boolean) {
+    withDeslopToolWindow(project) { toolWindow ->
+        if (activate) toolWindow.activate { reportPanel(toolWindow)?.display(payload) }
+        else reportPanel(toolWindow)?.display(payload)
+    }
 }
 
 /**
@@ -98,8 +100,7 @@ internal fun updateDeslopReport(project: Project, html: String) {
  * IDE family, mirroring the VS Code client's live refresh. Public because the
  * LSP4IJ language client in the surface module drives it from the notification.
  */
-fun refreshDeslopReportInPlace(project: Project) =
-    renderDeslopReport(project) { html -> updateDeslopReport(project, html) }
+fun refreshDeslopReportInPlace(project: Project) = refreshDeslopReport(project, activate = false)
 
 /**
  * Runs [action] against the Deslop tool window on the EDT. Tool window access

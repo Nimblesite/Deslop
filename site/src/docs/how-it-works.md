@@ -29,14 +29,14 @@ Each language ships a grammar via tree-sitter:
 
 | Language | Status |
 | --- | --- |
-| C# | v1 |
-| Rust | v1 |
-| Python | v1 |
-| Dart | v1 |
-| JavaScript | v1 |
-| TypeScript / TSX | v1 |
-| PHP | v1 |
-| F# | v1 |
+| [C#](https://learn.microsoft.com/en-us/dotnet/csharp/) | v1 |
+| [Rust](https://www.rust-lang.org/) | v1 |
+| [Python](https://www.python.org/) | v1 |
+| [Dart](https://dart.dev/) | v1 |
+| [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) | v1 |
+| [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
+| [PHP](https://www.php.net/) | v1 |
+| [F#](https://fsharp.org/) | v1 |
 | Go | roadmap |
 
 A parser produces an AST. No source-level regex touches this pipeline — ever.
