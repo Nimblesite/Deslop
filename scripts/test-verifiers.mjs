@@ -26,7 +26,8 @@ const cases = [
   binariesRejectStaleJsonManifestVersion, binariesAcceptValidContract,
   jetbrainsRejectsMissingManifest, jetbrainsRejectsMissingBundledBinary,
   jetbrainsRejectsWrongVersionBundle, jetbrainsRejectsWrongComponentNameBundle,
-  jetbrainsRejectsUndeclaredBundle, jetbrainsAcceptsValidPackage,
+  jetbrainsRejectsUndeclaredBundle, jetbrainsRejectsContentModuleJar,
+  jetbrainsRejectsMissingSharedJar, jetbrainsAcceptsValidPackage,
   vsixRejectsMissingManifest, vsixRejectsMissingBundledLsp,
   vsixRejectsMissingBundledMcp, vsixRejectsWrongVersionBundle,
   vsixRejectsWrongComponentNameBundle, vsixRejectsUndeclaredBundle,
@@ -207,6 +208,16 @@ function jetbrainsRejectsUndeclaredBundle(work) {
   expectFail(verifyJetBrains, [zipPath, platform], /Undeclared JetBrains binary/);
 }
 
+function jetbrainsRejectsContentModuleJar(work) {
+  const zipPath = buildJetBrainsZip(work, { sharedJarUnderModules: true });
+  expectFail(verifyJetBrains, [zipPath, platform], /under lib\/modules\//);
+}
+
+function jetbrainsRejectsMissingSharedJar(work) {
+  const zipPath = buildJetBrainsZip(work, { skipSharedJar: true });
+  expectFail(verifyJetBrains, [zipPath, platform], /missing the shared UI jar/);
+}
+
 function jetbrainsAcceptsValidPackage(work) {
   const zipPath = buildJetBrainsZip(work, {});
   expectSuccess(verifyJetBrains, [zipPath, platform], /Verified JetBrains package/);
@@ -351,6 +362,8 @@ function buildJetBrainsZip(work, options) {
     });
   }
 
+  stageSharedUiJar(pluginRoot, options);
+
   const zipPath = join(work, "plugin.zip");
   const result = spawnSync("zip", ["-rq", zipPath, "deslop-jetbrains"], {
     cwd: stagingRoot,
@@ -358,6 +371,20 @@ function buildJetBrainsZip(work, options) {
   });
   if (result.status !== 0) throw new Error(`zip failed: ${result.stderr}`);
   return zipPath;
+}
+
+// [DEPLOY-JETBRAINS-PACKAGE] The real Gradle build stages the shared UI jar directly
+// under lib/ (deslop-jetbrains-bundling.gradle.kts hoists it out of lib/modules/ so the
+// tool window + Tools action load from the main plugin classloader). A valid fixture must
+// mirror that or verifyFlatClasspath has no bite: omit it to prove the missing-shared-jar
+// rejection, or leave it under lib/modules/ to prove the content-module rejection.
+function stageSharedUiJar(pluginRoot, options) {
+  if (options.skipSharedJar) return;
+  const libDir = options.sharedJarUnderModules
+    ? join(pluginRoot, "lib", "modules")
+    : join(pluginRoot, "lib");
+  mkdirSync(libDir, { recursive: true });
+  writeFileSync(join(libDir, `deslop-shared-${validVersion}.jar`), "");
 }
 
 function buildVsixZip(work, options) {
