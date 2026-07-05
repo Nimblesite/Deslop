@@ -271,7 +271,10 @@ fn assert_report_json_shape(report: &Value) -> Result<()> {
         .first()
         .ok_or_else(|| anyhow!("csharp-small must yield clusters: {report}"))?;
     let bucket = first.get("bucket").and_then(Value::as_str);
-    assert!(bucket.is_some(), "cluster needs a clone-type bucket: {first}");
+    assert!(
+        bucket.is_some(),
+        "cluster needs a clone-type bucket: {first}"
+    );
     let path = first.pointer("/occurrences/0/path").and_then(Value::as_str);
     assert!(path.is_some(), "cluster occurrence needs a path: {first}");
     let schema_doc = report.get("schema_doc").and_then(Value::as_str);

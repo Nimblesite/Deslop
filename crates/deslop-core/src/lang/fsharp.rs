@@ -94,10 +94,17 @@ fn normalise_kind(raw: &str) -> Option<&'static str> {
         // Identifier leaves — collapse for Type-2 renamed-clone detection
         "identifier" | "op_identifier" => Some(IDENTIFIER_KIND),
         // Literals — collapse so constant edits do not perturb fingerprints
-        "int" | "xint" | "float" | "char" | "bool" | "unit" | "string" | "format_string"
-        | "triple_quoted_string" | "format_triple_quoted_string" | "verbatim_string" => {
-            Some(LITERAL_KIND)
-        }
+        "int"
+        | "xint"
+        | "float"
+        | "char"
+        | "bool"
+        | "unit"
+        | "string"
+        | "format_string"
+        | "triple_quoted_string"
+        | "format_triple_quoted_string"
+        | "verbatim_string" => Some(LITERAL_KIND),
         // All structural kinds pass through unchanged
         other => Some(intern_kind(other)),
     }

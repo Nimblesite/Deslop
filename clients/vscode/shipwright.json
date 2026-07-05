@@ -1,0 +1,140 @@
+{
+  "manifestVersion": 1,
+  "product": {
+    "id": "deslop",
+    "displayName": "Deslop",
+    "version": "0.0.0-dev",
+    "repository": "https://github.com/Nimblesite/Deslop"
+  },
+  "components": [
+    {
+      "id": "deslop",
+      "kind": "cli",
+      "language": "rust",
+      "binaryName": "deslop",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64"
+      ],
+      "sources": [
+        "path",
+        "pkgmgr",
+        "cargo-bin",
+        "github-release"
+      ],
+      "pkgmgr": {
+        "brew": "Nimblesite/tap/deslop",
+        "scoop": "Nimblesite/deslop"
+      },
+      "githubRelease": {
+        "repo": "Nimblesite/Deslop",
+        "assetPattern": "deslop-${version}-${platform}.tar.gz"
+      },
+      "verifyStartup": true,
+      "versionCheckStrategy": "version-flag",
+      "required": true
+    },
+    {
+      "id": "deslop-lsp",
+      "kind": "lsp",
+      "language": "rust",
+      "binaryName": "deslop-lsp",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64"
+      ],
+      "bundled": {
+        "bundlePath": "bin/${platform}/${binaryName}${exe}",
+        "perPlatformArtifact": true
+      },
+      "sources": [
+        "user-setting",
+        "bundled"
+      ],
+      "userSetting": "deslop.lspPath",
+      "verifyStartup": true,
+      "versionCheckStrategy": "version-flag",
+      "required": true
+    },
+    {
+      "id": "deslop-mcp",
+      "kind": "mcp",
+      "language": "rust",
+      "binaryName": "deslop-mcp",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64"
+      ],
+      "bundled": {
+        "bundlePath": "bin/${platform}/${binaryName}${exe}",
+        "perPlatformArtifact": true
+      },
+      "sources": [
+        "user-setting",
+        "bundled"
+      ],
+      "userSetting": "deslop.mcpPath",
+      "verifyStartup": true,
+      "versionCheckStrategy": "version-flag",
+      "required": true
+    },
+    {
+      "id": "deslop-vscode",
+      "kind": "extension-vscode",
+      "language": "typescript",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "linux-x64",
+        "linux-arm64",
+        "win32-x64"
+      ]
+    },
+    {
+      "id": "deslop-jetbrains",
+      "kind": "extension-jetbrains",
+      "language": "kotlin",
+      "expectedVersion": "0.0.0-dev",
+      "platforms": [
+        "all"
+      ]
+    }
+  ],
+  "hosts": {
+    "vscode": {
+      "artifact": "vsix-per-platform",
+      "activationVerifies": [
+        "deslop-lsp",
+        "deslop-mcp"
+      ],
+      "onMismatch": "error"
+    },
+    "jetbrains": {
+      "artifact": "intellij-jar",
+      "activationVerifies": [
+        "deslop-lsp"
+      ],
+      "onMismatch": "error"
+    },
+    "cli": {
+      "artifact": "archive",
+      "activationVerifies": [
+        "deslop"
+      ],
+      "onMismatch": "error"
+    }
+  }
+}

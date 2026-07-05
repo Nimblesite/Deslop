@@ -147,7 +147,9 @@ fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
              cluster; got clusters: {clusters:#?}"
         );
     };
-    let structural = cluster.pointer("/signals/structural").and_then(serde_json::Value::as_f64);
+    let structural = cluster
+        .pointer("/signals/structural")
+        .and_then(serde_json::Value::as_f64);
     assert_eq!(
         structural,
         Some(1.0),

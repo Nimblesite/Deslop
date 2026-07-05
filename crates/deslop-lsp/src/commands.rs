@@ -120,7 +120,9 @@ async fn render_html_report(backend: &LspBackend) -> LspResult<Option<Value>> {
 /// [`render_html_report`], so both share the client's string coercion.
 async fn report_json(backend: &LspBackend) -> LspResult<Option<Value>> {
     let report = backend.service().report_get().await;
-    let slim: Report = (*report).clone().truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
+    let slim: Report = (*report)
+        .clone()
+        .truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
     let json = serde_json::to_string(&slim).map_err(|error| serialisation_error(&error))?;
     Ok(Some(Value::String(json)))
 }
