@@ -23,7 +23,7 @@ pub const OPEN_REPORT: &str = "deslop.lsp.openReport";
 /// so the client can show it in an in-editor browser tab ([LSP-COMMANDS]).
 pub const RENDER_HTML_REPORT: &str = "deslop.lsp.renderHtmlReport";
 /// Returns the live structured report as a JSON string so a client without
-/// an embedded browser (the JetBrains tool window on a JCEF-less IDE such as
+/// an embedded browser (the `JetBrains` tool window on a JCEF-less IDE such as
 /// Android Studio) can render the worst offenders natively instead of the
 /// HTML surface ([LSP-COMMANDS], [OUTPUT-SCHEMA-JSON]).
 pub const REPORT_JSON: &str = "deslop.lsp.reportJson";
@@ -121,12 +121,12 @@ async fn render_html_report(backend: &LspBackend) -> LspResult<Option<Value>> {
 async fn report_json(backend: &LspBackend) -> LspResult<Option<Value>> {
     let report = backend.service().report_get().await;
     let slim: Report = (*report).clone().truncate_for_wire(LIVE_WIRE_OCCURRENCE_CAP);
-    let json = serde_json::to_string(&slim).map_err(serialisation_error)?;
+    let json = serde_json::to_string(&slim).map_err(|error| serialisation_error(&error))?;
     Ok(Some(Value::String(json)))
 }
 
 /// Maps a report serialisation failure onto a JSON-RPC internal error.
-fn serialisation_error(error: serde_json::Error) -> Error {
+fn serialisation_error(error: &serde_json::Error) -> Error {
     let mut out = Error::internal_error();
     out.message = error.to_string().into();
     out

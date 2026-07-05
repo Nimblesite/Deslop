@@ -31,7 +31,7 @@ use deslop_core::{
     ExclusionConfig,
 };
 use tokio::sync::{broadcast::Receiver, Mutex};
-use tower_lsp::Client;
+use tower_lsp::{lsp_types::MessageType, Client};
 
 use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotification};
 
@@ -108,14 +108,37 @@ async fn forward_broadcasts(
 }
 
 /// Pushes `deslop/reportChanged` for a watcher-triggered analysis pass.
+///
+/// Also surfaces the pass on the LSP `window/logMessage` channel — the
+/// one log stream every client renders (the LSP4IJ Logs tab, the VS Code
+/// output channel) — so the running engine is visible, not silent behind
+/// stderr-only `tracing` the client never shows ([LSP-PUSH]).
 async fn push_report_changed(client: &Client, notification: ReportChangedNotification) {
     tracing::debug!(
         generation = notification.generation,
         "file_watch pushing deslop/reportChanged",
     );
     client
+        .log_message(MessageType::INFO, analysis_pass_log(&notification))
+        .await;
+    client
         .send_notification::<ReportChangedLspNotification>(notification)
         .await;
+}
+
+/// Human-readable one-liner announcing an analysis pass on the LSP client
+/// console, e.g. `Deslop analysis pass 7: 0 added, 1 removed, 0 updated
+/// (worst weight 1234)`.
+fn analysis_pass_log(notification: &ReportChangedNotification) -> String {
+    let summary = &notification.summary;
+    format!(
+        "Deslop analysis pass {}: {} added, {} removed, {} updated (worst weight {:.0})",
+        notification.generation,
+        summary.clusters_added,
+        summary.clusters_removed,
+        summary.clusters_updated,
+        summary.worst_weight,
+    )
 }
 
 /// Pushes `deslop/analysisState` carrying the generated tagged

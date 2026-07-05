@@ -238,7 +238,7 @@ async fn assert_render_html_report_command(
     Ok(())
 }
 
-/// Exercises `deslop.lsp.reportJson`: the structured report the JetBrains
+/// Exercises `deslop.lsp.reportJson`: the structured report the `JetBrains`
 /// tool window groups natively when the IDE has no embedded browser. Locks
 /// the contract that native surface depends on — a JSON string carrying a
 /// worst-first `clusters` array, each cluster with a clone-type `bucket` and
