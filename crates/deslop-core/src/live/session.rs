@@ -14,7 +14,7 @@ use crate::{
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
     lang::LanguageParser,
-    pipeline::{EmbeddingSettings, PipelineSession},
+    pipeline::{language_for_path, EmbeddingSettings, PipelineSession},
     report::{Report, ReportCluster},
 };
 
@@ -794,33 +794,22 @@ pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
     )
 }
 
-/// Derives language ids from the occurrence paths of a report,
-/// mapping known file extensions onto the canonical parser id.
-/// Used as a fallback for `parser_ids` during the cache-seed
-/// window before the background pipeline installs.
+/// Derives language ids from the occurrence paths of a report, mapping each
+/// path onto its canonical parser id via the registry-driven
+/// [`language_for_path`]. Used as a fallback for `parser_ids` during the
+/// cache-seed window before the background pipeline installs. Deriving from
+/// the parser registry (not a hand-maintained extension map) keeps the seeded
+/// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
+/// GH #270).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
     let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
     for cluster in &report.clusters {
         for occurrence in &cluster.occurrences {
-            if let Some(language) = extension_to_language(&occurrence.path) {
+            let language = language_for_path(&occurrence.path);
+            if language != "unknown" {
                 let _inserted = seen.insert(language);
             }
         }
     }
     seen.into_iter().map(str::to_owned).collect()
-}
-
-/// Maps a file extension to the canonical parser language id.
-fn extension_to_language(path: &Path) -> Option<&'static str> {
-    match path.extension().and_then(|extension| extension.to_str())? {
-        "cs" => Some("csharp"),
-        "rs" => Some("rust"),
-        "py" => Some("python"),
-        "dart" => Some("dart"),
-        "js" | "mjs" | "cjs" | "jsx" => Some("javascript"),
-        "ts" => Some("typescript"),
-        "tsx" => Some("tsx"),
-        "fs" | "fsx" => Some("fsharp"),
-        _ => None,
-    }
 }

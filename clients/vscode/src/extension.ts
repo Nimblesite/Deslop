@@ -35,6 +35,7 @@ import {
   SessionProvider,
   StatusTicker,
 } from "./tree/providers";
+import { ANALYSED_LANGUAGE_IDS } from "./types/languages";
 import { ClusterHoverProvider } from "./decorations/clusterHoverProvider";
 import { DecorationManager } from "./decorations/manager";
 import { LiveBubble } from "./bubble/live";
@@ -56,16 +57,13 @@ let activeReportStore: ReportStore | undefined;
 
 const REPORT_READY_CONTEXT = "deslop.reportReady";
 
-const ANALYSED_DOCUMENTS = [
-  { language: "csharp", scheme: "file" },
-  { language: "rust", scheme: "file" },
-  { language: "python", scheme: "file" },
-  { language: "dart", scheme: "file" },
-  { language: "javascript", scheme: "file" },
-  { language: "javascriptreact", scheme: "file" },
-  { language: "typescript", scheme: "file" },
-  { language: "typescriptreact", scheme: "file" },
-];
+// Derived from the single language registry so a newly supported language
+// reaches the hover card and LSP document sync without a per-site edit
+// ([FACET-MODEL] anti-drift). See ANALYSED_LANGUAGE_IDS in types/languages.
+const ANALYSED_DOCUMENTS = ANALYSED_LANGUAGE_IDS.map((language) => ({
+  language,
+  scheme: "file",
+}));
 
 const PRODUCTION_EMBEDDING_PROVIDER = "ollama";
 const DEFAULT_EMBEDDING_MODEL = "nomic-embed-text";
