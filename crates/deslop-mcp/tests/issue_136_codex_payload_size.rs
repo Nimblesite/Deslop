@@ -72,8 +72,8 @@ fn assert_every_description_within_budget(response: &Value) -> Result<()> {
         .and_then(Value::as_array)
         .ok_or_else(|| anyhow!("tools/list must return result.tools array"))?;
     ensure!(
-        tools.len() == 12,
-        "issue #136: deslop ships exactly 12 tools today; tools/list returned {}",
+        tools.len() == 13,
+        "issue #136: deslop ships exactly 13 tools today; tools/list returned {}",
         tools.len()
     );
     for tool in tools {

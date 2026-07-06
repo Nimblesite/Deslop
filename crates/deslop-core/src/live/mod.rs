@@ -14,6 +14,7 @@ pub mod debouncer;
 pub mod embedding_refresh;
 pub mod errors;
 pub mod freshness;
+pub mod merge;
 pub mod notifications;
 pub mod scheduler;
 pub mod session;

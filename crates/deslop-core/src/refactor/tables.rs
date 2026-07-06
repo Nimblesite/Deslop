@@ -1,0 +1,135 @@
+//! Per-language node-kind tables driving the refactor engine.
+//!
+//! The free-variable walk ([AUTOFIX-EXTRACT-FREE-VARS]) and the
+//! precondition checks ([AUTOFIX-EXTRACT-PRECONDITIONS]) are
+//! language-agnostic; everything language-specific is declared through
+//! these tables on the [`crate::lang::LanguageParser`] trait — the same
+//! single extension point as parsing.
+
+/// One binding-introducing node pattern for the free-variable walk
+/// ([AUTOFIX-EXTRACT-FREE-VARS] step 3).
+///
+/// When the walk enters a node of `node_kind`, the names bound are the
+/// identifier-kind nodes inside the `name_field` child subtree (or the
+/// whole node when `name_field` is `None`). Value-side subtrees are
+/// walked as references *before* the names bind, matching runtime
+/// evaluation order (`x = x + 1` reads the outer `x`).
+#[derive(Debug, Clone, Copy)]
+pub struct BindingKind {
+    /// Tree-sitter node kind that introduces the binding.
+    pub node_kind: &'static str,
+    /// Child field holding the bound name(s); `None` binds identifiers
+    /// from the whole node.
+    pub name_field: Option<&'static str>,
+    /// Child fields walked *after* the names bind, in addition to the
+    /// walk's global late fields — a Rust match arm's `value` runs with
+    /// its pattern in scope, unlike an assignment's `value`.
+    pub late_fields: &'static [&'static str],
+}
+
+/// Scope-frame node pattern for the free-variable walk. Frames open at
+/// nested function-like constructs so their parameters and locals do
+/// not leak into the enclosing block's free-variable list.
+#[derive(Debug, Clone, Copy)]
+pub struct FrameKind {
+    /// Tree-sitter node kind that opens a new scope frame.
+    pub node_kind: &'static str,
+    /// Child field whose identifiers bind *inside* the new frame
+    /// (lambda / closure parameter lists).
+    pub bind_inside_field: Option<&'static str>,
+    /// Child field whose identifiers bind in the *enclosing* frame
+    /// (a nested function's own name).
+    pub bind_outside_field: Option<&'static str>,
+    /// Child kinds walked *before* the frame's remaining children —
+    /// Python comprehension clauses appear textually after the body
+    /// but bind first (`[x for x in xs]` binds `x` before the body
+    /// reads it).
+    pub bind_first_kinds: &'static [&'static str],
+}
+
+/// Identifier-reference recognition table for the free-variable walk
+/// ([AUTOFIX-EXTRACT-FREE-VARS] step 4). Declares which node kinds are
+/// variable references and which syntactic positions are *not*
+/// references (member names, type positions, call targets that resolve
+/// as methods).
+#[derive(Debug, Clone, Copy)]
+pub struct ReferenceTable {
+    /// Node kinds that read or write a variable by name.
+    pub reference_kinds: &'static [&'static str],
+    /// Extra leaf kinds that bind a name without ever being a
+    /// reference (C#'s `implicit_parameter` in `order => …`).
+    pub bindable_kinds: &'static [&'static str],
+    /// Parent node kinds under which an identifier is never a variable
+    /// reference (e.g. `generic_name`, `scoped_identifier`).
+    pub skip_parent_kinds: &'static [&'static str],
+    /// `(parent_kind, child_field)` pairs whose identifier child is not
+    /// a variable reference (e.g. `("member_access_expression", "name")`).
+    pub skip_parent_fields: &'static [(&'static str, &'static str)],
+    /// Child field names that always hold non-reference identifiers
+    /// regardless of parent kind (e.g. `"type"`).
+    pub skip_fields: &'static [&'static str],
+}
+
+/// Shared empty table returned by the [`crate::lang::LanguageParser`]
+/// default implementation — languages without refactor support
+/// recognise no references, so every walk yields an empty free list.
+pub const EMPTY_REFERENCE_TABLE: ReferenceTable = ReferenceTable {
+    reference_kinds: &[],
+    bindable_kinds: &[],
+    skip_parent_kinds: &[],
+    skip_parent_fields: &[],
+    skip_fields: &[],
+};
+
+/// Container/scope kinds for [AUTOFIX-EXTRACT-PRECONDITIONS] rules 4–5
+/// and the free-variable walk's frame handling.
+#[derive(Debug, Clone, Copy)]
+pub struct ScopeKinds {
+    /// Node kinds whose named children are statements — an occurrence
+    /// must cover a contiguous run of these children (rule 5).
+    pub statement_container_kinds: &'static [&'static str],
+    /// Function-like enclosing-scope kinds (rule 4).
+    pub function_kinds: &'static [&'static str],
+    /// Shared-parent kinds one level up (rule 4): C# containing class,
+    /// Rust `impl`/module, Python class or module. The parse root
+    /// qualifies when its kind is listed (module-level languages).
+    pub shared_parent_kinds: &'static [&'static str],
+    /// Nested-scope kinds that open a frame during the free-variable
+    /// walk (lambdas, closures, comprehensions, local functions).
+    pub frame_kinds: &'static [FrameKind],
+    /// Whether an occurrence directly at module top level satisfies the
+    /// enclosing-scope rule (Python: yes).
+    pub allow_module_top_level: bool,
+}
+
+/// One boundary-crossing statement pattern for [AUTOFIX-MERGE-SAFETY]
+/// check B: a node of `node_kind` inside a merge candidate refuses the
+/// merge unless one of `allowed_containers` encloses it *within* the
+/// candidate span (a `break` inside its own loop is fine; a `return`
+/// never is).
+#[derive(Debug, Clone, Copy)]
+pub struct BoundaryKind {
+    /// Tree-sitter node kind that transfers control.
+    pub node_kind: &'static str,
+    /// Enclosing kinds that neutralise the transfer when fully inside
+    /// the span. Empty means the kind always crosses the boundary.
+    pub allowed_containers: &'static [&'static str],
+}
+
+/// Per-language tables for the mechanical merge ([AUTOFIX-MERGE]).
+#[derive(Debug, Clone, Copy)]
+pub struct MergeTables {
+    /// Control-transfer patterns for safety check B
+    /// ([AUTOFIX-MERGE-SAFETY]).
+    pub boundary_kinds: &'static [BoundaryKind],
+    /// Raw literal node kind → declared parameter type
+    /// ([AUTOFIX-MERGE-NAMES] type backstop).
+    pub literal_types: &'static [(&'static str, &'static str)],
+    /// `(node_kind, target_field)` pairs that write a variable —
+    /// a hole identifier written inside the span refuses value-passing
+    /// ([AUTOFIX-MERGE-SAFETY] D).
+    pub write_kinds: &'static [(&'static str, &'static str)],
+    /// Whether the language supports default parameter values
+    /// ([AUTOFIX-MERGE-DEFAULTS]).
+    pub supports_default_parameters: bool,
+}

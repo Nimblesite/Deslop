@@ -341,6 +341,16 @@ pub(super) fn call_cluster_by_id(
     Ok(to_value(&cluster))
 }
 
+/// `merge-plan` forwarder ([AUTOFIX-MERGE-MCP]).
+pub(super) fn call_merge_plan(
+    backend: &dyn McpBackend,
+    args: &Value,
+) -> Result<Value, JsonRpcError> {
+    let id = extract_string(args, "id")?;
+    let plan = backend.merge_plan(&id).map_err(backend_to_rpc)?;
+    Ok(to_value(&plan))
+}
+
 /// `list-embedding-models` forwarder.
 pub(super) fn call_list_embedding_models(backend: &dyn McpBackend) -> Result<Value, JsonRpcError> {
     let models = backend.list_embedding_models().map_err(backend_to_rpc)?;

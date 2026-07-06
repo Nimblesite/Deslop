@@ -35,6 +35,7 @@ pub mod lsh;
 pub mod pair;
 pub mod pipeline;
 pub mod process;
+pub mod refactor;
 pub mod render;
 pub mod report;
 pub mod report_boilerplate;

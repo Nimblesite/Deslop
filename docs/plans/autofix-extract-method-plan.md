@@ -14,7 +14,7 @@ Non-goals (route to the AI fallback, [autofix-extract-ai-plan.md](autofix-extrac
 
 ## Hard dependencies
 
-1. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42)** — `ClusterKind::Identical` must split true Type-1 from Type-2 before this work can land. Without #42 the action is unsafe to offer ([AUTOFIX-EXTRACT-DEPENDENCIES]). **Block this work behind #42.**
+1. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The split is **not** a `kind_detail` field: `report_bucket_kind` demotes signal-`Identical` clusters whose member slices are not whitespace-canonicalised byte-equivalent to `NearlyIdentical` (`[CLONE-BUCKETS-IDENTICAL]`). The bucket label alone is *not* the refactor gate, because the nested-cluster collapse (`[PIPELINE-CLUSTER-EXACT]` #50) keeps the outer method-level Type-2 view of the renamed-methods-with-identical-bodies case; the authoritative Type-1 gate is the refactor layer's own byte-equivalence proof on the effective rewrite spans ([AUTOFIX-EXTRACT-PRECONDITIONS] rules 1 and 5, including whole-function body narrowing).
 2. The `LanguageParser` trait gains free-variable + emitter methods — the **single extension point** rule still holds.
 3. `LiveApi` exposes `clusters_intersecting(uri, range)` (or the LSP layer adapts existing methods to that shape). Confirm before Phase 3; add if missing.
 
@@ -25,7 +25,7 @@ New code in `deslop-core` lives behind a `refactor` module so the LSP layer stay
 - `crates/deslop-core/src/refactor/mod.rs` — public surface: `ExtractMethodPlan`, `compute_plan(cluster, parser) -> Result<Option<ExtractMethodPlan>, RefactorError>`. Spec ID comments referencing `[AUTOFIX-EXTRACT-*]`.
 - `crates/deslop-core/src/refactor/free_vars.rs` — language-agnostic walk skeleton driven by the per-language node-kind tables.
 - `crates/deslop-core/src/refactor/emit.rs` — language-agnostic `WorkspaceEdit` assembly given a per-language emitter result.
-- Per-language emitter implementations live next to the existing parser implementations in the language plugin file (e.g. `crates/deslop-core/src/languages/csharp.rs`). The `LanguageParser` trait gains `binding_node_kinds`, `identifier_reference_kinds`, `emit_extract_method`.
+- Per-language emitter implementations live next to the existing parser implementations in the language plugin file (e.g. `crates/deslop-core/src/lang/csharp.rs`). The `LanguageParser` trait gains `binding_node_kinds`, `identifier_reference_kinds`, `emit_extract_method`.
 
 LSP wiring:
 
@@ -34,13 +34,13 @@ LSP wiring:
 
 Trait extension:
 
-- The `LanguageParser` trait gains the new methods in the same PR that adds the trait change; existing C# / Rust / Python implementations get empty placeholders that compile and return "no extraction available" until their phase lands.
+- The `LanguageParser` trait gains the new methods in the same PR that adds the trait change, as **default methods returning "no extraction available"** — every existing implementation (C#, Rust, Python, Dart, JS/TS, F#, PHP) compiles unchanged until its phase overrides them.
 
 ## Phases
 
 Each phase ends with green CI and at least one passing E2E test.
 
-**Phase 0 — wait for [#42](https://github.com/Nimblesite/Deslop/issues/42).** Track the issue. No code in this plan is mergeable until #42 lands the Type-1 vs Type-2 split.
+**Phase 0 — satisfied.** [#42](https://github.com/Nimblesite/Deslop/issues/42) shipped in PR #63: the Type-1 vs Type-2 split is the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence routing in `report_bucket_kind` (no `kind_detail` field).
 
 **Phase 1 — `refactor::free_vars` end-to-end on C#.** Implement the walk, the C# node-kind table, and an E2E test that opens a fixture and asserts the free-var list for a known cluster through a public `deslop-core` API. No LSP wiring yet.
 
@@ -79,30 +79,30 @@ Each phase ends with green CI and at least one passing E2E test.
 
 ## TODO
 
-- [ ] Block this plan on issue [#42](https://github.com/Nimblesite/Deslop/issues/42). No PR merges until #42 ships the `kind_detail` Type-1 vs Type-2 split.
-- [ ] Confirm `LiveApi::clusters_intersecting(uri, range)` exists; add it if missing. Spec ID comment: `[AUTOFIX-EXTRACT-CODE-ACTION]`.
-- [ ] Extend `LanguageParser` with `binding_node_kinds`, `identifier_reference_kinds`, `emit_extract_method`. Update existing C# / Rust / Python implementations to compile (empty placeholders OK in the trait-change PR).
-- [ ] Add `crates/deslop-core/src/refactor/` module: `mod.rs`, `free_vars.rs`, `emit.rs`. Public surface `compute_plan(cluster, parser) -> Result<Option<ExtractMethodPlan>, RefactorError>`. Spec ID comments referencing `[AUTOFIX-EXTRACT-*]`.
-- [ ] Implement the free-variable walk in `free_vars.rs` driven by per-language node-kind tables. E2E test against a C# fixture proves the free-var list for a known cluster. Spec ID comment: `[AUTOFIX-EXTRACT-FREE-VARS]`.
-- [ ] Implement the C# emitter in the C# language plugin. E2E asserts the generated `WorkspaceEdit` matches a golden. Spec ID comment: `[AUTOFIX-EXTRACT-EMITTER-CSHARP]`.
-- [ ] Add `code_action.rs` to `crates/deslop-lsp/src/`. Advertise `codeActionProvider` with `codeActionKinds: ["refactor.extract"]` in `backend.rs`. Spec ID comment: `[AUTOFIX-EXTRACT-CODE-ACTION]`.
-- [ ] LSP E2E: real binary, fixture workspace, code action computed, applied, post-apply buffer matches golden. Spec ID comments: `[AUTOFIX-EXTRACT-WORKSPACE-EDIT]`, `[AUTOFIX-EXTRACT-CODE-ACTION]`.
-- [ ] Repeat emitter + golden + E2E for Rust including the `DeslopTodo` type alias. Spec ID comment: `[AUTOFIX-EXTRACT-EMITTER-RUST]`.
-- [ ] Repeat emitter + golden + E2E for Python with PEP 8 spacing. Spec ID comment: `[AUTOFIX-EXTRACT-EMITTER-PYTHON]`.
-- [ ] Negative-path E2E suite per [AUTOFIX-EXTRACT-TESTING]: for the *verbatim* `[AUTOFIX-EXTRACT]` action, Type-2 / cross-file / cross-class / single-occurrence / mid-expression each produce no code action (they belong to `[AUTOFIX-MERGE]` / `[AUTOFIX-CONSOLIDATE]`).
+- [x] ~~Block this plan on issue [#42](https://github.com/Nimblesite/Deslop/issues/42).~~ Shipped in PR #63 — the split is the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence routing (`report_bucket_kind` demotes non-byte-equivalent clusters to `NearlyIdentical`); there is no `kind_detail` field. Spec updated to match.
+- [x] ~~Confirm `LiveApi::clusters_intersecting(uri, range)` exists~~ — `LiveApi::report_for_range(path, start_byte, end_byte)` already serves exactly this shape; the LSP layer reads the lock-free snapshot via `report_for_range_in`. No new `LiveApi` method needed. Spec ID comment: `[AUTOFIX-EXTRACT-CODE-ACTION]`.
+- [x] Extend `LanguageParser` with `binding_node_kinds`, `identifier_reference_kinds`, `emit_extract_method` **plus `extract_scope_kinds`** (container/frame kinds needed by preconditions rules 4–5 — same single-extension-point rationale). All four have defaults, so every existing language compiles unchanged.
+- [x] Add `crates/deslop-core/src/refactor/` module: `mod.rs`, `free_vars.rs`, `emit.rs`, plus `preconditions.rs` and `tables.rs`. Public surface `compute_plan(cluster, source, parser) -> Result<Option<ExtractMethodPlan>, RefactorError>`. Spec ID comments referencing `[AUTOFIX-EXTRACT-*]`.
+- [x] Implement the free-variable walk in `free_vars.rs` driven by per-language node-kind tables. E2E test against a C# fixture proves the free-var list for a known cluster (`crates/deslop-core/tests/refactor_extract.rs`). Spec ID comment: `[AUTOFIX-EXTRACT-FREE-VARS]`.
+- [x] Implement the C# emitter in the C# language plugin. E2E asserts the applied plan matches the golden `crates/deslop-lsp/tests/fixtures/code_action/InvoiceMath.applied.cs`. Spec ID comment: `[AUTOFIX-EXTRACT-EMITTER-CSHARP]`.
+- [x] Add `code_action.rs` to `crates/deslop-lsp/src/`. Advertise `codeActionProvider` with `codeActionKinds: ["refactor.extract"]` in `backend.rs`. Spec ID comment: `[AUTOFIX-EXTRACT-CODE-ACTION]`.
+- [x] LSP E2E: real binary, fixture workspace, code action computed, applied, post-apply buffer matches golden (`crates/deslop-lsp/tests/code_action.rs`). Spec ID comments: `[AUTOFIX-EXTRACT-WORKSPACE-EDIT]`, `[AUTOFIX-EXTRACT-CODE-ACTION]`.
+- [x] Repeat emitter + golden + E2E for Rust including the `DeslopTodo` type alias (snake_case helper name — spec amended to avoid `non_snake_case` warnings). Spec ID comment: `[AUTOFIX-EXTRACT-EMITTER-RUST]`.
+- [x] Repeat emitter + golden + E2E for Python with PEP 8 spacing. Spec ID comment: `[AUTOFIX-EXTRACT-EMITTER-PYTHON]`.
+- [x] Negative-path E2E suite per [AUTOFIX-EXTRACT-TESTING]: for the *verbatim* `[AUTOFIX-EXTRACT]` action, Type-2 / cross-file / cross-class / single-occurrence / mid-expression (plus truncated, hidden, overlapping, loose-bucket, table-less-language) each produce no plan and no code action (`crates/deslop-core/tests/refactor_extract_negative.rs`, `crates/deslop-lsp/tests/code_action.rs`).
 
 ### 🟢 Tier A — mechanical call-site merge ([AUTOFIX-MERGE])
-- [ ] Add in-process `AnalysisSession::subtree_at_range` + `source_bytes_for` over `PipelineSession.per_file`/`.sources`; not on the wire. E2E retrieves a cluster's occurrence subtrees. Spec ID `[AUTOFIX-MERGE]`.
-- [ ] `refactor::anti_unify(subtrees) -> { template, per_site_substitutions }` — first-order syntactic lgg with the store/coalesce rule. Spec ID `[AUTOFIX-MERGE-ANTIUNIFY]`.
-- [ ] `refactor::decide_mergeability(cluster, session) -> Mechanical | AiOrHuman` — skeleton equality, Baker prev-encoding, Baxter Similarity ≥ threshold, DIFF_LEAVES/PARAM_ARITY budgets, leaf-only differences. Spec ID `[AUTOFIX-MERGE-GATE]`.
-- [ ] `refactor::safety` — the A–F checklist (reuse the free-var walk; add binding/dependency, value-vs-thunk, type-unification). Spec ID `[AUTOFIX-MERGE-SAFETY]`.
-- [ ] Mechanical name derivation (modal-candidate else positional) + default-value computation + type unification (no `object`/`DeslopTodo` guessing — refuse if no type unifies). Spec IDs `[AUTOFIX-MERGE-NAMES]`, `[AUTOFIX-MERGE-DEFAULTS]`.
-- [ ] Per-language emitters with the type-safety backstop (C# overload fallback, Rust `Option`/wrapper/builder, Dart nullable `??`, Python `None`-sentinel under strict typing). Reuse the `LanguageParser` emitter trait. E2E goldens per language + negative (`ai_or_human`) fixtures.
-- [ ] `merge-plan { cluster_id } -> MergePlan` MCP tool cloning the `cluster-by-id` path (`tools/mod.rs`, `handlers.rs`, `schemas.rs`, `backend/mod.rs`, `backend/state.rs` → `ipc_call("merge/plan")`); prevention-first ≤200-char description; read-only. Add `MergePlan` to `docs/models/live-ipc.td`. Spec ID `[AUTOFIX-MERGE-MCP]`.
-- [ ] `refactor.rewrite` LSP code action: advertise `codeActionProvider { resolveProvider: true }`; offer (edit omitted) → `codeAction/resolve` builds the multi-site annotated, versioned, transactional `WorkspaceEdit`. LSP E2E asserts the resulting workspace **compiles**. Spec ID `[AUTOFIX-MERGE-CODE-ACTION]`.
+- [x] Add in-process `PipelineSession::subtree_at_range` + `source_bytes_for` over `per_file`/`.sources` (plus `AnalysisSession::pipeline()` for live access); not on the wire. E2E retrieves a cluster's occurrence subtrees (`crates/deslop-core/tests/refactor_ast_access.rs`). Spec ID `[AUTOFIX-MERGE]`.
+- [x] `refactor::merge::gate` — first-order syntactic lgg over the normalised forests with the store/coalesce rule (identical per-site tuples share a slot) plus a residual byte proof. Spec ID `[AUTOFIX-MERGE-ANTIUNIFY]`.
+- [x] `refactor::merge::compute_merge_plan -> MergePlan { verdict: Mechanical | AiOrHuman }` — skeleton equality, Baker rename lifting, Baxter similarity ≥ 0.95, DIFF_LEAVES/PARAM_ARITY budgets, leaf-only differences. Spec ID `[AUTOFIX-MERGE-GATE]`.
+- [x] `refactor::merge::safety` — the A–F checklist (reuses the free-var walk; boundary scan, declared-inside-read-after, write-in-span, declared-type unification; thunk-needing holes refuse in v1). Spec ID `[AUTOFIX-MERGE-SAFETY]`.
+- [x] Mechanical name derivation (modal-candidate else positional) + default-value computation (trailing, modal, C# only) + type unification (no `object`/`DeslopTodo` guessing — refuse if no type unifies). Spec IDs `[AUTOFIX-MERGE-NAMES]`, `[AUTOFIX-MERGE-DEFAULTS]`.
+- [x] Per-language merge emitters with the type-safety backstop: C# (defaults as trailing optional params), Rust (no defaults; the E2E **compiles the merged file with `rustc`**), Dart (goldens; no Dart toolchain in CI). Python always refuses in v1 (strict-typing detection not yet wired, [AUTOFIX-ZERO-RISK]). E2E goldens per language + negative (`ai_or_human`) fixtures.
+- [x] `merge-plan { id } -> MergePlan` MCP tool cloning the `cluster-by-id` path (`tools/mod.rs`, `handlers.rs`, `schemas.rs`, `backend/mod.rs`, `backend/state.rs` → `ipc_call("merge/plan")`); prevention-first ≤200-char description; read-only. `MergePlan` lives in `docs/models/live-ipc.td`. E2E: `crates/deslop-mcp/tests/merge_plan.rs`. Spec ID `[AUTOFIX-MERGE-MCP]`.
+- [x] `refactor.rewrite` LSP code action: `codeActionProvider { resolveProvider: true }`; offer (edit omitted, `data.cluster_id`) → `codeAction/resolve` attaches the annotated `WorkspaceEdit` (`changeAnnotations`; version ids null until the LSP tracks buffer versions); refusals resolve to `disabled.reason`. The compile assertion runs on the identical engine output in `rust_leafgap_merges_and_compiles` (`rustc --emit=metadata`). Spec ID `[AUTOFIX-MERGE-CODE-ACTION]`.
 
 ### 🔵 Tier B — cross-file consolidation ([AUTOFIX-CONSOLIDATE])
-- [ ] Per-language import/symbol resolver + reference graph; Schäfer binding invariant; consolidation gate (resolvable refs, no collision, no visibility/orphan break, dependents in change set). Spec IDs `[AUTOFIX-CONSOLIDATE]`, `[AUTOFIX-CONSOLIDATE-GATE]`.
-- [ ] `WorkspaceEdit` with `DeleteFile`/multi-file `TextDocumentEdit`s + import rewrites; E2E consolidates a cross-file duplicate, workspace compiles; negative fixtures refuse. Spec ID `[AUTOFIX-CONSOLIDATE-EDIT]`.
+- [x] Consolidation resolver + gate (`crates/deslop-core/src/refactor/consolidate.rs`): v1 covers Rust sibling modules — visible canonical, byte-equivalent whole definitions, single-definition duplicates, reference detection driving the `use crate::<module>::<name>;` rewrite (the Schäfer invariant holds by construction: the only same-file definition is removed and the import re-binds every reference). Other languages refuse with a reason. Spec IDs `[AUTOFIX-CONSOLIDATE]`, `[AUTOFIX-CONSOLIDATE-GATE]`.
+- [x] Multi-file edits + import rewrites; E2E consolidates a cross-file duplicate and the workspace **compiles** (`rustc`), negative fixtures refuse (`crates/deslop-core/tests/refactor_consolidate.rs`). `DeleteFile` for would-empty duplicates refuses in v1 (needs the `mod`-declaration rewrite; spec notes the follow-up). Spec ID `[AUTOFIX-CONSOLIDATE-EDIT]`.
 
-- [ ] Update [PLAN.md](PLAN.md) — move the relevant tiers from "Remaining" to "Implemented" as each phase goes green (Tier 1 after Phase 5, Tier A after Phase 8, Tier B after Phase 9).
+- [x] Update [PLAN.md](PLAN.md) — Tier 1, Tier A, and Tier B (v1) are implemented; PLAN.md entry updated accordingly.

@@ -145,6 +145,18 @@ pub(super) fn schema_rescan() -> Value {
     })
 }
 
+/// `merge-plan` input schema ([AUTOFIX-MERGE-MCP]).
+pub(super) fn schema_merge_plan() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "description": "Stable cluster identifier (from any report tool or LSP diagnostic)." }
+        },
+        "required": ["id"],
+        "additionalProperties": false,
+    })
+}
+
 /// Schema for `cluster-by-id`.
 pub(super) fn schema_cluster_by_id() -> Value {
     json!({

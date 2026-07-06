@@ -22,6 +22,7 @@ pub(super) fn dispatch(
         "report/forFile" => dispatch_report_for_file(params, service, handle),
         "report/forRange" => dispatch_report_for_range(params, service, handle),
         "cluster/byId" => dispatch_cluster_by_id(params, service, handle),
+        "merge/plan" => dispatch_merge_plan(params, service, handle),
         "session/config" => dispatch_session_config(service, handle),
         "duplicates/findSimilar" => dispatch_find_similar(params, service, handle),
         "embedding/listModels" => dispatch_list_models(service, handle),
@@ -75,6 +76,20 @@ fn dispatch_cluster_by_id(
         .block_on(service.cluster_by_id(id))
         .map_err(|err| json!({"code": -32603, "message": err.to_string()}))?;
     serde_json::to_value(&cluster).map_err(|err| rpc_serialise_error(&err))
+}
+
+/// Delegates `merge/plan` to [`LiveApi::merge_plan`]
+/// ([AUTOFIX-MERGE-MCP]).
+fn dispatch_merge_plan(
+    params: &Value,
+    service: &Arc<LiveService>,
+    handle: &Handle,
+) -> Result<Value, Value> {
+    let id = required_str_param(params, "id")?;
+    let plan = handle
+        .block_on(service.merge_plan(id))
+        .map_err(|err| json!({"code": -32603, "message": err.to_string()}))?;
+    serde_json::to_value(&plan).map_err(|err| rpc_serialise_error(&err))
 }
 
 /// Delegates `session/config` to [`LiveApi::session_config`].

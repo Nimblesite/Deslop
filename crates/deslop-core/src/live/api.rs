@@ -54,6 +54,19 @@ pub trait LiveApi: Send + Sync + std::fmt::Debug {
     /// Returns [`LiveError::UnknownCluster`] when no cluster matches.
     async fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, LiveError>;
 
+    /// `merge/plan` — the mechanical call-site merge for a cluster
+    /// ([AUTOFIX-MERGE-MCP]). Read-only; refusals arrive as
+    /// `ai_or_human` verdicts, never as errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LiveError::UnknownCluster`] when no cluster matches
+    /// and [`LiveError::Core`] when the occurrence file fails to parse.
+    async fn merge_plan(
+        &self,
+        cluster_id: &str,
+    ) -> Result<crate::wire_generated::MergePlan, LiveError>;
+
     /// `duplicates/findSimilar` — agent-facing similarity probe.
     ///
     /// # Errors
@@ -220,6 +233,15 @@ impl LiveApi for LiveService {
         let mut guard = self.inner.lock().await;
         guard.refresh_if_stale();
         guard.cluster_by_id(id)
+    }
+
+    async fn merge_plan(
+        &self,
+        cluster_id: &str,
+    ) -> Result<crate::wire_generated::MergePlan, LiveError> {
+        let mut guard = self.inner.lock().await;
+        guard.refresh_if_stale();
+        crate::live::merge::merge_plan_for(&guard, cluster_id)
     }
 
     async fn find_similar(

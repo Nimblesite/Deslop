@@ -1,0 +1,350 @@
+//! Negative-path E2E coverage for the verbatim extract action
+//! ([AUTOFIX-EXTRACT-TESTING] case 3): Type-2, cross-file, cross-class,
+//! single-occurrence, truncated, hidden, overlapping, mid-expression,
+//! and non-exact-bucket clusters must all be silently refused —
+//! `Ok(None)`, never an error, never a partial plan.
+
+mod common;
+
+use std::{fs, path::PathBuf};
+
+use anyhow::{anyhow, ensure, Context, Result};
+use deslop_core::{
+    lang::{csharp::CSharpParser, LanguageParser},
+    refactor,
+    report::{ReportCluster, ReportOccurrence, ReportSignals},
+};
+
+use crate::common::{analyse_refactor_fixture as analyse, fixture};
+
+/// Asserts that no cluster in the fixture's ranked report yields an
+/// extract plan for `file_name`.
+fn assert_no_plan(fixture_name: &str, file_name: &str) -> Result<()> {
+    let root = fixture(fixture_name);
+    let source = fs::read(root.join(file_name)).context("fixture source")?;
+    let report = analyse(&root)?;
+    ensure!(
+        !report.clusters.is_empty(),
+        "{fixture_name}: the fixture must produce clusters for the refusal to be meaningful"
+    );
+    let parser = refactor::parser_for_path(std::path::Path::new(file_name))
+        .ok_or_else(|| anyhow!("no parser for {file_name}"))?;
+    for cluster in &report.clusters {
+        let plan = refactor::compute_plan(cluster, &source, parser.as_ref())?;
+        ensure!(
+            plan.is_none(),
+            "{fixture_name}: cluster {} (bucket {}) must be refused, got a plan",
+            cluster.id,
+            cluster.bucket
+        );
+    }
+    Ok(())
+}
+
+/// Type-2 clusters (renamed identifiers inside the bodies) are refused:
+/// the effective spans are not byte-equivalent
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1) — they belong to
+/// [AUTOFIX-MERGE], not to this action.
+#[test]
+fn type2_renamed_identifiers_refused() -> Result<()> {
+    assert_no_plan("csharp-extract-type2", "RateMath.cs")
+}
+
+/// Cross-file identical definitions are refused (rule 3) — they belong
+/// to [AUTOFIX-CONSOLIDATE].
+#[test]
+fn cross_file_occurrences_refused() -> Result<()> {
+    assert_no_plan("csharp-extract-crossfile", "InvoiceTotals.cs")?;
+    assert_no_plan("csharp-extract-crossfile", "ReceiptTotals.cs")
+}
+
+/// Same-file occurrences in two different classes are refused (rule 4:
+/// shared enclosing parent).
+#[test]
+fn cross_class_occurrences_refused() -> Result<()> {
+    assert_no_plan("csharp-extract-crossclass", "Totals.cs")
+}
+
+/// Builds a synthetic cluster over the positive fixture with full
+/// control of the precondition-relevant fields.
+fn synthetic_cluster(occurrences: Vec<ReportOccurrence>, bucket: &str) -> ReportCluster {
+    ReportCluster {
+        id: "abcdef0123456789".to_owned(),
+        weight: 1.0,
+        size: occurrences.len(),
+        canonical_node_count: 40,
+        signals: ReportSignals {
+            structural: 1.0,
+            token_jaccard: 1.0,
+            embedding_cos: 0.0,
+            fused: 1.0,
+        },
+        bucket: bucket.to_owned(),
+        category: "logic".to_owned(),
+        occurrences_total: occurrences.len(),
+        occurrences,
+        occurrences_truncated: false,
+        summary: String::new(),
+        interpretation: String::new(),
+    }
+}
+
+/// One occurrence over `[start, end)` of the positive fixture file.
+fn occurrence(start: usize, end: usize, hidden: bool) -> ReportOccurrence {
+    ReportOccurrence {
+        path: PathBuf::from("InvoiceMath.cs"),
+        start_byte: start,
+        end_byte: end,
+        start_line: 0,
+        end_line: 0,
+        hidden,
+    }
+}
+
+/// A byte span inside the fixture source.
+type Span = (usize, usize);
+
+/// The two byte spans of `needle` in the positive fixture source.
+fn both_spans(source: &str, needle: &str) -> Result<(Span, Span)> {
+    let first = source.find(needle).context("first needle")?;
+    let resume = first.saturating_add(needle.len());
+    let second = source
+        .get(resume..)
+        .and_then(|rest| rest.find(needle))
+        .map(|offset| resume.saturating_add(offset))
+        .context("second needle")?;
+    Ok((
+        (first, first.saturating_add(needle.len())),
+        (second, second.saturating_add(needle.len())),
+    ))
+}
+
+/// The positive fixture's source plus its two full statement-run spans
+/// (`var total…` through `return total;`).
+fn positive_fixture() -> Result<(Vec<u8>, Span, Span)> {
+    let source = fs::read_to_string(fixture("csharp-extract-type1").join("InvoiceMath.cs"))?;
+    let (first_start, _) = both_spans(&source, "var total = 0;")?;
+    let (_, second_start) = both_spans(&source, "var total = 0;")?;
+    let ((_, first_end), (_, second_end)) = both_spans(&source, "return total;")?;
+    Ok((
+        source.clone().into_bytes(),
+        (first_start.0, first_end),
+        (second_start.0, second_end),
+    ))
+}
+
+/// Runs `compute_plan` on a synthetic cluster and asserts refusal.
+fn assert_refused(cluster: &ReportCluster, source: &[u8], label: &str) -> Result<()> {
+    let parser = CSharpParser::new();
+    let plan = refactor::compute_plan(cluster, source, &parser)
+        .map_err(|error| anyhow!("{label}: unexpected error {error}"))?;
+    ensure!(plan.is_none(), "{label}: cluster must be refused");
+    Ok(())
+}
+
+/// Rule 2: a single-occurrence cluster is refused.
+#[test]
+fn single_occurrence_refused() -> Result<()> {
+    let (source, first, _) = positive_fixture()?;
+    let cluster = synthetic_cluster(vec![occurrence(first.0, first.1, false)], "identical");
+    assert_refused(&cluster, &source, "single occurrence")
+}
+
+/// A wire-truncated cluster is refused — an unseen occurrence could
+/// not be rewritten atomically ([AUTOFIX-EXTRACT-WORKSPACE-EDIT]).
+#[test]
+fn truncated_cluster_refused() -> Result<()> {
+    let (source, first, second) = positive_fixture()?;
+    let mut cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(second.0, second.1, false),
+        ],
+        "identical",
+    );
+    cluster.occurrences_truncated = true;
+    assert_refused(&cluster, &source, "truncated cluster")
+}
+
+/// Hidden occurrences do not count toward rule 2's minimum.
+#[test]
+fn hidden_occurrence_refused() -> Result<()> {
+    let (source, first, second) = positive_fixture()?;
+    let cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(second.0, second.1, true),
+        ],
+        "identical",
+    );
+    assert_refused(&cluster, &source, "hidden second occurrence")
+}
+
+/// Overlapping same-file ranges can not be rewritten independently.
+#[test]
+fn overlapping_ranges_refused() -> Result<()> {
+    let (source, first, _) = positive_fixture()?;
+    let cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(first.0 + 10, first.1 + 10, false),
+        ],
+        "identical",
+    );
+    assert_refused(&cluster, &source, "overlapping ranges")
+}
+
+/// Rule 5: mid-expression ranges are silently skipped.
+#[test]
+fn mid_expression_refused() -> Result<()> {
+    let (source, ..) = positive_fixture()?;
+    let text = String::from_utf8(source.clone())?;
+    let (first, second) = both_spans(&text, "amount * taxRate / 100")?;
+    let cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(second.0, second.1, false),
+        ],
+        "identical",
+    );
+    assert_refused(&cluster, &source, "mid-expression range")
+}
+
+/// Non-exact buckets (weak LSH / semantic) never reach the slice proof.
+#[test]
+fn loose_bucket_refused() -> Result<()> {
+    let (source, first, second) = positive_fixture()?;
+    let cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(second.0, second.1, false),
+        ],
+        "loosely_similar",
+    );
+    assert_refused(&cluster, &source, "loosely_similar bucket")
+}
+
+/// Languages without refactor tables (F# today) are refused at the
+/// scope-kind gate — the trait default returns `None`.
+#[test]
+fn language_without_tables_refused() -> Result<()> {
+    let (source, first, second) = positive_fixture()?;
+    let cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(second.0, second.1, false),
+        ],
+        "identical",
+    );
+    let parser = deslop_core::lang::fsharp::FSharpParser::new();
+    ensure!(
+        parser.extract_scope_kinds().is_none(),
+        "F# has no refactor tables yet"
+    );
+    let plan = refactor::compute_plan(&cluster, &source, &parser)?;
+    ensure!(plan.is_none(), "table-less language must be refused");
+    Ok(())
+}
+
+/// Rule 4: a statement block with no function-like ancestor (a Rust
+/// `const` initializer block) is refused — Rust does not allow module
+/// top-level statement runs.
+#[test]
+fn block_without_enclosing_function_refused() -> Result<()> {
+    let source = b"const A: usize = { let seed = 2; seed * 3 };\nconst B: usize = { let seed = 2; seed * 3 };\n";
+    let text = std::str::from_utf8(source)?;
+    let first = text.find('{').context("first block")?;
+    let first_end = text
+        .find('}')
+        .map(|i| i.saturating_add(1))
+        .context("first close")?;
+    let resume = first_end;
+    let second = text
+        .get(resume..)
+        .and_then(|rest| rest.find('{'))
+        .map(|i| resume.saturating_add(i))
+        .context("second block")?;
+    let second_end = text
+        .get(resume..)
+        .and_then(|rest| rest.find('}'))
+        .map(|i| resume.saturating_add(i).saturating_add(1))
+        .context("second close")?;
+    let mut cluster = synthetic_cluster(
+        vec![
+            occurrence(first, first_end, false),
+            occurrence(second, second_end, false),
+        ],
+        "identical",
+    );
+    cluster
+        .occurrences
+        .iter_mut()
+        .for_each(|entry| entry.path = PathBuf::from("consts.rs"));
+    let parser = deslop_core::lang::rust_lang::RustParser::new();
+    let plan = refactor::compute_plan(&cluster, source, &parser)
+        .map_err(|error| anyhow!("unexpected error {error}"))?;
+    ensure!(
+        plan.is_none(),
+        "const-initializer blocks have no enclosing function and must be refused"
+    );
+    Ok(())
+}
+
+/// The `LanguageParser` refactor defaults ([AUTOFIX-EXTRACT-DEPENDENCIES]):
+/// a language without overrides recognises nothing, emits nothing, and
+/// merges nothing — so no action is ever offered for it.
+#[test]
+fn trait_defaults_refuse_everything() -> Result<()> {
+    let parser = deslop_core::lang::fsharp::FSharpParser::new();
+    ensure!(
+        parser.binding_node_kinds().is_empty(),
+        "default binding table is empty"
+    );
+    ensure!(
+        parser
+            .identifier_reference_kinds()
+            .reference_kinds
+            .is_empty(),
+        "default reference table recognises nothing"
+    );
+    ensure!(parser.extract_scope_kinds().is_none(), "no scope kinds");
+    ensure!(parser.merge_tables().is_none(), "no merge tables");
+
+    let source = b"let add x = x + 1\n";
+    let tree = deslop_core::lang::shared::parse_source("fsharp", &parser.grammar(), source)
+        .map_err(|error| anyhow!("parse: {error}"))?;
+    ensure!(
+        parser
+            .declared_type_of(tree.root_node(), "x", source)
+            .is_none(),
+        "default type lookup finds nothing"
+    );
+    let scope = deslop_core::refactor::preconditions::OccurrenceScope {
+        run: vec![tree.root_node()],
+        function: None,
+        shared_parent: tree.root_node(),
+    };
+    let scopes = vec![scope];
+    let request = deslop_core::refactor::emit::EmitRequest {
+        source,
+        cluster_id: "abcdef0123456789",
+        free_variables: &[],
+        scopes: &scopes,
+    };
+    ensure!(
+        parser.emit_extract_method(&request).is_none(),
+        "default extract emitter refuses"
+    );
+    let merge_request = deslop_core::refactor::merge::MergeEmitRequest {
+        source,
+        cluster_id: "abcdef0123456789",
+        helper_body: "",
+        parameters: &[],
+        scopes: &scopes,
+    };
+    ensure!(
+        parser.emit_merge_method(&merge_request).is_none(),
+        "default merge emitter refuses"
+    );
+    Ok(())
+}

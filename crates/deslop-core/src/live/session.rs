@@ -326,6 +326,14 @@ impl AnalysisSession {
         Arc::clone(&self.latest_report)
     }
 
+    /// In-process view of the installed pipeline, used by the merge
+    /// engine's AST accessors ([AUTOFIX-MERGE]) — `None` during the
+    /// cache-seed window. Never serialised to the wire.
+    #[must_use]
+    pub fn pipeline(&self) -> Option<&PipelineSession> {
+        self.pipeline.as_ref()
+    }
+
     /// Swaps in `report` and republishes it to the lock-free snapshot in
     /// lock-step ([LSP-NON-INTERFERENCE]). Every mutation that changes
     /// `latest_report` routes through here so the snapshot the LSP reads

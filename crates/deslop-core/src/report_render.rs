@@ -488,7 +488,7 @@ fn equivalent_method_sets(method_sets: &[Vec<Vec<u8>>]) -> bool {
 /// Collapses all runs of ASCII whitespace in `bytes` to a single space and
 /// trims leading / trailing whitespace. Used to compare source slices
 /// without being fooled by formatting differences.
-fn canonicalise_whitespace(bytes: &[u8]) -> Vec<u8> {
+pub(crate) fn canonicalise_whitespace(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     let mut last_was_space = true;
     for &byte in bytes {

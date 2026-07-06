@@ -143,6 +143,16 @@ pub trait McpBackend: Send + Sync {
     /// the current report.
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError>;
 
+    /// Computes the mechanical merge plan for a cluster
+    /// ([AUTOFIX-MERGE-MCP]). Read-only; refusals arrive inside the
+    /// plan as `ai_or_human` verdicts.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BackendError::UnknownCluster`] when `id` is not in
+    /// the current report.
+    fn merge_plan(&self, id: &str) -> Result<deslop_core::wire_generated::MergePlan, BackendError>;
+
     /// Enumerates embedding models available on the host. Returns
     /// the models reported by every registered production provider
     /// (today: `ollama` only). An unreachable Ollama is not an error —

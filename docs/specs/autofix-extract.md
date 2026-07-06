@@ -41,11 +41,13 @@ User-facing copy on the action: *"Extract identical code to shared method"*. Cav
 
 For a cluster `C` to be eligible, **all** of these must hold:
 
-1. `C.kind == ClusterKind::Identical` **and** `C.kind_detail == Type1` — the post-#42 split that distinguishes true Type-1 (raw token bytes match) from Type-2 (normalised tokens match). Without the split this action is unsafe to offer; see [AUTOFIX-EXTRACT-DEPENDENCIES].
+1. **The effective rewrite spans are proven byte-equivalent.** The cluster must sit in an exact-structural bucket (`Identical`, `NearlyIdentical`, or `StructuralOnly`), and the refactor layer verifies whitespace-canonicalised byte-equivalence on the **effective spans** it will rewrite (rule 5) before offering the action — the same proof `[CLONE-BUCKETS-IDENTICAL]` uses for the `Identical` bucket, re-run in-process on the exact bytes. The bucket alone is *not* sufficient: the pipeline's nested-cluster collapse (`[PIPELINE-CLUSTER-EXACT]` issue #50) keeps the *outer* view of a duplicated region, so the flagship case — two byte-identical method bodies behind differently-named signatures — always surfaces as a method-level Type-2 cluster, never as an `Identical` one. The slice proof, not the label, is the Type-1 gate. There is no `kind_detail` field; see [AUTOFIX-EXTRACT-DEPENDENCIES].
 2. `C.occurrences.len() ≥ 2`.
 3. Every occurrence resolves to the **same file URI**.
 4. Every occurrence's enclosing scope is a method/function (C#: method / property accessor / local function; Rust: `fn` / `impl fn`; Python: `def` / `async def` / module top-level), and every occurrence shares the **same enclosing parent one level up** (C#: same containing class; Rust: same `impl` block or same module; Python: same containing class or same module).
-5. The block aligns with statement boundaries in the parse tree — start and end byte ranges sit between statements, not mid-expression. Mid-expression occurrences are silently skipped.
+5. The block aligns with statement boundaries in the parse tree — start and end byte ranges sit between statements, not mid-expression. Mid-expression occurrences are silently skipped. Two alignments are accepted, producing the **effective spans** rule 1 verifies:
+   - The occurrence covers a contiguous run of statements (or a whole statement block) — the effective span is that run.
+   - The occurrence is exactly one whole function/method declaration whose body is a statement block — the effective span **narrows to the body's statements**. This is how the renamed-methods-with-identical-bodies case (the #42 motivating example) extracts: the signatures differ and stay untouched; only the byte-equivalent bodies are rewritten as calls.
 
 If any precondition fails, no action is offered for the cluster. Failures are silent — there is no diagnostic.
 
@@ -76,7 +78,7 @@ Per-language node-kind tables (binding-introducing nodes, identifier-reference n
 
 A new method declaration plus N call-site rewrites. Per-language emitters produce the textual form; the LSP layer assembles the `WorkspaceEdit`.
 
-**Method-name strategy:** derive a deterministic name from the cluster id — `ExtractedFromCluster_<6-char-prefix>` (C# / Rust pascal-ish via the cluster id), `extracted_from_cluster_<6-char-prefix>` (Python). Stable across runs so re-applying the action on the same cluster doesn't churn names; required for golden tests.
+**Method-name strategy:** derive a deterministic name from the cluster id — `ExtractedFromCluster_<6-char-prefix>` (C#, PascalCase per convention), `extracted_from_cluster_<6-char-prefix>` (Rust and Python, snake_case — Pascal-cased Rust functions would trip `non_snake_case` warnings in the user's build). Stable across runs so re-applying the action on the same cluster doesn't churn names; required for golden tests.
 
 ### [AUTOFIX-EXTRACT-EMITTER-CSHARP]
 
@@ -162,6 +164,8 @@ The user is told upfront on the action title's caveat line and in this spec sect
 - Captured `this` / instance-state usage — extracted method is `static` and won't see instance members.
 - Free variables whose runtime types differ across occurrences but happen to share the same name (rare for true Type-1).
 - Return-type inference is best-effort — `object` (C#), `DeslopTodo` (Rust), unannotated (Python).
+- Call-target identifiers (`Log(x)`) are assumed to resolve from the helper's destination in C# and Rust — same class / same module by the preconditions — so they are not parameterised; a local delegate or closure in call position needs a manual parameter. Python keeps call targets as parameters (no compiler backstop, so behaviour preservation wins over cosmetics).
+- Rust implicit format-args (`format!("{x}")`) capture locals invisibly to the syntactic walk — a variable used *only* inside a format string is missed as a parameter and surfaces as a compile error.
 
 The action is **never the only suggested fix** for a duplicate. The diagnostic, the hover, and the existing manual workflow remain. This is a power-user shortcut, not a replacement for review.
 
@@ -183,7 +187,7 @@ Goldens live under `crates/deslop-lsp/tests/fixtures/code_action/`. Test referen
 
 ## [AUTOFIX-EXTRACT-DEPENDENCIES] Hard prerequisites
 
-1. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42)** — bucket must distinguish true Type-1 from Type-2. Without the split, this action would silently fire on Type-2 clusters and produce structurally-wrong refactors at every site (not just type-wrong — the call-site argument lists would not match the method signature, because Type-2 free-var names differ across occurrences). Implementation is **blocked** on #42.
+1. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The bucket distinguishes true Type-1 from Type-2 without a new field: `report_bucket_kind` demotes any signal-`Identical` cluster whose member slices are not whitespace-canonicalised byte-equivalent to `NearlyIdentical`, and upgrades proven byte-equivalent structural clusters to `Identical` (`[CLONE-BUCKETS-IDENTICAL]`, issues #66/#232). Without that precedent this action would have silently fired on Type-2 clusters and produced structurally-wrong refactors at every site (the call-site argument lists would not match the method signature, because Type-2 free-var names differ across occurrences). The verbatim action does not consume the label directly: the pipeline's nested-cluster collapse (`[PIPELINE-CLUSTER-EXACT]` #50) keeps the outer Type-2 view of a duplicated region, so the refactor layer runs the same whitespace-canonicalised byte-equivalence proof itself on the effective rewrite spans ([AUTOFIX-EXTRACT-PRECONDITIONS] rules 1 and 5) — every span the action rewrites is proven byte-equal before the action is offered.
 2. **`LanguageParser` trait extension** — new methods for free-variable computation (`binding_node_kinds`, `identifier_reference_kinds`) and for emitting language-shaped method declarations (`emit_extract_method`). The trait is the single extension point for languages; this work belongs there.
 
 ---
@@ -215,6 +219,8 @@ The 50+-call-site case: N occurrences sharing one skeleton, differing only in a 
 ```
 
 Unconstrained Type-3 (statements added/removed, control-flow drift) and Type-4 route to AI: Bellon shows experts disagree on most Type-3 candidates and Type-3 similarity is non-transitive — judgement, not auto-merge.
+
+**v1 gate constraints (implementation status):** the mechanical path additionally refuses — with a reason — when occurrences span more than one file or more than one shared scope (cross-file merges wait for the [AUTOFIX-CONSOLIDATE] import machinery), when a hole would need a deferred thunk (value parameters only in v1; timing-risky holes refuse rather than thunk), and for Python always (strict-typing detection via `session-config` is not yet wired, and [AUTOFIX-ZERO-RISK] forbids the merge without it). The gate also runs a **residual byte proof**: with every hole cut out, all sites' remaining bytes must be whitespace-canonically equal — operators and comments are invisible to the normalised skeleton, and only this byte-level check rules their drift out. Free variables of the merged block become leading typed context parameters, typed by the same declared-type lookup as holes; an unresolvable type refuses.
 
 ### [AUTOFIX-MERGE-ANTIUNIFY] The template and the per-site arguments
 
@@ -281,6 +287,8 @@ This is the one mechanical action needing **semantic depth** beyond tree-sitter:
 
 REFUSE unless all hold: every duplicate definition is reference-resolvable; consolidation introduces no name collision at the canonical location; no visibility/orphan-rule break (Rust `pub`/crate visibility, trait orphan rule); every dependent reference is in the change set or reachable via the workspace index. The type-safety backstop applies — in typed languages a missed/incorrect import is an immediate compile error (Python only under strict typing).
 
+**v1 resolver scope (implementation status):** Rust sibling modules only — whole top-level `fn` definitions, byte-equivalent including the signature, canonical already visible (`pub`), duplicates in the canonical file's directory, one definition of the name per duplicate file. The rewrite is `use crate::<canonical module>::<name>;` plus the definition deletion; a duplicate file that would become empty refuses (deleting it needs the `mod` declaration rewritten — the `DeleteFile` branch of [AUTOFIX-CONSOLIDATE-EDIT] lands with the full resolver). All other languages refuse with a reason. The consolidation E2E compiles the rewritten crate with `rustc`.
+
 ### [AUTOFIX-CONSOLIDATE-EDIT] The WorkspaceEdit
 
 `documentChanges` mixing resource operations and text edits, executed in array order: a `DeleteFile` for any duplicate file that becomes empty (else a `TextDocumentEdit` deleting the definition), plus one `TextDocumentEdit` per dependent rewriting its import/reference to the canonical symbol. Versioned identifiers; `changeAnnotations` for the preview tree; `failureHandling: transactional`; single undo label.
@@ -291,9 +299,9 @@ The full surface of behaviour-preserving, no-AI deduplication actions and their 
 
 | Fix | Mechanism | Depth | Status |
 |---|---|---|---|
-| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | specced; blocked on #42 |
-| Call-site merge ([AUTOFIX-MERGE]) | anti-unification + default params | binding + types | this spec |
-| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | this spec |
+| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`) |
+| Call-site merge ([AUTOFIX-MERGE]) | anti-unification + default params | binding + types | **implemented** (C#, Rust, Dart; `merge-plan` MCP tool + LSP `refactor.rewrite`; Python refuses pending strict-typing detection) |
+| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | **implemented (v1: Rust sibling modules)**; other languages refuse with a reason |
 | Redirect to existing canonical | a fragment duplicating an *existing* named helper → replace with a call to it (Fowler *Replace Inline Code with Function Call*) | binding + types | spec'd here; after [AUTOFIX-MERGE] |
 | Consolidate duplicate constant/literal | repeated literal → one shared `const`/`static`, refs updated | trivial | catalog (degenerate parameterise-by-constant) |
 | Pull Up Method / Form Template Method | now-identical sibling methods → superclass; differing steps overridable (Hotta/Higo PDG; Fowler) | class hierarchy | catalog (OO-only; needs hierarchy model) |
@@ -386,7 +394,7 @@ The LSP **does not** expose this as a `textDocument/codeAction` in v1 — code a
 
 For a cluster `C` to be eligible:
 
-1. `C.kind == ClusterKind::Identical` with `kind_detail == Type2` (post-#42), **or** `C.kind == ClusterKind::NearlyIdentical` (Type-3) **and** every occurrence's free-variable list agrees on slot count and slot source-position.
+1. The cluster is a renamed Type-2 — post-#42 these surface as `ClusterKind::NearlyIdentical` with `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99` but non-byte-equivalent slices (`[CLONE-BUCKETS-IDENTICAL]` demotion) — **or** a Type-3 `ClusterKind::NearlyIdentical`; in both cases every occurrence's free-variable list must agree on slot count and slot source-position.
 2. Same single-file constraint as Type-1 ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 3).
 3. Same single-class / single-module constraint ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 4).
 4. **Slot alignment succeeded** — every occurrence agrees on the count and source-position of free-variable slots. Type-3 clusters where occurrences differ in free-var arity are skipped (the scaffold is undefined).

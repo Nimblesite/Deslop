@@ -58,6 +58,20 @@ pub struct NormalizedNode {
 }
 
 impl NormalizedNode {
+    /// Descends to the smallest subtree whose byte range contains
+    /// `range` — the merge engine's occurrence-narrowing primitive
+    /// ([AUTOFIX-MERGE]).
+    #[must_use]
+    pub fn smallest_covering(&self, range: ByteRange) -> Option<&Self> {
+        if self.byte_range.start > range.start || self.byte_range.end < range.end {
+            return None;
+        }
+        self.children
+            .iter()
+            .find_map(|child| child.smallest_covering(range))
+            .or(Some(self))
+    }
+
     /// Total number of nodes in this subtree, including `self`. Computed
     /// bottom-up by the caller and cached alongside the fingerprint.
     #[must_use]
