@@ -22,6 +22,7 @@ import {
   BinarySettings,
 } from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
+import { wireMcpRegistration } from "./mcpRegistration";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
 import {
@@ -53,6 +54,7 @@ import {
 let client: LanguageClient | undefined;
 let resolvedLsp: ResolvedBinary | undefined;
 let resolvedMcp: ResolvedBinary | undefined;
+let mcpDefinition: vscode.McpStdioServerDefinition | undefined;
 let activeReportStore: ReportStore | undefined;
 
 const REPORT_READY_CONTEXT = "deslop.reportReady";
@@ -83,6 +85,7 @@ export interface ExtensionApi {
   readonly client: LanguageClient | undefined;
   readonly resolvedLsp: ResolvedBinary | undefined;
   readonly resolvedMcp: ResolvedBinary | undefined;
+  readonly mcpDefinition: vscode.McpStdioServerDefinition | undefined;
   readonly reportStore: ReportStore | undefined;
 }
 
@@ -209,6 +212,10 @@ export async function activate(
     return currentApi();
   }
 
+  // [VSIX-MCP-INTEGRATION] Register the bundled MCP with VS Code's MCP API
+  // so agent hosts launch it by absolute path, never a $PATH lookup (#267).
+  mcpDefinition = wireMcpRegistration(context, resolvedMcp, resolveWorkspaceRoot());
+
   context.subscriptions.push(wireDirtyDocuments(reportStore));
 
   const decorations = new DecorationManager(reportStore);
@@ -274,6 +281,9 @@ export function currentApi(): ExtensionApi {
     },
     get resolvedMcp() {
       return resolvedMcp;
+    },
+    get mcpDefinition() {
+      return mcpDefinition;
     },
     get reportStore() {
       return activeReportStore;
