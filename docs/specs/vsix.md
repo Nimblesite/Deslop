@@ -426,7 +426,7 @@ The extension posts VS Code notifications sparingly:
 
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 
-VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the VSIX's `contributes.mcpServers` manifest entry. The VSIX registers a single server named `deslop` with the same workspace root the LSP uses. The contributed command path must resolve to one of the manifest-approved artifacts; package verification fails if the contribution and `shipwright.json` drift. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
+VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the extension's `contributes.mcpServerDefinitionProviders` entry: activation calls `vscode.lm.registerMcpServerDefinitionProvider` with a single stdio server named `deslop` targeting the same workspace root the LSP uses (`--root`). The registered command is the absolute path produced by the manifest-driven resolver — the `deslop.mcpPath` override or the bundled binary, per `shipwright.json` sources — never a bare `$PATH` name, so the contribution cannot drift from the manifest. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.
 
 Users who run an agent *outside* VS Code (e.g. Claude Code CLI in a terminal) can still wire the MCP up manually via the agent's own config. The VSIX bundling is convenience, not a lock-in.
 
