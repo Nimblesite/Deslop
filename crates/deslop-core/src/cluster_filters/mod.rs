@@ -559,7 +559,7 @@ pub(super) fn node_contains_identifier(node: Node<'_>, source: &[u8], needle: &[
 
 /// Walks `root` looking for the smallest descendant of `kinds` whose
 /// byte range encloses `range`.
-pub(super) fn enclosing_kind<'tree>(
+pub(crate) fn enclosing_kind<'tree>(
     root: Node<'tree>,
     range: ByteRange,
     kinds: &[&str],

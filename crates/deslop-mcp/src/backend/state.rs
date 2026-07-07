@@ -266,24 +266,19 @@ impl McpBackend for LiveBackend {
     }
 
     fn cluster_by_id(&self, id: &str) -> Result<ReportCluster, BackendError> {
-        let result = match ipc_call(&self.root, "cluster/byId", &json!({ "id": id })) {
-            Ok(value) => value,
-            // The LSP surfaces unknown ids as a JSON-RPC error. The
-            // generic IPC client maps every RPC error to
-            // `StateFileCorrupt`, but the MCP wire contract requires
-            // `UnknownCluster` so the agent gets a stable code
-            // ([MCP-TESTING]).
-            Err(BackendError::StateFileCorrupt(message))
-                if message.contains("unknown cluster id")
-                    || message.contains("no cluster with id") =>
-            {
-                return Err(BackendError::UnknownCluster(id.to_owned()));
-            }
-            Err(error) => return Err(error),
-        };
+        let result = cluster_scoped_ipc(&self.root, "cluster/byId", id)?;
         let cluster: ReportCluster = serde_json::from_value(result)
             .map_err(|err| BackendError::StateFileCorrupt(format!("ipc cluster parse: {err}")))?;
         Ok(cluster)
+    }
+
+    fn merge_plan(&self, id: &str) -> Result<deslop_core::wire_generated::MergePlan, BackendError> {
+        let result = cluster_scoped_ipc(&self.root, "merge/plan", id)?;
+        let plan: deslop_core::wire_generated::MergePlan =
+            serde_json::from_value(result).map_err(|err| {
+                BackendError::StateFileCorrupt(format!("ipc merge-plan parse: {err}"))
+            })?;
+        Ok(plan)
     }
 
     fn list_embedding_models(&self) -> Result<Vec<WireEmbeddingModelInfo>, BackendError> {
@@ -405,5 +400,25 @@ fn empty_rescan_progress(generation: u64) -> RescanProgress {
     RescanProgress {
         generation,
         summary: ChangeSummary::default(),
+    }
+}
+
+/// Issues a cluster-scoped IPC call, mapping the LSP's unknown-id
+/// JSON-RPC error onto the stable `UnknownCluster` code — the generic
+/// IPC client folds every RPC error into `StateFileCorrupt`, but the
+/// MCP wire contract requires the stable code ([MCP-TESTING]).
+fn cluster_scoped_ipc(
+    root: &std::path::Path,
+    method: &str,
+    id: &str,
+) -> Result<serde_json::Value, BackendError> {
+    match ipc_call(root, method, &json!({ "id": id })) {
+        Ok(value) => Ok(value),
+        Err(BackendError::StateFileCorrupt(message))
+            if message.contains("unknown cluster id") || message.contains("no cluster with id") =>
+        {
+            Err(BackendError::UnknownCluster(id.to_owned()))
+        }
+        Err(error) => Err(error),
     }
 }

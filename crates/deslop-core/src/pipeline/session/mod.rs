@@ -8,6 +8,7 @@
 //! optional-embedding clustering pipeline. The embedding + fingerprint
 //! caches on disk are shared with the batch path ([PIPELINE-INCREMENTAL]).
 
+mod ast_access;
 mod change;
 mod render;
 

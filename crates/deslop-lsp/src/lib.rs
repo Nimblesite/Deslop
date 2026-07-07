@@ -9,6 +9,7 @@
 pub mod app;
 pub mod backend;
 mod cache_seed;
+pub mod code_action;
 pub mod code_lens;
 pub mod commands;
 pub mod custom_methods;

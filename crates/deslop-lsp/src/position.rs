@@ -1,11 +1,11 @@
-//! Byte offset ↔ LSP `Position` conversion ([LSP-DIAGNOSTICS]).
+//! Byte offset ↔ LSP `Position` adapters ([LSP-DIAGNOSTICS]).
 //!
-//! The LSP protocol encodes positions as `(line, character)` with
-//! `character` counting UTF-16 code units from the last newline per
-//! the LSP 3.17 spec. This module centralises that arithmetic so the
-//! additive editor surfaces (diagnostics, code-lens) project byte
-//! ranges onto the same line grid.
+//! The arithmetic lives in `deslop_core::refactor::position` (the
+//! merge engine renders wire `WorkspaceEdit`s with the same rules);
+//! this module only projects [`LineCol`] onto
+//! `tower_lsp::lsp_types::Position` for the editor surfaces.
 
+use deslop_core::refactor::position::{byte_for_line_col, line_col_for_byte, LineCol};
 use tower_lsp::lsp_types::Position;
 
 /// Returns the zero-indexed `Position` corresponding to `byte_offset`
@@ -13,19 +13,27 @@ use tower_lsp::lsp_types::Position;
 /// position of the final line.
 #[must_use]
 pub fn position_for_byte(source: &str, byte_offset: usize) -> Position {
-    let clamped = byte_offset.min(source.len());
-    let prefix = source.get(..clamped).unwrap_or(source);
-    let line_count =
-        u32::try_from(prefix.bytes().filter(|byte| *byte == b'\n').count()).unwrap_or(u32::MAX);
-    let last_line_start = prefix
-        .rfind('\n')
-        .map_or(0, |newline_index| newline_index.saturating_add(1));
-    let last_line_text = prefix.get(last_line_start..).unwrap_or("");
-    let character = u32::try_from(last_line_text.encode_utf16().count()).unwrap_or(u32::MAX);
+    let line_col = line_col_for_byte(source, byte_offset);
     Position {
-        line: line_count,
-        character,
+        line: line_col.line,
+        character: line_col.character,
     }
+}
+
+/// Returns the byte offset corresponding to the zero-indexed LSP
+/// `position` in `source` — the inverse of [`position_for_byte`], with
+/// the same UTF-16 column semantics. Positions past the end of a line
+/// clamp to the line end; lines past the end of `source` clamp to
+/// `source.len()`.
+#[must_use]
+pub fn byte_for_position(source: &str, position: Position) -> usize {
+    byte_for_line_col(
+        source,
+        LineCol {
+            line: position.line,
+            character: position.character,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -33,6 +41,37 @@ pub fn position_for_byte(source: &str, byte_offset: usize) -> Position {
 mod tests {
     use super::*;
     use anyhow::{anyhow, Result};
+
+    #[test]
+    fn byte_for_position_inverts_position_for_byte() {
+        let source = "ab\ncd\u{1F600}ef\ngh";
+        for byte_offset in [0, 1, 3, 4, 12, source.len()] {
+            let position = position_for_byte(source, byte_offset);
+            assert_eq!(
+                byte_for_position(source, position),
+                byte_offset,
+                "round-trip at byte {byte_offset}"
+            );
+        }
+        let past_line_end = Position {
+            line: 0,
+            character: 99,
+        };
+        assert_eq!(
+            byte_for_position(source, past_line_end),
+            2,
+            "columns past the line end clamp to the newline"
+        );
+        let past_last_line = Position {
+            line: 9,
+            character: 0,
+        };
+        assert_eq!(
+            byte_for_position(source, past_last_line),
+            source.len(),
+            "lines past EOF clamp to the source length"
+        );
+    }
 
     #[test]
     fn position_for_byte_covers_newlines_utf16_clamping_and_offsets() -> Result<()> {

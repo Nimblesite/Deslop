@@ -1,0 +1,348 @@
+//! E2E coverage for the verbatim extract-method refactor
+//! ([AUTOFIX-EXTRACT], [AUTOFIX-EXTRACT-FREE-VARS],
+//! [AUTOFIX-EXTRACT-EMITTER-CSHARP], [AUTOFIX-EXTRACT-EMITTER-RUST],
+//! [AUTOFIX-EXTRACT-EMITTER-PYTHON], [AUTOFIX-EXTRACT-TESTING]).
+//!
+//! Drives the real pipeline over fixture workspaces, feeds the ranked
+//! report's clusters to `refactor::compute_plan`, and asserts the
+//! free-variable list, the deterministic method name, and the
+//! fully-applied buffer against golden snapshots shared with the LSP
+//! code-action tests.
+
+mod common;
+
+use std::{fs, path::PathBuf};
+
+use anyhow::{anyhow, ensure, Context, Result};
+use deslop_core::{
+    refactor::{self, ExtractMethodPlan},
+    report::{Report, ReportCluster},
+};
+
+use crate::common::{analyse_refactor_fixture as analyse, fixture, refactor_golden as golden};
+
+/// Returns the best-ranked cluster for which the verbatim extract plan
+/// computes, along with its plan.
+fn first_extract_plan(
+    report: &Report,
+    source: &[u8],
+    file_name: &str,
+) -> Result<(ReportCluster, ExtractMethodPlan)> {
+    let parser = refactor::parser_for_path(std::path::Path::new(file_name))
+        .ok_or_else(|| anyhow!("no parser registered for {file_name}"))?;
+    for cluster in &report.clusters {
+        if let Some(plan) = refactor::compute_plan(cluster, source, parser.as_ref())? {
+            return Ok((cluster.clone(), plan));
+        }
+    }
+    Err(anyhow!(
+        "no cluster in the ranked report produced an extract plan"
+    ))
+}
+
+/// One language's golden scenario: fixture, expected free variables,
+/// expected deterministic name prefix, and the shared golden file.
+struct ExtractCase {
+    /// Fixture directory name under the shared pool.
+    fixture: &'static str,
+    /// Source file inside the fixture.
+    file: &'static str,
+    /// Expected free variables in first-reference order.
+    free_variables: &'static [&'static str],
+    /// Language-shaped helper-name prefix ([AUTOFIX-EXTRACT-EMITTER]).
+    name_prefix: &'static str,
+    /// Golden post-apply buffer shared with the LSP E2E suite.
+    golden: &'static str,
+}
+
+/// Runs one language's end-to-end scenario: pipeline → plan →
+/// free-vars → deterministic name → golden apply.
+fn assert_extract_case(case: &ExtractCase) -> Result<()> {
+    let root = fixture(case.fixture);
+    let source = fs::read(root.join(case.file)).context("fixture source")?;
+    let report = analyse(&root)?;
+    let (cluster, plan) = first_extract_plan(&report, &source, case.file)?;
+
+    ensure!(
+        ["identical", "nearly_identical", "structural_only"].contains(&cluster.bucket.as_str()),
+        "extract plans must come from exact-structural buckets \
+         ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), got bucket {}",
+        cluster.bucket
+    );
+    ensure!(
+        plan.free_variables == case.free_variables,
+        "{}: free variables must be {:?} in first-reference order, got {:?}",
+        case.fixture,
+        case.free_variables,
+        plan.free_variables
+    );
+    let expected_name = format!(
+        "{}{}",
+        case.name_prefix,
+        cluster.id.get(..6).unwrap_or_default()
+    );
+    ensure!(
+        plan.method_name == expected_name,
+        "method name must embed the cluster id prefix: expected {expected_name}, got {}",
+        plan.method_name
+    );
+    ensure!(
+        plan.edits.len() == 3,
+        "one insertion plus two call-site rewrites expected, got {} edits",
+        plan.edits.len()
+    );
+    ensure!(
+        plan.edits
+            .windows(2)
+            .all(|pair| matches!(pair, [left, right] if left.start_byte >= right.start_byte)),
+        "edits must be ordered by descending start byte"
+    );
+
+    let applied = String::from_utf8(plan.apply_to(&source)).context("applied buffer utf8")?;
+    let golden_path = golden(case.golden);
+    if std::env::var_os("DESLOP_BLESS").is_some() {
+        fs::write(&golden_path, &applied).context("blessing golden")?;
+    }
+    let expected = fs::read_to_string(&golden_path)
+        .with_context(|| format!("golden {}", golden_path.display()))?;
+    ensure!(
+        applied == expected,
+        "applied buffer must match golden {}.\n--- applied ---\n{applied}",
+        golden_path.display()
+    );
+    Ok(())
+}
+
+/// [AUTOFIX-EXTRACT-EMITTER-CSHARP]: `private static` helper at the top
+/// of the enclosing class, `object` placeholders, both bodies rewritten.
+#[test]
+fn csharp_type1_cluster_extracts_to_golden() -> Result<()> {
+    assert_extract_case(&ExtractCase {
+        fixture: "csharp-extract-type1",
+        file: "InvoiceMath.cs",
+        free_variables: &["amounts", "taxRate"],
+        name_prefix: "ExtractedFromCluster_",
+        golden: "InvoiceMath.applied.cs",
+    })
+}
+
+/// [AUTOFIX-EXTRACT-EMITTER-RUST]: module-scope free function above the
+/// first occurrence, `DeslopTodo` alias, `snake_case` deterministic name.
+#[test]
+fn rust_type1_cluster_extracts_to_golden() -> Result<()> {
+    assert_extract_case(&ExtractCase {
+        fixture: "rust-extract-type1",
+        file: "metrics.rs",
+        free_variables: &["amounts", "tax_rate"],
+        name_prefix: "extracted_from_cluster_",
+        golden: "metrics.applied.rs",
+    })
+}
+
+/// [AUTOFIX-EXTRACT-EMITTER-PYTHON]: module-scope `def` above the first
+/// occurrence with PEP 8 two-blank-line spacing, bare parameter names.
+#[test]
+fn python_type1_cluster_extracts_to_golden() -> Result<()> {
+    assert_extract_case(&ExtractCase {
+        fixture: "python-extract-type1",
+        file: "metrics.py",
+        free_variables: &["amounts", "tax_rate"],
+        name_prefix: "extracted_from_cluster_",
+        golden: "metrics.applied.py",
+    })
+}
+
+/// [AUTOFIX-EXTRACT-FREE-VARS] on richer C# shapes: lambda frames bind
+/// their parameters, member / call-target / type positions are not
+/// references, `out var` binds, and a return inside a lambda does not
+/// force a value-returning helper (`void` path).
+#[test]
+fn csharp_lambda_and_member_access_free_vars() -> Result<()> {
+    assert_extract_case(&ExtractCase {
+        fixture: "csharp-extract-freevars",
+        file: "OrderFormatter.cs",
+        free_variables: &["orders", "prefix", "Console"],
+        name_prefix: "ExtractedFromCluster_",
+        golden: "OrderFormatter.applied.cs",
+    })
+}
+
+/// [AUTOFIX-EXTRACT-FREE-VARS] on richer Rust shapes: closures bind
+/// their parameters, match arms bind patterns, macro names and paths
+/// are not references, and the helper inserts above the `#[...]`
+/// attribute chain with a semicolon-preserving call.
+#[test]
+fn rust_closure_match_and_attribute_free_vars() -> Result<()> {
+    assert_extract_case(&ExtractCase {
+        fixture: "rust-extract-attrs",
+        file: "recorder.rs",
+        free_variables: &["items", "label"],
+        name_prefix: "extracted_from_cluster_",
+        golden: "recorder.applied.rs",
+    })
+}
+
+/// [AUTOFIX-EXTRACT-PRECONDITIONS] rule 4 module-top-level (Python) +
+/// [AUTOFIX-EXTRACT-FREE-VARS] comprehension scoping: the comprehension
+/// variable binds before its textually-earlier body reads it, and
+/// module-level bodies re-indent one step in the helper.
+#[test]
+fn python_module_level_run_extracts_to_golden() -> Result<()> {
+    assert_extract_case(&ExtractCase {
+        fixture: "python-extract-module",
+        file: "pipeline.py",
+        free_variables: &["values", "BASELINE", "sum", "math", "len", "print"],
+        name_prefix: "extracted_from_cluster_",
+        golden: "pipeline.applied.py",
+    })
+}
+
+/// Determinism ([AUTOFIX-EXTRACT-EMITTER]): recomputing the plan for
+/// the same cluster yields byte-identical edits.
+#[test]
+fn csharp_type1_plan_is_deterministic() -> Result<()> {
+    let root = fixture("csharp-extract-type1");
+    let source = fs::read(root.join("InvoiceMath.cs")).context("fixture source")?;
+    let report = analyse(&root)?;
+    let (_, first) = first_extract_plan(&report, &source, "InvoiceMath.cs")?;
+    let (_, second) = first_extract_plan(&report, &source, "InvoiceMath.cs")?;
+    ensure!(
+        first == second,
+        "same cluster and source must produce identical plans"
+    );
+    Ok(())
+}
+
+/// Builds a synthetic proven-Identical cluster over two spans of the
+/// positive fixture — used to exercise the statement-run alignments
+/// that real pipeline windows do not produce for this fixture.
+fn synthetic_identical_cluster(spans: [(usize, usize); 2]) -> ReportCluster {
+    ReportCluster {
+        id: "abcdef0123456789".to_owned(),
+        weight: 1.0,
+        size: 2,
+        canonical_node_count: 40,
+        signals: deslop_core::report::ReportSignals {
+            structural: 1.0,
+            token_jaccard: 1.0,
+            embedding_cos: 0.0,
+            fused: 1.0,
+        },
+        bucket: "identical".to_owned(),
+        category: "logic".to_owned(),
+        occurrences: spans
+            .iter()
+            .map(|span| deslop_core::report::ReportOccurrence {
+                path: PathBuf::from("InvoiceMath.cs"),
+                start_byte: span.0,
+                end_byte: span.1,
+                start_line: 0,
+                end_line: 0,
+                hidden: false,
+            })
+            .collect(),
+        occurrences_total: 2,
+        occurrences_truncated: false,
+        summary: String::new(),
+        interpretation: String::new(),
+    }
+}
+
+/// Byte offset just past the `\n        }` that closes the `foreach`
+/// block starting at or after `from`.
+fn foreach_block_end(source: &str, from: usize) -> Result<usize> {
+    let closer = "\n        }";
+    source
+        .get(from..)
+        .and_then(|rest| rest.find(closer))
+        .map(|offset| from.saturating_add(offset).saturating_add(closer.len()))
+        .context("foreach block closer")
+}
+
+/// Both occurrences' spans for a needle-anchored region of the C#
+/// fixture, one per duplicated method.
+fn fixture_spans(
+    source: &str,
+    start_needle: &str,
+    end_of: impl Fn(&str, usize) -> Result<usize>,
+) -> Result<[(usize, usize); 2]> {
+    let first_start = source.find(start_needle).context("first start")?;
+    let resume = first_start.saturating_add(start_needle.len());
+    let second_start = source
+        .get(resume..)
+        .and_then(|rest| rest.find(start_needle))
+        .map(|offset| resume.saturating_add(offset))
+        .context("second start")?;
+    Ok([
+        (first_start, end_of(source, first_start)?),
+        (second_start, end_of(source, second_start)?),
+    ])
+}
+
+/// [AUTOFIX-EXTRACT-PRECONDITIONS] rule 5, single-statement alignment:
+/// an occurrence that is exactly one statement node extracts as a
+/// one-statement run.
+#[test]
+fn exact_single_statement_occurrence_extracts() -> Result<()> {
+    let root = fixture("csharp-extract-type1");
+    let source = fs::read_to_string(root.join("InvoiceMath.cs")).context("fixture source")?;
+    let spans = fixture_spans(
+        &source,
+        "foreach (var amount in amounts)",
+        foreach_block_end,
+    )?;
+    let cluster = synthetic_identical_cluster(spans);
+    let parser = refactor::parser_for_path(std::path::Path::new("InvoiceMath.cs"))
+        .context("csharp parser")?;
+    let plan = refactor::compute_plan(&cluster, source.as_bytes(), parser.as_ref())?
+        .context("single-statement occurrence must extract")?;
+    ensure!(
+        plan.free_variables == ["amounts", "taxRate", "total"],
+        "extracting only the loop leaves `total` free (declared outside the run), got {:?}",
+        plan.free_variables
+    );
+    ensure!(plan.edits.len() == 3, "insertion + two rewrites");
+    Ok(())
+}
+
+/// [AUTOFIX-EXTRACT-PRECONDITIONS] rule 5, sibling-run alignment: an
+/// occurrence spanning a contiguous statement window inside a block
+/// extracts that window.
+#[test]
+fn sibling_window_occurrence_extracts() -> Result<()> {
+    let root = fixture("csharp-extract-type1");
+    let source = fs::read_to_string(root.join("InvoiceMath.cs")).context("fixture source")?;
+    let spans = fixture_spans(&source, "var total = 0;", foreach_block_end)?;
+    let cluster = synthetic_identical_cluster(spans);
+    let parser = refactor::parser_for_path(std::path::Path::new("InvoiceMath.cs"))
+        .context("csharp parser")?;
+    let plan = refactor::compute_plan(&cluster, source.as_bytes(), parser.as_ref())?
+        .context("two-statement window must extract")?;
+    ensure!(
+        plan.method_name == "ExtractedFromCluster_abcdef",
+        "deterministic name from the synthetic id, got {}",
+        plan.method_name
+    );
+    Ok(())
+}
+
+/// `apply_to` skips (rather than panics on) an edit whose range lies
+/// outside the buffer — unreachable from `compute_plan`, pinned here
+/// so the guard stays honest.
+#[test]
+fn apply_to_ignores_out_of_range_edits() {
+    let plan = ExtractMethodPlan {
+        method_name: "x".to_owned(),
+        free_variables: Vec::new(),
+        edits: vec![deslop_core::refactor::PlannedEdit {
+            start_byte: 3,
+            end_byte: usize::MAX,
+            new_text: "gone".to_owned(),
+        }],
+    };
+    assert_eq!(
+        plan.apply_to(b"abc"),
+        b"abc",
+        "out-of-range edit is a no-op"
+    );
+}

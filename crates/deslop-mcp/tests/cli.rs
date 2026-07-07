@@ -673,7 +673,7 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
         .iter()
         .filter_map(|tool| tool.get("name").and_then(Value::as_str).map(str::to_owned))
         .collect();
-    assert_eq!(names.len(), 12, "expected 12 tools, got {names:?}");
+    assert_eq!(names.len(), 13, "expected 13 tools, got {names:?}");
     for expected in [
         "top-offenders",
         "rescan",
@@ -684,6 +684,7 @@ fn tools_list_returns_all_tools_with_schemas() -> Result<()> {
         "report-for-range",
         "find-similar",
         "cluster-by-id",
+        "merge-plan",
         "list-embedding-models",
         "set-embedding-model",
         "session-config",

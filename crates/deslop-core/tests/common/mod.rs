@@ -361,3 +361,55 @@ impl ReportFixture {
         })
     }
 }
+
+/// Minimum subtree size shared by the refactor E2E suites — matches
+/// the LSP server default so the same clusters appear on both
+/// surfaces ([AUTOFIX-EXTRACT-TESTING]).
+pub(crate) const REFACTOR_MIN_NODES: u32 = 30;
+
+/// Resolves a golden file under the LSP code-action fixture directory
+/// ([AUTOFIX-EXTRACT-TESTING] golden location), shared with the LSP
+/// E2E suite.
+pub(crate) fn refactor_golden(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../deslop-lsp/tests/fixtures/code_action")
+        .join(name)
+}
+
+/// Runs the full analysis pipeline over a fixture workspace with the
+/// refactor suites' settings (embeddings off, incremental off).
+pub(crate) fn analyse_refactor_fixture(root: &Path) -> Result<deslop_core::report::Report> {
+    deslop_core::run(&deslop_core::PipelineConfig {
+        root: root.to_path_buf(),
+        min_nodes: REFACTOR_MIN_NODES,
+        config_path: None,
+        embedding: refactor_embedding_settings(),
+        incremental: false,
+    })
+    .map_err(|error| anyhow!("pipeline failed: {error}"))
+}
+
+/// Initialises a live pipeline session over a fixture workspace with
+/// the refactor suites' settings.
+pub(crate) fn refactor_pipeline_session(
+    root: &Path,
+) -> Result<(deslop_core::PipelineSession, deslop_core::report::Report)> {
+    deslop_core::PipelineSession::initialise(
+        root.to_path_buf(),
+        REFACTOR_MIN_NODES,
+        false,
+        None,
+        refactor_embedding_settings(),
+    )
+    .map_err(|error| anyhow!("session init failed: {error}"))
+}
+
+/// The refactor suites' embedding policy: off, no provider.
+fn refactor_embedding_settings() -> deslop_core::EmbeddingSettings<'static> {
+    deslop_core::EmbeddingSettings {
+        mode: deslop_core::EmbeddingMode::Off,
+        provider: None,
+        batch_yield: None,
+        progress: None,
+    }
+}

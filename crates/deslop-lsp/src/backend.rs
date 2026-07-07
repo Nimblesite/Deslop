@@ -6,7 +6,7 @@ use deslop_core::{
     },
     live::{
         read_report_snapshot, report_for_file_in, ChangeSummary, EmbeddingProgress,
-        EmbeddingProgressReporter, LiveError, LiveService, ReportChangedNotification,
+        EmbeddingProgressReporter, LiveApi, LiveError, LiveService, ReportChangedNotification,
     },
     report::Report,
 };
@@ -18,7 +18,9 @@ use tokio::sync::Mutex;
 use tower_lsp::{
     jsonrpc::Result as LspResult,
     lsp_types::{
-        CodeLens, CodeLensOptions, CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
+        CodeAction, CodeActionKind, CodeActionOptions, CodeActionParams,
+        CodeActionProviderCapability, CodeActionResponse, CodeLens, CodeLensOptions,
+        CodeLensParams, DiagnosticOptions, DiagnosticServerCapabilities,
         DidChangeConfigurationParams, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
         DidCloseTextDocumentParams, DidOpenTextDocumentParams, DocumentDiagnosticParams,
         DocumentDiagnosticReport, DocumentDiagnosticReportResult, ExecuteCommandParams,
@@ -31,7 +33,7 @@ use tower_lsp::{
 
 use crate::notifications::{EmbeddingProgressNotification, ReportChangedLspNotification};
 use crate::observability::Observability;
-use crate::{code_lens, commands, diagnostics};
+use crate::{code_action, code_lens, commands, diagnostics};
 
 /// User-visible server name advertised in `initialize`.
 pub const SERVER_NAME: &str = "deslop-lsp";
@@ -370,6 +372,20 @@ impl LanguageServer for LspBackend {
                 code_lens_provider: Some(CodeLensOptions {
                     resolve_provider: Some(false),
                 }),
+                // [AUTOFIX-EXTRACT-CODE-ACTION] + [AUTOFIX-MERGE-CODE-ACTION]
+                // The verbatim extract carries its edit inline; the
+                // mechanical merge is offered lazily and resolved on
+                // demand, so resolveProvider is advertised.
+                code_action_provider: Some(CodeActionProviderCapability::Options(
+                    CodeActionOptions {
+                        code_action_kinds: Some(vec![
+                            CodeActionKind::REFACTOR_EXTRACT,
+                            CodeActionKind::REFACTOR_REWRITE,
+                        ]),
+                        work_done_progress_options: WorkDoneProgressOptions::default(),
+                        resolve_provider: Some(true),
+                    },
+                )),
                 execute_command_provider: Some(commands::provider()),
                 ..ServerCapabilities::default()
             },
@@ -451,6 +467,48 @@ impl LanguageServer for LspBackend {
     // additive `ClusterHoverProvider`; canonical navigation is offered
     // by the `deslop.jumpToNextOccurrence` code lens, the
     // `deslop.compareWithCanonical` command, and the Top Offenders tree.
+
+    async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
+        self.observability.record_handler("code_action");
+        let Some(path) = url_to_path(&params.text_document.uri) else {
+            return Ok(None);
+        };
+        // [AUTOFIX-EXTRACT-CODE-ACTION] The action is computed against
+        // the same on-disk state the watcher-driven report describes;
+        // a stale buffer makes the editor reject the apply and the
+        // action is re-offered on the next compute cycle
+        // ([AUTOFIX-EXTRACT-WORKSPACE-EDIT]).
+        let Ok(source) = std::fs::read(&path) else {
+            return Ok(None);
+        };
+        // [LSP-NON-INTERFERENCE-NONBLOCKING] Lock-free snapshot read —
+        // never the session mutex.
+        let report = read_report_snapshot(&self.report_snapshot);
+        let actions = code_action::build_for_range(
+            &report,
+            &path,
+            &params.text_document.uri,
+            &source,
+            params.range,
+        );
+        Ok((!actions.is_empty()).then_some(actions))
+    }
+
+    async fn code_action_resolve(&self, action: CodeAction) -> LspResult<CodeAction> {
+        self.observability.record_handler("code_action_resolve");
+        // [AUTOFIX-MERGE-CODE-ACTION] step 2: only rewrite offers carry
+        // a cluster id; anything else resolves to itself.
+        let Some(cluster_id) = code_action::offered_cluster_id(&action) else {
+            return Ok(action);
+        };
+        match self.service.merge_plan(&cluster_id).await {
+            Ok(plan) => Ok(code_action::resolved_action(action, &plan)),
+            Err(error) => {
+                tracing::warn!(%cluster_id, %error, "merge plan resolution failed");
+                Ok(action)
+            }
+        }
+    }
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         let Some(path) = url_to_path(&params.text_document.uri) else {

@@ -13,7 +13,7 @@ Non-goals: Type-2 via LSP `codeAction` (synchronous; AI round-trip is not), AI-g
 ## Hard dependencies
 
 1. **Type-1 path** ([autofix-extract-method-plan.md](autofix-extract-method-plan.md)) ships first. The slot-substitution layer extends the same emitter rather than forking it.
-2. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42)** — Type-1 / Type-2 split must exist; the AI path eligibility check ([AUTOFIX-EXTRACT-AI-PRECONDITIONS]) reads `kind_detail`.
+2. **Issue [#42](https://github.com/Nimblesite/Deslop/issues/42) — shipped** (PR #63). The Type-1 / Type-2 split is the `[CLONE-BUCKETS-IDENTICAL]` byte-equivalence routing (no `kind_detail` field); the AI path detects renamed Type-2 as `NearlyIdentical` with `structural ≥ 0.99 ∧ token_jaccard ≥ 0.99` and non-byte-equivalent slices ([AUTOFIX-EXTRACT-AI-PRECONDITIONS]).
 3. `LanguageParser` slot-alignment method — takes N parse subtrees, returns `Option<SlotMapping>`. Same single extension point as parsing and Type-1 free-vars.
 
 ## File layout

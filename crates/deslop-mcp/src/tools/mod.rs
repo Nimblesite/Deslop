@@ -22,15 +22,15 @@ mod limits;
 mod schemas;
 
 use handlers::{
-    call_cluster_by_id, call_find_similar, call_list_embedding_models, call_report_for_file,
-    call_report_for_range, call_report_get, call_report_query, call_rescan, call_schema_doc,
-    call_session_config, call_set_embedding_model, call_top_offenders,
+    call_cluster_by_id, call_find_similar, call_list_embedding_models, call_merge_plan,
+    call_report_for_file, call_report_for_range, call_report_get, call_report_query, call_rescan,
+    call_schema_doc, call_session_config, call_set_embedding_model, call_top_offenders,
 };
 use limits::cap_tool_result;
 use schemas::{
-    schema_cluster_by_id, schema_empty, schema_find_similar, schema_report_for_file,
-    schema_report_for_range, schema_report_get, schema_report_query, schema_rescan,
-    schema_set_embedding_model, schema_top_offenders,
+    schema_cluster_by_id, schema_empty, schema_find_similar, schema_merge_plan,
+    schema_report_for_file, schema_report_for_range, schema_report_get, schema_report_query,
+    schema_rescan, schema_set_embedding_model, schema_top_offenders,
 };
 
 /// Static definition of one MCP tool.
@@ -47,7 +47,7 @@ pub struct ToolDefinition {
 /// Static tool registry. `top-offenders` is the primary entry point.
 /// Descriptions stay ≤200 chars (issue #136) — detail belongs in the
 /// `deslop://schema` resource, not the `tools/list` payload.
-const TOOLS: [ToolDefinition; 12] = [
+const TOOLS: [ToolDefinition; 13] = [
     ToolDefinition {
         name: "top-offenders",
         description:
@@ -97,6 +97,11 @@ const TOOLS: [ToolDefinition; 12] = [
         name: "cluster-by-id",
         description: "Full cluster record by stable id (shown in report text and LSP diagnostics).",
         input_schema: schema_cluster_by_id,
+    },
+    ToolDefinition {
+        name: "merge-plan",
+        description: "Mechanical merge for a cluster BEFORE hand-editing: anti-unified helper, typed params, per-site args, mechanical/ai_or_human verdict, WorkspaceEdit. Read-only — never writes files.",
+        input_schema: schema_merge_plan,
     },
     ToolDefinition {
         name: "list-embedding-models",
@@ -221,6 +226,7 @@ fn dispatch_inner(
         "report-for-range" => call_report_for_range(backend, arguments),
         "find-similar" => call_find_similar(backend, arguments),
         "cluster-by-id" => call_cluster_by_id(backend, arguments),
+        "merge-plan" => call_merge_plan(backend, arguments),
         "list-embedding-models" => call_list_embedding_models(backend),
         "set-embedding-model" => call_set_embedding_model(backend, arguments),
         "session-config" => call_session_config(backend),
