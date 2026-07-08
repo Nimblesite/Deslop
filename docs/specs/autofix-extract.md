@@ -54,6 +54,7 @@ For a cluster `C` to be eligible, **all** of these must hold:
    - **Late-binding bodies.** In languages whose function bodies resolve names at *call* time (Python `def`/`lambda` — the language declares these `deferred_frame_kinds`), a body defined anywhere in the horizon — including *before* the span — counts as "after" it: the scan runs the frame-aware free-variable walk over each such body and refuses when a span-bound name is free in it. Languages whose compilers reject use-before-declaration (C#, Rust, Dart) declare none and keep the purely positional scan.
    - **Scope-escape declarations.** A name declared `global`/`nonlocal` inside a deferred body (`scope_escape_kinds`) reads past the body's own frame, so it counts as free in that body even though the walk's frames would bind it.
    - **Skip rules.** The positional scan applies the language's identifier skip rules exactly as the free-variable walk does — an attribute name or keyword-argument name after the span is not a read of a span-bound local, so it must not refuse the extract.
+7. **No free variable is written inside the span.** No name in the span's free-variable list ([AUTOFIX-EXTRACT-FREE-VARS]) may be a bare-identifier assignment target inside any occurrence's effective span (per-language `write_kinds`: C#/Rust/Dart plain and compound assignment; Python augmented assignment only, because plain assignment *binds* and is rule 6's territory). This is merge check D's written-hole dataflow ([AUTOFIX-MERGE-SAFETY]) applied to the extract's context parameters: the helper would mutate its own parameter copy while the caller's variable silently keeps its old value — mutation loss no compiler backstop catches in Python or C# (issue #280). The check is conservative both ways by design: it refuses even when the written value is never read again (a false "unsafe" beats a false "safe", [AUTOFIX-ZERO-RISK]), and it matches only *bare-identifier* targets — subscript and member targets (`d[k] += v`, `obj.field = x`) mutate the object a parameter still shares, which is behaviour-preserving under reference semantics. The residual C# value-type case (`struct` field writes through a copy) is out of mechanical scope and routes to the AI fallback.
 
 If any precondition fails, no action is offered for the cluster. Failures are silent — there is no diagnostic.
 
@@ -187,6 +188,7 @@ Coarse end-to-end only, per CLAUDE.md. `crates/deslop-lsp/tests/code_action.rs` 
    - Occurrences are in different classes within the same file (C#).
    - Occurrence count is 1.
    - The block straddles a statement boundary (mid-expression).
+   - A span-bound name is read after the span (rule 6, #278) or a free variable is written inside it (rule 7, #280) — `crates/deslop-core/tests/refactor_extract_negative.rs` and `refactor_extract_write_gate.rs`, per language, with positives proving bound-name writes still extract.
 4. Asserts the cluster id appears in the inserted method name (deterministic naming).
 
 Goldens live under `crates/deslop-lsp/tests/fixtures/code_action/`. Test references the `[AUTOFIX-EXTRACT-*]` ID it covers, per CLAUDE.md.
@@ -317,7 +319,7 @@ The full surface of behaviour-preserving, no-AI deduplication actions and their 
 
 | Fix | Mechanism | Depth | Status |
 |---|---|---|---|
-| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`; refuses escaping bindings per rule 6, #278) |
+| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`; refuses escaping bindings per rule 6, #278, and written free variables per rule 7, #280) |
 | Call-site merge ([AUTOFIX-MERGE]) | anti-unification + default params | binding + types | **implemented** (C#, Rust, Dart; `merge-plan` MCP tool + LSP `refactor.rewrite`; Python refuses pending strict-typing detection) |
 | Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | **implemented (v1.1: Rust sibling modules — definition runs + binding-drift gate; surfaced per [AUTOFIX-CONSOLIDATE-SURFACE], #277/#279)**; other languages refuse with a reason |
 | Redirect to existing canonical | a fragment duplicating an *existing* named helper → replace with a call to it (Fowler *Replace Inline Code with Function Call*) | binding + types | spec'd here; after [AUTOFIX-MERGE] |

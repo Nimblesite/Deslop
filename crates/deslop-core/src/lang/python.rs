@@ -219,6 +219,10 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     hoist_rules: HOIST_RULES,
     deferred_frame_kinds: &["function_definition", "lambda"],
     scope_escape_kinds: &["global_statement", "nonlocal_statement"],
+    // Plain assignment *binds* (rule 6 territory); only augmented
+    // assignment reads-then-rebinds an outer name, so it alone is a
+    // write of a free variable (rule 7, issue #280).
+    write_kinds: &[("augmented_assignment", "left")],
 };
 
 /// PEP 572: a walrus target inside a comprehension binds in the

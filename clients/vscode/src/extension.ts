@@ -335,6 +335,15 @@ export function startLanguageClient(
   lsp: ResolvedBinary,
   workspaceRoot: string | undefined,
 ): LanguageClient | undefined {
+  if (!workspaceRoot) {
+    // No workspace folder ⇒ nothing to analyse. Do not launch the server:
+    // vscode-languageclient would append its `--stdio` transport flag as the
+    // only argv, the Rust binary would read `--stdio` as the workspace root,
+    // and the file watcher would crash-loop on that bogus path (#201). This
+    // mirrors the MCP guard in wireMcpRegistration.
+    log("no workspace folder open; LSP not started (nothing to analyse)", {});
+    return undefined;
+  }
   const runArgs = buildServerArgs(workspaceRoot, false);
   const debugArgs = buildServerArgs(workspaceRoot, true);
   log("starting language client", {

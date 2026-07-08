@@ -77,16 +77,13 @@ pub fn compute_plan(
     if !preconditions::slices_equivalent(source, &effective_spans) {
         return Ok(None);
     }
-    // Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #278): a span
-    // whose own bindings are read after it would corrupt the enclosing
-    // code when rewritten as a call. Silent refusal, reason discarded.
-    if read_after::read_after_check(&scopes, source, parser, scope_kinds).is_err() {
-        return Ok(None);
-    }
     let tables = WalkTables::for_language(parser, scope_kinds);
     let free_variables = scopes.first().map_or_else(Vec::new, |scope| {
         free_vars::free_variables(&scope.run, source, tables)
     });
+    if !passes_dataflow_rules(&scopes, &free_variables, source, parser, scope_kinds) {
+        return Ok(None);
+    }
     let request = EmitRequest {
         source,
         cluster_id: &cluster.id,
@@ -96,6 +93,23 @@ pub fn compute_plan(
     Ok(parser
         .emit_extract_method(&request)
         .map(|outcome| emit::assemble_plan(outcome, &scopes, free_variables)))
+}
+
+/// Dataflow preconditions ([AUTOFIX-EXTRACT-PRECONDITIONS]): rule 6
+/// (issue #278) — a span whose own bindings are read after it would
+/// corrupt the enclosing code when rewritten as a call — and rule 7
+/// (issue #280) — a span writing one of its free variables would
+/// mutate the helper's parameter copy, silently losing the mutation.
+/// The extract tier refuses silently; reasons are discarded.
+fn passes_dataflow_rules(
+    scopes: &[preconditions::OccurrenceScope<'_>],
+    free_variables: &[String],
+    source: &[u8],
+    parser: &dyn LanguageParser,
+    scope_kinds: &'static tables::ScopeKinds,
+) -> bool {
+    read_after::read_after_check(scopes, source, parser, scope_kinds).is_ok()
+        && read_after::write_in_span_check(scopes, free_variables, source, scope_kinds).is_ok()
 }
 
 /// Free variables of a raw statement run in first-reference order —

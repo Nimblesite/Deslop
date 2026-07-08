@@ -166,6 +166,7 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     hoist_rules: &[],
     deferred_frame_kinds: &[],
     scope_escape_kinds: &[],
+    write_kinds: &[("assignment_expression", "left")],
 };
 
 /// Dart merge tables ([AUTOFIX-MERGE-SAFETY] B and D). Defaults are
@@ -211,7 +212,6 @@ const MERGE_TABLES: MergeTables = MergeTables {
         ("true", "bool"),
         ("false", "bool"),
     ],
-    write_kinds: &[("assignment_expression", "left")],
     supports_default_parameters: false,
 };
 

@@ -11,7 +11,7 @@
 
 mod common;
 
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
@@ -19,7 +19,10 @@ use deslop_core::{
     report::{Report, ReportCluster},
 };
 
-use crate::common::{analyse_refactor_fixture as analyse, fixture, refactor_golden as golden};
+use crate::common::{
+    analyse_refactor_fixture as analyse, clusters::needle_cluster_plan, fixture,
+    refactor_golden as golden,
+};
 
 /// Returns the best-ranked cluster for which the verbatim extract plan
 /// computes, along with its plan.
@@ -213,92 +216,44 @@ fn csharp_type1_plan_is_deterministic() -> Result<()> {
     Ok(())
 }
 
-/// Builds a synthetic proven-Identical cluster over two spans of the
-/// positive fixture — used to exercise the statement-run alignments
-/// that real pipeline windows do not produce for this fixture.
-fn synthetic_identical_cluster(spans: [(usize, usize); 2]) -> ReportCluster {
-    ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: 2,
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: "identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences: spans
-            .iter()
-            .map(|span| deslop_core::report::ReportOccurrence {
-                path: PathBuf::from("InvoiceMath.cs"),
-                start_byte: span.0,
-                end_byte: span.1,
-                start_line: 0,
-                end_line: 0,
-                hidden: false,
-            })
-            .collect(),
-        occurrences_total: 2,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    }
-}
-
-/// Byte offset just past the `\n        }` that closes the `foreach`
-/// block starting at or after `from`.
-fn foreach_block_end(source: &str, from: usize) -> Result<usize> {
-    let closer = "\n        }";
-    source
-        .get(from..)
-        .and_then(|rest| rest.find(closer))
-        .map(|offset| from.saturating_add(offset).saturating_add(closer.len()))
-        .context("foreach block closer")
-}
-
-/// Both occurrences' spans for a needle-anchored region of the C#
-/// fixture, one per duplicated method.
-fn fixture_spans(
-    source: &str,
-    start_needle: &str,
-    end_of: impl Fn(&str, usize) -> Result<usize>,
-) -> Result<[(usize, usize); 2]> {
-    let first_start = source.find(start_needle).context("first start")?;
-    let resume = first_start.saturating_add(start_needle.len());
-    let second_start = source
-        .get(resume..)
-        .and_then(|rest| rest.find(start_needle))
-        .map(|offset| resume.saturating_add(offset))
-        .context("second start")?;
-    Ok([
-        (first_start, end_of(source, first_start)?),
-        (second_start, end_of(source, second_start)?),
-    ])
-}
+/// Two C# methods sharing one duplicated loop — the anchor for the
+/// rule 5 statement-run alignment tests. The loop writes only its own
+/// binding and a member of `lines`, so no free name is written
+/// (rule 7, issue #280).
+const TAX_TABLE: &str = "public class TaxTable\n\
+                         {\n\
+                         \x20   public void FillA(int[] amounts, int taxRate, List<int> lines)\n\
+                         \x20   {\n\
+                         \x20       foreach (var amount in amounts)\n\
+                         \x20       {\n\
+                         \x20           var taxed = amount * taxRate / 100;\n\
+                         \x20           lines.Add(amount + taxed);\n\
+                         \x20       }\n\
+                         \x20   }\n\
+                         \n\
+                         \x20   public void FillB(int[] amounts, int taxRate, List<int> lines)\n\
+                         \x20   {\n\
+                         \x20       foreach (var amount in amounts)\n\
+                         \x20       {\n\
+                         \x20           var taxed = amount * taxRate / 100;\n\
+                         \x20           lines.Add(amount + taxed);\n\
+                         \x20       }\n\
+                         \x20   }\n\
+                         }\n";
 
 /// [AUTOFIX-EXTRACT-PRECONDITIONS] rule 5, single-statement alignment:
 /// an occurrence that is exactly one statement node extracts as a
 /// one-statement run.
 #[test]
 fn exact_single_statement_occurrence_extracts() -> Result<()> {
-    let root = fixture("csharp-extract-type1");
-    let source = fs::read_to_string(root.join("InvoiceMath.cs")).context("fixture source")?;
-    let spans = fixture_spans(
-        &source,
-        "foreach (var amount in amounts)",
-        foreach_block_end,
-    )?;
-    let cluster = synthetic_identical_cluster(spans);
-    let parser = refactor::parser_for_path(std::path::Path::new("InvoiceMath.cs"))
-        .context("csharp parser")?;
-    let plan = refactor::compute_plan(&cluster, source.as_bytes(), parser.as_ref())?
+    let needle = "foreach (var amount in amounts)\n        {\n            \
+                  var taxed = amount * taxRate / 100;\n            \
+                  lines.Add(amount + taxed);\n        }";
+    let plan = needle_cluster_plan(TAX_TABLE, needle, "TaxTable.cs")?
         .context("single-statement occurrence must extract")?;
     ensure!(
-        plan.free_variables == ["amounts", "taxRate", "total"],
-        "extracting only the loop leaves `total` free (declared outside the run), got {:?}",
+        plan.free_variables == ["amounts", "taxRate", "lines"],
+        "the loop reads its collection, the rate, and the output list, got {:?}",
         plan.free_variables
     );
     ensure!(plan.edits.len() == 3, "insertion + two rewrites");
@@ -307,29 +262,13 @@ fn exact_single_statement_occurrence_extracts() -> Result<()> {
 
 /// [AUTOFIX-EXTRACT-PRECONDITIONS] rule 5, sibling-run alignment: an
 /// occurrence spanning a contiguous statement window inside a block
-/// extracts that window. The window sits inside the loop so none of
-/// its bindings escape (rule 6, issue #278) — the pre-#278 window
-/// (`var total…` through the loop end) bound `total`, which
-/// `return total` reads after the span, and is now correctly refused.
+/// extracts that window. The window's only binding (`taxed`) dies
+/// inside it (rule 6, issue #278) and no free name is written
+/// (rule 7, issue #280).
 #[test]
 fn sibling_window_occurrence_extracts() -> Result<()> {
-    let root = fixture("csharp-extract-type1");
-    let source = fs::read_to_string(root.join("InvoiceMath.cs")).context("fixture source")?;
-    let spans = fixture_spans(
-        &source,
-        "var taxed = amount * taxRate / 100;",
-        |text, from| {
-            let closer = "total += amount + taxed;";
-            text.get(from..)
-                .and_then(|rest| rest.find(closer))
-                .map(|offset| from.saturating_add(offset).saturating_add(closer.len()))
-                .context("loop body end")
-        },
-    )?;
-    let cluster = synthetic_identical_cluster(spans);
-    let parser = refactor::parser_for_path(std::path::Path::new("InvoiceMath.cs"))
-        .context("csharp parser")?;
-    let plan = refactor::compute_plan(&cluster, source.as_bytes(), parser.as_ref())?
+    let needle = "var taxed = amount * taxRate / 100;\n            lines.Add(amount + taxed);";
+    let plan = needle_cluster_plan(TAX_TABLE, needle, "TaxTable.cs")?
         .context("two-statement window must extract")?;
     ensure!(
         plan.method_name == "ExtractedFromCluster_abcdef",
@@ -337,8 +276,8 @@ fn sibling_window_occurrence_extracts() -> Result<()> {
         plan.method_name
     );
     ensure!(
-        plan.free_variables == ["amount", "taxRate", "total"],
-        "loop-body window frees its loop variable and outer accumulator, got {:?}",
+        plan.free_variables == ["amount", "taxRate", "lines"],
+        "loop-body window frees its loop variable, the rate, and the list, got {:?}",
         plan.free_variables
     );
     Ok(())

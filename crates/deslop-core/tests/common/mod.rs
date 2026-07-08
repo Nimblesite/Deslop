@@ -13,8 +13,6 @@
 
 pub(crate) mod clusters;
 
-pub(crate) use clusters::*;
-
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;

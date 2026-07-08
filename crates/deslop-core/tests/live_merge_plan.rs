@@ -129,7 +129,7 @@ fn cache_seed_window_refuses_with_reason() -> Result<()> {
 fn live_session_consolidates_cross_file_cluster() -> Result<()> {
     let (_workspace, session) = live_session("rust-consolidate")?;
     let report = session.report();
-    let cluster = crate::common::cross_file_identical_cluster(&report)?;
+    let cluster = crate::common::clusters::cross_file_identical_cluster(&report)?;
     let plan = merge_plan_for(&session, &cluster.id)
         .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
     ensure!(
@@ -167,7 +167,7 @@ fn live_session_consolidates_cross_file_cluster() -> Result<()> {
 fn live_session_refuses_binding_drifted_consolidation() -> Result<()> {
     let (_workspace, session) = live_session("rust-consolidate-drift")?;
     let report = session.report();
-    let cluster = crate::common::cross_file_identical_cluster(&report)?;
+    let cluster = crate::common::clusters::cross_file_identical_cluster(&report)?;
     let plan = merge_plan_for(&session, &cluster.id)
         .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
     let MergeVerdict::AiOrHuman { reason } = plan.verdict else {

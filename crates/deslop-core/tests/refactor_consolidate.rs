@@ -23,7 +23,9 @@ use deslop_core::{
 };
 
 use crate::common::{
-    analyse_refactor_fixture as analyse, fixture, report_occurrence, synthetic_report_cluster,
+    analyse_refactor_fixture as analyse,
+    clusters::{report_occurrence, synthetic_report_cluster},
+    fixture,
 };
 
 /// Reads every occurrence path of a cluster into the sources map the

@@ -21,8 +21,8 @@ use deslop_core::{
 use serde_json::Value;
 
 use crate::common::{
-    fixture, refactor_golden as golden, refactor_pipeline_session as session, report_occurrence,
-    synthetic_report_cluster,
+    clusters::{report_occurrence, synthetic_report_cluster},
+    fixture, refactor_golden as golden, refactor_pipeline_session as session,
 };
 
 /// Computes merge plans for every cluster of a single-file fixture and

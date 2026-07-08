@@ -126,6 +126,14 @@ pub struct ScopeKinds {
     /// (Python `global`/`nonlocal`): inside a deferred body their names
     /// read past the body's own frame, so rule 6 treats them as free.
     pub scope_escape_kinds: &'static [&'static str],
+    /// `(node_kind, target_field)` pairs that write a variable by
+    /// name. Rule 7 refuses extracts whose free variables are written
+    /// inside the span — the helper would mutate its own parameter
+    /// copy ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #280) — and merge
+    /// check D refuses written holes ([AUTOFIX-MERGE-SAFETY]). Only
+    /// bare-identifier targets match: subscript/member targets mutate
+    /// the object the parameter still shares.
+    pub write_kinds: &'static [(&'static str, &'static str)],
 }
 
 /// One boundary-crossing statement pattern for [AUTOFIX-MERGE-SAFETY]
@@ -151,10 +159,6 @@ pub struct MergeTables {
     /// Raw literal node kind → declared parameter type
     /// ([AUTOFIX-MERGE-NAMES] type backstop).
     pub literal_types: &'static [(&'static str, &'static str)],
-    /// `(node_kind, target_field)` pairs that write a variable —
-    /// a hole identifier written inside the span refuses value-passing
-    /// ([AUTOFIX-MERGE-SAFETY] D).
-    pub write_kinds: &'static [(&'static str, &'static str)],
     /// Whether the language supports default parameter values
     /// ([AUTOFIX-MERGE-DEFAULTS]).
     pub supports_default_parameters: bool,

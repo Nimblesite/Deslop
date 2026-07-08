@@ -56,6 +56,58 @@ pub(crate) fn read_after_check(
     Ok(())
 }
 
+/// Rule 7 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #280): no free
+/// variable of the span may be an assignment target inside it — the
+/// helper would mutate its own parameter copy and the caller's
+/// variable would silently keep its old value, the mutation loss the
+/// type-safety backstop cannot catch. Merge check D runs the same
+/// dataflow per hole ([AUTOFIX-MERGE-SAFETY]).
+pub(crate) fn write_in_span_check(
+    scopes: &[OccurrenceScope<'_>],
+    free_variables: &[String],
+    source: &[u8],
+    scope_kinds: &'static ScopeKinds,
+) -> Result<(), String> {
+    for scope in scopes {
+        for name in free_variables {
+            if written_in_span(scope, name, source, scope_kinds.write_kinds) {
+                return Err(format!(
+                    "free `{name}` is written inside the span — extracting would lose the mutation"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// True when `name` is a bare-identifier assignment target anywhere
+/// inside the occurrence span. Subscript/member targets do not match:
+/// they mutate the object a parameter copy still shares
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, [AUTOFIX-MERGE-SAFETY] D).
+pub(crate) fn written_in_span(
+    scope: &OccurrenceScope<'_>,
+    name: &str,
+    source: &[u8],
+    write_kinds: &'static [(&'static str, &'static str)],
+) -> bool {
+    scope.run.iter().any(|node| {
+        let mut stack = vec![*node];
+        while let Some(current) = stack.pop() {
+            if let Some((_, field)) = write_kinds.iter().find(|(kind, _)| *kind == current.kind())
+            {
+                let target = current
+                    .child_by_field_name(*field)
+                    .and_then(|child| node_text(child, source));
+                if target.as_deref() == Some(name) {
+                    return true;
+                }
+            }
+            stack.extend(named_children(current));
+        }
+        false
+    })
+}
+
 /// Names bound at the top level of one occurrence's statement run —
 /// shared by [`read_after_check`] and the merge tier's rename lifting.
 pub(crate) fn run_bound_names(

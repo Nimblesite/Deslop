@@ -16,8 +16,9 @@ use deslop_core::{
 };
 
 use crate::common::{
-    analyse_refactor_fixture as analyse, both_spans, fixture, needle_cluster_plan,
-    report_occurrence, synthetic_report_cluster,
+    analyse_refactor_fixture as analyse,
+    clusters::{both_spans, needle_cluster_plan, report_occurrence, synthetic_report_cluster},
+    fixture,
 };
 
 /// Asserts that no cluster in the fixture's ranked report yields an

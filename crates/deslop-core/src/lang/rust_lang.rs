@@ -135,10 +135,6 @@ const MERGE_TABLES: MergeTables = MergeTables {
         ("boolean_literal", "bool"),
         ("char_literal", "char"),
     ],
-    write_kinds: &[
-        ("assignment_expression", "left"),
-        ("compound_assignment_expr", "left"),
-    ],
     supports_default_parameters: false,
 };
 
@@ -307,6 +303,10 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     hoist_rules: &[],
     deferred_frame_kinds: &[],
     scope_escape_kinds: &[],
+    write_kinds: &[
+        ("assignment_expression", "left"),
+        ("compound_assignment_expr", "left"),
+    ],
 };
 
 /// One indentation step for the emitted helper body, matching rustfmt.

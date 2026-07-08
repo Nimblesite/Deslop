@@ -202,6 +202,8 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     hoist_rules: &[],
     deferred_frame_kinds: &[],
     scope_escape_kinds: &[],
+    // Compound assignments (`+=` …) are `assignment_expression` too.
+    write_kinds: &[("assignment_expression", "left")],
 };
 
 /// C# node kinds that exit with a value when they carry an expression

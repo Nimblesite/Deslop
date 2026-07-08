@@ -18,8 +18,8 @@ use crate::{
     lang::{shared::LITERAL_KIND, LanguageParser},
     refactor::{
         merge::gate::Hole,
-        preconditions::{node_text, OccurrenceScope},
-        read_after::{read_after_check, run_bound_names},
+        preconditions::OccurrenceScope,
+        read_after::{read_after_check, run_bound_names, written_in_span},
         tables::{MergeTables, ScopeKinds},
     },
 };
@@ -54,7 +54,7 @@ pub fn evaluate(
     boundary_check(scopes, tables, scope_kinds)?;
     read_after_check(scopes, source, parser, scope_kinds)?;
     let bound_per_site = bound_names_per_site(scopes, source, parser, scope_kinds);
-    classify_holes(scopes, source, holes, parser, tables, &bound_per_site)
+    classify_holes(scopes, source, holes, parser, tables, scope_kinds, &bound_per_site)
 }
 
 /// Check B (control flow): no control transfer crossing the span
@@ -143,6 +143,7 @@ fn classify_holes(
     holes: &[Hole],
     parser: &dyn LanguageParser,
     tables: &'static MergeTables,
+    scope_kinds: &'static ScopeKinds,
     bound_per_site: &[HashSet<String>],
 ) -> Result<Vec<HoleRole>, String> {
     let mut rename_map: HashMap<String, Vec<String>> = HashMap::new();
@@ -155,7 +156,7 @@ fn classify_holes(
             lift_rename(hole, &mut rename_map)?;
             roles.push(HoleRole::LiftedRename);
         } else {
-            roles.push(identifier_role(hole, source, scopes, tables, parser)?);
+            roles.push(identifier_role(hole, source, scopes, scope_kinds, parser)?);
         }
     }
     bijective_guard(&rename_map)?;
@@ -299,12 +300,12 @@ fn identifier_role(
     hole: &Hole,
     source: &[u8],
     scopes: &[OccurrenceScope<'_>],
-    tables: &'static MergeTables,
+    scope_kinds: &'static ScopeKinds,
     parser: &dyn LanguageParser,
 ) -> Result<HoleRole, String> {
     let mut unified: Option<String> = None;
     for (site, scope) in hole.per_site.iter().zip(scopes) {
-        if written_in_span(scope, &site.text, source, tables) {
+        if written_in_span(scope, &site.text, source, scope_kinds.write_kinds) {
             return Err(format!(
                 "`{}` is written inside the span — call-time evaluation would change behaviour",
                 site.text
@@ -330,35 +331,6 @@ fn identifier_role(
     unified
         .map(|type_name| HoleRole::Parameter { type_name })
         .ok_or_else(|| "identifier hole has no sites".to_owned())
-}
-
-/// True when `name` is an assignment target anywhere inside the
-/// occurrence span.
-fn written_in_span(
-    scope: &OccurrenceScope<'_>,
-    name: &str,
-    source: &[u8],
-    tables: &'static MergeTables,
-) -> bool {
-    scope.run.iter().any(|node| {
-        let mut stack = vec![*node];
-        while let Some(current) = stack.pop() {
-            if let Some((_, field)) = tables
-                .write_kinds
-                .iter()
-                .find(|(kind, _)| *kind == current.kind())
-            {
-                let target = current
-                    .child_by_field_name(*field)
-                    .and_then(|child| node_text(child, source));
-                if target.as_deref() == Some(name) {
-                    return true;
-                }
-            }
-            stack.extend(crate::refactor::preconditions::named_children(current));
-        }
-        false
-    })
 }
 
 /// Raw tree-sitter node covering `range` within one occurrence's run.
