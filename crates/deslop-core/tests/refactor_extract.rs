@@ -307,12 +307,25 @@ fn exact_single_statement_occurrence_extracts() -> Result<()> {
 
 /// [AUTOFIX-EXTRACT-PRECONDITIONS] rule 5, sibling-run alignment: an
 /// occurrence spanning a contiguous statement window inside a block
-/// extracts that window.
+/// extracts that window. The window sits inside the loop so none of
+/// its bindings escape (rule 6, issue #278) — the pre-#278 window
+/// (`var total…` through the loop end) bound `total`, which
+/// `return total` reads after the span, and is now correctly refused.
 #[test]
 fn sibling_window_occurrence_extracts() -> Result<()> {
     let root = fixture("csharp-extract-type1");
     let source = fs::read_to_string(root.join("InvoiceMath.cs")).context("fixture source")?;
-    let spans = fixture_spans(&source, "var total = 0;", foreach_block_end)?;
+    let spans = fixture_spans(
+        &source,
+        "var taxed = amount * taxRate / 100;",
+        |text, from| {
+            let closer = "total += amount + taxed;";
+            text.get(from..)
+                .and_then(|rest| rest.find(closer))
+                .map(|offset| from.saturating_add(offset).saturating_add(closer.len()))
+                .context("loop body end")
+        },
+    )?;
     let cluster = synthetic_identical_cluster(spans);
     let parser = refactor::parser_for_path(std::path::Path::new("InvoiceMath.cs"))
         .context("csharp parser")?;
@@ -322,6 +335,11 @@ fn sibling_window_occurrence_extracts() -> Result<()> {
         plan.method_name == "ExtractedFromCluster_abcdef",
         "deterministic name from the synthetic id, got {}",
         plan.method_name
+    );
+    ensure!(
+        plan.free_variables == ["amount", "taxRate", "total"],
+        "loop-body window frees its loop variable and outer accumulator, got {:?}",
+        plan.free_variables
     );
     Ok(())
 }

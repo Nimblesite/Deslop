@@ -19,6 +19,7 @@ pub mod preconditions;
 pub mod tables;
 
 mod free_vars;
+pub(crate) mod wire_edit;
 
 use std::path::Path;
 
@@ -73,6 +74,12 @@ pub fn compute_plan(
         .map(preconditions::OccurrenceScope::span)
         .collect();
     if !preconditions::slices_equivalent(source, &effective_spans) {
+        return Ok(None);
+    }
+    // Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #278): a span
+    // whose own bindings are read after it would corrupt the enclosing
+    // code when rewritten as a call. Silent refusal, reason discarded.
+    if preconditions::read_after_check(&scopes, source, parser, scope_kinds).is_err() {
         return Ok(None);
     }
     let tables = WalkTables {

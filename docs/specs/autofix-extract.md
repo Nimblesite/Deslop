@@ -48,6 +48,7 @@ For a cluster `C` to be eligible, **all** of these must hold:
 5. The block aligns with statement boundaries in the parse tree — start and end byte ranges sit between statements, not mid-expression. Mid-expression occurrences are silently skipped. Two alignments are accepted, producing the **effective spans** rule 1 verifies:
    - The occurrence covers a contiguous run of statements (or a whole statement block) — the effective span is that run.
    - The occurrence is exactly one whole function/method declaration whose body is a statement block — the effective span **narrows to the body's statements**. This is how the renamed-methods-with-identical-bodies case (the #42 motivating example) extracts: the signatures differ and stay untouched; only the byte-equivalent bodies are rewritten as calls.
+6. **No binding escapes the span.** No name bound inside any occurrence's effective span may be read after that span within its enclosing function (or, for module-top-level occurrences, within the rest of the module). This is the merge tier's declared-inside-read-after dataflow check ([AUTOFIX-MERGE-SAFETY] check B) applied to the extract: rewriting such a block as a call deletes bindings that later statements still read, corrupting code *outside* the rewritten spans — beyond the [AUTOFIX-EXTRACT-CAVEATS] contract (issue #278). Undecidable cases refuse ([AUTOFIX-ZERO-RISK] Opdyke bias).
 
 If any precondition fails, no action is offered for the cluster. Failures are silent — there is no diagnostic.
 
@@ -289,9 +290,21 @@ REFUSE unless all hold: every duplicate definition is reference-resolvable; cons
 
 **v1 resolver scope (implementation status):** Rust sibling modules only — whole top-level `fn` definitions, byte-equivalent including the signature, canonical already visible (`pub`), duplicates in the canonical file's directory, one definition of the name per duplicate file. The rewrite is `use crate::<canonical module>::<name>;` plus the definition deletion; a duplicate file that would become empty refuses (deleting it needs the `mod` declaration rewritten — the `DeleteFile` branch of [AUTOFIX-CONSOLIDATE-EDIT] lands with the full resolver). All other languages refuse with a reason. The consolidation E2E compiles the rewritten crate with `rustc`.
 
+**v1.1 extensions (issue #277):**
+
+- **Definition runs.** An occurrence span covering a contiguous run of ≥2 whole top-level definitions (and nothing else — the pipeline's sibling windows emit exactly this for adjacent duplicated functions) splits into per-definition sites. Every occurrence must split into the same ordered symbol list; each symbol then passes the gates independently, and the plan consolidates all of them in one atomic edit set. A span that covers anything other than whole top-level definitions still refuses.
+- **Binding-drift gate.** For every free identifier referenced inside a consolidated definition (Schäfer: `lookup(ref)_after == lookup(ref)_before`, decided conservatively without a full resolver): if any occurrence file defines a top-level item with that name, then **every** occurrence file must define it **byte-equivalently** — otherwise the moved reference would re-bind from the duplicate module's item to a different canonical-module item, and the gate refuses naming the drifting symbol (the traffic-light-examples case: byte-identical `run` bodies each calling a *different* module-local `next`). Names bound by `use` declarations require those declarations to be textually identical across every occurrence file. Names bound by neither (crate root / std prelude) resolve identically from sibling modules and pass. Undecidable shapes refuse ([AUTOFIX-ZERO-RISK]).
+
 ### [AUTOFIX-CONSOLIDATE-EDIT] The WorkspaceEdit
 
 `documentChanges` mixing resource operations and text edits, executed in array order: a `DeleteFile` for any duplicate file that becomes empty (else a `TextDocumentEdit` deleting the definition), plus one `TextDocumentEdit` per dependent rewriting its import/reference to the canonical symbol. Versioned identifiers; `changeAnnotations` for the preview tree; `failureHandling: transactional`; single undo label.
+
+### [AUTOFIX-CONSOLIDATE-SURFACE] Editor and agent surfacing
+
+Consolidation ships through the **same lazily-resolved channels** as [AUTOFIX-MERGE] — the engine routes by cluster shape; callers never pre-classify a cluster as merge-vs-consolidate:
+
+- **LSP.** `build_for_range` offers a `refactor.rewrite` action titled *"Consolidate identical duplicates into one canonical definition"* for any cluster in an exact-structural bucket with ≥2 visible, untruncated occurrences spanning ≥2 files. `codeAction/resolve` computes the plan: mechanical → the [AUTOFIX-CONSOLIDATE-EDIT] `WorkspaceEdit` (`documentChanges` across the duplicate files); refused → `disabled.reason` carrying the human-readable routing reason ([AUTOFIX-MERGE-CODE-ACTION] step 2's consolidate branch, now normative). A cross-file identical cluster therefore **never** silently offers nothing while its diagnostic promises "Safe to extract" — the pre-v1.1 dead end of issue #277.
+- **MCP/IPC.** The existing `merge-plan` tool (and the `merge/plan` IPC method behind it) routes multi-file clusters to the consolidation engine and answers with the same wire `MergePlan`: `verdict: mechanical` carrying the multi-file `workspace_edit` and the consolidated symbol list in `helper_name`, empty `parameters`; refusals answer `ai_or_human` with the reason. One tool remains the mechanical family's whole agent surface ([AUTOFIX-MERGE-MCP]); no new wire type is needed because `workspace_edit` is already opaque JSON.
 
 ## [AUTOFIX-CATALOG] The zero-risk mechanical-fix catalog
 
@@ -299,9 +312,9 @@ The full surface of behaviour-preserving, no-AI deduplication actions and their 
 
 | Fix | Mechanism | Depth | Status |
 |---|---|---|---|
-| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`) |
+| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`; refuses escaping bindings per rule 6, #278) |
 | Call-site merge ([AUTOFIX-MERGE]) | anti-unification + default params | binding + types | **implemented** (C#, Rust, Dart; `merge-plan` MCP tool + LSP `refactor.rewrite`; Python refuses pending strict-typing detection) |
-| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | **implemented (v1: Rust sibling modules)**; other languages refuse with a reason |
+| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | **implemented (v1.1: Rust sibling modules — definition runs + binding-drift gate; surfaced per [AUTOFIX-CONSOLIDATE-SURFACE], #277/#279)**; other languages refuse with a reason |
 | Redirect to existing canonical | a fragment duplicating an *existing* named helper → replace with a call to it (Fowler *Replace Inline Code with Function Call*) | binding + types | spec'd here; after [AUTOFIX-MERGE] |
 | Consolidate duplicate constant/literal | repeated literal → one shared `const`/`static`, refs updated | trivial | catalog (degenerate parameterise-by-constant) |
 | Pull Up Method / Form Template Method | now-identical sibling methods → superclass; differing steps overridable (Hotta/Higo PDG; Fowler) | class hierarchy | catalog (OO-only; needs hierarchy model) |
@@ -315,7 +328,7 @@ One new tool, cloning the `cluster-by-id` end-to-end shape ([mcp.md §MCP-TOOLS]
 
 | Tool | Inputs | Output | Description (prevention-first, ≤200 chars) |
 |---|---|---|---|
-| `merge-plan` | `{ cluster_id }` | `MergePlan` | Compute the mechanical merge for a cluster: parameterised helper, derived param names/types, per-site arguments, defaults, the `mechanical`/`ai_or_human` verdict, and the `WorkspaceEdit`. **Read-only — never writes files.** |
+| `merge-plan` | `{ cluster_id }` | `MergePlan` | Compute the mechanical plan for a cluster — same-file clusters get the parameterised-helper merge, cross-file clusters route to [AUTOFIX-CONSOLIDATE] ([AUTOFIX-CONSOLIDATE-SURFACE]) — with the `mechanical`/`ai_or_human` verdict and the `WorkspaceEdit`. **Read-only — never writes files.** |
 
 `MergePlan` is the only addition; the mechanical path has no AI round-trip, so no second tool is needed (the AI fallback keeps its `extract-method-plan` / `extract-method-apply` pair). The host applies the returned `WorkspaceEdit`. Wire type added to [live-ipc.td](../models/live-ipc.td); the request reuses `ClusterIdParams`.
 

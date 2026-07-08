@@ -290,6 +290,37 @@ fn block_without_enclosing_function_refused() -> Result<()> {
     Ok(())
 }
 
+/// Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #278): a span whose
+/// own bindings are read after it is refused — rewriting the run as a
+/// call would delete `seed` and `scaled` while the enclosing functions
+/// still read them after the span, corrupting code outside the
+/// rewritten region.
+#[test]
+fn bindings_read_after_span_refused() -> Result<()> {
+    let text = "fn alpha(input: usize) -> usize {\n    let seed = input + 1;\n    let scaled = seed * 3;\n    scaled + seed\n}\n\nfn beta(input: usize) -> usize {\n    let seed = input + 1;\n    let scaled = seed * 3;\n    scaled - seed\n}\n";
+    let needle = "let seed = input + 1;\n    let scaled = seed * 3;";
+    let (first, second) = both_spans(text, needle)?;
+    let mut cluster = synthetic_cluster(
+        vec![
+            occurrence(first.0, first.1, false),
+            occurrence(second.0, second.1, false),
+        ],
+        "identical",
+    );
+    cluster
+        .occurrences
+        .iter_mut()
+        .for_each(|entry| entry.path = PathBuf::from("wallets.rs"));
+    let parser = deslop_core::lang::rust_lang::RustParser::new();
+    let plan = refactor::compute_plan(&cluster, text.as_bytes(), &parser)
+        .map_err(|error| anyhow!("unexpected error {error}"))?;
+    ensure!(
+        plan.is_none(),
+        "a span whose bindings are read after it must be refused (issue #278)"
+    );
+    Ok(())
+}
+
 /// The `LanguageParser` refactor defaults ([AUTOFIX-EXTRACT-DEPENDENCIES]):
 /// a language without overrides recognises nothing, emits nothing, and
 /// merges nothing — so no action is ever offered for it.

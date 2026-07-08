@@ -1,9 +1,11 @@
 //! Behaviour-preservation preconditions ([AUTOFIX-MERGE-SAFETY]).
 //!
 //! Check A (structural, consistent holes) is established by the gate;
-//! this module adds B (single-entry/single-exit + no
-//! declared-inside-read-after), the Baker rename lifting (gate step 3),
-//! C's shadow-free naming inputs, and D's value-parameter typing. Any
+//! this module adds B (single-entry/single-exit; its
+//! declared-inside-read-after dataflow half is the shared
+//! [`read_after_check`] in `preconditions`, which extract rule 6 also
+//! runs — issue #278), the Baker rename lifting (gate step 3), C's
+//! shadow-free naming inputs, and D's value-parameter typing. Any
 //! undecidable check refuses — a false "unsafe" beats a false "safe"
 //! (Opdyke bias, [AUTOFIX-ZERO-RISK]).
 
@@ -15,9 +17,8 @@ use crate::{
     ast::ByteRange,
     lang::{shared::LITERAL_KIND, LanguageParser},
     refactor::{
-        free_vars,
         merge::gate::Hole,
-        preconditions::{node_text, OccurrenceScope},
+        preconditions::{node_text, read_after_check, run_bound_names, OccurrenceScope},
         tables::{MergeTables, ScopeKinds},
     },
 };
@@ -119,47 +120,6 @@ fn transfer_is_contained(node: Node<'_>, span: ByteRange, containers: &[&str]) -
     false
 }
 
-/// Check B (dataflow): no local declared inside the span may be read
-/// after it inside the enclosing function (Komondoor/Horwitz-lite).
-fn read_after_check(
-    scopes: &[OccurrenceScope<'_>],
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    scope_kinds: &'static ScopeKinds,
-) -> Result<(), String> {
-    for scope in scopes {
-        let bound = run_bound_names(scope, source, parser, scope_kinds);
-        let Some(function) = scope.function else {
-            continue;
-        };
-        let span = scope.span();
-        if let Some(name) = read_after_span(function, span, source, parser, &bound) {
-            return Err(format!(
-                "local `{name}` declared inside the span is read after it"
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Names bound at the top level of one occurrence's statement run.
-fn run_bound_names(
-    scope: &OccurrenceScope<'_>,
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    scope_kinds: &'static ScopeKinds,
-) -> HashSet<String> {
-    free_vars::bound_names(
-        &scope.run,
-        source,
-        free_vars::WalkTables {
-            bindings: parser.binding_node_kinds(),
-            references: parser.identifier_reference_kinds(),
-            scopes: scope_kinds,
-        },
-    )
-}
-
 /// Per-site bound-name sets, used by the rename lifting.
 fn bound_names_per_site(
     scopes: &[OccurrenceScope<'_>],
@@ -171,35 +131,6 @@ fn bound_names_per_site(
         .iter()
         .map(|scope| run_bound_names(scope, source, parser, scope_kinds))
         .collect()
-}
-
-/// First in-span-declared name referenced after the span within the
-/// enclosing function, if any.
-fn read_after_span(
-    function: Node<'_>,
-    span: ByteRange,
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    bound: &HashSet<String>,
-) -> Option<String> {
-    let references = parser.identifier_reference_kinds();
-    let mut stack = vec![function];
-    while let Some(node) = stack.pop() {
-        if node.start_byte() >= span.end && references.reference_kinds.contains(&node.kind()) {
-            if let Some(text) = node_text(node, source) {
-                if bound.contains(&text) {
-                    return Some(text);
-                }
-            }
-        }
-        let children = crate::refactor::preconditions::named_children(node);
-        stack.extend(
-            children
-                .into_iter()
-                .filter(|child| child.end_byte() > span.end),
-        );
-    }
-    None
 }
 
 /// Gate step 3 + check D: identifier holes whose every site names an

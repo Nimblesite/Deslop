@@ -9,9 +9,19 @@ mod common;
 use anyhow::{anyhow, ensure, Context, Result};
 use common::{
     copied_fixture_named, spawn_lsp_and_wait_for_socket, structured_content,
-    wait_for_state_then_init_mcp,
+    wait_for_state_then_init_mcp, McpHandle,
 };
 use serde_json::{json, Value};
+
+/// Requests `merge-plan` for `cluster_id` and returns the structured
+/// plan — the request idiom every scenario shares.
+fn request_merge_plan(mcp: &mut McpHandle, cluster_id: &str) -> Result<Value> {
+    let response = mcp.request(
+        "tools/call",
+        &json!({ "name": "merge-plan", "arguments": { "id": cluster_id } }),
+    )?;
+    structured_content(&response, "merge-plan")
+}
 
 /// [AUTOFIX-MERGE-MCP]: a mergeable cluster returns a mechanical plan
 /// end to end (MCP → IPC → LSP → refactor engine).
@@ -32,11 +42,7 @@ fn merge_plan_returns_mechanical_plan_over_ipc() -> Result<()> {
         .context("worst cluster id present")?
         .to_owned();
 
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "merge-plan", "arguments": { "id": cluster_id } }),
-    )?;
-    let plan = structured_content(&response, "merge-plan")?;
+    let plan = request_merge_plan(&mut mcp, &cluster_id)?;
 
     ensure!(
         plan.pointer("/verdict/kind").and_then(Value::as_str) == Some("mechanical"),
@@ -125,11 +131,7 @@ fn unmergeable_cluster_answers_with_ai_or_human() -> Result<()> {
         ));
     };
 
-    let response = mcp.request(
-        "tools/call",
-        &json!({ "name": "merge-plan", "arguments": { "id": cluster_id } }),
-    )?;
-    let plan = structured_content(&response, "merge-plan")?;
+    let plan = request_merge_plan(&mut mcp, &cluster_id)?;
     let verdict = plan
         .pointer("/verdict/kind")
         .and_then(Value::as_str)
@@ -137,6 +139,75 @@ fn unmergeable_cluster_answers_with_ai_or_human() -> Result<()> {
     ensure!(
         verdict == "mechanical" || plan.pointer("/verdict/reason").is_some(),
         "either mechanical or a reasoned refusal, got {plan}"
+    );
+    Ok(())
+}
+
+/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
+/// definition routes to the consolidation engine and answers a
+/// mechanical plan whose `WorkspaceEdit` deletes the duplicate and
+/// imports the canonical symbol.
+#[test]
+fn merge_plan_routes_cross_file_cluster_to_consolidation() -> Result<()> {
+    let workspace = copied_fixture_named("rust-consolidate")?;
+    let _lsp = spawn_lsp_and_wait_for_socket(workspace.path())?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+
+    let offenders = mcp.request(
+        "tools/call",
+        &json!({ "name": "top-offenders", "arguments": { "n": 5 } }),
+    )?;
+    let offenders = structured_content(&offenders, "top-offenders")?;
+    let clusters = offenders
+        .pointer("/clusters")
+        .and_then(Value::as_array)
+        .context("clusters present")?;
+    let cluster_id = clusters
+        .iter()
+        .find(|cluster| {
+            cluster
+                .pointer("/occurrences")
+                .and_then(Value::as_array)
+                .is_some_and(|occurrences| {
+                    let paths: std::collections::HashSet<&str> = occurrences
+                        .iter()
+                        .filter_map(|entry| entry.pointer("/path").and_then(Value::as_str))
+                        .collect();
+                    paths.len() >= 2
+                })
+        })
+        .and_then(|cluster| cluster.pointer("/id").and_then(Value::as_str))
+        .context("a cross-file cluster surfaces in the offenders")?
+        .to_owned();
+
+    let plan = request_merge_plan(&mut mcp, &cluster_id)?;
+    ensure!(
+        plan.pointer("/verdict/kind").and_then(Value::as_str) == Some("mechanical"),
+        "the cross-file cluster must consolidate mechanically, got {plan}"
+    );
+    ensure!(
+        plan.pointer("/helper_name").and_then(Value::as_str) == Some("normalise_labels"),
+        "the consolidated symbol rides in helper_name, got {plan}"
+    );
+    let edits = plan
+        .pointer("/workspace_edit/documentChanges/0/edits")
+        .and_then(Value::as_array)
+        .context("consolidation edit present")?;
+    ensure!(
+        edits.len() == 2,
+        "deletion plus import expected, got {}",
+        edits.len()
+    );
+    let uri = plan
+        .pointer("/workspace_edit/documentChanges/0/textDocument/uri")
+        .and_then(Value::as_str)
+        .context("edited uri present")?;
+    ensure!(
+        uri.starts_with("file://")
+            && std::path::Path::new(uri)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("rs")),
+        "absolute file uri for the duplicate, got {uri}"
     );
     Ok(())
 }

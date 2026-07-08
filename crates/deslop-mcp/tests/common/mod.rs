@@ -35,13 +35,22 @@ pub fn copied_fixture() -> Result<TempDir> {
     copied_fixture_named("csharp-mcp")
 }
 
-/// Copies the named `tests/fixtures/<name>` directory into a writable temp
-/// dir so the LSP can write to `.deslop-cache/`. Lets MCP wire tests run
-/// against any language fixture, not just the C# one.
+/// Copies the named fixture directory into a writable temp dir so the
+/// LSP can write to `.deslop-cache/`. Looks in this crate's
+/// `tests/fixtures/<name>` first, then falls back to the workspace-shared
+/// root under `crates/deslop/tests/fixtures/<name>` so MCP wire tests
+/// reuse the refactor fixtures instead of duplicating them.
 pub fn copied_fixture_named(name: &str) -> Result<TempDir> {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let local = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
         .join(name);
+    let src = if local.exists() {
+        local
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deslop/tests/fixtures")
+            .join(name)
+    };
     let dst = TempDir::new()?;
     copy_dir(&src, dst.path())?;
     let cache = dst.path().join(".deslop-cache");

@@ -100,7 +100,7 @@ const TOOLS: [ToolDefinition; 13] = [
     },
     ToolDefinition {
         name: "merge-plan",
-        description: "Mechanical merge for a cluster BEFORE hand-editing: anti-unified helper, typed params, per-site args, mechanical/ai_or_human verdict, WorkspaceEdit. Read-only — never writes files.",
+        description: "Mechanical plan for a cluster BEFORE hand-editing: same-file clusters merge into one helper; cross-file identical definitions consolidate to one canonical copy. Verdict + WorkspaceEdit. Read-only.",
         input_schema: schema_merge_plan,
     },
     ToolDefinition {

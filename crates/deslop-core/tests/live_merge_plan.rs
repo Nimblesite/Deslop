@@ -120,3 +120,66 @@ fn cache_seed_window_refuses_with_reason() -> Result<()> {
     );
     Ok(())
 }
+
+/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
+/// definition routes through the live glue to the consolidation engine
+/// and answers a mechanical plan carrying the multi-file
+/// `WorkspaceEdit` and the consolidated symbol.
+#[test]
+fn live_session_consolidates_cross_file_cluster() -> Result<()> {
+    let (_workspace, session) = live_session("rust-consolidate")?;
+    let report = session.report();
+    let cluster = crate::common::cross_file_identical_cluster(&report)?;
+    let plan = merge_plan_for(&session, &cluster.id)
+        .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
+    ensure!(
+        matches!(plan.verdict, MergeVerdict::Mechanical),
+        "the sibling-module duplicate consolidates mechanically, got {:?}",
+        plan.verdict
+    );
+    ensure!(
+        plan.helper_name == "normalise_labels",
+        "the consolidated symbol rides in helper_name, got {}",
+        plan.helper_name
+    );
+    let edit = plan.workspace_edit.context("wire WorkspaceEdit present")?;
+    let edits = edit
+        .pointer("/documentChanges/0/edits")
+        .and_then(serde_json::Value::as_array)
+        .context("documentChanges carry the duplicate file's edits")?;
+    ensure!(edits.len() == 2, "deletion + import, got {}", edits.len());
+    let uri = edit
+        .pointer("/documentChanges/0/textDocument/uri")
+        .and_then(serde_json::Value::as_str)
+        .context("edited uri present")?;
+    ensure!(
+        uri.starts_with("file://") && uri.contains("pricing_"),
+        "absolute duplicate-file uri, got {uri}"
+    );
+    Ok(())
+}
+
+/// [AUTOFIX-CONSOLIDATE-GATE] binding drift through the live glue
+/// (issue #279): byte-identical `run` bodies calling a per-module
+/// `shift` refuse with the drifting symbol named — never a mechanical
+/// plan that would change behaviour.
+#[test]
+fn live_session_refuses_binding_drifted_consolidation() -> Result<()> {
+    let (_workspace, session) = live_session("rust-consolidate-drift")?;
+    let report = session.report();
+    let cluster = crate::common::cross_file_identical_cluster(&report)?;
+    let plan = merge_plan_for(&session, &cluster.id)
+        .map_err(|error| anyhow!("merge_plan_for: {error}"))?;
+    let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
+        return Err(anyhow!("drifted consolidation must refuse"));
+    };
+    ensure!(
+        reason.contains("shift"),
+        "the drifting symbol is named in the refusal, got {reason}"
+    );
+    ensure!(
+        plan.workspace_edit.is_none(),
+        "refusals never carry an edit"
+    );
+    Ok(())
+}

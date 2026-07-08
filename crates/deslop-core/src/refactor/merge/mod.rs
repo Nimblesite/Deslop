@@ -17,9 +17,8 @@ use crate::{
     lang::{shared::parse_source, LanguageParser},
     refactor::{
         emit::PlannedEdit,
-        position::line_col_for_byte,
         preconditions::{self, OccurrenceScope},
-        RefactorError,
+        wire_edit, RefactorError,
     },
     report::ReportCluster,
     wire_generated::{MergeParameter, MergePlan, MergeVerdict},
@@ -217,6 +216,11 @@ fn assemble(
         new_text: outcome.insertion_text,
     });
     edits.sort_unstable_by_key(|edit| std::cmp::Reverse(edit.start_byte));
+    let file = wire_edit::FileEdits {
+        absolute_path: context.absolute_path.to_path_buf(),
+        source: context.source,
+        edits,
+    };
     MergePlan {
         cluster_id: context.cluster.id.clone(),
         language: context.parser.id().to_owned(),
@@ -224,7 +228,11 @@ fn assemble(
         helper_name: outcome.helper_name,
         helper_body,
         parameters,
-        workspace_edit: workspace_edit_json(context.absolute_path, context.source, &edits),
+        workspace_edit: wire_edit::workspace_edit_json(
+            &[file],
+            MERGE_ANNOTATION_ID,
+            MERGE_ANNOTATION_LABEL,
+        ),
     }
 }
 
@@ -386,63 +394,9 @@ fn spliced_body(
     Some(body)
 }
 
-/// Serialises the edits as an LSP `WorkspaceEdit` (`documentChanges`
-/// form, positions in LSP line/UTF-16 columns) for the wire
-/// ([AUTOFIX-MERGE-MCP]); the LSP surface rebuilds a native edit
-/// in-process instead.
-fn workspace_edit_json(
-    absolute_path: &Path,
-    source: &[u8],
-    edits: &[PlannedEdit],
-) -> Option<serde_json::Value> {
-    let text = std::str::from_utf8(source).ok()?;
-    let lsp_edits: Vec<serde_json::Value> = edits
-        .iter()
-        .map(|edit| {
-            let start = line_col_for_byte(text, edit.start_byte);
-            let end = line_col_for_byte(text, edit.end_byte);
-            serde_json::json!({
-                "range": {
-                    "start": { "line": start.line, "character": start.character },
-                    "end": { "line": end.line, "character": end.character }
-                },
-                "newText": edit.new_text,
-                "annotationId": MERGE_ANNOTATION_ID,
-            })
-        })
-        .collect();
-    Some(serde_json::json!({
-        "documentChanges": [{
-            "textDocument": { "uri": file_uri(absolute_path), "version": null },
-            "edits": lsp_edits,
-        }],
-        "changeAnnotations": {
-            MERGE_ANNOTATION_ID: {
-                "label": "Deslop: merge duplicates into one parameterised helper",
-                "needsConfirmation": false,
-            }
-        }
-    }))
-}
-
 /// Annotation id labelling every merge edit in the preview tree
 /// ([AUTOFIX-MERGE-CODE-ACTION] step 3).
 const MERGE_ANNOTATION_ID: &str = "deslop.merge";
 
-/// Minimal RFC 3986 `file://` URI for an absolute path (percent-encodes
-/// everything outside the unreserved set and `/`).
-fn file_uri(path: &Path) -> String {
-    let mut uri = String::from("file://");
-    for byte in path.to_string_lossy().bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
-                uri.push(char::from(byte));
-            }
-            other => {
-                use std::fmt::Write as _;
-                let _formatted = write!(uri, "%{other:02X}");
-            }
-        }
-    }
-    uri
-}
+/// Annotation label shown on the merge preview tree.
+const MERGE_ANNOTATION_LABEL: &str = "Deslop: merge duplicates into one parameterised helper";
