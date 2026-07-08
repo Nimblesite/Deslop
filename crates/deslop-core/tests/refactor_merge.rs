@@ -10,7 +10,7 @@
 
 mod common;
 
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
@@ -20,7 +20,10 @@ use deslop_core::{
 };
 use serde_json::Value;
 
-use crate::common::{fixture, refactor_golden as golden, refactor_pipeline_session as session};
+use crate::common::{
+    fixture, refactor_golden as golden, refactor_pipeline_session as session, report_occurrence,
+    synthetic_report_cluster,
+};
 
 /// Computes merge plans for every cluster of a single-file fixture and
 /// returns them in rank order.
@@ -484,34 +487,9 @@ fn three_site_merge_defaults_trailing_parameter() -> Result<()> {
         .collect::<Result<_>>()?;
     let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
         .iter()
-        .map(|(start, end)| deslop_core::report::ReportOccurrence {
-            path: PathBuf::from("Tiers.cs"),
-            start_byte: *start,
-            end_byte: *end,
-            start_line: 0,
-            end_line: 0,
-            hidden: false,
-        })
+        .map(|span| report_occurrence("Tiers.cs", *span, false))
         .collect();
-    let cluster = deslop_core::report::ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: "nearly_identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    };
+    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
     let file_root = session
         .subtree_at_range(
             file_id,
@@ -608,34 +586,9 @@ fn too_many_holes_refuse() -> Result<()> {
         .collect::<Result<_>>()?;
     let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
         .iter()
-        .map(|(start, end)| deslop_core::report::ReportOccurrence {
-            path: PathBuf::from("Sprawl.cs"),
-            start_byte: *start,
-            end_byte: *end,
-            start_line: 0,
-            end_line: 0,
-            hidden: false,
-        })
+        .map(|span| report_occurrence("Sprawl.cs", *span, false))
         .collect();
-    let cluster = deslop_core::report::ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: "nearly_identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    };
+    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
     let file_root = session
         .subtree_at_range(
             file_id,

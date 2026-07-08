@@ -206,7 +206,7 @@ export async function activate(
         version: resolvedMcp.version,
       });
     }
-    client = startLanguageClient(resolvedLsp);
+    client = startLanguageClient(resolvedLsp, resolveWorkspaceRoot());
   } catch (err) {
     surfaceStartupFailure(err, reportStore);
     return currentApi();
@@ -242,15 +242,22 @@ export async function activate(
     ),
   );
 
-  reportStore.setLifecycle({ kind: "analysing" });
-  try {
-    await client.start();
-  } catch (err) {
-    surfaceStartupFailure(err, reportStore);
-    return currentApi();
+  if (client) {
+    reportStore.setLifecycle({ kind: "analysing" });
+    try {
+      await client.start();
+    } catch (err) {
+      surfaceStartupFailure(err, reportStore);
+      return currentApi();
+    }
+    wireNotifications(client, reportStore);
+    await seedInitialReport(client, reportStore);
+  } else {
+    // No workspace folder → nothing to analyse. The LSP was not started
+    // (#201), so settle into the idle state rather than a perpetual scan
+    // spinner. `scanStatus` renders "ready" as a clean empty view.
+    reportStore.setLifecycle({ kind: "ready" });
   }
-  wireNotifications(client, reportStore);
-  await seedInitialReport(client, reportStore);
   context.subscriptions.push(
     // [VSIX-SETTINGS] Hot-reload deslop.* settings to the running LSP
     // without a restart (embedding settings sync here).
@@ -324,8 +331,10 @@ export function syncReportReadyContext(store: ReportStore): void {
   );
 }
 
-export function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
-  const workspaceRoot = resolveWorkspaceRoot();
+export function startLanguageClient(
+  lsp: ResolvedBinary,
+  workspaceRoot: string | undefined,
+): LanguageClient | undefined {
   const runArgs = buildServerArgs(workspaceRoot, false);
   const debugArgs = buildServerArgs(workspaceRoot, true);
   log("starting language client", {
@@ -333,9 +342,6 @@ export function startLanguageClient(lsp: ResolvedBinary): LanguageClient {
     workspaceRoot: workspaceRoot ?? null,
     args: runArgs,
   });
-  if (!workspaceRoot) {
-    log("no workspace folder open; LSP will have nothing to analyse", {});
-  }
   const serverOptions: ServerOptions = {
     run: { command: lsp.path, transport: TransportKind.stdio, args: runArgs },
     debug: {

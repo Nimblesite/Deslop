@@ -6,16 +6,19 @@
 
 mod common;
 
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
     lang::{csharp::CSharpParser, LanguageParser},
     refactor,
-    report::{ReportCluster, ReportOccurrence, ReportSignals},
+    report::ReportCluster,
 };
 
-use crate::common::{analyse_refactor_fixture as analyse, fixture};
+use crate::common::{
+    analyse_refactor_fixture as analyse, both_spans, fixture, needle_cluster_plan,
+    report_occurrence, synthetic_report_cluster,
+};
 
 /// Asserts that no cluster in the fixture's ranked report yields an
 /// extract plan for `file_name`.
@@ -65,59 +68,8 @@ fn cross_class_occurrences_refused() -> Result<()> {
     assert_no_plan("csharp-extract-crossclass", "Totals.cs")
 }
 
-/// Builds a synthetic cluster over the positive fixture with full
-/// control of the precondition-relevant fields.
-fn synthetic_cluster(occurrences: Vec<ReportOccurrence>, bucket: &str) -> ReportCluster {
-    ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: bucket.to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    }
-}
-
-/// One occurrence over `[start, end)` of the positive fixture file.
-fn occurrence(start: usize, end: usize, hidden: bool) -> ReportOccurrence {
-    ReportOccurrence {
-        path: PathBuf::from("InvoiceMath.cs"),
-        start_byte: start,
-        end_byte: end,
-        start_line: 0,
-        end_line: 0,
-        hidden,
-    }
-}
-
 /// A byte span inside the fixture source.
 type Span = (usize, usize);
-
-/// The two byte spans of `needle` in the positive fixture source.
-fn both_spans(source: &str, needle: &str) -> Result<(Span, Span)> {
-    let first = source.find(needle).context("first needle")?;
-    let resume = first.saturating_add(needle.len());
-    let second = source
-        .get(resume..)
-        .and_then(|rest| rest.find(needle))
-        .map(|offset| resume.saturating_add(offset))
-        .context("second needle")?;
-    Ok((
-        (first, first.saturating_add(needle.len())),
-        (second, second.saturating_add(needle.len())),
-    ))
-}
 
 /// The positive fixture's source plus its two full statement-run spans
 /// (`var total…` through `return total;`).
@@ -146,7 +98,7 @@ fn assert_refused(cluster: &ReportCluster, source: &[u8], label: &str) -> Result
 #[test]
 fn single_occurrence_refused() -> Result<()> {
     let (source, first, _) = positive_fixture()?;
-    let cluster = synthetic_cluster(vec![occurrence(first.0, first.1, false)], "identical");
+    let cluster = synthetic_report_cluster(vec![report_occurrence("InvoiceMath.cs", (first.0, first.1), false)], "identical");
     assert_refused(&cluster, &source, "single occurrence")
 }
 
@@ -155,10 +107,10 @@ fn single_occurrence_refused() -> Result<()> {
 #[test]
 fn truncated_cluster_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
-    let mut cluster = synthetic_cluster(
+    let mut cluster = synthetic_report_cluster(
         vec![
-            occurrence(first.0, first.1, false),
-            occurrence(second.0, second.1, false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
         "identical",
     );
@@ -170,10 +122,10 @@ fn truncated_cluster_refused() -> Result<()> {
 #[test]
 fn hidden_occurrence_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
-    let cluster = synthetic_cluster(
+    let cluster = synthetic_report_cluster(
         vec![
-            occurrence(first.0, first.1, false),
-            occurrence(second.0, second.1, true),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), true),
         ],
         "identical",
     );
@@ -184,10 +136,10 @@ fn hidden_occurrence_refused() -> Result<()> {
 #[test]
 fn overlapping_ranges_refused() -> Result<()> {
     let (source, first, _) = positive_fixture()?;
-    let cluster = synthetic_cluster(
+    let cluster = synthetic_report_cluster(
         vec![
-            occurrence(first.0, first.1, false),
-            occurrence(first.0 + 10, first.1 + 10, false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (first.0 + 10, first.1 + 10), false),
         ],
         "identical",
     );
@@ -200,10 +152,10 @@ fn mid_expression_refused() -> Result<()> {
     let (source, ..) = positive_fixture()?;
     let text = String::from_utf8(source.clone())?;
     let (first, second) = both_spans(&text, "amount * taxRate / 100")?;
-    let cluster = synthetic_cluster(
+    let cluster = synthetic_report_cluster(
         vec![
-            occurrence(first.0, first.1, false),
-            occurrence(second.0, second.1, false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
         "identical",
     );
@@ -214,10 +166,10 @@ fn mid_expression_refused() -> Result<()> {
 #[test]
 fn loose_bucket_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
-    let cluster = synthetic_cluster(
+    let cluster = synthetic_report_cluster(
         vec![
-            occurrence(first.0, first.1, false),
-            occurrence(second.0, second.1, false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
         "loosely_similar",
     );
@@ -229,10 +181,10 @@ fn loose_bucket_refused() -> Result<()> {
 #[test]
 fn language_without_tables_refused() -> Result<()> {
     let (source, first, second) = positive_fixture()?;
-    let cluster = synthetic_cluster(
+    let cluster = synthetic_report_cluster(
         vec![
-            occurrence(first.0, first.1, false),
-            occurrence(second.0, second.1, false),
+            report_occurrence("InvoiceMath.cs", (first.0, first.1), false),
+            report_occurrence("InvoiceMath.cs", (second.0, second.1), false),
         ],
         "identical",
     );
@@ -269,17 +221,13 @@ fn block_without_enclosing_function_refused() -> Result<()> {
         .and_then(|rest| rest.find('}'))
         .map(|i| resume.saturating_add(i).saturating_add(1))
         .context("second close")?;
-    let mut cluster = synthetic_cluster(
+    let cluster = synthetic_report_cluster(
         vec![
-            occurrence(first, first_end, false),
-            occurrence(second, second_end, false),
+            report_occurrence("consts.rs", (first, first_end), false),
+            report_occurrence("consts.rs", (second, second_end), false),
         ],
         "identical",
     );
-    cluster
-        .occurrences
-        .iter_mut()
-        .for_each(|entry| entry.path = PathBuf::from("consts.rs"));
     let parser = deslop_core::lang::rust_lang::RustParser::new();
     let plan = refactor::compute_plan(&cluster, source, &parser)
         .map_err(|error| anyhow!("unexpected error {error}"))?;
@@ -323,33 +271,6 @@ fn csharp_binding_escaping_sibling_window_refused() -> Result<()> {
         "the window binds `total`, which is read after the span — must refuse (issue #278)"
     );
     Ok(())
-}
-
-/// Computes the extract plan for a synthetic proven-Identical cluster
-/// over the two occurrences of `needle` in `text`, parsed per
-/// `file_name`'s language — the rule 6 dataflow tests drive this end
-/// to end.
-fn needle_cluster_plan(
-    text: &str,
-    needle: &str,
-    file_name: &str,
-) -> Result<Option<refactor::ExtractMethodPlan>> {
-    let (first, second) = both_spans(text, needle)?;
-    let mut cluster = synthetic_cluster(
-        vec![
-            occurrence(first.0, first.1, false),
-            occurrence(second.0, second.1, false),
-        ],
-        "identical",
-    );
-    cluster
-        .occurrences
-        .iter_mut()
-        .for_each(|entry| entry.path = PathBuf::from(file_name));
-    let parser = refactor::parser_for_path(std::path::Path::new(file_name))
-        .ok_or_else(|| anyhow!("no parser for {file_name}"))?;
-    refactor::compute_plan(&cluster, text.as_bytes(), parser.as_ref())
-        .map_err(|error| anyhow!("unexpected error {error}"))
 }
 
 /// Rule 6's late-binding half ([AUTOFIX-EXTRACT-PRECONDITIONS], issue

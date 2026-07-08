@@ -11,6 +11,10 @@
 
 #![allow(dead_code)]
 
+pub(crate) mod clusters;
+
+pub(crate) use clusters::*;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
@@ -412,26 +416,4 @@ fn refactor_embedding_settings() -> deslop_core::EmbeddingSettings<'static> {
         batch_yield: None,
         progress: None,
     }
-}
-
-/// First cross-file `identical` cluster in the ranked report — the
-/// consolidation suites' shared finder ([AUTOFIX-CONSOLIDATE-SURFACE]).
-pub(crate) fn cross_file_identical_cluster(
-    report: &deslop_core::report::Report,
-) -> Result<deslop_core::report::ReportCluster> {
-    report
-        .clusters
-        .iter()
-        .find(|cluster| {
-            cluster.bucket == "identical" && {
-                let paths: std::collections::HashSet<_> = cluster
-                    .occurrences
-                    .iter()
-                    .map(|occurrence| &occurrence.path)
-                    .collect();
-                paths.len() >= 2
-            }
-        })
-        .cloned()
-        .ok_or_else(|| anyhow!("a cross-file identical cluster must surface"))
 }

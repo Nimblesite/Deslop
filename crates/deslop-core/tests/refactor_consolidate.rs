@@ -19,10 +19,12 @@ use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
     lang::{csharp::CSharpParser, rust_lang::RustParser},
     refactor::consolidate::{compute_consolidation_plan, ConsolidationOutcome},
-    report::{Report, ReportCluster, ReportOccurrence, ReportSignals},
+    report::{Report, ReportCluster},
 };
 
-use crate::common::{analyse_refactor_fixture as analyse, fixture};
+use crate::common::{
+    analyse_refactor_fixture as analyse, fixture, report_occurrence, synthetic_report_cluster,
+};
 
 /// Reads every occurrence path of a cluster into the sources map the
 /// consolidation engine consumes.
@@ -153,35 +155,10 @@ fn synthetic_cluster(
     for (name, content) in files {
         let start = content.find(needle).context("definition present")?;
         let end = start.saturating_add(needle.len());
-        occurrences.push(ReportOccurrence {
-            path: PathBuf::from(name),
-            start_byte: start,
-            end_byte: end,
-            start_line: 0,
-            end_line: 0,
-            hidden: false,
-        });
+        occurrences.push(report_occurrence(name, (start, end), false));
         let _inserted = sources.insert(PathBuf::from(name), content.as_bytes().to_vec());
     }
-    let cluster = ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: "identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    };
+    let cluster = synthetic_report_cluster(occurrences, "identical");
     Ok((cluster, sources))
 }
 

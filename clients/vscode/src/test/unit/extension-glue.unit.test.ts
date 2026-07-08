@@ -96,10 +96,26 @@ suite("extension activation glue", () => {
   });
 
   test("startLanguageClient builds a configured LanguageClient without spawning", () => {
-    const client = startLanguageClient(resolvedLsp());
+    const client = startLanguageClient(resolvedLsp(), "/tmp/deslop-workspace");
     assert.ok(client instanceof LanguageClient, "must return a real LanguageClient instance");
     // Constructed but never started — no server process is spawned.
     assert.equal(client.name, "Deslop");
+  });
+
+  test("startLanguageClient does not launch the LSP without a workspace folder (issue #201)", () => {
+    // Regression: with no folder open, vscode-languageclient appends its
+    // `--stdio` transport flag as the only argv the server sees. The Rust
+    // binary then reads `--stdio` as the positional workspace root, the file
+    // watcher fails on that bogus path, and the server crash-loops until VS
+    // Code disables it ("server crashed 5 times"). There is nothing to
+    // analyse without a folder, so the client must not be constructed at all
+    // — mirroring the MCP guard in wireMcpRegistration.
+    const client = startLanguageClient(resolvedLsp(), undefined);
+    assert.equal(
+      client,
+      undefined,
+      "no workspace folder ⇒ the LSP must not be launched (it would crash-loop on the client's --stdio flag)",
+    );
   });
 
   test("currentBinarySettings mirrors the configured override paths", async () => {
