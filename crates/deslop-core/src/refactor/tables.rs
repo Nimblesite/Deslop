@@ -81,6 +81,18 @@ pub const EMPTY_REFERENCE_TABLE: ReferenceTable = ReferenceTable {
     skip_fields: &[],
 };
 
+/// A binding node kind whose names bind past *transparent* frames into
+/// the nearest enclosing opaque frame — PEP 572's walrus inside a
+/// comprehension binds in the containing function or module scope, not
+/// the comprehension's own frame ([AUTOFIX-EXTRACT-FREE-VARS]).
+#[derive(Debug, Clone, Copy)]
+pub struct HoistRule {
+    /// Tree-sitter node kind of the hoisting binding (`named_expression`).
+    pub binding_kind: &'static str,
+    /// Frame node kinds the binding hoists past (comprehension kinds).
+    pub transparent_frame_kinds: &'static [&'static str],
+}
+
 /// Container/scope kinds for [AUTOFIX-EXTRACT-PRECONDITIONS] rules 4–5
 /// and the free-variable walk's frame handling.
 #[derive(Debug, Clone, Copy)]
@@ -100,6 +112,20 @@ pub struct ScopeKinds {
     /// Whether an occurrence directly at module top level satisfies the
     /// enclosing-scope rule (Python: yes).
     pub allow_module_top_level: bool,
+    /// Binding kinds that hoist past transparent frames
+    /// ([AUTOFIX-EXTRACT-FREE-VARS] — PEP 572 walrus).
+    pub hoist_rules: &'static [HoistRule],
+    /// Frame kinds whose bodies run at *call time*, not where they sit
+    /// in the source — in late-binding languages (Python) a body
+    /// defined before a span can still read the span's bindings after
+    /// it, so rule 6 must scan these bodies wherever they appear
+    /// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 6). Empty for languages
+    /// whose compilers reject use-before-declaration (C#, Rust, Dart).
+    pub deferred_frame_kinds: &'static [&'static str],
+    /// Declaration kinds that re-bind names to an *enclosing* scope
+    /// (Python `global`/`nonlocal`): inside a deferred body their names
+    /// read past the body's own frame, so rule 6 treats them as free.
+    pub scope_escape_kinds: &'static [&'static str],
 }
 
 /// One boundary-crossing statement pattern for [AUTOFIX-MERGE-SAFETY]

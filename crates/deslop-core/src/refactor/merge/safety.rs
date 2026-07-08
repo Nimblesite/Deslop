@@ -3,7 +3,7 @@
 //! Check A (structural, consistent holes) is established by the gate;
 //! this module adds B (single-entry/single-exit; its
 //! declared-inside-read-after dataflow half is the shared
-//! [`read_after_check`] in `preconditions`, which extract rule 6 also
+//! [`read_after_check`] in `read_after`, which extract rule 6 also
 //! runs — issue #278), the Baker rename lifting (gate step 3), C's
 //! shadow-free naming inputs, and D's value-parameter typing. Any
 //! undecidable check refuses — a false "unsafe" beats a false "safe"
@@ -18,7 +18,8 @@ use crate::{
     lang::{shared::LITERAL_KIND, LanguageParser},
     refactor::{
         merge::gate::Hole,
-        preconditions::{node_text, read_after_check, run_bound_names, OccurrenceScope},
+        preconditions::{node_text, OccurrenceScope},
+        read_after::{read_after_check, run_bound_names},
         tables::{MergeTables, ScopeKinds},
     },
 };

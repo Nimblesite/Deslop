@@ -16,6 +16,7 @@ pub mod emit;
 pub mod merge;
 pub mod position;
 pub mod preconditions;
+pub(crate) mod read_after;
 pub mod tables;
 
 mod free_vars;
@@ -79,14 +80,10 @@ pub fn compute_plan(
     // Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #278): a span
     // whose own bindings are read after it would corrupt the enclosing
     // code when rewritten as a call. Silent refusal, reason discarded.
-    if preconditions::read_after_check(&scopes, source, parser, scope_kinds).is_err() {
+    if read_after::read_after_check(&scopes, source, parser, scope_kinds).is_err() {
         return Ok(None);
     }
-    let tables = WalkTables {
-        bindings: parser.binding_node_kinds(),
-        references: parser.identifier_reference_kinds(),
-        scopes: scope_kinds,
-    };
+    let tables = WalkTables::for_language(parser, scope_kinds);
     let free_variables = scopes.first().map_or_else(Vec::new, |scope| {
         free_vars::free_variables(&scope.run, source, tables)
     });
@@ -110,15 +107,7 @@ pub(crate) fn free_variables_of_run(
     parser: &dyn LanguageParser,
     scope_kinds: &'static tables::ScopeKinds,
 ) -> Vec<String> {
-    free_vars::free_variables(
-        run,
-        source,
-        WalkTables {
-            bindings: parser.binding_node_kinds(),
-            references: parser.identifier_reference_kinds(),
-            scopes: scope_kinds,
-        },
-    )
+    free_vars::free_variables(run, source, WalkTables::for_language(parser, scope_kinds))
 }
 
 /// Resolves the language plugin responsible for `path`, when the

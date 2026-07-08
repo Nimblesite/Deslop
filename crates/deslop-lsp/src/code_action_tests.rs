@@ -328,3 +328,44 @@ fn resolved_action_attaches_edit_or_disables() -> Result<()> {
     );
     Ok(())
 }
+
+/// A mechanical verdict whose edit is missing or undeserializable must
+/// disable the action — an enabled action with no edit applies as a
+/// silent no-op the user reads as success.
+#[test]
+fn resolved_action_disables_when_edit_is_unusable() -> Result<()> {
+    let offer = CodeAction {
+        title: MERGE_ACTION_TITLE.to_owned(),
+        kind: Some(CodeActionKind::REFACTOR_REWRITE),
+        data: Some(serde_json::json!({ "cluster_id": "abcdef0123456789" })),
+        ..CodeAction::default()
+    };
+    let base = deslop_core::wire_generated::MergePlan {
+        cluster_id: "abcdef0123456789".to_owned(),
+        language: "csharp".to_owned(),
+        verdict: deslop_core::wire_generated::MergeVerdict::Mechanical,
+        helper_name: "MergedFromCluster_abcdef".to_owned(),
+        helper_body: "var x = arg0;".to_owned(),
+        parameters: Vec::new(),
+        workspace_edit: None,
+    };
+    for (label, edit) in [
+        ("missing edit", None),
+        ("undeserializable edit", Some(serde_json::json!(42))),
+    ] {
+        let plan = deslop_core::wire_generated::MergePlan {
+            workspace_edit: edit,
+            ..base.clone()
+        };
+        let resolved = resolved_action(offer.clone(), &plan);
+        ensure!(resolved.edit.is_none(), "{label}: no edit attaches");
+        ensure!(
+            resolved
+                .disabled
+                .as_ref()
+                .is_some_and(|entry| entry.reason.contains("edit")),
+            "{label}: the action must disable with a reason naming the missing edit"
+        );
+    }
+    Ok(())
+}

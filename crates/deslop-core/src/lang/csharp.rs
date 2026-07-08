@@ -199,6 +199,9 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     ],
     frame_kinds: FRAME_KINDS,
     allow_module_top_level: false,
+    hoist_rules: &[],
+    deferred_frame_kinds: &[],
+    scope_escape_kinds: &[],
 };
 
 /// C# node kinds that exit with a value when they carry an expression

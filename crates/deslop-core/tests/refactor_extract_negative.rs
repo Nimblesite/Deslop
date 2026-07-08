@@ -299,6 +299,41 @@ fn block_without_enclosing_function_refused() -> Result<()> {
 fn bindings_read_after_span_refused() -> Result<()> {
     let text = "fn alpha(input: usize) -> usize {\n    let seed = input + 1;\n    let scaled = seed * 3;\n    scaled + seed\n}\n\nfn beta(input: usize) -> usize {\n    let seed = input + 1;\n    let scaled = seed * 3;\n    scaled - seed\n}\n";
     let needle = "let seed = input + 1;\n    let scaled = seed * 3;";
+    let plan = needle_cluster_plan(text, needle, "wallets.rs")?;
+    ensure!(
+        plan.is_none(),
+        "a span whose bindings are read after it must be refused (issue #278)"
+    );
+    Ok(())
+}
+
+/// Rule 6 over the C# fixture's pre-#278 sibling window — `var total…`
+/// through the loop end. The window binds `total`, which the `if`
+/// guard and `return` read after the span; this is exactly the
+/// corrupting shape the old positive test asserted before issue #278
+/// retargeted it, pinned here as a refusal.
+#[test]
+fn csharp_binding_escaping_sibling_window_refused() -> Result<()> {
+    let source = fs::read_to_string(fixture("csharp-extract-type1").join("InvoiceMath.cs"))
+        .context("fixture source")?;
+    let needle = "var total = 0;\n        foreach (var amount in amounts)\n        {\n            var taxed = amount * taxRate / 100;\n            total += amount + taxed;\n        }";
+    let plan = needle_cluster_plan(&source, needle, "InvoiceMath.cs")?;
+    ensure!(
+        plan.is_none(),
+        "the window binds `total`, which is read after the span — must refuse (issue #278)"
+    );
+    Ok(())
+}
+
+/// Computes the extract plan for a synthetic proven-Identical cluster
+/// over the two occurrences of `needle` in `text`, parsed per
+/// `file_name`'s language — the rule 6 dataflow tests drive this end
+/// to end.
+fn needle_cluster_plan(
+    text: &str,
+    needle: &str,
+    file_name: &str,
+) -> Result<Option<refactor::ExtractMethodPlan>> {
     let (first, second) = both_spans(text, needle)?;
     let mut cluster = synthetic_cluster(
         vec![
@@ -310,13 +345,96 @@ fn bindings_read_after_span_refused() -> Result<()> {
     cluster
         .occurrences
         .iter_mut()
-        .for_each(|entry| entry.path = PathBuf::from("wallets.rs"));
-    let parser = deslop_core::lang::rust_lang::RustParser::new();
-    let plan = refactor::compute_plan(&cluster, text.as_bytes(), &parser)
-        .map_err(|error| anyhow!("unexpected error {error}"))?;
+        .for_each(|entry| entry.path = PathBuf::from(file_name));
+    let parser = refactor::parser_for_path(std::path::Path::new(file_name))
+        .ok_or_else(|| anyhow!("no parser for {file_name}"))?;
+    refactor::compute_plan(&cluster, text.as_bytes(), parser.as_ref())
+        .map_err(|error| anyhow!("unexpected error {error}"))
+}
+
+/// Rule 6's late-binding half ([AUTOFIX-EXTRACT-PRECONDITIONS], issue
+/// #278 hardening): a Python function defined lexically *before* the
+/// span reads a span-bound module name when called after it — the body
+/// executes at call time, so lexical position does not bound the read.
+/// Extracting would leave `total`/`offset` local to the helper and
+/// `show()` raising `NameError`.
+#[test]
+fn python_late_binding_function_read_refused() -> Result<()> {
+    let text = "def show():\n    print(total)\n\n\ntotal = base + 1\noffset = total * 2\nmark = 0\ntotal = base + 1\noffset = total * 2\n";
+    let needle = "total = base + 1\noffset = total * 2";
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?;
     ensure!(
         plan.is_none(),
-        "a span whose bindings are read after it must be refused (issue #278)"
+        "a function defined before the span reads its bindings at call time — must refuse"
+    );
+    Ok(())
+}
+
+/// Rule 6's escape-declaration half: a function before the span
+/// declares `global total`, so its reads resolve at module scope no
+/// matter what its own frame binds — the extract must still refuse.
+#[test]
+fn python_global_declaration_read_refused() -> Result<()> {
+    let text = "def bump():\n    global total\n    return total + 1\n\n\ntotal = base + 1\noffset = total * 2\nmark = 0\ntotal = base + 1\noffset = total * 2\n";
+    let needle = "total = base + 1\noffset = total * 2";
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?;
+    ensure!(
+        plan.is_none(),
+        "a `global` declaration re-binds reads to module scope — must refuse"
+    );
+    Ok(())
+}
+
+/// Rule 6 over a PEP 572 walrus: `last := item` inside a comprehension
+/// binds in the *enclosing* scope, not the comprehension frame — so
+/// `print(last)` after the span reads a span-created binding and the
+/// extract must refuse ([AUTOFIX-EXTRACT-FREE-VARS] hoisting).
+#[test]
+fn python_walrus_binding_read_after_span_refused() -> Result<()> {
+    let text = "values = [1, 2]\npeak = max((last := item) for item in values)\nflag = peak > 0\nprint(last)\nvalues = [3, 4]\npeak = max((last := item) for item in values)\nflag = peak > 0\nprint(last)\n";
+    let needle = "peak = max((last := item) for item in values)\nflag = peak > 0";
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?;
+    ensure!(
+        plan.is_none(),
+        "a walrus binding hoists past the comprehension frame and is read after the span — must refuse"
+    );
+    Ok(())
+}
+
+/// Rule 5 alignment for Python single-statement occurrences: the
+/// `expression_statement` wrapper is byte-identical to its expression
+/// child, so the deepest-node lookup must hop the extent-equal wrapper
+/// to find the statement container above it — a one-statement span is
+/// a legitimate extract.
+#[test]
+fn python_single_statement_occurrence_extracts() -> Result<()> {
+    let text = "total = base + 1\nmark = 0\ntotal = base + 1\nprint(mark)\n";
+    let needle = "total = base + 1";
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?
+        .ok_or_else(|| anyhow!("a single-statement module-level span must extract"))?;
+    ensure!(
+        plan.free_variables == ["base"],
+        "the lone statement reads only `base`, got {:?}",
+        plan.free_variables
+    );
+    Ok(())
+}
+
+/// Rule 6 must not over-refuse on non-reference identifier positions:
+/// after the span, `config` appears only as an attribute name and a
+/// keyword-argument name — neither reads the span-bound local, so the
+/// extract stays offered (per-language skip rules apply to the
+/// read-after scan exactly as they do to the free-variable walk).
+#[test]
+fn python_attribute_and_kwarg_names_after_span_extract() -> Result<()> {
+    let text = "config = build(size)\ntag = str(config)\nmark = 0\nconfig = build(size)\ntag = str(config)\nrender(config=1)\nitem.config = 2\n";
+    let needle = "config = build(size)\ntag = str(config)";
+    let plan = needle_cluster_plan(text, needle, "metrics.py")?
+        .ok_or_else(|| anyhow!("attribute/kwarg positions are not reads — must extract"))?;
+    ensure!(
+        plan.free_variables == ["build", "size", "str"],
+        "span reads only its callees and `size`, got {:?}",
+        plan.free_variables
     );
     Ok(())
 }

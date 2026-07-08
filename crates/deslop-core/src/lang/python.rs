@@ -22,7 +22,7 @@ use crate::{
         emit::{
             cluster_id_prefix, line_indent_at, line_start_at, run_text, EmitOutcome, EmitRequest,
         },
-        tables::{BindingKind, FrameKind, ReferenceTable, ScopeKinds},
+        tables::{BindingKind, FrameKind, HoistRule, ReferenceTable, ScopeKinds},
     },
     state::FileId,
 };
@@ -216,7 +216,23 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     shared_parent_kinds: &["class_definition", "module"],
     frame_kinds: FRAME_KINDS,
     allow_module_top_level: true,
+    hoist_rules: HOIST_RULES,
+    deferred_frame_kinds: &["function_definition", "lambda"],
+    scope_escape_kinds: &["global_statement", "nonlocal_statement"],
 };
+
+/// PEP 572: a walrus target inside a comprehension binds in the
+/// containing function or module scope, never the comprehension's own
+/// frame ([AUTOFIX-EXTRACT-FREE-VARS] hoisting).
+const HOIST_RULES: &[HoistRule] = &[HoistRule {
+    binding_kind: "named_expression",
+    transparent_frame_kinds: &[
+        "list_comprehension",
+        "set_comprehension",
+        "dictionary_comprehension",
+        "generator_expression",
+    ],
+}];
 
 /// One indentation step for re-indented module-level bodies (PEP 8).
 const INDENT_STEP: &str = "    ";

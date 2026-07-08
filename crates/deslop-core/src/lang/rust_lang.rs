@@ -304,6 +304,9 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     shared_parent_kinds: &["impl_item", "mod_item", "source_file"],
     frame_kinds: FRAME_KINDS,
     allow_module_top_level: false,
+    hoist_rules: &[],
+    deferred_frame_kinds: &[],
+    scope_escape_kinds: &[],
 };
 
 /// One indentation step for the emitted helper body, matching rustfmt.

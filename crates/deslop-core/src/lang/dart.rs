@@ -163,6 +163,9 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     shared_parent_kinds: &["class_definition", "source_file"],
     frame_kinds: FRAME_KINDS,
     allow_module_top_level: false,
+    hoist_rules: &[],
+    deferred_frame_kinds: &[],
+    scope_escape_kinds: &[],
 };
 
 /// Dart merge tables ([AUTOFIX-MERGE-SAFETY] B and D). Defaults are

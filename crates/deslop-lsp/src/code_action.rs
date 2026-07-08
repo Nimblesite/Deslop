@@ -105,7 +105,16 @@ pub fn resolved_action(
                 .workspace_edit
                 .clone()
                 .and_then(|value| serde_json::from_value::<WorkspaceEdit>(value).ok());
-            action.edit = edit;
+            match edit {
+                // An enabled action without an edit would apply as a
+                // silent no-op, so a missing/malformed edit disables.
+                Some(edit) => action.edit = Some(edit),
+                None => {
+                    action.disabled = Some(tower_lsp::lsp_types::CodeActionDisabled {
+                        reason: "the engine returned no applicable edit for this plan".to_owned(),
+                    });
+                }
+            }
         }
         deslop_core::wire_generated::MergeVerdict::AiOrHuman { reason } => {
             action.disabled = Some(tower_lsp::lsp_types::CodeActionDisabled {

@@ -7,16 +7,13 @@
 //! can prove equivalence of contained C# methods rather than of the
 //! raw slices ([CLONE-BUCKETS-IDENTICAL]).
 
-use std::collections::HashSet;
-
 use tree_sitter::Node;
 
 use crate::{
     ast::ByteRange,
     buckets::{classify, ClusterKind},
     cluster_filters::enclosing_kind,
-    lang::LanguageParser,
-    refactor::{free_vars, tables::ScopeKinds},
+    refactor::tables::ScopeKinds,
     report::ReportCluster,
     report_render::canonicalise_whitespace,
 };
@@ -68,14 +65,7 @@ const EXACT_BUCKETS: [ClusterKind; 3] = [
 /// spans ([`slices_equivalent`]).
 #[must_use]
 pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
-    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
-        return None;
-    }
-    let visible: Vec<_> = cluster
-        .occurrences
-        .iter()
-        .filter(|occurrence| !occurrence.hidden)
-        .collect();
+    let visible = visible_exact_occurrences(cluster)?;
     let (first, rest) = visible.split_first()?;
     if rest.is_empty() || rest.iter().any(|occurrence| occurrence.path != first.path) {
         return None;
@@ -99,19 +89,33 @@ pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
 /// silently offering nothing (issue #277).
 #[must_use]
 pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
-    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
+    let Some(visible) = visible_exact_occurrences(cluster) else {
         return false;
-    }
-    let visible: Vec<_> = cluster
-        .occurrences
-        .iter()
-        .filter(|occurrence| !occurrence.hidden)
-        .collect();
+    };
     let distinct: std::collections::HashSet<_> = visible
         .iter()
         .map(|occurrence| &occurrence.path)
         .collect();
     visible.len() >= 2 && distinct.len() >= 2
+}
+
+/// The visible occurrences of an exact-structural, untruncated cluster
+/// — the pre-screen [`eligible_ranges`] and [`consolidation_candidate`]
+/// share. `None` when the bucket or wire truncation disqualifies the
+/// cluster outright.
+fn visible_exact_occurrences(
+    cluster: &ReportCluster,
+) -> Option<Vec<&crate::report::ReportOccurrence>> {
+    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
+        return None;
+    }
+    Some(
+        cluster
+            .occurrences
+            .iter()
+            .filter(|occurrence| !occurrence.hidden)
+            .collect(),
+    )
 }
 
 /// True when every range ends before the next begins.
@@ -252,7 +256,8 @@ fn statement_run<'t>(
 ) -> Option<(Node<'t>, Vec<Node<'t>>)> {
     let covering = root.named_descendant_for_byte_range(range.start, range.end)?;
     if covering.start_byte() == range.start && covering.end_byte() == range.end {
-        return exact_node_run(covering, scopes);
+        return exact_node_run(covering, scopes)
+            .or_else(|| exact_node_run(widest_at_extent(covering), scopes));
     }
     if scopes.function_kinds.contains(&covering.kind()) {
         return covered_function_body_run(covering, range, scopes);
@@ -274,6 +279,21 @@ fn covered_function_body_run<'t>(
     (range.start <= body.start_byte() && body.end_byte() <= range.end)
         .then(|| function_body_run(function, scopes))
         .flatten()
+}
+
+/// The outermost ancestor sharing `node`'s exact byte extent — Python's
+/// `expression_statement` wraps its expression at identical extent, so
+/// the deepest-node lookup lands below the statement and rule 5 must
+/// hop back up to align on the statement container's child.
+fn widest_at_extent(node: Node<'_>) -> Node<'_> {
+    let mut current = node;
+    while let Some(parent) = current.parent() {
+        if parent.start_byte() != current.start_byte() || parent.end_byte() != current.end_byte() {
+            break;
+        }
+        current = parent;
+    }
+    current
 }
 
 /// An occurrence that is exactly one node: a whole statement container
@@ -347,94 +367,6 @@ fn child_run<'t>(
         .iter()
         .position(|child| child.end_byte() == range.end)?;
     (start <= end).then(|| (covering, children.get(start..=end).unwrap_or(&[]).to_vec()))
-}
-
-/// Rule 6 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #278) — also
-/// [AUTOFIX-MERGE-SAFETY] check B's dataflow half: no name bound
-/// inside any occurrence's span may be read after that span within its
-/// enclosing function (or, for module-top-level occurrences, the rest
-/// of the shared parent). The `Err` carries the human-readable refusal
-/// reason the merge tier surfaces; the extract tier discards it and
-/// refuses silently.
-pub(crate) fn read_after_check(
-    scopes: &[OccurrenceScope<'_>],
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    scope_kinds: &'static ScopeKinds,
-) -> Result<(), String> {
-    let all_spans: Vec<ByteRange> = scopes.iter().map(OccurrenceScope::span).collect();
-    for scope in scopes {
-        let bound = run_bound_names(scope, source, parser, scope_kinds);
-        let horizon = scope.function.unwrap_or(scope.shared_parent);
-        let span = scope.span();
-        if let Some(name) = read_after_span(horizon, span, &all_spans, source, parser, &bound) {
-            return Err(format!(
-                "local `{name}` declared inside the span is read after it"
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Names bound at the top level of one occurrence's statement run —
-/// shared by [`read_after_check`] and the merge tier's rename lifting.
-pub(crate) fn run_bound_names(
-    scope: &OccurrenceScope<'_>,
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    scope_kinds: &'static ScopeKinds,
-) -> HashSet<String> {
-    free_vars::bound_names(
-        &scope.run,
-        source,
-        free_vars::WalkTables {
-            bindings: parser.binding_node_kinds(),
-            references: parser.identifier_reference_kinds(),
-            scopes: scope_kinds,
-        },
-    )
-}
-
-/// First in-span-declared name referenced after the span within
-/// `horizon`, if any. Subtrees inside any of the cluster's occurrence
-/// spans are pruned — they are rewritten away with their occurrence,
-/// so a sibling occurrence re-binding the same names is not a read.
-fn read_after_span(
-    horizon: Node<'_>,
-    span: ByteRange,
-    all_spans: &[ByteRange],
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    bound: &HashSet<String>,
-) -> Option<String> {
-    let references = parser.identifier_reference_kinds();
-    let mut stack = vec![horizon];
-    while let Some(node) = stack.pop() {
-        if inside_any_span(node, all_spans) {
-            continue;
-        }
-        if node.start_byte() >= span.end && references.reference_kinds.contains(&node.kind()) {
-            if let Some(text) = node_text(node, source) {
-                if bound.contains(&text) {
-                    return Some(text);
-                }
-            }
-        }
-        let children = named_children(node);
-        stack.extend(
-            children
-                .into_iter()
-                .filter(|child| child.end_byte() > span.end),
-        );
-    }
-    None
-}
-
-/// True when `node` sits fully inside one of the occurrence spans.
-fn inside_any_span(node: Node<'_>, spans: &[ByteRange]) -> bool {
-    spans
-        .iter()
-        .any(|span| span.start <= node.start_byte() && node.end_byte() <= span.end)
 }
 
 /// UTF-8 text of one raw node — the shared leaf-reading primitive for
