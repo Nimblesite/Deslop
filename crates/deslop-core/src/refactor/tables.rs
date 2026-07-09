@@ -126,14 +126,45 @@ pub struct ScopeKinds {
     /// (Python `global`/`nonlocal`): inside a deferred body their names
     /// read past the body's own frame, so rule 6 treats them as free.
     pub scope_escape_kinds: &'static [&'static str],
-    /// `(node_kind, target_field)` pairs that write a variable by
-    /// name. Rule 7 refuses extracts whose free variables are written
-    /// inside the span — the helper would mutate its own parameter
-    /// copy ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #280) — and merge
-    /// check D refuses written holes ([AUTOFIX-MERGE-SAFETY]). Only
-    /// bare-identifier targets match: subscript/member targets mutate
-    /// the object the parameter still shares.
-    pub write_kinds: &'static [(&'static str, &'static str)],
+    /// Variable-writing node patterns. Rule 7 refuses extracts whose
+    /// free variables are written inside the span — the helper would
+    /// mutate its own parameter copy ([AUTOFIX-EXTRACT-PRECONDITIONS],
+    /// issue #280) — and merge check D refuses written holes and
+    /// context parameters ([AUTOFIX-MERGE-SAFETY]).
+    pub write_kinds: &'static [WriteKind],
+    /// Statement kinds whose meaning changes when the span relocates
+    /// to the emitter's destination scope (Python `nonlocal` — a
+    /// module-scope helper has no enclosing function binding). A span
+    /// containing one refuses ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7).
+    pub relocation_unsafe_kinds: &'static [&'static str],
+}
+
+/// One variable-writing node pattern for rule 7 and merge check D
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] issue #280, [AUTOFIX-MERGE-SAFETY]).
+///
+/// A node of `node_kind` writes the name(s) in its target — the
+/// `target_field` child, or the node itself when `None` (grammars that
+/// give the operand no field: C# `total++`, `out total`). When
+/// `marker_tokens` is non-empty the node writes only if one of those
+/// token kinds appears among its children (`++`/`--` under a unary
+/// expression, `ref`/`out` under an argument). A target matches by
+/// exact text for bare identifiers, or — when its kind is listed in
+/// `destructuring_kinds` — by any named leaf under it (C# tuple
+/// deconstruction, Dart pattern assignment). Other composite targets
+/// (subscripts, member accesses) never match: they mutate the object a
+/// parameter copy still shares.
+#[derive(Debug, Clone, Copy)]
+pub struct WriteKind {
+    /// Tree-sitter node kind that writes a variable.
+    pub node_kind: &'static str,
+    /// Child field holding the written target; `None` targets the node
+    /// itself.
+    pub target_field: Option<&'static str>,
+    /// Token kinds one of which must appear among the node's children
+    /// for it to write. Empty means the node always writes.
+    pub marker_tokens: &'static [&'static str],
+    /// Target kinds whose named leaves are all written.
+    pub destructuring_kinds: &'static [&'static str],
 }
 
 /// One boundary-crossing statement pattern for [AUTOFIX-MERGE-SAFETY]

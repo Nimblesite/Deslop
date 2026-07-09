@@ -94,6 +94,12 @@ where
     W: Write,
     R: FnOnce(LspStartup) -> Result<()>,
 {
+    // Install the subscriber at the process boundary so diagnostics reach
+    // stderr on *every* path — including argv parse errors that never reach
+    // the serve path (e.g. a rootless `deslop-lsp --stdio`, #201). Without
+    // this, `failure_exit`'s `tracing::error!` hits `NoSubscriber` and the
+    // process exits 1 silently. `try_init` makes it idempotent.
+    init_tracing();
     match run_process_result(args, stdout, runner) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => failure_exit(&error),
@@ -110,7 +116,6 @@ where
     F: FnOnce(PathBuf, u32, LspEmbeddingConfig, IpcMode) -> Fut,
     Fut: std::future::Future<Output = Result<()>>,
 {
-    init_tracing();
     let _profile_guard = crate::profiling::LspProfileGuard::from_env();
     apply_process_nice(startup.nice)?;
     if let Some(policy) = startup.ranking_structural_only {
@@ -156,21 +161,24 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
     })
 }
 
-/// Reads the workspace root from the first positional argument.
+/// Reads the workspace root from the first positional (non-flag) argument.
 ///
-/// [#201] The client's transport flag (`--stdio`, appended by
-/// `vscode-languageclient`) and `--debug` can occupy this slot when no
-/// folder is open. A flag is never a path — the workspace root, when
-/// present, is always the first argument and never begins with `-`
-/// (absolute paths start with `/` or a drive letter). Treating a leading
-/// flag as the root pointed the file watcher at a path named `--stdio`
-/// and crash-looped the server, so a leading flag is a usage error, not a
-/// root.
+/// [#201] The client's transport flag (`--stdio`, injected by
+/// `vscode-languageclient`) and `--debug` are not paths. Treating one as
+/// the root pointed the file watcher at a path named `--stdio` and
+/// crash-looped the server. The workspace root is the first argument that
+/// does not begin with `-` (absolute paths start with `/`, a drive
+/// letter, or a UNC prefix — never `-`); when the whole argv is flags
+/// (no folder open) that is a usage error, not a root. Scanning for the
+/// first non-flag argument — rather than trusting `args[1]` — keeps the
+/// guard correct no matter where the client injects the transport flag,
+/// so a future library that prepends it cannot reopen the crash-loop.
 fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
-    match args.get(1) {
-        Some(arg) if !arg.starts_with('-') => Ok(PathBuf::from(arg)),
-        _ => Err(anyhow!("usage: deslop-lsp <workspace-root>")),
-    }
+    args.iter()
+        .skip(1)
+        .find(|arg| !arg.starts_with('-'))
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("usage: deslop-lsp <workspace-root>"))
 }
 
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.

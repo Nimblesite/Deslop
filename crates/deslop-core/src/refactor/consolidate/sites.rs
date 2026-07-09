@@ -51,8 +51,7 @@ pub(super) fn occurrence_sites<S: ::std::hash::BuildHasher>(
             Some(sites) => per_occurrence.push(sites),
             None => {
                 return Ok(Err(
-                    "an occurrence is not a run of whole top-level function definitions"
-                        .to_owned(),
+                    "an occurrence is not a run of whole top-level function definitions".to_owned(),
                 ));
             }
         }
@@ -65,9 +64,7 @@ fn cross_file_screen(visible: &[&ReportOccurrence], truncated: bool) -> Result<(
     let distinct: std::collections::HashSet<&PathBuf> =
         visible.iter().map(|occurrence| &occurrence.path).collect();
     if visible.len() < 2 || distinct.len() < 2 || truncated {
-        return Err(
-            "consolidation needs untruncated occurrences in at least two files".to_owned(),
-        );
+        return Err("consolidation needs untruncated occurrences in at least two files".to_owned());
     }
     Ok(())
 }

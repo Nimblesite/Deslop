@@ -18,7 +18,7 @@ use crate::{
     refactor::{
         free_vars,
         preconditions::{named_children, node_text, OccurrenceScope},
-        tables::ScopeKinds,
+        tables::{ScopeKinds, WriteKind},
     },
 };
 
@@ -57,11 +57,13 @@ pub(crate) fn read_after_check(
 }
 
 /// Rule 7 ([AUTOFIX-EXTRACT-PRECONDITIONS], issue #280): no free
-/// variable of the span may be an assignment target inside it — the
-/// helper would mutate its own parameter copy and the caller's
-/// variable would silently keep its old value, the mutation loss the
-/// type-safety backstop cannot catch. Merge check D runs the same
-/// dataflow per hole ([AUTOFIX-MERGE-SAFETY]).
+/// variable of the span may be a write target inside it — the helper
+/// would mutate its own parameter copy and the caller's variable would
+/// silently keep its old value, the mutation loss the type-safety
+/// backstop cannot catch. Also refuses spans containing a
+/// relocation-unsafe declaration (Python `nonlocal`). Merge check D
+/// runs the same dataflow per hole and per context parameter
+/// ([AUTOFIX-MERGE-SAFETY]).
 pub(crate) fn write_in_span_check(
     scopes: &[OccurrenceScope<'_>],
     free_variables: &[String],
@@ -69,10 +71,15 @@ pub(crate) fn write_in_span_check(
     scope_kinds: &'static ScopeKinds,
 ) -> Result<(), String> {
     for scope in scopes {
+        if let Some(kind) = relocation_unsafe_kind(scope, scope_kinds) {
+            return Err(format!(
+                "the span declares `{kind}` — relocating it would break the binding"
+            ));
+        }
         for name in free_variables {
             if written_in_span(scope, name, source, scope_kinds.write_kinds) {
                 return Err(format!(
-                    "free `{name}` is written inside the span — extracting would lose the mutation"
+                    "free `{name}` is written inside the span — a parameter copy would absorb the mutation"
                 ));
             }
         }
@@ -80,32 +87,101 @@ pub(crate) fn write_in_span_check(
     Ok(())
 }
 
-/// True when `name` is a bare-identifier assignment target anywhere
-/// inside the occurrence span. Subscript/member targets do not match:
-/// they mutate the object a parameter copy still shares
+/// First relocation-unsafe declaration kind anywhere in the span —
+/// Python `nonlocal` targets an enclosing *function* scope, which the
+/// emitter's module-scope destination does not have.
+fn relocation_unsafe_kind(
+    scope: &OccurrenceScope<'_>,
+    scope_kinds: &'static ScopeKinds,
+) -> Option<&'static str> {
+    scope.run.iter().find_map(|node| {
+        let mut stack = vec![*node];
+        while let Some(current) = stack.pop() {
+            if let Some(kind) = scope_kinds
+                .relocation_unsafe_kinds
+                .iter()
+                .find(|kind| **kind == current.kind())
+            {
+                return Some(*kind);
+            }
+            stack.extend(named_children(current));
+        }
+        None
+    })
+}
+
+/// True when `name` is a write target anywhere inside the occurrence
+/// span, per the language's [`WriteKind`] patterns
 /// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7, [AUTOFIX-MERGE-SAFETY] D).
 pub(crate) fn written_in_span(
     scope: &OccurrenceScope<'_>,
     name: &str,
     source: &[u8],
-    write_kinds: &'static [(&'static str, &'static str)],
+    write_kinds: &'static [WriteKind],
 ) -> bool {
     scope.run.iter().any(|node| {
         let mut stack = vec![*node];
         while let Some(current) = stack.pop() {
-            if let Some((_, field)) = write_kinds.iter().find(|(kind, _)| *kind == current.kind())
+            if write_kinds
+                .iter()
+                .any(|write| write_hits(current, write, name, source))
             {
-                let target = current
-                    .child_by_field_name(*field)
-                    .and_then(|child| node_text(child, source));
-                if target.as_deref() == Some(name) {
-                    return true;
-                }
+                return true;
             }
             stack.extend(named_children(current));
         }
         false
     })
+}
+
+/// True when `node` matches `write` and its target names `name`: exact
+/// text for bare-identifier targets, named-leaf scan for destructuring
+/// targets, nothing for other composites (subscript/member writes
+/// mutate the object a parameter copy still shares).
+fn write_hits(node: Node<'_>, write: &WriteKind, name: &str, source: &[u8]) -> bool {
+    if node.kind() != write.node_kind || !has_marker_token(node, write.marker_tokens) {
+        return false;
+    }
+    let Some(target) = write
+        .target_field
+        .map_or(Some(node), |field| node.child_by_field_name(field))
+    else {
+        return false;
+    };
+    node_text(target, source).as_deref() == Some(name)
+        || (write.destructuring_kinds.contains(&target.kind())
+            && named_leaf_matches(target, name, source))
+}
+
+/// True when one of `markers` appears among the node's children (or no
+/// marker is required). Markers are unnamed tokens (`++`, `ref`), so
+/// the scan walks all children, not just named ones.
+fn has_marker_token(node: Node<'_>, markers: &'static [&'static str]) -> bool {
+    if markers.is_empty() {
+        return true;
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if markers.contains(&child.kind()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// True when any named leaf under `target` spells `name` — the
+/// destructuring scan: every component of a tuple/pattern target is
+/// written.
+fn named_leaf_matches(target: Node<'_>, name: &str, source: &[u8]) -> bool {
+    let mut stack = vec![target];
+    while let Some(node) = stack.pop() {
+        let children = named_children(node);
+        if children.is_empty() && node_text(node, source).as_deref() == Some(name) {
+            return true;
+        }
+        stack.extend(children);
+    }
+    false
 }
 
 /// Names bound at the top level of one occurrence's statement run —

@@ -47,13 +47,67 @@ use crate::{
 /// Primitive types parse as `primitive_type` nodes and never reach the
 /// gate.
 const RUST_PRELUDE: &[&str] = &[
-    "AsMut", "AsRef", "Box", "Clone", "Copy", "Debug", "Default", "DoubleEndedIterator", "Drop",
-    "Eq", "Err", "ExactSizeIterator", "Extend", "Fn", "FnMut", "FnOnce", "From", "FromIterator",
-    "Hash", "Into", "IntoIterator", "Iterator", "None", "Ok", "Option", "Ord", "PartialEq",
-    "PartialOrd", "Result", "Send", "Sized", "Some", "String", "Sync", "ToOwned", "ToString",
-    "TryFrom", "TryInto", "Unpin", "Vec", "assert", "assert_eq", "assert_ne", "cfg", "concat",
-    "dbg", "env", "eprint", "eprintln", "file", "format", "include_str", "line", "matches",
-    "option_env", "print", "println", "stringify", "vec", "write", "writeln",
+    "AsMut",
+    "AsRef",
+    "Box",
+    "Clone",
+    "Copy",
+    "Debug",
+    "Default",
+    "DoubleEndedIterator",
+    "Drop",
+    "Eq",
+    "Err",
+    "ExactSizeIterator",
+    "Extend",
+    "Fn",
+    "FnMut",
+    "FnOnce",
+    "From",
+    "FromIterator",
+    "Hash",
+    "Into",
+    "IntoIterator",
+    "Iterator",
+    "None",
+    "Ok",
+    "Option",
+    "Ord",
+    "PartialEq",
+    "PartialOrd",
+    "Result",
+    "Send",
+    "Sized",
+    "Some",
+    "String",
+    "Sync",
+    "ToOwned",
+    "ToString",
+    "TryFrom",
+    "TryInto",
+    "Unpin",
+    "Vec",
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "cfg",
+    "concat",
+    "dbg",
+    "env",
+    "eprint",
+    "eprintln",
+    "file",
+    "format",
+    "include_str",
+    "line",
+    "matches",
+    "option_env",
+    "print",
+    "println",
+    "stringify",
+    "vec",
+    "write",
+    "writeln",
 ];
 
 /// One occurrence file's parse artefacts, shared across the checks.
@@ -167,7 +221,10 @@ fn drain_worklist(
 
 /// Proves one name stable or refuses with the reason.
 fn prove_stable(name: &str, files: &[ParsedFile<'_>]) -> Result<Stability, String> {
-    if files.iter().any(|file| nested_definition_exists(file, name)) {
+    if files
+        .iter()
+        .any(|file| nested_definition_exists(file, name))
+    {
         return Err(format!(
             "`{name}` matches a definition nested inside another item (impl/mod/enum) — resolution is not mechanically decidable (v1 gate, issue #279)"
         ));
@@ -272,8 +329,7 @@ fn locally_bound(
             .iter()
             .find(|binding| binding.node_kind == node.kind())
             .and_then(|binding| binding.name_field);
-        let closure_params =
-            (node.kind() == "closure_expression").then_some("parameters");
+        let closure_params = (node.kind() == "closure_expression").then_some("parameters");
         if let Some(field) = binding_field.or(closure_params) {
             if let Some(target) = node.child_by_field_name(field) {
                 bound.extend(kind_texts(target, source, "identifier"));
@@ -340,7 +396,10 @@ fn nested_definition_exists(file: &ParsedFile<'_>, name: &str) -> bool {
 /// enum variants, struct fields, macro definitions.
 fn is_definition_kind(kind: &str) -> bool {
     kind.ends_with("_item")
-        || matches!(kind, "enum_variant" | "field_declaration" | "macro_definition")
+        || matches!(
+            kind,
+            "enum_variant" | "field_declaration" | "macro_definition"
+        )
 }
 
 /// True when any occurrence file's `impl` (or `trait`) blocks define an
@@ -454,12 +513,8 @@ fn definitions_equivalent(
 
 /// `use` declarations mentioning `name` must be textually identical
 /// across every occurrence file.
-fn use_declarations_identical(
-    name: &str,
-    files: &[ParsedFile<'_>],
-) -> Result<Stability, String> {
-    let per_file: Vec<BTreeSet<String>> =
-        files.iter().map(|file| use_texts(file, name)).collect();
+fn use_declarations_identical(name: &str, files: &[ParsedFile<'_>]) -> Result<Stability, String> {
+    let per_file: Vec<BTreeSet<String>> = files.iter().map(|file| use_texts(file, name)).collect();
     let all_equal = per_file
         .windows(2)
         .all(|pair| matches!(pair, [left, right] if left == right));
@@ -485,8 +540,7 @@ fn use_texts(file: &ParsedFile<'_>, name: &str) -> BTreeSet<String> {
 fn mentions(node: Node<'_>, source: &[u8], name: &str) -> bool {
     let mut stack = vec![node];
     while let Some(current) = stack.pop() {
-        if current.named_child_count() == 0 && node_text(current, source).as_deref() == Some(name)
-        {
+        if current.named_child_count() == 0 && node_text(current, source).as_deref() == Some(name) {
             return true;
         }
         stack.extend(named_children(current));

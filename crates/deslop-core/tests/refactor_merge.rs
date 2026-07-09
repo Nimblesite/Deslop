@@ -466,6 +466,32 @@ fn written_hole_identifier_refuses() -> Result<()> {
     assert_all_refused_with("csharp-merge-writtenhole", "Mutator.cs", "written inside")
 }
 
+/// [AUTOFIX-MERGE-SAFETY] / extract rule 7 (#280): a *context* free
+/// variable (identical at every site, so never a hole) written inside
+/// the span refuses — the helper's by-value parameter copy would
+/// absorb the mutation and every caller's variable would keep its old
+/// value.
+#[test]
+fn written_context_variable_refuses() -> Result<()> {
+    assert_all_refused_with(
+        "csharp-merge-writtencontext",
+        "Accumulator.cs",
+        "written inside",
+    )
+}
+
+/// Same context-write refusal through the Dart tables — the only
+/// coverage of Dart's `write_kinds` (Dart has no Tier-1 emitter, so an
+/// extract-path Dart test would be vacuous).
+#[test]
+fn dart_written_context_variable_refuses() -> Result<()> {
+    assert_all_refused_with(
+        "dart-merge-writtencontext",
+        "accumulator.dart",
+        "written inside",
+    )
+}
+
 /// [AUTOFIX-MERGE-DEFAULTS]: a trailing slot shared by all-but-one of
 /// three sites gains a default and the matching calls elide it. The
 /// three-sibling family is hidden by the ranked report (#197), so the

@@ -447,7 +447,9 @@ fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
     let (target_uri, edits) = changes
         .iter()
         .find_map(|change| {
-            let uri_text = change.pointer("/textDocument/uri").and_then(Value::as_str)?;
+            let uri_text = change
+                .pointer("/textDocument/uri")
+                .and_then(Value::as_str)?;
             let edits = change.pointer("/edits").and_then(Value::as_array)?;
             (!edits.is_empty()).then(|| (uri_text.to_owned(), edits.clone()))
         })

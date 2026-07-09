@@ -157,8 +157,9 @@ fn process_exit_code_reflects_runner_result() {
     assert_eq!(failure, ExitCode::from(1));
 }
 
-/// Startup dispatch builds the runtime layer, initializes diagnostics,
-/// and forwards exactly the parsed config to the async server function.
+/// Startup dispatch builds the runtime layer and forwards exactly the
+/// parsed config to the async server function. (Tracing is installed at
+/// the process boundary in `run_process`, not here.)
 #[test]
 fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
     let startup = LspStartup {
@@ -393,7 +394,11 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
     // Happy path preserved: a real root followed by the appended transport
     // flag still resolves to the real root — exactly why a folder-open
     // session never hit this bug.
-    let run = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-201", "--stdio"])?)?;
+    let run = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/deslop-201",
+        "--stdio",
+    ])?)?;
     assert_eq!(run.workspace_root, PathBuf::from("/tmp/deslop-201"));
     let debug = serve_startup(action_from_args([
         "deslop-lsp",
@@ -402,6 +407,17 @@ fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
         "--stdio",
     ])?)?;
     assert_eq!(debug.workspace_root, PathBuf::from("/tmp/deslop-201"));
+
+    // Robustness: the root is the first non-flag argument, not strictly
+    // `args[1]`. Even if a future `vscode-languageclient` PREPENDED the
+    // transport flag instead of appending it, the real root still resolves
+    // — so that library change could never silently reopen the crash-loop.
+    let prepended = serve_startup(action_from_args([
+        "deslop-lsp",
+        "--stdio",
+        "/tmp/deslop-201",
+    ])?)?;
+    assert_eq!(prepended.workspace_root, PathBuf::from("/tmp/deslop-201"));
     Ok(())
 }
 

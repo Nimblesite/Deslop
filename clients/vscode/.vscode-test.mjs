@@ -31,6 +31,27 @@ export default defineConfig({
         bail: true,
       },
     },
+    {
+      // [#201] No `workspaceFolder` → VS Code launches an EMPTY window. This
+      // is the only config that exercises activate()'s no-folder path (the
+      // LSP-launch guard + the "ready" idle else-branch); the fixture entry
+      // above always has a folder open. Kept in its own launch so the
+      // folder-dependent suites still get their workspace.
+      files: ["out/test/no-folder/**/*.test.js"],
+      launchArgs: ["--disable-extensions"],
+      env: {
+        // Same bundled-binary resolution as the fixture entry: clear the
+        // override env so it falls to ${extensionPath}/bin/<platform>/.
+        DESLOP_BINARY_DIR: "",
+        DESLOP_LSP_PATH: "",
+        DESLOP_MCP_PATH: "",
+      },
+      mocha: {
+        ui: "tdd",
+        timeout: 60_000,
+        bail: true,
+      },
+    },
   ],
   coverage: {
     includeAll: true,

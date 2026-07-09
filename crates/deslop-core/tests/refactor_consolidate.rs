@@ -538,11 +538,14 @@ fn import_lands_after_inner_doc_comments() -> Result<()> {
     let file_a = format!("{definition}\n\npub fn a() -> usize {{ helper(1) }}\n");
     let file_b =
         format!("//! Ledger sibling.\n\n{definition}\n\npub fn b() -> usize {{ helper(2) }}\n");
-    let (cluster, sources) = synthetic_cluster(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
+    let (cluster, sources) =
+        synthetic_cluster(&[("a.rs", &file_a), ("b.rs", &file_b)], definition)?;
     let outcome = compute_consolidation_plan(&cluster, &sources, &RustParser::new())
         .map_err(|error| anyhow!("consolidation failed: {error}"))?;
     let ConsolidationOutcome::Mechanical(plan) = outcome else {
-        return Err(anyhow!("doc-headed duplicate must consolidate: {outcome:?}"));
+        return Err(anyhow!(
+            "doc-headed duplicate must consolidate: {outcome:?}"
+        ));
     };
     let mut buffer = file_b.clone();
     for edit in &plan.edits {

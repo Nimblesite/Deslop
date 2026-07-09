@@ -19,7 +19,7 @@ use crate::{
     refactor::{
         merge::gate::Hole,
         preconditions::OccurrenceScope,
-        read_after::{read_after_check, run_bound_names, written_in_span},
+        read_after::{read_after_check, run_bound_names, write_in_span_check, written_in_span},
         tables::{MergeTables, ScopeKinds},
     },
 };
@@ -53,8 +53,17 @@ pub fn evaluate(
 ) -> Result<Vec<HoleRole>, String> {
     boundary_check(scopes, tables, scope_kinds)?;
     read_after_check(scopes, source, parser, scope_kinds)?;
+    context_write_check(scopes, source, parser, scope_kinds)?;
     let bound_per_site = bound_names_per_site(scopes, source, parser, scope_kinds);
-    classify_holes(scopes, source, holes, parser, tables, scope_kinds, &bound_per_site)
+    classify_holes(
+        scopes,
+        source,
+        holes,
+        parser,
+        tables,
+        scope_kinds,
+        &bound_per_site,
+    )
 }
 
 /// Check B (control flow): no control transfer crossing the span
@@ -119,6 +128,23 @@ fn transfer_is_contained(node: Node<'_>, span: ByteRange, containers: &[&str]) -
         current = candidate.parent();
     }
     false
+}
+
+/// Extract rule 7's merge counterpart (issue #280): no *context* free
+/// variable — identical at every site, so never a hole — may be
+/// written inside its site's span. Check D covers written holes; this
+/// covers the parameters `free_value_parameters` would create.
+fn context_write_check(
+    scopes: &[OccurrenceScope<'_>],
+    source: &[u8],
+    parser: &dyn LanguageParser,
+    scope_kinds: &'static ScopeKinds,
+) -> Result<(), String> {
+    for scope in scopes {
+        let free = crate::refactor::free_variables_of_run(&scope.run, source, parser, scope_kinds);
+        write_in_span_check(std::slice::from_ref(scope), &free, source, scope_kinds)?;
+    }
+    Ok(())
 }
 
 /// Per-site bound-name sets, used by the rename lifting.

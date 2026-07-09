@@ -193,10 +193,7 @@ fn duplicate_edits_at<S: ::std::hash::BuildHasher>(
     parser: &dyn LanguageParser,
     module: &str,
 ) -> Result<Result<Vec<PlannedFileEdit>, String>, RefactorError> {
-    let sites: Vec<&DefinitionSite> = groups
-        .iter()
-        .filter_map(|group| group.get(index))
-        .collect();
+    let sites: Vec<&DefinitionSite> = groups.iter().filter_map(|group| group.get(index)).collect();
     let Some(path) = sites.first().map(|site| site.path.clone()) else {
         return Ok(Ok(Vec::new()));
     };

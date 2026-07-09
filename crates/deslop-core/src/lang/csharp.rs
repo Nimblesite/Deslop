@@ -28,7 +28,7 @@ use crate::{
             EmitRequest,
         },
         merge::{MergeEmitOutcome, MergeEmitRequest},
-        tables::{BindingKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds},
+        tables::{BindingKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds, WriteKind},
     },
     state::FileId,
 };
@@ -203,7 +203,35 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     deferred_frame_kinds: &[],
     scope_escape_kinds: &[],
     // Compound assignments (`+=` …) are `assignment_expression` too.
-    write_kinds: &[("assignment_expression", "left")],
+    // Increments and `ref`/`out` arguments have no target field, so
+    // they match via marker tokens and their own named leaves.
+    write_kinds: &[
+        WriteKind {
+            node_kind: "assignment_expression",
+            target_field: Some("left"),
+            marker_tokens: &[],
+            destructuring_kinds: &["tuple_expression"],
+        },
+        WriteKind {
+            node_kind: "postfix_unary_expression",
+            target_field: None,
+            marker_tokens: &["++", "--"],
+            destructuring_kinds: &["postfix_unary_expression"],
+        },
+        WriteKind {
+            node_kind: "prefix_unary_expression",
+            target_field: None,
+            marker_tokens: &["++", "--"],
+            destructuring_kinds: &["prefix_unary_expression"],
+        },
+        WriteKind {
+            node_kind: "argument",
+            target_field: None,
+            marker_tokens: &["ref", "out"],
+            destructuring_kinds: &["argument"],
+        },
+    ],
+    relocation_unsafe_kinds: &[],
 };
 
 /// C# node kinds that exit with a value when they carry an expression

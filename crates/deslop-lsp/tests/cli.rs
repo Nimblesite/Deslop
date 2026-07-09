@@ -53,6 +53,39 @@ fn prints_json_version_contract() -> Result<()> {
     Ok(())
 }
 
+// Issue #201: a rootless launch (the transport flag with no workspace root,
+// e.g. `deslop-lsp --stdio` from a folderless VS Code window) must FAIL
+// LOUDLY — exit non-zero AND write the usage error to stderr. The original
+// crash was preceded by the parser taking `--stdio` as the root; the guard
+// now rejects it, and the diagnostic must be visible (no silent no-op — the
+// subscriber is installed at the process boundary, not only on the serve
+// path). stdout stays clean so it never corrupts a JSON-RPC stream.
+#[test]
+fn rootless_launch_fails_loudly_with_usage_on_stderr() -> Result<()> {
+    for args in [vec!["--stdio"], vec!["--debug", "--stdio"]] {
+        let output = Command::cargo_bin("deslop-lsp")?
+            .timeout(Duration::from_secs(10))
+            .args(&args)
+            .output()?;
+        assert!(
+            !output.status.success(),
+            "rootless `deslop-lsp {args:?}` must exit non-zero, got {}",
+            output.status
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("usage: deslop-lsp"),
+            "rootless launch must surface the usage error on stderr (no silent no-op), got stderr={stderr:?}"
+        );
+        assert!(
+            output.stdout.is_empty(),
+            "rootless launch must not write to stdout, got {:?}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn initialize_reports_server_info_version() -> Result<()> {
     let (_workspace, mut child, mut stdin, mut stdout, _stderr) =

@@ -92,10 +92,8 @@ pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
     let Some(visible) = visible_exact_occurrences(cluster) else {
         return false;
     };
-    let distinct: std::collections::HashSet<_> = visible
-        .iter()
-        .map(|occurrence| &occurrence.path)
-        .collect();
+    let distinct: std::collections::HashSet<_> =
+        visible.iter().map(|occurrence| &occurrence.path).collect();
     visible.len() >= 2 && distinct.len() >= 2
 }
 

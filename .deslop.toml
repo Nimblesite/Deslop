@@ -21,6 +21,12 @@ exclude = [
   "**/*.openapi.cs",
   "**/*.pb.cs",
   "**/_site/**",
+  # Non-published dev/build/CI tooling — not part of the shipped CLI, LSP,
+  # MCP, VSIX, or site output. Excluded from the duplication budget because
+  # they are not product code (build/verify/package/codegen scripts and the
+  # static-site build config).
+  "**/scripts/**",
+  "**/eleventy.config.js",
 ]
 
 # Duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP], spec [EXIT-CODES].

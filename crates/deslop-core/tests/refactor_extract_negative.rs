@@ -99,7 +99,14 @@ fn assert_refused(cluster: &ReportCluster, source: &[u8], label: &str) -> Result
 #[test]
 fn single_occurrence_refused() -> Result<()> {
     let (source, first, _) = positive_fixture()?;
-    let cluster = synthetic_report_cluster(vec![report_occurrence("InvoiceMath.cs", (first.0, first.1), false)], "identical");
+    let cluster = synthetic_report_cluster(
+        vec![report_occurrence(
+            "InvoiceMath.cs",
+            (first.0, first.1),
+            false,
+        )],
+        "identical",
+    );
     assert_refused(&cluster, &source, "single occurrence")
 }
 

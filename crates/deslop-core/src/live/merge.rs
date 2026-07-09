@@ -199,10 +199,7 @@ fn consolidation_file_edits<'a>(
             new_text: edit.new_text.clone(),
         };
         let absolute = root.join(&edit.path);
-        match files
-            .iter_mut()
-            .find(|file| file.absolute_path == absolute)
-        {
+        match files.iter_mut().find(|file| file.absolute_path == absolute) {
             Some(file) => file.edits.push(planned),
             None => files.push(wire_edit::FileEdits {
                 absolute_path: absolute,
