@@ -360,6 +360,51 @@ fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
     Ok(())
 }
 
+/// Issue #201 (showstopper): the transport flag is NEVER a workspace root.
+///
+/// When VS Code opens with no workspace folder, the extension launches the
+/// server with no positional root and `vscode-languageclient` appends its
+/// `--stdio` transport flag — so the argv is exactly `deslop-lsp --stdio`.
+/// The crash log showed `workspace_root=--stdio`: the parser had taken the
+/// flag as the positional root, the file watcher then failed to watch a path
+/// literally named `--stdio` ("No path was found"), and the server exited 1
+/// on a loop ("crashed 5 times"). A leading flag must resolve to a clean
+/// usage error, never a bogus `workspace_root`.
+#[test]
+fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
+    // The exact argv from the crash log — no folder open, run mode.
+    let error = action_from_args(["deslop-lsp", "--stdio"])
+        .err()
+        .ok_or_else(|| anyhow!("`deslop-lsp --stdio` must fail, not serve a bogus root"))?;
+    let rendered = format!("{error:#}");
+    assert!(
+        rendered.contains("usage: deslop-lsp"),
+        "no positional root ⇒ usage error, got {rendered:?}",
+    );
+    assert!(
+        !rendered.contains("--stdio"),
+        "the transport flag must never surface as a workspace-root path, got {rendered:?}",
+    );
+
+    // Debug launch with no folder: `buildServerArgs` yields `["--debug"]` and
+    // the client appends `--stdio` → `deslop-lsp --debug --stdio`. Same rule.
+    assert_error_contains(["deslop-lsp", "--debug", "--stdio"], "usage: deslop-lsp")?;
+
+    // Happy path preserved: a real root followed by the appended transport
+    // flag still resolves to the real root — exactly why a folder-open
+    // session never hit this bug.
+    let run = serve_startup(action_from_args(["deslop-lsp", "/tmp/deslop-201", "--stdio"])?)?;
+    assert_eq!(run.workspace_root, PathBuf::from("/tmp/deslop-201"));
+    let debug = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/deslop-201",
+        "--debug",
+        "--stdio",
+    ])?)?;
+    assert_eq!(debug.workspace_root, PathBuf::from("/tmp/deslop-201"));
+    Ok(())
+}
+
 /// Extracts version output from a parsed action.
 fn version_output(action: LspAction) -> Result<String> {
     match action {

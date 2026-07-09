@@ -348,7 +348,7 @@ export function startLanguageClient(
   const debugArgs = buildServerArgs(workspaceRoot, true);
   log("starting language client", {
     lspPath: lsp.path,
-    workspaceRoot: workspaceRoot ?? null,
+    workspaceRoot,
     args: runArgs,
   });
   const serverOptions: ServerOptions = {

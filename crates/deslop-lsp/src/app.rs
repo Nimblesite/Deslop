@@ -157,10 +157,20 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
 }
 
 /// Reads the workspace root from the first positional argument.
+///
+/// [#201] The client's transport flag (`--stdio`, appended by
+/// `vscode-languageclient`) and `--debug` can occupy this slot when no
+/// folder is open. A flag is never a path — the workspace root, when
+/// present, is always the first argument and never begins with `-`
+/// (absolute paths start with `/` or a drive letter). Treating a leading
+/// flag as the root pointed the file watcher at a path named `--stdio`
+/// and crash-looped the server, so a leading flag is a usage error, not a
+/// root.
 fn parse_workspace_root(args: &[String]) -> Result<PathBuf> {
-    args.get(1)
-        .map(PathBuf::from)
-        .ok_or_else(|| anyhow!("usage: deslop-lsp <workspace-root>"))
+    match args.get(1) {
+        Some(arg) if !arg.starts_with('-') => Ok(PathBuf::from(arg)),
+        _ => Err(anyhow!("usage: deslop-lsp <workspace-root>")),
+    }
 }
 
 /// Reads the optional `--worker-threads` value, defaulting to Tokio behavior.
