@@ -13,8 +13,12 @@ use deslop_core::{
     refactor::{self, ExtractMethodPlan},
     report::Report,
 };
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CodeActionOrCommand, Range, TextEdit, Url, WorkspaceEdit,
+use tower_lsp::{
+    lsp_types::{
+        CodeAction, CodeActionKind, CodeActionOrCommand, MessageType, Range, TextEdit, Url,
+        WorkspaceEdit,
+    },
+    Client,
 };
 
 use crate::position::{byte_for_position, position_for_byte};
@@ -121,6 +125,21 @@ pub fn resolved_action(
                 reason: reason.clone(),
             });
         }
+    }
+    action
+}
+
+/// Announces a refusal attached at resolve time as a visible warning.
+///
+/// VS Code honours `disabled` only on the `textDocument/codeAction`
+/// response; a `disabled` field attached during `codeAction/resolve` is
+/// ignored, so without this message the user's click is a silent no-op.
+/// The `window/showMessage` warning carries the refusal reason instead
+/// (issue #282, [AUTOFIX-MERGE-CODE-ACTION]).
+pub async fn warn_if_refused(client: &Client, action: CodeAction) -> CodeAction {
+    if let Some(disabled) = &action.disabled {
+        let text = format!("Deslop can't apply '{}': {}", action.title, disabled.reason);
+        client.show_message(MessageType::WARNING, text).await;
     }
     action
 }

@@ -12,19 +12,15 @@ mod common;
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::{anyhow, ensure, Context, Result};
-use common::{call, handshake, spawn_lsp_on_fixture_guarded};
+use common::{
+    call, code_action_params, handshake, rewrite_offer, spawn_lsp_on_fixture_guarded,
+    wait_for_actions, ANALYSIS_TIMEOUT, POLL_INTERVAL,
+};
 use serde_json::{json, Value};
-
-/// Analysis must settle within this budget on any dev machine; the
-/// fixture is a single small file.
-const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);
-
-/// Poll cadence while waiting for the first analysis pass.
-const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Golden files live beside this test per [AUTOFIX-EXTRACT-TESTING].
 fn golden(name: &str) -> PathBuf {
@@ -33,19 +29,6 @@ fn golden(name: &str) -> PathBuf {
         .join("fixtures")
         .join("code_action")
         .join(name)
-}
-
-/// Builds a `textDocument/codeAction` params payload for `uri` covering
-/// the zero-indexed `line` span.
-fn code_action_params(uri: &str, start_line: u32, end_line: u32) -> Value {
-    json!({
-        "textDocument": { "uri": uri },
-        "range": {
-            "start": { "line": start_line, "character": 0 },
-            "end": { "line": end_line, "character": 0 }
-        },
-        "context": { "diagnostics": [] }
-    })
 }
 
 /// Applies LSP `TextEdit`s (descending start order) to an ASCII source
@@ -90,33 +73,6 @@ fn byte_offset(source: &str, position: &Value) -> Result<usize> {
         .nth(usize::try_from(line).context("line fits usize")?)
         .context("line exists in fixture")?;
     Ok(line_start.saturating_add(usize::try_from(character).context("character fits usize")?))
-}
-
-/// Polls `textDocument/codeAction` until the first analysis pass
-/// surfaces the extract action (bounded, no arbitrary sleeps beyond the
-/// poll cadence).
-fn wait_for_actions(
-    stdin: &mut std::process::ChildStdin,
-    stdout: &mut std::io::BufReader<std::process::ChildStdout>,
-    params: &Value,
-) -> Result<Vec<Value>> {
-    let deadline = Instant::now()
-        .checked_add(ANALYSIS_TIMEOUT)
-        .unwrap_or_else(Instant::now);
-    loop {
-        let response = call(stdin, stdout, "textDocument/codeAction", params)?;
-        if let Some(actions) = response.pointer("/result").and_then(Value::as_array) {
-            if !actions.is_empty() {
-                return Ok(actions.clone());
-            }
-        }
-        if Instant::now() >= deadline {
-            return Err(anyhow!(
-                "no code action surfaced within {ANALYSIS_TIMEOUT:?}"
-            ));
-        }
-        std::thread::sleep(POLL_INTERVAL);
-    }
 }
 
 /// [AUTOFIX-EXTRACT-TESTING] case 1: a C# fixture with two
@@ -391,33 +347,6 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
         "resolved merge must match the shared golden.\n--- applied ---\n{applied}"
     );
     Ok(())
-}
-
-/// Finds the lazily-resolved `refactor.rewrite` offer with `title`
-/// among `actions`, asserting the shared offer shape
-/// ([AUTOFIX-MERGE-CODE-ACTION] step 1): kind `refactor.rewrite`, edit
-/// omitted, cluster id in `data`.
-fn rewrite_offer<'a>(actions: &'a [Value], title: &str) -> Result<&'a Value> {
-    let offer = actions
-        .iter()
-        .find(|action| action.pointer("/title").and_then(Value::as_str) == Some(title))
-        .with_context(|| format!("rewrite offer `{title}` present"))?;
-    ensure!(
-        offer.pointer("/kind").and_then(Value::as_str) == Some("refactor.rewrite"),
-        "offer kind must be refactor.rewrite"
-    );
-    ensure!(
-        offer.pointer("/edit").is_none(),
-        "the offer omits the edit — lazy resolve"
-    );
-    ensure!(
-        offer
-            .pointer("/data/cluster_id")
-            .and_then(Value::as_str)
-            .is_some(),
-        "the offer carries the cluster id"
-    );
-    Ok(offer)
 }
 
 /// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
