@@ -38,7 +38,17 @@ impl PipelineSession {
         let Some(language) = self.language_for(&absolute) else {
             return Ok(());
         };
+        // Both gates evict, not just skip: a path the corpus already holds
+        // must leave it the moment it becomes inadmissible, so an inflated
+        // corpus self-heals instead of needing a restart.
         if self.exclusion.is_excluded(&absolute, Some(language)) {
+            self.drop_path(&absolute);
+            return Ok(());
+        }
+        // Discovery's walker prunes these; the live path is handed paths
+        // directly and must apply the same rules or it admits files
+        // discovery never would (#287).
+        if self.ignore_matcher.is_ignored(&absolute) {
             self.drop_path(&absolute);
             return Ok(());
         }

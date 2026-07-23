@@ -13,12 +13,138 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ignore::WalkBuilder;
+use ignore::{
+    gitignore::{Gitignore, GitignoreBuilder},
+    Match, WalkBuilder,
+};
 
 use crate::{
     config::ExclusionConfig,
     state::{FileId, FileRegistry},
 };
+
+/// Names of the per-directory ignore files the walker honours.
+const IGNORE_FILE_NAMES: [&str; 2] = [".gitignore", ".ignore"];
+
+/// Standalone equivalent of the ignore rules [`discover_files`] gets for
+/// free from `WalkBuilder::standard_filters(true)` ([PIPELINE-DISCOVER-FILES]).
+///
+/// The walker prunes ignored *directories* as it descends, so it can only
+/// answer "is this path ignored?" while walking. The live ingest path never
+/// walks — it is handed individual paths by the file watcher, by LSP
+/// `didSave`, and by the freshness tracker — so it needs the same rules as a
+/// predicate it can apply to one path at a time.
+///
+/// Without this, discovery's file set was a strict *subset* of what the live
+/// path admitted, and every ignored file touched by a build was ingested into
+/// the corpus permanently (#287).
+#[derive(Debug)]
+pub struct IgnoreMatcher {
+    /// Workspace root; hidden-component checks are relative to it so a
+    /// dot-directory *above* the workspace never hides the whole tree.
+    root: PathBuf,
+    /// One compiled matcher per ignore file, paired with the directory that
+    /// file governs. Ordered shallowest-first so a deeper rule — including a
+    /// `!` whitelist — overrides a shallower one, matching Git's precedence.
+    matchers: Vec<(PathBuf, Gitignore)>,
+}
+
+impl IgnoreMatcher {
+    /// Compiles every `.gitignore` / `.ignore` under `root`, plus
+    /// `.git/info/exclude`.
+    ///
+    /// Ignore files are themselves hidden, so the discovery walk used to find
+    /// them runs with `hidden(false)`. It keeps the remaining standard filters
+    /// on, so an ignore file *inside* an already-ignored directory is skipped —
+    /// exactly as Git treats it.
+    #[must_use]
+    pub fn build(root: &Path) -> Self {
+        let mut matchers = Vec::new();
+        let walker = WalkBuilder::new(root)
+            .standard_filters(true)
+            .hidden(false)
+            .follow_links(false)
+            .build();
+        for entry in walker.filter_map(Result::ok) {
+            if !entry.file_type().is_some_and(|file_type| file_type.is_file()) {
+                continue;
+            }
+            let is_ignore_file = entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| IGNORE_FILE_NAMES.contains(&name));
+            if !is_ignore_file {
+                continue;
+            }
+            if let Some(parent) = entry.path().parent() {
+                push_matcher(&mut matchers, parent, entry.path());
+            }
+        }
+        let exclude = root.join(".git").join("info").join("exclude");
+        if exclude.is_file() {
+            push_matcher(&mut matchers, root, &exclude);
+        }
+        matchers.sort_by_key(|(directory, _)| directory.components().count());
+        Self {
+            root: root.to_path_buf(),
+            matchers,
+        }
+    }
+
+    /// Returns `true` when the walker would have pruned `path` — because an
+    /// ignore rule matches it or any of its parent directories, or because a
+    /// path component below the root is hidden (dot-prefixed).
+    ///
+    /// `path` must be absolute and canonicalised against the same root.
+    #[must_use]
+    pub fn is_ignored(&self, path: &Path) -> bool {
+        if self.has_hidden_component(path) {
+            return true;
+        }
+        self.matchers
+            .iter()
+            .filter(|(directory, _)| path.starts_with(directory))
+            .fold(false, |ignored, (_, matcher)| {
+                match matcher.matched_path_or_any_parents(path, false) {
+                    Match::Ignore(_) => true,
+                    Match::Whitelist(_) => false,
+                    Match::None => ignored,
+                }
+            })
+    }
+
+    /// Mirrors the walker's `hidden` filter: any dot-prefixed component
+    /// between the workspace root and the file hides it.
+    fn has_hidden_component(&self, path: &Path) -> bool {
+        let Ok(relative) = path.strip_prefix(&self.root) else {
+            return false;
+        };
+        relative.components().any(|component| {
+            component
+                .as_os_str()
+                .to_str()
+                .is_some_and(|name| name.starts_with('.') && name != "." && name != "..")
+        })
+    }
+}
+
+/// Compiles `file` as an ignore file governing `directory` and appends it.
+/// A malformed ignore file is logged and skipped — one bad pattern must never
+/// take the daemon down, and skipping only ever admits more files than Git
+/// would, never fewer.
+fn push_matcher(matchers: &mut Vec<(PathBuf, Gitignore)>, directory: &Path, file: &Path) {
+    let mut builder = GitignoreBuilder::new(directory);
+    if let Some(error) = builder.add(file) {
+        tracing::warn!(%error, "ignore_file_unreadable; rules from it are not applied");
+        return;
+    }
+    match builder.build() {
+        Ok(matcher) => matchers.push((directory.to_path_buf(), matcher)),
+        Err(error) => {
+            tracing::warn!(%error, "ignore_file_malformed; rules from it are not applied");
+        }
+    }
+}
 
 /// A discovered file attached to its [`FileId`].
 #[derive(Debug, Clone)]
