@@ -52,34 +52,9 @@ pub struct IgnoreMatcher {
 impl IgnoreMatcher {
     /// Compiles every `.gitignore` / `.ignore` under `root`, plus
     /// `.git/info/exclude`.
-    ///
-    /// Ignore files are themselves hidden, so the discovery walk used to find
-    /// them runs with `hidden(false)`. It keeps the remaining standard filters
-    /// on, so an ignore file *inside* an already-ignored directory is skipped —
-    /// exactly as Git treats it.
     #[must_use]
     pub fn build(root: &Path) -> Self {
-        let mut matchers = Vec::new();
-        let walker = WalkBuilder::new(root)
-            .standard_filters(true)
-            .hidden(false)
-            .follow_links(false)
-            .build();
-        for entry in walker.filter_map(Result::ok) {
-            if !entry.file_type().is_some_and(|file_type| file_type.is_file()) {
-                continue;
-            }
-            let is_ignore_file = entry
-                .file_name()
-                .to_str()
-                .is_some_and(|name| IGNORE_FILE_NAMES.contains(&name));
-            if !is_ignore_file {
-                continue;
-            }
-            if let Some(parent) = entry.path().parent() {
-                push_matcher(&mut matchers, parent, entry.path());
-            }
-        }
+        let mut matchers = collect_ignore_matchers(root);
         let exclude = root.join(".git").join("info").join("exclude");
         if exclude.is_file() {
             push_matcher(&mut matchers, root, &exclude);
@@ -126,6 +101,36 @@ impl IgnoreMatcher {
                 .is_some_and(|name| name.starts_with('.') && name != "." && name != "..")
         })
     }
+}
+
+/// Walks `root` and compiles every `.gitignore` / `.ignore` into a matcher
+/// paired with the directory it governs.
+///
+/// Ignore files are themselves hidden, so the walk runs with `hidden(false)`.
+/// It keeps the remaining standard filters on, so an ignore file *inside* an
+/// already-ignored directory is skipped — exactly as Git treats it.
+fn collect_ignore_matchers(root: &Path) -> Vec<(PathBuf, Gitignore)> {
+    let walker = WalkBuilder::new(root)
+        .standard_filters(true)
+        .hidden(false)
+        .follow_links(false)
+        .build();
+    let mut matchers = Vec::new();
+    for entry in walker.filter_map(Result::ok).filter(is_ignore_file) {
+        if let Some(parent) = entry.path().parent() {
+            push_matcher(&mut matchers, parent, entry.path());
+        }
+    }
+    matchers
+}
+
+/// Returns `true` when the walk entry is a `.gitignore` / `.ignore` file.
+fn is_ignore_file(entry: &ignore::DirEntry) -> bool {
+    entry.file_type().is_some_and(|file_type| file_type.is_file())
+        && entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| IGNORE_FILE_NAMES.contains(&name))
 }
 
 /// Compiles `file` as an ignore file governing `directory` and appends it.

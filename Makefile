@@ -222,6 +222,7 @@ deployment-verify: build
 	node scripts/test-release-workflow-contract.mjs
 	node scripts/test-release-version-stamping.mjs
 	node scripts/test-verifiers.mjs
+	node scripts/test-action-contract.mjs
 
 # _kill-deslop-processes: SIGTERM (then SIGKILL on holdouts) every running
 #   `deslop-lsp` and `deslop-mcp` process so a stale child from a previous

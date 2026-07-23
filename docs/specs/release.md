@@ -94,8 +94,10 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
 
 **Distribution channels.**
 
-A `v*` tag fans out to every channel from one workflow
-(`.github/workflows/release.yml`):
+A `v[0-9]+.[0-9]+.[0-9]+*` tag fans out to every channel from one workflow
+(`.github/workflows/release.yml`). The pattern is MAJOR.MINOR.PATCH-only rather
+than `v*` so a bare major alias can never re-fire the pipeline — see
+[ACTION-VERSION].
 
 - **VS Code Marketplace** ([DEPLOY-VSCE-MARKETPLACE]) — `publish-marketplace` runs one `vsce publish` per
   platform-specific VSIX using Microsoft Entra OIDC, not a stored Marketplace
@@ -125,6 +127,78 @@ A `v*` tag fans out to every channel from one workflow
   created. The Eleventy build loads `site/src/_data/releases.js`, fetches
   GitHub Releases with `GITHUB_TOKEN`, and renders `/releases/` plus
   `/zh/releases/` from the current release metadata on every website publish.
+
+## GitHub Marketplace action
+
+**[ACTION-METADATA] One action, at the repository root.** The Marketplace lists
+exactly one metadata file per repository and only at the root, so `action.yml`
+sits beside `Cargo.toml`. It is a **composite** action: Deslop already publishes
+five prebuilt platform archives, so a Docker action (Linux-only, per-run image
+cost) and a JavaScript action (a bundled-node build for no gain) are both
+strictly worse. Branding is a Feather icon plus one of the nine colours the
+metadata schema permits — `icon: copy`, `color: purple`.
+
+**[ACTION-VERSION] The action and the CLI it installs are the same version.**
+The default `version` input is `github.action_ref` with the leading `v`
+stripped, so `uses: Nimblesite/Deslop@v0.25.0` installs `deslop` 0.25.0 and the
+two cannot drift. `stamp-release-version.mjs` deliberately does not commit its
+output, so a stamped default in `action.yml` would never reach the tag a
+consumer resolves — deriving from the ref sidesteps that entirely. A commit-SHA
+or branch pin carries no version and is a hard error naming the fix, never a
+silent fall back to "latest".
+
+**No mutable major alias.** Marketplace consumers conventionally pin `@v1` and
+the publisher re-points it each release. Deslop does not publish one: it would
+contradict [SWR-SEC-ACTION-PINNING], and `v1` would match the release trigger
+and publish a release named "1". The trigger pattern is narrowed to
+MAJOR.MINOR.PATCH so this is structurally impossible rather than a convention.
+Consumers pin exact versions; Dependabot bumps them.
+
+**[ACTION-RESOLVE] Runner to release asset.** `runner.os` × `runner.arch` maps
+to the `artifact_name` published by the release matrix — `linux-x64`,
+`linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64`. These are release
+*asset* names and are deliberately distinct from the Shipwright platform ids
+(`darwin-arm64`, `win32-x64`) used by the manifest verifiers. An unsupported
+pair is a hard error naming the pair; there is no silent fallback. This is the
+`github-release` source already declared for the `deslop` component in
+`shipwright.json`, so the action opens no new distribution channel.
+
+**[ACTION-VERIFY] Checksums are verified before extraction.** The action
+downloads the archive and its published `.sha256` sidecar and compares digests
+before anything is unpacked. The digest is computed in Node so there is no
+three-way branch between `sha256sum`, `shasum -a 256`, and Windows. Extraction
+uses `tar -xf` on every platform: bsdtar reads the `.zip` on Windows runners,
+GNU tar reads the `.tar.gz` everywhere else.
+
+**[ACTION-GATE] Exit codes are surfaced, never reinterpreted.** The run step
+captures the CLI status without `set -e`, the report step publishes the
+measurements, the artifact is uploaded, and only then does the gate step
+re-raise. Exit `3` fails with a message naming the measured percentage and the
+ceiling; `1` and `2` fail with distinct messages so a misconfigured input is
+never mistaken for a duplication breach. Ownership of the codes themselves
+stays with [pipeline.md §EXIT-CODES](pipeline.md).
+
+Every input reaches its script through `env`, never through `${{ }}`
+interpolated into a `run` body, so a crafted input cannot inject shell.
+
+**[ACTION-PUBLISH] Listing the action is a manual, human step.** Draft a release
+from the `action.yml` page, tick *Publish this Action to the GitHub
+Marketplace*, choose the categories, and publish with 2FA. It requires the
+Marketplace Developer Agreement accepted on the `Nimblesite` org and a unique
+`name`. The listing resolves metadata from the tag, not from `main`, so the
+first listed version must be a tag whose commit already contains `action.yml`.
+
+**[ACTION-TESTS] Two layers.** `scripts/test-action-contract.mjs` runs in
+`make deployment-verify` and proves what a runner cannot cheaply re-prove per
+PR: the asset mapping against the real `release.yml` matrix, version derivation,
+checksum rejection, output extraction, and the static shape of `action.yml`
+(including that the nested `upload-artifact` stays pinned to a 40-character
+SHA). `.github/workflows/action-selftest.yml` then exercises the action exactly
+as a consumer would, on all five runners, against the fixtures in `examples/` —
+asserting a clean run publishes a finite percentage and the installed
+`deslop --version` matches the requested version, a breach fails the step but
+still leaves a browsable report, and an out-of-range threshold fails without
+rendering one.
 
 **Binary resolution — bundled, no fallback.**
 
