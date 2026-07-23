@@ -231,4 +231,23 @@ check("the gate re-raises the CLI status rather than swallowing it", () => {
   );
 });
 
+// GitHub injects `-e` into composite `shell: bash` steps, so a bare `deslop`
+// invocation would abort the run step on a breach before the status reaches
+// GITHUB_OUTPUT — leaving every output empty and skipping the report, upload,
+// and gate steps. [ACTION-GATE]
+check("a breach cannot abort the run step before the status is captured", () => {
+  assert.ok(
+    action.includes('deslop "${args[@]}" || status=$?'),
+    "the run step must capture the CLI status with an errexit-proof || guard",
+  );
+  assert.ok(
+    action.includes('echo "exit-code=${status}" >> "${GITHUB_OUTPUT}"'),
+    "the captured status must be written to GITHUB_OUTPUT",
+  );
+  assert.ok(
+    !action.includes('echo "exit-code=$?"'),
+    "the status must come from the guard variable, not $? after a guarded call",
+  );
+});
+
 console.log(`\naction contract: ${checked} checks passed`);

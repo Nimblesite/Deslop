@@ -29,7 +29,7 @@ use deslop_core::{
     report::CacheStats,
     report_metrics::AnalysedLines,
     state::{FileId, FileRegistry},
-    EmbeddingProvenance, ExclusionConfig, ReportInputs,
+    EmbeddingProvenance, ExclusionConfig, Report, ReportInputs,
 };
 use tracing::{
     field::{Field, Visit},
@@ -45,6 +45,24 @@ pub(crate) fn fixture(name: &str) -> PathBuf {
         .join("tests")
         .join("fixtures")
         .join(name)
+}
+
+/// Counts live cluster occurrences whose path contains `component` as a
+/// whole path component. Component matching, never substring, so `pkg`
+/// cannot be satisfied by an unrelated `pkg_twin` sibling — the
+/// prefix-eviction guard for #223 and the ignore-tree guard for #287.
+pub(crate) fn occurrences_with_component(report: &Report, component: &str) -> usize {
+    report
+        .clusters
+        .iter()
+        .flat_map(|cluster| cluster.occurrences.iter())
+        .filter(|occurrence| {
+            occurrence
+                .path
+                .components()
+                .any(|part| part.as_os_str() == component)
+        })
+        .count()
 }
 
 /// Copies the fixture tree into a temp dir so destructive edits never

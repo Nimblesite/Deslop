@@ -34,7 +34,7 @@ pub(super) fn occurrence_sites<S: ::std::hash::BuildHasher>(
         .iter()
         .filter(|occurrence| !occurrence.hidden)
         .collect();
-    if let Err(reason) = cross_file_screen(&visible, cluster.occurrences_truncated) {
+    if let Err(reason) = cross_file_screen(cluster) {
         return Ok(Err(reason));
     }
     let mut per_occurrence = Vec::new();
@@ -60,10 +60,8 @@ pub(super) fn occurrence_sites<S: ::std::hash::BuildHasher>(
 }
 
 /// The visible occurrences must span at least two files, untruncated.
-fn cross_file_screen(visible: &[&ReportOccurrence], truncated: bool) -> Result<(), String> {
-    let distinct: std::collections::HashSet<&PathBuf> =
-        visible.iter().map(|occurrence| &occurrence.path).collect();
-    if visible.len() < 2 || distinct.len() < 2 || truncated {
+fn cross_file_screen(cluster: &ReportCluster) -> Result<(), String> {
+    if crate::report::distinct_visible_path_count(cluster) < 2 || cluster.occurrences_truncated {
         return Err("consolidation needs untruncated occurrences in at least two files".to_owned());
     }
     Ok(())

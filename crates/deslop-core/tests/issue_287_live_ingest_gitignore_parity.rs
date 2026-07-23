@@ -19,11 +19,7 @@
 use std::{fs, path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
-use deslop_core::{
-    embedding::test_support::StubProvider,
-    live::AnalysisSession,
-    Report,
-};
+use deslop_core::{embedding::test_support::StubProvider, live::AnalysisSession};
 
 mod common;
 use crate::common::*;
@@ -51,23 +47,6 @@ const DUPLICATE_SOURCE: &str = r"namespace Vendored
     }
 }
 ";
-
-/// Counts live cluster occurrences whose path contains `component` as a whole
-/// path component — component matching, never substring, so `vendored` cannot
-/// be satisfied by an unrelated `vendored_twin`.
-fn occurrences_with_component(report: &Report, component: &str) -> usize {
-    report
-        .clusters
-        .iter()
-        .flat_map(|cluster| cluster.occurrences.iter())
-        .filter(|occurrence| {
-            occurrence
-                .path
-                .components()
-                .any(|part| part.as_os_str() == component)
-        })
-        .count()
-}
 
 /// Writes `DUPLICATE_SOURCE` to `root/dir/Ignored.cs`, creating `dir`.
 fn write_ignored_source(root: &Path, dir: &str) -> Result<std::path::PathBuf> {
@@ -140,7 +119,8 @@ async fn live_ingest_rejects_paths_discovery_excludes() -> Result<()> {
 
     let after = session.report();
     assert_eq!(
-        after.files_analysed, files_before,
+        after.files_analysed,
+        files_before,
         "live ingest must admit no file discovery would have excluded; \
          corpus grew from {files_before} to {} after feeding {} ignored paths",
         after.files_analysed,
@@ -155,6 +135,64 @@ async fn live_ingest_rejects_paths_discovery_excludes() -> Result<()> {
             after.clusters,
         );
     }
+    Ok(())
+}
+
+/// The parity must not go stale: an ignore-rule edit mid-session re-scopes
+/// the live gate in both directions. Adding `/vendored/` to `.gitignore`
+/// evicts the already-admitted tree exactly as a fresh discovery would prune
+/// it; emptying the rule re-admits it. Fed through `apply_changes`, exactly
+/// as the watcher delivers the `.gitignore` event.
+#[tokio::test(flavor = "multi_thread")]
+async fn gitignore_edit_mid_session_rescopes_live_ingest() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let root = tmp.path();
+    fs::create_dir_all(root.join(".git")).context("mkdir .git")?;
+    let _vendored = write_ignored_source(root, "vendored")?;
+    let provider = Arc::new(StubProvider::new());
+    let mut session =
+        AnalysisSession::new(root.to_path_buf(), 15, false, None, provider).context("session")?;
+
+    let before = session.report();
+    assert_eq!(
+        before.files_analysed, 3,
+        "with no ignore rule, discovery must admit Alpha.cs, Beta.cs and \
+         vendored/Ignored.cs; files_analysed={}",
+        before.files_analysed,
+    );
+
+    let gitignore = root.join(".gitignore");
+    fs::write(&gitignore, "/vendored/\n").context("write .gitignore rule")?;
+    let _delta = session
+        .apply_changes(std::slice::from_ref(&gitignore))
+        .context("apply .gitignore addition")?;
+
+    let evicted = session.report();
+    assert_eq!(
+        evicted.files_analysed, 2,
+        "adding `/vendored/` to .gitignore mid-session must evict the \
+         admitted tree; files_analysed={}",
+        evicted.files_analysed,
+    );
+    assert_eq!(
+        occurrences_with_component(&evicted, "vendored"),
+        0,
+        "no vendored occurrence may survive the .gitignore edit: {:?}",
+        evicted.clusters,
+    );
+
+    fs::write(&gitignore, "").context("empty .gitignore")?;
+    let _delta = session
+        .apply_changes(&[gitignore])
+        .context("apply .gitignore removal")?;
+
+    let readmitted = session.report();
+    assert_eq!(
+        readmitted.files_analysed, 3,
+        "emptying .gitignore must re-admit the tree via re-discovery; \
+         files_analysed={}",
+        readmitted.files_analysed,
+    );
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 
 use std::{env, fs, io::Write as _, path::PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use deslop_core::{render::render_html, render::render_text, Report};
 
 use crate::Cli;
@@ -10,6 +10,22 @@ use crate::Cli;
 /// Default base name for the three-format output written to CWD when
 /// `--output` is not provided.
 const DEFAULT_OUTPUT_STEM: &str = "deslop-report";
+
+/// A post-parse usage error: an invalid flag combination clap's
+/// declarative rules cannot express. `main` maps it to exit `2` — the
+/// same code clap uses for its own argument rejections, so CI
+/// consumers never mistake a misconfiguration for an analysis failure
+/// ([EXIT-CODES]).
+#[derive(Debug)]
+pub(crate) struct UsageError(String);
+
+impl std::fmt::Display for UsageError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for UsageError {}
 
 /// Which of the three output formats are enabled for this run.
 #[derive(Debug)]
@@ -31,7 +47,10 @@ impl FormatSelection {
             html: !args.suppress.nohtml,
         };
         if !selection.json && !selection.text && !selection.html {
-            bail!("at least one of --nojson/--notext/--nohtml must remain enabled");
+            return Err(UsageError(
+                "at least one of --nojson/--notext/--nohtml must remain enabled".to_owned(),
+            )
+            .into());
         }
         Ok(selection)
     }

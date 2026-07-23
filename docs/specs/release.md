@@ -171,7 +171,9 @@ uses `tar -xf` on every platform: bsdtar reads the `.zip` on Windows runners,
 GNU tar reads the `.tar.gz` everywhere else.
 
 **[ACTION-GATE] Exit codes are surfaced, never reinterpreted.** The run step
-captures the CLI status without `set -e`, the report step publishes the
+captures the CLI status with an `||` guard — GitHub injects `-e` into every
+composite `shell: bash` step, so an unguarded non-zero status would abort the
+step before the status reaches `GITHUB_OUTPUT` — the report step publishes the
 measurements, the artifact is uploaded, and only then does the gate step
 re-raise. Exit `3` fails with a message naming the measured percentage and the
 ceiling; `1` and `2` fail with distinct messages so a misconfigured input is

@@ -20,7 +20,7 @@ use std::{
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{discover_files, DiscoveryResult, IgnoreMatcher},
+    discover::{discover_files, is_ignore_rule_path, DiscoveryResult, IgnoreMatcher},
     error::CoreError,
     fpcache::CachedFile,
     lang::LanguageParser,
@@ -184,10 +184,12 @@ impl PipelineSession {
     /// watcher can fire on any file, not only interesting ones.
     ///
     /// A `changed` entry naming a watched config file
-    /// (`<root>/.deslop.toml` or the explicit override) reloads the
-    /// exclusion config and re-evaluates the whole corpus against it:
-    /// newly-excluded files are dropped, newly re-included files are
-    /// re-discovered ([LIVE-CONFIG-LIVE], #189).
+    /// (`<root>/.deslop.toml` or the explicit override) or an
+    /// ignore-rule file (`.gitignore` / `.ignore` /
+    /// `.git/info/exclude`) reloads the exclusion config and ignore
+    /// matcher and re-evaluates the whole corpus: newly-excluded files
+    /// are dropped, newly re-included files are re-discovered
+    /// ([LIVE-CONFIG-LIVE] #189, ignore-rule parity #287).
     ///
     /// # Errors
     ///
@@ -199,12 +201,12 @@ impl PipelineSession {
     ) -> Result<Report, CoreError> {
         let mut stats = CacheStats::default();
         let watched = watched_config_paths(&self.root, self.config_path.as_deref());
-        if changed.iter().any(|path| is_config_path(path, &watched)) {
+        if changed.iter().any(|path| reshapes_corpus(path, &watched)) {
             self.refresh_exclusion(&mut stats, &embedding)?;
         }
         for path in changed
             .iter()
-            .filter(|path| !is_config_path(path, &watched))
+            .filter(|path| !reshapes_corpus(path, &watched))
         {
             self.apply_one_change(path, &mut stats, &embedding)?;
         }
@@ -316,6 +318,15 @@ impl PipelineSession {
         self.ignore_matcher = IgnoreMatcher::build(&self.root);
         Ok(())
     }
+}
+
+/// True when a change to `path` re-scopes the corpus rather than
+/// contributing content to it: a watched `.deslop.toml` (or explicit
+/// override), or an ignore-rule file whose edit re-shapes what the
+/// live ingest gate admits ([LIVE-CONFIG-LIVE] #189, ignore-rule
+/// parity #287).
+fn reshapes_corpus(path: &Path, watched: &[PathBuf]) -> bool {
+    is_config_path(path, watched) || is_ignore_rule_path(path)
 }
 
 /// Resolves the exclusion config using the session's override path or

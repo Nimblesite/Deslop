@@ -112,15 +112,24 @@ jobs:
           output: breach-report
           upload-artifact: "false"
 
-      - name: The breach fails the step and still leaves a browsable report
+      - name: The breach fails the step and still publishes outputs and reports
         shell: bash
         run: |
           set -euo pipefail
           test "${OUTCOME}" = "failure"
+          # The measurements must survive the failure — a breach that aborts
+          # the composite before its outputs are written is the exact defect
+          # this scenario exists to catch. [ACTION-GATE]
+          test "${CODE}" = "3"
+          awk -v p="${PERCENT}" 'BEGIN { if (p >= 0 && p <= 100) exit 0; exit 1 }'
+          test "${CLUSTERS}" -ge 1
           test -f breach-report.html
           test -f breach-report.json
         env:
           OUTCOME: ${{ steps.breach.outcome }}
+          CODE: ${{ steps.breach.outputs.exit-code }}
+          PERCENT: ${{ steps.breach.outputs.duplication-percent }}
+          CLUSTERS: ${{ steps.breach.outputs.cluster-count }}
 
       # --- a bad input is a usage error, not a duplication verdict -----------
       - name: Reject an out-of-range threshold

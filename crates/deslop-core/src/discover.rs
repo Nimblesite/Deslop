@@ -126,11 +126,27 @@ fn collect_ignore_matchers(root: &Path) -> Vec<(PathBuf, Gitignore)> {
 
 /// Returns `true` when the walk entry is a `.gitignore` / `.ignore` file.
 fn is_ignore_file(entry: &ignore::DirEntry) -> bool {
-    entry.file_type().is_some_and(|file_type| file_type.is_file())
-        && entry
-            .file_name()
-            .to_str()
-            .is_some_and(|name| IGNORE_FILE_NAMES.contains(&name))
+    entry
+        .file_type()
+        .is_some_and(|file_type| file_type.is_file())
+        && has_ignore_file_name(entry.path())
+}
+
+/// Returns `true` when `path` is named `.gitignore` / `.ignore`.
+fn has_ignore_file_name(path: &Path) -> bool {
+    path.file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|name| IGNORE_FILE_NAMES.contains(&name))
+}
+
+/// Returns `true` when `path` names an ignore-rule file this matcher
+/// compiles: `.gitignore` / `.ignore` anywhere in the tree, or the
+/// repository's `.git/info/exclude`. An edit to any of them re-scopes
+/// what the live gate admits, so the watcher and the session treat them
+/// like watched config paths ([LIVE-WATCHER], #287).
+#[must_use]
+pub fn is_ignore_rule_path(path: &Path) -> bool {
+    has_ignore_file_name(path) || path.ends_with(Path::new(".git/info/exclude"))
 }
 
 /// Compiles `file` as an ignore file governing `directory` and appends it.

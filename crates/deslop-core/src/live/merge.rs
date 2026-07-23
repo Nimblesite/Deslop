@@ -52,13 +52,7 @@ pub fn merge_plan_for(session: &AnalysisSession, cluster_id: &str) -> Result<Mer
             "analysis is still warming up (cache-seed window)".to_owned(),
         ));
     };
-    let distinct_paths: std::collections::HashSet<_> = cluster
-        .occurrences
-        .iter()
-        .filter(|occurrence| !occurrence.hidden)
-        .map(|occurrence| &occurrence.path)
-        .collect();
-    if distinct_paths.len() > 1 {
+    if crate::report::distinct_visible_path_count(&cluster) > 1 {
         return consolidation_plan_for(&cluster, pipeline);
     }
     single_file_merge_plan(&cluster, pipeline)

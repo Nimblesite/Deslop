@@ -1,6 +1,0 @@
-[tool]
-
-[tool.basilisk]
-
-[tool.basilisk.rule-tags]
-basilisk = "error"

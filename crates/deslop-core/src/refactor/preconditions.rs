@@ -89,12 +89,8 @@ pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
 /// silently offering nothing (issue #277).
 #[must_use]
 pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
-    let Some(visible) = visible_exact_occurrences(cluster) else {
-        return false;
-    };
-    let distinct: std::collections::HashSet<_> =
-        visible.iter().map(|occurrence| &occurrence.path).collect();
-    visible.len() >= 2 && distinct.len() >= 2
+    visible_exact_occurrences(cluster).is_some()
+        && crate::report::distinct_visible_path_count(cluster) >= 2
 }
 
 /// The visible occurrences of an exact-structural, untruncated cluster

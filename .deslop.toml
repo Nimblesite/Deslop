@@ -35,7 +35,10 @@ exclude = [
 # `deslop .` reads this value and exits 3 (tanking CI) when measured repo-wide
 # duplication exceeds it. Pinned just above the currently-measured value; the
 # score is inflated by the coarse E2E test suites and SHOULD be driven down
-# over time. Last measured 12.15% (2026-07-09) — ratcheted 13 -> 12.2. Going
-# below 12% requires removing real duplication, not lowering this gate.
+# over time. Last measured 12.15% (2026-07-09) — ratcheted 13 -> 12.2. Part of
+# that drop is exclusion-funded, not dedup-funded: the same change excluded
+# **/scripts/** and eleventy.config.js (non-shipped build tooling) from the
+# corpus. Going below 12% requires removing real duplication, not lowering
+# this gate.
 [threshold]
 max_duplication_percent = 12.2
