@@ -17,7 +17,7 @@ use notify::{
 };
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
-use crate::config::ExclusionConfig;
+use crate::{config::ExclusionConfig, discover::is_ignore_rule_path};
 
 /// Default channel capacity for the watcher → scheduler bridge.
 /// Sized for short bursts of saves; the scheduler's debouncer
@@ -133,6 +133,14 @@ impl WatcherHandler {
     /// map, so forwarding a removal it does not track is a cheap no-op.
     fn forward_one(&self, path: PathBuf, is_removal: bool) {
         if self.is_watched_config_path(&path) {
+            let _result = self.sender.try_send(path);
+            return;
+        }
+        // Ignore-rule files bypass the extension and exclusion filters
+        // the same way `.deslop.toml` does: editing one re-scopes the
+        // live ingest gate, so the session must see it to rebuild its
+        // matcher and re-evaluate the corpus (ignore-rule parity #287).
+        if is_ignore_rule_path(&path) {
             let _result = self.sender.try_send(path);
             return;
         }

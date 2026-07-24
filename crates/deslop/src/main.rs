@@ -215,7 +215,10 @@ fn main() {
             // (when tracing was up). Fall back to a plain eprintln!
             // so failures before logging initialises still surface.
             eprintln!("deslop: {err:#}");
-            std::process::exit(1);
+            // Usage errors exit `2` like clap's own rejections
+            // ([EXIT-CODES]); everything else is a runtime failure.
+            let code = if err.is::<output::UsageError>() { 2 } else { 1 };
+            std::process::exit(code);
         }
     }
 }

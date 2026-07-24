@@ -157,8 +157,9 @@ fn process_exit_code_reflects_runner_result() {
     assert_eq!(failure, ExitCode::from(1));
 }
 
-/// Startup dispatch builds the runtime layer, initializes diagnostics,
-/// and forwards exactly the parsed config to the async server function.
+/// Startup dispatch builds the runtime layer and forwards exactly the
+/// parsed config to the async server function. (Tracing is installed at
+/// the process boundary in `run_process`, not here.)
 #[test]
 fn startup_dispatch_invokes_async_server_with_config() -> Result<()> {
     let startup = LspStartup {
@@ -357,6 +358,66 @@ fn issue_83_legacy_startup_flags_are_rejected() -> Result<()> {
         ],
         "unsupported LSP startup flag",
     )?;
+    Ok(())
+}
+
+/// Issue #201 (showstopper): the transport flag is NEVER a workspace root.
+///
+/// When VS Code opens with no workspace folder, the extension launches the
+/// server with no positional root and `vscode-languageclient` appends its
+/// `--stdio` transport flag — so the argv is exactly `deslop-lsp --stdio`.
+/// The crash log showed `workspace_root=--stdio`: the parser had taken the
+/// flag as the positional root, the file watcher then failed to watch a path
+/// literally named `--stdio` ("No path was found"), and the server exited 1
+/// on a loop ("crashed 5 times"). A leading flag must resolve to a clean
+/// usage error, never a bogus `workspace_root`.
+#[test]
+fn issue_201_transport_flag_is_never_the_workspace_root() -> Result<()> {
+    // The exact argv from the crash log — no folder open, run mode.
+    let error = action_from_args(["deslop-lsp", "--stdio"])
+        .err()
+        .ok_or_else(|| anyhow!("`deslop-lsp --stdio` must fail, not serve a bogus root"))?;
+    let rendered = format!("{error:#}");
+    assert!(
+        rendered.contains("usage: deslop-lsp"),
+        "no positional root ⇒ usage error, got {rendered:?}",
+    );
+    assert!(
+        !rendered.contains("--stdio"),
+        "the transport flag must never surface as a workspace-root path, got {rendered:?}",
+    );
+
+    // Debug launch with no folder: `buildServerArgs` yields `["--debug"]` and
+    // the client appends `--stdio` → `deslop-lsp --debug --stdio`. Same rule.
+    assert_error_contains(["deslop-lsp", "--debug", "--stdio"], "usage: deslop-lsp")?;
+
+    // Happy path preserved: a real root followed by the appended transport
+    // flag still resolves to the real root — exactly why a folder-open
+    // session never hit this bug.
+    let run = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/deslop-201",
+        "--stdio",
+    ])?)?;
+    assert_eq!(run.workspace_root, PathBuf::from("/tmp/deslop-201"));
+    let debug = serve_startup(action_from_args([
+        "deslop-lsp",
+        "/tmp/deslop-201",
+        "--debug",
+        "--stdio",
+    ])?)?;
+    assert_eq!(debug.workspace_root, PathBuf::from("/tmp/deslop-201"));
+
+    // Robustness: the root is the first non-flag argument, not strictly
+    // `args[1]`. Even if a future `vscode-languageclient` PREPENDED the
+    // transport flag instead of appending it, the real root still resolves
+    // — so that library change could never silently reopen the crash-loop.
+    let prepended = serve_startup(action_from_args([
+        "deslop-lsp",
+        "--stdio",
+        "/tmp/deslop-201",
+    ])?)?;
+    assert_eq!(prepended.workspace_root, PathBuf::from("/tmp/deslop-201"));
     Ok(())
 }
 

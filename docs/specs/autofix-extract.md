@@ -49,6 +49,18 @@ For a cluster `C` to be eligible, **all** of these must hold:
    - The occurrence covers a contiguous run of statements (or a whole statement block) — the effective span is that run.
    - The occurrence is exactly one whole function/method declaration whose body is a statement block — the effective span **narrows to the body's statements**. This is how the renamed-methods-with-identical-bodies case (the #42 motivating example) extracts: the signatures differ and stay untouched; only the byte-equivalent bodies are rewritten as calls.
 
+   When the deepest node covering an exact-extent occurrence sits *below* the statement level because a wrapper shares its byte extent (Python's `expression_statement` around its expression — no terminating token), alignment hops to the outermost node with the same extent before applying the rules above, so a single-statement Python span is a legitimate extract.
+6. **No binding escapes the span.** No name bound inside any occurrence's effective span may be read after that span within its enclosing function (or, for module-top-level occurrences, within the rest of the module). This is the merge tier's declared-inside-read-after dataflow check ([AUTOFIX-MERGE-SAFETY] check B) applied to the extract: rewriting such a block as a call deletes bindings that later statements still read, corrupting code *outside* the rewritten spans — beyond the [AUTOFIX-EXTRACT-CAVEATS] contract (issue #278). Undecidable cases refuse ([AUTOFIX-ZERO-RISK] Opdyke bias). Three refinements make the scan match runtime semantics rather than lexical order:
+   - **Late-binding bodies.** In languages whose function bodies resolve names at *call* time (Python `def`/`lambda` — the language declares these `deferred_frame_kinds`), a body defined anywhere in the horizon — including *before* the span — counts as "after" it: the scan runs the frame-aware free-variable walk over each such body and refuses when a span-bound name is free in it. Languages whose compilers reject use-before-declaration (C#, Rust, Dart) declare none and keep the purely positional scan.
+   - **Scope-escape declarations.** A name declared `global`/`nonlocal` inside a deferred body (`scope_escape_kinds`) reads past the body's own frame, so it counts as free in that body even though the walk's frames would bind it.
+   - **Skip rules.** The positional scan applies the language's identifier skip rules exactly as the free-variable walk does — an attribute name or keyword-argument name after the span is not a read of a span-bound local, so it must not refuse the extract.
+7. **No free variable is written inside the span.** No name in the span's free-variable list ([AUTOFIX-EXTRACT-FREE-VARS]) may be a write target inside any occurrence's effective span. This is merge check D's written-hole dataflow ([AUTOFIX-MERGE-SAFETY]) applied to the extract's context parameters: the helper would mutate its own parameter copy while the caller's variable silently keeps its old value — mutation loss no compiler backstop catches in Python or C# (issue #280). Each language declares its writes as `WriteKind` patterns:
+   - **Assignments** — plain and compound (C#, Rust, Dart); Python declares augmented assignment only, because plain assignment *binds* and is rule 6's territory.
+   - **Marker-token writes** — node kinds whose grammar gives the operand no field: C# `total++`/`--total` (`++`/`--` under a unary expression) and `ref`/`out` arguments, Dart increments. The node writes only when the marker token is present, so `-x` and plain arguments stay reads.
+   - **Destructuring targets** — C# tuple deconstruction (`(min, max) = (max, min)`) and Dart pattern assignment write every named leaf under the target, not the target's whole text.
+   - **Relocation-unsafe declarations** — a span containing Python `nonlocal` refuses outright: the emitted module-scope helper has no enclosing function binding, so relocation breaks the binding (`global` survives — same module either way).
+   The merge tier runs the same check per site over its context free variables (`context_write_check`), closing the counterpart gap for merge context parameters. The check is conservative both ways by design: it refuses even when the written value is never read again (a false "unsafe" beats a false "safe", [AUTOFIX-ZERO-RISK]), while subscript and member targets (`d[k] += v`, `obj.field = x`) stay extractable — they mutate the object a parameter still shares, which is behaviour-preserving under reference semantics. The residual C# value-type case (`struct` field writes through a copy) is out of mechanical scope and routes to the AI fallback.
+
 If any precondition fails, no action is offered for the cluster. Failures are silent — there is no diagnostic.
 
 ## [AUTOFIX-EXTRACT-FREE-VARS] Free-variable analysis
@@ -57,7 +69,7 @@ For each occurrence, compute the **free-variable list** by walking the tree-sitt
 
 1. Initialise an empty scope stack.
 2. Pre-order walk the subtree.
-3. At every node that introduces a binding (parameter list, `let` / `var` / `const` / `val`, `for`-loop binding, pattern binding, lambda parameters, Python assignment to a never-before-seen name in the block), push the bound names into the current scope frame.
+3. At every node that introduces a binding (parameter list, `let` / `var` / `const` / `val`, `for`-loop binding, pattern binding, lambda parameters, Python assignment to a never-before-seen name in the block), push the bound names into the current scope frame. A binding covered by a per-language **hoist rule** binds past the frames the rule marks transparent, into the nearest opaque frame — PEP 572's walrus inside a comprehension binds in the containing function or module scope, never the comprehension's own frame.
 4. At every identifier-reference node, if no scope frame in the stack — including frames pushed during this walk — declares the name, record it as free.
 5. Emit free names in **first-reference textual order**, deduplicated.
 
@@ -181,6 +193,7 @@ Coarse end-to-end only, per CLAUDE.md. `crates/deslop-lsp/tests/code_action.rs` 
    - Occurrences are in different classes within the same file (C#).
    - Occurrence count is 1.
    - The block straddles a statement boundary (mid-expression).
+   - A span-bound name is read after the span (rule 6, #278) or a free variable is written inside it (rule 7, #280) — `crates/deslop-core/tests/refactor_extract_negative.rs` and `refactor_extract_write_gate.rs`, per language, with positives proving bound-name writes still extract.
 4. Asserts the cluster id appears in the inserted method name (deterministic naming).
 
 Goldens live under `crates/deslop-lsp/tests/fixtures/code_action/`. Test references the `[AUTOFIX-EXTRACT-*]` ID it covers, per CLAUDE.md.
@@ -289,9 +302,21 @@ REFUSE unless all hold: every duplicate definition is reference-resolvable; cons
 
 **v1 resolver scope (implementation status):** Rust sibling modules only — whole top-level `fn` definitions, byte-equivalent including the signature, canonical already visible (`pub`), duplicates in the canonical file's directory, one definition of the name per duplicate file. The rewrite is `use crate::<canonical module>::<name>;` plus the definition deletion; a duplicate file that would become empty refuses (deleting it needs the `mod` declaration rewritten — the `DeleteFile` branch of [AUTOFIX-CONSOLIDATE-EDIT] lands with the full resolver). All other languages refuse with a reason. The consolidation E2E compiles the rewritten crate with `rustc`.
 
+**v1.1 extensions (issue #277):**
+
+- **Definition runs.** An occurrence span covering a contiguous run of ≥2 whole top-level definitions (and nothing else — the pipeline's sibling windows emit exactly this for adjacent duplicated functions) splits into per-definition sites. Every occurrence must split into the same ordered symbol list; each symbol then passes the gates independently, and the plan consolidates all of them in one atomic edit set. A span that covers anything other than whole top-level definitions still refuses.
+- **Binding-drift gate.** For every free identifier referenced inside a consolidated definition (Schäfer: `lookup(ref)_after == lookup(ref)_before`, decided conservatively without a full resolver): if any occurrence file defines a top-level item with that name, then **every** occurrence file must define it **byte-equivalently** — otherwise the moved reference would re-bind from the duplicate module's item to a different canonical-module item, and the gate refuses naming the drifting symbol (the traffic-light-examples case: byte-identical `run` bodies each calling a *different* module-local `next`). Names bound by `use` declarations require those declarations to be textually identical across every occurrence file. Names bound by neither (crate root / std prelude) resolve identically from sibling modules and pass. Undecidable shapes refuse ([AUTOFIX-ZERO-RISK]).
+
 ### [AUTOFIX-CONSOLIDATE-EDIT] The WorkspaceEdit
 
 `documentChanges` mixing resource operations and text edits, executed in array order: a `DeleteFile` for any duplicate file that becomes empty (else a `TextDocumentEdit` deleting the definition), plus one `TextDocumentEdit` per dependent rewriting its import/reference to the canonical symbol. Versioned identifiers; `changeAnnotations` for the preview tree; `failureHandling: transactional`; single undo label.
+
+### [AUTOFIX-CONSOLIDATE-SURFACE] Editor and agent surfacing
+
+Consolidation ships through the **same lazily-resolved channels** as [AUTOFIX-MERGE] — the engine routes by cluster shape; callers never pre-classify a cluster as merge-vs-consolidate:
+
+- **LSP.** `build_for_range` offers a `refactor.rewrite` action titled *"Consolidate identical duplicates into one canonical definition"* for any cluster in an exact-structural bucket with ≥2 visible, untruncated occurrences spanning ≥2 files. `codeAction/resolve` computes the plan: mechanical → the [AUTOFIX-CONSOLIDATE-EDIT] `WorkspaceEdit` (`documentChanges` across the duplicate files); refused → `disabled.reason` carrying the human-readable routing reason ([AUTOFIX-MERGE-CODE-ACTION] step 2's consolidate branch, now normative). A cross-file identical cluster therefore **never** silently offers nothing while its diagnostic promises "Safe to extract" — the pre-v1.1 dead end of issue #277.
+- **MCP/IPC.** The existing `merge-plan` tool (and the `merge/plan` IPC method behind it) routes multi-file clusters to the consolidation engine and answers with the same wire `MergePlan`: `verdict: mechanical` carrying the multi-file `workspace_edit` and the consolidated symbol list in `helper_name`, empty `parameters`; refusals answer `ai_or_human` with the reason. One tool remains the mechanical family's whole agent surface ([AUTOFIX-MERGE-MCP]); no new wire type is needed because `workspace_edit` is already opaque JSON.
 
 ## [AUTOFIX-CATALOG] The zero-risk mechanical-fix catalog
 
@@ -299,9 +324,9 @@ The full surface of behaviour-preserving, no-AI deduplication actions and their 
 
 | Fix | Mechanism | Depth | Status |
 |---|---|---|---|
-| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`) |
+| Type-1 verbatim extract ([AUTOFIX-EXTRACT]) | one shared method, rewrite sites | tree-sitter | **implemented** (C#, Rust, Python; LSP `refactor.extract`; refuses escaping bindings per rule 6, #278, and written free variables per rule 7, #280) |
 | Call-site merge ([AUTOFIX-MERGE]) | anti-unification + default params | binding + types | **implemented** (C#, Rust, Dart; `merge-plan` MCP tool + LSP `refactor.rewrite`; Python refuses pending strict-typing detection) |
-| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | **implemented (v1: Rust sibling modules)**; other languages refuse with a reason |
+| Cross-file consolidation ([AUTOFIX-CONSOLIDATE]) | move canonical + delete dups + rewrite refs | import/symbol graph | **implemented (v1.1: Rust sibling modules — definition runs + binding-drift gate; surfaced per [AUTOFIX-CONSOLIDATE-SURFACE], #277/#279)**; other languages refuse with a reason |
 | Redirect to existing canonical | a fragment duplicating an *existing* named helper → replace with a call to it (Fowler *Replace Inline Code with Function Call*) | binding + types | spec'd here; after [AUTOFIX-MERGE] |
 | Consolidate duplicate constant/literal | repeated literal → one shared `const`/`static`, refs updated | trivial | catalog (degenerate parameterise-by-constant) |
 | Pull Up Method / Form Template Method | now-identical sibling methods → superclass; differing steps overridable (Hotta/Higo PDG; Fowler) | class hierarchy | catalog (OO-only; needs hierarchy model) |
@@ -315,7 +340,7 @@ One new tool, cloning the `cluster-by-id` end-to-end shape ([mcp.md §MCP-TOOLS]
 
 | Tool | Inputs | Output | Description (prevention-first, ≤200 chars) |
 |---|---|---|---|
-| `merge-plan` | `{ cluster_id }` | `MergePlan` | Compute the mechanical merge for a cluster: parameterised helper, derived param names/types, per-site arguments, defaults, the `mechanical`/`ai_or_human` verdict, and the `WorkspaceEdit`. **Read-only — never writes files.** |
+| `merge-plan` | `{ cluster_id }` | `MergePlan` | Compute the mechanical plan for a cluster — same-file clusters get the parameterised-helper merge, cross-file clusters route to [AUTOFIX-CONSOLIDATE] ([AUTOFIX-CONSOLIDATE-SURFACE]) — with the `mechanical`/`ai_or_human` verdict and the `WorkspaceEdit`. **Read-only — never writes files.** |
 
 `MergePlan` is the only addition; the mechanical path has no AI round-trip, so no second tool is needed (the AI fallback keeps its `extract-method-plan` / `extract-method-apply` pair). The host applies the returned `WorkspaceEdit`. Wire type added to [live-ipc.td](../models/live-ipc.td); the request reuses `ClusterIdParams`.
 

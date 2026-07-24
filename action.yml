@@ -1,0 +1,228 @@
+# Deslop — GitHub Marketplace action. [ACTION-METADATA]
+#
+# Installs the published deslop CLI for the current runner, analyzes the
+# workspace, renders the reports, and fails the job when repo-wide duplication
+# breaches the threshold. Exit codes are owned by docs/specs/pipeline.md
+# [EXIT-CODES]; this action surfaces them, it does not reinterpret them.
+name: Deslop
+description: Find, rank, and gate on duplicated code — worst offenders first.
+author: Nimblesite
+
+branding:
+  icon: copy
+  color: purple
+
+inputs:
+  path:
+    description: Directory to analyze.
+    required: false
+    default: "."
+  version:
+    description: >-
+      Deslop CLI release to install, for example 0.1.0. Defaults to the ref this
+      action is pinned to, so `uses: Nimblesite/Deslop@v0.1.0` installs deslop
+      0.1.0. Required when you pin this action to a commit SHA, because a SHA
+      carries no version.
+    required: false
+    default: ""
+  fail-over:
+    description: >-
+      Duplication percentage above which the job fails. Leave unset to honor
+      `[threshold] max_duplication_percent` in .deslop.toml. Must be a finite
+      number in [0, 100].
+    required: false
+    default: ""
+  no-fail-over:
+    description: >-
+      Clear any .deslop.toml threshold for this run so it can never fail on
+      duplication. Mutually exclusive with `fail-over`.
+    required: false
+    default: "false"
+  min-nodes:
+    description: Minimum AST subtree node count for a clone candidate.
+    required: false
+    default: "30"
+  config:
+    description: Explicit .deslop.toml path. Defaults to the one beside the scan root.
+    required: false
+    default: ""
+  output:
+    description: Report path prefix; `.json`, `.txt` and `.html` are appended.
+    required: false
+    default: deslop-report
+  nojson:
+    description: Suppress the JSON report. Also suppresses every report-derived output.
+    required: false
+    default: "false"
+  notext:
+    description: Suppress the plain-text report.
+    required: false
+    default: "false"
+  nohtml:
+    description: Suppress the HTML report.
+    required: false
+    default: "false"
+  log-level:
+    description: Tracing level — error, warn, info, debug or trace.
+    required: false
+    default: info
+  upload-artifact:
+    description: Upload the rendered reports as a workflow artifact.
+    required: false
+    default: "true"
+  artifact-name:
+    description: Name of the uploaded report artifact.
+    required: false
+    default: deslop-report
+
+outputs:
+  duplication-percent:
+    description: Repo-wide duplicated lines as a percentage of analyzed lines.
+    value: ${{ steps.report.outputs.duplication-percent }}
+  cluster-count:
+    description: Number of clusters contributing to the duplicated line count.
+    value: ${{ steps.report.outputs.cluster-count }}
+  threshold-percent:
+    description: The resolved fail-over ceiling this run was measured against.
+    value: ${{ steps.report.outputs.threshold-percent }}
+  exit-code:
+    description: The CLI's raw exit status — 0 clean, 1 runtime error, 2 usage error, 3 threshold breached.
+    value: ${{ steps.report.outputs.exit-code }}
+  report-json:
+    description: Path to the rendered JSON report.
+    value: ${{ steps.report.outputs.report-json }}
+  report-text:
+    description: Path to the rendered plain-text report.
+    value: ${{ steps.report.outputs.report-text }}
+  report-html:
+    description: Path to the rendered HTML report.
+    value: ${{ steps.report.outputs.report-html }}
+
+runs:
+  using: composite
+  steps:
+    # Inputs reach every script through `env`, never through `${{ }}` inside a
+    # `run` body, so a crafted input cannot inject shell.
+    - name: Resolve the deslop release
+      id: resolve
+      shell: bash
+      run: node "${GITHUB_ACTION_PATH}/scripts/action-resolve-artifact.mjs" "${RUNNER_OS}" "${RUNNER_ARCH}" "${VERSION_INPUT}" "${ACTION_REF}"
+      env:
+        VERSION_INPUT: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+
+    - name: Download the deslop CLI
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "${RUNNER_TEMP}/deslop"
+        curl --fail --silent --show-error --location --retry 3 \
+          --output "${RUNNER_TEMP}/deslop/${ARCHIVE}" "${URL}"
+        curl --fail --silent --show-error --location --retry 3 \
+          --output "${RUNNER_TEMP}/deslop/${ARCHIVE}.sha256" "${CHECKSUM_URL}"
+      env:
+        ARCHIVE: ${{ steps.resolve.outputs.archive }}
+        URL: ${{ steps.resolve.outputs.url }}
+        CHECKSUM_URL: ${{ steps.resolve.outputs.checksum-url }}
+
+    - name: Verify the archive checksum
+      shell: bash
+      run: |
+        node "${GITHUB_ACTION_PATH}/scripts/action-verify-checksum.mjs" \
+          "${RUNNER_TEMP}/deslop/${ARCHIVE}" "${RUNNER_TEMP}/deslop/${ARCHIVE}.sha256"
+      env:
+        ARCHIVE: ${{ steps.resolve.outputs.archive }}
+
+    # bsdtar ships on the Windows runners and reads the `.zip`; GNU tar reads
+    # the `.tar.gz` everywhere else. One command, no per-OS branch.
+    - name: Install the deslop CLI
+      shell: bash
+      # Extract from inside the directory with a relative archive name: the
+      # step shell on Windows is Git Bash, whose GNU tar parses the `D:` drive
+      # prefix of an absolute ${RUNNER_TEMP} path as a remote host — and GNU
+      # tar cannot read the `.zip` regardless, so Windows uses the runner's
+      # bsdtar from System32 ([ACTION-VERIFY]).
+      run: |
+        set -euo pipefail
+        cd "${RUNNER_TEMP}/deslop"
+        if [ "${RUNNER_OS}" = "Windows" ]; then
+          "$(cygpath -u "${SYSTEMROOT}")/System32/tar.exe" -xf "${ARCHIVE}"
+        else
+          tar -xf "${ARCHIVE}"
+        fi
+        echo "${RUNNER_TEMP}/deslop/${STAGE}" >> "${GITHUB_PATH}"
+      env:
+        ARCHIVE: ${{ steps.resolve.outputs.archive }}
+        STAGE: ${{ steps.resolve.outputs.stage }}
+
+    # A non-zero deslop status is the product, not a failure of this step.
+    # GitHub runs composite `shell: bash` steps under an injected `-e`
+    # (`bash -eo pipefail`), and a later `set` cannot clear it — so the status
+    # is captured with an `||` guard, which errexit exempts. The step then
+    # always succeeds, the report step publishes the measurements, the
+    # artifact uploads, and the gate step below re-raises the status.
+    - name: Run deslop
+      id: run
+      shell: bash
+      run: |
+        set -uo pipefail
+        args=("${SCAN_PATH}" --min-nodes "${MIN_NODES}" --output "${OUTPUT}" --log-level "${LOG_LEVEL}")
+        if [ -n "${FAIL_OVER}" ]; then args+=(--fail-over "${FAIL_OVER}"); fi
+        if [ "${NO_FAIL_OVER}" = "true" ]; then args+=(--no-fail-over); fi
+        if [ -n "${CONFIG}" ]; then args+=(--config "${CONFIG}"); fi
+        if [ "${NOJSON}" = "true" ]; then args+=(--nojson); fi
+        if [ "${NOTEXT}" = "true" ]; then args+=(--notext); fi
+        if [ "${NOHTML}" = "true" ]; then args+=(--nohtml); fi
+        status=0
+        deslop "${args[@]}" || status=$?
+        echo "exit-code=${status}" >> "${GITHUB_OUTPUT}"
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        MIN_NODES: ${{ inputs.min-nodes }}
+        OUTPUT: ${{ inputs.output }}
+        LOG_LEVEL: ${{ inputs.log-level }}
+        FAIL_OVER: ${{ inputs.fail-over }}
+        NO_FAIL_OVER: ${{ inputs.no-fail-over }}
+        CONFIG: ${{ inputs.config }}
+        NOJSON: ${{ inputs.nojson }}
+        NOTEXT: ${{ inputs.notext }}
+        NOHTML: ${{ inputs.nohtml }}
+
+    # Skipped under `nojson`, which leaves every report-derived output empty.
+    - name: Read the report
+      id: report
+      if: inputs.nojson != 'true'
+      shell: bash
+      run: |
+        node "${GITHUB_ACTION_PATH}/scripts/action-read-outputs.mjs" "${OUTPUT}" "${EXIT_CODE}"
+      env:
+        OUTPUT: ${{ inputs.output }}
+        EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+
+    - name: Upload the reports
+      if: inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ inputs.artifact-name }}
+        if-no-files-found: warn
+        path: |
+          ${{ inputs.output }}.json
+          ${{ inputs.output }}.txt
+          ${{ inputs.output }}.html
+
+    - name: Gate on the result
+      if: steps.run.outputs.exit-code != '0'
+      shell: bash
+      run: |
+        case "${EXIT_CODE}" in
+          3) echo "::error::Deslop gate failed — ${MEASURED}% of analyzed lines are duplicated, ceiling is ${CEILING}%. The full report is in the ${ARTIFACT_NAME} artifact." ;;
+          1) echo "::error::Deslop could not complete the analysis (exit 1). Check the scan path, the .deslop.toml config, and the log output above." ;;
+          2) echo "::error::Deslop rejected its arguments (exit 2). Check the action inputs — fail-over must be a finite number in [0, 100] and cannot be combined with no-fail-over." ;;
+          *) echo "::error::Deslop exited with unexpected status ${EXIT_CODE}." ;;
+        esac
+        exit "${EXIT_CODE}"
+      env:
+        EXIT_CODE: ${{ steps.run.outputs.exit-code }}
+        MEASURED: ${{ steps.report.outputs.duplication-percent }}
+        CEILING: ${{ steps.report.outputs.threshold-percent }}
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}

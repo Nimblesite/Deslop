@@ -11,9 +11,12 @@ use std::collections::HashSet;
 
 use tree_sitter::Node;
 
-use crate::refactor::{
-    preconditions::node_text,
-    tables::{BindingKind, FrameKind, ReferenceTable, ScopeKinds},
+use crate::{
+    lang::LanguageParser,
+    refactor::{
+        preconditions::node_text,
+        tables::{BindingKind, FrameKind, ReferenceTable, ScopeKinds},
+    },
 };
 
 /// Child fields whose subtrees never contribute bound names when a
@@ -40,22 +43,66 @@ pub(crate) struct WalkTables {
     pub scopes: &'static ScopeKinds,
 }
 
+impl WalkTables {
+    /// Bundles one language's walk tables from its parser plus scope
+    /// kinds — the single construction point for every walk consumer.
+    pub(crate) fn for_language(parser: &dyn LanguageParser, scopes: &'static ScopeKinds) -> Self {
+        Self {
+            bindings: parser.binding_node_kinds(),
+            references: parser.identifier_reference_kinds(),
+            scopes,
+        }
+    }
+}
+
+/// One scope frame: the kind of the node that opened it (`None` for
+/// the walk's root frame) and the names it binds. The kind lets hoisted
+/// bindings skip transparent frames ([`crate::refactor::tables::HoistRule`]).
+struct Frame {
+    /// Node kind that opened the frame; `None` at the root.
+    kind: Option<&'static str>,
+    /// Names bound in this frame so far.
+    names: HashSet<String>,
+}
+
+impl Frame {
+    /// An empty frame opened by a node of `kind`.
+    fn new(kind: Option<&'static str>) -> Self {
+        Self {
+            kind,
+            names: HashSet::new(),
+        }
+    }
+}
+
 /// Mutable walk state: the scope-frame stack and the ordered,
 /// deduplicated free-name list ([AUTOFIX-EXTRACT-FREE-VARS] step 5).
 struct WalkState {
     /// Innermost frame last; names bound so far during the walk.
-    frames: Vec<HashSet<String>>,
+    frames: Vec<Frame>,
     /// Free names in first-reference textual order.
     free: Vec<String>,
+    /// Frame kinds the *current* binding's names hoist past — set for
+    /// the duration of one binding node's name collection, empty
+    /// otherwise ([AUTOFIX-EXTRACT-FREE-VARS] PEP 572 walrus).
+    hoist_past: &'static [&'static str],
+}
+
+impl WalkState {
+    /// A fresh state with one root frame.
+    fn new() -> Self {
+        Self {
+            frames: vec![Frame::new(None)],
+            free: Vec::new(),
+            hoist_past: &[],
+        }
+    }
 }
 
 /// Collects the free-variable list for a run of sibling statement
 /// nodes, in first-reference textual order, deduplicated.
 pub(crate) fn free_variables(run: &[Node<'_>], source: &[u8], tables: WalkTables) -> Vec<String> {
-    let mut state = WalkState {
-        frames: vec![HashSet::new()],
-        free: Vec::new(),
-    };
+    let mut state = WalkState::new();
     for node in run {
         walk(*node, source, tables, &mut state);
     }
@@ -66,14 +113,15 @@ pub(crate) fn free_variables(run: &[Node<'_>], source: &[u8], tables: WalkTables
 /// frame after a full walk. The merge safety checks scan the enclosing
 /// function for these after the span ([AUTOFIX-MERGE-SAFETY] B).
 pub(crate) fn bound_names(run: &[Node<'_>], source: &[u8], tables: WalkTables) -> HashSet<String> {
-    let mut state = WalkState {
-        frames: vec![HashSet::new()],
-        free: Vec::new(),
-    };
+    let mut state = WalkState::new();
     for node in run {
         walk(*node, source, tables, &mut state);
     }
-    state.frames.pop().unwrap_or_default()
+    state
+        .frames
+        .pop()
+        .map(|frame| frame.names)
+        .unwrap_or_default()
 }
 
 /// Dispatches one node to the frame / binding / reference / descend
@@ -130,7 +178,7 @@ fn walk_frame(
     if let Some(field) = frame.bind_outside_field {
         bind_field(node, field, source, tables, state);
     }
-    state.frames.push(HashSet::new());
+    state.frames.push(Frame::new(Some(frame.node_kind)));
     if let Some(field) = frame.bind_inside_field {
         bind_field(node, field, source, tables, state);
     }
@@ -181,6 +229,25 @@ fn walk_binding(
     state: &mut WalkState,
     binding: &'static BindingKind,
 ) {
+    let late = walk_early_children(node, source, tables, state, binding);
+    let enclosing_hoist = state.hoist_past;
+    state.hoist_past = hoist_past_for(binding.node_kind, tables.scopes);
+    bind_field_or_node(node, binding.name_field, source, tables, state);
+    state.hoist_past = enclosing_hoist;
+    for child in late {
+        walk(child, source, tables, state);
+    }
+}
+
+/// Walks a binding node's value-side children as references and
+/// returns the late-field children to walk after the names bind.
+fn walk_early_children<'t>(
+    node: Node<'t>,
+    source: &[u8],
+    tables: WalkTables,
+    state: &mut WalkState,
+    binding: &'static BindingKind,
+) -> Vec<Node<'t>> {
     let mut late = Vec::new();
     for (child, field) in named_children_with_fields(node) {
         if binding.name_field.is_none() || field == binding.name_field {
@@ -194,10 +261,21 @@ fn walk_binding(
             walk(child, source, tables, state);
         }
     }
-    bind_field_or_node(node, binding.name_field, source, tables, state);
-    for child in late {
-        walk(child, source, tables, state);
-    }
+    late
+}
+
+/// Frame kinds the names of a `binding_kind` node hoist past — empty
+/// unless the language declares a matching
+/// [`crate::refactor::tables::HoistRule`] (PEP 572 walrus).
+fn hoist_past_for(
+    binding_kind: &'static str,
+    scopes: &'static ScopeKinds,
+) -> &'static [&'static str] {
+    scopes
+        .hoist_rules
+        .iter()
+        .find(|rule| rule.binding_kind == binding_kind)
+        .map_or(&[], |rule| rule.transparent_frame_kinds)
 }
 
 /// Binds identifiers from the `field` child subtree of `node` into the
@@ -252,9 +330,11 @@ fn collect_bound_names(node: Node<'_>, source: &[u8], tables: WalkTables, state:
     }
 }
 
-/// Inserts one leaf identifier's text into the innermost frame. Only
-/// identifier-kind leaves bind — keywords, modifiers, and literals
-/// inside a binding region are not names.
+/// Inserts one leaf identifier's text into the innermost frame the
+/// current binding does not hoist past — hoisting bindings (PEP 572
+/// walrus) skip transparent comprehension frames and land in the
+/// nearest opaque frame. Only identifier-kind leaves bind — keywords,
+/// modifiers, and literals inside a binding region are not names.
 fn bind_leaf(node: Node<'_>, source: &[u8], tables: WalkTables, state: &mut WalkState) {
     let kind = node.kind();
     if !tables.references.reference_kinds.contains(&kind)
@@ -265,8 +345,14 @@ fn bind_leaf(node: Node<'_>, source: &[u8], tables: WalkTables, state: &mut Walk
     let Some(name) = node_text(node, source) else {
         return;
     };
-    if let Some(frame) = state.frames.last_mut() {
-        let _known = frame.insert(name);
+    let hoist_past = state.hoist_past;
+    let target = state
+        .frames
+        .iter_mut()
+        .rev()
+        .find(|frame| !frame.kind.is_some_and(|kind| hoist_past.contains(&kind)));
+    if let Some(frame) = target {
+        let _known = frame.names.insert(name);
     }
 }
 
@@ -285,7 +371,7 @@ fn record_reference(
     let Some(name) = node_text(node, source) else {
         return;
     };
-    if state.frames.iter().any(|frame| frame.contains(&name)) {
+    if state.frames.iter().any(|frame| frame.names.contains(&name)) {
         return;
     }
     if !state.free.contains(&name) {
@@ -293,8 +379,10 @@ fn record_reference(
     }
 }
 
-/// Applies the per-language skip rules to a candidate reference node.
-fn reference_is_skipped(node: Node<'_>, references: &'static ReferenceTable) -> bool {
+/// Applies the per-language skip rules to a candidate reference node —
+/// shared with rule 6's read-after scan so both classify identifier
+/// positions identically ([AUTOFIX-EXTRACT-PRECONDITIONS]).
+pub(crate) fn reference_is_skipped(node: Node<'_>, references: &'static ReferenceTable) -> bool {
     let Some(parent) = node.parent() else {
         return false;
     };

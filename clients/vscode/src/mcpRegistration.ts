@@ -30,10 +30,10 @@ export function wireMcpRegistration(
   mcp: ResolvedBinary | undefined,
   workspaceRoot: string | undefined,
 ): vscode.McpStdioServerDefinition | undefined {
-  if (!mcp || workspaceRoot === undefined) {
+  if (!mcp || !workspaceRoot) {
     log("mcp registration skipped", {
       binaryResolved: mcp !== undefined,
-      workspaceOpen: workspaceRoot !== undefined,
+      workspaceOpen: Boolean(workspaceRoot),
     });
     return undefined;
   }

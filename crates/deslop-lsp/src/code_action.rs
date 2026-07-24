@@ -13,8 +13,12 @@ use deslop_core::{
     refactor::{self, ExtractMethodPlan},
     report::Report,
 };
-use tower_lsp::lsp_types::{
-    CodeAction, CodeActionKind, CodeActionOrCommand, Range, TextEdit, Url, WorkspaceEdit,
+use tower_lsp::{
+    lsp_types::{
+        CodeAction, CodeActionKind, CodeActionOrCommand, MessageType, Range, TextEdit, Url,
+        WorkspaceEdit,
+    },
+    Client,
 };
 
 use crate::position::{byte_for_position, position_for_byte};
@@ -25,6 +29,11 @@ pub const EXTRACT_ACTION_TITLE: &str = "Extract identical code to shared method"
 /// User-facing title of the mechanical merge action
 /// ([AUTOFIX-MERGE-CODE-ACTION]).
 pub const MERGE_ACTION_TITLE: &str = "Merge duplicates into one parameterised helper";
+
+/// User-facing title of the cross-file consolidation action
+/// ([AUTOFIX-CONSOLIDATE-SURFACE]).
+pub const CONSOLIDATE_ACTION_TITLE: &str =
+    "Consolidate identical duplicates into one canonical definition";
 
 /// Builds the `refactor.extract` actions for every eligible cluster
 /// intersecting `range` — one complete, atomically-applicable
@@ -51,18 +60,22 @@ pub fn build_for_range(
         if let Some(plan) = plan_for_cluster(cluster, source, parser.as_ref()) {
             actions.push(action_for_plan(uri, text, &plan));
         } else if refactor::preconditions::eligible_ranges(cluster).is_some() {
-            actions.push(merge_offer(cluster));
+            actions.push(rewrite_offer(cluster, MERGE_ACTION_TITLE));
+        } else if refactor::preconditions::consolidation_candidate(cluster) {
+            actions.push(rewrite_offer(cluster, CONSOLIDATE_ACTION_TITLE));
         }
     }
     actions
 }
 
-/// The lazily-resolved `refactor.rewrite` offer
-/// ([AUTOFIX-MERGE-CODE-ACTION] step 1): the edit is omitted and
-/// `data` carries the cluster id for `codeAction/resolve`.
-fn merge_offer(cluster: &deslop_core::report::ReportCluster) -> CodeActionOrCommand {
+/// The lazily-resolved `refactor.rewrite` offer shared by the merge
+/// and consolidation actions ([AUTOFIX-MERGE-CODE-ACTION] step 1,
+/// [AUTOFIX-CONSOLIDATE-SURFACE]): the edit is omitted and `data`
+/// carries the cluster id for `codeAction/resolve`, where the engine
+/// routes by cluster shape.
+fn rewrite_offer(cluster: &deslop_core::report::ReportCluster, title: &str) -> CodeActionOrCommand {
     CodeActionOrCommand::CodeAction(CodeAction {
-        title: MERGE_ACTION_TITLE.to_owned(),
+        title: title.to_owned(),
         kind: Some(CodeActionKind::REFACTOR_REWRITE),
         is_preferred: Some(true),
         data: Some(serde_json::json!({ "cluster_id": cluster.id })),
@@ -96,13 +109,37 @@ pub fn resolved_action(
                 .workspace_edit
                 .clone()
                 .and_then(|value| serde_json::from_value::<WorkspaceEdit>(value).ok());
-            action.edit = edit;
+            match edit {
+                // An enabled action without an edit would apply as a
+                // silent no-op, so a missing/malformed edit disables.
+                Some(edit) => action.edit = Some(edit),
+                None => {
+                    action.disabled = Some(tower_lsp::lsp_types::CodeActionDisabled {
+                        reason: "the engine returned no applicable edit for this plan".to_owned(),
+                    });
+                }
+            }
         }
         deslop_core::wire_generated::MergeVerdict::AiOrHuman { reason } => {
             action.disabled = Some(tower_lsp::lsp_types::CodeActionDisabled {
                 reason: reason.clone(),
             });
         }
+    }
+    action
+}
+
+/// Announces a refusal attached at resolve time as a visible warning.
+///
+/// VS Code honours `disabled` only on the `textDocument/codeAction`
+/// response; a `disabled` field attached during `codeAction/resolve` is
+/// ignored, so without this message the user's click is a silent no-op.
+/// The `window/showMessage` warning carries the refusal reason instead
+/// (issue #282, [AUTOFIX-MERGE-CODE-ACTION]).
+pub async fn warn_if_refused(client: &Client, action: CodeAction) -> CodeAction {
+    if let Some(disabled) = &action.disabled {
+        let text = format!("Deslop can't apply '{}': {}", action.title, disabled.reason);
+        client.show_message(MessageType::WARNING, text).await;
     }
     action
 }

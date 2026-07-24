@@ -65,14 +65,7 @@ const EXACT_BUCKETS: [ClusterKind; 3] = [
 /// spans ([`slices_equivalent`]).
 #[must_use]
 pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
-    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
-        return None;
-    }
-    let visible: Vec<_> = cluster
-        .occurrences
-        .iter()
-        .filter(|occurrence| !occurrence.hidden)
-        .collect();
+    let visible = visible_exact_occurrences(cluster)?;
     let (first, rest) = visible.split_first()?;
     if rest.is_empty() || rest.iter().any(|occurrence| occurrence.path != first.path) {
         return None;
@@ -86,6 +79,37 @@ pub fn eligible_ranges(cluster: &ReportCluster) -> Option<Vec<ByteRange>> {
         .collect();
     ranges.sort_unstable_by_key(|range| (range.start, range.end));
     ranges_are_disjoint(&ranges).then_some(ranges)
+}
+
+/// Cheap cross-file consolidation screen for the LSP offer
+/// ([AUTOFIX-CONSOLIDATE-SURFACE]): an exact-structural bucket with ≥2
+/// visible, untruncated occurrences spanning ≥2 files. The
+/// consolidation engine's gates decide the rest at resolve time, so a
+/// candidate that ultimately refuses surfaces its reason instead of
+/// silently offering nothing (issue #277).
+#[must_use]
+pub fn consolidation_candidate(cluster: &ReportCluster) -> bool {
+    visible_exact_occurrences(cluster).is_some()
+        && crate::report::distinct_visible_path_count(cluster) >= 2
+}
+
+/// The visible occurrences of an exact-structural, untruncated cluster
+/// — the pre-screen [`eligible_ranges`] and [`consolidation_candidate`]
+/// share. `None` when the bucket or wire truncation disqualifies the
+/// cluster outright.
+fn visible_exact_occurrences(
+    cluster: &ReportCluster,
+) -> Option<Vec<&crate::report::ReportOccurrence>> {
+    if !EXACT_BUCKETS.contains(&classify(cluster)) || cluster.occurrences_truncated {
+        return None;
+    }
+    Some(
+        cluster
+            .occurrences
+            .iter()
+            .filter(|occurrence| !occurrence.hidden)
+            .collect(),
+    )
 }
 
 /// True when every range ends before the next begins.
@@ -226,7 +250,8 @@ fn statement_run<'t>(
 ) -> Option<(Node<'t>, Vec<Node<'t>>)> {
     let covering = root.named_descendant_for_byte_range(range.start, range.end)?;
     if covering.start_byte() == range.start && covering.end_byte() == range.end {
-        return exact_node_run(covering, scopes);
+        return exact_node_run(covering, scopes)
+            .or_else(|| exact_node_run(widest_at_extent(covering), scopes));
     }
     if scopes.function_kinds.contains(&covering.kind()) {
         return covered_function_body_run(covering, range, scopes);
@@ -248,6 +273,21 @@ fn covered_function_body_run<'t>(
     (range.start <= body.start_byte() && body.end_byte() <= range.end)
         .then(|| function_body_run(function, scopes))
         .flatten()
+}
+
+/// The outermost ancestor sharing `node`'s exact byte extent — Python's
+/// `expression_statement` wraps its expression at identical extent, so
+/// the deepest-node lookup lands below the statement and rule 5 must
+/// hop back up to align on the statement container's child.
+fn widest_at_extent(node: Node<'_>) -> Node<'_> {
+    let mut current = node;
+    while let Some(parent) = current.parent() {
+        if parent.start_byte() != current.start_byte() || parent.end_byte() != current.end_byte() {
+            break;
+        }
+        current = parent;
+    }
+    current
 }
 
 /// An occurrence that is exactly one node: a whole statement container

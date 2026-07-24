@@ -197,24 +197,65 @@ on: [push, pull_request]
 jobs:
   duplication-gate:
     runs-on: ubuntu-latest
-    env:
-      DESLOP_VERSION: "0.1.0"   # pin the tool version — see the Releases page
     steps:
       - uses: actions/checkout@v4
-      - name: Install the Deslop CLI
-        run: |
-          curl -sSfL "https://github.com/Nimblesite/Deslop/releases/download/v${DESLOP_VERSION}/deslop-${DESLOP_VERSION}-linux-x64.tar.gz" | tar -xz
-          echo "$PWD/deslop-${DESLOP_VERSION}-linux-x64" >> "$GITHUB_PATH"
-      - name: Gate on duplication
-        run: deslop . --fail-over 5.0   # or omit --fail-over to use [threshold] in .deslop.toml
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - uses: Nimblesite/Deslop@v0.25.0
         with:
-          name: deslop-report
-          path: deslop-report.html
+          fail-over: "5.0"   # or omit to use [threshold] in .deslop.toml
 ```
 
-Exit code `3` fails the step like any non-zero status. The `if: always()` upload keeps `deslop-report.html` even on a breach so a human can browse the offenders. macOS / Linux runners can `brew install nimblesite/tap/deslop` instead of downloading the archive.
+The action installs the CLI matching the tag you pinned, analyses the workspace,
+uploads `deslop-report.{json,txt,html}` as a workflow artifact, and fails the job
+on exit `3`. It runs on Linux, macOS and Windows runners, x64 and arm64.
+
+Pin an exact version rather than a mutable ref — Dependabot bumps it for you.
+
+#### Inputs
+
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `path` | `.` | Directory to analyse |
+| `version` | the pinned tag | CLI release to install. Required when you pin this action to a commit SHA |
+| `fail-over` | *(unset)* | Percentage above which the job fails. Unset honours `.deslop.toml` |
+| `no-fail-over` | `false` | Clear any configured threshold for this run |
+| `min-nodes` | `30` | Minimum AST subtree node count for a clone candidate |
+| `config` | *(unset)* | Explicit `.deslop.toml` path |
+| `output` | `deslop-report` | Report path prefix; `.json`, `.txt`, `.html` are appended |
+| `nojson` / `notext` / `nohtml` | `false` | Suppress an output format |
+| `log-level` | `info` | `error`, `warn`, `info`, `debug` or `trace` |
+| `upload-artifact` | `true` | Upload the rendered reports |
+| `artifact-name` | `deslop-report` | Name of the uploaded artifact |
+
+#### Outputs
+
+| Output | Meaning |
+| --- | --- |
+| `duplication-percent` | Duplicated lines as a percentage of analysed lines |
+| `cluster-count` | Clusters contributing to the duplicated line count |
+| `threshold-percent` | The ceiling this run was measured against |
+| `exit-code` | `0` clean, `1` runtime error, `2` usage error, `3` breached |
+| `report-json` / `report-text` / `report-html` | Paths to the rendered reports |
+
+Outputs are published even when the gate trips, so a later step can comment the
+number or ratchet a budget. Setting `nojson: true` leaves them empty — they are
+read from the JSON report.
+
+```yaml
+      - uses: Nimblesite/Deslop@v0.25.0
+        id: deslop
+        with:
+          no-fail-over: "true"   # measure without gating
+      - run: echo "${{ steps.deslop.outputs.duplication-percent }}% duplicated"
+```
+
+The action needs no token and no permissions beyond the default `contents: read`.
+
+Prefer to drive the binary yourself — self-hosted runners, non-GitHub CI, or an
+image that already has the CLI? `brew install nimblesite/tap/deslop` (macOS /
+Linux), `scoop install Nimblesite/deslop` (Windows), or download the archive for
+your platform from the [Releases page](https://github.com/Nimblesite/Deslop/releases)
+and call `deslop . --fail-over 5.0` directly. Exit code `3` fails the step like
+any non-zero status.
 
 Agents driving CI should read the [For AI](https://deslop.live/docs/for-ai/) guide for the same gate plus how to parse the JSON report.
 

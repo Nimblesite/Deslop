@@ -1,0 +1,167 @@
+# Proves the published Marketplace action on every hosted runner GitHub still
+# operates. macOS Intel is deliberately absent: GitHub retired the macos-13
+# pool, so a macos-x64 leg queues for hours and dies instead of running. The
+# macos-x64 asset is still cross-compiled, checksum-verified, and published by
+# release.yml, and the contract test proves its mapping. [ACTION-TESTS]
+#
+# Black-box: the action is exercised exactly as a consumer would call it, against
+# the fixture repos in examples/, using the real published CLI. No fake binary,
+# no stubbed download.
+name: Action self-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - action.yml
+      - scripts/action-*.mjs
+      - scripts/test-action-contract.mjs
+      - .github/workflows/action-selftest.yml
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Action contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - run: node scripts/test-action-contract.mjs
+
+  # A pull request cannot install the release for its own tag — that release does
+  # not exist yet. Resolve the newest published release instead, so the self-test
+  # never rots against a hard-coded version.
+  target-version:
+    name: Resolve the release under test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.latest.outputs.version }}
+    steps:
+      - id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo ${{ github.repository }} --json tagName --jq .tagName)
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "Testing the action against deslop ${tag#v}"
+
+  gate:
+    name: Gate (${{ matrix.artifact }})
+    needs: [contract, target-version]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x64
+          - os: ubuntu-24.04-arm
+            artifact: linux-arm64
+          - os: macos-latest
+            artifact: macos-arm64
+          - os: windows-latest
+            artifact: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- a clean run passes and publishes real measurements ---------------
+      - name: Run under a ceiling the fixture cannot breach
+        id: pass
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.target-version.outputs.version }}
+          fail-over: "100"
+          output: pass-report
+          artifact-name: deslop-report-${{ matrix.artifact }}
+
+      - name: The passing run reports a real percentage, cluster count and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "measured ${PERCENT}% across ${CLUSTERS} clusters"
+          test "${CODE}" = "0"
+          # A finite percentage in [0, 100], not an empty string or a NaN.
+          awk -v p="${PERCENT}" 'BEGIN { if (p >= 0 && p <= 100) exit 0; exit 1 }'
+          test "${CLUSTERS}" -ge 1
+          test -f pass-report.json && test -f pass-report.txt && test -f pass-report.html
+          # The action installed the CLI version it was asked for.
+          test "$(deslop --version)" = "deslop ${{ needs.target-version.outputs.version }}"
+        env:
+          PERCENT: ${{ steps.pass.outputs.duplication-percent }}
+          CLUSTERS: ${{ steps.pass.outputs.cluster-count }}
+          CODE: ${{ steps.pass.outputs.exit-code }}
+
+      # --- a breach fails the step but still renders the reports ------------
+      - name: Run under a ceiling the fixture must breach
+        id: breach
+        continue-on-error: true
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.target-version.outputs.version }}
+          fail-over: "0"
+          output: breach-report
+          upload-artifact: "false"
+
+      - name: The breach fails the step and still publishes outputs and reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${OUTCOME}" = "failure"
+          # The measurements must survive the failure — a breach that aborts
+          # the composite before its outputs are written is the exact defect
+          # this scenario exists to catch. [ACTION-GATE]
+          test "${CODE}" = "3"
+          awk -v p="${PERCENT}" 'BEGIN { if (p >= 0 && p <= 100) exit 0; exit 1 }'
+          test "${CLUSTERS}" -ge 1
+          test -f breach-report.html
+          test -f breach-report.json
+        env:
+          OUTCOME: ${{ steps.breach.outcome }}
+          CODE: ${{ steps.breach.outputs.exit-code }}
+          PERCENT: ${{ steps.breach.outputs.duplication-percent }}
+          CLUSTERS: ${{ steps.breach.outputs.cluster-count }}
+
+      # --- a bad input is a usage error, not a duplication verdict -----------
+      - name: Reject an out-of-range threshold
+        id: usage
+        continue-on-error: true
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.target-version.outputs.version }}
+          fail-over: "101"
+          output: usage-report
+          upload-artifact: "false"
+
+      - name: An out-of-range threshold fails without rendering a report
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${OUTCOME}" = "failure"
+          test ! -f usage-report.json
+        env:
+          OUTCOME: ${{ steps.usage.outcome }}
+
+      # --- a tampered download never reaches extraction ---------------------
+      - name: A corrupted archive aborts before extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'not an archive' > tampered.tar.gz
+          printf '%s  tampered.tar.gz\n' \
+            0000000000000000000000000000000000000000000000000000000000000000 > tampered.tar.gz.sha256
+          if node scripts/action-verify-checksum.mjs tampered.tar.gz tampered.tar.gz.sha256; then
+            echo "checksum verification accepted a tampered archive" >&2
+            exit 1
+          fi

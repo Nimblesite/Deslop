@@ -12,19 +12,15 @@ mod common;
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::{anyhow, ensure, Context, Result};
-use common::{call, handshake, spawn_lsp_on_fixture_guarded};
+use common::{
+    call, code_action_params, handshake, rewrite_offer, spawn_lsp_on_fixture_guarded,
+    wait_for_actions, ANALYSIS_TIMEOUT, POLL_INTERVAL,
+};
 use serde_json::{json, Value};
-
-/// Analysis must settle within this budget on any dev machine; the
-/// fixture is a single small file.
-const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);
-
-/// Poll cadence while waiting for the first analysis pass.
-const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// Golden files live beside this test per [AUTOFIX-EXTRACT-TESTING].
 fn golden(name: &str) -> PathBuf {
@@ -33,19 +29,6 @@ fn golden(name: &str) -> PathBuf {
         .join("fixtures")
         .join("code_action")
         .join(name)
-}
-
-/// Builds a `textDocument/codeAction` params payload for `uri` covering
-/// the zero-indexed `line` span.
-fn code_action_params(uri: &str, start_line: u32, end_line: u32) -> Value {
-    json!({
-        "textDocument": { "uri": uri },
-        "range": {
-            "start": { "line": start_line, "character": 0 },
-            "end": { "line": end_line, "character": 0 }
-        },
-        "context": { "diagnostics": [] }
-    })
 }
 
 /// Applies LSP `TextEdit`s (descending start order) to an ASCII source
@@ -90,33 +73,6 @@ fn byte_offset(source: &str, position: &Value) -> Result<usize> {
         .nth(usize::try_from(line).context("line fits usize")?)
         .context("line exists in fixture")?;
     Ok(line_start.saturating_add(usize::try_from(character).context("character fits usize")?))
-}
-
-/// Polls `textDocument/codeAction` until the first analysis pass
-/// surfaces the extract action (bounded, no arbitrary sleeps beyond the
-/// poll cadence).
-fn wait_for_actions(
-    stdin: &mut std::process::ChildStdin,
-    stdout: &mut std::io::BufReader<std::process::ChildStdout>,
-    params: &Value,
-) -> Result<Vec<Value>> {
-    let deadline = Instant::now()
-        .checked_add(ANALYSIS_TIMEOUT)
-        .unwrap_or_else(Instant::now);
-    loop {
-        let response = call(stdin, stdout, "textDocument/codeAction", params)?;
-        if let Some(actions) = response.pointer("/result").and_then(Value::as_array) {
-            if !actions.is_empty() {
-                return Ok(actions.clone());
-            }
-        }
-        if Instant::now() >= deadline {
-            return Err(anyhow!(
-                "no code action surfaced within {ANALYSIS_TIMEOUT:?}"
-            ));
-        }
-        std::thread::sleep(POLL_INTERVAL);
-    }
 }
 
 /// [AUTOFIX-EXTRACT-TESTING] case 1: a C# fixture with two
@@ -370,26 +326,7 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
         .map_err(|()| anyhow!("fixture path is absolute"))?;
     let params = code_action_params(uri.as_str(), 4, 6);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
-    let offer = actions
-        .iter()
-        .find(|action| action.pointer("/kind").and_then(Value::as_str) == Some("refactor.rewrite"))
-        .context("rewrite offer present")?;
-    ensure!(
-        offer.pointer("/title").and_then(Value::as_str)
-            == Some("Merge duplicates into one parameterised helper"),
-        "merge action title"
-    );
-    ensure!(
-        offer.pointer("/edit").is_none(),
-        "the offer omits the edit — lazy resolve"
-    );
-    ensure!(
-        offer
-            .pointer("/data/cluster_id")
-            .and_then(Value::as_str)
-            .is_some(),
-        "the offer carries the cluster id"
-    );
+    let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;
 
     let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     let edits = resolved
@@ -412,6 +349,56 @@ fn merge_fixture_offers_and_resolves_rewrite_action() -> Result<()> {
     Ok(())
 }
 
+/// [AUTOFIX-CONSOLIDATE-SURFACE] (issue #277): a cross-file identical
+/// definition offers a lazily resolved `refactor.rewrite`; resolving
+/// attaches the consolidation edit; applying it removes the duplicate
+/// definition and imports the canonical symbol.
+#[test]
+fn cross_file_fixture_offers_and_resolves_consolidate_action() -> Result<()> {
+    let (workspace, _guard, mut stdin, mut stdout) =
+        spawn_lsp_on_fixture_guarded("rust-consolidate")?;
+    let _init = handshake(&mut stdin, &mut stdout)?;
+    let file = workspace.path().join("pricing_b.rs");
+    let uri = tower_lsp::lsp_types::Url::from_file_path(&file)
+        .map_err(|()| anyhow!("fixture path is absolute"))?;
+    let params = code_action_params(uri.as_str(), 2, 5);
+    let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
+    let offer = rewrite_offer(
+        &actions,
+        "Consolidate identical duplicates into one canonical definition",
+    )?;
+    let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
+    let changes = resolved
+        .pointer("/result/edit/documentChanges")
+        .and_then(Value::as_array)
+        .cloned()
+        .context("resolve attaches the consolidation edit ([AUTOFIX-CONSOLIDATE-EDIT])")?;
+    let (target_uri, edits) = changes
+        .iter()
+        .find_map(|change| {
+            let uri_text = change
+                .pointer("/textDocument/uri")
+                .and_then(Value::as_str)?;
+            let edits = change.pointer("/edits").and_then(Value::as_array)?;
+            (!edits.is_empty()).then(|| (uri_text.to_owned(), edits.clone()))
+        })
+        .context("one duplicate file receives edits")?;
+    let target = tower_lsp::lsp_types::Url::parse(&target_uri)?
+        .to_file_path()
+        .map_err(|()| anyhow!("edited uri is a file path"))?;
+    let source = fs::read_to_string(&target)?;
+    let applied = apply_text_edits(&source, &edits)?;
+    ensure!(
+        applied.starts_with("use crate::pricing_"),
+        "duplicate imports the canonical symbol:\n{applied}"
+    );
+    ensure!(
+        !applied.contains("pub fn normalise_labels"),
+        "duplicate no longer defines the symbol:\n{applied}"
+    );
+    Ok(())
+}
+
 /// Resolving a drifted cluster disables the action with the routing
 /// reason instead of attaching an edit.
 #[test]
@@ -424,10 +411,7 @@ fn drifted_fixture_resolve_disables_with_reason() -> Result<()> {
         .map_err(|()| anyhow!("fixture path is absolute"))?;
     let params = code_action_params(uri.as_str(), 4, 6);
     let actions = wait_for_actions(&mut stdin, &mut stdout, &params)?;
-    let offer = actions
-        .iter()
-        .find(|action| action.pointer("/kind").and_then(Value::as_str) == Some("refactor.rewrite"))
-        .context("rewrite offer present even for a later refusal (lazy)")?;
+    let offer = rewrite_offer(&actions, "Merge duplicates into one parameterised helper")?;
     let resolved = call(&mut stdin, &mut stdout, "codeAction/resolve", offer)?;
     ensure!(
         resolved.pointer("/result/edit").is_none(),

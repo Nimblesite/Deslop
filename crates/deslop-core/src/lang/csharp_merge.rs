@@ -67,7 +67,6 @@ pub(super) const MERGE_TABLES: MergeTables = MergeTables {
         ("boolean_literal", "bool"),
         ("character_literal", "char"),
     ],
-    write_kinds: &[("assignment_expression", "left")],
     supports_default_parameters: true,
 };
 

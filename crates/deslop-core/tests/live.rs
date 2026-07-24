@@ -22,7 +22,7 @@ use deslop_core::{
         LiveError, LiveService, LiveWatcher, Scheduler,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
-    EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError, Report,
+    EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
 };
 
 mod common;
@@ -42,22 +42,44 @@ fn csharp_small_session() -> Result<(tempfile::TempDir, AnalysisSession)> {
     Ok((tmp, session))
 }
 
-/// Counts live cluster occurrences whose relative path contains the
-/// given directory or file name as a whole path component. Component
-/// matching (not substring) so `pkg` never matches a `pkg_twin`
-/// sibling — the prefix-eviction guard for #223.
-fn occurrences_with_component(report: &Report, component: &str) -> usize {
-    report
-        .clusters
-        .iter()
-        .flat_map(|cluster| cluster.occurrences.iter())
-        .filter(|occurrence| {
-            occurrence
-                .path
-                .components()
-                .any(|part| part.as_os_str() == component)
-        })
-        .count()
+/// Copies the `csharp-small` fixture pair into
+/// `<scan_root>/benchmarks/fixtures/` — the layout the `report_hide`
+/// tests target with a scan-root-relative pattern.
+fn seed_hidden_fixture_pair(scan_root: &Path) -> Result<()> {
+    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
+    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
+    for name in ["Alpha.cs", "Beta.cs"] {
+        let _bytes = fs::copy(fixture("csharp-small").join(name), hidden_dir.join(name))
+            .with_context(|| format!("copy {name}"))?;
+    }
+    Ok(())
+}
+
+/// Spins up the full live loop over an existing session — watcher →
+/// scheduler → `report_changed` subscription — and waits the beat
+/// `FSEvents` (macOS) and inotify (Linux) need to attach. The caller
+/// holds the returned watcher and scheduler for the loop's lifetime.
+async fn start_live_loop(
+    scan_root: &Path,
+    session: AnalysisSession,
+    extensions: &[&str],
+    config_paths: Vec<PathBuf>,
+) -> Result<(
+    Arc<tokio::sync::Mutex<AnalysisSession>>,
+    LiveWatcher,
+    Scheduler,
+    tokio::sync::broadcast::Receiver<deslop_core::live::ReportChangedNotification>,
+)> {
+    let session_lock = Arc::new(tokio::sync::Mutex::new(session));
+    let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
+    let exclusion = Arc::new(ExclusionConfig::empty());
+    let (watcher, watcher_rx) =
+        LiveWatcher::start(scan_root, owned_extensions, exclusion, config_paths)
+            .map_err(|err| anyhow!("watcher start: {err}"))?;
+    let scheduler = Scheduler::with_system_clock(Arc::clone(&session_lock), watcher_rx);
+    let report_rx = scheduler.subscribe_report_changed();
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    Ok((session_lock, watcher, scheduler, report_rx))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -127,18 +149,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     let tmp = tempfile::tempdir().context("tempdir")?;
     // Canonicalise so notify-reported paths and our paths share a prefix.
     let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
-    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
-    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
-    let _alpha_bytes = fs::copy(
-        fixture("csharp-small").join("Alpha.cs"),
-        hidden_dir.join("Alpha.cs"),
-    )
-    .context("copy Alpha.cs")?;
-    let _beta_bytes = fs::copy(
-        fixture("csharp-small").join("Beta.cs"),
-        hidden_dir.join("Beta.cs"),
-    )
-    .context("copy Beta.cs")?;
+    seed_hidden_fixture_pair(&scan_root)?;
     let config_path = scan_root.join(".deslop.toml");
     fs::write(&config_path, b"[defaults]\n").context("seed .deslop.toml")?;
 
@@ -152,16 +163,13 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     );
     let pre_generation = session.generation();
 
-    let session_lock = Arc::new(tokio::sync::Mutex::new(session));
-    let extensions = vec!["cs".to_owned(), "rs".to_owned(), "py".to_owned()];
-    let exclusion = Arc::new(ExclusionConfig::empty());
-    let (_watcher_keep_alive, watcher_rx) =
-        LiveWatcher::start(&scan_root, extensions, exclusion, vec![config_path.clone()])
-            .map_err(|err| anyhow!("watcher start: {err}"))?;
-    let scheduler = Scheduler::with_system_clock(Arc::clone(&session_lock), watcher_rx);
-    let mut report_rx = scheduler.subscribe_report_changed();
-    // FSEvents (macOS) and inotify (Linux) need a beat to attach.
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let (session_lock, _watcher, _scheduler, mut report_rx) = start_live_loop(
+        &scan_root,
+        session,
+        &["cs", "rs", "py"],
+        vec![config_path.clone()],
+    )
+    .await?;
 
     fs::write(
         &config_path,
@@ -197,6 +205,73 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
     Ok(())
 }
 
+// Ignore-rule parity (#287) must hold reactively: a `.gitignore` edit is a
+// first-class live incremental update, exactly like `.deslop.toml` (#139).
+// Drives the full live loop — [`LiveWatcher`] → [`Scheduler`] →
+// [`AnalysisSession`] → `report_changed` broadcast — and asserts the
+// newly-ignored tree is evicted from the corpus without a rescan.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result<()> {
+    let tmp = tempfile::tempdir().context("tempdir")?;
+    // Canonicalise so notify-reported paths and our paths share a prefix.
+    let scan_root = tmp.path().canonicalize().context("canonicalise root")?;
+    // `ignore` honours .gitignore rules only inside a repository; the marker
+    // directory is enough — no git invocation.
+    fs::create_dir_all(scan_root.join(".git")).context("mkdir .git")?;
+    let vendored_dir = scan_root.join("vendored");
+    fs::create_dir_all(&vendored_dir).context("mkdir vendored")?;
+    for (source, target) in [
+        ("Alpha.cs", scan_root.join("Alpha.cs")),
+        ("Beta.cs", scan_root.join("Beta.cs")),
+        ("Alpha.cs", vendored_dir.join("Vendored.cs")),
+    ] {
+        let _bytes = fs::copy(fixture("csharp-small").join(source), &target)
+            .with_context(|| format!("copy {source}"))?;
+    }
+
+    let provider = Arc::new(StubProvider::new());
+    let session =
+        AnalysisSession::new(scan_root.clone(), 15, false, None, provider).context("session")?;
+    let pre = session.report();
+    assert_eq!(
+        pre.files_analysed, 3,
+        "the vendored copy must be admitted before any ignore rule exists"
+    );
+    let pre_generation = session.generation();
+
+    let (session_lock, _watcher, _scheduler, mut report_rx) =
+        start_live_loop(&scan_root, session, &["cs"], vec![]).await?;
+
+    fs::write(scan_root.join(".gitignore"), "/vendored/\n").context("write .gitignore")?;
+
+    let notification = tokio::time::timeout(Duration::from_secs(15), report_rx.recv())
+        .await
+        .context("timed out waiting for report_changed after .gitignore edit")?
+        .context("report_changed channel closed")?;
+    assert!(
+        notification.generation > pre_generation,
+        "a .gitignore edit must bump the generation; pre={pre_generation}, post={}",
+        notification.generation,
+    );
+
+    let post = {
+        let guard = session_lock.lock().await;
+        guard.report()
+    };
+    assert_eq!(
+        post.files_analysed, 2,
+        "the live loop must evict the newly-gitignored tree; files_analysed={}",
+        post.files_analysed,
+    );
+    assert_eq!(
+        occurrences_with_component(&post, "vendored"),
+        0,
+        "no vendored occurrence may survive the live .gitignore edit: {:?}",
+        post.clusters,
+    );
+    Ok(())
+}
+
 // Implements #137: live AnalysisSession (the LSP / VSIX live surface)
 // must honor `.deslop.toml` `report_hide` patterns the same way the
 // CLI does. With both clones placed under `benchmarks/fixtures/` and
@@ -207,18 +282,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
 async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     let scan_root = tmp.path();
-    let hidden_dir = scan_root.join("benchmarks").join("fixtures");
-    fs::create_dir_all(&hidden_dir).context("mkdir benchmarks/fixtures")?;
-    let _alpha_bytes = fs::copy(
-        fixture("csharp-small").join("Alpha.cs"),
-        hidden_dir.join("Alpha.cs"),
-    )
-    .context("copy Alpha.cs")?;
-    let _beta_bytes = fs::copy(
-        fixture("csharp-small").join("Beta.cs"),
-        hidden_dir.join("Beta.cs"),
-    )
-    .context("copy Beta.cs")?;
+    seed_hidden_fixture_pair(scan_root)?;
     fs::write(
         scan_root.join(".deslop.toml"),
         "[defaults]\nreport_hide = [\"benchmarks/fixtures/**\"]\n",

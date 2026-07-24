@@ -14,9 +14,11 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
     sync::atomic::{AtomicI64, Ordering},
+    time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Context, Result};
+use serde_json::{json, Value};
 
 /// JSON-RPC id counter shared across every harness call.
 static NEXT_ID: AtomicI64 = AtomicI64::new(10_000);
@@ -97,7 +99,8 @@ pub fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<serde_json::Val
     deslop_test_support::read_lsp_frame(reader)
 }
 
-/// Sends a request and waits for the matching response id.
+/// Sends a request and waits for the matching response id, discarding
+/// any server-initiated frames seen on the way.
 pub fn send_and_recv(
     stdin: &mut ChildStdin,
     reader: &mut BufReader<ChildStdout>,
@@ -105,11 +108,20 @@ pub fn send_and_recv(
     payload: &str,
 ) -> Result<serde_json::Value> {
     write_frame(stdin, payload)?;
+    Ok(recv_response(reader, id)?.0)
+}
+
+/// Reads frames until the response carrying `id` arrives, collecting every
+/// server-initiated frame (notifications and server→client requests)
+/// emitted before it.
+fn recv_response(reader: &mut BufReader<ChildStdout>, id: i64) -> Result<(Value, Vec<Value>)> {
+    let mut server_frames = Vec::new();
     loop {
         let frame = read_frame(reader)?;
-        if frame.get("id").and_then(serde_json::Value::as_i64) == Some(id) {
-            return Ok(frame);
+        if frame.get("id").and_then(Value::as_i64) == Some(id) && frame.get("method").is_none() {
+            return Ok((frame, server_frames));
         }
+        server_frames.push(frame);
     }
 }
 
@@ -168,6 +180,20 @@ pub fn call(
 ) -> Result<serde_json::Value> {
     let (id, payload) = request(method, params)?;
     send_and_recv(stdin, stdout, id, &payload)
+}
+
+/// Sends a request, waits for the paired response, and returns it together
+/// with every server-initiated frame (e.g. `window/showMessage`) the
+/// server emitted before the response.
+pub fn call_capturing(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    method: &str,
+    params: &serde_json::Value,
+) -> Result<(Value, Vec<Value>)> {
+    let (id, payload) = request(method, params)?;
+    write_frame(stdin, &payload)?;
+    recv_response(stdout, id)
 }
 
 /// RAII guard that kills and reaps the spawned LSP child when it drops, so a
@@ -253,4 +279,79 @@ pub fn cluster_count(frame: &serde_json::Value) -> usize {
         .pointer("/result/clusters")
         .and_then(serde_json::Value::as_array)
         .map_or(0, Vec::len)
+}
+
+/// Analysis must settle within this budget on any dev machine; the
+/// code-action fixtures are single small files.
+pub const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// Poll cadence while waiting for the first analysis pass.
+pub const POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Builds a `textDocument/codeAction` params payload for `uri` covering
+/// the zero-indexed `line` span.
+#[must_use]
+pub fn code_action_params(uri: &str, start_line: u32, end_line: u32) -> Value {
+    json!({
+        "textDocument": { "uri": uri },
+        "range": {
+            "start": { "line": start_line, "character": 0 },
+            "end": { "line": end_line, "character": 0 }
+        },
+        "context": { "diagnostics": [] }
+    })
+}
+
+/// Polls `textDocument/codeAction` until the first analysis pass
+/// surfaces an action (bounded, no arbitrary sleeps beyond the poll
+/// cadence).
+pub fn wait_for_actions(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    params: &Value,
+) -> Result<Vec<Value>> {
+    let deadline = Instant::now()
+        .checked_add(ANALYSIS_TIMEOUT)
+        .unwrap_or_else(Instant::now);
+    loop {
+        let response = call(stdin, stdout, "textDocument/codeAction", params)?;
+        if let Some(actions) = response.pointer("/result").and_then(Value::as_array) {
+            if !actions.is_empty() {
+                return Ok(actions.clone());
+            }
+        }
+        if Instant::now() >= deadline {
+            return Err(anyhow!(
+                "no code action surfaced within {ANALYSIS_TIMEOUT:?}"
+            ));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
+/// Finds the lazily-resolved `refactor.rewrite` offer with `title`
+/// among `actions`, asserting the shared offer shape
+/// ([AUTOFIX-MERGE-CODE-ACTION] step 1): kind `refactor.rewrite`, edit
+/// omitted, cluster id in `data`.
+pub fn rewrite_offer<'a>(actions: &'a [Value], title: &str) -> Result<&'a Value> {
+    let offer = actions
+        .iter()
+        .find(|action| action.pointer("/title").and_then(Value::as_str) == Some(title))
+        .with_context(|| format!("rewrite offer `{title}` present"))?;
+    ensure!(
+        offer.pointer("/kind").and_then(Value::as_str) == Some("refactor.rewrite"),
+        "offer kind must be refactor.rewrite"
+    );
+    ensure!(
+        offer.pointer("/edit").is_none(),
+        "the offer omits the edit — lazy resolve"
+    );
+    ensure!(
+        offer
+            .pointer("/data/cluster_id")
+            .and_then(Value::as_str)
+            .is_some(),
+        "the offer carries the cluster id"
+    );
+    Ok(offer)
 }

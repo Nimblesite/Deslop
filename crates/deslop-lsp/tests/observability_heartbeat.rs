@@ -32,10 +32,7 @@ static NEXT_ID: AtomicI64 = AtomicI64::new(90_000);
 fn report_get_handler_logs_elapsed_ms() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let mut child = spawn_logging_lsp(workspace.path())?;
-    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
-
-    let _init = handshake(&mut stdin, &mut reader)?;
-    let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
+    let (_stdin, _reader) = boot_and_report_get(&mut child)?;
 
     thread::sleep(Duration::from_millis(400));
     let _ = child.kill();
@@ -58,10 +55,7 @@ fn report_get_handler_logs_elapsed_ms() -> Result<()> {
 fn cpu_report_returns_structured_snapshot_after_report_get() -> Result<()> {
     let workspace = tempfile::tempdir()?;
     let mut child = spawn_logging_lsp(workspace.path())?;
-    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
-
-    let _init = handshake(&mut stdin, &mut reader)?;
-    let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
+    let (mut stdin, mut reader) = boot_and_report_get(&mut child)?;
     let response = call(&mut stdin, &mut reader, "deslop/cpuReport", &json!({}))?;
     let result = response
         .get("result")
@@ -140,10 +134,7 @@ fn profile_dir_writes_non_empty_firefox_profile_on_shutdown() -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
 
-    let (mut stdin, mut reader) = take_stdin_stdout(&mut child)?;
-
-    let _init = handshake(&mut stdin, &mut reader)?;
-    let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
+    let (mut stdin, mut reader) = boot_and_report_get(&mut child)?;
     thread::sleep(Duration::from_millis(300));
     let shutdown_response = shutdown(&mut stdin, &mut reader)?;
     assert!(
@@ -258,4 +249,14 @@ fn take_stdin_stdout(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildSt
         .take()
         .ok_or_else(|| anyhow!("child stdout missing"))?;
     Ok((stdin, BufReader::new(stdout)))
+}
+
+/// Boots the LSP conversation every scenario shares: takes the child's
+/// pipes, completes the `initialize` handshake, and issues one
+/// `deslop/reportGet`, returning the pipes for scenario-specific calls.
+fn boot_and_report_get(child: &mut Child) -> Result<(ChildStdin, BufReader<ChildStdout>)> {
+    let (mut stdin, mut reader) = take_stdin_stdout(child)?;
+    let _init = handshake(&mut stdin, &mut reader)?;
+    let _report = call(&mut stdin, &mut reader, "deslop/reportGet", &json!({}))?;
+    Ok((stdin, reader))
 }

@@ -1,9 +1,11 @@
 //! Behaviour-preservation preconditions ([AUTOFIX-MERGE-SAFETY]).
 //!
 //! Check A (structural, consistent holes) is established by the gate;
-//! this module adds B (single-entry/single-exit + no
-//! declared-inside-read-after), the Baker rename lifting (gate step 3),
-//! C's shadow-free naming inputs, and D's value-parameter typing. Any
+//! this module adds B (single-entry/single-exit; its
+//! declared-inside-read-after dataflow half is the shared
+//! [`read_after_check`] in `read_after`, which extract rule 6 also
+//! runs — issue #278), the Baker rename lifting (gate step 3), C's
+//! shadow-free naming inputs, and D's value-parameter typing. Any
 //! undecidable check refuses — a false "unsafe" beats a false "safe"
 //! (Opdyke bias, [AUTOFIX-ZERO-RISK]).
 
@@ -15,9 +17,9 @@ use crate::{
     ast::ByteRange,
     lang::{shared::LITERAL_KIND, LanguageParser},
     refactor::{
-        free_vars,
         merge::gate::Hole,
-        preconditions::{node_text, OccurrenceScope},
+        preconditions::OccurrenceScope,
+        read_after::{read_after_check, run_bound_names, write_in_span_check, written_in_span},
         tables::{MergeTables, ScopeKinds},
     },
 };
@@ -51,8 +53,17 @@ pub fn evaluate(
 ) -> Result<Vec<HoleRole>, String> {
     boundary_check(scopes, tables, scope_kinds)?;
     read_after_check(scopes, source, parser, scope_kinds)?;
+    context_write_check(scopes, source, parser, scope_kinds)?;
     let bound_per_site = bound_names_per_site(scopes, source, parser, scope_kinds);
-    classify_holes(scopes, source, holes, parser, tables, &bound_per_site)
+    classify_holes(
+        scopes,
+        source,
+        holes,
+        parser,
+        tables,
+        scope_kinds,
+        &bound_per_site,
+    )
 }
 
 /// Check B (control flow): no control transfer crossing the span
@@ -119,45 +130,21 @@ fn transfer_is_contained(node: Node<'_>, span: ByteRange, containers: &[&str]) -
     false
 }
 
-/// Check B (dataflow): no local declared inside the span may be read
-/// after it inside the enclosing function (Komondoor/Horwitz-lite).
-fn read_after_check(
+/// Extract rule 7's merge counterpart (issue #280): no *context* free
+/// variable — identical at every site, so never a hole — may be
+/// written inside its site's span. Check D covers written holes; this
+/// covers the parameters `free_value_parameters` would create.
+fn context_write_check(
     scopes: &[OccurrenceScope<'_>],
     source: &[u8],
     parser: &dyn LanguageParser,
     scope_kinds: &'static ScopeKinds,
 ) -> Result<(), String> {
     for scope in scopes {
-        let bound = run_bound_names(scope, source, parser, scope_kinds);
-        let Some(function) = scope.function else {
-            continue;
-        };
-        let span = scope.span();
-        if let Some(name) = read_after_span(function, span, source, parser, &bound) {
-            return Err(format!(
-                "local `{name}` declared inside the span is read after it"
-            ));
-        }
+        let free = crate::refactor::free_variables_of_run(&scope.run, source, parser, scope_kinds);
+        write_in_span_check(std::slice::from_ref(scope), &free, source, scope_kinds)?;
     }
     Ok(())
-}
-
-/// Names bound at the top level of one occurrence's statement run.
-fn run_bound_names(
-    scope: &OccurrenceScope<'_>,
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    scope_kinds: &'static ScopeKinds,
-) -> HashSet<String> {
-    free_vars::bound_names(
-        &scope.run,
-        source,
-        free_vars::WalkTables {
-            bindings: parser.binding_node_kinds(),
-            references: parser.identifier_reference_kinds(),
-            scopes: scope_kinds,
-        },
-    )
 }
 
 /// Per-site bound-name sets, used by the rename lifting.
@@ -173,35 +160,6 @@ fn bound_names_per_site(
         .collect()
 }
 
-/// First in-span-declared name referenced after the span within the
-/// enclosing function, if any.
-fn read_after_span(
-    function: Node<'_>,
-    span: ByteRange,
-    source: &[u8],
-    parser: &dyn LanguageParser,
-    bound: &HashSet<String>,
-) -> Option<String> {
-    let references = parser.identifier_reference_kinds();
-    let mut stack = vec![function];
-    while let Some(node) = stack.pop() {
-        if node.start_byte() >= span.end && references.reference_kinds.contains(&node.kind()) {
-            if let Some(text) = node_text(node, source) {
-                if bound.contains(&text) {
-                    return Some(text);
-                }
-            }
-        }
-        let children = crate::refactor::preconditions::named_children(node);
-        stack.extend(
-            children
-                .into_iter()
-                .filter(|child| child.end_byte() > span.end),
-        );
-    }
-    None
-}
-
 /// Gate step 3 + check D: identifier holes whose every site names an
 /// in-span local lift as consistent renames; the rest become typed
 /// value parameters or refuse.
@@ -211,6 +169,7 @@ fn classify_holes(
     holes: &[Hole],
     parser: &dyn LanguageParser,
     tables: &'static MergeTables,
+    scope_kinds: &'static ScopeKinds,
     bound_per_site: &[HashSet<String>],
 ) -> Result<Vec<HoleRole>, String> {
     let mut rename_map: HashMap<String, Vec<String>> = HashMap::new();
@@ -223,7 +182,7 @@ fn classify_holes(
             lift_rename(hole, &mut rename_map)?;
             roles.push(HoleRole::LiftedRename);
         } else {
-            roles.push(identifier_role(hole, source, scopes, tables, parser)?);
+            roles.push(identifier_role(hole, source, scopes, scope_kinds, parser)?);
         }
     }
     bijective_guard(&rename_map)?;
@@ -367,12 +326,12 @@ fn identifier_role(
     hole: &Hole,
     source: &[u8],
     scopes: &[OccurrenceScope<'_>],
-    tables: &'static MergeTables,
+    scope_kinds: &'static ScopeKinds,
     parser: &dyn LanguageParser,
 ) -> Result<HoleRole, String> {
     let mut unified: Option<String> = None;
     for (site, scope) in hole.per_site.iter().zip(scopes) {
-        if written_in_span(scope, &site.text, source, tables) {
+        if written_in_span(scope, &site.text, source, scope_kinds.write_kinds) {
             return Err(format!(
                 "`{}` is written inside the span — call-time evaluation would change behaviour",
                 site.text
@@ -398,35 +357,6 @@ fn identifier_role(
     unified
         .map(|type_name| HoleRole::Parameter { type_name })
         .ok_or_else(|| "identifier hole has no sites".to_owned())
-}
-
-/// True when `name` is an assignment target anywhere inside the
-/// occurrence span.
-fn written_in_span(
-    scope: &OccurrenceScope<'_>,
-    name: &str,
-    source: &[u8],
-    tables: &'static MergeTables,
-) -> bool {
-    scope.run.iter().any(|node| {
-        let mut stack = vec![*node];
-        while let Some(current) = stack.pop() {
-            if let Some((_, field)) = tables
-                .write_kinds
-                .iter()
-                .find(|(kind, _)| *kind == current.kind())
-            {
-                let target = current
-                    .child_by_field_name(*field)
-                    .and_then(|child| node_text(child, source));
-                if target.as_deref() == Some(name) {
-                    return true;
-                }
-            }
-            stack.extend(crate::refactor::preconditions::named_children(current));
-        }
-        false
-    })
 }
 
 /// Raw tree-sitter node covering `range` within one occurrence's run.

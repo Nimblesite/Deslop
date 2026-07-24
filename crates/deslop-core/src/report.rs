@@ -84,6 +84,22 @@ pub fn occurrence_count(cluster: &ReportCluster) -> usize {
     total.max(cluster.occurrences.len())
 }
 
+/// Distinct paths among a cluster's visible (non-hidden) occurrences —
+/// the cross-file screen every consolidation surface shares
+/// ([AUTOFIX-CONSOLIDATE-SURFACE]). Two or more distinct paths imply
+/// two or more visible occurrences, so callers need no separate count
+/// check.
+#[must_use]
+pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
+    cluster
+        .occurrences
+        .iter()
+        .filter(|occurrence| !occurrence.hidden)
+        .map(|occurrence| &occurrence.path)
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+}
+
 impl From<PairScore> for ReportSignals {
     fn from(score: PairScore) -> Self {
         Self {

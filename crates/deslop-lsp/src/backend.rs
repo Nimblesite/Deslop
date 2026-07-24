@@ -502,7 +502,10 @@ impl LanguageServer for LspBackend {
             return Ok(action);
         };
         match self.service.merge_plan(&cluster_id).await {
-            Ok(plan) => Ok(code_action::resolved_action(action, &plan)),
+            Ok(plan) => {
+                let resolved = code_action::resolved_action(action, &plan);
+                Ok(code_action::warn_if_refused(&self.client, resolved).await)
+            }
             Err(error) => {
                 tracing::warn!(%cluster_id, %error, "merge plan resolution failed");
                 Ok(action)

@@ -23,7 +23,10 @@ use crate::{
         },
         merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
         preconditions::{named_children, node_text},
-        tables::{BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds},
+        tables::{
+            BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds,
+            WriteKind,
+        },
     },
     state::FileId,
 };
@@ -134,10 +137,6 @@ const MERGE_TABLES: MergeTables = MergeTables {
         ("string_literal", "&'static str"),
         ("boolean_literal", "bool"),
         ("char_literal", "char"),
-    ],
-    write_kinds: &[
-        ("assignment_expression", "left"),
-        ("compound_assignment_expr", "left"),
     ],
     supports_default_parameters: false,
 };
@@ -304,6 +303,27 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     shared_parent_kinds: &["impl_item", "mod_item", "source_file"],
     frame_kinds: FRAME_KINDS,
     allow_module_top_level: false,
+    hoist_rules: &[],
+    deferred_frame_kinds: &[],
+    scope_escape_kinds: &[],
+    // Non-identifier targets (`*p`, `s.f`, `v[i]`) mutate shared
+    // state a parameter still reaches; the borrow checker backstops
+    // the rest, so no marker or destructuring entries are needed.
+    write_kinds: &[
+        WriteKind {
+            node_kind: "assignment_expression",
+            target_field: Some("left"),
+            marker_tokens: &[],
+            destructuring_kinds: &[],
+        },
+        WriteKind {
+            node_kind: "compound_assignment_expr",
+            target_field: Some("left"),
+            marker_tokens: &[],
+            destructuring_kinds: &[],
+        },
+    ],
+    relocation_unsafe_kinds: &[],
 };
 
 /// One indentation step for the emitted helper body, matching rustfmt.

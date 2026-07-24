@@ -233,6 +233,22 @@ fn suppressing_every_format_is_an_error() -> Result<()> {
     Ok(())
 }
 
+// Implements [EXIT-CODES]: an incompatible flag combination is a usage
+// error and must exit `2`, like the other argument rejections — not `1`,
+// which CI consumers (and the action's gate step) read as a runtime
+// failure of the analysis itself.
+#[test]
+fn suppressing_every_format_exits_with_usage_code() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--nojson", "--notext", "--nohtml"])
+        .assert()
+        .code(2)
+        .stderr(contains("must remain enabled"));
+    Ok(())
+}
+
 // Implements [OUTPUT-FORMAT-DERIVED] `--from-report`: analysis is
 // skipped and the derived formats are re-rendered from the canonical
 // JSON. Exercises the deserialize path on the Report struct.

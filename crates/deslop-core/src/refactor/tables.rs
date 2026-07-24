@@ -81,6 +81,18 @@ pub const EMPTY_REFERENCE_TABLE: ReferenceTable = ReferenceTable {
     skip_fields: &[],
 };
 
+/// A binding node kind whose names bind past *transparent* frames into
+/// the nearest enclosing opaque frame — PEP 572's walrus inside a
+/// comprehension binds in the containing function or module scope, not
+/// the comprehension's own frame ([AUTOFIX-EXTRACT-FREE-VARS]).
+#[derive(Debug, Clone, Copy)]
+pub struct HoistRule {
+    /// Tree-sitter node kind of the hoisting binding (`named_expression`).
+    pub binding_kind: &'static str,
+    /// Frame node kinds the binding hoists past (comprehension kinds).
+    pub transparent_frame_kinds: &'static [&'static str],
+}
+
 /// Container/scope kinds for [AUTOFIX-EXTRACT-PRECONDITIONS] rules 4–5
 /// and the free-variable walk's frame handling.
 #[derive(Debug, Clone, Copy)]
@@ -100,6 +112,59 @@ pub struct ScopeKinds {
     /// Whether an occurrence directly at module top level satisfies the
     /// enclosing-scope rule (Python: yes).
     pub allow_module_top_level: bool,
+    /// Binding kinds that hoist past transparent frames
+    /// ([AUTOFIX-EXTRACT-FREE-VARS] — PEP 572 walrus).
+    pub hoist_rules: &'static [HoistRule],
+    /// Frame kinds whose bodies run at *call time*, not where they sit
+    /// in the source — in late-binding languages (Python) a body
+    /// defined before a span can still read the span's bindings after
+    /// it, so rule 6 must scan these bodies wherever they appear
+    /// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 6). Empty for languages
+    /// whose compilers reject use-before-declaration (C#, Rust, Dart).
+    pub deferred_frame_kinds: &'static [&'static str],
+    /// Declaration kinds that re-bind names to an *enclosing* scope
+    /// (Python `global`/`nonlocal`): inside a deferred body their names
+    /// read past the body's own frame, so rule 6 treats them as free.
+    pub scope_escape_kinds: &'static [&'static str],
+    /// Variable-writing node patterns. Rule 7 refuses extracts whose
+    /// free variables are written inside the span — the helper would
+    /// mutate its own parameter copy ([AUTOFIX-EXTRACT-PRECONDITIONS],
+    /// issue #280) — and merge check D refuses written holes and
+    /// context parameters ([AUTOFIX-MERGE-SAFETY]).
+    pub write_kinds: &'static [WriteKind],
+    /// Statement kinds whose meaning changes when the span relocates
+    /// to the emitter's destination scope (Python `nonlocal` — a
+    /// module-scope helper has no enclosing function binding). A span
+    /// containing one refuses ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 7).
+    pub relocation_unsafe_kinds: &'static [&'static str],
+}
+
+/// One variable-writing node pattern for rule 7 and merge check D
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] issue #280, [AUTOFIX-MERGE-SAFETY]).
+///
+/// A node of `node_kind` writes the name(s) in its target — the
+/// `target_field` child, or the node itself when `None` (grammars that
+/// give the operand no field: C# `total++`, `out total`). When
+/// `marker_tokens` is non-empty the node writes only if one of those
+/// token kinds appears among its children (`++`/`--` under a unary
+/// expression, `ref`/`out` under an argument). A target matches by
+/// exact text for bare identifiers, or — when its kind is listed in
+/// `destructuring_kinds` — by any named leaf under it (C# tuple
+/// deconstruction, Dart pattern assignment). Other composite targets
+/// (subscripts, member accesses) never match: they mutate the object a
+/// parameter copy still shares.
+#[derive(Debug, Clone, Copy)]
+pub struct WriteKind {
+    /// Tree-sitter node kind that writes a variable.
+    pub node_kind: &'static str,
+    /// Child field holding the written target; `None` targets the node
+    /// itself.
+    pub target_field: Option<&'static str>,
+    /// Token kinds one of which must appear among the node's children
+    /// for it to write. Empty means the node always writes.
+    pub marker_tokens: &'static [&'static str],
+    /// Target kinds whose named leaves are all written.
+    pub destructuring_kinds: &'static [&'static str],
 }
 
 /// One boundary-crossing statement pattern for [AUTOFIX-MERGE-SAFETY]
@@ -125,10 +190,6 @@ pub struct MergeTables {
     /// Raw literal node kind → declared parameter type
     /// ([AUTOFIX-MERGE-NAMES] type backstop).
     pub literal_types: &'static [(&'static str, &'static str)],
-    /// `(node_kind, target_field)` pairs that write a variable —
-    /// a hole identifier written inside the span refuses value-passing
-    /// ([AUTOFIX-MERGE-SAFETY] D).
-    pub write_kinds: &'static [(&'static str, &'static str)],
     /// Whether the language supports default parameter values
     /// ([AUTOFIX-MERGE-DEFAULTS]).
     pub supports_default_parameters: bool,

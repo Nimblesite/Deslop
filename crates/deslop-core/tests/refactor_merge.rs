@@ -10,7 +10,7 @@
 
 mod common;
 
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
@@ -20,7 +20,10 @@ use deslop_core::{
 };
 use serde_json::Value;
 
-use crate::common::{fixture, refactor_golden as golden, refactor_pipeline_session as session};
+use crate::common::{
+    clusters::{report_occurrence, synthetic_report_cluster},
+    fixture, refactor_golden as golden, refactor_pipeline_session as session,
+};
 
 /// Computes merge plans for every cluster of a single-file fixture and
 /// returns them in rank order.
@@ -463,6 +466,32 @@ fn written_hole_identifier_refuses() -> Result<()> {
     assert_all_refused_with("csharp-merge-writtenhole", "Mutator.cs", "written inside")
 }
 
+/// [AUTOFIX-MERGE-SAFETY] / extract rule 7 (#280): a *context* free
+/// variable (identical at every site, so never a hole) written inside
+/// the span refuses — the helper's by-value parameter copy would
+/// absorb the mutation and every caller's variable would keep its old
+/// value.
+#[test]
+fn written_context_variable_refuses() -> Result<()> {
+    assert_all_refused_with(
+        "csharp-merge-writtencontext",
+        "Accumulator.cs",
+        "written inside",
+    )
+}
+
+/// Same context-write refusal through the Dart tables — the only
+/// coverage of Dart's `write_kinds` (Dart has no Tier-1 emitter, so an
+/// extract-path Dart test would be vacuous).
+#[test]
+fn dart_written_context_variable_refuses() -> Result<()> {
+    assert_all_refused_with(
+        "dart-merge-writtencontext",
+        "accumulator.dart",
+        "written inside",
+    )
+}
+
 /// [AUTOFIX-MERGE-DEFAULTS]: a trailing slot shared by all-but-one of
 /// three sites gains a default and the matching calls elide it. The
 /// three-sibling family is hidden by the ranked report (#197), so the
@@ -484,34 +513,9 @@ fn three_site_merge_defaults_trailing_parameter() -> Result<()> {
         .collect::<Result<_>>()?;
     let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
         .iter()
-        .map(|(start, end)| deslop_core::report::ReportOccurrence {
-            path: PathBuf::from("Tiers.cs"),
-            start_byte: *start,
-            end_byte: *end,
-            start_line: 0,
-            end_line: 0,
-            hidden: false,
-        })
+        .map(|span| report_occurrence("Tiers.cs", *span, false))
         .collect();
-    let cluster = deslop_core::report::ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: "nearly_identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    };
+    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
     let file_root = session
         .subtree_at_range(
             file_id,
@@ -608,34 +612,9 @@ fn too_many_holes_refuse() -> Result<()> {
         .collect::<Result<_>>()?;
     let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
         .iter()
-        .map(|(start, end)| deslop_core::report::ReportOccurrence {
-            path: PathBuf::from("Sprawl.cs"),
-            start_byte: *start,
-            end_byte: *end,
-            start_line: 0,
-            end_line: 0,
-            hidden: false,
-        })
+        .map(|span| report_occurrence("Sprawl.cs", *span, false))
         .collect();
-    let cluster = deslop_core::report::ReportCluster {
-        id: "abcdef0123456789".to_owned(),
-        weight: 1.0,
-        size: occurrences.len(),
-        canonical_node_count: 40,
-        signals: deslop_core::report::ReportSignals {
-            structural: 1.0,
-            token_jaccard: 1.0,
-            embedding_cos: 0.0,
-            fused: 1.0,
-        },
-        bucket: "nearly_identical".to_owned(),
-        category: "logic".to_owned(),
-        occurrences_total: occurrences.len(),
-        occurrences,
-        occurrences_truncated: false,
-        summary: String::new(),
-        interpretation: String::new(),
-    };
+    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
     let file_root = session
         .subtree_at_range(
             file_id,

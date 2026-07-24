@@ -20,7 +20,7 @@ use std::{
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{discover_files, DiscoveryResult},
+    discover::{discover_files, is_ignore_rule_path, DiscoveryResult, IgnoreMatcher},
     error::CoreError,
     fpcache::CachedFile,
     lang::LanguageParser,
@@ -60,6 +60,12 @@ pub struct PipelineSession {
     /// re-loaded by [`PipelineSession::reload_exclusion`] when the
     /// daemon detects a config change.
     pub(super) exclusion: ExclusionConfig,
+    /// Ignore rules (`.gitignore`, `.ignore`, `.git/info/exclude`, hidden
+    /// components) mirroring the ones [`discover_files`] gets from its
+    /// walker. The live ingest path is handed individual paths and never
+    /// walks, so it must apply these itself or it admits files discovery
+    /// would have pruned (#287). Rebuilt alongside `exclusion`.
+    pub(super) ignore_matcher: IgnoreMatcher,
     /// File registry shared across the whole session. New files
     /// register on their first `update_files` sighting; removed files
     /// keep their [`FileId`] slot (nothing ever gets unregistered) so
@@ -130,6 +136,7 @@ impl PipelineSession {
             "pipeline session initialising",
         );
         let exclusion = load_exclusion(&root, config_path.as_deref())?;
+        let ignore_matcher = IgnoreMatcher::build(&root);
         let discovery = discover_files(&root, &extension_to_language, &exclusion);
         log_discovery_summary(&discovery, &root);
         let config = PipelineConfig {
@@ -155,6 +162,7 @@ impl PipelineSession {
             parsers,
             extension_to_language,
             exclusion,
+            ignore_matcher,
             registry: discovery.registry,
             per_file: corpus.per_file,
             sources: corpus.sources,
@@ -176,10 +184,12 @@ impl PipelineSession {
     /// watcher can fire on any file, not only interesting ones.
     ///
     /// A `changed` entry naming a watched config file
-    /// (`<root>/.deslop.toml` or the explicit override) reloads the
-    /// exclusion config and re-evaluates the whole corpus against it:
-    /// newly-excluded files are dropped, newly re-included files are
-    /// re-discovered ([LIVE-CONFIG-LIVE], #189).
+    /// (`<root>/.deslop.toml` or the explicit override) or an
+    /// ignore-rule file (`.gitignore` / `.ignore` /
+    /// `.git/info/exclude`) reloads the exclusion config and ignore
+    /// matcher and re-evaluates the whole corpus: newly-excluded files
+    /// are dropped, newly re-included files are re-discovered
+    /// ([LIVE-CONFIG-LIVE] #189, ignore-rule parity #287).
     ///
     /// # Errors
     ///
@@ -191,12 +201,12 @@ impl PipelineSession {
     ) -> Result<Report, CoreError> {
         let mut stats = CacheStats::default();
         let watched = watched_config_paths(&self.root, self.config_path.as_deref());
-        if changed.iter().any(|path| is_config_path(path, &watched)) {
+        if changed.iter().any(|path| reshapes_corpus(path, &watched)) {
             self.refresh_exclusion(&mut stats, &embedding)?;
         }
         for path in changed
             .iter()
-            .filter(|path| !is_config_path(path, &watched))
+            .filter(|path| !reshapes_corpus(path, &watched))
         {
             self.apply_one_change(path, &mut stats, &embedding)?;
         }
@@ -305,8 +315,18 @@ impl PipelineSession {
     /// config on failure so a bad edit does not brick the daemon.
     fn reload_exclusion(&mut self) -> Result<(), CoreError> {
         self.exclusion = load_exclusion(&self.root, self.config_path.as_deref())?;
+        self.ignore_matcher = IgnoreMatcher::build(&self.root);
         Ok(())
     }
+}
+
+/// True when a change to `path` re-scopes the corpus rather than
+/// contributing content to it: a watched `.deslop.toml` (or explicit
+/// override), or an ignore-rule file whose edit re-shapes what the
+/// live ingest gate admits ([LIVE-CONFIG-LIVE] #189, ignore-rule
+/// parity #287).
+fn reshapes_corpus(path: &Path, watched: &[PathBuf]) -> bool {
+    is_config_path(path, watched) || is_ignore_rule_path(path)
 }
 
 /// Resolves the exclusion config using the session's override path or

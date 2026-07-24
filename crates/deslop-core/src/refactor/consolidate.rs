@@ -11,6 +11,14 @@
 //! would become empty refuses — deleting the file needs the module
 //! declaration rewritten, which waits for the full resolver
 //! ([AUTOFIX-CONSOLIDATE-EDIT] `DeleteFile` follow-up).
+//!
+//! v1.1 (issues #277/#279): an occurrence may cover a contiguous run
+//! of whole definitions (each consolidated per symbol), and the
+//! [`binding_drift`] gate refuses definitions whose free references
+//! would re-bind after the move.
+
+mod binding_drift;
+mod sites;
 
 use std::{collections::HashMap, path::PathBuf};
 
@@ -41,12 +49,14 @@ pub struct PlannedFileEdit {
 }
 
 /// A mechanical consolidation: the duplicate definitions deleted and
-/// every duplicate file re-pointed at the canonical symbol.
+/// every duplicate file re-pointed at the canonical symbols.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsolidatePlan {
-    /// Symbol being consolidated.
-    pub symbol: String,
-    /// Path of the canonical definition (kept untouched).
+    /// Symbols being consolidated, in definition order — one for the
+    /// classic single-definition cluster, several for a definition run
+    /// ([AUTOFIX-CONSOLIDATE-GATE] v1.1).
+    pub symbols: Vec<String>,
+    /// Path of the canonical definitions (kept untouched).
     pub canonical_path: PathBuf,
     /// Edits grouped per file, descending start order within a file.
     pub edits: Vec<PlannedFileEdit>,
@@ -63,11 +73,15 @@ pub enum ConsolidationOutcome {
 }
 
 /// One duplicate definition site resolved against its file.
+#[derive(Clone)]
 struct DefinitionSite {
     /// Workspace-relative file path as reported.
     path: PathBuf,
-    /// Span of the whole definition in that file.
+    /// Span of the whole definition including its outer attributes and
+    /// doc comments — deleted and byte-equivalence-proven as one unit.
     span: ByteRange,
+    /// Span of the bare item node, for reference analysis.
+    item_span: ByteRange,
     /// Definition name text.
     name: String,
     /// Whether the definition carries a visibility marker.
@@ -93,126 +107,100 @@ pub fn compute_consolidation_plan<S: ::std::hash::BuildHasher>(
             parser.id()
         )));
     }
-    match definition_sites(cluster, sources, parser)? {
+    match sites::occurrence_sites(cluster, sources, parser)? {
         Err(reason) => Ok(ConsolidationOutcome::Refused(reason)),
-        Ok(sites) => Ok(build_plan(&sites, sources, parser)?.map_or_else(
+        Ok(per_occurrence) => Ok(build_plan(&per_occurrence, sources, parser)?.map_or_else(
             ConsolidationOutcome::Refused,
             ConsolidationOutcome::Mechanical,
         )),
     }
 }
 
-/// Resolves every occurrence to a whole, top-level, byte-equivalent
-/// definition ([AUTOFIX-CONSOLIDATE] shape gate).
-fn definition_sites<S: ::std::hash::BuildHasher>(
-    cluster: &ReportCluster,
-    sources: &HashMap<PathBuf, Vec<u8>, S>,
-    parser: &dyn LanguageParser,
-) -> Result<Result<Vec<DefinitionSite>, String>, RefactorError> {
-    let distinct_paths: std::collections::HashSet<&PathBuf> = cluster
-        .occurrences
-        .iter()
-        .map(|entry| &entry.path)
-        .collect();
-    if cluster.occurrences.len() < 2 || distinct_paths.len() < 2 || cluster.occurrences_truncated {
-        return Ok(Err(
-            "consolidation needs untruncated occurrences in at least two files".to_owned(),
-        ));
-    }
-    let mut sites = Vec::new();
-    for occurrence in &cluster.occurrences {
-        let Some(source) = sources.get(&occurrence.path) else {
-            return Ok(Err(format!("no source for {}", occurrence.path.display())));
-        };
-        let tree = parse_source(parser.id(), &parser.grammar(), source)?;
-        let span = ByteRange {
-            start: occurrence.start_byte,
-            end: occurrence.end_byte,
-        };
-        match definition_site(tree.root_node(), span, source, &occurrence.path) {
-            Some(site) => sites.push(site),
-            None => {
-                return Ok(Err(
-                    "an occurrence is not a whole top-level function definition".to_owned(),
-                ));
-            }
-        }
-    }
-    Ok(Ok(sites))
-}
-
-/// Resolves one occurrence to a top-level `fn` definition site. The
-/// pipeline's sibling windows can start mid-signature (after the
-/// visibility modifier), so any window covering the whole body widens
-/// to the full `function_item` — the span the consolidation deletes.
-fn definition_site(
-    root: Node<'_>,
-    span: ByteRange,
-    source: &[u8],
-    path: &std::path::Path,
-) -> Option<DefinitionSite> {
-    let node = root.named_descendant_for_byte_range(span.start, span.end)?;
-    if node.kind() != "function_item"
-        || node.parent().map(|parent| parent.kind()) != Some("source_file")
-    {
-        return None;
-    }
-    let body_covered = node
-        .child_by_field_name("body")
-        .is_some_and(|body| span.start <= body.start_byte() && body.end_byte() <= span.end);
-    if !body_covered {
-        return None;
-    }
-    let name = node
-        .child_by_field_name("name")
-        .and_then(|child| node_text(child, source))?;
-    let visible = named_children(node)
-        .into_iter()
-        .any(|child| child.kind() == "visibility_modifier");
-    Some(DefinitionSite {
-        path: path.to_path_buf(),
-        span: ByteRange {
-            start: node.start_byte(),
-            end: node.end_byte(),
-        },
-        name,
-        visible,
-    })
-}
-
 /// Applies the remaining gates and assembles the edits. The inner
 /// `Err` is the refusal reason.
 fn build_plan<S: ::std::hash::BuildHasher>(
-    sites: &[DefinitionSite],
+    per_occurrence: &[Vec<DefinitionSite>],
     sources: &HashMap<PathBuf, Vec<u8>, S>,
     parser: &dyn LanguageParser,
 ) -> Result<Result<ConsolidatePlan, String>, RefactorError> {
-    let Some((canonical, duplicates)) = sites.split_first() else {
-        return Ok(Err("no definition sites".to_owned()));
+    let groups = match sites::symbol_groups(per_occurrence) {
+        Ok(groups) => groups,
+        Err(reason) => return Ok(Err(reason)),
     };
-    if let Err(reason) = consolidation_gate(canonical, duplicates, sources) {
+    for group in &groups {
+        let Some((canonical, duplicates)) = group.split_first() else {
+            return Ok(Err("no definition sites".to_owned()));
+        };
+        if let Err(reason) = consolidation_gate(canonical, duplicates, sources) {
+            return Ok(Err(reason));
+        }
+    }
+    if let Err(reason) = binding_drift::gate(&groups, sources, parser)? {
         return Ok(Err(reason));
     }
+    assemble_edits(&groups, sources, parser)
+}
+
+/// Builds the per-duplicate-file edits and the plan record once every
+/// gate has passed.
+fn assemble_edits<S: ::std::hash::BuildHasher>(
+    groups: &[Vec<DefinitionSite>],
+    sources: &HashMap<PathBuf, Vec<u8>, S>,
+    parser: &dyn LanguageParser,
+) -> Result<Result<ConsolidatePlan, String>, RefactorError> {
+    let Some(canonical) = groups.first().and_then(|group| group.first()) else {
+        return Ok(Err("no definition sites".to_owned()));
+    };
     let Some(module) = module_stem(&canonical.path) else {
         return Ok(Err(
             "canonical file name is not a valid module name".to_owned()
         ));
     };
+    let occurrence_count = groups.first().map_or(0, Vec::len);
     let mut edits = Vec::new();
-    for duplicate in duplicates {
-        let Some(source) = sources.get(&duplicate.path) else {
-            return Ok(Err(format!("no source for {}", duplicate.path.display())));
-        };
-        match duplicate_edits(duplicate, source, parser, &module)? {
+    for index in 1..occurrence_count {
+        match duplicate_edits_at(index, groups, sources, parser, &module)? {
             Ok(mut file_edits) => edits.append(&mut file_edits),
             Err(reason) => return Ok(Err(reason)),
         }
     }
-    Ok(Ok(ConsolidatePlan {
-        symbol: canonical.name.clone(),
+    Ok(Ok(plan_record(groups, canonical, edits)))
+}
+
+/// The plan record: one symbol per group, canonical file untouched.
+fn plan_record(
+    groups: &[Vec<DefinitionSite>],
+    canonical: &DefinitionSite,
+    edits: Vec<PlannedFileEdit>,
+) -> ConsolidatePlan {
+    ConsolidatePlan {
+        symbols: groups
+            .iter()
+            .filter_map(|group| group.first())
+            .map(|site| site.name.clone())
+            .collect(),
         canonical_path: canonical.path.clone(),
         edits,
-    }))
+    }
+}
+
+/// Edits for the duplicate file at occurrence `index` across every
+/// symbol group.
+fn duplicate_edits_at<S: ::std::hash::BuildHasher>(
+    index: usize,
+    groups: &[Vec<DefinitionSite>],
+    sources: &HashMap<PathBuf, Vec<u8>, S>,
+    parser: &dyn LanguageParser,
+    module: &str,
+) -> Result<Result<Vec<PlannedFileEdit>, String>, RefactorError> {
+    let sites: Vec<&DefinitionSite> = groups.iter().filter_map(|group| group.get(index)).collect();
+    let Some(path) = sites.first().map(|site| site.path.clone()) else {
+        return Ok(Ok(Vec::new()));
+    };
+    let Some(source) = sources.get(&path) else {
+        return Ok(Err(format!("no source for {}", path.display())));
+    };
+    duplicate_file_edits(&sites, source, parser, module)
 }
 
 /// [AUTOFIX-CONSOLIDATE-GATE]: byte-equivalent definitions, a visible
@@ -255,47 +243,142 @@ fn consolidation_gate<S: ::std::hash::BuildHasher>(
     Ok(())
 }
 
-/// Edits for one duplicate file: delete the definition and, when the
-/// file still references the symbol, import the canonical one. The
-/// Schäfer invariant holds by construction: the only definition of the
-/// name in the file is removed and the import re-binds every reference
-/// to the canonical item ([AUTOFIX-CONSOLIDATE]).
-fn duplicate_edits(
-    duplicate: &DefinitionSite,
+/// Edits for one duplicate file: delete every consolidated definition
+/// and, when the file still references any consolidated symbol, import
+/// the canonical ones. Together with the [`binding_drift`] gate this
+/// upholds the Schäfer invariant: the file's own definitions are
+/// removed and the import re-binds every remaining reference to the
+/// canonical items ([AUTOFIX-CONSOLIDATE]).
+fn duplicate_file_edits(
+    sites: &[&DefinitionSite],
     source: &[u8],
     parser: &dyn LanguageParser,
     module: &str,
 ) -> Result<Result<Vec<PlannedFileEdit>, String>, RefactorError> {
     let tree = parse_source(parser.id(), &parser.grammar(), source)?;
-    if count_definitions(tree.root_node(), source, &duplicate.name) > 1 {
-        return Ok(Err(format!(
-            "{} defines `{}` more than once — resolution is ambiguous",
-            duplicate.path.display(),
-            duplicate.name
-        )));
+    let spans: Vec<ByteRange> = sites.iter().map(|site| site.span).collect();
+    if let Err(reason) = deletability_gate(tree.root_node(), source, sites, &spans) {
+        return Ok(Err(reason));
     }
-    if file_becomes_empty(source, duplicate.span) {
-        return Ok(Err(format!(
-            "{} would become empty — file deletion needs the module declaration rewritten (v1 gate)",
-            duplicate.path.display()
-        )));
+    let mut edits = deletion_edits(sites, source, &spans);
+    let referenced = referenced_symbols(tree.root_node(), source, parser, sites, &spans);
+    if let (Some(site), false) = (sites.first(), referenced.is_empty()) {
+        let offset = import_offset(tree.root_node(), source);
+        edits.push(import_edit(&site.path, module, &referenced, offset));
     }
-    let mut edits = vec![PlannedFileEdit {
-        path: duplicate.path.clone(),
-        start_byte: duplicate.span.start,
-        end_byte: deletion_end(source, duplicate.span.end),
-        new_text: String::new(),
-    }];
-    if references_remain(tree.root_node(), source, parser, duplicate) {
-        edits.push(PlannedFileEdit {
-            path: duplicate.path.clone(),
-            start_byte: 0,
-            end_byte: 0,
-            new_text: format!("use crate::{module}::{};\n\n", duplicate.name),
-        });
-    }
-    edits.sort_unstable_by_key(|edit| std::cmp::Reverse(edit.start_byte));
+    // Descending (start, end): a deletion starting where the import
+    // inserts must apply first so both hold against original offsets.
+    edits.sort_unstable_by_key(|edit| {
+        (
+            std::cmp::Reverse(edit.start_byte),
+            std::cmp::Reverse(edit.end_byte),
+        )
+    });
     Ok(Ok(edits))
+}
+
+/// Insertion offset for the `use` item: after leading inner attributes
+/// and inner doc comments, which must stay first in the file
+/// (#279 review).
+fn import_offset(root: Node<'_>, source: &[u8]) -> usize {
+    let mut offset = 0;
+    for child in named_children(root) {
+        let inner = child.kind() == "inner_attribute"
+            || (matches!(child.kind(), "line_comment" | "block_comment")
+                && node_text(child, source)
+                    .is_some_and(|text| text.starts_with("//!") || text.starts_with("/*!")));
+        if !inner {
+            break;
+        }
+        offset = deletion_end(source, child.end_byte());
+    }
+    offset
+}
+
+/// Refuses ambiguous or would-empty deletions
+/// ([AUTOFIX-CONSOLIDATE-EDIT] v1 gates).
+fn deletability_gate(
+    root: Node<'_>,
+    source: &[u8],
+    sites: &[&DefinitionSite],
+    spans: &[ByteRange],
+) -> Result<(), String> {
+    for site in sites {
+        if count_definitions(root, source, &site.name) > 1 {
+            return Err(format!(
+                "{} defines `{}` more than once — resolution is ambiguous",
+                site.path.display(),
+                site.name
+            ));
+        }
+    }
+    if file_becomes_empty(source, spans) {
+        let display = sites
+            .first()
+            .map(|site| site.path.display().to_string())
+            .unwrap_or_default();
+        return Err(format!(
+            "{display} would become empty — file deletion needs the module declaration rewritten (v1 gate)"
+        ));
+    }
+    Ok(())
+}
+
+/// One deletion per consolidated definition, trailing blank line
+/// included.
+fn deletion_edits(
+    sites: &[&DefinitionSite],
+    source: &[u8],
+    spans: &[ByteRange],
+) -> Vec<PlannedFileEdit> {
+    sites
+        .iter()
+        .zip(spans)
+        .map(|(site, span)| PlannedFileEdit {
+            path: site.path.clone(),
+            start_byte: span.start,
+            end_byte: deletion_end(source, span.end),
+            new_text: String::new(),
+        })
+        .collect()
+}
+
+/// Consolidated symbols still referenced outside the deleted spans,
+/// alphabetical for a deterministic import.
+fn referenced_symbols<'a>(
+    root: Node<'_>,
+    source: &[u8],
+    parser: &dyn LanguageParser,
+    sites: &[&'a DefinitionSite],
+    spans: &[ByteRange],
+) -> Vec<&'a str> {
+    let mut names: Vec<&str> = sites
+        .iter()
+        .filter(|site| references_remain(root, source, parser, &site.name, spans))
+        .map(|site| site.name.as_str())
+        .collect();
+    names.sort_unstable();
+    names
+}
+
+/// The `use` insertion re-binding every remaining reference to the
+/// canonical items.
+fn import_edit(
+    path: &std::path::Path,
+    module: &str,
+    names: &[&str],
+    offset: usize,
+) -> PlannedFileEdit {
+    let list = match names {
+        [only] => (*only).to_owned(),
+        many => format!("{{{}}}", many.join(", ")),
+    };
+    PlannedFileEdit {
+        path: path.to_path_buf(),
+        start_byte: offset,
+        end_byte: offset,
+        new_text: format!("use crate::{module}::{list};\n\n"),
+    }
 }
 
 /// Counts top-level definitions of `name` in the file.
@@ -313,11 +396,14 @@ fn count_definitions(root: Node<'_>, source: &[u8], name: &str) -> usize {
         .count()
 }
 
-/// True when deleting `span` leaves only whitespace behind.
-fn file_becomes_empty(source: &[u8], span: ByteRange) -> bool {
-    let head = source.get(..span.start).unwrap_or_default();
-    let tail = source.get(span.end..).unwrap_or_default();
-    head.iter().all(u8::is_ascii_whitespace) && tail.iter().all(u8::is_ascii_whitespace)
+/// True when deleting every span leaves only whitespace behind.
+fn file_becomes_empty(source: &[u8], spans: &[ByteRange]) -> bool {
+    source.iter().enumerate().all(|(index, byte)| {
+        byte.is_ascii_whitespace()
+            || spans
+                .iter()
+                .any(|span| span.start <= index && index < span.end)
+    })
 }
 
 /// Extends a deletion to swallow the trailing blank line.
@@ -329,24 +415,26 @@ fn deletion_end(source: &[u8], end: usize) -> usize {
     cursor
 }
 
-/// True when the duplicate file still references the symbol outside
-/// the deleted definition.
+/// True when the duplicate file still references `name` outside the
+/// deleted definition spans.
 fn references_remain(
     root: Node<'_>,
     source: &[u8],
     parser: &dyn LanguageParser,
-    duplicate: &DefinitionSite,
+    name: &str,
+    excluded: &[ByteRange],
 ) -> bool {
     let references = parser.identifier_reference_kinds();
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
-        let inside_definition =
-            node.start_byte() >= duplicate.span.start && node.end_byte() <= duplicate.span.end;
-        if inside_definition {
+        let inside_deleted = excluded
+            .iter()
+            .any(|span| node.start_byte() >= span.start && node.end_byte() <= span.end);
+        if inside_deleted {
             continue;
         }
         if references.reference_kinds.contains(&node.kind())
-            && node_text(node, source).as_deref() == Some(duplicate.name.as_str())
+            && node_text(node, source).as_deref() == Some(name)
         {
             return true;
         }

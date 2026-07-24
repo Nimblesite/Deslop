@@ -38,7 +38,17 @@ impl PipelineSession {
         let Some(language) = self.language_for(&absolute) else {
             return Ok(());
         };
+        // Both gates evict, not just skip: a path the corpus already holds
+        // must leave it the moment it becomes inadmissible, so an inflated
+        // corpus self-heals instead of needing a restart.
         if self.exclusion.is_excluded(&absolute, Some(language)) {
+            self.drop_path(&absolute);
+            return Ok(());
+        }
+        // Discovery's walker prunes these; the live path is handed paths
+        // directly and must apply the same rules or it admits files
+        // discovery never would (#287).
+        if self.ignore_matcher.is_ignored(&absolute) {
             self.drop_path(&absolute);
             return Ok(());
         }
@@ -96,17 +106,20 @@ impl PipelineSession {
         Ok(())
     }
 
-    /// Drops every live file the reloaded exclusion config now
-    /// matches. Returns the number of dropped paths.
+    /// Drops every live file the reloaded exclusion config — or the
+    /// rebuilt ignore matcher — now matches, so a `.deslop.toml` or
+    /// `.gitignore` edit evicts exactly what a fresh discovery would
+    /// prune (ignore-rule parity #287). Returns the number of dropped
+    /// paths.
     fn drop_newly_excluded(&mut self) -> usize {
         let doomed: Vec<PathBuf> = self
             .live_paths
             .iter()
             .filter_map(|(file_id, path)| {
                 let language = self.file_languages.get(file_id).copied();
-                self.exclusion
-                    .is_excluded(path, language)
-                    .then(|| path.clone())
+                let excluded = self.exclusion.is_excluded(path, language)
+                    || self.ignore_matcher.is_ignored(path);
+                excluded.then(|| path.clone())
             })
             .collect();
         for path in &doomed {

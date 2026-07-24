@@ -31,7 +31,10 @@ use crate::{
         emit::{cluster_id_prefix, line_indent_at, line_start_at},
         merge::{plain_call_text, MergeEmitOutcome, MergeEmitRequest},
         preconditions::{field_text, named_children, node_text},
-        tables::{BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds},
+        tables::{
+            BindingKind, BoundaryKind, FrameKind, MergeTables, ReferenceTable, ScopeKinds,
+            WriteKind,
+        },
     },
     state::FileId,
 };
@@ -163,6 +166,39 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     shared_parent_kinds: &["class_definition", "source_file"],
     frame_kinds: FRAME_KINDS,
     allow_module_top_level: false,
+    hoist_rules: &[],
+    deferred_frame_kinds: &[],
+    scope_escape_kinds: &[],
+    // `pattern_assignment` (Dart 3 destructuring) has no fields, so it
+    // conservatively matches any named leaf under it — including the
+    // right-hand side, an accepted over-refusal.
+    write_kinds: &[
+        WriteKind {
+            node_kind: "assignment_expression",
+            target_field: Some("left"),
+            marker_tokens: &[],
+            destructuring_kinds: &[],
+        },
+        WriteKind {
+            node_kind: "postfix_expression",
+            target_field: Some("argument"),
+            marker_tokens: &["++", "--"],
+            destructuring_kinds: &[],
+        },
+        WriteKind {
+            node_kind: "unary_expression",
+            target_field: None,
+            marker_tokens: &["++", "--"],
+            destructuring_kinds: &["unary_expression"],
+        },
+        WriteKind {
+            node_kind: "pattern_assignment",
+            target_field: None,
+            marker_tokens: &[],
+            destructuring_kinds: &["pattern_assignment"],
+        },
+    ],
+    relocation_unsafe_kinds: &[],
 };
 
 /// Dart merge tables ([AUTOFIX-MERGE-SAFETY] B and D). Defaults are
@@ -208,7 +244,6 @@ const MERGE_TABLES: MergeTables = MergeTables {
         ("true", "bool"),
         ("false", "bool"),
     ],
-    write_kinds: &[("assignment_expression", "left")],
     supports_default_parameters: false,
 };
 

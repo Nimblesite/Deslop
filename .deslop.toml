@@ -21,13 +21,24 @@ exclude = [
   "**/*.openapi.cs",
   "**/*.pb.cs",
   "**/_site/**",
+  # Non-published dev/build/CI tooling — not part of the shipped CLI, LSP,
+  # MCP, VSIX, or site output. Excluded from the duplication budget because
+  # they are not product code (build/verify/package/codegen scripts and the
+  # static-site build config).
+  "**/scripts/**",
+  "**/eleventy.config.js",
 ]
 
 # Duplication gate — REPO-STANDARDS-SPEC [CI-DESLOP], spec [EXIT-CODES].
 # Single source of truth for this repo's duplication budget. Committed,
 # PR-reviewed, ratcheted DOWN only (never up without written justification).
 # `deslop .` reads this value and exits 3 (tanking CI) when measured repo-wide
-# duplication exceeds it. Seeded at the currently-measured value; the score is
-# inflated by the coarse E2E test suites and SHOULD be driven down over time.
+# duplication exceeds it. Pinned just above the currently-measured value; the
+# score is inflated by the coarse E2E test suites and SHOULD be driven down
+# over time. Last measured 12.15% (2026-07-09) — ratcheted 13 -> 12.2. Part of
+# that drop is exclusion-funded, not dedup-funded: the same change excluded
+# **/scripts/** and eleventy.config.js (non-shipped build tooling) from the
+# corpus. Going below 12% requires removing real duplication, not lowering
+# this gate.
 [threshold]
-max_duplication_percent = 13
+max_duplication_percent = 12.2
