@@ -143,6 +143,9 @@ lint: typediagram-gen
 	@bash scripts/taxonomy-gate.sh
 	@echo "==> VSIX stub-provider packaging gate (unit)..."
 	@node --test clients/vscode/scripts/stub-gate.test.mjs
+	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
+	@node --test scripts/verify-env-path-writes.test.mjs
+	@node scripts/verify-env-path-writes.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree

@@ -142,6 +142,20 @@ runs:
       # prefix of an absolute ${RUNNER_TEMP} path as a remote host — and GNU
       # tar cannot read the `.zip` regardless, so Windows uses the runner's
       # bsdtar from System32 ([ACTION-VERIFY]).
+      #
+      # NEVER write a caller-influenced value into ${GITHUB_PATH} or
+      # ${GITHUB_ENV}. Both files are read back by the runner as the *next*
+      # step's PATH and environment, so a value derived from an action input —
+      # `${STAGE}` carries the `version` input — hands a caller who can set that
+      # input a say in where later steps resolve their executables from. The
+      # staged directory is therefore moved to a fixed `bin` name and only that
+      # constant is exported. Enforced with an error by
+      # `scripts/verify-env-path-writes.mjs` ([ACTION-ENVPATH]).
+      #
+      # `mv` doubles as the layout assertion — a release repackaged without the
+      # versioned top-level directory fails here instead of silently exporting
+      # an empty directory. `rm -rf` keeps a second invocation in the same job
+      # from nesting the new staging directory inside the old `bin`.
       run: |
         set -euo pipefail
         cd "${RUNNER_TEMP}/deslop"
@@ -150,7 +164,9 @@ runs:
         else
           tar -xf "${ARCHIVE}"
         fi
-        echo "${RUNNER_TEMP}/deslop/${STAGE}" >> "${GITHUB_PATH}"
+        rm -rf bin
+        mv "${STAGE}" bin
+        echo "${RUNNER_TEMP}/deslop/bin" >> "${GITHUB_PATH}"
       env:
         ARCHIVE: ${{ steps.resolve.outputs.archive }}
         STAGE: ${{ steps.resolve.outputs.stage }}
