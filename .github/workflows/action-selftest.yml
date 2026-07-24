@@ -1,5 +1,8 @@
-# Proves the published Marketplace action on every runner it claims to support.
-# [ACTION-TESTS]
+# Proves the published Marketplace action on every hosted runner GitHub still
+# operates. macOS Intel is deliberately absent: GitHub retired the macos-13
+# pool, so a macos-x64 leg queues for hours and dies instead of running. The
+# macos-x64 asset is still cross-compiled, checksum-verified, and published by
+# release.yml, and the contract test proves its mapping. [ACTION-TESTS]
 #
 # Black-box: the action is exercised exactly as a consumer would call it, against
 # the fixture repos in examples/, using the real published CLI. No fake binary,
@@ -63,8 +66,6 @@ jobs:
             artifact: linux-x64
           - os: ubuntu-24.04-arm
             artifact: linux-arm64
-          - os: macos-13
-            artifact: macos-x64
           - os: macos-latest
             artifact: macos-arm64
           - os: windows-latest

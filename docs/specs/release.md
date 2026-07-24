@@ -200,7 +200,11 @@ PR: the asset mapping against the real `release.yml` matrix, version derivation,
 checksum rejection, output extraction, and the static shape of `action.yml`
 (including that the nested `upload-artifact` stays pinned to a 40-character
 SHA). `.github/workflows/action-selftest.yml` then exercises the action exactly
-as a consumer would, on all five runners, against the fixtures in `examples/` —
+as a consumer would, on the four runner pools GitHub still operates (macOS
+Intel has no hosted leg — GitHub retired the `macos-13` pool, so the job
+queues for hours instead of running; the `macos-x64` asset is still
+cross-compiled and published by the release matrix, and the contract layer
+proves its runner mapping), against the fixtures in `examples/` —
 asserting a clean run publishes a finite percentage and the installed
 `deslop --version` matches the requested version, a breach fails the step but
 still leaves a browsable report, and an out-of-range threshold fails without
