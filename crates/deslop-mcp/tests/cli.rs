@@ -1761,7 +1761,11 @@ fn set_embedding_model_rejects_stub_provider() -> Result<()> {
 
 #[test]
 fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
-    // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    // The harness spawns a companion LSP, so this exercises the live IPC
+    // path. Port 1 is never listening, so the swap must fail as an
+    // unreachable *provider* — naming the endpoint it was handed proves the
+    // caller's endpoint survived the trip instead of being discarded
+    // ([Deslop#286]).
     // [REMOVE-STUB] Stub provider removed from production payloads;
     // exercise the same plumbing through the ollama provider.
     let (child, response) = init_and_tool_response(
@@ -1770,7 +1774,16 @@ fn set_embedding_model_preserves_shared_settings_and_endpoint() -> Result<()> {
     )?;
     assert!(
         response.get("error").is_some(),
-        "set-embedding-model without LSP must return an error envelope: {response}",
+        "set-embedding-model against a dead endpoint must return an error envelope: {response}",
+    );
+    let rendered = response.to_string();
+    assert!(
+        !rendered.contains("LSP is not running"),
+        "issue #286: the LSP is running and serving this socket; the error must describe the real failure: {response}",
+    );
+    assert!(
+        rendered.contains("127.0.0.1:1"),
+        "the endpoint the caller supplied must reach the provider and be named in the failure: {response}",
     );
     let _ = child.finish();
     Ok(())
@@ -2030,16 +2043,28 @@ fn report_for_file_on_unknown_path_returns_empty_clusters() -> Result<()> {
 
 #[test]
 fn set_embedding_model_swap_updates_session_config_provenance() -> Result<()> {
-    // StateFileBackend does not manage embeddings — set-embedding-model requires the LSP.
+    // A swap that never reached a provider must not leave provenance behind:
+    // an agent reading session-config afterwards has to see that embeddings
+    // are still off, not a model that was never installed ([Deslop#286]).
     // [REMOVE-STUB] Use the ollama provider id since stub is no longer
     // accepted by the production MCP schema.
-    let (child, response) = init_and_tool_response(
+    let (mut child, response) = init_and_tool_response(
         "set-embedding-model",
         &json!({ "provider_id": "ollama", "model_id": "nomic-embed-text", "endpoint": "http://127.0.0.1:1", "user_initiated": true }),
     )?;
     assert!(
         response.get("error").is_some(),
-        "set-embedding-model without LSP must return an error envelope: {response}",
+        "a swap against a dead endpoint must return an error envelope: {response}",
+    );
+    assert!(
+        !response.to_string().contains("LSP is not running"),
+        "issue #286: the companion LSP is live; the error must describe the real failure: {response}",
+    );
+    let config = structured_tool_result(&call_tool(&mut child, "session-config", &json!({}))?)?;
+    assert_eq!(
+        config.get("embedding_provenance"),
+        Some(&Value::Null),
+        "a failed swap must leave session-config reporting no embedding provenance: {config}",
     );
     let _ = child.finish();
     Ok(())

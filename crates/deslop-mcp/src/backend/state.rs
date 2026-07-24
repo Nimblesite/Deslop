@@ -28,7 +28,7 @@ use deslop_core::{
         FindSimilarInput as WireFindSimilarInput, FindSimilarRequest, SessionConfig,
     },
     report::ReportCluster,
-    EmbeddingSpec, Report,
+    EmbeddingProvenance, EmbeddingSpec, Report,
 };
 use serde_json::{json, Value};
 use tracing::debug;
@@ -290,13 +290,16 @@ impl McpBackend for LiveBackend {
 
     fn set_embedding_model(
         &self,
-        _provider_id: &str,
-        _model_id: &str,
-        _endpoint: Option<&str>,
+        provider_id: &str,
+        model_id: &str,
+        endpoint: Option<&str>,
     ) -> Result<EmbeddingSpec, BackendError> {
-        Err(BackendError::LspNotRunning {
-            socket_path: self.ipc_socket.clone(),
-        })
+        let params = json!({
+            "provider_id": provider_id,
+            "model_id": model_id,
+            "endpoint": endpoint,
+        });
+        spec_from_set_model_reply(ipc_call(&self.root, "embedding/setModel", &params)?)
     }
 
     fn session_config(&self) -> Result<SessionConfigSnapshot, BackendError> {
@@ -357,6 +360,29 @@ impl McpBackend for LiveBackend {
             Err(error) => debug!(reason = %error, "mcp_subscribe_connect_failed"),
         }
     }
+}
+
+/// Converts an `embedding/setModel` IPC reply into the spec the MCP
+/// response carries.
+///
+/// A null provenance means the LSP switched embeddings off rather than
+/// swapping providers. The MCP schema cannot request that, so receiving
+/// it means the two binaries disagree about the wire contract — the
+/// same class of drift `StateFileCorrupt` reports elsewhere.
+fn spec_from_set_model_reply(result: Value) -> Result<EmbeddingSpec, BackendError> {
+    let provenance = serde_json::from_value::<Option<EmbeddingProvenance>>(result)
+        .map_err(|err| BackendError::StateFileCorrupt(format!("ipc set-model parse: {err}")))?
+        .ok_or_else(|| {
+            BackendError::StateFileCorrupt(
+                "ipc set-model returned no provenance: the LSP switched embeddings off instead of swapping providers".to_owned(),
+            )
+        })?;
+    Ok(EmbeddingSpec {
+        provider_id: provenance.provider_id,
+        model_id: provenance.model_id,
+        model_version: provenance.model_version,
+        dimensions: provenance.dimensions,
+    })
 }
 
 /// Converts the compact `deslop.lsp.refreshReport` IPC response into
