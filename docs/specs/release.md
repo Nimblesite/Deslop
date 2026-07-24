@@ -167,8 +167,12 @@ pair is a hard error naming the pair; there is no silent fallback. This is the
 downloads the archive and its published `.sha256` sidecar and compares digests
 before anything is unpacked. The digest is computed in Node so there is no
 three-way branch between `sha256sum`, `shasum -a 256`, and Windows. Extraction
-uses `tar -xf` on every platform: bsdtar reads the `.zip` on Windows runners,
-GNU tar reads the `.tar.gz` everywhere else.
+runs from inside the staging directory with a relative archive name — the step
+shell on Windows is Git Bash, whose GNU tar parses the `D:` drive prefix of an
+absolute path as a remote-host archive (`tar: Cannot connect to D:`). Windows
+extracts with the runner's bsdtar (`%SystemRoot%\System32\tar.exe`), the only
+tar in that shell that reads the `.zip`; every other platform reads the
+`.tar.gz` with plain `tar -xf`.
 
 **[ACTION-GATE] Exit codes are surfaced, never reinterpreted.** The run step
 captures the CLI status with an `||` guard — GitHub injects `-e` into every

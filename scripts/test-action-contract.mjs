@@ -250,4 +250,23 @@ check("a breach cannot abort the run step before the status is captured", () => 
   );
 });
 
+// Git Bash's GNU tar parses the `D:` drive prefix of an absolute
+// ${RUNNER_TEMP} archive path as a remote host and cannot read the Windows
+// `.zip` at all — extraction must cd into the staging directory and use the
+// runner's System32 bsdtar on Windows. [ACTION-VERIFY]
+check("extraction survives Git Bash tar on Windows", () => {
+  assert.ok(
+    action.includes('cd "${RUNNER_TEMP}/deslop"'),
+    "the install step must extract from inside the staging directory",
+  );
+  assert.ok(
+    action.includes('"$(cygpath -u "${SYSTEMROOT}")/System32/tar.exe" -xf "${ARCHIVE}"'),
+    "Windows must extract with the System32 bsdtar, by relative archive name",
+  );
+  assert.ok(
+    !action.includes('tar -xf "${RUNNER_TEMP}'),
+    "no tar invocation may pass an absolute drive-letter archive path",
+  );
+});
+
 console.log(`\naction contract: ${checked} checks passed`);

@@ -137,9 +137,19 @@ runs:
     # the `.tar.gz` everywhere else. One command, no per-OS branch.
     - name: Install the deslop CLI
       shell: bash
+      # Extract from inside the directory with a relative archive name: the
+      # step shell on Windows is Git Bash, whose GNU tar parses the `D:` drive
+      # prefix of an absolute ${RUNNER_TEMP} path as a remote host — and GNU
+      # tar cannot read the `.zip` regardless, so Windows uses the runner's
+      # bsdtar from System32 ([ACTION-VERIFY]).
       run: |
         set -euo pipefail
-        tar -xf "${RUNNER_TEMP}/deslop/${ARCHIVE}" -C "${RUNNER_TEMP}/deslop"
+        cd "${RUNNER_TEMP}/deslop"
+        if [ "${RUNNER_OS}" = "Windows" ]; then
+          "$(cygpath -u "${SYSTEMROOT}")/System32/tar.exe" -xf "${ARCHIVE}"
+        else
+          tar -xf "${ARCHIVE}"
+        fi
         echo "${RUNNER_TEMP}/deslop/${STAGE}" >> "${GITHUB_PATH}"
       env:
         ARCHIVE: ${{ steps.resolve.outputs.archive }}
