@@ -174,6 +174,19 @@ extracts with the runner's bsdtar (`%SystemRoot%\System32\tar.exe`), the only
 tar in that shell that reads the `.zip`; every other platform reads the
 `.tar.gz` with plain `tar -xf`.
 
+**[ACTION-ENVPATH] Only runner-owned constants reach `$GITHUB_PATH` and
+`$GITHUB_ENV`.** The runner replays both files as the *next* step's PATH and
+environment, so a value built from an action input, a step output, or a
+`${{ }}` expression hands whoever sets that input a say in where later steps
+resolve their executables — CodeQL's `actions/envpath-injection`. The install
+step therefore moves the extracted `deslop-<version>-<artifact>` directory to a
+fixed `bin` name and exports `${RUNNER_TEMP}/deslop/bin`, a constant; the `mv`
+doubles as the layout assertion, failing loudly if a release is ever repackaged
+without that top-level directory. `scripts/verify-env-path-writes.mjs` enforces
+this with an error across `action.yml` and every workflow, in `make lint` so it
+runs on every CI job rather than behind a path filter, and
+`verify-env-path-writes.test.mjs` proves the gate rejects the tainted form.
+
 **[ACTION-GATE] Exit codes are surfaced, never reinterpreted.** The run step
 captures the CLI status with an `||` guard — GitHub injects `-e` into every
 composite `shell: bash` step, so an unguarded non-zero status would abort the
