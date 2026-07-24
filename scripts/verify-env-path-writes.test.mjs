@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 
 import {
   envWriteViolations,
@@ -74,7 +75,7 @@ test("only the fragment before the redirect is inspected, so the sink name itsel
 });
 
 test("the lint covers action.yml and every workflow", () => {
-  const targets = lintTargets().map((target) => target.split("/").at(-1));
+  const targets = lintTargets().map((target) => basename(target));
   assert.ok(targets.includes("action.yml"), "action.yml is the composite action under Marketplace listing");
   for (const workflow of ["ci.yml", "release.yml", "action-selftest.yml", "codeql.yml", "deploy-pages.yml"]) {
     assert.ok(targets.includes(workflow), `${workflow} is not covered by the env/PATH lint`);
