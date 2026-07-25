@@ -42,7 +42,8 @@ pub(super) fn schema_report_get() -> Value {
         "type": "object",
         "properties": {
             "offset": { "type": "integer", "minimum": 0, "description": "Zero-based cluster index to start at." },
-            "limit": { "type": "integer", "minimum": 0, "description": "Max clusters in this page. Pick a sensible value for your context window." }
+            "limit": { "type": "integer", "minimum": 0, "description": "Max clusters in this page. Pick a sensible value for your context window." },
+            "include_per_file": { "type": "boolean", "default": false, "description": "Include the per-file duplication breakdown (one row per analysed file). Off by default: on a large workspace it alone can exceed the whole result budget." }
         },
         "required": ["offset", "limit"],
         "additionalProperties": false,
@@ -61,7 +62,8 @@ pub(super) fn schema_report_query() -> Value {
             "bucket": { "type": "string", "enum": bucket_enum(), "description": "Match clusters whose canonical bucket equals this id." },
             "path_contains": { "type": "string", "description": "Case-sensitive substring match against any occurrence path on the cluster." },
             "min_score": { "type": "number", "description": "Inclusive ranking-score floor." },
-            "min_size": { "type": "integer", "minimum": 0, "description": "Inclusive subtree-node-count floor (canonical_node_count)." }
+            "min_size": { "type": "integer", "minimum": 0, "description": "Inclusive subtree-node-count floor (canonical_node_count)." },
+            "include_per_file": { "type": "boolean", "default": false, "description": "Include the per-file duplication breakdown (one row per analysed file). Off by default: on a large workspace it alone can exceed the whole result budget." }
         },
         "required": ["offset", "limit"],
         "additionalProperties": false,

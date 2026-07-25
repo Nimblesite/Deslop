@@ -189,6 +189,7 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         registry: inputs.registry,
         exclusion: inputs.exclusion,
         analysed_lines: inputs.analysed_lines,
+        scan_root: inputs.scan_root,
     });
     // Resolve the [EXIT-CODES] duplication gate here so every surface that
     // renders through this path carries the breach verdict — the live

@@ -105,6 +105,51 @@ fn list_embedding_models_via_mcp_delegates_to_running_lsp() -> Result<()> {
     Ok(())
 }
 
+/// [MCP-IPC-CLIENT] Issue #286: `set-embedding-model` must travel the
+/// same IPC chain as every other compute tool. It used to ignore its
+/// arguments and answer `LspNotRunning` unconditionally — on every
+/// platform, while the LSP was up and serving `find-similar` from this
+/// very socket — so the tool could never succeed and its error blamed a
+/// server that was running.
+///
+/// An unregistered provider id keeps the assertion independent of
+/// whether an Ollama daemon happens to be installed: the only component
+/// that can name the registered providers is the live LSP's registry,
+/// so an error naming the request proves the argument crossed the IPC
+/// boundary rather than being discarded by the MCP backend.
+#[test]
+fn issue_286_set_embedding_model_reaches_the_running_lsp() -> Result<()> {
+    let (workspace, _lsp_guard, _socket) = lsp_workspace_with_socket()?;
+    let mut mcp = wait_for_state_then_init_mcp(workspace.path())?;
+
+    let response = mcp.request(
+        "tools/call",
+        &json!({
+            "name": "set-embedding-model",
+            "arguments": {
+                "user_initiated": true,
+                "provider_id": "definitely-not-a-registered-provider",
+                "model_id": "nomic-embed-text"
+            }
+        }),
+    )?;
+
+    let rendered = response.to_string();
+    ensure!(
+        !rendered.contains("LSP is not running"),
+        "issue #286: set-embedding-model reported the LSP as down while the LSP was serving this very socket: {response}"
+    );
+    ensure!(
+        !rendered.contains("method-not-found"),
+        "issue #286: the LSP IPC table must route embedding/setModel: {response}"
+    );
+    ensure!(
+        rendered.contains("definitely-not-a-registered-provider"),
+        "issue #286: the live provider registry must reject the requested provider by name, proving the argument reached the LSP: {response}"
+    );
+    Ok(())
+}
+
 /// [MCP-IPC-CLIENT] Agent `rescan` must ask the running LSP to execute
 /// `deslop.lsp.refreshReport`, then return top offenders from the
 /// refreshed state file.

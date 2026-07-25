@@ -154,6 +154,14 @@ from the canonical occurrence path via the **core parser registry's** extension 
 source shared with the HTML renderer, so every registered language (Dart included, #164) reports
 its real id, never `"unknown"`.
 
+`metrics` carries the headline repo totals on every page. Its **`per_file` breakdown is opt-in**
+via `include_per_file: true` and empty otherwise: it holds one row per analysed file, so on a
+workspace of a thousand files — or a few hundred deeply nested ones — that block alone exceeds the
+whole [MCP-RESULT-SIZE-CAP] budget before a single cluster is added, which made every page overflow
+([issue #286](https://github.com/Nimblesite/Deslop/issues/286)). Every `per_file` path is rendered
+relative to the scan root, the same form occurrence paths use, so a report never mixes the two and
+never carries the user's home directory.
+
 `schema_doc` is intentionally absent from every page; agents call `schema-doc` or read
 `deslop://schema` once. `total_clusters` lets the agent decide whether to keep paging; exhaustive
 audits page until `offset + returned >= total_clusters`.
@@ -202,8 +210,12 @@ last-resort guard layered on top of the per-call occurrence budget
 dispatcher drops clusters from the tail of the inner `clusters[]` array until it
 fits, then stamps the response with `truncated: true`, a human-readable
 `truncated_reason`, `truncated_at_bytes`, and a `next_action` pointer to the
-paginated report tool; payloads with no `clusters` array degrade to a stub
-carrying the same markers. Every truncation emits a `tracing::warn!` so operators
+paginated report tool; payloads with no `clusters` array — **and payloads still
+over budget once every cluster has been dropped** — degrade to a stub carrying
+the same markers. Draining the cluster array is not by itself success: reporting
+it as one shipped an oversized payload stamped `truncated: true`, which is the
+one outcome this cap exists to prevent
+([issue #286](https://github.com/Nimblesite/Deslop/issues/286)). Every truncation emits a `tracing::warn!` so operators
 can size their corpora. A companion budget keeps the whole `tools/list` payload
 ≤16 KB with each description ≤200 chars so long-form rationale stays in the
 `deslop://schema` resource.

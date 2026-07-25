@@ -423,6 +423,10 @@ pub(super) fn extract_pagination(args: &Value) -> Result<Pagination, JsonRpcErro
     Ok(Pagination {
         offset: usize::try_from(offset).unwrap_or(usize::MAX),
         limit: usize::try_from(limit).unwrap_or(usize::MAX),
+        include_per_file: args
+            .get("include_per_file")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 

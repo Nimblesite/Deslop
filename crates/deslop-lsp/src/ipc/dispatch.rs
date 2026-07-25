@@ -26,6 +26,7 @@ pub(super) fn dispatch(
         "session/config" => dispatch_session_config(service, handle),
         "duplicates/findSimilar" => dispatch_find_similar(params, service, handle),
         "embedding/listModels" => dispatch_list_models(service, handle),
+        "embedding/setModel" => dispatch_set_model(params, service, handle),
         crate::commands::REFRESH_REPORT => dispatch_refresh_report(service, handle),
         _ => Err(json!({"code": -32601, "message": "method not found"})),
     }
@@ -116,6 +117,25 @@ fn dispatch_find_similar(
 fn dispatch_list_models(service: &Arc<LiveService>, handle: &Handle) -> Result<Value, Value> {
     let models = handle.block_on(service.embedding_list_models());
     serde_json::to_value(&models).map_err(|err| rpc_serialise_error(&err))
+}
+
+/// Delegates `embedding/setModel` to [`LiveService::embedding_set_model`].
+///
+/// The VSIX reaches this swap through the LSP custom method; MCP clients
+/// reach it here. Without this arm the MCP backend can only ever be told
+/// "method not found" ([Deslop#286]).
+fn dispatch_set_model(
+    params: &Value,
+    service: &Arc<LiveService>,
+    handle: &Handle,
+) -> Result<Value, Value> {
+    let provider_id = required_str_param(params, "provider_id")?;
+    let model_id = required_str_param(params, "model_id")?;
+    let endpoint = params.get("endpoint").and_then(Value::as_str);
+    let provenance = handle
+        .block_on(service.embedding_set_model(provider_id, model_id, endpoint))
+        .map_err(|error| json!({"code": -32603, "message": error.to_string()}))?;
+    serde_json::to_value(&provenance).map_err(|err| rpc_serialise_error(&err))
 }
 
 /// Forces the same full refresh as `workspace/executeCommand`

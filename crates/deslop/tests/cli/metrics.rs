@@ -97,6 +97,30 @@ fn metrics_per_file_breakdown_matches_repo_totals() -> Result<()> {
     Ok(())
 }
 
+/// Issue #286: `per_file[].path` is documented as relative to the scan
+/// root — the same contract every occurrence path already honours — but
+/// was emitted absolute. That inflates every JSON report by the length of
+/// the scan root times the file count, and writes the user's home
+/// directory into a file agents copy between machines.
+#[test]
+fn metrics_per_file_paths_are_scan_root_relative() -> Result<()> {
+    let (_analysed, json) = run_clone_pair("8")?;
+    let mut paths: Vec<String> = metric_field(&json, "per_file")
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|entry| field(entry, "path").as_str().map(str::to_owned))
+        .collect();
+    paths.sort();
+    assert_eq!(
+        paths,
+        vec!["Alpha.cs".to_owned(), "Beta.cs".to_owned()],
+        "per_file paths must be scan-root-relative, exactly as occurrence paths are"
+    );
+    Ok(())
+}
+
 /// Asserts one `per_file` row: a `.cs` path, non-zero duplication for
 /// this cross-file clone fixture, and a percentage computed against the
 /// file's own analysed-line denominator.
