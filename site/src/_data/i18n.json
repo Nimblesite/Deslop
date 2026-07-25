@@ -42,7 +42,8 @@
       "vscodeMarketplace": "VS Code Marketplace",
       "openVsx": "Open VSX Registry",
       "discord": "Discord",
-      "rss": "RSS"
+      "rss": "RSS",
+      "githubAction": "GitHub Action"
     },
     "editors": {
       "eyebrow": "Install",
@@ -117,7 +118,8 @@
       "vscodeMarketplace": "VS Code Marketplace",
       "openVsx": "Open VSX 注册表",
       "discord": "Discord",
-      "rss": "RSS"
+      "rss": "RSS",
+      "githubAction": "GitHub Action"
     },
     "editors": {
       "eyebrow": "安装",

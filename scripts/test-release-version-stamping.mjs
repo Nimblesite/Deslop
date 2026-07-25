@@ -119,23 +119,33 @@ function stamperStampsEveryWorkspaceCrateInLock(work) {
 // The README is the body of the GitHub Marketplace listing, and the pinned ref
 // IS the CLI version the action installs. An unstamped pin shipped v0.26.0's
 // listing telling every visitor to use v0.25.0 — a tag that predates action.yml,
-// so the advertised snippet failed outright. Every pin must move with the tag.
+// so the advertised snippet failed outright. Every published surface that shows
+// a copy-pasteable pin — the README and both locales of the Action doc page —
+// must move with the tag, or a reader copies a stale version.
 function stamperStampsEveryReadmeActionPin(work) {
   copyStampInputs(work);
   const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
 
-  const readme = read(work, "README.md");
-  const pins = readme.split("\n").filter((line) => line.includes("uses: Nimblesite/Deslop@"));
-  if (pins.length < 2) {
-    throw new Error(`README.md has ${pins.length} action pins, expected the 2 workflow examples`);
+  let total = 0;
+  for (const doc of ["README.md", "site/src/docs/github-action.md", "site/src/zh/docs/github-action.md"]) {
+    const text = read(work, doc);
+    const pins = text.split("\n").filter((line) => line.includes("uses: Nimblesite/Deslop@v"));
+    if (pins.length === 0) throw new Error(`${doc} lost its action pin entirely`);
+    for (const pin of pins) assertIncludes(pin, `uses: Nimblesite/Deslop@v${version}`);
+    total += pins.length;
+    // The pin sits inside a `steps:` list and must keep its indentation and its
+    // `- ` marker, or the rendered snippet is invalid YAML.
+    assertIncludes(text, `      - uses: Nimblesite/Deslop@v${version}\n        with:`);
   }
-  for (const pin of pins) {
-    assertIncludes(pin, `uses: Nimblesite/Deslop@v${version}`);
+  if (total < 7) throw new Error(`only ${total} action pins stamped across the docs, expected 7`);
+
+  // The SHA-pinned example documents the case where the ref carries no version,
+  // so `version:` is required. Rewriting it to a tag would destroy the very
+  // thing it illustrates — the stamper must leave a non-`@v` ref alone.
+  for (const doc of ["site/src/docs/github-action.md", "site/src/zh/docs/github-action.md"]) {
+    assertIncludes(read(work, doc), "uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f");
   }
-  // The quickstart pin sits inside a `steps:` list and must keep its indentation
-  // and its `- ` marker, or the rendered snippet is invalid YAML.
-  assertIncludes(readme, `      - uses: Nimblesite/Deslop@v${version}\n        with:`);
 }
 
 function stamperRejectsInvalidVersion(work) {
@@ -151,6 +161,8 @@ function copyStampInputs(work) {
     "Cargo.lock",
     "shipwright.json",
     "README.md",
+    "site/src/docs/github-action.md",
+    "site/src/zh/docs/github-action.md",
     "clients/vscode/package.json",
     "clients/vscode/package-lock.json",
     "clients/vscode/webview-ui/package.json",
