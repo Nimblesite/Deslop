@@ -4,7 +4,13 @@
 # workspace, renders the reports, and fails the job when repo-wide duplication
 # breaches the threshold. Exit codes are owned by docs/specs/pipeline.md
 # [EXIT-CODES]; this action surfaces them, it does not reinterpret them.
-name: Deslop
+# The Marketplace listing name must match no GitHub user or organization — the
+# publish form rejects a collision unless that account is the publisher. A
+# dormant, unrelated org already holds the login `deslop` (id 6157270), so the
+# bare product name is unclaimable here; `Deslop Live` is the product's own name
+# (deslop.live, `nimblesite.deslop-live`) and collides with nothing. Do not
+# shorten it back. [ACTION-METADATA]
+name: Deslop Live
 description: Find, rank, and gate on duplicated code — worst offenders first.
 author: Nimblesite
 

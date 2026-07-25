@@ -17,6 +17,13 @@ const nodeProjects = [
 // `--pre-release` flag at publish time. Spec: [DEPLOY-VSCE-MARKETPLACE].
 const marketplaceProjects = new Set(["clients/vscode"]);
 const stagedDeploymentManifests = ["clients/vscode/shipwright.json"];
+// GitHub renders README.md as the body of the Marketplace listing, and the
+// action derives the CLI version from the ref it is pinned to — so an unstamped
+// `uses:` pin hands every listing visitor a workflow that installs an older
+// release, or fails outright against a tag predating action.yml. The pin is a
+// project-owned version reference like any other. [ACTION-VERSION]
+const actionPinPrefix = "uses: Nimblesite/Deslop@v";
+const actionPinReadmes = ["README.md"];
 
 const { root, version } = parseArgs(process.argv.slice(2));
 stampReleaseVersion(root, version);
@@ -31,6 +38,7 @@ export function stampReleaseVersion(rootPath, versionValue) {
     const manifestPath = join(rootPath, manifest);
     if (existsSync(manifestPath)) stampDeploymentManifest(manifestPath, versionValue);
   }
+  for (const readme of actionPinReadmes) stampActionPin(join(rootPath, readme), versionValue);
   for (const project of nodeProjects) {
     const projectVersion = marketplaceProjects.has(project)
       ? marketplaceVersion(versionValue)
@@ -106,6 +114,29 @@ function replaceLockVersions(text, versionValue) {
   });
   if (stamped === 0) throw new Error("Cargo.lock has no workspace crates to stamp");
   return out.join("[[package]]");
+}
+
+function stampActionPin(filePath, versionValue) {
+  writeFileSync(filePath, replaceActionPins(readFileSync(filePath, "utf8"), versionValue));
+}
+
+// Rewrites only the version token, preserving anything trailing it on the line
+// (a comment, a `with:` continuation), so a documented pin can never be
+// truncated by the stamp. Prose that *states* a version alongside its pin —
+// action.yml's own `version` doc, release.md [ACTION-VERSION] — is deliberately
+// not listed here: stamping those would leave the sentence contradicting itself.
+function replaceActionPins(text, versionValue) {
+  let stamped = 0;
+  const lines = text.split("\n").map((line) => {
+    const marker = line.indexOf(actionPinPrefix);
+    if (marker < 0) return line;
+    const tail = line.slice(marker + actionPinPrefix.length);
+    const space = tail.indexOf(" ");
+    stamped++;
+    return `${line.slice(0, marker)}${actionPinPrefix}${versionValue}${space < 0 ? "" : tail.slice(space)}`;
+  });
+  if (stamped === 0) throw new Error(`no ${actionPinPrefix} pin to stamp`);
+  return lines.join("\n");
 }
 
 function parseArgs(args) {

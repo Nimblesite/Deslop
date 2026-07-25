@@ -29,9 +29,6 @@ use super::{
     embedding_observability::{token_count, EmbeddingObserver},
 };
 
-/// Maximum source characters sent to any embedding provider.
-const MAX_PROVIDER_INPUT_CHARS: usize = 6_000;
-
 /// Outcome of the embedding pass. Empty `pairs` + `None` provenance
 /// means the pass was skipped or failed gracefully.
 #[derive(Debug, Default)]
@@ -139,7 +136,13 @@ fn compute_embeddings(
     observer: &mut EmbeddingObserver,
 ) -> EmbeddingBatch {
     let mut batch = EmbeddingBatch::with_capacity(corpus.fingerprints.len());
-    let pending = lookup_phase(corpus, cache, &mut batch, observer);
+    let pending = lookup_phase(
+        corpus,
+        cache,
+        &mut batch,
+        observer,
+        provider.max_input_chars(),
+    );
     observer.log_cache_phase(pending.len());
     process_pending_embeddings(
         PendingDispatch {
@@ -164,19 +167,23 @@ fn compute_embeddings(
 }
 
 /// Walks the corpus once, loading cache hits and queuing unique misses.
+/// `max_input_chars` is the budget the provider declared for itself
+/// ([`EmbeddingProvider::max_input_chars`], #286) — never a constant of
+/// this pass's own.
 fn lookup_phase(
     corpus: &FingerprintCorpus,
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
     observer: &mut EmbeddingObserver,
+    max_input_chars: usize,
 ) -> Vec<PendingEmbedding> {
     let mut indexed_hashes: HashSet<String> = HashSet::new();
     let mut pending_positions: HashMap<String, usize> = HashMap::new();
     let mut pending: Vec<PendingEmbedding> = Vec::new();
     for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
         let snippet = snippet_for(fingerprint, &corpus.sources);
-        if snippet.chars().count() > MAX_PROVIDER_INPUT_CHARS {
-            record_oversized_input(batch, index, snippet);
+        if snippet.chars().count() > max_input_chars {
+            record_oversized_input(batch, index, snippet, max_input_chars);
             continue;
         }
         classify_snippet(
@@ -269,7 +276,12 @@ fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usiz
 }
 
 /// Counts an oversized snippet as skipped before provider dispatch.
-fn record_oversized_input(batch: &mut EmbeddingBatch, fingerprint_index: usize, snippet: String) {
+fn record_oversized_input(
+    batch: &mut EmbeddingBatch,
+    fingerprint_index: usize,
+    snippet: String,
+    max_input_chars: usize,
+) {
     let snippet_hash = content_hash(&snippet);
     let item = PendingEmbedding {
         fingerprint_index,
@@ -277,11 +289,7 @@ fn record_oversized_input(batch: &mut EmbeddingBatch, fingerprint_index: usize, 
         snippet_hash,
         occurrences: 1,
     };
-    record_failed_pending(
-        batch,
-        &item,
-        &format!("exceeds {MAX_PROVIDER_INPUT_CHARS} chars"),
-    );
+    record_failed_pending(batch, &item, &format!("exceeds {max_input_chars} chars"));
 }
 
 /// Dispatches pending embedding requests in provider-sized chunks.

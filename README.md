@@ -88,7 +88,7 @@ Every detection algorithm in the table below is a real file, not a future plan:
 | Worst-offenders ranking | `clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)` | [`cluster.rs`](crates/deslop-core/src/cluster.rs) |
 | Live + reactive (LSP watcher → IPC → MCP) | Debounced watcher, in-memory report, Unix socket or token-gated TCP IPC | [`live/`](crates/deslop-core/src/live/), [`deslop-lsp/`](crates/deslop-lsp/), [`deslop-mcp/`](crates/deslop-mcp/) |
 
-Full research → code map: [docs/specs/SPEC.md §Algorithm implementation status](docs/specs/SPEC.md#algorithm-implementation-status). Site-facing version: [Research Background](https://deslop.live/docs/research-background/).
+Full research → code map: [docs/specs/SPEC.md §Topic files](docs/specs/SPEC.md#topic-files). Site-facing version: [Research Background](https://deslop.live/docs/research-background/).
 
 ---
 
@@ -199,14 +199,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Nimblesite/Deslop@v0.25.0
+      - uses: Nimblesite/Deslop@v0.26.0
         with:
           fail-over: "5.0"   # or omit to use [threshold] in .deslop.toml
 ```
 
 The action installs the CLI matching the tag you pinned, analyses the workspace,
 uploads `deslop-report.{json,txt,html}` as a workflow artifact, and fails the job
-on exit `3`. It runs on Linux, macOS and Windows runners, x64 and arm64.
+on exit `3`. Supported runners: Linux x64, Linux arm64, macOS x64, macOS arm64,
+and Windows x64. Any other pair is a hard error naming the combination.
 
 Pin an exact version rather than a mutable ref — Dependabot bumps it for you.
 
@@ -241,7 +242,7 @@ number or ratchet a budget. Setting `nojson: true` leaves them empty — they ar
 read from the JSON report.
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.25.0
+      - uses: Nimblesite/Deslop@v0.26.0
         id: deslop
         with:
           no-fail-over: "true"   # measure without gating
@@ -252,7 +253,8 @@ The action needs no token and no permissions beyond the default `contents: read`
 
 Prefer to drive the binary yourself — self-hosted runners, non-GitHub CI, or an
 image that already has the CLI? `brew install nimblesite/tap/deslop` (macOS /
-Linux), `scoop install Nimblesite/deslop` (Windows), or download the archive for
+Linux), `scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket`
+then `scoop install deslop` (Windows), or download the archive for
 your platform from the [Releases page](https://github.com/Nimblesite/Deslop/releases)
 and call `deslop . --fail-over 5.0` directly. Exit code `3` fails the step like
 any non-zero status.

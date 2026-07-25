@@ -74,6 +74,19 @@ pub(crate) fn copy_fixture(name: &str) -> Result<tempfile::TempDir> {
     Ok(dir)
 }
 
+/// Builds an [`AnalysisSession`] over `root` at `min_nodes = 15` with a
+/// deterministic [`StubProvider`] — the shared preamble behind every
+/// live-feature suite. Extracted because the three-line
+/// `Arc::new(StubProvider::new())` → `AnalysisSession::new(.., 15, false,
+/// None, provider)` pairing is an `identical` cluster in Deslop's own
+/// report; new suites reuse this instead of adding a copy.
+#[cfg(feature = "live")]
+pub(crate) fn live_session(root: &Path) -> Result<deslop_core::live::AnalysisSession> {
+    let provider = Arc::new(deslop_core::embedding::test_support::StubProvider::new());
+    deslop_core::live::AnalysisSession::new(root.to_path_buf(), 15, false, None, provider)
+        .context("session")
+}
+
 /// Recursively copies `src` into `dst`, creating directories as needed.
 pub(crate) fn copy_recursive(src: &Path, dst: &Path) -> Result<()> {
     if src.is_dir() {

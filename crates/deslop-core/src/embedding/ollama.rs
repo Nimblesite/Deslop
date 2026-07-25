@@ -9,7 +9,9 @@ use std::{thread, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
-use crate::embedding::provider::{EmbeddingProvider, EmbeddingSpec, ProviderError};
+use crate::embedding::provider::{
+    EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_MAX_INPUT_CHARS,
+};
 
 // `OllamaModelInfo` is generated from `docs/models/live-ipc.td` by
 // `scripts/typediagram-gen.mjs`. Per CLAUDE.md the IPC model code is
@@ -65,6 +67,22 @@ where
     }
 }
 
+/// Shared ureq configuration for every Ollama call: one global timeout,
+/// and non-success statuses surfaced as responses rather than errors so
+/// each call site can attach its own diagnostic.
+///
+/// Extracted because the identical builder chain sat in `probe`,
+/// `post_embeddings`, and `fetch_tags` — Deslop's own `find-similar`
+/// flagged it at `fused=1.00` when a fourth copy was about to be
+/// written for `/api/show` (#286).
+fn ollama_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(HTTP_TIMEOUT))
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
 /// Maps a transport error into the provider contract.
 fn provider_unreachable(error: &ureq::Error) -> ProviderError {
     ProviderError::Unreachable {
@@ -83,6 +101,9 @@ pub struct OllamaProvider {
     model: String,
     /// Cached spec built at construction time (identity + dimensions).
     spec: EmbeddingSpec,
+    /// Per-input character budget derived from the model's own context
+    /// length at construction time (#286).
+    max_input_chars: usize,
 }
 
 impl OllamaProvider {
@@ -106,10 +127,12 @@ impl OllamaProvider {
             model_version: version,
             dimensions,
         };
+        let max_input_chars = fetch_context_chars(&endpoint, &model);
         Ok(Self {
             endpoint,
             model,
             spec,
+            max_input_chars,
         })
     }
 }
@@ -121,14 +144,7 @@ impl EmbeddingProvider for OllamaProvider {
 
     fn probe(&self) -> Result<(), ProviderError> {
         let url = format!("{}/api/tags", self.endpoint);
-        let response = call_with_transport_retry(|| {
-            ureq::get(&url)
-                .config()
-                .timeout_global(Some(HTTP_TIMEOUT))
-                .http_status_as_error(false)
-                .build()
-                .call()
-        })?;
+        let response = call_with_transport_retry(|| ollama_agent().get(&url).call())?;
         if !response.status().is_success() {
             return Err(ProviderError::ProviderFailed {
                 provider_id: PROVIDER_ID.to_owned(),
@@ -153,6 +169,10 @@ impl EmbeddingProvider for OllamaProvider {
 
     fn max_batch_size(&self) -> usize {
         MAX_BATCH_SIZE
+    }
+
+    fn max_input_chars(&self) -> usize {
+        self.max_input_chars
     }
 
     fn embed_batch(&self, inputs: &[String]) -> Result<Vec<Vec<f32>>, ProviderError> {
@@ -226,14 +246,7 @@ fn post_embeddings(
         input,
         truncate: true,
     };
-    let mut response = call_with_transport_retry(|| {
-        ureq::post(&url)
-            .config()
-            .timeout_global(Some(HTTP_TIMEOUT))
-            .http_status_as_error(false)
-            .build()
-            .send_json(&body)
-    })?;
+    let mut response = call_with_transport_retry(|| ollama_agent().post(&url).send_json(&body))?;
     if !response.status().is_success() {
         let status = response.status();
         let detail = response
@@ -328,17 +341,74 @@ fn ensure_dimensions(embedding: &[f32], expected: usize) -> Result<(), ProviderE
     Ok(())
 }
 
+/// Conservative characters-per-token ratio used to turn a model's
+/// token context length into a character budget. Source code tokenises
+/// worse than prose, so this stays below the ~4 rule of thumb: a budget
+/// that is slightly too small drops a subtree, one that is too large
+/// gets silently truncated by Ollama (`truncate: true`) and yields a
+/// vector that misrepresents the code ([FUSION-EMBED-PROVIDER]).
+const CHARS_PER_TOKEN: usize = 3;
+
+/// Request body for `POST /api/show`.
+#[derive(Debug, Serialize)]
+struct ShowRequest<'a> {
+    /// Model whose metadata is being requested.
+    model: &'a str,
+}
+
+/// Subset of the `POST /api/show` response we use. `model_info` is a
+/// flat map whose context-length key is architecture-prefixed, e.g.
+/// `"nomic-bert.context_length"`.
+#[derive(Debug, Deserialize)]
+struct ShowResponse {
+    /// Architecture-keyed model metadata reported by Ollama.
+    #[serde(default)]
+    model_info: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+/// Best-effort per-input character budget for `model`, derived from the
+/// model's own context length. Falls back to [`DEFAULT_MAX_INPUT_CHARS`]
+/// whenever `/api/show`, the architecture key, or the context field is
+/// missing — the endpoint is incomplete on some Ollama builds, and a
+/// conservative budget is always safe (#286).
+fn fetch_context_chars(endpoint: &str, model: &str) -> usize {
+    context_tokens(endpoint, model)
+        .and_then(|tokens| tokens.checked_mul(CHARS_PER_TOKEN))
+        .unwrap_or(DEFAULT_MAX_INPUT_CHARS)
+}
+
+/// Reads `model_info["<architecture>.context_length"]` from `/api/show`.
+fn context_tokens(endpoint: &str, model: &str) -> Option<usize> {
+    let show = fetch_show(endpoint, model).ok()?;
+    let architecture = show.model_info.get("general.architecture")?.as_str()?;
+    let key = format!("{architecture}.context_length");
+    usize::try_from(show.model_info.get(&key)?.as_u64()?).ok()
+}
+
+/// Fetches the `POST /api/show` payload for `model`.
+fn fetch_show(endpoint: &str, model: &str) -> Result<ShowResponse, ProviderError> {
+    let url = format!("{endpoint}/api/show");
+    let body = ShowRequest { model };
+    let mut response = call_with_transport_retry(|| ollama_agent().post(&url).send_json(&body))?;
+    if !response.status().is_success() {
+        return Err(ProviderError::ProviderFailed {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: format!("show endpoint failed (status {})", response.status()),
+        });
+    }
+    response
+        .body_mut()
+        .read_json()
+        .map_err(|err| ProviderError::Malformed {
+            provider_id: PROVIDER_ID.to_owned(),
+            message: err.to_string(),
+        })
+}
+
 /// Fetches the `GET /api/tags` payload.
 fn fetch_tags(endpoint: &str) -> Result<TagsResponse, ProviderError> {
     let url = format!("{endpoint}/api/tags");
-    let mut response = call_with_transport_retry(|| {
-        ureq::get(&url)
-            .config()
-            .timeout_global(Some(HTTP_TIMEOUT))
-            .http_status_as_error(false)
-            .build()
-            .call()
-    })?;
+    let mut response = call_with_transport_retry(|| ollama_agent().get(&url).call())?;
     if !response.status().is_success() {
         return Err(ProviderError::ProviderFailed {
             provider_id: PROVIDER_ID.to_owned(),

@@ -30,6 +30,10 @@ pub struct EmbeddingSpec {
 /// Default provider registry key.
 pub const DEFAULT_PROVIDER_ID: &str = "ollama";
 
+/// Conservative per-input character budget assumed for any provider
+/// that does not declare its own ([`EmbeddingProvider::max_input_chars`]).
+pub const DEFAULT_MAX_INPUT_CHARS: usize = 6_000;
+
 /// Errors surfaced by an [`EmbeddingProvider`] implementation.
 #[derive(Debug, Error)]
 pub enum ProviderError {
@@ -94,6 +98,25 @@ pub trait EmbeddingProvider: std::fmt::Debug + Send + Sync {
     /// single call to [`EmbeddingProvider::embed_batch`].
     fn max_batch_size(&self) -> usize {
         1
+    }
+
+    /// Maximum source characters this provider accepts in one input.
+    /// Subtrees longer than this are counted as failures and never
+    /// dispatched ([FUSION-EMBED-PROVIDER], #82).
+    ///
+    /// The budget belongs to the provider because it is a property of
+    /// the model behind it — `nomic-embed-text` carries an 8k-token
+    /// context, `mxbai-embed-large` only 512. A pipeline-wide constant
+    /// cannot be right for both: too generous and the provider
+    /// silently truncates, too tight and the largest subtrees — the
+    /// ones re-derived duplication hurts most — are dropped from the
+    /// index with only `failed_subtrees` to show for it (#286).
+    ///
+    /// The conservative default is what every provider got before the
+    /// budget became overridable; implementations that know their
+    /// model's real capacity should report it.
+    fn max_input_chars(&self) -> usize {
+        DEFAULT_MAX_INPUT_CHARS
     }
 
     /// Embeds multiple inputs in one provider call. Providers that do

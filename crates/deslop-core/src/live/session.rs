@@ -404,7 +404,17 @@ impl AnalysisSession {
         }
         let previous = Arc::clone(&self.latest_report);
         let prev_generation = self.generation;
-        let next = self.run_pipeline(changed)?;
+        let Some(next) = self.run_pipeline(changed)? else {
+            // Nothing analysed moved, so the report cannot have changed.
+            // Publishing a new generation here would wake every subscriber
+            // — panel, diagnostics, MCP — to re-fetch an identical report
+            // (#299). Report no delta against the generation we kept.
+            return Ok(ReportDelta::between(
+                Some((prev_generation, &previous)),
+                prev_generation,
+                &previous,
+            ));
+        };
         self.generation = self.generation.saturating_add(1);
         let next_arc = Arc::new(next);
         self.publish_report(Arc::clone(&next_arc));
@@ -632,7 +642,9 @@ impl AnalysisSession {
 
     /// Runs the underlying pipeline. Caller guarantees `pipeline` is
     /// `Some` — [`Self::apply_changes`] short-circuits otherwise.
-    fn run_pipeline(&mut self, changed: &[PathBuf]) -> Result<Report, LiveError> {
+    /// [LIVE-SCHEDULER-NOOP] [`None`] means the pass touched no analysed
+    /// file, so the previous report still stands (#299).
+    fn run_pipeline(&mut self, changed: &[PathBuf]) -> Result<Option<Report>, LiveError> {
         let pipeline = self.pipeline.as_mut().ok_or(LiveError::AnalysisNotReady)?;
         let embedding = EmbeddingSettings {
             mode: self.embedding_mode,

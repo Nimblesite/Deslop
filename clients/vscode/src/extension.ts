@@ -23,6 +23,7 @@ import {
 } from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
 import { wireMcpRegistration } from "./mcpRegistration";
+import { promptToIgnoreCache } from "./gitignorePrompt";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
 import {
@@ -215,6 +216,12 @@ export async function activate(
   // [VSIX-MCP-INTEGRATION] Register the bundled MCP with VS Code's MCP API
   // so agent hosts launch it by absolute path, never a $PATH lookup (#267).
   mcpDefinition = wireMcpRegistration(context, resolvedMcp, resolveWorkspaceRoot());
+
+  // [VSIX-CACHE-IGNORE] Offer to keep `.deslop-cache/` out of git (#286).
+  // Deliberately not awaited: activation must not block on a dialog.
+  promptToIgnoreCache(context, resolveWorkspaceRoot()).catch((error: unknown) => {
+    log("cache ignore prompt failed", { message: String(error) });
+  });
 
   context.subscriptions.push(wireDirtyDocuments(reportStore));
 

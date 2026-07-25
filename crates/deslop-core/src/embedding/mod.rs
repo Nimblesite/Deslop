@@ -33,7 +33,9 @@ pub use ollama::{
     DEFAULT_OLLAMA_MODEL,
 };
 pub use pairs::{embedding_pairs, EmbeddingPair};
-pub use provider::{EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_PROVIDER_ID};
+pub use provider::{
+    EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_MAX_INPUT_CHARS, DEFAULT_PROVIDER_ID,
+};
 pub use registry::{ProviderRegistry, RegistryError};
 
 use std::sync::Arc;
