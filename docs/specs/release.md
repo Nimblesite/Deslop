@@ -82,9 +82,15 @@ on drift. Coverage floors are owned by `coverage-thresholds.json`
 - **[GITHUB-DEPENDABOT] Dependabot** — `.github/dependabot.yml` raises weekly
   grouped updates for every ecosystem (github-actions, cargo, npm ×3, gradle).
   Routine version bumps target the long-lived `dependabot-upgrades` staging branch
-  and are auto-squash-merged by `dependabot-automerge.yml`, so the expensive
+  and are swept into it by `dependabot-automerge.yml`, so the expensive
   CI + CodeQL matrix runs once on the single `dependabot-upgrades → main`
-  consolidation PR; security updates open against `main` directly.
+  consolidation PR; security updates open against `main` directly and are swept
+  into the same staging branch. The sweep **polls** (three-hourly `schedule` plus
+  `workflow_dispatch`) rather than subscribing to pull requests: only a job-level
+  `if:` can restrict a PR-triggered job to the Dependabot actor, and GitHub
+  reports an `if:`-skipped job as a `skipped` check run, which would hang a dead
+  check on every human PR to `main`. Polling also gives both bases one code path
+  and leaves no `pull_request_target` variant to reach for.
 - **[SWR-SEC-ACTION-PINNING] Action SHA pinning** — security-critical workflows
   pin third-party GitHub Actions to a full 40-character commit SHA with a trailing
   `# vX.Y.Z` comment, because a floating tag can be re-pointed at malicious code

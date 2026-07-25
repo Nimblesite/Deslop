@@ -11,14 +11,17 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
+const dependabotWorkflowPath = resolve(repoRoot, ".github/workflows/dependabot-automerge.yml");
 const workflow = readFileSync(workflowPath, "utf8");
 const deployWorkflow = readFileSync(deployWorkflowPath, "utf8");
+const dependabotWorkflow = readFileSync(dependabotWorkflowPath, "utf8");
 
 const tests = [
   releaseBuildsTaggedSourceWithoutPostTagVersionCommit,
   releaseArchivesContainPackageManagerDeclaredBinaries,
   releaseBuildsPlatformSpecificVsixArtifacts,
   pagesDeployCleansRerunArtifactsAndRetries,
+  dependabotSweepLeavesNoDeadCheckOnHumanPullRequests,
 ];
 
 let failed = 0;
@@ -143,8 +146,47 @@ function pagesDeployCleansRerunArtifactsAndRetries() {
   );
 }
 
+// A job-level `if:` does not make a job disappear — GitHub still materialises
+// it as a check run with conclusion `skipped`. So a workflow that subscribes to
+// every pull request and then filters for the Dependabot actor hangs a dead
+// `skipped` check on every human PR to `main`, forever. The sweep must select
+// its own work by polling instead of being handed a PR it is not allowed to
+// touch. ([GITHUB-DEPENDABOT])
+function dependabotSweepLeavesNoDeadCheckOnHumanPullRequests() {
+  const triggers = sectionBetween("\non:\n", "\npermissions:", dependabotWorkflow);
+  assertExcludes(
+    triggers,
+    "pull_request",
+    "the sweep must not subscribe to pull requests at all: an actor-gated job still reports a skipped check on every human PR to main, and never naming the trigger also makes the pull_request_target foot-gun unreachable by construction",
+  );
+  assertIncludes(
+    triggers,
+    "schedule:",
+    "dropping the pull-request trigger strands security bumps, which GitHub always opens against main, unless the sweep polls for them",
+  );
+  assertIncludes(
+    triggers,
+    "workflow_dispatch:",
+    "a maintainer must be able to sweep immediately instead of waiting for the next cron tick",
+  );
+  assertIncludes(
+    dependabotWorkflow,
+    "--author 'app/dependabot'",
+    "polling must still restrict the sweep to Dependabot-authored pull requests",
+  );
+  assertIncludes(
+    dependabotWorkflow,
+    'startswith("dependabot/")',
+    "polling must still require a dependabot/* source branch — the second half of the actor-AND-source gate",
+  );
+}
+
 function assertAbsent(pattern, message) {
   if (pattern.test(workflow)) throw new Error(message);
+}
+
+function assertExcludes(value, unexpected, message) {
+  if (value.includes(unexpected)) throw new Error(message);
 }
 
 function assertSectionAbsent(section, pattern, message) {
