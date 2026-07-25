@@ -146,38 +146,38 @@ function pagesDeployCleansRerunArtifactsAndRetries() {
   );
 }
 
-// A job-level `if:` does not make a job disappear — GitHub still materialises
-// it as a check run with conclusion `skipped`. So a workflow that subscribes to
-// every pull request and then filters for the Dependabot actor hangs a dead
-// `skipped` check on every human PR to `main`, forever. The sweep must select
-// its own work by polling instead of being handed a PR it is not allowed to
-// touch. ([GITHUB-DEPENDABOT])
+// The sweep is event-driven, and its base filter is what keeps it invisible to
+// humans. A job-level `if:` does not make a job disappear — GitHub still
+// materialises it as a check run with conclusion `skipped` — so subscribing to
+// pull requests against `main` hangs a dead check on every human PR, one that
+// by construction can never run. Filtering the base to the staging branch means
+// the workflow is never instantiated for a human PR at all. ([GITHUB-DEPENDABOT])
 function dependabotSweepLeavesNoDeadCheckOnHumanPullRequests() {
   const triggers = sectionBetween("\non:\n", "\npermissions:", dependabotWorkflow);
   assertExcludes(
     triggers,
-    "pull_request",
-    "the sweep must not subscribe to pull requests at all: an actor-gated job still reports a skipped check on every human PR to main, and never naming the trigger also makes the pull_request_target foot-gun unreachable by construction",
+    "main",
+    "the sweep must not subscribe to pull requests against main: its job is actor-gated, and an if:-skipped job still reports a skipped check on every human PR",
   );
   assertIncludes(
     triggers,
-    "schedule:",
-    "dropping the pull-request trigger strands security bumps, which GitHub always opens against main, unless the sweep polls for them",
+    "- dependabot-upgrades",
+    "the sweep must still fire on bumps opened against the staging branch, which is where every ecosystem in .github/dependabot.yml targets them",
   );
-  assertIncludes(
+  assertExcludes(
     triggers,
-    "workflow_dispatch:",
-    "a maintainer must be able to sweep immediately instead of waiting for the next cron tick",
+    "pull_request_target",
+    "pull_request_target would hand the write token and secrets to PR-controlled content, turning the merge bot into an exfiltration sink",
   );
   assertIncludes(
     dependabotWorkflow,
-    "--author 'app/dependabot'",
-    "polling must still restrict the sweep to Dependabot-authored pull requests",
+    "github.actor == 'dependabot[bot]'",
+    "the sweep must still refuse to act for any actor but Dependabot",
   );
   assertIncludes(
     dependabotWorkflow,
-    'startswith("dependabot/")',
-    "polling must still require a dependabot/* source branch — the second half of the actor-AND-source gate",
+    "startsWith(github.head_ref, 'dependabot/')",
+    "the sweep must still require a dependabot/* source branch — the second half of the actor-AND-source gate",
   );
 }
 
