@@ -163,15 +163,17 @@ The blocking rule is not listing-slug collision — `/marketplace/actions/deslop
 is free — but account collision. GitHub refuses a name matching any user or
 organization unless that account publishes it, and the dormant unrelated org
 `deslop` (id 6157270, created 2013-12-11, zero public repos) holds the login.
-`action.yml` therefore declares `name: Deslop Live`, asserted by
-`test-action-contract.mjs`. Do not shorten it back.
+`action.yml` therefore declares `name: Deslop.live` — the product's own name and
+shipping domain, and a dot is not a legal character in a GitHub login, so no
+account can ever claim it. Asserted by `test-action-contract.mjs`. Do not
+shorten it back.
 
 Because metadata resolves from the tag, **v0.26.0 cannot be listed** — it carries
 `name: Deslop`. A new tag is a hard prerequisite, not a nicety.
 
 1. Confirm the publishing account has 2FA enabled. Publishing is blocked without
    it.
-2. Cut a release **after** the `name: Deslop Live` commit. Confirm the tag really
+2. Cut a release **after** the `name: Deslop.live` commit. Confirm the tag really
    carries it:
    `gh api "repos/Nimblesite/Deslop/contents/action.yml?ref=<tag>" --jq .content | base64 -d | grep '^name:'`
 3. Accept the GitHub Marketplace Developer Agreement. It must be accepted by the

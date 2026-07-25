@@ -138,13 +138,14 @@ cost) and a JavaScript action (a bundled-node build for no gain) are both
 strictly worse. Branding is a Feather icon plus one of the nine colours the
 metadata schema permits — `icon: copy`, `color: purple`.
 
-**The listing name is `Deslop Live`, and cannot be `Deslop`.** GitHub refuses a
+**The listing name is `Deslop.live`, and cannot be `Deslop`.** GitHub refuses a
 Marketplace name that matches any user or organization login unless that account
 is the publisher, and a dormant unrelated organization has held `deslop` (id
 6157270) since 2013. `Nimblesite` is not a member, so the bare product name is
 permanently unlistable from this repo — no tag, no agreement, and no category
-choice changes that. `Deslop Live` is the product's own name (`deslop.live`,
-`nimblesite.deslop-live`) and matches no account. The listing name is
+choice changes that. `Deslop.live` is the product's own name and the shipping
+domain, and a dot is not a legal character in a GitHub login, so no account can
+ever claim it — the collision cannot recur. The listing name is
 independent of the repository slug, so `uses: Nimblesite/Deslop@vX.Y.Z` is
 unaffected and no consumer workflow changes. `test-action-contract.mjs` asserts
 the whole `name:` line, because a substring check accepts the rejected name and

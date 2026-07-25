@@ -183,7 +183,7 @@ expectThrows(
 const action = readFileSync("action.yml", "utf8");
 
 check("action.yml declares the Marketplace-required metadata", () => {
-  for (const field of ["name: Deslop Live", "description:", "author: Nimblesite", "using: composite"]) {
+  for (const field of ["name: Deslop.live", "description:", "author: Nimblesite", "using: composite"]) {
     assert.ok(action.includes(field), `action.yml is missing ${field}`);
   }
   assert.ok(action.includes("icon: copy"), "branding icon must be a Feather icon name");
@@ -197,7 +197,7 @@ check("action.yml declares the Marketplace-required metadata", () => {
 // publish form, after the tag was cut. Assert the whole line. [ACTION-METADATA]
 check("the Marketplace name is not the org-colliding bare product name", () => {
   const declared = action.split("\n").find((line) => line.startsWith("name:"));
-  assert.equal(declared, "name: Deslop Live", "action.yml name line must be exactly `name: Deslop Live`");
+  assert.equal(declared, "name: Deslop.live", "action.yml name line must be exactly `name: Deslop.live`");
 });
 
 check("every documented input is declared", () => {

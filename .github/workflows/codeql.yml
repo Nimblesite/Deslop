@@ -52,7 +52,12 @@ jobs:
     # Code scanning (SARIF upload) is free on PUBLIC repos and needs GHAS on
     # private ones. Gating on public visibility lets a private fork skip cleanly
     # (no red X) and self-enable the moment it is made public.
-    if: github.event.repository.visibility == 'public'
+    #
+    # Dependabot PRs are excluded: they are swept into `dependabot-upgrades` by
+    # dependabot-automerge.yml and never merge to main directly, so scanning them
+    # burns 20 minutes per language on a bump we discard. The consolidation PR is
+    # scanned. ([GITHUB-DEPENDABOT])
+    if: github.event.repository.visibility == 'public' && github.actor != 'dependabot[bot]'
     permissions:
       security-events: write
       actions: read
