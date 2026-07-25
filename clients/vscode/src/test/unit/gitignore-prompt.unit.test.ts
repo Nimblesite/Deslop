@@ -222,8 +222,14 @@ suite("cache gitignore consent", () => {
   });
 
   test("writeCacheIgnore reports failure instead of throwing", () => {
+    // The directory must not exist, but a fixed name under the shared OS
+    // temp dir is the wrong way to get that: it is CWE-377 (any other user
+    // can pre-create it and capture the write) and it makes the test fail
+    // outright on a machine where that path is already lying around. Take a
+    // 0700 `mkdtemp` parent and name a child inside it that was never made.
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "deslop-missing-"));
     assert.equal(
-      writeCacheIgnore(path.join(os.tmpdir(), "deslop-does-not-exist-286")),
+      writeCacheIgnore(path.join(parent, "never-created")),
       false,
       "an unwritable workspace must degrade, not crash activation",
     );
