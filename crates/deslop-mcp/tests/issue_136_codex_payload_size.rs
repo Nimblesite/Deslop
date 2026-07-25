@@ -219,6 +219,77 @@ fn assert_truncation_marker(structured: &Value) -> Result<()> {
     Ok(())
 }
 
+/// Issue #286: `metrics.per_file` carries one row per analysed file. On
+/// a workspace with long paths that block alone outweighs the entire
+/// 200 KB tool-result budget, so every `report-query` overflowed before
+/// a single cluster was returned. It must be opt-in, and asking for it
+/// must never let the payload escape the cap: draining the cluster array
+/// used to be reported as a successful shrink, so an oversized result
+/// went out stamped `truncated: true`.
+#[test]
+fn issue_286_report_query_stays_within_the_wire_cap() -> Result<()> {
+    let workspace = copied_fixture()?;
+    let files = inflate_workspace_with_long_paths(workspace.path())?;
+    let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
+    let mut mcp = initialized_mcp(workspace.path())?;
+
+    let lean = mcp.request(
+        "tools/call",
+        &json!({"name": "report-query", "arguments": {"offset": 0, "limit": 0}}),
+    )?;
+    let structured = structured_content(&lean, "report-query")?;
+    let per_file = structured
+        .pointer("/metrics/per_file")
+        .and_then(Value::as_array)
+        .map_or(0, Vec::len);
+    ensure!(
+        per_file == 0,
+        "issue #286: the per-file breakdown must be opt-in, got {per_file} rows unasked"
+    );
+    ensure!(
+        structured.pointer("/metrics/analysed_loc").is_some(),
+        "the headline metrics must survive the per-file opt-out: {structured}"
+    );
+
+    // Asking for the breakdown on this workspace cannot fit. There is no
+    // cluster left to drop — the page was requested with `limit: 0` — so
+    // the cap can only hold by falling back to the stub. It used to
+    // report that shrink as a success and ship the oversized page.
+    let fat = mcp.request(
+        "tools/call",
+        &json!({"name": "report-query", "arguments": {"offset": 0, "limit": 0, "include_per_file": true}}),
+    )?;
+    let payload = fat
+        .pointer("/result/structuredContent")
+        .ok_or_else(|| anyhow!("report-query returned no structuredContent: {fat}"))?;
+    let size = serde_json::to_vec(payload)?.len();
+    ensure!(
+        size <= 200 * 1024,
+        "issue #286: an opted-in per-file page over {files} files must still respect the {} byte cap; got {size} bytes",
+        200 * 1024
+    );
+    assert_truncation_marker(payload)?;
+    Ok(())
+}
+
+/// Writes 300 analysable C# files whose paths are long enough that the
+/// `per_file` metrics block alone exceeds the 200 KB wire cap. The
+/// bodies are trivial — this fixture exercises the metrics block, not
+/// clustering — and every component stays inside `NAME_MAX`.
+fn inflate_workspace_with_long_paths(root: &Path) -> Result<usize> {
+    let deep = root.join("d".repeat(200)).join("e".repeat(200));
+    fs::create_dir_all(&deep)?;
+    let count = 400_usize;
+    for index in 0..count {
+        let name = format!("{}{index:04}.cs", "f".repeat(190));
+        fs::write(
+            deep.join(name),
+            format!("namespace Wide{index} {{ public class Row{index} {{ }} }}\n"),
+        )?;
+    }
+    Ok(count)
+}
+
 /// Writes ~120 nearly-identical C# files into the workspace so the
 /// LSP produces enough clusters for the cap path to engage. Each
 /// file is a deep-enough subtree to clear the default `min-nodes`

@@ -12,20 +12,23 @@ use deslop_core::{
     pipeline::language_for_path,
     report::{Report, ReportCluster},
     wire_generated::{
-        ClusterSummary, OccurrenceSummary, ReportPage, ReportPageFilters, ReportPageInfo,
+        ClusterSummary, OccurrenceSummary, RepoMetrics, ReportPage, ReportPageFilters,
+        ReportPageInfo,
     },
 };
 
-/// Pagination request: zero-based `offset` + cap on returned items.
-/// Both come straight from the agent's tool call. The MCP layer
-/// rejects missing fields up front, so by the time we see them they
-/// are always present.
+/// The agent's page request: zero-based `offset`, cap on returned
+/// items, and whether the per-file metrics breakdown is wanted. The MCP
+/// layer rejects missing pagination fields up front, so by the time we
+/// see them they are always present.
 #[derive(Debug, Clone, Copy)]
 pub struct Pagination {
     /// Zero-based cluster index to start at (within the matched set).
     pub offset: usize,
     /// Maximum number of clusters to return on this page.
     pub limit: usize,
+    /// Whether to carry `metrics.per_file`. Off unless the agent asks.
+    pub include_per_file: bool,
 }
 
 /// Builds a [`ReportPage`] over `report` with the matched-and-paged
@@ -63,7 +66,7 @@ pub fn build_page(
         clusters_hidden: report.clusters_hidden,
         embedding_provenance: report.embedding_provenance.clone(),
         cache_stats: report.cache_stats,
-        metrics: report.metrics.clone(),
+        metrics: page_metrics(report, pagination.include_per_file),
         action_hints: report.action_hints.clone(),
         total_clusters,
         page: ReportPageInfo {
@@ -74,6 +77,21 @@ pub fn build_page(
         clusters: summaries,
         filters: echo_filters(filters),
     }
+}
+
+/// Builds the page's metrics block.
+///
+/// `per_file` carries one row per analysed file. On a workspace with a
+/// thousand files — or a few hundred deeply nested ones — that block
+/// outweighs the entire 200 KB tool-result budget before a single
+/// cluster is added, which made every `report-query` overflow. It is
+/// opt-in; the headline totals are always present ([Deslop#286]).
+fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
+    let mut metrics = report.metrics.clone();
+    if !include_per_file {
+        metrics.per_file = Vec::new();
+    }
+    metrics
 }
 
 /// Returns whether `cluster` satisfies every active filter on `filters`.

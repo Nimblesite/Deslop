@@ -79,15 +79,21 @@ fn shrink_to_budget(mut payload: Value) -> Value {
 }
 
 /// Truncates `payload.clusters` (top level) until the result fits
-/// the budget. Returns `true` when truncation was possible, `false`
-/// when there is no `clusters` array to shrink.
+/// the budget. Returns `true` when the payload now fits, `false` when
+/// there is no `clusters` array to shrink — or when dropping every
+/// cluster still leaves it over budget, so the caller falls back to the
+/// stub instead of returning an oversized result.
 fn shrink_clusters_in_place(payload: &mut Value) -> bool {
     if !has_cluster_array(payload) {
         return false;
     }
     while serialised_len(payload) > MAX_TOOL_RESULT_BYTES {
+        // The cluster array is empty and the payload still breaches the
+        // cap: the non-cluster content alone is oversized. Reporting
+        // success here would stamp `truncated: true` on a payload that
+        // still blows the agent's wire budget ([Deslop#286]).
         if !pop_one_cluster(payload) {
-            return true;
+            return false;
         }
     }
     true
