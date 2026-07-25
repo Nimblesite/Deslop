@@ -36,10 +36,24 @@ jobs:
       - name: Classify changed paths
         id: classify
         env:
+          ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          # Dependabot PRs are swept into `dependabot-upgrades` by
+          # dependabot-automerge.yml and never merge into main directly, so the
+          # heavy matrix would only burn minutes on a bump we discard. CI runs
+          # once, on the `dependabot-upgrades -> main` consolidation PR.
+          # ([GITHUB-DEPENDABOT])
+          if [ "$ACTOR" = "dependabot[bot]" ]; then
+            {
+              echo "code=false"
+              echo "site=false"
+            } >> "$GITHUB_OUTPUT"
+            echo "Dependabot PR — skipping the code matrix and site build."
+            exit 0
+          fi
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
@@ -419,6 +433,11 @@ jobs:
   # it only runs on pull_request events (this workflow's trigger).
   security:
     name: security
+    # Skipped for Dependabot, like every other job here: the bump is swept into
+    # `dependabot-upgrades` and reviewed once at the consolidation PR, where this
+    # gate does run. Reviewing a vuln-fix bump for vulnerabilities it is fixing
+    # is pure noise. ([GITHUB-DEPENDABOT])
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

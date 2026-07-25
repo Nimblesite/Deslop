@@ -15,6 +15,7 @@ const tests = [
   stamperSetsEveryProjectVersion,
   stamperStampsGeneratedVsixManifest,
   stamperStampsEveryWorkspaceCrateInLock,
+  stamperStampsEveryReadmeActionPin,
   stamperRejectsInvalidVersion,
 ];
 
@@ -115,6 +116,28 @@ function stamperStampsEveryWorkspaceCrateInLock(work) {
   if (workspaceCrates === 0) throw new Error("Cargo.lock had no workspace crates to stamp");
 }
 
+// The README is the body of the GitHub Marketplace listing, and the pinned ref
+// IS the CLI version the action installs. An unstamped pin shipped v0.26.0's
+// listing telling every visitor to use v0.25.0 — a tag that predates action.yml,
+// so the advertised snippet failed outright. Every pin must move with the tag.
+function stamperStampsEveryReadmeActionPin(work) {
+  copyStampInputs(work);
+  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+
+  const readme = read(work, "README.md");
+  const pins = readme.split("\n").filter((line) => line.includes("uses: Nimblesite/Deslop@"));
+  if (pins.length < 2) {
+    throw new Error(`README.md has ${pins.length} action pins, expected the 2 workflow examples`);
+  }
+  for (const pin of pins) {
+    assertIncludes(pin, `uses: Nimblesite/Deslop@v${version}`);
+  }
+  // The quickstart pin sits inside a `steps:` list and must keep its indentation
+  // and its `- ` marker, or the rendered snippet is invalid YAML.
+  assertIncludes(readme, `      - uses: Nimblesite/Deslop@v${version}\n        with:`);
+}
+
 function stamperRejectsInvalidVersion(work) {
   copyStampInputs(work);
   const result = spawnSync("node", [stamper, "v9.8", "--root", work], { encoding: "utf8" });
@@ -127,6 +150,7 @@ function copyStampInputs(work) {
     "Cargo.toml",
     "Cargo.lock",
     "shipwright.json",
+    "README.md",
     "clients/vscode/package.json",
     "clients/vscode/package-lock.json",
     "clients/vscode/webview-ui/package.json",

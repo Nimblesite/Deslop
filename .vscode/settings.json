@@ -10,5 +10,5 @@
   "deslop.embedding.model": "nomic-embed-text",
   "deslop.topOffenders.splitByLanguage": true,
   "deslop.topOffenders.sortBy": "impact",
-  "deslop.topOffenders.groupBy": "cluster"
+  "deslop.topOffenders.groupBy": "type"
 }

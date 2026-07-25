@@ -34,6 +34,8 @@ use super::{
     corpus::{build_extension_map, default_parsers, fingerprint_corpus},
 };
 
+use change::CorpusEffect;
+
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
 ///
 /// The session owns the [`FileRegistry`] used by its fingerprints, so
@@ -191,6 +193,14 @@ impl PipelineSession {
     /// are dropped, newly re-included files are re-discovered
     /// ([LIVE-CONFIG-LIVE] #189, ignore-rule parity #287).
     ///
+    /// [LIVE-SCHEDULER-NOOP] Returns [`None`] when the pass touched no
+    /// analysed file — every path was rejected by the extension,
+    /// exclusion, or ignore gate, or named a file the corpus never held.
+    /// The corpus is then provably unchanged, so the report is too, and
+    /// re-deriving it is pure waste: one production LSP burned 11h17m of
+    /// CPU across 1086 such passes before this early-out existed (#299).
+    /// Callers keep the report they already have.
+    ///
     /// # Errors
     ///
     /// Same error surface as [`Self::initialise`].
@@ -198,22 +208,35 @@ impl PipelineSession {
         &mut self,
         changed: &[PathBuf],
         embedding: EmbeddingSettings<'_>,
-    ) -> Result<Report, CoreError> {
+    ) -> Result<Option<Report>, CoreError> {
         let mut stats = CacheStats::default();
         let watched = watched_config_paths(&self.root, self.config_path.as_deref());
-        if changed.iter().any(|path| reshapes_corpus(path, &watched)) {
+        // A config or ignore-rule edit re-scopes rendering itself (hide
+        // patterns, thresholds), not just the file set, so it always
+        // re-renders even when no file enters or leaves the corpus.
+        let mut effect =
+            CorpusEffect::from_touched(changed.iter().any(|path| reshapes_corpus(path, &watched)));
+        if effect == CorpusEffect::Mutated {
             self.refresh_exclusion(&mut stats, &embedding)?;
         }
         for path in changed
             .iter()
             .filter(|path| !reshapes_corpus(path, &watched))
         {
-            self.apply_one_change(path, &mut stats, &embedding)?;
+            effect = effect.merge(self.apply_one_change(path, &mut stats, &embedding)?);
+        }
+        if effect == CorpusEffect::Untouched {
+            tracing::debug!(
+                changed_paths = changed.len(),
+                files_analysed = self.files_analysed,
+                "live pass touched no analysed file; reusing the previous report"
+            );
+            return Ok(None);
         }
         self.cumulative_stats.hits = self.cumulative_stats.hits.saturating_add(stats.hits);
         self.cumulative_stats.misses = self.cumulative_stats.misses.saturating_add(stats.misses);
         let config = self.pipeline_config(embedding);
-        self.render(&config, stats)
+        Ok(Some(self.render(&config, stats)?))
     }
 
     /// Returns the workspace root this session is analysing.

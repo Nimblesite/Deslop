@@ -222,6 +222,7 @@ fn response_for(
 ) -> String {
     match request.path.as_str() {
         "/api/tags" => json_response("200 OK", &tags_body()),
+        "/api/show" => json_response("200 OK", &show_body()),
         // The dimension probe always succeeds so the provider can learn the
         // vector width even while real embeds are being rejected.
         "/api/embed" if is_dimension_probe(&request.body) => {
@@ -300,6 +301,25 @@ fn tags_body() -> Value {
         }]
     })
 }
+
+/// `POST /api/show` metadata. The context length is architecture-keyed
+/// exactly as Ollama reports it, and is deliberately far larger than
+/// the conservative default so a test can prove the provider's own
+/// budget is what the pipeline honours (#286).
+pub(crate) fn show_body() -> Value {
+    json!({
+        "model_info": {
+            "general.architecture": MOCK_ARCHITECTURE,
+            "mock-bert.context_length": MOCK_CONTEXT_TOKENS,
+        }
+    })
+}
+
+/// Architecture name reported by [`show_body`].
+const MOCK_ARCHITECTURE: &str = "mock-bert";
+
+/// Token context length reported by [`show_body`].
+pub(crate) const MOCK_CONTEXT_TOKENS: u64 = 32_768;
 
 fn json_response(status: &str, body: &Value) -> String {
     let text = serde_json::to_string(body).unwrap_or_else(|_| "{}".to_owned());

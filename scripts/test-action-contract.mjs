@@ -183,11 +183,21 @@ expectThrows(
 const action = readFileSync("action.yml", "utf8");
 
 check("action.yml declares the Marketplace-required metadata", () => {
-  for (const field of ["name: Deslop", "description:", "author: Nimblesite", "using: composite"]) {
+  for (const field of ["name: Deslop.live", "description:", "author: Nimblesite", "using: composite"]) {
     assert.ok(action.includes(field), `action.yml is missing ${field}`);
   }
   assert.ok(action.includes("icon: copy"), "branding icon must be a Feather icon name");
   assert.ok(action.includes("color: purple"), "branding colour must be one of the nine allowed values");
+});
+
+// GitHub refuses to list an action whose name matches a user or organization,
+// unless that account is the publisher. A dormant unrelated org holds `deslop`,
+// so the bare product name is permanently unlistable here — a substring check on
+// "name: Deslop" would accept it and the rejection would only surface in the
+// publish form, after the tag was cut. Assert the whole line. [ACTION-METADATA]
+check("the Marketplace name is not the org-colliding bare product name", () => {
+  const declared = action.split("\n").find((line) => line.startsWith("name:"));
+  assert.equal(declared, "name: Deslop.live", "action.yml name line must be exactly `name: Deslop.live`");
 });
 
 check("every documented input is declared", () => {

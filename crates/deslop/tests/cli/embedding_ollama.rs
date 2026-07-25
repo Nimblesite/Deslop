@@ -1,4 +1,4 @@
-use crate::mock_ollama::MockOllama;
+use crate::mock_ollama::{MockOllama, MOCK_CONTEXT_TOKENS};
 use crate::support::*;
 
 // different default. Reports are parsed via `serde_json` so the
@@ -65,6 +65,68 @@ fn run_deslop(scan_root: &Path, output_prefix: &Path, args: &[&str]) -> Result<(
         .arg(server.endpoint())
         .assert()
         .success();
+    Ok(())
+}
+
+/// Builds a valid C# file whose single method body exceeds
+/// `minimum_chars`, used to prove a large subtree survives the
+/// embedding pass when the provider declares room for it.
+fn huge_csharp_source(minimum_chars: usize) -> String {
+    let mut statements = String::new();
+    while statements.chars().count() < minimum_chars {
+        statements.push_str("            total = total + 1;\n");
+    }
+    format!(
+        "namespace Big {{ public class Huge {{ public int Run(int seed) {{ var total = seed;\n{statements}            return total; }} }} }}\n"
+    )
+}
+
+// GH#286 [FUSION-EMBED-PROVIDER]: the per-input budget belongs to the
+// model, not the pipeline. The mock reports a 32,768-token context via
+// `/api/show`, so a ~12k-char method must reach the provider instead of
+// being dropped by the old hard-coded 6,000-char constant. An F# user
+// lost 14,723 of 175,160 subtrees (8.4%) to that constant — silently,
+// and precisely at the large end where re-derived duplication hides.
+#[test]
+fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Result<()> {
+    let (tmp, scan_root) = seed_scan("csharp-type4")?;
+    let oversized = 12_000;
+    assert!(
+        u64::try_from(oversized).unwrap_or(u64::MAX) < MOCK_CONTEXT_TOKENS.saturating_mul(3),
+        "fixture must fit the declared budget or the test proves nothing"
+    );
+    fs::write(scan_root.join("Huge.cs"), huge_csharp_source(oversized))?;
+    let out = outputs_under(tmp.path());
+
+    run_deslop(
+        &scan_root,
+        &tmp.path().join("report"),
+        &["--min-nodes", "15", "--embeddings", "required"],
+    )?;
+
+    let json = load_report_json(&out.json)?;
+    let provenance = object_field(
+        &json,
+        "embedding_provenance",
+        "embedding_provenance missing or not an object",
+    )?;
+    let failed = provenance
+        .get("failed_subtrees")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(u64::MAX);
+    assert_eq!(
+        failed, 0,
+        "a {oversized}-char subtree must reach a provider declaring \
+         {MOCK_CONTEXT_TOKENS} tokens of context, but it was dropped: {provenance:?}"
+    );
+    let indexed = provenance
+        .get("indexed_subtrees")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    assert!(
+        indexed > 0,
+        "the oversized file must contribute indexed subtrees: {provenance:?}"
+    );
     Ok(())
 }
 

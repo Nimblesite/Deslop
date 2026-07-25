@@ -178,16 +178,44 @@ The LSP supplements the watcher with `textDocument/didChange` and `workspace/did
 
 After the watcher emits a coalesced changeset:
 
-1. Calls `PipelineSession::update_files(changed: &[PathBuf]) -> Report`.
+1. Calls `PipelineSession::update_files(changed: &[PathBuf]) -> Option<Report>`.
 2. Pipeline reuses fingerprint and embedding caches.
-3. Recomputes clustering + ranking over the updated fingerprint set.
-4. Atomically swaps `latest_report`; bumps `generation`.
-5. Broadcasts the new generation through `report_changed` so both LSP push notifications and IPC `report/subscribe` subscribers receive the same event ([LIVE-IPC-SOCKET]).
-6. **Does NOT** rewrite `live-report.json`. The seed cache is per-cold-pass only ([LIVE-SEED-CACHE]).
+3. Returns `None` when the changeset touched no analysed file ([LIVE-SCHEDULER-NOOP]); steps 4-5 are then skipped entirely.
+4. Recomputes clustering + ranking over the updated fingerprint set.
+5. Atomically swaps `latest_report`; bumps `generation`.
+6. Broadcasts the new generation through `report_changed` so both LSP push notifications and IPC `report/subscribe` subscribers receive the same event ([LIVE-IPC-SOCKET]).
+7. **Does NOT** rewrite `live-report.json`. The seed cache is per-cold-pass only ([LIVE-SEED-CACHE]).
 
 Single-threaded per session. Consecutive queued changesets merge before dispatch.
 
 Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the budget → `tracing::warn!` with timing breakdown.
+
+### [LIVE-SCHEDULER-NOOP] No-op pass early-out
+
+A changeset whose every path is rejected before it can touch the corpus — an
+unsupported extension, an `exclude` match, an ignore-rule match
+([LIVE-WATCHER]), or a removal naming a file the corpus never held — leaves the
+fingerprint set byte-identical. The report is therefore provably identical too,
+so `update_files` returns `None` and the scheduler:
+
+- does **not** run LSH, embedding, candidate-pair, clustering, or ranking;
+- does **not** swap `latest_report`;
+- does **not** bump `generation` or broadcast `report_changed`.
+
+The last point is a correctness requirement, not just an optimisation: a
+generation bump is a promise to every subscriber that the report changed, and
+honouring it forces the panel, the diagnostics, and every MCP client to re-fetch
+an identical snapshot.
+
+Only a mutation to an analysed file re-renders. A watched config or ignore-rule
+path always counts as a mutation ([LIVE-CONFIG-LIVE]) because it re-scopes
+rendering itself — hide patterns and thresholds — not merely the file set.
+
+Without this early-out, steps 4-6 ran on every filesystem event the watcher
+delivered. One production LSP session spent **11h17m of CPU across 1086 passes**
+on a 172-file workspace, re-deriving 4,972 clusters from 422,711 fingerprints
+and 366,765 candidate pairs roughly every 30 seconds; 139 of 157 logged passes
+published a byte-identical report (#299).
 
 ### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
 Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched

@@ -5,7 +5,9 @@ released `deslop` CLI, runs it, writes the reports, and fails the job when
 duplication breaches the threshold.
 
 **Status: T1–T7 implemented. T8 (the Marketplace listing) is a manual human step
-and is the only work outstanding.**
+and is the only work outstanding. It is blocked on a tag: the listing resolves
+`action.yml` from the tag, and every tag through v0.26.0 carries the rejected
+`name: Deslop` — see T8.**
 
 Spec group `[ACTION-*]`, added to [docs/specs/release.md](../specs/release.md).
 
@@ -156,17 +158,39 @@ equals that tag with `v` stripped.
 Manual, once, by a human with `Nimblesite` org permission. No agent attempts
 this.
 
+The name check is **resolved and no longer a search**: `Deslop` is unlistable.
+The blocking rule is not listing-slug collision — `/marketplace/actions/deslop`
+is free — but account collision. GitHub refuses a name matching any user or
+organization unless that account publishes it, and the dormant unrelated org
+`deslop` (id 6157270, created 2013-12-11, zero public repos) holds the login.
+`action.yml` therefore declares `name: Deslop.live` — the product's own name and
+shipping domain, and a dot is not a legal character in a GitHub login, so no
+account can ever claim it. Asserted by `test-action-contract.mjs`. Do not
+shorten it back.
+
+Because metadata resolves from the tag, **v0.26.0 cannot be listed** — it carries
+`name: Deslop`. A new tag is a hard prerequisite, not a nicety.
+
 1. Confirm the publishing account has 2FA enabled. Publishing is blocked without
    it.
-2. Search the Marketplace for `Deslop`. If taken, set `name: Deslop Duplicate
-   Code Gate` in `action.yml` before tagging — the listing resolves metadata
-   from the tag, so a rename afterwards costs a new tag.
-3. Accept the GitHub Marketplace Developer Agreement on the `Nimblesite` org.
-4. Open `action.yml` on the repo main page, click the **Draft a release** banner.
+2. Cut a release **after** the `name: Deslop.live` commit. Confirm the tag really
+   carries it:
+   `gh api "repos/Nimblesite/Deslop/contents/action.yml?ref=<tag>" --jq .content | base64 -d | grep '^name:'`
+3. Accept the GitHub Marketplace Developer Agreement. It must be accepted by the
+   account that owns the repo — the `Nimblesite` org — not a personal account.
+4. Open the new release for editing at
+   `https://github.com/Nimblesite/Deslop/releases/edit/<tag>`, or click the
+   **Draft a release** banner on the `action.yml` page.
 5. Tick **Publish this Action to the GitHub Marketplace**.
 6. Resolve every metadata validation error and warning the form reports.
 7. Primary category **Code quality**, secondary **Continuous integration**.
 8. Enter the release tag, add the title, publish with 2FA.
+
+There is **no programmatic path** — verified against GitHub's OpenAPI (neither
+`POST /repos/{owner}/{repo}/releases` nor `PATCH /releases/{id}` has a
+marketplace field), the live release resource's 22 keys, the GraphQL schema
+(which exposes no release-create/update mutation at all), and `gh release
+create|edit`. Release automation must never assume a tag lists the action.
 
 To unpublish: edit each published release, untick the Marketplace checkbox,
 update the release.

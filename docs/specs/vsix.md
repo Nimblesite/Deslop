@@ -424,6 +424,34 @@ The extension posts VS Code notifications sparingly:
 - On first activation ever → info toast `Deslop is watching this workspace. Open the Duplicate Clusters view to see the report.` — one-time per workspace, dismissible forever.
 - No toasts for ordinary re-analysis. That's what the status bar is for.
 
+### [VSIX-CACHE-IGNORE] Keeping the analysis cache out of the user's repository
+
+Deslop writes its cache into `<workspace>/.deslop-cache/` — fingerprints, one
+blob per embedded subtree, the live report, and the IPC endpoint records. On a
+large workspace that is hundreds of thousands of files: gh #286 reported 700 MB
+across 150,000+ files, "95% of the files in the repo by count". Deslop's own
+`.gitignore` has carried `.deslop-cache/` since day one, which is precisely why
+the pollution was invisible to this project.
+
+On activation the extension offers to fix it, and the consent rule is absolute:
+
+- The prompt is `Ignore deslop files from git?` with `Yes` / `No`.
+- On `Yes`, and only on `Yes`, `.deslop-cache/` is appended to the `.gitignore`
+  beside the cache, creating the file when absent and preserving every existing
+  rule.
+- On `No` — or on dismissal — nothing is written and the answer is recorded in
+  workspace state, so the question is never asked again.
+- Nothing is asked when the workspace is outside a git working tree, when the
+  entry is already present, or when no folder is open.
+
+A user's `.gitignore` is tracked source: it lands in their next commit and
+changes what their whole team sees. The cache directory is Deslop's to write;
+that file is not. Writing it unprompted would be the extension committing on the
+user's behalf, so the write is gated on an explicit answer and never inferred.
+The repository is located by walking up from the workspace root, because a
+workspace is frequently a subfolder of the repository (a monorepo package, or
+`src/` opened directly) and those users are polluted just the same.
+
 ### [VSIX-MCP-INTEGRATION] MCP integration for in-VS-Code agents
 
 VS Code's MCP-aware agent hosts (Claude Code, Copilot Chat with MCP) auto-discover the bundled `deslop-mcp` binary through the extension's `contributes.mcpServerDefinitionProviders` entry: activation calls `vscode.lm.registerMcpServerDefinitionProvider` with a single stdio server named `deslop` targeting the same workspace root the LSP uses (`--root`). The registered command is the absolute path produced by the manifest-driven resolver — the `deslop.mcpPath` override or the bundled binary, per `shipwright.json` sources — never a bare `$PATH` name, so the contribution cannot drift from the manifest. Agents inside VS Code can call `find-similar` and friends against the same live daemon the UI is driving — one analysis, two consumers, no duplication of state.

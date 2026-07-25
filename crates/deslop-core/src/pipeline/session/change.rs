@@ -22,38 +22,70 @@ use super::{
     PipelineSession,
 };
 
+/// Whether a change pass altered the analysed corpus
+/// ([LIVE-SCHEDULER-NOOP]).
+///
+/// A pass that touches no analysed file cannot change the report, so the
+/// whole LSH → embedding → pair → cluster → rank → render chain downstream
+/// of it is pure waste and is skipped (#299).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CorpusEffect {
+    /// At least one analysed file was added, replaced, or dropped.
+    Mutated,
+    /// No analysed file was touched; the previous report still holds.
+    Untouched,
+}
+
+impl CorpusEffect {
+    /// Folds two effects together — any mutation wins.
+    pub(super) const fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Untouched, Self::Untouched) => Self::Untouched,
+            _ => Self::Mutated,
+        }
+    }
+
+    /// Lifts "did this touch anything?" into an effect.
+    pub(super) const fn from_touched(touched: bool) -> Self {
+        if touched {
+            Self::Mutated
+        } else {
+            Self::Untouched
+        }
+    }
+}
+
 impl PipelineSession {
-    /// Applies one changed path: delete, update, or add.
+    /// Applies one changed path: delete, update, or add. Reports whether
+    /// the corpus actually moved, so a pass made entirely of paths the
+    /// gates below reject can skip the re-render (#299).
     pub(super) fn apply_one_change(
         &mut self,
         path: &Path,
         stats: &mut CacheStats,
         embedding: &EmbeddingSettings<'_>,
-    ) -> Result<(), CoreError> {
+    ) -> Result<CorpusEffect, CoreError> {
         let absolute = self.canonicalise_reference(path);
         if !absolute.exists() {
-            self.drop_subtree(&absolute);
-            return Ok(());
+            return Ok(self.drop_subtree(&absolute));
         }
         let Some(language) = self.language_for(&absolute) else {
-            return Ok(());
+            return Ok(CorpusEffect::Untouched);
         };
         // Both gates evict, not just skip: a path the corpus already holds
         // must leave it the moment it becomes inadmissible, so an inflated
         // corpus self-heals instead of needing a restart.
         if self.exclusion.is_excluded(&absolute, Some(language)) {
-            self.drop_path(&absolute);
-            return Ok(());
+            return Ok(self.drop_path(&absolute));
         }
         // Discovery's walker prunes these; the live path is handed paths
         // directly and must apply the same rules or it admits files
         // discovery never would (#287).
         if self.ignore_matcher.is_ignored(&absolute) {
-            self.drop_path(&absolute);
-            return Ok(());
+            return Ok(self.drop_path(&absolute));
         }
         let Some(parser) = parser_for_language(&self.parsers, language) else {
-            return Ok(());
+            return Ok(CorpusEffect::Untouched);
         };
         let file_id = self
             .file_id_for(&absolute)
@@ -67,8 +99,7 @@ impl PipelineSession {
                 // excluded path is handled above. Real parser errors propagate.
                 Err(CoreError::AstTooDeep { language, limit }) => {
                     log_skip_too_deep(language, limit);
-                    self.drop_path(&absolute);
-                    return Ok(());
+                    return Ok(self.drop_path(&absolute));
                 }
                 Err(other) => return Err(other),
             };
@@ -80,7 +111,7 @@ impl PipelineSession {
         let _prev_path = self.live_paths.insert(file_id, absolute);
         let _prev_lang = self.file_languages.insert(file_id, language);
         self.files_analysed = self.live_paths.len();
-        Ok(())
+        Ok(CorpusEffect::Mutated)
     }
 
     /// Reloads `.deslop.toml` and re-evaluates the existing corpus
@@ -123,7 +154,7 @@ impl PipelineSession {
             })
             .collect();
         for path in &doomed {
-            self.drop_path(path);
+            let _effect = self.drop_path(path);
         }
         doomed.len()
     }
@@ -145,7 +176,7 @@ impl PipelineSession {
             .filter(|path| !known.contains(path))
             .collect();
         for path in &fresh {
-            self.apply_one_change(path, stats, embedding)?;
+            let _effect = self.apply_one_change(path, stats, embedding)?;
         }
         Ok(fresh.len())
     }
@@ -158,28 +189,31 @@ impl PipelineSession {
     /// sibling `pkg_twin`. The prefix is reflexive, so an exact-leaf
     /// deletion drops just that file. Reuses [`Self::drop_path`] per
     /// match so all maps, boilerplate ranges, and `files_analysed` stay
-    /// consistent.
-    pub(super) fn drop_subtree(&mut self, prefix: &Path) {
+    /// consistent. Reports whether anything was actually evicted — a
+    /// removal event for a path the corpus never held leaves it
+    /// [`CorpusEffect::Untouched`] (#299).
+    pub(super) fn drop_subtree(&mut self, prefix: &Path) -> CorpusEffect {
         let doomed: Vec<PathBuf> = self
             .live_paths
             .values()
             .filter(|registered| registered.starts_with(prefix))
             .cloned()
             .collect();
-        for path in &doomed {
-            self.drop_path(path);
-        }
+        doomed.iter().fold(CorpusEffect::Untouched, |effect, path| {
+            effect.merge(self.drop_path(path))
+        })
     }
 
-    /// Removes a path from every in-memory map if present.
-    pub(super) fn drop_path(&mut self, absolute: &Path) {
+    /// Removes a path from every in-memory map, reporting whether it was
+    /// present to begin with.
+    pub(super) fn drop_path(&mut self, absolute: &Path) -> CorpusEffect {
         let Some((file_id, _)) = self
             .live_paths
             .iter()
             .find(|(_, registered)| registered.as_path() == absolute)
             .map(|(id, path)| (*id, path.clone()))
         else {
-            return;
+            return CorpusEffect::Untouched;
         };
         let _removed_path = self.live_paths.remove(&file_id);
         let _removed_cache = self.per_file.remove(&file_id);
@@ -189,6 +223,7 @@ impl PipelineSession {
         self.boilerplate_ranges
             .retain(|range| range.file_id != file_id);
         self.files_analysed = self.live_paths.len();
+        CorpusEffect::Mutated
     }
 
     /// Replaces all remembered boilerplate ranges for one live file.

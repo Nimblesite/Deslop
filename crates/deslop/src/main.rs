@@ -466,12 +466,14 @@ fn produce_report(
         added = adds.len(),
         "rerun: replaying paths through PipelineSession::update_files",
     );
+    // `None` means the replayed paths touched no analysed file, so the
+    // initial report still stands and re-rendering it would be waste (#299).
     let updated = session
         .update_files(&touched, embedding())
         .context("incremental rerun failed")?;
-    let delta = ReportDelta::between(Some((0, &initial)), 1, &updated);
+    let delta = ReportDelta::between(Some((0, &initial)), 1, updated.as_ref().unwrap_or(&initial));
     Ok(PipelineOutcome {
-        report: updated,
+        report: updated.unwrap_or(initial),
         delta: Some(delta),
     })
 }
