@@ -105,7 +105,7 @@ pub trait EmbeddingProvider: std::fmt::Debug + Send + Sync {
     /// dispatched ([FUSION-EMBED-PROVIDER], #82).
     ///
     /// The budget belongs to the provider because it is a property of
-    /// the model behind it — `nomic-embed-text` carries an 8k-token
+    /// the model behind it — `nomic-embed-text` reports a 2,048-token
     /// context, `mxbai-embed-large` only 512. A pipeline-wide constant
     /// cannot be right for both: too generous and the provider
     /// silently truncates, too tight and the largest subtrees — the
