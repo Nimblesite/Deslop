@@ -13,6 +13,12 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `main`-only, like ci.yml/codeql.yml: a PR against `dependabot-upgrades`
+    # must not run this. A github-actions bump edits .github/workflows/**, which
+    # matches the paths filter below, so without the branch filter every routine
+    # action bump would fire the full hosted-runner matrix on a PR that is swept
+    # away seconds later. ([GITHUB-DEPENDABOT])
+    branches: [main]
     paths:
       - action.yml
       - scripts/action-*.mjs
@@ -25,6 +31,13 @@ permissions:
 jobs:
   contract:
     name: Action contract
+    # Dependabot PRs are swept into `dependabot-upgrades`, never merged to main
+    # directly. A github-actions SECURITY bump is force-opened against `main` and
+    # edits .github/workflows/**, matching the paths filter above, so without
+    # this gate it would run the whole hosted-runner matrix on a discarded bump.
+    # `gate` needs this job, so skipping here skips the matrix too.
+    # ([GITHUB-DEPENDABOT])
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -39,6 +52,8 @@ jobs:
   # never rots against a hard-coded version.
   target-version:
     name: Resolve the release under test
+    # Skipped for Dependabot for the same reason as `contract` above.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
