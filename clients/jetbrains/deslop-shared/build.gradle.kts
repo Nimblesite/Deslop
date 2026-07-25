@@ -18,7 +18,7 @@ group = "com.nimblesite"
 version = providers.gradleProperty("deslopVersion").getOrElse("0.1.0")
 
 dependencies {
-    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     testImplementation(kotlin("test-junit5"))
     // The 2024.3 platform's JUnit5 LauncherSessionListener
     // (JUnit5TestEnvironmentInitializer) hard-references JUnit4's
