@@ -29,7 +29,7 @@ jobs:
       code: ${{ steps.classify.outputs.code }}
       site: ${{ steps.classify.outputs.site }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # CLAUDE.md invariant: tree-sitter grammars must stay pinned
       # with `=x.y.z` in the workspace `Cargo.toml`. This step fails
@@ -103,7 +103,7 @@ jobs:
         with:
           components: rustfmt, clippy, llvm-tools-preview
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           # Caches the ~/.npm download store keyed on the extension
@@ -127,7 +127,7 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -150,7 +150,7 @@ jobs:
         run: make test
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-report
@@ -174,7 +174,7 @@ jobs:
         run: make deployment-verify
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
           path: |
@@ -195,11 +195,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
 
@@ -210,7 +210,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -242,11 +242,11 @@ jobs:
     # the 10-minute default is too tight for the Electron download + E2E run.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           # Caches the ~/.npm download store keyed on the extension
@@ -262,7 +262,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Cache cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -309,7 +309,7 @@ jobs:
         run: make vsix-package
 
       - name: Upload VSIX coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: vsix-coverage
@@ -328,11 +328,11 @@ jobs:
     # for the integration test — well over the 10-minute default on a cold cache.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           # Caches the ~/.npm download store keyed on the extension
@@ -347,7 +347,7 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -389,9 +389,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
           cache: npm
@@ -425,9 +425,9 @@ jobs:
       contents: read
       pull-requests: write  # dependency-review posts its PR summary
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Dependency review
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
