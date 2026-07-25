@@ -122,10 +122,7 @@ pub(crate) fn occurrence<S: BuildHasher>(
     let (start_line, end_line) = source.map_or((0, 0), |bytes| {
         byte_range_to_line_range(bytes, byte_range.start, byte_range.end)
     });
-    let path = absolute.map_or_else(PathBuf::new, |abs| {
-        abs.strip_prefix(scan_root)
-            .map_or_else(|_| abs.clone(), Path::to_path_buf)
-    });
+    let path = absolute.map_or_else(PathBuf::new, |abs| relative_to_scan_root(&abs, scan_root));
     ReportOccurrence {
         path,
         start_byte: byte_range.start,
@@ -134,6 +131,29 @@ pub(crate) fn occurrence<S: BuildHasher>(
         end_line,
         hidden,
     }
+}
+
+/// Renders `absolute` the way every report surface must: relative to
+/// `scan_root` when it lies inside, unchanged when it does not.
+///
+/// Occurrences, boilerplate rows and per-file metrics all resolve paths
+/// through here, so a single report can never mix relative and absolute
+/// forms — the drift that put the user's home directory into every
+/// `metrics.per_file` row ([Deslop#286]).
+pub(crate) fn relative_to_scan_root(absolute: &Path, scan_root: &Path) -> PathBuf {
+    absolute
+        .strip_prefix(scan_root)
+        .map_or_else(|_| absolute.to_path_buf(), Path::to_path_buf)
+}
+
+/// Resolves the report path for `file_id`, or an empty path when the
+/// registry cannot resolve it.
+pub(crate) fn display_path(file_id: FileId, registry: &FileRegistry, scan_root: &Path) -> PathBuf {
+    registry
+        .path(file_id)
+        .map_or_else(PathBuf::new, |absolute| {
+            relative_to_scan_root(absolute, scan_root)
+        })
 }
 
 /// Converts a byte range into an inclusive 1-indexed line range.

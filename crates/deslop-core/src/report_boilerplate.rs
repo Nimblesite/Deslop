@@ -1,14 +1,10 @@
 //! Report projection for suppressed import/prologue boilerplate.
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::Path};
 
 use crate::{
-    boilerplate::BoilerplateRange,
-    config::ExclusionConfig,
-    state::{FileId, FileRegistry},
+    boilerplate::BoilerplateRange, config::ExclusionConfig, report_render::display_path,
+    state::FileRegistry,
 };
 
 // `ReportBoilerplateHint` and `ReportBoilerplateOccurrence` are
@@ -72,14 +68,6 @@ fn occurrence(
         start_byte: range.byte_range.start,
         end_byte: range.byte_range.end,
     }
-}
-
-/// Resolves the report path for `file_id` relative to `scan_root`.
-fn display_path(file_id: FileId, registry: &FileRegistry, scan_root: &Path) -> PathBuf {
-    registry.path(file_id).map_or_else(PathBuf::new, |abs| {
-        abs.strip_prefix(scan_root)
-            .map_or_else(|_| abs.to_path_buf(), Path::to_path_buf)
-    })
 }
 
 /// Returns the gentle remediation copy for a language.

@@ -9,11 +9,13 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     hash::BuildHasher,
+    path::Path,
 };
 
 use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
+    report_render::relative_to_scan_root,
     state::{FileId, FileRegistry},
 };
 
@@ -110,6 +112,10 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     /// Per-file analysed-line counts accumulated during the corpus
     /// read-pass.
     pub analysed_lines: &'a AnalysedLines,
+    /// Scan root every `per_file` path is rendered relative to, so the
+    /// metrics rows carry the same path form as occurrence rows
+    /// ([Deslop#286]).
+    pub scan_root: &'a Path,
 }
 
 /// Computes [`RepoMetrics`] for a finished analysis pass. The returned
@@ -179,7 +185,7 @@ fn file_metric<S: BuildHasher>(
     per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
     inputs: &MetricsInputs<'_, S>,
 ) -> Option<FileMetric> {
-    let path = inputs.registry.path(file_id)?.to_path_buf();
+    let path = relative_to_scan_root(inputs.registry.path(file_id)?, inputs.scan_root);
     let analysed_loc = inputs.analysed_lines.get(&file_id).copied().unwrap_or(0);
     let duplicated_loc = per_file_lines
         .get(&file_id)
