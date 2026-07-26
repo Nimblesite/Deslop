@@ -24,6 +24,7 @@ mod csharp_merge;
 pub mod dart;
 pub(crate) mod ecmascript;
 pub mod fsharp;
+pub mod go;
 pub mod javascript;
 pub mod php;
 pub mod python;

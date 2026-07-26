@@ -29,13 +29,118 @@ fn run_default(fixture_name: &str) -> Result<(PathBuf, serde_json::Value)> {
     Ok((scan_root, report))
 }
 
+/// Asserts the canonical Type-2 report shape shared by every
+/// per-language `*-small` fixture: both files analysed, both file
+/// names present, and a structural = 1.0 cluster signal.
+fn assert_type2_report(json: &str, first_file: &str, second_file: &str) {
+    assert!(json.contains("\"files_analysed\": 2"));
+    assert!(json.contains(first_file));
+    assert!(json.contains(second_file));
+    assert!(json.contains("\"structural\": 1.0"));
+}
+
+/// Parses a JSON report and returns its cluster array (empty if absent).
+fn report_clusters(json: &str) -> Result<Vec<serde_json::Value>> {
+    let report: serde_json::Value = serde_json::from_str(json)?;
+    Ok(report
+        .pointer("/clusters")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default())
+}
+
+/// Returns the set of occurrence file basenames carried by `cluster`.
+fn cluster_file_basenames(cluster: &serde_json::Value) -> std::collections::BTreeSet<String> {
+    cluster
+        .get("occurrences")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|occurrence| occurrence.get("path").and_then(serde_json::Value::as_str))
+        .map(|path| {
+            Path::new(path).file_name().map_or_else(
+                || path.to_owned(),
+                |name| name.to_string_lossy().into_owned(),
+            )
+        })
+        .collect()
+}
+
+/// Finds the cluster spanning both `first_file` and `second_file`, or
+/// fails with the full cluster dump so the report shape is visible.
+fn require_cluster_spanning<'a>(
+    clusters: &'a [serde_json::Value],
+    first_file: &str,
+    second_file: &str,
+) -> Result<&'a serde_json::Value> {
+    clusters
+        .iter()
+        .find(|cluster| {
+            let files = cluster_file_basenames(cluster);
+            files.contains(first_file) && files.contains(second_file)
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "expected a cross-file cluster spanning {first_file} and {second_file} \
+                 (genuine Type-3 body near-miss); the signature-only match must not be \
+                 the only cluster; got clusters: {clusters:#?}"
+            )
+        })
+}
+
+/// Asserts the Type-3 near-miss contract on a cross-file cluster:
+/// structural = 1.0 on the shared body subtree, at least two
+/// occurrences, and a `token_jaccard` signal present.
+fn assert_type3_signals(cluster: &serde_json::Value) {
+    let structural = cluster
+        .pointer("/signals/structural")
+        .and_then(serde_json::Value::as_f64);
+    assert_eq!(
+        structural,
+        Some(1.0),
+        "the near-miss cluster must reach structural = 1.0 on the shared body subtree, \
+         got {structural:?}",
+    );
+    let occurrences = cluster
+        .pointer("/occurrences")
+        .and_then(serde_json::Value::as_array)
+        .map_or(0, Vec::len);
+    assert!(
+        occurrences >= 2,
+        "a clone cluster must have at least two occurrences, got {occurrences}",
+    );
+    assert!(
+        cluster.pointer("/signals/token_jaccard").is_some(),
+        "the cross-file cluster must carry a token_jaccard signal",
+    );
+}
+
+/// Zero-false-positive guard shared by every `*-dissimilar-functions`
+/// fixture: every cluster's occurrences stay within a single file, so
+/// two structurally unrelated functions are never paired as duplicates.
+fn assert_every_cluster_single_file(json: &str, language_label: &str) -> Result<()> {
+    for (index, cluster) in report_clusters(json)?.iter().enumerate() {
+        let cluster_id = cluster
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("<unknown>");
+        let files = cluster_file_basenames(cluster);
+        assert_eq!(
+            files.len(),
+            1,
+            "cluster #{index} ({cluster_id}) spans multiple files {files:?}; the two \
+             {language_label} functions are structurally unrelated and must not be \
+             reported as duplicates",
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
     let json = run_min_nodes("csharp-small", "8")?;
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains("Alpha.cs"));
-    assert!(json.contains("Beta.cs"));
-    assert!(json.contains("\"structural\": 1.0"));
+    assert_type2_report(&json, "Alpha.cs", "Beta.cs");
     Ok(())
 }
 
@@ -43,10 +148,7 @@ fn detects_type2_clone_in_csharp_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_rust_fixture() -> Result<()> {
     let json = run_min_nodes("rust-small", "10")?;
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains("alpha.rs"));
-    assert!(json.contains("beta.rs"));
-    assert!(json.contains("\"structural\": 1.0"));
+    assert_type2_report(&json, "alpha.rs", "beta.rs");
     Ok(())
 }
 
@@ -54,10 +156,7 @@ fn detects_type2_clone_in_rust_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_python_fixture() -> Result<()> {
     let json = run_min_nodes("python-small", "10")?;
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains("alpha.py"));
-    assert!(json.contains("beta.py"));
-    assert!(json.contains("\"structural\": 1.0"));
+    assert_type2_report(&json, "alpha.py", "beta.py");
     Ok(())
 }
 
@@ -69,10 +168,7 @@ fn detects_type2_clone_in_python_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_dart_fixture() -> Result<()> {
     let json = run_min_nodes("dart-small", "10")?;
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains("alpha.dart"));
-    assert!(json.contains("beta.dart"));
-    assert!(json.contains("\"structural\": 1.0"));
+    assert_type2_report(&json, "alpha.dart", "beta.dart");
     Ok(())
 }
 
@@ -84,10 +180,7 @@ fn detects_type2_clone_in_dart_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_php_fixture() -> Result<()> {
     let json = run_min_nodes("php-small", "10")?;
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains("alpha.php"));
-    assert!(json.contains("beta.php"));
-    assert!(json.contains("\"structural\": 1.0"));
+    assert_type2_report(&json, "alpha.php", "beta.php");
     Ok(())
 }
 
@@ -99,10 +192,19 @@ fn detects_type2_clone_in_php_fixture() -> Result<()> {
 #[test]
 fn detects_type2_clone_in_fsharp_fixture() -> Result<()> {
     let json = run_min_nodes("fsharp-small", "10")?;
-    assert!(json.contains("\"files_analysed\": 2"));
-    assert!(json.contains("alpha.fs"));
-    assert!(json.contains("beta.fs"));
-    assert!(json.contains("\"structural\": 1.0"));
+    assert_type2_report(&json, "alpha.fs", "beta.fs");
+    Ok(())
+}
+
+// Implements [PIPELINE-LANG-TRAIT] for Go ([LANG-CAND-GO]): Type-2
+// renamed-clone detection. `alpha.go` and `beta.go` implement the same
+// accumulate loop with every identifier renamed and the integer literals
+// changed; Go normalisation collapses identifiers/literals so the two
+// functions fingerprint identically and cluster at structural = 1.0.
+#[test]
+fn detects_type2_clone_in_go_fixture() -> Result<()> {
+    let json = run_min_nodes("go-small", "10")?;
+    assert_type2_report(&json, "alpha.go", "beta.go");
     Ok(())
 }
 
@@ -117,57 +219,27 @@ fn detects_type2_clone_in_fsharp_fixture() -> Result<()> {
 #[test]
 fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
     let json = run_min_nodes("fsharp-type3", "8")?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
-    let clusters = report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let cross_file = clusters.iter().find(|cluster| {
-        let files: std::collections::BTreeSet<String> = cluster
-            .get("occurrences")
-            .and_then(serde_json::Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|occurrence| occurrence.get("path").and_then(serde_json::Value::as_str))
-            .map(|path| {
-                Path::new(path).file_name().map_or_else(
-                    || path.to_owned(),
-                    |name| name.to_string_lossy().into_owned(),
-                )
-            })
-            .collect();
-        files.contains("delta.fs") && files.contains("epsilon.fs")
-    });
-    let Some(cluster) = cross_file else {
-        anyhow::bail!(
-            "fsharp-type3 must produce a cross-file cluster spanning delta.fs and epsilon.fs \
-             (genuine Type-3 body near-miss); the signature-only match must not be the only \
-             cluster; got clusters: {clusters:#?}"
-        );
-    };
-    let structural = cluster
-        .pointer("/signals/structural")
-        .and_then(serde_json::Value::as_f64);
-    assert_eq!(
-        structural,
-        Some(1.0),
-        "the F# near-miss cluster must reach structural = 1.0 on the shared body subtree, \
-         got {structural:?}",
-    );
-    let occurrences = cluster
-        .pointer("/occurrences")
-        .and_then(serde_json::Value::as_array)
-        .map_or(0, Vec::len);
-    assert!(
-        occurrences >= 2,
-        "a clone cluster must have at least two occurrences, got {occurrences}",
-    );
-    assert!(
-        cluster.pointer("/signals/token_jaccard").is_some(),
-        "the cross-file F# cluster must carry a token_jaccard signal",
-    );
+    let clusters = report_clusters(&json)?;
+    let cluster = require_cluster_spanning(&clusters, "delta.fs", "epsilon.fs")?;
+    assert_type3_signals(cluster);
+    Ok(())
+}
+
+// Implements [FUSION-SIGNALS-THREE-LAYER] for Go ([LANG-CAND-GO]): a
+// genuine Type-3 near-miss. `delta.go`'s loop body runs two accumulator
+// updates per iteration; `epsilon.go`'s runs one. The shared control-flow
+// subtrees (the `if _ < 0 { return 0 }` guard, the `_ += _` update, the
+// three-clause `for` header) surface as a cross-file cluster at
+// structural = 1.0, while the signature-only sibling match (`func f(_
+// int) int`, whose bodies differ) is correctly suppressed
+// ([CLONE-NOISE-SIGNATURE-ONLY], #154) — proving both the structural
+// near-miss path and the signature filter are wired for Go.
+#[test]
+fn detects_type3_clone_in_go_fixture() -> Result<()> {
+    let json = run_min_nodes("go-type3", "8")?;
+    let clusters = report_clusters(&json)?;
+    let cluster = require_cluster_spanning(&clusters, "delta.go", "epsilon.go")?;
+    assert_type3_signals(cluster);
     Ok(())
 }
 
@@ -179,37 +251,19 @@ fn detects_type3_clone_in_fsharp_fixture() -> Result<()> {
 #[test]
 fn dissimilar_fsharp_functions_across_files_stay_in_separate_clusters() -> Result<()> {
     let json = run_min_nodes("fsharp-dissimilar-functions", "8")?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
-    let clusters = report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    for (index, cluster) in clusters.iter().enumerate() {
-        let occurrences = cluster
-            .get("occurrences")
-            .and_then(serde_json::Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for occurrence in &occurrences {
-            let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) else {
-                continue;
-            };
-            let basename = Path::new(path).file_name().map_or_else(
-                || path.to_owned(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            let _inserted = files.insert(basename);
-        }
-        assert_eq!(
-            files.len(),
-            1,
-            "cluster #{index} spans multiple files {files:?}; the two F# functions are \
-             structurally unrelated and must not be reported as duplicates",
-        );
-    }
-    Ok(())
+    assert_every_cluster_single_file(&json, "F#")
+}
+
+// Audience: HUMAN. Zero-false-positive guard for Go ([LANG-CAND-GO]).
+// `tally()` counts words into a map inside a range loop; `describe()` is
+// a chain of `if code == … { return … }` early exits. The two share no
+// real shape, so a human reading the report must never see them paired
+// as duplicates. Positive bound: every cluster's occurrences come from a
+// single file.
+#[test]
+fn dissimilar_go_functions_across_files_stay_in_separate_clusters() -> Result<()> {
+    let json = run_min_nodes("go-dissimilar-functions", "8")?;
+    assert_every_cluster_single_file(&json, "Go")
 }
 
 // Audience: HUMAN. Zero-false-positive guard for Dart ([LANG-CAND-DART]).
@@ -220,37 +274,7 @@ fn dissimilar_fsharp_functions_across_files_stay_in_separate_clusters() -> Resul
 #[test]
 fn dissimilar_dart_functions_across_files_stay_in_separate_clusters() -> Result<()> {
     let json = run_min_nodes("dart-dissimilar-functions", "8")?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
-    let clusters = report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    for (index, cluster) in clusters.iter().enumerate() {
-        let occurrences = cluster
-            .get("occurrences")
-            .and_then(serde_json::Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for occurrence in &occurrences {
-            let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) else {
-                continue;
-            };
-            let basename = Path::new(path).file_name().map_or_else(
-                || path.to_owned(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            let _inserted = files.insert(basename);
-        }
-        assert_eq!(
-            files.len(),
-            1,
-            "cluster #{index} spans multiple files {files:?}; the two Dart functions \
-             are structurally unrelated and must not be reported as duplicates",
-        );
-    }
-    Ok(())
+    assert_every_cluster_single_file(&json, "Dart")
 }
 
 // Audience: HUMAN. Issue #34. When a human opens two Python test
@@ -269,42 +293,7 @@ fn dissimilar_dart_functions_across_files_stay_in_separate_clusters() -> Result<
 #[test]
 fn dissimilar_python_functions_across_files_stay_in_separate_clusters() -> Result<()> {
     let json = run_min_nodes("python-dissimilar-functions", "10")?;
-    let report: serde_json::Value = serde_json::from_str(&json)?;
-    let clusters = report
-        .pointer("/clusters")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-
-    for (index, cluster) in clusters.iter().enumerate() {
-        let cluster_id = cluster
-            .get("id")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("<unknown>");
-        let occurrences = cluster
-            .get("occurrences")
-            .and_then(serde_json::Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let mut files: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for occurrence in &occurrences {
-            let Some(path) = occurrence.get("path").and_then(serde_json::Value::as_str) else {
-                continue;
-            };
-            let basename = Path::new(path).file_name().map_or_else(
-                || path.to_owned(),
-                |name| name.to_string_lossy().into_owned(),
-            );
-            let _inserted = files.insert(basename);
-        }
-        assert_eq!(
-            files.len(),
-            1,
-            "cluster #{index} ({cluster_id}) spans multiple files {files:?}; \
-             the human reader would be confused because the bodies are not similar",
-        );
-    }
-    Ok(())
+    assert_every_cluster_single_file(&json, "Python")
 }
 
 // Returns the byte slice of `path` spanned by `occurrence`'s reported

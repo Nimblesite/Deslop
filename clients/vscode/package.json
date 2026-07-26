@@ -46,6 +46,7 @@
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
     "onLanguage:fsharp",
+    "onLanguage:go",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
     "workspaceContains:**/*.py",
@@ -57,7 +58,8 @@
     "workspaceContains:**/*.ts",
     "workspaceContains:**/*.tsx",
     "workspaceContains:**/*.fs",
-    "workspaceContains:**/*.fsx"
+    "workspaceContains:**/*.fsx",
+    "workspaceContains:**/*.go"
   ],
   "contributes": {
     "commands": [

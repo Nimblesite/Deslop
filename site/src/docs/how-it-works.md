@@ -37,7 +37,8 @@ Each language ships a grammar via tree-sitter:
 | [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
 | [PHP](https://www.php.net/) | v1 |
 | [F#](https://fsharp.org/) | v1 |
-| Go | roadmap |
+| [Go](https://go.dev/) | v1 |
+| Java | roadmap |
 
 A parser produces an AST. No source-level regex touches this pipeline — ever.
 

@@ -422,6 +422,21 @@ fn debug_ast_dump_matches_committed_golden_fsharp() -> Result<()> {
     assert_ast_golden("ast-golden-fsharp", "Sample.fs")
 }
 
+// [LANG-CAND-GO] golden: Sample.go exercises identifier collapse
+// (`identifier`, `field_identifier`, `type_identifier`,
+// `package_identifier` in a qualified type, `blank_identifier`, and
+// `label_name`), literal collapse (int, float, imaginary, rune,
+// interpreted + raw strings with escape sequences, `true`, `false`,
+// `nil`, `iota`), line / block comment drop, and the Go structural
+// forms most likely to shift between grammar patch releases (struct,
+// method with receiver, labeled loop, expression switch, composite
+// literal). Any grammar bump or `normalise_kind` edit trips this
+// byte-for-byte check.
+#[test]
+fn debug_ast_dump_matches_committed_golden_go() -> Result<()> {
+    assert_ast_golden("ast-golden-go", "Sample.go")
+}
+
 // [LANG-CAND-JAVASCRIPT] golden: Sample.jsx proves the plain JavaScript
 // grammar's JSX path normalises identically — and pins that JSX text AND
 // html_character_reference entities (`&amp;`, `&copy;`) both collapse to

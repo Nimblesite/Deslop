@@ -518,6 +518,20 @@ code + e2e fixture + AST golden + grammar pin in `Cargo.toml`,
   wired into `default_parsers`, `function_kinds`, `grammar_for`, the HTML
   display-name map, and the live extension map; VS Code `onLanguage:fsharp`
   + `.fs`/`.fsx` activation. All four e2e tests green.
+- **P-LANG-3 — Go** (COMPLETE, 2026-07-26 — see [LANG-CAND-GO]).
+  `tree-sitter-go = "=0.25.0"`;
+  [`go.rs`](../../crates/deslop-core/src/lang/go.rs); `go-small`, `go-type3`,
+  `go-dissimilar-functions`, `ast-golden-go`; wired into `default_parsers`,
+  `function_kinds` (`function_declaration` / `method_declaration` /
+  `func_literal`), `grammar_for`, the HTML display-name map, and the
+  boilerplate carriers (`package_clause` / `import_declaration`); VS Code
+  `onLanguage:go` + `.go` activation; JetBrains `DeslopSupportedFiles` +
+  LSP4IJ pattern (which also picked up the previously missing
+  `php`/`fs`/`fsx` lockstep). Normalisation extends the [LANG-CAND-GO]
+  plan with `blank_identifier`/`label_name` → `__ident__` and the string
+  `*_content` bodies, `escape_sequence`, and `iota` → `__literal__`;
+  composite literals and `func_literal` closures stay structural. All four
+  e2e tests green.
 
 ### [LANG-CAND-DART-RESULT] Dart spike outcome (2026-05-30) — GREEN
 
@@ -562,8 +576,6 @@ never cluster across files.
 
 ### Remaining
 
-- **P-LANG-3 — Go** — `tree-sitter-go = "=0.25.0"` + `go.rs` + fixtures.
-  The easiest remaining language (trivial normalisation, glacial grammar).
 - **P-LANG-5 — Java** — `tree-sitter-java = "=0.23.5"` + plugin + fixtures.
 - **P-LANG-6 — C / C++** — `tree-sitter-cpp = "=0.23.4"` +
   `tree-sitter-c = "=0.24.2"` + both plugins + fixtures.

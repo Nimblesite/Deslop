@@ -38,7 +38,8 @@ discover → parse → normalize → fingerprint → cluster
 | [TypeScript](https://www.typescriptlang.org/) / TSX | v1 |
 | [PHP](https://www.php.net/) | v1 |
 | [F#](https://fsharp.org/) | v1 |
-| Go | 路线图 |
+| [Go](https://go.dev/) | v1 |
+| Java | 路线图 |
 
 解析器产出一棵 AST。这条流水线上从不会有任何源代码级别的正则参与 —— 永远不会。
 
