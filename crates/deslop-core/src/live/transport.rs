@@ -229,7 +229,7 @@ fn restrict_to_owner(_path: &Path) -> std::io::Result<()> {
 /// plain equality check at the server suffices.
 fn generate_token() -> std::io::Result<String> {
     let mut seed = [0_u8; 16];
-    getrandom::getrandom(&mut seed).map_err(std::io::Error::other)?;
+    getrandom::fill(&mut seed).map_err(std::io::Error::other)?;
     Ok(blake3::hash(&seed).to_hex().to_string())
 }
 

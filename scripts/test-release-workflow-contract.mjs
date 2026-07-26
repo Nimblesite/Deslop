@@ -128,11 +128,16 @@ function pagesDeployCleansRerunArtifactsAndRetries() {
     'select(.name == "github-pages")',
     "Pages deploy workflow must delete only the Pages artifact from the current run",
   );
-  assertOccurrenceCount(
+  // Matched on the action, not a pinned major: a Dependabot bump to the deploy
+  // action is routine and must not read as the retry step going missing. Both
+  // uses still have to agree, so a bump can never land on one step and leave the
+  // retry a major behind — which would silently retry against different
+  // behaviour than the attempt that failed.
+  assertUniformRef(
     deployWorkflow,
-    "actions/deploy-pages@v4",
+    "- uses: actions/deploy-pages@",
     2,
-    "Pages deploy workflow must retry a transient deploy-pages failure in the same job",
+    "Pages deploy workflow must retry a transient deploy-pages failure in the same job, on the same action version",
   );
   assertIncludes(
     deployWorkflow,
@@ -201,9 +206,20 @@ function assertIncludes(value, expected, message) {
   if (!value.includes(expected)) throw new Error(message);
 }
 
-function assertOccurrenceCount(value, expected, count, message) {
-  const actual = value.split(expected).length - 1;
-  if (actual !== count) throw new Error(`${message}; found ${actual}`);
+// Asserts `prefix` introduces exactly `count` steps AND that every one pins the
+// same ref. Counting alone would pass a workflow whose retry step drifted a
+// major behind the attempt it retries.
+function assertUniformRef(value, prefix, count, message) {
+  const refs = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length).split(/\s/u, 1)[0]);
+  if (refs.length !== count) throw new Error(`${message}; found ${refs.length}`);
+  const distinct = [...new Set(refs)];
+  if (distinct.length !== 1) {
+    throw new Error(`${message}; refs diverge: ${distinct.join(", ")}`);
+  }
 }
 
 function sectionBetween(start, end, source = workflow) {
