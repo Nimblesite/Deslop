@@ -9,6 +9,14 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const stamper = join(repoRoot, "scripts/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
+// Mirrors stamp-release-version.mjs. The doc pages come after README.md so the
+// SHA-example assertion can address them as `slice(1)` — only they carry it.
+const actionPinPrefix = "uses: Nimblesite/Deslop@v";
+const actionPinDocs = [
+  "README.md",
+  "site/src/docs/github-action.md",
+  "site/src/zh/docs/github-action.md",
+];
 
 const tests = [
   sourceProjectsUseVersionPlaceholder,
@@ -119,23 +127,77 @@ function stamperStampsEveryWorkspaceCrateInLock(work) {
 // The README is the body of the GitHub Marketplace listing, and the pinned ref
 // IS the CLI version the action installs. An unstamped pin shipped v0.26.0's
 // listing telling every visitor to use v0.25.0 — a tag that predates action.yml,
-// so the advertised snippet failed outright. Every pin must move with the tag.
+// so the advertised snippet failed outright. Every published surface that shows
+// a copy-pasteable pin — the README and both locales of the Action doc page —
+// must move with the tag, or a reader copies a stale version.
 function stamperStampsEveryReadmeActionPin(work) {
   copyStampInputs(work);
   const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
 
-  const readme = read(work, "README.md");
-  const pins = readme.split("\n").filter((line) => line.includes("uses: Nimblesite/Deslop@"));
-  if (pins.length < 2) {
-    throw new Error(`README.md has ${pins.length} action pins, expected the 2 workflow examples`);
+  const total = actionPinDocs.reduce(
+    (count, doc) => count + assertDocPinsStamped(doc, read(repoRoot, doc), read(work, doc)),
+    0,
+  );
+  if (total < 7) throw new Error(`only ${total} action pins stamped across the docs, expected 7`);
+
+  // The SHA-pinned example documents the case where the ref carries no version,
+  // so `version:` is required. Rewriting it to a tag would destroy the very
+  // thing it illustrates — the stamper must leave a non-`@v` ref alone.
+  for (const doc of actionPinDocs.slice(1)) {
+    assertIncludes(read(work, doc), "uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f");
   }
-  for (const pin of pins) {
-    assertIncludes(pin, `uses: Nimblesite/Deslop@v${version}`);
+}
+
+// Stamping must move the version and nothing else, anywhere in the file. The
+// indentation is deliberately NOT asserted to one fixed depth: the README shows
+// a bare two-step fragment while the doc pages show a whole workflow, so the
+// pins legitimately sit at different depths. What has to hold is that whatever
+// depth a pin had, it still has — these snippets are pasted straight into
+// workflow YAML, where a shifted prefix is a syntax error.
+function assertDocPinsStamped(doc, before, after) {
+  const beforeLines = before.split("\n");
+  const afterLines = after.split("\n");
+  if (afterLines.length !== beforeLines.length) {
+    throw new Error(`${doc}: stamping changed the line count`);
   }
-  // The quickstart pin sits inside a `steps:` list and must keep its indentation
-  // and its `- ` marker, or the rendered snippet is invalid YAML.
-  assertIncludes(readme, `      - uses: Nimblesite/Deslop@v${version}\n        with:`);
+  const pins = beforeLines.filter((line, index) =>
+    assertLineStamped(doc, index + 1, line, afterLines[index]),
+  );
+  if (pins.length === 0) throw new Error(`${doc} has no action pin to stamp`);
+  return pins.length;
+}
+
+// Returns true when the line carried a pin, so the caller can count them.
+function assertLineStamped(doc, lineNumber, before, after) {
+  if (!before.includes(actionPinPrefix)) {
+    if (after !== before) {
+      throw new Error(`${doc}:${lineNumber} changed but carries no action pin: ${after}`);
+    }
+    return false;
+  }
+  const wanted = pinParts(before);
+  const got = pinParts(after);
+  if (got.version !== version) {
+    throw new Error(`${doc}:${lineNumber} pins ${got.version}, expected ${version}`);
+  }
+  if (got.prefix !== wanted.prefix || got.suffix !== wanted.suffix) {
+    throw new Error(`${doc}:${lineNumber} stamping moved more than the version: ${after}`);
+  }
+  return true;
+}
+
+// Splits a pin line into the part before the version, the version token itself,
+// and whatever trails it (a `# comment`, nothing at end of line).
+function pinParts(line) {
+  const marker = line.indexOf(actionPinPrefix);
+  const tail = line.slice(marker + actionPinPrefix.length);
+  const space = tail.indexOf(" ");
+  return {
+    prefix: line.slice(0, marker),
+    version: space < 0 ? tail : tail.slice(0, space),
+    suffix: space < 0 ? "" : tail.slice(space),
+  };
 }
 
 function stamperRejectsInvalidVersion(work) {
@@ -150,7 +212,7 @@ function copyStampInputs(work) {
     "Cargo.toml",
     "Cargo.lock",
     "shipwright.json",
-    "README.md",
+    ...actionPinDocs,
     "clients/vscode/package.json",
     "clients/vscode/package-lock.json",
     "clients/vscode/webview-ui/package.json",

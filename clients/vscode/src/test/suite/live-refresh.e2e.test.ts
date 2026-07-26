@@ -122,7 +122,12 @@ suite("live tree refresh", () => {
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         const mutated = `${original}\n// repeat-save marker ${attempt} ${Date.now()}\n`;
         fs.writeFileSync(targetFile, mutated, "utf8");
-        const next = await waitFor(() => {
+        // The predicate's return type is explicit because the loop assigns this
+        // call's result back into `last`, which the predicate itself reads.
+        // Inferring the return would have to resolve `next` to resolve `last`,
+        // and TypeScript breaks that cycle by falling back to `any`
+        // (TS7022/TS7024). Stating the type keeps the generation a number.
+        const next = await waitFor((): number | undefined => {
           const g = store.current.generation;
           return g > last ? g : undefined;
         }, 15_000);

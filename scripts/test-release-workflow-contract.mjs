@@ -11,14 +11,17 @@ import { fileURLToPath } from "node:url";
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflowPath = resolve(repoRoot, ".github/workflows/release.yml");
 const deployWorkflowPath = resolve(repoRoot, ".github/workflows/deploy-pages.yml");
+const dependabotWorkflowPath = resolve(repoRoot, ".github/workflows/dependabot-automerge.yml");
 const workflow = readFileSync(workflowPath, "utf8");
 const deployWorkflow = readFileSync(deployWorkflowPath, "utf8");
+const dependabotWorkflow = readFileSync(dependabotWorkflowPath, "utf8");
 
 const tests = [
   releaseBuildsTaggedSourceWithoutPostTagVersionCommit,
   releaseArchivesContainPackageManagerDeclaredBinaries,
   releaseBuildsPlatformSpecificVsixArtifacts,
   pagesDeployCleansRerunArtifactsAndRetries,
+  dependabotSweepLeavesNoDeadCheckOnHumanPullRequests,
 ];
 
 let failed = 0;
@@ -125,11 +128,16 @@ function pagesDeployCleansRerunArtifactsAndRetries() {
     'select(.name == "github-pages")',
     "Pages deploy workflow must delete only the Pages artifact from the current run",
   );
-  assertOccurrenceCount(
+  // Matched on the action, not a pinned major: a Dependabot bump to the deploy
+  // action is routine and must not read as the retry step going missing. Both
+  // uses still have to agree, so a bump can never land on one step and leave the
+  // retry a major behind — which would silently retry against different
+  // behaviour than the attempt that failed.
+  assertUniformRef(
     deployWorkflow,
-    "actions/deploy-pages@v4",
+    "- uses: actions/deploy-pages@",
     2,
-    "Pages deploy workflow must retry a transient deploy-pages failure in the same job",
+    "Pages deploy workflow must retry a transient deploy-pages failure in the same job, on the same action version",
   );
   assertIncludes(
     deployWorkflow,
@@ -143,8 +151,47 @@ function pagesDeployCleansRerunArtifactsAndRetries() {
   );
 }
 
+// The sweep is event-driven, and its base filter is what keeps it invisible to
+// humans. A job-level `if:` does not make a job disappear — GitHub still
+// materialises it as a check run with conclusion `skipped` — so subscribing to
+// pull requests against `main` hangs a dead check on every human PR, one that
+// by construction can never run. Filtering the base to the staging branch means
+// the workflow is never instantiated for a human PR at all. ([GITHUB-DEPENDABOT])
+function dependabotSweepLeavesNoDeadCheckOnHumanPullRequests() {
+  const triggers = sectionBetween("\non:\n", "\npermissions:", dependabotWorkflow);
+  assertExcludes(
+    triggers,
+    "main",
+    "the sweep must not subscribe to pull requests against main: its job is actor-gated, and an if:-skipped job still reports a skipped check on every human PR",
+  );
+  assertIncludes(
+    triggers,
+    "- dependabot-upgrades",
+    "the sweep must still fire on bumps opened against the staging branch, which is where every ecosystem in .github/dependabot.yml targets them",
+  );
+  assertExcludes(
+    triggers,
+    "pull_request_target",
+    "pull_request_target would hand the write token and secrets to PR-controlled content, turning the merge bot into an exfiltration sink",
+  );
+  assertIncludes(
+    dependabotWorkflow,
+    "github.actor == 'dependabot[bot]'",
+    "the sweep must still refuse to act for any actor but Dependabot",
+  );
+  assertIncludes(
+    dependabotWorkflow,
+    "startsWith(github.head_ref, 'dependabot/')",
+    "the sweep must still require a dependabot/* source branch — the second half of the actor-AND-source gate",
+  );
+}
+
 function assertAbsent(pattern, message) {
   if (pattern.test(workflow)) throw new Error(message);
+}
+
+function assertExcludes(value, unexpected, message) {
+  if (value.includes(unexpected)) throw new Error(message);
 }
 
 function assertSectionAbsent(section, pattern, message) {
@@ -159,9 +206,20 @@ function assertIncludes(value, expected, message) {
   if (!value.includes(expected)) throw new Error(message);
 }
 
-function assertOccurrenceCount(value, expected, count, message) {
-  const actual = value.split(expected).length - 1;
-  if (actual !== count) throw new Error(`${message}; found ${actual}`);
+// Asserts `prefix` introduces exactly `count` steps AND that every one pins the
+// same ref. Counting alone would pass a workflow whose retry step drifted a
+// major behind the attempt it retries.
+function assertUniformRef(value, prefix, count, message) {
+  const refs = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length).split(/\s/u, 1)[0]);
+  if (refs.length !== count) throw new Error(`${message}; found ${refs.length}`);
+  const distinct = [...new Set(refs)];
+  if (distinct.length !== 1) {
+    throw new Error(`${message}; refs diverge: ${distinct.join(", ")}`);
+  }
 }
 
 function sectionBetween(start, end, source = workflow) {

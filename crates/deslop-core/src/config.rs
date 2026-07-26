@@ -765,6 +765,15 @@ fn canonicalise_or_clone(path: &Path) -> PathBuf {
 /// `<scan_root>/subdir/...` regardless of where the scan root sits on
 /// disk (#138). With no scan root the matcher falls back to `/` so
 /// absolute-path callers still get the original behaviour.
+///
+/// Unclosed character classes are rejected here even though
+/// `GitignoreBuilder` began allowing them in `ignore` 0.4.31 to match Git,
+/// which reads a dangling `[` literally. That leniency is right for the
+/// `.gitignore` files Git owns ([`crate::discover`] keeps it) and wrong for
+/// `.deslop.toml`, which only Deslop reads: `exclude = ["[unclosed"]` is a
+/// typo, and silently compiling it into a literal filename match excludes
+/// nothing while looking like it worked. Config errors are reported, never
+/// no-opped ([EXCLUSION-CONFIG]).
 fn build_matcher(
     source: &Path,
     scan_root: Option<&Path>,
@@ -772,6 +781,7 @@ fn build_matcher(
 ) -> Result<Gitignore, CoreError> {
     let root = scan_root.unwrap_or_else(|| Path::new("/"));
     let mut builder = GitignoreBuilder::new(root);
+    let _ = builder.allow_unclosed_class(false);
     for pattern in patterns {
         if let Err(err) = builder.add_line(None, pattern) {
             return Err(CoreError::ConfigPattern {

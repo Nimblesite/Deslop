@@ -5,11 +5,13 @@ name: Dependabot auto-merge
 # branch, no questions asked ([GITHUB-DEPENDABOT]). Two kinds of PR land here:
 #
 #   * VERSION updates  -> Dependabot opens them against `dependabot-upgrades`
-#     directly (.github/dependabot.yml `target-branch`).
+#     directly (.github/dependabot.yml `target-branch`), and every ecosystem in
+#     that file sets it. These are what this workflow sweeps.
 #   * SECURITY updates -> GitHub IGNORES `target-branch` for these and ALWAYS
-#     opens them against the default branch (`main`). So this workflow also
-#     triggers on `main` and folds the security bump into the SAME staging
-#     branch — nothing is ever left sitting on `main` waiting for a human.
+#     opens them against the default branch (`main`). They are handled by a
+#     human, deliberately — see the trigger note below. A CVE bump getting eyes
+#     on it is not a bad outcome, and `security` (dependency-review) in ci.yml
+#     still gates it.
 #
 # Sweep strategy: PATH-RESTRICTED, not a branch merge. Only the files the PR
 # itself changed (diff against its merge-base with the PR base) are copied from
@@ -50,11 +52,23 @@ name: Dependabot auto-merge
 # turn this merge bot into a real RCE/exfiltration sink — exactly the
 # actions/untrusted-checkout finding, made true. Do not change it.
 # ([GITHUB-CODE-SCANNING])
+#
+# ⚠️ BASE FILTER — `dependabot-upgrades` ONLY. Do not add `main` back. The job
+# can only be narrowed to Dependabot by a job-level `if:`, and an `if:`-skipped
+# job is NOT an absent job: GitHub still materialises it as a check run with
+# conclusion `skipped`. Subscribing to PRs against `main` therefore hangs a dead
+# `skipped` check on EVERY human PR, forever — a check that by construction can
+# never once run. Filtering the base to the staging branch means this workflow
+# is never instantiated for a human PR at all.
+#
+# A Dependabot sweep merge has reverted this once already (#306): the staging
+# branch was cut before the fix, so its stale copy came back with the bump.
+# Re-applying it here is not enough on its own — `dependabot-upgrades` needs the
+# same edit, or the next sweep resurrects `- main` again.
 on:
   pull_request:
     branches:
       - dependabot-upgrades
-      - main
 
 permissions:
   contents: write
@@ -73,7 +87,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out the staging branch
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: dependabot-upgrades
           fetch-depth: 0

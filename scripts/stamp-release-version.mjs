@@ -21,9 +21,15 @@ const stagedDeploymentManifests = ["clients/vscode/shipwright.json"];
 // action derives the CLI version from the ref it is pinned to — so an unstamped
 // `uses:` pin hands every listing visitor a workflow that installs an older
 // release, or fails outright against a tag predating action.yml. The pin is a
-// project-owned version reference like any other. [ACTION-VERSION]
+// project-owned version reference like any other. Every published surface that
+// shows a copy-pasteable pin is listed here, in both locales — a doc page that
+// drifts is the same defect as a README that drifts. [ACTION-VERSION]
 const actionPinPrefix = "uses: Nimblesite/Deslop@v";
-const actionPinReadmes = ["README.md"];
+const actionPinDocs = [
+  "README.md",
+  "site/src/docs/github-action.md",
+  "site/src/zh/docs/github-action.md",
+];
 
 const { root, version } = parseArgs(process.argv.slice(2));
 stampReleaseVersion(root, version);
@@ -38,7 +44,7 @@ export function stampReleaseVersion(rootPath, versionValue) {
     const manifestPath = join(rootPath, manifest);
     if (existsSync(manifestPath)) stampDeploymentManifest(manifestPath, versionValue);
   }
-  for (const readme of actionPinReadmes) stampActionPin(join(rootPath, readme), versionValue);
+  for (const doc of actionPinDocs) stampActionPin(join(rootPath, doc), versionValue);
   for (const project of nodeProjects) {
     const projectVersion = marketplaceProjects.has(project)
       ? marketplaceVersion(versionValue)
