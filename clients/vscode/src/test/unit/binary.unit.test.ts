@@ -11,8 +11,8 @@ import {
   BinaryVerificationError,
   type DeploymentManifest,
 } from "../../binary";
-import { mkdirSync, writeFileSync, chmodSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 function platformId(): string {
@@ -26,6 +26,18 @@ function platformId(): string {
 
 function writeVersionScript(filePath: string, name: string, version: string): void {
   writeFileSync(filePath, `#!/bin/sh\necho '${name} ${version}'\n`);
+  chmodSync(filePath, 0o755);
+}
+
+// A binary whose FIRST exec stalls past the warm probe budget and whose
+// second answers instantly — macOS Gatekeeper validating a freshly installed
+// unsigned binary, reproduced with a marker file instead of wall-clock luck.
+function writeFirstExecStallScript(filePath: string, name: string, version: string): void {
+  const marker = `${filePath}.warm`;
+  writeFileSync(
+    filePath,
+    `#!/bin/sh\nif [ ! -f '${marker}' ]; then touch '${marker}'; sleep 3; fi\necho '${name} ${version}'\n`,
+  );
   chmodSync(filePath, 0o755);
 }
 
@@ -60,7 +72,12 @@ function component(id: string, kind: string, pathVar: string | undefined) {
 
 // [DEPLOY-RESOLVER]
 suite("binary resolver", () => {
-  const tmp = resolve(tmpdir(), `deslop-binary-${process.pid}-${Date.now()}`);
+  // mkdtemp, not a name built from pid + clock. This suite writes shell scripts
+  // and then *executes* them, and the OS temp dir is world-writable: a guessable
+  // path lets another local process pre-create or symlink these entries and
+  // choose what the test runner executes (js/insecure-temporary-file). mkdtemp
+  // gives a 0700 dir with an unguessable suffix, as every sibling suite uses.
+  const tmp = mkdtempSync(join(tmpdir(), "deslop-binary-"));
   const envDir = resolve(tmp, "env");
   const pathDir = resolve(tmp, "pathdir");
   const userDir = resolve(tmp, "user");
@@ -92,6 +109,32 @@ suite("binary resolver", () => {
           lspPath: resolve(userDir, "deslop-lsp"),
         }),
       BinaryVerificationError,
+    );
+  });
+
+  // [DEPLOY-RESOLVER] A probe that never replies is INCONCLUSIVE, not a
+  // mismatch. Every bundled binary in a just-installed VSIX is on its first
+  // exec, and macOS validates unsigned ~30 MB files before running them; when
+  // that outran the warm budget the resolver reported "version mismatch",
+  // activation bailed before registerCommands, and the extension was dead
+  // until reload. This pins the retry that makes first activation survive.
+  test("a first exec that outruns the warm probe budget still resolves", () => {
+    const stalling = resolve(userDir, "stalling-lsp");
+    writeFirstExecStallScript(stalling, "deslop-lsp", "0.1.0");
+
+    const resolved = resolveBinary(extDir, "lsp", manifest(), { lspPath: stalling }, { PATH: "" });
+
+    assert.equal(
+      resolved.version,
+      "0.1.0",
+      "the retry must read the version the stalled first probe missed",
+    );
+    assert.equal(resolved.source, "user-setting", "the override must still win the candidate race");
+    assert.equal(resolved.path, stalling);
+    assert.equal(resolved.componentId, "deslop-lsp");
+    assert.ok(
+      existsSync(`${stalling}.warm`),
+      "the first exec must genuinely have run and stalled — otherwise this proves nothing",
     );
   });
 

@@ -74,7 +74,7 @@ The batch CLI and live services both run through `PipelineSession`. The batch en
 
 `crates/deslop-core/src/discover.rs::discover_files` walks the target root with the `ignore` crate, applies standard ignore filters, does not follow symlinks, filters by registered language extensions, applies `.deslop.toml` exclusion rules, and registers surviving files in a `FileRegistry`.
 
-Supported language parsers are currently registered by `crates/deslop-core/src/pipeline/corpus.rs::default_parsers`: C#, Rust, Python, Dart, JavaScript, TypeScript, TSX, PHP, and F#. Go and other languages are not registered in the current core pipeline.
+Supported language parsers are currently registered by `crates/deslop-core/src/pipeline/corpus.rs::default_parsers`: C#, Rust, Python, Dart, JavaScript, TypeScript, TSX, PHP, F#, and Go. Java and C/C++ are not registered in the current core pipeline.
 
 ### 2. Parse and normalize
 
@@ -90,6 +90,7 @@ Normalization is language-specific:
 - TypeScript / TSX: `crates/deslop-core/src/lang/typescript.rs`
 - PHP: `crates/deslop-core/src/lang/php.rs`
 - F#: `crates/deslop-core/src/lang/fsharp.rs`
+- Go: `crates/deslop-core/src/lang/go.rs`
 
 The shared constants are `__ident__` for identifier-like nodes and `__literal__` for literal-like nodes. Comments and trivia are dropped by returning `None` from the language-specific normalizer. This is the mechanism that makes renamed Type-2 clones hash together.
 
@@ -197,7 +198,8 @@ The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and
 
 | Claim | Verify in code | Useful tests |
 | --- | --- | --- |
-| C#, Rust, Python, Dart, JavaScript, TypeScript, TSX, PHP, and F# are registered today. | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test js_ts_signatures`, `cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_php_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_fsharp_fixture` |
+| C#, Rust, Python, Dart, JavaScript, TypeScript, TSX, PHP, F#, and Go are registered today. | `crates/deslop-core/src/pipeline/corpus.rs::default_parsers` | `cargo test -p deslop --test js_ts_signatures`, `cargo test -p deslop --test cli detects_type2_clone_in_csharp_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_php_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_fsharp_fixture`, `cargo test -p deslop --test cli detects_type2_clone_in_go_fixture` |
+| The registered language set reaches the editor surfaces. | `clients/vscode/package.json` activation events, `clients/vscode/src/types/languages.ts` | `cargo test -p deslop-core --test lang_registry_vsix_parity` |
 | Type-2 normalization collapses identifiers and literals. | `crates/deslop-core/src/lang/shared.rs`, language parser files | `cargo test -p deslop --test cli debug_ast_dump_matches_committed_golden` |
 | Structural clones are BLAKE3 Merkle subtree hashes. | `crates/deslop-core/src/fingerprint.rs` | `cargo test -p deslop --test sibling_dedup` |
 | Type-3 recall uses sibling windows and MinHash LSH. | `crates/deslop-core/src/sibling.rs`, `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/lsh.rs` | `cargo test -p deslop --test sibling_ranking` |

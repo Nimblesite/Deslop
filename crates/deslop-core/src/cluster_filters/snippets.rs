@@ -134,6 +134,7 @@ fn grammar_for(language: &str) -> Option<tree_sitter::Language> {
         "typescript" => Some(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
         "tsx" => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         "fsharp" => Some(tree_sitter_fsharp::LANGUAGE_FSHARP.into()),
+        "go" => Some(tree_sitter_go::LANGUAGE.into()),
         _ => None,
     }
 }

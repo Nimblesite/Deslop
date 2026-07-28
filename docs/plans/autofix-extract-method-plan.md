@@ -34,7 +34,7 @@ LSP wiring:
 
 Trait extension:
 
-- The `LanguageParser` trait gains the new methods in the same PR that adds the trait change, as **default methods returning "no extraction available"** — every existing implementation (C#, Rust, Python, Dart, JS/TS, F#, PHP) compiles unchanged until its phase overrides them.
+- The `LanguageParser` trait gains the new methods in the same PR that adds the trait change, as **default methods returning "no extraction available"** — every existing implementation (C#, Rust, Python, Dart, JS/TS, F#, PHP, Go) compiles unchanged until its phase overrides them.
 
 ## Phases
 

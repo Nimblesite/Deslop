@@ -540,6 +540,10 @@ const fn function_kinds(language: &str) -> &'static [&'static str] {
         // `method_or_prop_defn` carries a `name` field (members), so #69 is
         // limited to members; top-level `let` bindings still get #154.
         b"fsharp" => &["function_or_value_defn", "method_or_prop_defn"],
+        // Go functions, methods, and closures all expose a `body` field so
+        // the signature-only (#154) and polymorphic-signature (#69) filters
+        // can compare bodies after a signature-only structural match.
+        b"go" => &["function_declaration", "method_declaration", "func_literal"],
         _ => &[],
     }
 }

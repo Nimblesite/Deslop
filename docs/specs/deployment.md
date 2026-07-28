@@ -96,6 +96,17 @@ For Deslop's migration issues, mismatch behavior is:
 Errors must include product/extension version, component id, expected version,
 found version or `not found`, candidate path/source, and the next action.
 
+A version probe that never replies is **inconclusive, not a mismatch**. Every
+bundled binary in a freshly installed package is on its first execution, and
+macOS validates an unsigned multi-megabyte binary before running it
+(Gatekeeper / `syspolicyd`) — hundreds of milliseconds, and more on a loaded
+machine. A host that reports that stall as a version mismatch fails the very
+first activation after install, with an error naming a cause that is not true.
+Hosts must therefore retry a timed-out probe once on a budget wide enough for
+first-exec validation before concluding anything, and keep the warm budget
+tight so a genuinely hung binary is still caught quickly. Only a probe that
+replies with the wrong id/version is a mismatch.
+
 ### [DEPLOY-VSIX-PACKAGE] VSIX package contract
 
 Each platform-specific VSIX artifact must be built with `vsce package --target`

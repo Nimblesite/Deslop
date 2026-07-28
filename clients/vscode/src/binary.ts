@@ -234,9 +234,45 @@ function settingValue(component: DeploymentComponent, settings: BinarySettings):
   return undefined;
 }
 
+/** Budget for a binary that has already been executed once: a warm
+ * `--version` answers in single-digit milliseconds. */
+const PROBE_TIMEOUT_MS = 1500;
+
+/** Budget for the FIRST execution of a freshly written binary. macOS
+ * validates an unsigned ~30 MB binary on its first exec (Gatekeeper /
+ * `syspolicyd`), which costs hundreds of milliseconds and, on a loaded
+ * machine, more than the warm budget — and a just-installed VSIX is in
+ * exactly that state for both bundled binaries. */
+const PROBE_FIRST_EXEC_TIMEOUT_MS = 30_000;
+
+// [DEPLOY-RESOLVER] A probe that never answered is INCONCLUSIVE, not a
+// mismatch. Reporting it as one turned a slow first exec into "version
+// mismatch" with no commands registered — a dead extension until reload.
+// Retry once on the wider budget before believing the binary is wrong.
 function versionProbe(binaryPath: string): VersionProbe {
+  return (
+    probeOnce(binaryPath, PROBE_TIMEOUT_MS) ??
+    probeOnce(binaryPath, PROBE_FIRST_EXEC_TIMEOUT_MS) ?? {
+      name: null,
+      version: null,
+      raw: `no reply to --version within ${PROBE_FIRST_EXEC_TIMEOUT_MS}ms`,
+    }
+  );
+}
+
+/** True when `spawnSync` gave up on the child rather than failing to launch
+ * it — the one outcome worth a second, wider attempt. */
+function timedOut(error: Error | undefined): boolean {
+  return error !== undefined && "code" in error && error.code === "ETIMEDOUT";
+}
+
+/** One `--version` exec. `undefined` means the child never replied inside
+ * `timeout`, so the caller may retry rather than treat it as a verdict. */
+function probeOnce(binaryPath: string, timeout: number): VersionProbe | undefined {
   try {
-    const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 1500 });
+    const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout });
+    if (timedOut(result.error)) return undefined;
+    if (result.error) return { name: null, version: null, raw: result.error.message };
     if (result.status !== 0) return { name: null, version: null, raw: String(result.stderr) };
     return parseVersionLine(firstLine(String(result.stdout)));
   } catch (err) {

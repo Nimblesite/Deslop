@@ -19,7 +19,14 @@ const EXTENSION_LANGUAGE: Record<string, string> = {
   fs: "fsharp",
   fsx: "fsharp",
   php: "php",
+  go: "go",
 };
+
+/** Every source extension the registry resolves, without the leading dot,
+ * in registry order. Derived from the one extension map so activation
+ * events and file filters can be checked against it rather than
+ * re-listing extensions per surface ([FACET-MODEL], #170/#198). */
+export const SOURCE_EXTENSIONS: readonly string[] = Object.keys(EXTENSION_LANGUAGE);
 
 /** Language id for a file path, derived from its extension. Unknown
  * extensions map to `"unknown"`. */
@@ -39,6 +46,7 @@ const LANGUAGE_DISPLAY: Record<string, string> = {
   tsx: "TSX",
   fsharp: "F#",
   php: "PHP",
+  go: "Go",
 };
 
 /** Human display name for a language id used in group headings and
@@ -71,4 +79,5 @@ export const ANALYSED_LANGUAGE_IDS: readonly string[] = [
   "typescriptreact",
   "fsharp",
   "php",
+  "go",
 ];

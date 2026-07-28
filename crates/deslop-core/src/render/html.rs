@@ -371,6 +371,7 @@ fn language_display_name(language: &str) -> &'static str {
         "typescript" => "TypeScript",
         "tsx" => "TSX",
         "fsharp" => "F#",
+        "go" => "Go",
         _ => "Other",
     }
 }
