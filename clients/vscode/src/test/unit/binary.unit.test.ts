@@ -11,8 +11,8 @@ import {
   BinaryVerificationError,
   type DeploymentManifest,
 } from "../../binary";
-import { mkdirSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 function platformId(): string {
@@ -72,7 +72,12 @@ function component(id: string, kind: string, pathVar: string | undefined) {
 
 // [DEPLOY-RESOLVER]
 suite("binary resolver", () => {
-  const tmp = resolve(tmpdir(), `deslop-binary-${process.pid}-${Date.now()}`);
+  // mkdtemp, not a name built from pid + clock. This suite writes shell scripts
+  // and then *executes* them, and the OS temp dir is world-writable: a guessable
+  // path lets another local process pre-create or symlink these entries and
+  // choose what the test runner executes (js/insecure-temporary-file). mkdtemp
+  // gives a 0700 dir with an unguessable suffix, as every sibling suite uses.
+  const tmp = mkdtempSync(join(tmpdir(), "deslop-binary-"));
   const envDir = resolve(tmp, "env");
   const pathDir = resolve(tmp, "pathdir");
   const userDir = resolve(tmp, "user");
