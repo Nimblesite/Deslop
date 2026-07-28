@@ -8,6 +8,13 @@ import { spawnSync } from "node:child_process";
 // single :deslop-lsp4ij artifact (one LSP4IJ build serves Android Studio, IntelliJ
 // Community, and Rider/Ultimate), which bundles shipwright.json at its root plus a
 // bin/<platform>/deslop-lsp staged from the same manifest contract.
+// Every binary here was just unzipped into a fresh temp dir, so this is always
+// a FIRST exec: macOS validates the unsigned ~30 MB file before it runs
+// (Gatekeeper / `syspolicyd`), which costs hundreds of milliseconds. A tight
+// budget makes packaging fail on machine load rather than on a real defect
+// ([DEPLOY-RESOLVER]).
+const FIRST_EXEC_TIMEOUT_MS = 30_000;
+
 const platform = process.argv[3] ?? currentPlatform();
 const explicit = process.argv[2];
 const packagePaths = explicit
@@ -83,7 +90,10 @@ function verifyBundledEntry(packagePath, entry, component) {
 }
 
 function assertVersion(binaryPath, component) {
-  const result = spawnSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 1500 });
+  const result = spawnSync(binaryPath, ["--version"], {
+    encoding: "utf8",
+    timeout: FIRST_EXEC_TIMEOUT_MS,
+  });
   if (result.status !== 0) throw new Error(`${binaryPath} --version failed`);
   const expected = `${component.id} ${component.expectedVersion}`;
   const actual = firstLine(String(result.stdout));

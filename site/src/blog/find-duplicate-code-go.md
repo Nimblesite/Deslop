@@ -28,21 +28,9 @@ Go support runs through the same structural clone-detection pipeline as every ot
 
 The useful question is no longer whether two Go files contain the same text. It is whether they contain the same idea in a different jacket.
 
-## Thank you, Lance
+## Go support is a community contribution
 
-This support exists because **[Lance Haig](https://haigmail.com)** showed up and built it.
-
-Lance contributed the Go parser and the initial end-to-end language wiring in [PR #310](https://github.com/Nimblesite/Deslop/pull/310), from `.go` file discovery through normalization, reporting, editor activation, fixtures, and regression coverage. Language support is never one switch. It is a chain of small contracts across the core, CLI, live server, MCP surface, and editor clients, and Lance carried Go through that chain.
-
-Thank you, Lance. This is a serious contribution, and Go developers get a better duplicate-code tool because of it.
-
-## Search intent gets weird when your language is a verb
-
-We checked [Google Trends across worldwide Web Search for the past five years](https://trends.google.com/trends/explore?hl=en-US&date=today%205-y&q=duplicate%20code%20go,golang%20duplicate%20code,go%20duplicate%20code,golang%20linter,go%20linter) before naming this post. The useful finding was linguistic, not numerical.
-
-Google recognizes **“duplicate code”** as a topic. It also resolves **“golang”** cleanly to the Go programming language. Bare phrases such as “go linter” and “go duplicate code” are much noisier because *go* is one of the most common verbs in English. The narrow combinations did not produce enough reliable data to justify publishing a popularity chart, and Google Trends itself notes that [very-low-volume searches can appear as zero](https://support.google.com/trends/answer/4365533?hl=en).
-
-So this post uses **[Go as the language's proper name](https://go.dev/doc/faq#go_or_golang)** and **Golang** where search engines need the disambiguation. No invented search-volume numbers. Just the words a Go developer is most likely to use when the real intent is: *show me the code I accidentally wrote twice*.
+Go support was contributed by **[Lance Haig](https://haigmail.com)** in [PR #310](https://github.com/Nimblesite/Deslop/pull/310). His work added the parser and initial end-to-end language wiring, from `.go` file discovery through normalization, reporting, editor activation, fixtures, and regression coverage.
 
 ## What Go support actually adds
 

@@ -220,16 +220,35 @@ private data class VersionProbe(
     }
 
     companion object {
+        /** Budget for a binary already executed once: a warm `--version`
+         * answers in single-digit milliseconds. */
+        private const val WARM_TIMEOUT_MS = 1500L
+
+        /** Budget for the FIRST execution of a freshly installed binary.
+         * macOS validates an unsigned ~30 MB file on first exec (Gatekeeper /
+         * `syspolicyd`), which costs hundreds of milliseconds and, on a loaded
+         * machine, more than the warm budget. */
+        private const val FIRST_EXEC_TIMEOUT_MS = 30_000L
+
         fun read(path: Path): VersionProbe {
-            return runCatching { readProcess(path) }
+            return runCatching { probe(path) }
                 .getOrElse { VersionProbe(null, null, it.message.orEmpty()) }
         }
 
-        private fun readProcess(path: Path): VersionProbe {
+        // A probe that never answered is INCONCLUSIVE, not a mismatch:
+        // reporting it as one turns a slow first exec into a bogus "version
+        // mismatch" and a dead plugin. Retry once on the wider budget.
+        private fun probe(path: Path): VersionProbe =
+            readProcess(path, WARM_TIMEOUT_MS)
+                ?: readProcess(path, FIRST_EXEC_TIMEOUT_MS)
+                ?: VersionProbe(null, null, "no reply to --version within ${FIRST_EXEC_TIMEOUT_MS}ms")
+
+        /** One `--version` exec; `null` when the child never replied. */
+        private fun readProcess(path: Path, timeoutMs: Long): VersionProbe? {
             val process = ProcessBuilder(path.toString(), "--version").start()
-            if (!process.waitFor(1500, TimeUnit.MILLISECONDS)) {
+            if (!process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly()
-                return VersionProbe(null, null, "timeout")
+                return null
             }
             val line = process.inputStream.bufferedReader().readLine().orEmpty()
             if (process.exitValue() != 0) return VersionProbe(null, null, line)

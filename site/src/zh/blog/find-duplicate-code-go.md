@@ -29,21 +29,9 @@ Go 支持采用与 Deslop 其他语言相同的结构化克隆检测流水线。
 
 真正有用的问题，不再是两个 Go 文件是否包含相同的文本，而是它们是否用不同的外衣包裹着同一个想法。
 
-## 感谢 Lance
+## Go 支持来自社区贡献
 
-这项支持之所以存在，是因为 **[Lance Haig](https://haigmail.com)** 主动站出来，把它做成了。
-
-Lance 在 [PR #310](https://github.com/Nimblesite/Deslop/pull/310) 中贡献了 Go 解析器和最初的端到端语言接线，覆盖从 `.go` 文件发现，到归一化、报告、编辑器激活、fixture 和回归测试。支持一种语言从来不是拨动一个开关，而是贯穿核心引擎、CLI、实时服务器、MCP 界面和编辑器客户端的一连串细小契约；Lance 让 Go 走完了这整条链路。
-
-谢谢你，Lance。这是一项实打实的重要贡献，Go 开发者也因此拥有了更好的重复代码工具。
-
-## 当语言名称同时也是动词时，搜索意图会变得古怪
-
-在给本文命名之前，我们查看了 [Google Trends 过去五年全球范围内的网页搜索趋势](https://trends.google.com/trends/explore?hl=en-US&date=today%205-y&q=duplicate%20code%20go,golang%20duplicate%20code,go%20duplicate%20code,golang%20linter,go%20linter)。真正有价值的发现来自语言，而非数字。
-
-Google 会把 **“duplicate code”** 识别为一个主题，也能明确地将 **“golang”** 解析为 Go 编程语言。像 “go linter” 和 “go duplicate code” 这样的裸短语则嘈杂得多，因为 *go* 是英语中最常见的动词之一。这些较窄的组合没有产生足够可靠的数据，不足以支撑一张搜索热度图；Google Trends 自己也指出，[搜索量极低的查询可能显示为零](https://support.google.com/trends/answer/4365533?hl=en)。
-
-因此，本文以 **[Go 作为该语言的正式名称](https://go.dev/doc/faq#go_or_golang)**，并在搜索引擎需要消歧时使用 **Golang**。没有凭空捏造的搜索量数据，只有 Go 开发者在真正想表达“把我不小心写了两遍的代码找出来”时最可能使用的词。
+Go 支持由 **[Lance Haig](https://haigmail.com)** 在 [PR #310](https://github.com/Nimblesite/Deslop/pull/310) 中贡献。他的工作加入了解析器和最初的端到端语言接线，覆盖 `.go` 文件发现、归一化、报告、编辑器激活、fixture 和回归测试。
 
 ## Go 支持究竟添加了什么
 
