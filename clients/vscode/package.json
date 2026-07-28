@@ -31,7 +31,10 @@
     "dart",
     "javascript",
     "typescript",
-    "fsharp"
+    "tsx",
+    "php",
+    "fsharp",
+    "go"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -46,6 +49,7 @@
     "onLanguage:typescript",
     "onLanguage:typescriptreact",
     "onLanguage:fsharp",
+    "onLanguage:php",
     "onLanguage:go",
     "workspaceContains:**/*.cs",
     "workspaceContains:**/*.rs",
@@ -57,6 +61,7 @@
     "workspaceContains:**/*.jsx",
     "workspaceContains:**/*.ts",
     "workspaceContains:**/*.tsx",
+    "workspaceContains:**/*.php",
     "workspaceContains:**/*.fs",
     "workspaceContains:**/*.fsx",
     "workspaceContains:**/*.go"

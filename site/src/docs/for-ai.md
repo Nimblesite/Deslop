@@ -41,7 +41,8 @@ exclude     = ["vendor/**", "third_party/**"]    # dropped before parsing — ne
 report_hide = ["**/*.generated.cs", "**/*.g.cs"] # analysed, but hidden from the ranked report
 
 # Per-language overlays, keyed by the parser language id:
-# csharp, rust, python, dart. Overlays EXTEND [defaults]; they never replace it.
+# csharp, rust, python, dart, javascript, typescript, tsx, php, fsharp, go.
+# Overlays EXTEND [defaults]; they never replace it.
 [language.csharp]
 report_hide = ["**/Migrations/**/*.cs"]
 

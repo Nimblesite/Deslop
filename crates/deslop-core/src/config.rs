@@ -60,6 +60,16 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// `.dart_tool/`; because the live watcher has no `.gitignore` filter,
 /// excluding them here is what keeps that churn from monopolising the
 /// session and starving the editor's responsiveness.
+///
+/// `vendor` is the third-party source copy for Go (`go mod vendor`),
+/// PHP (Composer) and Rust (`cargo vendor`). Unlike every other entry it
+/// is *conventionally committed* — GitHub's `Go.gitignore` ships the
+/// `vendor/` rule commented out — and it is not dot-prefixed, so neither
+/// the gitignore pass nor the hidden-directory pass prunes it. Without
+/// this entry a vendored repo hands the pipeline tens of thousands of
+/// dependency files, and because ranking is worst-offenders-first the
+/// resulting third-party duplication outranks every first-party finding
+/// the user can actually act on.
 const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     "node_modules",
     "target",
@@ -72,6 +82,7 @@ const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
     ".claude",
     ".dart_tool",
     ".pub-cache",
+    "vendor",
 ];
 
 /// Directory components that are always analysed but hidden from summaries.

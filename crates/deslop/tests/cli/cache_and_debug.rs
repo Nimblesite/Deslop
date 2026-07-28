@@ -430,8 +430,15 @@ fn debug_ast_dump_matches_committed_golden_fsharp() -> Result<()> {
 // `nil`, `iota`), line / block comment drop, and the Go structural
 // forms most likely to shift between grammar patch releases (struct,
 // method with receiver, labeled loop, expression switch, composite
-// literal). Any grammar bump or `normalise_kind` edit trips this
-// byte-for-byte check.
+// literal). It also pins the shapes that are Go's alone and appear in no
+// other golden: `interface_type` with method specs, struct field tags,
+// `type_parameter_list` on both a generic type and a generic function,
+// `variadic_parameter_declaration`, directional `channel_type`s,
+// `go_statement`, `defer_statement`, `send_statement`,
+// `select_statement` with communication and default arms,
+// `type_switch_statement` with multi-type / interface / nil cases,
+// `range_clause` over a channel, and `generic_type` instantiation. Any
+// grammar bump or `normalise_kind` edit trips this byte-for-byte check.
 #[test]
 fn debug_ast_dump_matches_committed_golden_go() -> Result<()> {
     assert_ast_golden("ast-golden-go", "Sample.go")

@@ -1,8 +1,6 @@
 // Unit: production embedding settings exposed by package.json and extension.ts.
 
 import * as assert from "node:assert/strict";
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 
@@ -11,27 +9,7 @@ import {
   syncEmbeddingSettingsToLsp,
 } from "../../extension";
 import { ReportStore } from "../../reportStore";
-
-interface PackageContribution {
-  contributes: {
-    configuration: {
-      properties: Record<string, ConfigurationProperty>;
-    };
-  };
-}
-
-interface ConfigurationProperty {
-  default?: unknown;
-  description?: string;
-  enum?: unknown[];
-  type?: string;
-}
-
-function extensionPackage(): PackageContribution {
-  const packagePath = path.resolve(__dirname, "../../..", "package.json");
-  const text = fs.readFileSync(packagePath, "utf8");
-  return JSON.parse(text) as PackageContribution;
-}
+import { extensionPackage } from "./package.helpers";
 
 function legacyProviderId(): string {
   return ["st", "ub"].join("");

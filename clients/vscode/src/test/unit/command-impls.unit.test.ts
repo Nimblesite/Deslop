@@ -619,6 +619,42 @@ suite("tree menu renderers", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  // [FACET-MODEL] Copy Source Snippet used to carry a second, private
+  // extension map that never learned F#, PHP or Go, so those occurrences
+  // copied out as a bare ``` fence — unhighlighted in a PR and untyped for
+  // an AI agent. The tag now comes from `types/languages`.
+  test("sourceSnippetText fence tag comes from the shared language registry", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdd-fence-"));
+    const expected: ReadonlyArray<readonly [string, string]> = [
+      ["main.go", "go"],
+      ["Model.php", "php"],
+      ["Tests.fs", "fsharp"],
+      ["Widget.dart", "dart"],
+      ["App.tsx", "tsx"],
+      ["notes.txt", ""],
+      ["Makefile", ""],
+    ];
+
+    for (const [name, tag] of expected) {
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, "value\n", "utf8");
+      const text = sourceSnippetText({
+        path: file,
+        start_byte: 0,
+        end_byte: 5,
+        hidden: false,
+      });
+      assert.equal(
+        text.split("\n")[1],
+        "```" + tag,
+        `${name} must open its fence with "${tag}" so the snippet highlights when pasted`,
+      );
+      assert.ok(text.includes("value"), `${name} snippet must carry the source bytes`);
+    }
+
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   test("clusterIdForTreeNode returns cluster id for cluster nodes", () => {
     const c = clusterWithRanges("c-id", [{ path: "a", start_byte: 0, end_byte: 1 }]);
     const store = new ReportStore();

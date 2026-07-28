@@ -60,7 +60,7 @@ plan is complete; this roadmap keeps the durable baseline.
 | tree-sitter-python (new)     | 0.25.0         | ^0.1       | ✅               |
 | tree-sitter-typescript       | 0.23.2         | ^0.1       | ✅               |
 | tree-sitter-javascript       | 0.25.0         | ^0.1       | ✅               |
-| tree-sitter-go               | 0.25.0         | ^0.1       | ✅               |
+| tree-sitter-go               | 0.25.0         | ^0.1       | ✅ SHIPPED (=0.25.0) |
 | tree-sitter-java             | 0.23.5         | ^0.1       | ✅               |
 | tree-sitter-cpp              | 0.23.4         | ^0.1       | ✅               |
 | tree-sitter-c                | 0.24.2         | ^0.1       | ✅               |
@@ -271,19 +271,31 @@ fixtures + golden. Not blocking; low value.
   `tests/fixtures/dart-type3/{delta,epsilon}.dart`, AST golden.
 - **Estimate.** 1 day spike + 1 day implementation if green.
 
-### [LANG-CAND-GO] Go — PRIORITY 4 (low-hanging)
+### [LANG-CAND-GO] Go — ✅ SHIPPED (=0.25.0)
+
+Contributed by [Lance Haig](https://github.com/lhaig) in
+[#310](https://github.com/Nimblesite/Deslop/pull/310).
 
 - **Crate.** `tree-sitter-go = "=0.25.0"` (tree-sitter org). 100%
   documented. `tree-sitter ^0.25`. Rock solid — Go's grammar changes
   rarely and the tree-sitter grammar has been production-grade for
   years (used by GitHub semantic, Zed, Helix).
-- **Normalisation.** Trivial. `identifier`, `field_identifier`,
-  `type_identifier`, `package_identifier` → `__ident__`.
-  `interpreted_string_literal`, `raw_string_literal`, `int_literal`,
-  `float_literal`, `imaginary_literal`, `rune_literal`, `true`, `false`,
-  `nil` → `__literal__`. `comment` dropped.
-- **Fixtures.** `tests/fixtures/go-small/{alpha,beta}.go` + AST golden.
-- **Estimate.** 0.5 day. The easiest language to add.
+- **Normalisation.** `crates/deslop-core/src/lang/go.rs`. `identifier`,
+  `field_identifier`, `type_identifier`, `package_identifier`,
+  `blank_identifier`, `label_name` → `__ident__`. The literal family —
+  `int_literal`, `float_literal`, `imaginary_literal`, `rune_literal`,
+  both string forms with their `*_content` bodies, `escape_sequence`,
+  `true`, `false`, `nil`, `iota` → `__literal__`. `comment` dropped.
+  `composite_literal` / `literal_value` / `literal_element` and
+  `func_literal` stay structural — their shape is the clone signal.
+- **Exclusion.** `vendor` joins `BUILTIN_EXCLUDE_COMPONENTS`
+  (`crates/deslop-core/src/config.rs`); a committed `go mod vendor` tree
+  would otherwise outrank every first-party finding.
+- **Fixtures.** `go-small`, `go-type3`, `go-dissimilar-functions`,
+  `go-closure-signature-only`, `go-prologue-false-positive`,
+  `go-vendored`, and the `ast-golden-go` dump.
+- **Delivered.** Roughly a day, most of it in the surface wiring rather
+  than the parser — see [LANG-PER-LANG-CHECKLIST].
 
 ### [LANG-CAND-JAVA] Java — PRIORITY 5
 
@@ -424,9 +436,26 @@ A new-language PR is not done until all of the following are green:
 - [ ] Boilerplate classification documented for imports / module
       headers per [pipeline.md §PIPELINE-BOILERPLATE](../specs/pipeline.md).
 - [ ] VS Code extension `package.json` activation event
-      (`onLanguage:<id>` + `workspaceContains:**/*.<ext>`).
+      (`onLanguage:<id>` + `workspaceContains:**/*.<ext>`) and the
+      language id in `keywords` so Marketplace search finds it.
+- [ ] **`clients/vscode/src/types/languages.ts` — all three maps**
+      (`EXTENSION_LANGUAGE`, `LANGUAGE_DISPLAY`, `ANALYSED_LANGUAGE_IDS`).
+      This is the one that keeps getting missed (#170 → #198 → F#/PHP →
+      Go). Skip it and the engine analyses the files while the LSP never
+      syncs the buffer, hover and the inlay bubble never attach, Top
+      Offenders groups the language under "Other", and the report
+      webview has no filter option — all silently.
+      `cargo test -p deslop-core --test lang_registry_vsix_parity` and
+      `analysedLanguages.unit.test.ts` are the gate.
+- [ ] JetBrains `DeslopSupportedFiles.kt` extension → display map.
+- [ ] Dependency-copy directory added to `BUILTIN_EXCLUDE_COMPONENTS`
+      in `crates/deslop-core/src/config.rs` if the ecosystem has one
+      (`node_modules`, `.cargo`, `.venv`, `.pub-cache`, `vendor`, …).
+      A vendored tree outranks every first-party finding.
 - [ ] README / site docs mention the language in the supported-set
-      list.
+      list — including `site/src/docs/research-background.md` and its
+      `zh` mirror, whose stated purpose is auditor verification against
+      the code.
 - [ ] Coverage threshold in `coverage-thresholds.json` does not drop.
 
 ---
@@ -532,6 +561,26 @@ code + e2e fixture + AST golden + grammar pin in `Cargo.toml`,
   `*_content` bodies, `escape_sequence`, and `iota` → `__literal__`;
   composite literals and `func_literal` closures stay structural. All four
   e2e tests green.
+- **P-LANG-3-FOLLOWUP — Go surface wiring** (COMPLETE). Review of #310
+  found the Rust half complete and the TypeScript half missing, so the
+  follow-up closed it and built the gate that stops the next one:
+  `types/languages.ts` gained Go in all three maps; the second private
+  extension map in `commands/treeMenus.ts` was deleted in favour of the
+  shared registry (which also fixed the untagged fence for F#/PHP/Go in
+  Copy Source Snippet); `package.json` gained the missing
+  `onLanguage:php` / `workspaceContains:**/*.php` events and the `go` /
+  `php` / `tsx` Marketplace keywords; `vendor` joined
+  `BUILTIN_EXCLUDE_COMPONENTS`. New E2E: `go-vendored` (vendored tree
+  never discovered), `go-closure-signature-only` (`func_literal` in
+  `function_kinds` proven by the suppression it enables),
+  `go-prologue-false-positive` (`package_clause` / `import_declaration`
+  carriers proven by the six-file prologue cluster they suppress); the
+  Go Type-3 assertions now pin a *partial* near-miss rather than "a
+  cluster exists"; `ast-golden-go` grew goroutines, defer, channels,
+  select, type switches, generics, variadics, interfaces and struct
+  tags. Anti-drift: `lang_registry_vsix_parity.rs` derives the expected
+  manifest from `default_parsers`, and `analysedLanguages.unit.test.ts`
+  derives the registry from the manifest.
 
 ### [LANG-CAND-DART-RESULT] Dart spike outcome (2026-05-30) — GREEN
 

@@ -5,10 +5,10 @@
 // surface in copied text.
 
 import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { occurrenceDisplayLocation } from "../locations";
+import { languageForPath } from "../types/languages";
 import { ReportStore } from "../reportStore";
 import {
   ReportCluster,
@@ -194,7 +194,7 @@ export function aiPayloadForOccurrence(
 /// Builds the fenced code block + header for [`copySourceSnippet`].
 export function sourceSnippetText(occurrence: ReportOccurrence): string {
   const snippet = readOccurrenceBytes(occurrence);
-  const language = languageForPath(occurrence.path);
+  const language = fenceTagForPath(occurrence.path);
   return [
     humanLocation(occurrence),
     "```" + language,
@@ -272,20 +272,11 @@ function readOccurrenceBytes(occurrence: ReportOccurrence): string {
   }
 }
 
-const LANGUAGE_BY_EXT: Record<string, string> = {
-  ".cs": "csharp",
-  ".rs": "rust",
-  ".py": "python",
-  ".ts": "typescript",
-  ".tsx": "tsx",
-  ".js": "javascript",
-  ".mjs": "javascript",
-  ".cjs": "javascript",
-  ".jsx": "javascript",
-  ".dart": "dart",
-};
-
-function languageForPath(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  return LANGUAGE_BY_EXT[ext] ?? "";
+/// Markdown fence tag for an occurrence's file, from the one language
+/// registry ([FACET-MODEL], #170/#198). Unrecognised files get an empty
+/// tag — a bare ``` fence — rather than the registry's `"unknown"`
+/// sentinel, which no highlighter understands.
+function fenceTagForPath(filePath: string): string {
+  const language = languageForPath(filePath);
+  return language === "unknown" ? "" : language;
 }
