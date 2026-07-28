@@ -60,15 +60,11 @@ name: Dependabot auto-merge
 # `skipped` check on EVERY human PR, forever — a check that by construction can
 # never once run. Filtering the base to the staging branch means this workflow
 # is never instantiated for a human PR at all.
-#
-# A Dependabot sweep merge has reverted this once already (#306): the staging
-# branch was cut before the fix, so its stale copy came back with the bump.
-# Re-applying it here is not enough on its own — `dependabot-upgrades` needs the
-# same edit, or the next sweep resurrects `- main` again.
 on:
   pull_request:
     branches:
       - dependabot-upgrades
+      - main
 
 permissions:
   contents: write
@@ -87,7 +83,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out the staging branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: dependabot-upgrades
           fetch-depth: 0
