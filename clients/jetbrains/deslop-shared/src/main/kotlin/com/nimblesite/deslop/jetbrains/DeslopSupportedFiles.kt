@@ -20,6 +20,10 @@ object DeslopSupportedFiles {
         "jsx" to "JavaScript",
         "ts" to "TypeScript",
         "tsx" to "TypeScript",
+        "php" to "PHP",
+        "fs" to "F#",
+        "fsx" to "F#",
+        "go" to "Go",
     )
 
     /** Display name for a path whose extension is not one Deslop analyses. */

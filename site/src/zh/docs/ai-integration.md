@@ -183,7 +183,7 @@ Deslop 的事实来源是 `[byte_start, byte_end)`。行号仅在渲染时派生
 
 ## JetBrains 插件（开发中）
 
-位于 `clients/jetbrains/` 的 JetBrains 插件注册了一个 IntelliJ Platform 的 `lsp.serverSupportProvider`，并为 C#、Rust、Python、Dart、JavaScript、TypeScript、PHP 与 F# 文件启动 `deslop-lsp`。Rider 是第一个产品目标；IntelliJ IDEA、PyCharm、WebStorm、RustRover 与 CLion 将在同一平台 LSP API 上紧随其后。该插件以 Gradle 构建，针对已发布的 `deslop-lsp` 进行真实二进制测试，并随附与 VS Code 扩展相同的二进制解析规则。Zed 与 Neovim 插件已在路线图上——两者均具备 LSP 能力，如今都与 `deslop-lsp` 线路兼容。
+位于 `clients/jetbrains/` 的 JetBrains 插件注册了一个 IntelliJ Platform 的 `lsp.serverSupportProvider`，并为 C#、Rust、Python、Dart、JavaScript、TypeScript、PHP、F# 与 Go 文件启动 `deslop-lsp`。Rider 是第一个产品目标；IntelliJ IDEA、PyCharm、WebStorm、RustRover 与 CLion 将在同一平台 LSP API 上紧随其后。该插件以 Gradle 构建，针对已发布的 `deslop-lsp` 进行真实二进制测试，并随附与 VS Code 扩展相同的二进制解析规则。Zed 与 Neovim 插件已在路线图上——两者均具备 LSP 能力，如今都与 `deslop-lsp` 线路兼容。
 
 ## Deslop 刻意不做的事
 

@@ -754,8 +754,11 @@ async fn exercise_error_paths(service: &LiveService, _first_id: &str) {
     assert!(matches!(miss, Err(LiveError::UnknownCluster { .. })));
     let unsupported = FindSimilarRequest {
         input: FindSimilarInput::Snippet {
-            snippet: "func main() {}".to_owned(),
-            language: "go".to_owned(),
+            snippet: "fun main() {}".to_owned(),
+            // Kotlin is deferred indefinitely ([LANG-CAND-KOTLIN] grammar
+            // blockers), so it stays a genuinely unsupported probe now
+            // that Go ships ([LANG-CAND-GO]).
+            language: "kotlin".to_owned(),
         },
         max_results: None,
     };

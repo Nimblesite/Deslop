@@ -21,7 +21,9 @@ internal class DeslopSupportedFilesTest {
 
     @Test
     fun everyShippingLanguageExtensionIsAnalysed() {
-        for (extension in listOf("cs", "rs", "py", "dart", "js", "mjs", "cjs", "jsx", "ts", "tsx")) {
+        val extensions =
+            listOf("cs", "rs", "py", "dart", "js", "mjs", "cjs", "jsx", "ts", "tsx", "php", "fs", "fsx", "go")
+        for (extension in extensions) {
             assertTrue(
                 DeslopSupportedFiles.supportsExtension(extension),
                 "deslop-lsp parses .$extension, so the JetBrains bridge must start for it",
@@ -31,7 +33,7 @@ internal class DeslopSupportedFilesTest {
 
     @Test
     fun extensionsOutsideTheShippingSetStayDormant() {
-        for (extension in listOf("go", "kt", "txt", "md", null)) {
+        for (extension in listOf("java", "kt", "txt", "md", null)) {
             assertFalse(
                 DeslopSupportedFiles.supportsExtension(extension),
                 ".$extension is not a shipping Deslop language; the bridge must not start",

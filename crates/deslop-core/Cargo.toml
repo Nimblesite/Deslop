@@ -30,6 +30,7 @@ tree-sitter-typescript.workspace = true
 tree-sitter-javascript.workspace = true
 tree-sitter-php.workspace = true
 tree-sitter-fsharp.workspace = true
+tree-sitter-go.workspace = true
 ignore.workspace = true
 blake3.workspace = true
 ureq.workspace = true
