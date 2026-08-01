@@ -19,10 +19,19 @@ const dependabotWorkflow = readFileSync(dependabotWorkflowPath, "utf8");
 const tests = [
   releaseBuildsTaggedSourceWithoutPostTagVersionCommit,
   releaseArchivesContainPackageManagerDeclaredBinaries,
+  scoopManifestExtractDirMatchesWindowsArchiveRoot,
+  scoopAutoupdateTemplatesEveryVersionedSegment,
   releaseBuildsPlatformSpecificVsixArtifacts,
   pagesDeployCleansRerunArtifactsAndRetries,
   dependabotSweepLeavesNoDeadCheckOnHumanPullRequests,
 ];
+
+// Values bound while evaluating the Scoop manifest generator. The version is
+// deliberately not the current one: a manifest that hardcodes a real version
+// would still look right against it.
+const SCOOP_TEST_VERSION = "9.8.7";
+const SCOOP_TEST_SHA256 = "d713ca72419bc535e6c64605381255e544553356290b900b6c3f1eed21bee735";
+const SCOOP_TEST_REPOSITORY = "Nimblesite/Deslop";
 
 let failed = 0;
 for (const test of tests) {
@@ -84,6 +93,133 @@ function releaseArchivesContainPackageManagerDeclaredBinaries() {
       `Scoop declares ${binary}, so the Windows release archive must contain it`,
     );
   }
+}
+
+// The Windows zip nests every binary under a top-level staging directory, and
+// Scoop resolves `bin` from the app root — so the manifest has to name that
+// directory in `extract_dir` or shim creation fails after the download and hash
+// check have already passed. `autoupdate` needs it too: a manifest that carries
+// extract_dir only in the architecture block regresses on the next auto-update.
+// The expected value is derived from the packaging step, not hardcoded, so
+// flattening the archive and dropping extract_dir is equally accepted.
+function scoopManifestExtractDirMatchesWindowsArchiveRoot() {
+  const archiveRoot = windowsArchiveRoot(SCOOP_TEST_VERSION);
+  const manifest = generatedScoopManifest(SCOOP_TEST_VERSION, SCOOP_TEST_SHA256);
+
+  assertEqual(
+    manifest.architecture["64bit"].extract_dir ?? null,
+    archiveRoot,
+    "the Scoop manifest must declare extract_dir matching the Windows archive's top-level directory",
+  );
+  assertEqual(
+    manifest.autoupdate.architecture["64bit"].extract_dir ?? null,
+    archiveRoot === null ? null : archiveRoot.split(SCOOP_TEST_VERSION).join("$version"),
+    "autoupdate must carry the same extract_dir, templated on $version, or the next auto-updated manifest reverts to a broken shim",
+  );
+}
+
+// Every versioned segment of the autoupdate URL has to stay a Scoop `$version`
+// placeholder. Interpolating one at generation time freezes it: the tag segment
+// keeps pointing at the release that produced the manifest, so every future
+// version resolves back to that release's assets.
+function scoopAutoupdateTemplatesEveryVersionedSegment() {
+  const autoupdate = generatedScoopManifest(SCOOP_TEST_VERSION, SCOOP_TEST_SHA256).autoupdate;
+  const url = autoupdate.architecture["64bit"].url;
+
+  assertIncludes(
+    url,
+    "/download/v$version/",
+    `the autoupdate url must template the release tag segment; got ${url}`,
+  );
+  assertExcludes(
+    url,
+    SCOOP_TEST_VERSION,
+    `the autoupdate url must not embed the generating version (${SCOOP_TEST_VERSION}); a frozen segment pins every future update to this release`,
+  );
+}
+
+// The archive root is whatever `Compress-Archive -Path` is handed: a staging
+// directory becomes the archive's top-level entry, while `dist/$stage/*` or a
+// bare file produces a flat archive. Returns null when the archive is flat, so
+// the caller can require extract_dir to be absent instead.
+function windowsArchiveRoot(version) {
+  const step = sectionBetween(
+    "- name: Package archive (windows)",
+    "- name: Stage VSIX binaries (unix)",
+  );
+  const stage = expandGitHub(quotedValueAfter(step, '$stage = "'), version);
+  const packed = quotedValueAfter(step, 'Compress-Archive -Path "');
+  return packed === "dist/$stage" ? stage : null;
+}
+
+// Evaluates the workflow's manifest generator the way the runner does — GitHub
+// expands `${{ … }}`, then bash expands `${…}` in the heredoc — and parses what
+// it emits. Asserting on the generated manifest rather than on workflow text is
+// what makes a half-templated value visible at all: `${base}/deslop-\$version…`
+// reads as templated in the source and resolves to a frozen tag in the output.
+function generatedScoopManifest(version, sha256) {
+  const step = sectionBetween("- name: Build Scoop manifest", "- name: Checkout scoop-bucket");
+  const opener = step.indexOf("<<EOF");
+  if (opener < 0) throw new Error("missing Scoop manifest heredoc");
+  const body = step.slice(opener + "<<EOF".length, step.indexOf("EOF", opener + "<<EOF".length));
+  return JSON.parse(expandShell(expandGitHub(body, version), shellBindings(step, version, sha256)));
+}
+
+// Replays the step's own assignments in order, so the test never restates how
+// the asset name or download URL is composed — it reuses the workflow's.
+function shellBindings(step, version, sha256) {
+  const bindings = new Map([["win_sha", sha256]]);
+  for (const name of ["version", "base", "win_zip"]) {
+    const assigned = expandGitHub(quotedValueAfter(step, `${name}="`), version);
+    bindings.set(name, expandShell(assigned, bindings));
+  }
+  return bindings;
+}
+
+function expandGitHub(text, version) {
+  return substitute(text, "${{", "}}", (expression) => {
+    if (expression === "github.repository") return SCOOP_TEST_REPOSITORY;
+    if (expression === "matrix.artifact_name") return "windows-x64";
+    if (expression === "needs.version.outputs.version") return version;
+    throw new Error(`unbound GitHub expression: ${expression}`);
+  });
+}
+
+// `\$` reaches the manifest as a literal `$`, which is how Scoop's `$version`
+// placeholder survives the heredoc.
+function expandShell(text, bindings) {
+  const expanded = substitute(text, "${", "}", (name) => {
+    if (!bindings.has(name)) throw new Error(`unbound shell variable: ${name}`);
+    return bindings.get(name);
+  });
+  return expanded.split("\\$").join("$");
+}
+
+// Scanner rather than a pattern match: `${{ … }}` and `${…}` share a prefix, so
+// the passes have to run in order and must not overlap.
+function substitute(text, open, close, resolve) {
+  let result = "";
+  let cursor = 0;
+  for (;;) {
+    const start = text.indexOf(open, cursor);
+    if (start < 0) return result + text.slice(cursor);
+    const end = text.indexOf(close, start + open.length);
+    if (end < 0) return result + text.slice(cursor);
+    result += text.slice(cursor, start) + resolve(text.slice(start + open.length, end).trim());
+    cursor = end + close.length;
+  }
+}
+
+// Value of the first double-quoted argument on the first line starting with
+// `prefix`, e.g. `dist/$stage` from `Compress-Archive -Path "dist/$stage" …`.
+function quotedValueAfter(step, prefix) {
+  const line = step
+    .split("\n")
+    .map((candidate) => candidate.trim())
+    .find((candidate) => candidate.startsWith(prefix));
+  if (line === undefined) throw new Error(`missing workflow assignment: ${prefix}`);
+  const value = line.slice(prefix.length);
+  return value.slice(0, value.indexOf('"'));
 }
 
 function releaseBuildsPlatformSpecificVsixArtifacts() {
@@ -204,6 +340,10 @@ function assertPresent(pattern, message) {
 
 function assertIncludes(value, expected, message) {
   if (!value.includes(expected)) throw new Error(message);
+}
+
+function assertEqual(actual, expected, message) {
+  if (actual !== expected) throw new Error(`${message}; expected ${expected}, got ${actual}`);
 }
 
 // Asserts `prefix` introduces exactly `count` steps AND that every one pins the
