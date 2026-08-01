@@ -10,7 +10,7 @@ icon: smart_toy
 
 # AI Integration
 
-Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI. Every MCP tool response is computed against the **live** workspace state — the LSP holds the live report in memory and refreshes it on every change (debounced, with a hard cap), and the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop-cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop-cache/deslop.port`. There is no batch step. There is no stale cache.
+Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI. Every MCP tool response is computed against the **live** workspace state — the LSP holds the live report in memory and refreshes it on every change (debounced, with a hard cap), and the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step. There is no stale cache.
 
 ## The MCP tools, all live
 
@@ -170,11 +170,11 @@ Cluster IDs are short hex digests of the cluster's content fingerprint — the f
 
 The `deslop-core` crate owns the entire pipeline. Three shells consume it:
 
-- **MCP server (`deslop-mcp`)** — the agent surface. find-similar plus a focused set of read-only and config tools (see the table above). The server delegates every read — `top-offenders`, `report-get`, `report-for-file`, `find-similar`, and the rest — to the running LSP over the local IPC endpoint, so every response is computed against the LSP's live in-memory corpus, not a stale on-disk cache. Unix hosts use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback with `.deslop-cache/deslop.port` discovery. When the LSP isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
+- **MCP server (`deslop-mcp`)** — the agent surface. find-similar plus a focused set of read-only and config tools (see the table above). The server delegates every read — `top-offenders`, `report-get`, `report-for-file`, `find-similar`, and the rest — to the running LSP over the local IPC endpoint, so every response is computed against the LSP's live in-memory corpus, not a stale on-disk cache. Unix hosts use `.deslop/cache/deslop.sock`; Windows uses token-gated TCP loopback with `.deslop/cache/deslop.port` discovery. When the LSP isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
 - **LSP server (`deslop-lsp`)** — the editor surface. Diagnostics, hover, code lens, `textDocument/definition`, virtual `deslop://` documents, and custom `deslop/*` methods (`reportGet`, `reportDelta`, `reportForFile`, `reportForRange`, `clusterById`, `duplicatesFindSimilar`, `embeddingListModels`, `embeddingSetModel`, `sessionConfig`, `reportSchemaDoc`, `virtualDocument`, `cpuReport`). Fires `deslop/reportChanged`, `deslop/analysisState`, and `deslop/embeddingProgress` notifications. Owns the file watcher, the debouncer, and the analysis scheduler.
 - **CLI (`deslop`)** — the cold-cache fallback for CI gates and one-shot audits.
 
-All three reuse the same cache layout (`.deslop-cache/fingerprints/`, `.deslop-cache/embeddings/`) and the same JSON schema. Agents wired to the CLI today get the live channel by adding `deslop-mcp` to their MCP config — no schema change, no parser rewrite.
+All three reuse the same cache layout (`.deslop/cache/fingerprints/`, `.deslop/cache/embeddings/`) and the same JSON schema. Agents wired to the CLI today get the live channel by adding `deslop-mcp` to their MCP config — no schema change, no parser rewrite.
 
 ### Push notifications
 

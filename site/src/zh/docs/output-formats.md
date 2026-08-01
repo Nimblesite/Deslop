@@ -86,8 +86,8 @@ HTML 渲染器使用与 JSON 和 TXT 相同的排名和相同的簇摘要。它�
 
 ## 日志与报告的区别
 
-默认情况下，诊断信息通过带结构化字段的 `tracing` 写入一个带时间戳的日志文件（`deslop-<timestamp>.log`）；传入 `--log-to-console` 可改为将其发送到 `stderr`。人类可读的前言和摘要始终输出到 `stderr`。报告本身则写入文件 — 默认为 `deslop-report.json`/`.txt`/`.html`，或你通过 `--output` 传入的前缀。若只想生成 JSON 报告，请抑制另外两种格式：
+默认情况下，诊断信息通过带结构化字段的 `tracing` 写入一个带时间戳的日志文件（`.deslop/logs/deslop-<timestamp>.log`）；传入 `--log-to-console` 可改为将其发送到 `stderr`。人类可读的前言和摘要始终输出到 `stderr`。报告本身则写入文件 — 默认为被扫描项目下的 `.deslop/deslop-report.json`/`.txt`/`.html`，或你通过 `--output` 传入的前缀（日志会随之一起移动）。若只想生成 JSON 报告，请抑制另外两种格式：
 
 ```bash
-deslop . --notext --nohtml      # writes deslop-report.json
+deslop . --notext --nohtml      # writes .deslop/deslop-report.json
 ```

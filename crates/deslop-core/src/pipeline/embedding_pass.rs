@@ -12,8 +12,8 @@ use std::{
 
 use crate::{
     embedding::{
-        cache::DEFAULT_CACHE_DIR_NAME, content_hash, EmbeddingCache, EmbeddingMode, EmbeddingPair,
-        EmbeddingProvider, EmbeddingSpec, ProviderError,
+        content_hash, EmbeddingCache, EmbeddingMode, EmbeddingPair, EmbeddingProvider,
+        EmbeddingSpec, ProviderError,
     },
     error::CoreError,
     report::EmbeddingProvenance,
@@ -119,7 +119,7 @@ fn embed_corpus(
 /// the I/O error with a `CoreError::Embedding` — if the cache
 /// directory cannot be created the whole pass is degraded.
 fn open_cache(scan_root: &Path, spec: &EmbeddingSpec) -> Result<EmbeddingCache, CoreError> {
-    let base = scan_root.join(DEFAULT_CACHE_DIR_NAME);
+    let base = crate::paths::cache_dir(scan_root);
     EmbeddingCache::open(&base, spec).map_err(|source| CoreError::Embedding {
         message: format!("open embedding cache: {source}"),
     })

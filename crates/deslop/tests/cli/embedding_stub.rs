@@ -177,7 +177,7 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
         server.endpoint(),
     )?;
     let cache_dir = scan_root
-        .join(".deslop-cache")
+        .join(".deslop/cache")
         .join("embeddings")
         .join("ollama")
         .join("nomic-embed-text");

@@ -16,10 +16,6 @@ use blake3::Hasher;
 
 use crate::embedding::provider::EmbeddingSpec;
 
-/// Default cache root relative to the analysis root. Surfaced so
-/// callers can log the chosen path.
-pub const DEFAULT_CACHE_DIR_NAME: &str = ".deslop-cache";
-
 /// Cache layout:
 ///
 /// ```text
@@ -42,7 +38,7 @@ pub struct EmbeddingCache {
 
 impl EmbeddingCache {
     /// Opens (or creates) the cache directory for `spec` under
-    /// `base`. `base` is typically `<scan_root>/.deslop-cache`.
+    /// `base`. `base` is [`crate::paths::cache_dir`] of the scan root.
     ///
     /// # Errors
     ///

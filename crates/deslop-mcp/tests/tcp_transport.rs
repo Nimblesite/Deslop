@@ -2,7 +2,7 @@
 //! [MCP-IPC-DISCOVERY]).
 //!
 //! Spawns the real `deslop-lsp` with `--ipc-transport tcp`, waits for
-//! the `.deslop-cache/deslop.port` discovery record, then drives the
+//! the `.deslop/cache/deslop.port` discovery record, then drives the
 //! real `deslop-mcp` over stdio. Every assertion exercises the exact
 //! code path Windows uses in production — no Unix sockets appear
 //! anywhere in this file, so the suite runs on every platform,
@@ -25,7 +25,7 @@ use common::{
 
 /// Reads and validates the discovery record, returning `(port, token)`.
 fn read_discovery_record(workspace: &std::path::Path) -> Result<(u16, String)> {
-    let port_file = workspace.join(".deslop-cache/deslop.port");
+    let port_file = workspace.join(".deslop/cache/deslop.port");
     let record: Value =
         serde_json::from_slice(&fs::read(&port_file).context("read discovery record")?)
             .context("parse discovery record")?;
@@ -71,10 +71,10 @@ fn mcp_tools_work_over_tcp_transport() -> Result<()> {
     let lsp = spawn_lsp_with_args(workspace.path(), &["--ipc-transport", "tcp"])?;
     let _lsp_guard = ChildKillOnDrop(lsp);
 
-    let port_file = workspace.path().join(".deslop-cache/deslop.port");
+    let port_file = workspace.path().join(".deslop/cache/deslop.port");
     wait_for_path(&port_file, SOCKET_TIMEOUT).context("wait for discovery record")?;
     ensure!(
-        !workspace.path().join(".deslop-cache/deslop.sock").exists(),
+        !workspace.path().join(".deslop/cache/deslop.sock").exists(),
         "TCP transport must not create a Unix socket"
     );
     let _record = read_discovery_record(workspace.path())?;
@@ -132,7 +132,7 @@ fn tcp_token_gates_the_connection() -> Result<()> {
     let workspace = copied_fixture()?;
     let lsp = spawn_lsp_with_args(workspace.path(), &["--ipc-transport", "tcp"])?;
     let _lsp_guard = ChildKillOnDrop(lsp);
-    let port_file = workspace.path().join(".deslop-cache/deslop.port");
+    let port_file = workspace.path().join(".deslop/cache/deslop.port");
     wait_for_path(&port_file, SOCKET_TIMEOUT).context("wait for discovery record")?;
     let (port, token) = read_discovery_record(workspace.path())?;
 
@@ -164,7 +164,7 @@ fn tcp_token_gates_the_connection() -> Result<()> {
 #[test]
 fn stale_discovery_record_reports_lsp_not_running() -> Result<()> {
     let workspace = copied_fixture()?;
-    let cache_dir = workspace.path().join(".deslop-cache");
+    let cache_dir = workspace.path().join(".deslop/cache");
     fs::create_dir_all(&cache_dir)?;
     // Reserve a port the OS will not immediately reuse, then free it so
     // nothing is listening when MCP dials.

@@ -3,13 +3,13 @@
 //!
 //! Two transports carry the same line-delimited JSON-RPC protocol:
 //!
-//! - **Unix domain socket** `.deslop-cache/deslop.sock` — the default
+//! - **Unix domain socket** `.deslop/cache/deslop.sock` — the default
 //!   wherever Unix sockets exist. Behaviour is unchanged from the
 //!   original [LIVE-IPC-SOCKET] design.
 //! - **TCP loopback** `127.0.0.1:<os-assigned port>` — the default on
 //!   Windows (no Unix sockets) and opt-in elsewhere via
 //!   `deslop-lsp --ipc-transport tcp`. The bound port and a
-//!   per-session secret are published in `.deslop-cache/deslop.port`
+//!   per-session secret are published in `.deslop/cache/deslop.port`
 //!   ([`IpcEndpointFile`]). Clients present the secret as the first
 //!   line of every connection, so the analysis server stays closed to
 //!   other local processes and a stale discovery record colliding with
@@ -27,27 +27,23 @@ use std::{
 
 pub use crate::wire_generated::IpcEndpointFile;
 
-/// File name of the Unix-domain IPC socket under `.deslop-cache`.
+/// File name of the Unix-domain IPC socket under the cache directory.
 pub const IPC_SOCKET_FILE_NAME: &str = "deslop.sock";
 
-/// File name of the TCP endpoint discovery record under `.deslop-cache`.
+/// File name of the TCP endpoint discovery record under the cache
+/// directory.
 pub const IPC_PORT_FILE_NAME: &str = "deslop.port";
 
 /// Absolute path of the Unix-domain socket for `root`.
 #[must_use]
 pub fn socket_path(root: &Path) -> PathBuf {
-    cache_dir(root).join(IPC_SOCKET_FILE_NAME)
+    crate::paths::cache_dir(root).join(IPC_SOCKET_FILE_NAME)
 }
 
 /// Absolute path of the TCP endpoint discovery record for `root`.
 #[must_use]
 pub fn port_file_path(root: &Path) -> PathBuf {
-    cache_dir(root).join(IPC_PORT_FILE_NAME)
-}
-
-/// Workspace cache directory hosting both IPC endpoint artifacts.
-fn cache_dir(root: &Path) -> PathBuf {
-    root.join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME)
+    crate::paths::cache_dir(root).join(IPC_PORT_FILE_NAME)
 }
 
 /// Which transport the IPC server binds ([LIVE-IPC-TCP]).
@@ -100,7 +96,7 @@ pub struct IpcConnection {
 }
 
 impl IpcServerListener {
-    /// Binds `transport` under `root`, creating `.deslop-cache`,
+    /// Binds `transport` under `root`, creating `.deslop/cache`,
     /// clearing stale endpoint artifacts of both transports, and
     /// publishing the TCP discovery record when applicable.
     ///
@@ -111,7 +107,7 @@ impl IpcServerListener {
     /// [`IpcMode::Unix`] on a platform without Unix sockets fails
     /// with [`std::io::ErrorKind::Unsupported`].
     pub fn bind(root: &Path, transport: IpcMode) -> std::io::Result<Self> {
-        std::fs::create_dir_all(cache_dir(root))?;
+        std::fs::create_dir_all(crate::paths::cache_dir(root))?;
         match transport {
             IpcMode::Unix => bind_unix(root),
             IpcMode::Tcp => bind_tcp(root),

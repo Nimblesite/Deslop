@@ -41,9 +41,9 @@ flowchart LR
 
     CliProc(["deslop CLI process\n(one-shot batch)"])
 
-    StateFile[(".deslop-cache/live-report.json")]
-    IpcSocket[(".deslop-cache/deslop.sock\nor .deslop-cache/deslop.port")]
-    DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
+    StateFile[(".deslop/cache/live-report.json")]
+    IpcSocket[(".deslop/cache/deslop.sock\nor .deslop/cache/deslop.port")]
+    DiskCache[(".deslop/cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
     Ollama[(Ollama)]
 

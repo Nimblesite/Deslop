@@ -1,6 +1,6 @@
 export const CORE_TYPE_CONFIG = {
   IpcEndpointFile: {
-    docs: "On-disk discovery record for the TCP loopback IPC transport ([LIVE-IPC-TCP]). Written to `.deslop-cache/deslop.port` by deslop-lsp when TCP carries the IPC protocol (default on Windows, opt-in elsewhere via `--ipc-transport tcp`); read by deslop-mcp to locate and authenticate against the live server ([MCP-IPC-DISCOVERY]).",
+    docs: "On-disk discovery record for the TCP loopback IPC transport ([LIVE-IPC-TCP]). Written to `.deslop/cache/deslop.port` by deslop-lsp when TCP carries the IPC protocol (default on Windows, opt-in elsewhere via `--ipc-transport tcp`); read by deslop-mcp to locate and authenticate against the live server ([MCP-IPC-DISCOVERY]).",
     derives: ["Debug", "Clone", "Serialize", "Deserialize"],
     skipTs: true,
     fieldOverrides: { port: "u16" },
@@ -103,7 +103,7 @@ export const CORE_TYPE_CONFIG = {
       languages: "Languages with registered parsers in the session.",
       embedding_provenance: "Currently-active embedding provenance, if any.",
       exclusion_config_path: "Optional explicit exclusion-config path.",
-      cache_root: "Cache root (`<workspace>/.deslop-cache`).",
+      cache_root: "Cache root (`<workspace>/.deslop/cache`).",
       incremental: "Whether the session was created with the incremental cache on.",
     },
   },

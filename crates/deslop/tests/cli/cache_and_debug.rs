@@ -84,7 +84,7 @@ fn incremental_cache_hits_on_second_run() -> Result<()> {
         first_json.contains("\"misses\": 2"),
         "first run must register two misses: {first_json}"
     );
-    let cache_dir = scan_root.join(".deslop-cache").join("fingerprints");
+    let cache_dir = scan_root.join(".deslop/cache").join("fingerprints");
     assert!(
         cache_dir.is_dir(),
         "fingerprint cache directory missing: {}",
@@ -136,7 +136,7 @@ fn default_run_skips_the_cache() -> Result<()> {
     );
     assert!(
         !scan_root
-            .join(".deslop-cache")
+            .join(".deslop/cache")
             .join("fingerprints")
             .exists(),
         "default run must not populate the fingerprint cache",
@@ -153,7 +153,7 @@ fn corrupt_cache_entry_degrades_to_miss() -> Result<()> {
     let scan_root = tmp.path().join("src");
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     let _first_json = run_incremental_pass(&scan_root, &tmp.path().join("first"))?;
-    let fingerprints_root = scan_root.join(".deslop-cache").join("fingerprints");
+    let fingerprints_root = scan_root.join(".deslop/cache").join("fingerprints");
     for language_dir in fs::read_dir(&fingerprints_root)? {
         let language_path = language_dir?.path();
         for version_dir in fs::read_dir(&language_path)? {
@@ -211,7 +211,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
         let _bytes = fs::copy(entry.path(), scan_root.join(entry.file_name()))?;
     }
     let locked_dir = scan_root
-        .join(".deslop-cache")
+        .join(".deslop/cache")
         .join("fingerprints")
         .join("csharp")
         .join(env!("CARGO_PKG_VERSION"))

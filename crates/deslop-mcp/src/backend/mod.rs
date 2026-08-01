@@ -3,7 +3,7 @@
 //! The MCP server is a transport adapter; the backend holds no analysis
 //! state of its own. This file ships one concrete implementation,
 //! [`LiveBackend`], which delegates every read and compute call to the
-//! running LSP via the `.deslop-cache/deslop.sock` Unix socket — the
+//! running LSP via the `.deslop/cache/deslop.sock` Unix socket — the
 //! LSP's in-memory `latest_report` is the single source of truth.
 //! ([MCP-WHY-LIVE], [MCP-IPC-CLIENT], [MCP-CAPABILITIES]).
 

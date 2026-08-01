@@ -68,13 +68,18 @@ Grab the per-platform archive from the [Releases page](/releases/) or the [lates
 deslop .
 ```
 
-That scans the current directory, writes three reports, and prints the top clusters to your terminal:
+That scans the current directory, writes three reports, and prints the top clusters to your terminal. Everything Deslop writes goes into one `.deslop/` directory at the root of the scanned project — add `.deslop/` to your `.gitignore` and you are done:
 
 ```
-deslop-report.json   # canonical, agent-consumable
-deslop-report.txt    # line-oriented plain text
-deslop-report.html   # standalone, human-readable
+.deslop/
+  deslop-report.json   # canonical, agent-consumable
+  deslop-report.txt    # line-oriented plain text
+  deslop-report.html   # standalone, human-readable
+  logs/                # timestamped run logs
+  cache/               # fingerprints and embeddings; safe to delete
 ```
+
+`--output <prefix>` sends the reports (and their logs) somewhere else instead.
 
 ## Tune the threshold
 

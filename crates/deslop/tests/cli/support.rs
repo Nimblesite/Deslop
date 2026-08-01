@@ -56,11 +56,18 @@ pub(crate) fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Collects every `deslop-*.log` file sitting in `dir`. The default
-/// logging path writes a timestamped file next to the report; tests
-/// need to locate it without hardcoding the stamp.
-pub(crate) fn find_timestamped_logs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let matches = fs::read_dir(dir)?
+/// Collects every `deslop-*.log` file the CLI wrote for reports based
+/// in `report_dir`. Logs land in that directory's `logs/` subdirectory
+/// ([OUTPUT-DIR]); tests need to locate them without hardcoding the
+/// timestamp. An absent `logs/` means no log file was written — exactly
+/// what `--log-to-console` must produce — so it yields an empty vec
+/// instead of an error.
+pub(crate) fn find_timestamped_logs(report_dir: &Path) -> Result<Vec<PathBuf>> {
+    let logs_dir = report_dir.join("logs");
+    if !logs_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let matches = fs::read_dir(&logs_dir)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
         .filter(|path| {

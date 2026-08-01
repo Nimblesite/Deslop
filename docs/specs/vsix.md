@@ -426,17 +426,17 @@ The extension posts VS Code notifications sparingly:
 
 ### [VSIX-CACHE-IGNORE] Keeping the analysis cache out of the user's repository
 
-Deslop writes its cache into `<workspace>/.deslop-cache/` — fingerprints, one
+Deslop writes its cache into `<workspace>/.deslop/cache/` — fingerprints, one
 blob per embedded subtree, the live report, and the IPC endpoint records. On a
 large workspace that is hundreds of thousands of files: gh #286 reported 700 MB
 across 150,000+ files, "95% of the files in the repo by count". Deslop's own
-`.gitignore` has carried `.deslop-cache/` since day one, which is precisely why
+`.gitignore` has carried `.deslop/cache/` since day one, which is precisely why
 the pollution was invisible to this project.
 
 On activation the extension offers to fix it, and the consent rule is absolute:
 
 - The prompt is `Ignore deslop files from git?` with `Yes` / `No`.
-- On `Yes`, and only on `Yes`, `.deslop-cache/` is appended to the `.gitignore`
+- On `Yes`, and only on `Yes`, `.deslop/cache/` is appended to the `.gitignore`
   beside the cache, creating the file when absent and preserving every existing
   rule.
 - On `No` — or on dismissal — nothing is written and the answer is recorded in

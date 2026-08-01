@@ -135,7 +135,7 @@ Current CLI behavior is important:
 - The default provider key is `ollama`.
 - `crates/deslop-core/src/embedding/ollama.rs` sets the default endpoint to `http://127.0.0.1:11434` and the default model to `nomic-embed-text`.
 
-When embeddings run, snippets are cached under `.deslop-cache/embeddings/...`; HNSW nearest-neighbour search is implemented in `crates/deslop-core/src/embedding/pairs.rs`. The pair generator uses top-k neighbours and a minimum cosine threshold of 0.80.
+When embeddings run, snippets are cached under `.deslop/cache/embeddings/...`; HNSW nearest-neighbour search is implemented in `crates/deslop-core/src/embedding/pairs.rs`. The pair generator uses top-k neighbours and a minimum cosine threshold of 0.80.
 
 ### 8. Pair fusion and clustering
 
@@ -180,7 +180,7 @@ The JSON report is the canonical output. Text and HTML renderers are derived vie
 
 The same `PipelineSession` owns both full and incremental analysis state. `PipelineSession::update_files` reparses or drops changed files, then reruns signature building, LSH, optional embeddings, pair fusion, clustering, and report rendering over the current in-memory corpus.
 
-On-disk fingerprint caching is opt-in in the CLI. `crates/deslop/src/main.rs` exposes `--incremental`; when it is set, `crates/deslop-core/src/fpcache.rs` stores normalized trees and fingerprints under `.deslop-cache/fingerprints/...` keyed by language, tool version, `min_nodes`, and content hash.
+On-disk fingerprint caching is opt-in in the CLI. `crates/deslop/src/main.rs` exposes `--incremental`; when it is set, `crates/deslop-core/src/fpcache.rs` stores normalized trees and fingerprints under `.deslop/cache/fingerprints/...` keyed by language, tool version, `min_nodes`, and content hash.
 
 Live analysis is implemented under `crates/deslop-core/src/live/`:
 
@@ -192,7 +192,7 @@ Live analysis is implemented under `crates/deslop-core/src/live/`:
 
 The LSP server in `crates/deslop-lsp/src/backend.rs` wraps `LiveService` and exposes diagnostics, hover, code lens, and custom `deslop/*` methods. LSP embeddings start in `EmbeddingMode::Off` unless explicitly configured by the client.
 
-The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and protects filesystem inputs with `crates/deslop-mcp/src/safety.rs::resolve_within_root`. Every read tool — `find-similar`, `top-offenders`, `report-get`, `report-for-file`, and `report-for-range` — is forwarded over the local IPC endpoint to the LSP's live `AnalysisSession`, so every answer runs against the running corpus rather than a stale state file. Unix hosts use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered from `.deslop-cache/deslop.port`. The MCP keeps no on-disk cache of its own; it holds a `report/subscribe` connection to that endpoint and pushes `resources/updated` + `deslop/reportChanged` to its client whenever the LSP broadcasts a report change.
+The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and protects filesystem inputs with `crates/deslop-mcp/src/safety.rs::resolve_within_root`. Every read tool — `find-similar`, `top-offenders`, `report-get`, `report-for-file`, and `report-for-range` — is forwarded over the local IPC endpoint to the LSP's live `AnalysisSession`, so every answer runs against the running corpus rather than a stale state file. Unix hosts use `.deslop/cache/deslop.sock`; Windows uses token-gated TCP loopback discovered from `.deslop/cache/deslop.port`. The MCP keeps no on-disk cache of its own; it holds a `report/subscribe` connection to that endpoint and pushes `resources/updated` + `deslop/reportChanged` to its client whenever the LSP broadcasts a report change.
 
 ## Auditor verification map
 

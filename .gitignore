@@ -93,12 +93,18 @@ site/_site/
 /clients/vscode/dist
 clients/vscode/out/
 
+# [OUTPUT-DIR] Everything Deslop writes for a workspace — reports, logs,
+# fingerprint/embedding caches, the live state file, IPC endpoint artifacts.
+# One directory, one rule. `.deslop.toml` is config, not output, and stays
+# tracked (this pattern is directory-only, so it does not match the file).
+.deslop/
+
+# Pre-[OUTPUT-DIR] cache location. Kept ignored only so that a checkout still
+# holding one — written by an extension build from before the move, which may
+# have a live `deslop.sock` bound inside it — does not show up as ~100 MB of
+# untracked noise. Nothing writes here any more; the directory is safe to
+# delete once no old `deslop-lsp` is running against it.
 .deslop-cache/
-# Test fixtures need their pre-baked state file + embeddings checked in so
-# StateFileBackend has data to serve on a fresh CI checkout. Re-include the
-# directory and its contents.
-!crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
-!crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/**
 
 # typeDiagram-generated IPC model code (source of truth: docs/models/*.td).
 # Per CLAUDE.md the generated wire types must NOT be committed; they are
@@ -116,16 +122,10 @@ clients/vscode/bin/
 
 clients/vscode/media/webview/
 
-# Local deslop runs - never commit
-deslop-*.log
-deslop-report.*
-
-
 test-results/
 
 
 /*.png
-crates/deslop-mcp/tests/fixtures/csharp-mcp/.deslop-cache/
 
 
 clients/jetbrains/buildSrc/build/

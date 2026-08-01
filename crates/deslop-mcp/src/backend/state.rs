@@ -4,11 +4,11 @@
 //!
 //! Single source of truth: the LSP's in-memory `latest_report`
 //! ([LIVE-IPC-SOCKET]). The MCP never touches
-//! `.deslop-cache/live-report.json` — that file is the LSP's private
+//! `.deslop/cache/live-report.json` — that file is the LSP's private
 //! warm-start cache ([LIVE-SEED-CACHE]), not a wire contract. Every
 //! read tool call issues one JSON-RPC request over the published
-//! transport — the Unix socket `.deslop-cache/deslop.sock`, or the
-//! TCP loopback endpoint from `.deslop-cache/deslop.port` on Windows
+//! transport — the Unix socket `.deslop/cache/deslop.sock`, or the
+//! TCP loopback endpoint from `.deslop/cache/deslop.port` on Windows
 //! and under `--ipc-transport tcp` ([LIVE-IPC-TCP],
 //! [MCP-IPC-DISCOVERY]). When no endpoint is live, callers receive
 //! [`BackendError::LspNotRunning`] — there is no fallback pipeline;

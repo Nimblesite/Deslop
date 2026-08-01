@@ -123,7 +123,7 @@ fn run_pipeline(root: &Path, provider: &dyn EmbeddingProvider) -> Result<()> {
 }
 
 fn prime_cache(root: &Path, spec: &EmbeddingSpec, inputs: &[String]) -> Result<()> {
-    let cache = EmbeddingCache::open(&root.join(".deslop-cache"), spec).context("open cache")?;
+    let cache = EmbeddingCache::open(&root.join(".deslop/cache"), spec).context("open cache")?;
     for input in inputs {
         cache
             .store(input, &vector_for(input))

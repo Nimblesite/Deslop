@@ -260,7 +260,7 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
 }
 
 // Implements [FUSION-EMBED-PROVIDER] cache round-trip: the first
-// run populates `.deslop-cache/embeddings/ollama/<model>/<version>/`
+// run populates `.deslop/cache/embeddings/ollama/<model>/<version>/`
 // with one `.bin` per fingerprint; the second run completes in a
 // small fraction of the wall time because every embedding is
 // served from disk. Each Ollama inference call is network-bound
@@ -286,7 +286,7 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     )?;
 
     let cache_root = scan_root
-        .join(".deslop-cache")
+        .join(".deslop/cache")
         .join("embeddings")
         .join("ollama");
     let model_dir = fs::read_dir(&cache_root)?
@@ -372,7 +372,7 @@ fn ollama_provenance_surfaces_in_text_and_html() -> Result<()> {
 }
 
 // Implements [FUSION-EMBED-PROVIDER] × [PIPELINE-INCREMENTAL]: the
-// two caches live side-by-side under `.deslop-cache/` and
+// two caches live side-by-side under `.deslop/cache/` and
 // invalidate independently. The first run populates both
 // (`fingerprints/...` and `embeddings/...`); the second run hits
 // the fingerprint cache for every file AND reuses every embedding

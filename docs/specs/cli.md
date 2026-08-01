@@ -58,7 +58,9 @@ other value is a user error: the CLI exits non-zero before any analysis with
 The canonical JSON report ([pipeline.md §OUTPUT-SCHEMA-JSON](pipeline.md)) is the
 single source of truth; the text and HTML reports are **derived views** rendered
 from the same in-memory `Report`, so the three never drift. A default run writes
-all three (`<base>.json`, `<base>.txt`, `<base>.html`). `--nojson`, `--notext`,
+all three (`<base>.json`, `<base>.txt`, `<base>.html`), where `<base>` defaults to
+`<scan-root>/.deslop/deslop-report` ([pipeline.md §OUTPUT-DIR](pipeline.md)) and
+`--output <PATH_PREFIX>` overrides it. `--nojson`, `--notext`,
 and `--nohtml` suppress individual formats; suppressing all three is rejected as
 an error (a silent run is never useful). `--from-report <file>` skips analysis
 entirely and re-renders the derived text and HTML straight from an existing
@@ -137,11 +139,13 @@ precedence (both still win), and above the automatic TTY probe.
 
 ### [UX-LOG-CONSOLE] `--log-to-console`
 By default `deslop` keeps stderr human-readable: tracing events go to a
-timestamped `deslop-<unix-seconds>.log` file in the report directory, and stderr
-carries only the preamble and summary. `--log-to-console` reverses this — tracing
-events stream to stderr (interleaved with the summary) and no log file is
-written. This is the diagnostic mode for piping logs straight into a terminal or
-a parent process.
+timestamped `deslop-<unix-seconds>.log` file in the report directory's `logs/`
+subdirectory — `<scan-root>/.deslop/logs/` for a default run
+([pipeline.md §OUTPUT-DIR](pipeline.md)) — and stderr carries only the preamble
+and summary. `--log-to-console` reverses this — tracing events stream to stderr
+(interleaved with the summary) and no log file is written, and no `logs/`
+directory is created. This is the diagnostic mode for piping logs straight into a
+terminal or a parent process.
 
 ### [UX-LOG-LEVEL] `--log-level`
 `--log-level <LEVEL>` sets the minimum tracing severity emitted to whichever sink

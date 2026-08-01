@@ -2,7 +2,7 @@
 //! ([MCP-WHY-LIVE], [MCP-IPC-CLIENT]).
 //!
 //! Spawns the real `deslop-lsp` binary, waits for its IPC socket at
-//! `.deslop-cache/deslop.sock`, then spawns `deslop-mcp` against the
+//! `.deslop/cache/deslop.sock`, then spawns `deslop-mcp` against the
 //! same workspace and calls `find-similar` over the MCP wire. The
 //! call traverses MCP → IPC socket → LSP → live analysis → IPC reply
 //! → MCP response — the same chain agents will hit in production.

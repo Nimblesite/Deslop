@@ -232,7 +232,7 @@ structural_only = "ignore"
 | `--log-to-console` | 关 | 将日志发往 stderr，而非带时间戳的 `deslop-<timestamp>.log` 文件。 |
 | `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`。被 `RUST_LOG` 覆盖。 |
 | `--no-color` | 关 | 关闭 stderr 前导与摘要中的颜色。 |
-| `--incremental` | 关 | 启用 `<root>/.deslop-cache/` 下的磁盘指纹缓存。下次运行时未改动的文件会跳过解析。 |
+| `--incremental` | 关 | 启用 `<root>/.deslop/cache/` 下的磁盘指纹缓存。下次运行时未改动的文件会跳过解析。 |
 
 ### 开发与模拟参数
 

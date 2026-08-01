@@ -43,7 +43,7 @@ Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_ha
 
 **Activation.** Enabled with `--incremental` (off by default so read-only checkouts never get mutated). Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
 
-**Layout.** `<root>/.deslop-cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop-cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
+**Layout.** `<root>/.deslop/cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop/cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
 
 **Format.** `u32` magic, then a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint. No serde, no schema drift: the magic + tool-version path segment bracket every format change.
 
@@ -164,7 +164,32 @@ Top level:
 
 `--from-report <file.json>` skips analysis and re-renders the text + HTML views from a canonical JSON report. Keeps the rendering pipeline testable in isolation and makes re-formatting a cached report free.
 
-The default invocation writes all three formats to disk (`deslop-report.{json,txt,html}` in CWD, or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+The default invocation writes all three formats to disk (`.deslop/deslop-report.{json,txt,html}` under the scan root per [OUTPUT-DIR], or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+
+### [OUTPUT-DIR] Workspace output directory
+Everything Deslop writes for a scanned workspace lands under a single `.deslop/` directory at the **scan root**, so a user has exactly one path to gitignore, inspect, or delete, and the three surfaces never disagree about where a workspace's artefacts live:
+
+```text
+<scan-root>/
+  .deslop.toml                     # config — user-authored, tracked, NOT output
+  .deslop/                         # everything Deslop writes
+    deslop-report.{json,txt,html}  # rendered reports ([OUTPUT-SCHEMA-JSON])
+    deslop-report.delta.json       # generation delta, when `--rerun-touch` ran ([LIVE-DELTA])
+    logs/deslop-<unix-seconds>.log # tracing sink ([UX-LOG-CONSOLE])
+    cache/                         # derived state — safe to delete, always rebuildable
+      fingerprints/                # [PIPELINE-INCREMENTAL]
+      embeddings/                  # [FUSION-EMBED-PROVIDER]
+      live-report.json             # [LIVE-STATE-FILE]
+      deslop.sock deslop.port      # [LIVE-IPC-SOCKET], [LIVE-IPC-TCP]
+```
+
+`deslop-core::paths` is the single source of truth for this layout; the CLI, LSP, and MCP all resolve through it rather than joining path literals of their own. Three consequences are normative:
+
+- **The scan root, not the working directory, anchors the default.** `deslop /other/repo` writes into `/other/repo/.deslop/`, matching where the LSP and MCP already read and write for that workspace. A CLI run therefore never litters the directory the operator happened to be standing in.
+- **`--output <prefix>` overrides the report base, and the logs follow it** into `<prefix-dir>/logs/`. It is the only knob: the cache stays at `<scan-root>/.deslop/cache` because the LSP and MCP must locate it from the scan root alone, with no flags to consult.
+- **Logs get their own subdirectory.** Report file names are fixed and few; log file names are timestamped and accumulate, so they never bury the three files a user actually opens.
+
+`.deslop/` is dot-prefixed, so the discovery pass's hidden-directory prune keeps Deslop's own artefacts out of the corpus it analyses. The `.gitignore` entry the VSIX offers to write is the directory-only form `.deslop/` ([VSIX-CACHE-IGNORE]), which leaves the sibling `.deslop.toml` config file tracked.
 
 ### [OUTPUT-HUMAN-HTML] Human-readable HTML mode
 
