@@ -10,7 +10,7 @@ fn run_with_config(config_body: &str) -> Result<String> {
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, config_body)?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--config"])
         .arg(&config)
@@ -138,7 +138,7 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
 fn missing_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let missing = tmp.path().join("does-not-exist.toml");
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .arg("--config")
         .arg(&missing)
@@ -157,7 +157,7 @@ fn invalid_exclude_pattern_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults]\nexclude = [\"[unclosed\"]\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .arg("--config")
         .arg(&config)
@@ -175,7 +175,7 @@ fn malformed_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "not valid toml = = =\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .arg("--config")
         .arg(&config)
@@ -305,7 +305,7 @@ fn default_output_written_to_deslop_dir_under_scan_root() -> Result<()> {
     let _assertion = cmd
         .current_dir(&cwd)
         .arg(&scan_root)
-        .args(["--min-nodes", "8", "--incremental"])
+        .args(["--min-nodes", "8"])
         .assert()
         .success();
     let output_dir = scan_root.join(".deslop");

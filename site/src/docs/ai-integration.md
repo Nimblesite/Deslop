@@ -124,7 +124,7 @@ For a CLI-only loop (CI gates, cold-cache audits, or agents without MCP), the wo
 4. For every cluster above threshold, the agent has three choices: extract to a shared function, reuse the existing implementation, or accept the duplication and annotate why.
 5. Agent re-runs Deslop. The top cluster should be different or smaller.
 
-The incremental cache (`--incremental`) means step 5 only pays the cost of parsing files the agent actually touched — unchanged files skip tree-sitter entirely, so a warm pass stays proportional to the size of the change, not the size of the repo.
+The incremental cache — on by default — means step 5 only pays the cost of parsing files the agent actually touched — unchanged files skip tree-sitter entirely, so a warm pass stays proportional to the size of the change, not the size of the repo.
 
 ## Reading the JSON
 

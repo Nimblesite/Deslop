@@ -78,7 +78,7 @@ Axis-by-axis, the bar we are held to — and the plus-one that wins the category
 
 - **Match:** permissively licensed (we're MIT), scriptable CLI, exit codes suitable for CI gating.
 - **Beat:** ranked worst-first output (PMD CPD dumps unranked), byte-range-addressable occurrences (PMD emits line ranges), deterministic cluster ids, per-cluster signal breakdown, human-readable HTML renderer, exclusion tiers (`exclude` vs `report_hide`). ✅ shipped P2–P4.2.
-- **Category-winning feature:** **`--incremental` fingerprint cache** — PMD CPD reruns from scratch every time.
+- **Category-winning feature:** **the always-on incremental fingerprint cache** — PMD CPD reruns from scratch every time.
 
 #### vs. SonarLint / SonarQube (commercial IDE integration)
 

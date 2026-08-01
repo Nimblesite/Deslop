@@ -387,7 +387,6 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         &[
             "--min-nodes",
             "15",
-            "--incremental",
             "--embeddings",
             "required",
             "--embedding-model",
@@ -416,7 +415,6 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
         &[
             "--min-nodes",
             "15",
-            "--incremental",
             "--embeddings",
             "required",
             "--embedding-model",

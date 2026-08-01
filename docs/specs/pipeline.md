@@ -39,9 +39,18 @@ separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall,
 never changes existing cluster content.
 
 ### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
-Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
+On-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
 
-**Activation.** Enabled with `--incremental` (off by default so read-only checkouts never get mutated). Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
+**Activation.** On by default on every surface. Incremental analysis is a first-class path, not a bolt-on: the LSP runs on it permanently, and a batch CLI run is just "incremental starting from an empty cache". `deslop --no-incremental` opts out for callers that must not write to the tree at all. Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
+
+**[PIPELINE-INCREMENTAL-INVALIDATION] Invalidation is addressing, not bookkeeping.** The cache cannot serve a stale parse, because a stale parse is *unaddressable*: the blob's filename is `blake3(file contents)`, under path segments for language, tool version, and `min_nodes`. Edit a file with nothing watching — an agent writing, a `git checkout`, an editor with the LSP stopped — and its content hash changes, so the lookup lands on a path that does not exist and the file is re-parsed from disk. There is no mtime heuristic, no watcher-maintained index, and no invalidation step that could be skipped or get out of sync.
+
+Two further properties make a cache-on-by-default CLI safe:
+
+- **Corpus membership never comes from the cache.** Every run performs a fresh discovery walk, so files added or deleted while nothing was watching are picked up regardless of cache state. A deleted file's blob is simply orphaned — unused, never consulted.
+- **A warm run and a cold run agree.** Wiping `.deslop/cache/` changes the `cache_stats` counters and nothing else about the report. The cache is an accelerator; the source tree is the only source of truth.
+
+The one artefact that *can* go stale is the live state file `live-report.json` ([LIVE-STATE-FILE]) — a whole-report snapshot, not a content-addressed entry. The CLI never reads it. The LSP seeds from it for instant warm-start and immediately runs a cold pass that replaces it, reporting `Running` until that pass installs ([LIVE-CACHE-SEED]).
 
 **Layout.** `<root>/.deslop/cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop/cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
 
@@ -53,7 +62,7 @@ Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_ha
 - Cache directory unavailable (permissions, read-only fs) → `FingerprintCache::open` fails, the pipeline falls back to the full parse path for the affected language, logs `warn!`, keeps running.
 - Blob write fails (e.g. disk full) → `warn!`, return the in-memory result, pipeline continues.
 
-Zero-zero stats indicate the pass ran without the cache (`--incremental` not passed or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
+Zero-zero stats indicate the pass ran without the cache (`--no-incremental` passed, or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
 
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 `weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
@@ -149,7 +158,7 @@ Top level:
 - `min_nodes: u32` — subtree size floor used for the run.
 - `files_analysed: usize` — count of files actually parsed.
 - `clusters_hidden: usize` — clusters that existed but were suppressed from `clusters` because every occurrence matched a [EXCLUSION-CONFIG] `report_hide` pattern. Surfaces the volume of ignored duplication without leaking the content.
-- `cache_stats: { hits: usize, misses: usize }` — incremental fingerprint-cache telemetry per [PIPELINE-INCREMENTAL]. Both zero when `--incremental` was not passed; otherwise `hits + misses == files_analysed` for files whose language has a registered parser.
+- `cache_stats: { hits: usize, misses: usize }` — incremental fingerprint-cache telemetry per [PIPELINE-INCREMENTAL]. Both zero when `--no-incremental` was passed; otherwise `hits + misses == files_analysed` for files whose language has a registered parser.
 - `metrics: RepoMetrics` — repo-wide duplication totals per [METRICS-REPO]. Always populated; zero when no duplication exists.
 - `schema_doc: &'static str` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy. Shipped via `include_str!` so it cannot drift from the schema.
 - `action_hints: Vec<ActionHint>` — short playbook entries ("high structural + high jaccard → extract shared function", etc.) agents can consult before deciding how to act.

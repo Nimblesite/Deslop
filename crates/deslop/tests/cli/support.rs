@@ -38,6 +38,22 @@ pub(crate) fn deslop_command(scan_root: &Path, output_prefix: &Path) -> Result<C
     Ok(cmd)
 }
 
+/// Builds a command scanning the shared fixture `name`, with the
+/// fingerprint cache disabled.
+///
+/// The cache is on by default ([PIPELINE-INCREMENTAL]) and always lands
+/// in the *scan root* ([OUTPUT-DIR]) — `--output` cannot redirect it,
+/// because the LSP and MCP have to find it from the scan root alone.
+/// A fixture directory is checked into the repo and shared by the whole
+/// suite, so running a test must never write into one. Tests that
+/// actually exercise the cache seed a mutable scan root with
+/// [`seed_scan_root`] instead of reaching for a fixture directly.
+pub(crate) fn fixture_command(name: &str, output_prefix: &Path) -> Result<Command> {
+    let mut cmd = deslop_command(&fixture(name), output_prefix)?;
+    let _cmd = cmd.arg("--no-incremental");
+    Ok(cmd)
+}
+
 /// Appends `.<ext>` to `base` by cloning and replacing the file name.
 pub(crate) fn with_ext(base: &Path, ext: &str) -> PathBuf {
     deslop_test_support::with_ext(base, ext)
@@ -51,6 +67,13 @@ pub(crate) fn seed_scan_root(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
+        // Source files only. A fixture directory can pick up a nested
+        // `.deslop/` output directory ([OUTPUT-DIR]) from a stray run, and
+        // `fs::copy` on a directory fails outright — seeding must not be
+        // hostage to whatever else happens to be sitting there.
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
         let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
     }
     Ok(())

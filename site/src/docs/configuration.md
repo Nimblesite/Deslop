@@ -230,7 +230,7 @@ The hybrid embedding layer is **off by default**; Deslop ships structural and to
 | `--log-to-console` | off | Send logs to stderr instead of a timestamped `deslop-<timestamp>.log` file. |
 | `--log-level <LEVEL>` | `info` | `error` \| `warn` \| `info` \| `debug` \| `trace`. Overridden by `RUST_LOG`. |
 | `--no-color` | off | Disable colour in the stderr preamble and summary. |
-| `--incremental` | off | Enable the on-disk fingerprint cache under `<root>/.deslop/cache/`. Unchanged files skip parsing on the next run. |
+| `--no-incremental` | off | Turn **off** the on-disk fingerprint cache under `<root>/.deslop/cache/`. The cache is on by default, so unchanged files skip parsing on the next run; pass this to leave the scanned tree untouched. |
 
 ### Developer and simulation flags
 

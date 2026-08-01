@@ -180,7 +180,7 @@ The JSON report is the canonical output. Text and HTML renderers are derived vie
 
 The same `PipelineSession` owns both full and incremental analysis state. `PipelineSession::update_files` reparses or drops changed files, then reruns signature building, LSH, optional embeddings, pair fusion, clustering, and report rendering over the current in-memory corpus.
 
-On-disk fingerprint caching is opt-in in the CLI. `crates/deslop/src/main.rs` exposes `--incremental`; when it is set, `crates/deslop-core/src/fpcache.rs` stores normalized trees and fingerprints under `.deslop/cache/fingerprints/...` keyed by language, tool version, `min_nodes`, and content hash.
+On-disk fingerprint caching is on by default in the CLI. `crates/deslop/src/main.rs` exposes `--no-incremental` to turn it off; otherwise `crates/deslop-core/src/fpcache.rs` stores normalized trees and fingerprints under `.deslop/cache/fingerprints/...` keyed by language, tool version, `min_nodes`, and content hash.
 
 Live analysis is implemented under `crates/deslop-core/src/live/`:
 

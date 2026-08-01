@@ -303,7 +303,7 @@ display layer translates them.
 
 | Scenario | Budget |
 |---|---|
-| Cold start, empty cache, 100 K LOC | Same as `--incremental` CLI first-run. |
+| Cold start, empty cache, 100 K LOC | Same as a CLI first-run against an empty cache. |
 | Warm start, warm cache, 100 K LOC | < 2 s to `ready`. |
 | Incremental re-analysis, ≤ 10 changed files | < 500 ms end-to-end. |
 | `report/forFile`, 100 K-LOC report | < 50 ms. |

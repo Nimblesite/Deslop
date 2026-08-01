@@ -181,7 +181,7 @@ JSON 报告是规范输出。文本和 HTML 渲染器是基于该报告的派生
 
 同一个 `PipelineSession` 同时拥有完整分析与增量分析的状态。`PipelineSession::update_files` 重新解析或丢弃发生变化的文件，然后在当前内存语料上重新运行签名构建、LSH、可选嵌入、配对融合、聚簇和报告渲染。
 
-磁盘上的指纹缓存在 CLI 中是可选启用的。`crates/deslop/src/main.rs` 暴露了 `--incremental`；当其被设置时，`crates/deslop-core/src/fpcache.rs` 会以语言、工具版本、`min_nodes` 和内容哈希为键，将归一化树和指纹存储于 `.deslop/cache/fingerprints/...` 下。
+磁盘上的指纹缓存在 CLI 中默认开启。`crates/deslop/src/main.rs` 暴露了 `--no-incremental` 用于关闭它；否则 `crates/deslop-core/src/fpcache.rs` 会以语言、工具版本、`min_nodes` 和内容哈希为键，将归一化树和指纹存储于 `.deslop/cache/fingerprints/...` 下。缓存键即文件内容的哈希，因此在无人监听时被改动的文件必然重新解析——缓存无法提供过期结果。
 
 实时分析在 `crates/deslop-core/src/live/` 下实现：
 

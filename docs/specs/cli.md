@@ -32,10 +32,34 @@ MCP tool form is exposed via the `deslop-mcp` server, not the CLI.
 can discover the tuning knobs without reading source. The help text exits `0`,
 writes to stdout, and must list at minimum the analysis knob (`--min-nodes`), the
 output-format suppressors (`--nojson`, `--notext`, `--nohtml`), the re-render path
-(`--from-report`), config discovery (`--config`), the embedding flags
+(`--from-report`), config discovery (`--config`), the cache opt-out
+(`--no-incremental`), the embedding flags
 (`--embeddings`, `--embedding-provider`, `--embedding-model`,
 `--embedding-endpoint`), and the terminal-UX flags (`--log-to-console`,
 `--log-level`, `--no-color`, `--technical`).
+
+### [CLI-ARG-NO-INCREMENTAL] `--no-incremental` cache opt-out
+The fingerprint cache is **on by default**
+([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md)): a bare `deslop .` populates
+`<scan-root>/.deslop/cache/fingerprints/` and a second run over an unchanged tree
+skips tree-sitter entirely. This matches the LSP, which has always run
+incrementally — a batch run is just "incremental starting from an empty cache".
+Cache invalidation is content-addressed, so a file edited while nothing was
+watching is re-parsed automatically and a warm run can never disagree with a cold
+one ([PIPELINE-INCREMENTAL-INVALIDATION]).
+
+`--no-incremental` turns the *fingerprint* cache off for one run: nothing is read,
+nothing is written, and `cache_stats` reports `{ hits: 0, misses: 0 }`. It exists
+for callers that must not have the scanned tree re-parsed from stored state. It
+does **not** disable the embedding cache ([fusion.md §FUSION-EMBED-PROVIDER](fusion.md)),
+which is a separate layer keyed on provider/model identity — a run with
+`--embeddings` on still writes `.deslop/cache/embeddings/`, because re-paying model
+inference is far more expensive than re-parsing. Pass `--embeddings off` (the
+default) for a run that writes nothing at all. `--no-incremental` is not needed for a
+genuinely read-only checkout — an unwritable cache directory already degrades to a
+full parse with a `warn!` and a complete report. Note that `--output` cannot
+redirect the cache: it always lands in the scan root, because the LSP and MCP must
+locate it from the scan root alone with no flags to consult.
 
 ### [CLI-INVOCATION-VERSION] Version output
 `deslop --version` prints the plain line `deslop <version>` followed by a newline
