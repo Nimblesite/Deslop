@@ -14,8 +14,10 @@
 use std::{fs, path::Path, path::PathBuf};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
+
+mod common;
+use crate::common::deslop_cmd;
 
 /// Path to the `deslop-core` test directory — the actual source of the
 /// false positive reported in issue #58.
@@ -27,13 +29,8 @@ fn deslop_core_tests() -> PathBuf {
 }
 
 fn run_report(tmp: &Path, scan_root: &Path) -> Result<Value> {
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .arg(scan_root)
-        .args(["--embeddings", "off", "--output"])
-        .arg(tmp.join("report"))
-        .assert()
-        .success();
+    let mut cmd = deslop_cmd(scan_root, &tmp.join("report"))?;
+    let _assertion = cmd.args(["--embeddings", "off"]).assert().success();
     let json_path = tmp.join("report.json");
     let body = fs::read_to_string(&json_path)?;
     Ok(serde_json::from_str(&body)?)

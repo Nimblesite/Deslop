@@ -33,12 +33,18 @@ use serde_json::Value;
 mod common;
 use crate::common::*;
 
-/// Runs the CLI against `scan_root` with the deterministic mock Ollama
+/// Runs the CLI against a private copy of `fixture_root` with the
+/// deterministic mock Ollama
 /// wired in via `--embeddings required`, returning the parsed JSON.
-fn run_report(scan_root: &Path) -> Result<Value> {
+fn run_report(fixture_root: &Path) -> Result<Value> {
     let server = MockOllama::spawn()?;
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
+    // `--embeddings required` writes `.deslop/cache/embeddings/` into the
+    // *scan root* ([OUTPUT-DIR]); `--no-incremental` gates only the
+    // fingerprint layer. Scan a copy so the fixture stays pristine.
+    let scan_root = &tmp.path().join("src");
+    seed(fixture_root, scan_root)?;
     let mut cmd = deslop_cmd(scan_root, &output)?;
     let _assertion = cmd
         .args([
