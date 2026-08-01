@@ -164,6 +164,27 @@ async fn inert_paths_never_publish_a_new_generation() -> Result<()> {
     Ok(())
 }
 
+/// Issue #314: duplicate editor/watcher delivery for an unchanged analysed
+/// file must not run the whole-corpus render or publish a new generation.
+#[tokio::test(flavor = "multi_thread")]
+async fn unchanged_analysed_file_does_not_publish_new_generation() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let mut session = live_session(tmp.path())?;
+    let unchanged = tmp.path().join("Alpha.cs");
+    let baseline_generation = session.generation();
+
+    let _delta = session
+        .apply_changes(std::slice::from_ref(&unchanged))
+        .context("apply unchanged analysed file")?;
+
+    assert_eq!(
+        session.generation(),
+        baseline_generation,
+        "unchanged analysed bytes must reuse the current report instead of re-rendering",
+    );
+    Ok(())
+}
+
 /// The control. A fix that simply stopped bumping the generation would pass
 /// the test above and break the entire live loop, so prove the same session
 /// still publishes when an analysed file genuinely changes — and that it does
