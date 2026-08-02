@@ -582,7 +582,7 @@
   "devDependencies": {
     "@playwright/test": "^1.62.0",
     "@types/mocha": "^10.0.9",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.1.2",
     "@types/vscode": "^1.125.0",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
