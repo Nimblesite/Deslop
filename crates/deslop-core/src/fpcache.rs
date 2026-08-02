@@ -39,7 +39,7 @@ const MAGIC: u32 = 0xC0DE_D17E;
 const TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Fingerprint cache directory relative to the analysis root. Shares
-/// `.deslop-cache/` with the embedding cache; a subdirectory
+/// [`crate::paths::cache_dir`] with the embedding cache; a subdirectory
 /// per-subsystem keeps the layout auditable.
 const FINGERPRINT_DIR: &str = "fingerprints";
 

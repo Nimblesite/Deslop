@@ -124,7 +124,7 @@ Deslop 使用一个实时引擎。LSP 拥有分析会话并监视工作区。MCP
 
 **外部 MCP 客户端使用 VSIX 打包的二进制文件。** Claude Code、Claude Desktop、Cursor、Continue、Codex 以及其他外部 MCP 客户端，都应当指向已安装的 VS Code 扩展内部打包的 `deslop-mcp` 二进制文件——除非用户是通过 Homebrew 或 Scoop 安装的 CLI。这样可以避免本地的 `target/release` 二进制文件与扩展的线协议契约（wire contract）发生漂移。配置步骤见 [AI 集成](/zh/docs/ai-integration/)。
 
-**Windows 不再需要 Unix 套接字。** 在类 Unix 系统上，LSP 暴露一个本地的 Unix 套接字。在 Windows 上，Deslop 则使用一个由令牌把关的 TCP 回环端点，其信息发布在 `.deslop-cache/deslop.port` 中，这样 MCP 和 LSP 依然讲同一套 JSON-RPC 协议，而无需假装 Windows 拥有 Unix 套接字。其实现描述见实时规范中的 [TCP 回环传输](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/live.md#live-ipc-tcp)。
+**Windows 不再需要 Unix 套接字。** 在类 Unix 系统上，LSP 暴露一个本地的 Unix 套接字。在 Windows 上，Deslop 则使用一个由令牌把关的 TCP 回环端点，其信息发布在 `.deslop/cache/deslop.port` 中，这样 MCP 和 LSP 依然讲同一套 JSON-RPC 协议，而无需假装 Windows 拥有 Unix 套接字。其实现描述见实时规范中的 [TCP 回环传输](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/live.md#live-ipc-tcp)。
 
 **编辑器和智能体共享同一份报告。** VSIX 通过编辑器 UI 呈现各个簇，而 MCP 工具则把同样的实时数据暴露给智能体。[VS Code 簇面板文档](/zh/docs/vscode-cluster-panel/)介绍了面向人类的一侧。MCP 工具则覆盖面向智能体的一侧。重要的特性在于：两者读取的是同一个引擎。
 

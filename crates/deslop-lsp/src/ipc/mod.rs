@@ -3,8 +3,8 @@
 //!
 //! The LSP exposes the live in-memory analysis state to the MCP server
 //! through [`deslop_core::live::transport`]: a Unix domain socket at
-//! `.deslop-cache/deslop.sock` by default, or TCP loopback (published
-//! in `.deslop-cache/deslop.port`) on Windows and under
+//! `.deslop/cache/deslop.sock` by default, or TCP loopback (published
+//! in `.deslop/cache/deslop.port`) on Windows and under
 //! `--ipc-transport tcp` ([MCP-IPC-CLIENT]). No on-disk cache is
 //! involved on the read path. Methods served:
 //!
@@ -40,7 +40,7 @@ use deslop_core::live::{
 use serde_json::{json, Value};
 use tokio::{runtime::Handle, sync::broadcast};
 
-/// IPC server bound under the workspace's `.deslop-cache`.
+/// IPC server bound under the workspace's `.deslop/cache`.
 ///
 /// Dropping this value removes the endpoint artifacts (socket file or
 /// TCP discovery record) from the filesystem.

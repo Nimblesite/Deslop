@@ -75,12 +75,22 @@ function stubPrompt(answer: string | undefined): {
 
 suite("cache gitignore consent", () => {
   test("isCacheIgnored matches both spellings and ignores comments", () => {
-    assert.equal(isCacheIgnored(".deslop-cache/\n"), true);
-    assert.equal(isCacheIgnored("node_modules\n.deslop-cache\ntarget\n"), true);
-    assert.equal(isCacheIgnored("  .deslop-cache/  \n"), true);
-    assert.equal(isCacheIgnored("# .deslop-cache/\n"), false);
+    assert.equal(isCacheIgnored(".deslop/\n"), true);
+    assert.equal(isCacheIgnored("node_modules\n.deslop\ntarget\n"), true);
+    assert.equal(isCacheIgnored("  .deslop/  \n"), true);
+    assert.equal(isCacheIgnored("# .deslop/\n"), false);
     assert.equal(isCacheIgnored("node_modules\ntarget\n"), false);
     assert.equal(isCacheIgnored(""), false);
+    assert.equal(
+      isCacheIgnored(".deslop-cache/\n"),
+      false,
+      "the pre-[OUTPUT-DIR] entry no longer covers what Deslop writes",
+    );
+    assert.equal(
+      isCacheIgnored(".deslop.toml\n"),
+      false,
+      "ignoring the config file is not ignoring the output directory",
+    );
   });
 
   test("withCacheIgnored preserves content and newline hygiene", () => {
@@ -105,7 +115,12 @@ suite("cache gitignore consent", () => {
   test("needsCacheIgnore tracks the .gitignore contents", () => {
     assert.equal(needsCacheIgnore(repo()), true, "no .gitignore at all");
     assert.equal(needsCacheIgnore(repo("target\n")), true, "unrelated entries");
-    assert.equal(needsCacheIgnore(repo(".deslop-cache/\n")), false, "already ignored");
+    assert.equal(needsCacheIgnore(repo(".deslop/\n")), false, "already ignored");
+    assert.equal(
+      needsCacheIgnore(repo(".deslop-cache/\n")),
+      true,
+      "a repo carrying only the old cache entry still needs .deslop/ ignored",
+    );
   });
 
   test("needsCacheIgnore sees the repository from a workspace subfolder", () => {

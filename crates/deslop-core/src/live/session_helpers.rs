@@ -258,10 +258,10 @@ pub(super) fn atomic_write_json(dir: &Path, bytes: &[u8]) -> std::io::Result<()>
 }
 
 /// [LIVE-SEED-CACHE] Atomically writes `report` to
-/// `{root}/.deslop-cache/live-report.json`. Best-effort: failures are
+/// `{root}/.deslop/cache/live-report.json`. Best-effort: failures are
 /// logged at `warn` and never propagated.
 pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) {
-    let cache_dir = root.join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+    let cache_dir = crate::paths::cache_dir(root);
     if let Err(error) = std::fs::create_dir_all(&cache_dir) {
         tracing::warn!(%error, "state_file_dir_create_failed");
         return;
@@ -278,13 +278,11 @@ pub(super) fn persist_state_file(root: &Path, report: &Report, generation: u64) 
     }
 }
 
-/// [LIVE-CACHE-SEED] Best-effort load of `{root}/.deslop-cache/live-report.json`.
+/// [LIVE-CACHE-SEED] Best-effort load of `{root}/.deslop/cache/live-report.json`.
 /// Returns `None` for a missing file (cold start) and for any parse or
 /// I/O failure (the caller falls back to running a fresh full pass).
 pub(super) fn try_load_cached_report(root: &Path) -> Option<Report> {
-    let path = root
-        .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME)
-        .join(STATE_FILE_NAME);
+    let path = crate::paths::cache_dir(root).join(STATE_FILE_NAME);
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -358,9 +356,7 @@ mod tests {
     fn incompatible_cached_report_is_deleted_when_cache_seed_fails(
     ) -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
-        let cache_dir = temp
-            .path()
-            .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME);
+        let cache_dir = crate::paths::cache_dir(temp.path());
         std::fs::create_dir_all(&cache_dir)?;
         let state_path = cache_dir.join(super::STATE_FILE_NAME);
         std::fs::write(&state_path, br#"{"tool_version":"stale","clusters":[]}"#)?;

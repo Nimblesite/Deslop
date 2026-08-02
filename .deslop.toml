@@ -1,7 +1,7 @@
 # agent-pmo:f87d349
 [defaults]
 exclude = [
-  "**/.deslop-cache/**",
+  "**/.deslop/**",
   "**/.vscode-test/**",
   "**/__generated__/**",
   "**/bin/**",

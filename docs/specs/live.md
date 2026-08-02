@@ -10,7 +10,7 @@ The `live` module lives **inside `deslop-core`**, gated behind the `live` cargo 
 
 - `crates/deslop-lsp` — JSON-RPC over stdio. Owns the `AnalysisSession`, the watcher, the scheduler, and all pipeline work. Writes the warm-start seed cache and exposes the IPC endpoint.
 
-`crates/deslop-mcp` does **not** link the `live` feature. It is a pure transport adapter that delegates **every** read and compute call to the running LSP via the IPC socket ([LIVE-IPC-SOCKET]). It never reads `.deslop-cache/live-report.json` — that file is the LSP's private warm-start cache ([LIVE-SEED-CACHE]), not a wire contract.
+`crates/deslop-mcp` does **not** link the `live` feature. It is a pure transport adapter that delegates **every** read and compute call to the running LSP via the IPC socket ([LIVE-IPC-SOCKET]). It never reads `.deslop/cache/live-report.json` — that file is the LSP's private warm-start cache ([LIVE-SEED-CACHE]), not a wire contract.
 
 `crates/deslop` (CLI) does not link `live` either — zero watcher, zero background threads.
 
@@ -40,9 +40,9 @@ flowchart LR
 
     CliProc(["deslop CLI process\n(one-shot batch)"])
 
-    StateFile[(".deslop-cache/live-report.json")]
-    IpcSocket[(".deslop-cache/deslop.sock\nor .deslop-cache/deslop.port")]
-    DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
+    StateFile[(".deslop/cache/live-report.json")]
+    IpcSocket[(".deslop/cache/deslop.sock\nor .deslop/cache/deslop.port")]
+    DiskCache[(".deslop/cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
     Ollama[(Ollama /api/embed)]
 
@@ -78,15 +78,15 @@ process.
 
 One `AnalysisSession` per workspace root, owned by `deslop-lsp`. On `initialize`:
 
-1. Opens `.deslop-cache/` for the root (fingerprint cache + embedding cache).
+1. Opens `.deslop/cache/` for the root (fingerprint cache + embedding cache).
 2. Runs a full initial analysis (warm cache on second launch → cheap).
-3. Writes the initial report to `.deslop-cache/live-report.json` ([LIVE-SEED-CACHE]) so the next LSP startup can warm-start.
+3. Writes the initial report to `.deslop/cache/live-report.json` ([LIVE-SEED-CACHE]) so the next LSP startup can warm-start.
 4. Starts the IPC socket ([LIVE-IPC-SOCKET]) — the read surface for the MCP.
 5. Starts the file watcher ([LIVE-WATCHER]).
 6. Starts the re-analysis scheduler ([LIVE-SCHEDULER]).
 7. Sends `ready` with the initial `Report` to the LSP client.
 
-Shutdown: stop accepting new edits, finish the current pass, flush caches, remove the IPC socket, exit. The session never writes outside `.deslop-cache/` and never modifies source files.
+Shutdown: stop accepting new edits, finish the current pass, flush caches, remove the IPC socket, exit. The session never writes outside `.deslop/cache/` and never modifies source files.
 
 ### [LIVE-PROFILING] CPU repro evidence
 
@@ -126,7 +126,7 @@ pub struct AnalysisSession {
 After the **initial** full pipeline pass and after every **cold-pass install** (the post-cache-seed background refresh), the LSP writes the current report to:
 
 ```
-{workspace_root}/.deslop-cache/live-report.json
+{workspace_root}/.deslop/cache/live-report.json
 ```
 
 **Write is atomic:** write to `live-report.json.tmp`, then `rename()`. Readers always see a complete file or the previous version — never a partial write.
@@ -138,7 +138,7 @@ After the **initial** full pipeline pass and after every **cold-pass install** (
 **Not written on:** per-keystroke incremental updates ([LIVE-SCHEDULER]) and embedding refresh commits — those used to spam the disk and contributed nothing to startup latency. The MCP no longer reads this file ([MCP-IPC-CLIENT]); it gets live state via the IPC socket. Stale-cache reads cannot leak hidden clusters because no one reads the cache except the LSP itself, post-restart, before its first cold pass overwrites it.
 
 ### [LIVE-STATE-FILE] State file (alias)
-`[LIVE-STATE-FILE]` is an alias for the `.deslop-cache/live-report.json`
+`[LIVE-STATE-FILE]` is an alias for the `.deslop/cache/live-report.json`
 warm-start cache specified in full by [LIVE-SEED-CACHE]: written atomically on
 the initial full pass and on each cold-pass install, holding canonical `Report`
 JSON. It is the LSP's private startup cache and the on-disk path named in the
@@ -150,14 +150,14 @@ tag for new references.
 
 The LSP exposes its in-memory `latest_report` directly through a local IPC endpoint. **This is the only read path used by the MCP.** No on-disk cache is consulted on the read side.
 
-- **Unix/macOS:** `{workspace_root}/.deslop-cache/deslop.sock` (Unix domain socket) — the default transport.
+- **Unix/macOS:** `{workspace_root}/.deslop/cache/deslop.sock` (Unix domain socket) — the default transport.
 - **Windows:** TCP loopback per [LIVE-IPC-TCP] — Windows has no Unix sockets, so `deslop-lsp` binds `127.0.0.1` and publishes the endpoint in a discovery record.
 
 The LSP creates the endpoint on startup and removes its on-disk artifacts on clean shutdown. The MCP connects on demand (lazy, not persistent). Protocol: line-delimited JSON-RPC 2.0 on both transports.
 
 ### [LIVE-IPC-TCP] TCP loopback transport
 
-Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is started with `--ipc-transport tcp` on any platform — the IPC server binds an OS-assigned TCP port on `127.0.0.1` and publishes a **discovery record** at `{workspace_root}/.deslop-cache/deslop.port`. The record is the `IpcEndpointFile` wire model (typeDiagram, `docs/models/live-ipc.td`): `{ "port": <u16>, "token": "<64-hex>" }`.
+Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is started with `--ipc-transport tcp` on any platform — the IPC server binds an OS-assigned TCP port on `127.0.0.1` and publishes a **discovery record** at `{workspace_root}/.deslop/cache/deslop.port`. The record is the `IpcEndpointFile` wire model (typeDiagram, `docs/models/live-ipc.td`): `{ "port": <u16>, "token": "<64-hex>" }`.
 
 - **Token gate.** The token is fresh per LSP session (128 bits of OS entropy, hex-encoded). A TCP client must present it as the **first line** of every connection, before any JSON-RPC; the server drops mismatching connections without a response. This keeps the analysis server closed to other local processes and turns a stale record colliding with a foreign listener into a clean failure instead of a garbage exchange. Unix-socket connections present no token — the filesystem already permission-guards the socket (the record itself is written `0600` where Unix permissions exist).
 - **Same protocol.** Past the token line, both transports carry identical line-delimited JSON-RPC ([LIVE-IPC-SOCKET] method table applies verbatim).
@@ -166,7 +166,7 @@ Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is sta
 
 ### [LIVE-WATCHER] File watcher
 
-**The watcher runs only in `deslop-lsp`.** `deslop-mcp` watches only `.deslop-cache/live-report.json` (a single file) for change notifications — it never watches the workspace.
+**The watcher runs only in `deslop-lsp`.** `deslop-mcp` watches only `.deslop/cache/live-report.json` (a single file) for change notifications — it never watches the workspace.
 
 Use the `notify` crate (cross-platform, zero C deps). Watch the workspace root recursively, filtered by `LanguageParser::file_extensions()`. Debounce: **250 ms** of quiet after the last event, capped at **2 s** total accumulation so a formatter burst doesn't starve the scheduler.
 
@@ -194,9 +194,10 @@ Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the b
 
 A changeset whose every path is rejected before it can touch the corpus — an
 unsupported extension, an `exclude` match, an ignore-rule match
-([LIVE-WATCHER]), or a removal naming a file the corpus never held — leaves the
-fingerprint set byte-identical. The report is therefore provably identical too,
-so `update_files` returns `None` and the scheduler:
+([LIVE-WATCHER]), a removal naming a file the corpus never held, or **an
+analysed file whose bytes on disk are identical to the bytes already
+ingested** — leaves the fingerprint set byte-identical. The report is therefore
+provably identical too, so `update_files` returns `None` and the scheduler:
 
 - does **not** run LSH, embedding, candidate-pair, clustering, or ranking;
 - does **not** swap `latest_report`;
@@ -211,11 +212,39 @@ Only a mutation to an analysed file re-renders. A watched config or ignore-rule
 path always counts as a mutation ([LIVE-CONFIG-LIVE]) because it re-scopes
 rendering itself — hide patterns and thresholds — not merely the file set.
 
+Suppression of step 6 keys off the **generation**, never off which paths the
+changeset held: no filter over paths can be wrong about a generation, and an
+unannounced generation is exactly what a subscriber does not have.
+
+The scheduler therefore remembers the generation it last announced — seeded at
+startup from the session, because `initialize` and `reportGet` have already
+handed subscribers that one — and broadcasts only when the current generation
+differs from it. Comparing the generation across the pass instead would be a
+bug: every read calls `refresh_if_stale` ([LIVE-CLUSTER-OFFSET-FRESHNESS]), which ingests
+pending edits and advances the generation *without* broadcasting, and on a busy
+editor that read path routinely beats the watcher to the same edit. The pass
+that follows then finds nothing left to do, and a scheduler asking "did *I*
+change anything" would go silent on a generation nobody had heard about —
+freezing the panel on a stale report. Asking "have subscribers heard this
+generation" covers both origins.
+
+`analysis/state` (`Running` → `Idle`) is still broadcast for every pass — it
+drives the panel's progress indicator and costs one enum on the wire.
+
 Without this early-out, steps 4-6 ran on every filesystem event the watcher
 delivered. One production LSP session spent **11h17m of CPU across 1086 passes**
 on a 172-file workspace, re-deriving 4,972 clusters from 422,711 fingerprints
 and 366,765 candidate pairs roughly every 30 seconds; 139 of 157 logged passes
 published a byte-identical report (#299).
+
+Editors re-deliver the same buffer constantly — `textDocument/didChange` fires
+per keystroke, atomic saves emit write-then-rename pairs, and a build rewriting
+ignored output trees floods the watcher — so the unchanged-bytes gate carries
+most of the traffic in practice. A second production session ran **53
+whole-corpus renders in two hours**, 24 of them back-to-back at an 11-second
+cadence over ~262,000 fingerprints, holding `deslop-lsp` at 99.9% CPU and
+2.35 GiB RSS; the announcements those passes emitted drew 281 `reportGet`
+round-trips for a report that never changed (#314).
 
 ### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
 Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched
@@ -288,7 +317,7 @@ The LSP pushes three notification types to LSP clients (VSIX, other editors):
 - `analysis/state` — fires on `idle → running`, `running → idle`, and on scheduler errors.
 - `embedding/progress` — fires around embedding refreshes. Payload: `{ phase, provider_id, model_id, done, total, message? }`.
 
-The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop-cache/live-report.json` and never watches the workspace.
+The MCP **is** an IPC subscriber. It opens one long-lived `report/subscribe` connection over the socket and re-emits each `report/changed` notification to its own client as `notifications/deslop/reportChanged` ([MCP-NOTIFICATIONS]). It never reads `.deslop/cache/live-report.json` and never watches the workspace.
 
 ### [LIVE-REPORT-DISPLAY] Human-readable report display
 On-screen cluster views (LSP cluster virtual documents, hover bubbles, tree rows)
@@ -303,7 +332,7 @@ display layer translates them.
 
 | Scenario | Budget |
 |---|---|
-| Cold start, empty cache, 100 K LOC | Same as `--incremental` CLI first-run. |
+| Cold start, empty cache, 100 K LOC | Same as a CLI first-run against an empty cache. |
 | Warm start, warm cache, 100 K LOC | < 2 s to `ready`. |
 | Incremental re-analysis, ≤ 10 changed files | < 500 ms end-to-end. |
 | `report/forFile`, 100 K-LOC report | < 50 ms. |

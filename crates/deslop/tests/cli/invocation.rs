@@ -80,7 +80,7 @@ fn accepts_path_argument_without_panicking() -> Result<()> {
 fn default_run_emits_all_three_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(json.contains("\"schema_doc\""), "schema_doc missing");
@@ -129,7 +129,7 @@ fn default_run_emits_all_three_formats() -> Result<()> {
 fn cli_json_report_omits_inline_schema_doc() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     let value: Value = serde_json::from_str(&json)?;
@@ -208,7 +208,7 @@ fn wrap_clone_in_class(class: &str, body: &str) -> String {
 fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--nojson", "--nohtml"])
         .assert()
@@ -224,7 +224,7 @@ fn suppression_flags_leave_only_enabled_formats() -> Result<()> {
 #[test]
 fn suppressing_every_format_is_an_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--nojson", "--notext", "--nohtml"])
         .assert()
@@ -240,7 +240,7 @@ fn suppressing_every_format_is_an_error() -> Result<()> {
 #[test]
 fn suppressing_every_format_exits_with_usage_code() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--nojson", "--notext", "--nohtml"])
         .assert()
@@ -256,7 +256,7 @@ fn suppressing_every_format_exits_with_usage_code() -> Result<()> {
 fn from_report_rerenders_without_analysing() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut first = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut first = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = first
         .args(["--min-nodes", "8", "--notext", "--nohtml"])
         .assert()

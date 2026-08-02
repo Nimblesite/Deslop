@@ -26,7 +26,7 @@ use crate::notifications::{AnalysisStateLspNotification, ReportChangedLspNotific
 /// Keeps the live editor responsive while the deferred pass runs.
 const LIVE_EMBEDDING_BATCH_SLEEP: Duration = Duration::from_millis(10);
 
-/// Opens a live session, preferring `.deslop-cache/live-report.json`
+/// Opens a live session, preferring `.deslop/cache/live-report.json`
 /// when it is present and valid.
 pub(crate) fn open_session(
     root: PathBuf,

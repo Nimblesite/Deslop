@@ -82,8 +82,8 @@ Exit `3` is the **CI gate**. It only ever fires when you opt in — by passing a
 
 ## Logging vs. reports
 
-By default, diagnostics go to a timestamped log file (`deslop-<timestamp>.log`) via `tracing` with structured fields; pass `--log-to-console` to send them to `stderr` instead. The human-readable preamble and summary always go to `stderr`. The reports themselves are written to files — `deslop-report.json`/`.txt`/`.html` by default, or the prefix you pass to `--output`. To emit only the JSON report, suppress the other two formats:
+By default, diagnostics go to a timestamped log file (`.deslop/logs/deslop-<timestamp>.log`) via `tracing` with structured fields; pass `--log-to-console` to send them to `stderr` instead. The human-readable preamble and summary always go to `stderr`. The reports themselves are written to files — `.deslop/deslop-report.json`/`.txt`/`.html` under the scanned project by default, or the prefix you pass to `--output` (the logs follow it). To emit only the JSON report, suppress the other two formats:
 
 ```bash
-deslop . --notext --nohtml      # writes deslop-report.json
+deslop . --notext --nohtml      # writes .deslop/deslop-report.json
 ```

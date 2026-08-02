@@ -104,13 +104,13 @@ fn issue_90_report_get_reflects_lsp_state_between_plain_calls() -> Result<()> {
 /// or rewrite the file. Under the IPC architecture the MCP no longer
 /// reads it at all; the file is the LSP's private warm-start cache.
 /// The new contract: an MCP `report-get` must not modify
-/// `.deslop-cache/live-report.json` — only the LSP's cold-pass /
+/// `.deslop/cache/live-report.json` — only the LSP's cold-pass /
 /// initial-pass install paths may write it.
 #[test]
 fn mcp_read_does_not_mutate_lsp_seed_cache() -> Result<()> {
     let workspace = copied_fixture()?;
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    let state_file = workspace.path().join(".deslop/cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for seed cache")?;
 
     // Sample mtime + bytes after the LSP's initial pass has settled.
@@ -149,8 +149,8 @@ fn mcp_read_does_not_mutate_lsp_seed_cache() -> Result<()> {
 #[test]
 fn issue_118_incompatible_seed_cache_cannot_brick_lsp_startup() -> Result<()> {
     let workspace = copied_fixture()?;
-    let cache_dir = workspace.path().join(".deslop-cache");
-    fs::create_dir_all(&cache_dir).context("create .deslop-cache")?;
+    let cache_dir = workspace.path().join(".deslop/cache");
+    fs::create_dir_all(&cache_dir).context("create .deslop/cache")?;
     let state_file = cache_dir.join("live-report.json");
     fs::write(&state_file, br#"{"tool_version":"stale","clusters":[]}"#)?;
 

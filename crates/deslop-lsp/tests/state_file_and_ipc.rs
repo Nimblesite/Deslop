@@ -1,12 +1,12 @@
 //! E2E tests for the state-file and IPC surfaces added by the
 //! MCP-architecture fix.
 //!
-//! [LIVE-STATE-FILE] The LSP writes `.deslop-cache/live-report.json` on
+//! [LIVE-STATE-FILE] The LSP writes `.deslop/cache/live-report.json` on
 //! initialize and on each cold-pass install — never on incremental passes
 //! ([LIVE-SEED-CACHE]) — so the MCP can warm-start without running its own
 //! pipeline.
 //!
-//! [LSP-IPC] The LSP exposes `.deslop-cache/deslop.sock` (Unix only)
+//! [LSP-IPC] The LSP exposes `.deslop/cache/deslop.sock` (Unix only)
 //! so the MCP can delegate `duplicates/findSimilar` and
 //! `embedding/listModels` without duplicating compute.
 //!
@@ -33,7 +33,7 @@ use common::{
     watched_file_changed, write_frame, LspGuard,
 };
 
-const STATE_FILE: &str = ".deslop-cache/live-report.json";
+const STATE_FILE: &str = ".deslop/cache/live-report.json";
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -544,9 +544,9 @@ fn issue_73_cold_pass_commits_and_replaces_the_seed_after_seeded_startup() -> Re
     Ok(())
 }
 
-/// Returns the LSP IPC socket path under `workspace`'s `.deslop-cache`.
+/// Returns the LSP IPC socket path under `workspace`'s `.deslop/cache`.
 fn socket_path_for(workspace: &Path) -> PathBuf {
-    workspace.join(".deslop-cache").join("deslop.sock")
+    workspace.join(".deslop/cache").join("deslop.sock")
 }
 
 /// Spawns the LSP over a fresh copy of `fixture`, drives the

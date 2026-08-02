@@ -5,10 +5,10 @@
 //! state file alone — they need a live analysis pass. The MCP backend
 //! delegates them (and every other read) to the LSP via a single-shot
 //! JSON-RPC call over [`deslop_core::live::transport`]: the Unix
-//! domain socket `.deslop-cache/deslop.sock` where it exists, or — on
+//! domain socket `.deslop/cache/deslop.sock` where it exists, or — on
 //! Windows and wherever the LSP was started with `--ipc-transport
 //! tcp` — the TCP loopback endpoint published in
-//! `.deslop-cache/deslop.port` ([LIVE-IPC-TCP]). When neither endpoint
+//! `.deslop/cache/deslop.port` ([LIVE-IPC-TCP]). When neither endpoint
 //! is live, the backend returns [`BackendError::LspNotRunning`] so
 //! agents can offer to start the LSP.
 

@@ -39,11 +39,20 @@ separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall,
 never changes existing cluster content.
 
 ### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
-Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
+On-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
 
-**Activation.** Enabled with `--incremental` (off by default so read-only checkouts never get mutated). Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
+**Activation.** On by default on every surface. Incremental analysis is a first-class path, not a bolt-on: the LSP runs on it permanently, and a batch CLI run is just "incremental starting from an empty cache". `deslop --no-incremental` opts out for callers that must not write to the tree at all. Stats land on every report as `cache_stats { hits, misses }` at top level. Text renderer surfaces them as `cache: N hit / M miss`.
 
-**Layout.** `<root>/.deslop-cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop-cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
+**[PIPELINE-INCREMENTAL-INVALIDATION] Invalidation is addressing, not bookkeeping.** The cache cannot serve a stale parse, because a stale parse is *unaddressable*: the blob's filename is `blake3(file contents)`, under path segments for language, tool version, and `min_nodes`. Edit a file with nothing watching — an agent writing, a `git checkout`, an editor with the LSP stopped — and its content hash changes, so the lookup lands on a path that does not exist and the file is re-parsed from disk. There is no mtime heuristic, no watcher-maintained index, and no invalidation step that could be skipped or get out of sync.
+
+Two further properties make a cache-on-by-default CLI safe:
+
+- **Corpus membership never comes from the cache.** Every run performs a fresh discovery walk, so files added or deleted while nothing was watching are picked up regardless of cache state. A deleted file's blob is simply orphaned — unused, never consulted.
+- **A warm run and a cold run agree.** Wiping `.deslop/cache/` changes the `cache_stats` counters and nothing else about the report. The cache is an accelerator; the source tree is the only source of truth.
+
+The one artefact that *can* go stale is the live state file `live-report.json` ([LIVE-STATE-FILE]) — a whole-report snapshot, not a content-addressed entry. The CLI never reads it. The LSP seeds from it for instant warm-start and immediately runs a cold pass that replaces it, reporting `Running` until that pass installs ([LIVE-CACHE-SEED]).
+
+**Layout.** `<root>/.deslop/cache/fingerprints/<language_id>/<tool_version>/<min_nodes>/<content_hash>.bin`. Shares `.deslop/cache/` with the embedding cache from [FUSION-EMBED-PROVIDER]; the two layers invalidate independently.
 
 **Format.** `u32` magic, then a recursive `NormalizedNode` tree (`u32 kind_len`, kind UTF-8 bytes, `u64 start`, `u64 end`, `u32 child_count`, children...), then `u64 fingerprint_count` followed by one `{ [u8;32] hash, u64 start, u64 end, u64 node_count }` record per fingerprint. No serde, no schema drift: the magic + tool-version path segment bracket every format change.
 
@@ -53,7 +62,7 @@ Opt-in on-disk cache keyed by `(language_id, tool_version, min_nodes, content_ha
 - Cache directory unavailable (permissions, read-only fs) → `FingerprintCache::open` fails, the pipeline falls back to the full parse path for the affected language, logs `warn!`, keeps running.
 - Blob write fails (e.g. disk full) → `warn!`, return the in-memory result, pipeline continues.
 
-Zero-zero stats indicate the pass ran without the cache (`--incremental` not passed or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
+Zero-zero stats indicate the pass ran without the cache (`--no-incremental` passed, or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
 
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 `weight = clone_node_count × (cluster_size − 1) × log2(1 + total_spanned_loc)`. Clusters are sorted by weight descending. A cluster with one member (no duplication) scores zero by construction. Later stages multiply in the fusion score from [FUSION-STRATEGY-MAX-SUM]. For rendered (visible) ordering, `cluster_size` counts only non-hidden occurrences, so a mixed cluster's [EXCLUSION-CONFIG] `report_hide` members do not push it above fully-actionable clusters. The final ranking weight is multiplied by the clone-category coefficient from [RANK-CATEGORY] before the visible sort, so a data-table cluster ranks below comparable logic clones.
@@ -149,7 +158,7 @@ Top level:
 - `min_nodes: u32` — subtree size floor used for the run.
 - `files_analysed: usize` — count of files actually parsed.
 - `clusters_hidden: usize` — clusters that existed but were suppressed from `clusters` because every occurrence matched a [EXCLUSION-CONFIG] `report_hide` pattern. Surfaces the volume of ignored duplication without leaking the content.
-- `cache_stats: { hits: usize, misses: usize }` — incremental fingerprint-cache telemetry per [PIPELINE-INCREMENTAL]. Both zero when `--incremental` was not passed; otherwise `hits + misses == files_analysed` for files whose language has a registered parser.
+- `cache_stats: { hits: usize, misses: usize }` — incremental fingerprint-cache telemetry per [PIPELINE-INCREMENTAL]. Both zero when `--no-incremental` was passed; otherwise `hits + misses == files_analysed` for files whose language has a registered parser.
 - `metrics: RepoMetrics` — repo-wide duplication totals per [METRICS-REPO]. Always populated; zero when no duplication exists.
 - `schema_doc: &'static str` — markdown explaining every field, signal, threshold, ranking formula, byte-range convention, and clone taxonomy. Shipped via `include_str!` so it cannot drift from the schema.
 - `action_hints: Vec<ActionHint>` — short playbook entries ("high structural + high jaccard → extract shared function", etc.) agents can consult before deciding how to act.
@@ -164,7 +173,32 @@ Top level:
 
 `--from-report <file.json>` skips analysis and re-renders the text + HTML views from a canonical JSON report. Keeps the rendering pipeline testable in isolation and makes re-formatting a cached report free.
 
-The default invocation writes all three formats to disk (`deslop-report.{json,txt,html}` in CWD, or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+The default invocation writes all three formats to disk (`.deslop/deslop-report.{json,txt,html}` under the scan root per [OUTPUT-DIR], or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+
+### [OUTPUT-DIR] Workspace output directory
+Everything Deslop writes for a scanned workspace lands under a single `.deslop/` directory at the **scan root**, so a user has exactly one path to gitignore, inspect, or delete, and the three surfaces never disagree about where a workspace's artefacts live:
+
+```text
+<scan-root>/
+  .deslop.toml                     # config — user-authored, tracked, NOT output
+  .deslop/                         # everything Deslop writes
+    deslop-report.{json,txt,html}  # rendered reports ([OUTPUT-SCHEMA-JSON])
+    deslop-report.delta.json       # generation delta, when `--rerun-touch` ran ([LIVE-DELTA])
+    logs/deslop-<unix-seconds>.log # tracing sink ([UX-LOG-CONSOLE])
+    cache/                         # derived state — safe to delete, always rebuildable
+      fingerprints/                # [PIPELINE-INCREMENTAL]
+      embeddings/                  # [FUSION-EMBED-PROVIDER]
+      live-report.json             # [LIVE-STATE-FILE]
+      deslop.sock deslop.port      # [LIVE-IPC-SOCKET], [LIVE-IPC-TCP]
+```
+
+`deslop-core::paths` is the single source of truth for this layout; the CLI, LSP, and MCP all resolve through it rather than joining path literals of their own. Three consequences are normative:
+
+- **The scan root, not the working directory, anchors the default.** `deslop /other/repo` writes into `/other/repo/.deslop/`, matching where the LSP and MCP already read and write for that workspace. A CLI run therefore never litters the directory the operator happened to be standing in.
+- **`--output <prefix>` overrides the report base, and the logs follow it** into `<prefix-dir>/logs/`. It is the only knob: the cache stays at `<scan-root>/.deslop/cache` because the LSP and MCP must locate it from the scan root alone, with no flags to consult.
+- **Logs get their own subdirectory.** Report file names are fixed and few; log file names are timestamped and accumulate, so they never bury the three files a user actually opens.
+
+`.deslop/` is dot-prefixed, so the discovery pass's hidden-directory prune keeps Deslop's own artefacts out of the corpus it analyses. The `.gitignore` entry the VSIX offers to write is the directory-only form `.deslop/` ([VSIX-CACHE-IGNORE]), which leaves the sibling `.deslop.toml` config file tracked.
 
 ### [OUTPUT-HUMAN-HTML] Human-readable HTML mode
 

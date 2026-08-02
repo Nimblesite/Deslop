@@ -109,8 +109,8 @@ Everything above also runs incrementally inside the LSP server (`crates/deslop-c
 A file watcher batches edits (debounced, with a hard cap so a formatter burst can't starve the scheduler) and re-runs the pipeline through `PipelineSession::update_files`. The fresh report is held in memory, and the LSP then:
 
 - broadcasts `deslop/reportChanged` over the LSP wire, and
-- serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop-cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop-cache/deslop.port`.
+- serves the running corpus over a local IPC endpoint, so the bundled MCP server answers `find-similar` without re-parsing. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses token-gated TCP loopback discovered through `.deslop/cache/deslop.port`.
 
-`.deslop-cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
+`.deslop/cache/live-report.json` is written only as a cold-start seed — so a freshly launched LSP can answer queries while its first pass runs — not on every edit.
 
 Every VS Code surface — bubble, Top Offenders tree, status bar, hover, code lens — and every agent MCP query reads from that same in-memory report. The CLI is the cold-cache fallback for CI gates.

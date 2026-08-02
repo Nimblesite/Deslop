@@ -134,7 +134,7 @@ fn t2_issue_137_report_hide_visible_via_mcp_after_lsp_reanalysis() -> Result<()>
 fn t6_seed_cache_does_not_advance_on_incremental_edits() -> Result<()> {
     let workspace = copied_fixture()?;
     let _lsp_guard = spawn_lsp_and_wait_for_socket(workspace.path())?;
-    let state_file = workspace.path().join(".deslop-cache/live-report.json");
+    let state_file = workspace.path().join(".deslop/cache/live-report.json");
     wait_for_path(&state_file, SOCKET_TIMEOUT).context("wait for seed cache")?;
     // Let the initial-pass write settle before sampling mtime.
     std::thread::sleep(Duration::from_millis(200));

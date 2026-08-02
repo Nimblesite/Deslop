@@ -175,7 +175,7 @@ impl AnalysisSession {
     }
 
     /// [LIVE-CACHE-SEED] Constructs a session from
-    /// `{root}/.deslop-cache/live-report.json` so query methods can
+    /// `{root}/.deslop/cache/live-report.json` so query methods can
     /// answer instantly while the background full pass runs. Returns
     /// `None` if the cache file is missing or corrupt. Callers must
     /// follow up with [`Self::install_pipeline`] when the
@@ -504,9 +504,7 @@ impl AnalysisSession {
             languages: self.parser_ids(),
             embedding_provenance: self.latest_report.embedding_provenance.clone(),
             exclusion_config_path: self.config_path.clone(),
-            cache_root: self
-                .root
-                .join(crate::embedding::cache::DEFAULT_CACHE_DIR_NAME),
+            cache_root: crate::paths::cache_dir(&self.root),
             incremental: self.incremental,
         }
     }
@@ -728,7 +726,7 @@ impl AnalysisSession {
     }
 
     /// [LIVE-SEED-CACHE] Persists the current report snapshot to
-    /// `{root}/.deslop-cache/live-report.json` so the next LSP startup
+    /// `{root}/.deslop/cache/live-report.json` so the next LSP startup
     /// has a fast warm-start. Called only on initial-pass and
     /// cold-pass install — never on per-keystroke incremental updates.
     /// Best-effort: failures are logged but never propagated.
