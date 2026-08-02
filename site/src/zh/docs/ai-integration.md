@@ -39,7 +39,7 @@ Deslop 从第一次提交起就将编码智能体设计为一等受众。MCP 与
 从 Marketplace 安装扩展后，二进制文件位于：
 
 ```
-~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/<platform>/deslop-mcp
+~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp
 ```
 
 `<platform>` 为 `darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64` 或 `win32-x64`。`<VERSION>` 为已安装的扩展版本——每次更新 VSIX 时都要相应递增。
@@ -48,7 +48,7 @@ Deslop 从第一次提交起就将编码智能体设计为一等受众。MCP 与
 
 ```bash
 claude mcp add deslop -s user -- \
-  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp \
+  ~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin-arm64/bin/darwin-arm64/deslop-mcp \
   --root .
 ```
 
@@ -56,7 +56,7 @@ claude mcp add deslop -s user -- \
 
 ```toml
 [mcp_servers.deslop]
-command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp"
+command = "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin-arm64/bin/darwin-arm64/deslop-mcp"
 args    = ["--root", "."]
 ```
 
@@ -66,7 +66,7 @@ args    = ["--root", "."]
 {
   "mcpServers": {
     "deslop": {
-      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>/bin/darwin-arm64/deslop-mcp",
+      "command": "/Users/you/.vscode/extensions/nimblesite.deslop-live-<VERSION>-darwin-arm64/bin/darwin-arm64/deslop-mcp",
       "args": ["--root", "/absolute/path/to/your/repo"]
     }
   }

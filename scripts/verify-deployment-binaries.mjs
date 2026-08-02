@@ -58,6 +58,11 @@ function executableComponents(manifest) {
 
 function assertExecutable(binaryPath) {
   if (platform.startsWith("win32")) return;
+  // The execute bit is a property of the host filesystem, not of the artifact's
+  // target platform. NTFS cannot represent it — chmod(0o755) is a no-op there —
+  // so staging a Unix artifact from Windows can never satisfy this check, and
+  // gating only on the target makes every such verification fail.
+  if (process.platform === "win32") return;
   if ((statSync(binaryPath).mode & 0o111) === 0) throw new Error(`${binaryPath} is not executable`);
 }
 
