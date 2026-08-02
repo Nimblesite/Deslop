@@ -194,9 +194,10 @@ Budget: ≤ 10 changed files, warm cache, 100 K-LOC → **< 500 ms**. Miss the b
 
 A changeset whose every path is rejected before it can touch the corpus — an
 unsupported extension, an `exclude` match, an ignore-rule match
-([LIVE-WATCHER]), or a removal naming a file the corpus never held — leaves the
-fingerprint set byte-identical. The report is therefore provably identical too,
-so `update_files` returns `None` and the scheduler:
+([LIVE-WATCHER]), a removal naming a file the corpus never held, or **an
+analysed file whose bytes on disk are identical to the bytes already
+ingested** — leaves the fingerprint set byte-identical. The report is therefore
+provably identical too, so `update_files` returns `None` and the scheduler:
 
 - does **not** run LSH, embedding, candidate-pair, clustering, or ranking;
 - does **not** swap `latest_report`;
@@ -211,11 +212,39 @@ Only a mutation to an analysed file re-renders. A watched config or ignore-rule
 path always counts as a mutation ([LIVE-CONFIG-LIVE]) because it re-scopes
 rendering itself — hide patterns and thresholds — not merely the file set.
 
+Suppression of step 6 keys off the **generation**, never off which paths the
+changeset held: no filter over paths can be wrong about a generation, and an
+unannounced generation is exactly what a subscriber does not have.
+
+The scheduler therefore remembers the generation it last announced — seeded at
+startup from the session, because `initialize` and `reportGet` have already
+handed subscribers that one — and broadcasts only when the current generation
+differs from it. Comparing the generation across the pass instead would be a
+bug: every read calls `refresh_if_stale` ([LIVE-CLUSTER-OFFSET-FRESHNESS]), which ingests
+pending edits and advances the generation *without* broadcasting, and on a busy
+editor that read path routinely beats the watcher to the same edit. The pass
+that follows then finds nothing left to do, and a scheduler asking "did *I*
+change anything" would go silent on a generation nobody had heard about —
+freezing the panel on a stale report. Asking "have subscribers heard this
+generation" covers both origins.
+
+`analysis/state` (`Running` → `Idle`) is still broadcast for every pass — it
+drives the panel's progress indicator and costs one enum on the wire.
+
 Without this early-out, steps 4-6 ran on every filesystem event the watcher
 delivered. One production LSP session spent **11h17m of CPU across 1086 passes**
 on a 172-file workspace, re-deriving 4,972 clusters from 422,711 fingerprints
 and 366,765 candidate pairs roughly every 30 seconds; 139 of 157 logged passes
 published a byte-identical report (#299).
+
+Editors re-deliver the same buffer constantly — `textDocument/didChange` fires
+per keystroke, atomic saves emit write-then-rename pairs, and a build rewriting
+ignored output trees floods the watcher — so the unchanged-bytes gate carries
+most of the traffic in practice. A second production session ran **53
+whole-corpus renders in two hours**, 24 of them back-to-back at an 11-second
+cadence over ~262,000 fingerprints, holding `deslop-lsp` at 99.9% CPU and
+2.35 GiB RSS; the announcements those passes emitted drew 281 `reportGet`
+round-trips for a report that never changed (#314).
 
 ### [LIVE-CONFIG-LIVE] Live `.deslop.toml` reload
 Editing `<root>/.deslop.toml` (or the explicit `--config` override) is a watched
