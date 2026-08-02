@@ -584,7 +584,8 @@ jobs:
             "architecture": {
               "64bit": {
                 "url": "${base}/${win_zip}",
-                "hash": "${win_sha}"
+                "hash": "${win_sha}",
+                "extract_dir": "deslop-${version}-windows-x64"
               }
             },
             "bin": [
@@ -598,7 +599,8 @@ jobs:
             "autoupdate": {
               "architecture": {
                 "64bit": {
-                  "url": "${base}/deslop-\$version-windows-x64.zip"
+                  "url": "https://github.com/${{ github.repository }}/releases/download/v\$version/deslop-\$version-windows-x64.zip",
+                  "extract_dir": "deslop-\$version-windows-x64"
                 }
               }
             }
