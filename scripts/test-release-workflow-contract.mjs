@@ -4,6 +4,7 @@
 // the tests fail when the tagged source and published artifacts can drift, or
 // when package-manager manifests declare binaries missing from the archives.
 
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,17 @@ const tests = [
   releaseBuildsPlatformSpecificVsixArtifacts,
   pagesDeployCleansRerunArtifactsAndRetries,
   dependabotSweepLeavesNoDeadCheckOnHumanPullRequests,
+  contractFilesCheckOutLfOnEveryPlatform,
+];
+
+// Every file this suite and test-action-contract.mjs match line-exactly. Git for
+// Windows ships core.autocrlf=true in its system config, so without an explicit
+// attribute these check out CRLF and every `\n`-anchored match silently misses.
+const LINE_MATCHED_FILES = [
+  ".github/workflows/release.yml",
+  ".github/workflows/deploy-pages.yml",
+  ".github/workflows/dependabot-automerge.yml",
+  "action.yml",
 ];
 
 // Values bound while evaluating the Scoop manifest generator. The version is
@@ -320,6 +332,30 @@ function dependabotSweepLeavesNoDeadCheckOnHumanPullRequests() {
     "startsWith(github.head_ref, 'dependabot/')",
     "the sweep must still require a dependabot/* source branch — the second half of the actor-AND-source gate",
   );
+}
+
+// The contract suites compare against `\n`-anchored literals, so a CRLF checkout
+// turns every one of those assertions into a silent miss — the suite fails with
+// "missing workflow section" on a file that is perfectly intact. Asserted through
+// `git check-attr` rather than by reading .gitattributes, so what is verified is
+// the attribute git actually resolves for the path, not the text of a rule that
+// might not match it. ([DEPLOY-CI-GATES])
+function contractFilesCheckOutLfOnEveryPlatform() {
+  const result = spawnSync("git", ["check-attr", "eol", "--", ...LINE_MATCHED_FILES], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) throw new Error(`git check-attr failed: ${result.stderr ?? ""}`);
+
+  const undeclared = result.stdout
+    .trim()
+    .split("\n")
+    .filter((line) => line.slice(line.lastIndexOf(":") + 1).trim() !== "lf");
+  if (undeclared.length > 0) {
+    throw new Error(
+      `these files must be declared eol=lf or exact line matching breaks on a Windows checkout:\n  ${undeclared.join("\n  ")}`,
+    );
+  }
 }
 
 function assertAbsent(pattern, message) {
