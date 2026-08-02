@@ -217,7 +217,7 @@ export async function activate(
   // so agent hosts launch it by absolute path, never a $PATH lookup (#267).
   mcpDefinition = wireMcpRegistration(context, resolvedMcp, resolveWorkspaceRoot());
 
-  // [VSIX-CACHE-IGNORE] Offer to keep `.deslop-cache/` out of git (#286).
+  // [VSIX-CACHE-IGNORE] Offer to keep `.deslop/` out of git (#286).
   // Deliberately not awaited: activation must not block on a dialog.
   promptToIgnoreCache(context, resolveWorkspaceRoot()).catch((error: unknown) => {
     log("cache ignore prompt failed", { message: String(error) });

@@ -30,13 +30,26 @@ pub(crate) fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
-/// Builds `deslop <scan_root> --output <output_prefix>`, ready for the
-/// caller to append scenario-specific flags before `.assert()`. Centralises
-/// the `cargo_bin` lookup + scan-root + output-prefix prefix that every
-/// invocation shares.
+/// Builds `deslop <scan_root> --output <output_prefix> --no-incremental`,
+/// ready for the caller to append scenario-specific flags before
+/// `.assert()`. Centralises the `cargo_bin` lookup + scan-root +
+/// output-prefix prefix that every invocation shares.
+///
+/// `--no-incremental` is part of the shared prefix because the fingerprint
+/// cache is on by default ([PIPELINE-INCREMENTAL]) and always lands in the
+/// *scan root* ([OUTPUT-DIR]) — `--output` cannot redirect it. These
+/// binaries assert on detection output, and most point straight at a
+/// checked-in `tests/fixtures/` directory, so without the opt-out every
+/// run would write into the fixture tree and concurrent binaries sharing a
+/// fixture would race on the same cache. Cache behaviour itself is covered
+/// in `tests/cli/cache_and_debug.rs`, against scan roots it owns.
 pub(crate) fn deslop_cmd(scan_root: &Path, output_prefix: &Path) -> Result<Command> {
     let mut cmd = Command::cargo_bin("deslop")?;
-    let _cmd = cmd.arg(scan_root).arg("--output").arg(output_prefix);
+    let _cmd = cmd
+        .arg(scan_root)
+        .arg("--output")
+        .arg(output_prefix)
+        .arg("--no-incremental");
     Ok(cmd)
 }
 
@@ -85,6 +98,13 @@ pub(crate) fn seed(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
+        // Source files only. A fixture directory can pick up a nested
+        // `.deslop/` output directory ([OUTPUT-DIR]) from a stray run, and
+        // `fs::copy` on a directory fails outright — seeding must not be
+        // hostage to whatever else happens to be sitting there.
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
         let _bytes = fs::copy(entry.path(), dst.join(entry.file_name()))?;
     }
     Ok(())

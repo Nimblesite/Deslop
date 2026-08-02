@@ -3,7 +3,7 @@
 //! can decide whether to retry and where the on-disk fallback lives.
 //!
 //! Before this fix the error carried only a human message (`data: null`),
-//! leaving agents to discover the `.deslop-cache/live-report.json`
+//! leaving agents to discover the `.deslop/cache/live-report.json`
 //! fallback by accident. The numeric code and the existing human message
 //! (socket path + `--root`, per [Deslop#151]) must be preserved verbatim.
 
@@ -55,7 +55,7 @@ fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
     ensure!(
         data.get("socket_path")
             .and_then(Value::as_str)
-            .is_some_and(|path| path.contains(".deslop-cache")),
+            .is_some_and(under_cache_dir),
         "data.socket_path must name the IPC socket: {data}"
     );
     let fallback = data
@@ -69,10 +69,15 @@ fn issue_157_lsp_not_running_carries_structured_recovery_data() -> Result<()> {
         fallback
             .get("path")
             .and_then(Value::as_str)
-            .is_some_and(
-                |path| path.ends_with("live-report.json") && path.contains(".deslop-cache")
-            ),
-        "cache_fallback.path must point at .deslop-cache/live-report.json: {fallback}"
+            .is_some_and(|path| path.ends_with("live-report.json") && under_cache_dir(path)),
+        "cache_fallback.path must point at .deslop/cache/live-report.json: {fallback}"
     );
     Ok(())
+}
+
+/// True when `path` names an artefact inside a workspace's
+/// `.deslop/cache` directory ([OUTPUT-DIR]). Normalises separators so
+/// the assertion holds on the Windows backslash convention too.
+fn under_cache_dir(path: &str) -> bool {
+    path.replace('\\', "/").contains("/.deslop/cache/")
 }

@@ -4,7 +4,7 @@ use crate::support::*;
 /// its report under `<tmp>/report`. Every logging test shares this scan
 /// root + output layout; only the flag/env combination differs.
 fn csharp_small_command(tmp: &tempfile::TempDir) -> Result<Command> {
-    deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))
+    fixture_command("csharp-small", &tmp.path().join("report"))
 }
 
 /// Decodes the captured stderr of a finished assertion into an owned
@@ -234,19 +234,10 @@ fn technical_mode_surfaces_raw_cache_stats_line() -> Result<()> {
     seed_scan_root(&fixture("csharp-small"), &scan_root)?;
     // First run populates the cache.
     let mut first = deslop_command(&scan_root, &tmp.path().join("first"))?;
-    let _assertion = first
-        .args(["--min-nodes", "8", "--incremental"])
-        .assert()
-        .success();
+    let _assertion = first.args(["--min-nodes", "8"]).assert().success();
     let mut second = deslop_command(&scan_root, &tmp.path().join("second"))?;
     let assertion = second
-        .args([
-            "--min-nodes",
-            "8",
-            "--incremental",
-            "--technical",
-            "--no-color",
-        ])
+        .args(["--min-nodes", "8", "--technical", "--no-color"])
         .assert()
         .success();
     let stderr = stderr_text(&assertion)?;

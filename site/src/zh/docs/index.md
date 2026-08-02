@@ -69,13 +69,18 @@ Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/
 deslop .
 ```
 
-这会扫描当前目录、写入三份报告，并将最严重的簇打印到你的终端：
+这会扫描当前目录、写入三份报告，并将最严重的簇打印到你的终端。Deslop 写出的所有内容都会放进被扫描项目根目录下的同一个 `.deslop/` 目录——把 `.deslop/` 加入你的 `.gitignore` 即可：
 
 ```
-deslop-report.json   # canonical, agent-consumable
-deslop-report.txt    # line-oriented plain text
-deslop-report.html   # standalone, human-readable
+.deslop/
+  deslop-report.json   # canonical, agent-consumable
+  deslop-report.txt    # line-oriented plain text
+  deslop-report.html   # standalone, human-readable
+  logs/                # timestamped run logs
+  cache/               # fingerprints and embeddings; safe to delete
 ```
+
+使用 `--output <prefix>` 可以把报告（及其日志）改写到别处。
 
 ## 调整阈值
 

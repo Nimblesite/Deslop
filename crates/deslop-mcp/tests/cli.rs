@@ -249,10 +249,10 @@ fn read_lsp_frame(reader: &mut BufReader<ChildStdout>) -> Result<Value> {
     deslop_test_support::read_lsp_frame(reader)
 }
 
-/// Polls until `<root>/.deslop-cache/deslop.sock` exists. Failure
+/// Polls until `<root>/.deslop/cache/deslop.sock` exists. Failure
 /// after 30 s is fatal — the LSP is meant to bind within seconds.
 fn wait_for_socket(root: &Path) -> Result<()> {
-    let socket = root.join(".deslop-cache").join("deslop.sock");
+    let socket = root.join(".deslop/cache").join("deslop.sock");
     let started = std::time::Instant::now();
     while started.elapsed() < Duration::from_secs(30) {
         if socket.exists() {
@@ -323,10 +323,10 @@ impl WaitTimeout for Child {
     }
 }
 
-/// Read-only fixture root. The `.deslop-cache/live-report.json` state file
+/// Read-only fixture root. The `.deslop/cache/live-report.json` state file
 /// is pre-committed alongside the source files so `StateFileBackend` can
 /// serve data without an LSP process.
-/// Copies the fixture (including `.deslop-cache/live-report.json`) to a
+/// Copies the fixture (including `.deslop/cache/live-report.json`) to a
 /// writable temp directory for tests that mutate the workspace.
 fn copied_fixture_root() -> Result<TempDir> {
     let temp = TempDir::new()?;
@@ -335,10 +335,10 @@ fn copied_fixture_root() -> Result<TempDir> {
 }
 
 /// Runs the `deslop` CLI against `root` and writes the JSON report to
-/// `{root}/.deslop-cache/live-report.json` so `StateFileBackend` can
+/// `{root}/.deslop/cache/live-report.json` so `StateFileBackend` can
 /// read it without an LSP process.
 fn generate_state_file(root: &Path, min_nodes: u32) -> Result<()> {
-    let cache = root.join(".deslop-cache");
+    let cache = root.join(".deslop/cache");
     fs::create_dir_all(&cache)?;
     let out_prefix = cache.join("report-gen");
     let status = Command::new(cargo_bin("deslop"))

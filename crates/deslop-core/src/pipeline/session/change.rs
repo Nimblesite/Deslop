@@ -103,6 +103,18 @@ impl PipelineSession {
                 }
                 Err(other) => return Err(other),
             };
+        if self
+            .sources
+            .get(&file_id)
+            .is_some_and(|previous| previous == &source)
+        {
+            tracing::info!(
+                source_bytes = source.len(),
+                fingerprints = cached.fingerprints.len(),
+                "live change skipped; source bytes unchanged"
+            );
+            return Ok(CorpusEffect::Untouched);
+        }
         let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
         self.replace_boilerplate_ranges(file_id, ranges);
         let _prev_lines = self.analysed_lines.insert(file_id, lines);

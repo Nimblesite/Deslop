@@ -26,8 +26,8 @@ use common::{error_and_message, initialized_mcp};
 #[test]
 fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get() -> Result<()> {
     let workspace = TempDir::new()?;
-    fs::create_dir_all(workspace.path().join(".deslop-cache"))?;
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    fs::create_dir_all(workspace.path().join(".deslop/cache"))?;
+    let socket = workspace.path().join(".deslop/cache/deslop.sock");
     spawn_stale_lsp(&socket)?;
 
     let mut mcp = initialized_mcp(workspace.path())?;
@@ -59,8 +59,8 @@ fn issue_148_top_offenders_reports_version_mismatch_when_lsp_rejects_report_get(
 #[test]
 fn issue_148_session_config_reports_version_mismatch_when_lsp_rejects_method() -> Result<()> {
     let workspace = TempDir::new()?;
-    fs::create_dir_all(workspace.path().join(".deslop-cache"))?;
-    let socket = workspace.path().join(".deslop-cache/deslop.sock");
+    fs::create_dir_all(workspace.path().join(".deslop/cache"))?;
+    let socket = workspace.path().join(".deslop/cache/deslop.sock");
     spawn_stale_lsp(&socket)?;
 
     let mut mcp = initialized_mcp(workspace.path())?;

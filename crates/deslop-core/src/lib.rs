@@ -33,6 +33,7 @@ pub mod lang;
 pub mod live;
 pub mod lsh;
 pub mod pair;
+pub mod paths;
 pub mod pipeline;
 pub mod process;
 pub mod refactor;

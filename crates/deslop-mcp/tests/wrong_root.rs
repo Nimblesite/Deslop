@@ -102,7 +102,7 @@ struct McpChild {
 impl McpChild {
     fn spawn_with_cwd(cwd: &Path, root_arg: &str) -> Result<Self> {
         let lsp = spawn_lsp(cwd)?;
-        let socket = cwd.join(".deslop-cache").join("deslop.sock");
+        let socket = cwd.join(".deslop/cache").join("deslop.sock");
         wait_for_socket(&socket)?;
         let binary = env!("CARGO_BIN_EXE_deslop-mcp");
         let mut cmd = Command::new(binary);

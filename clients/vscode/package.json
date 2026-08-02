@@ -456,7 +456,7 @@
         "deslop.incremental": {
           "type": "boolean",
           "default": true,
-          "description": "Enable on-disk fingerprint cache (.deslop-cache)."
+          "description": "Enable on-disk fingerprint cache (.deslop/cache)."
         },
         "deslop.showAllLenses": {
           "type": "boolean",

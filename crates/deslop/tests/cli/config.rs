@@ -10,7 +10,7 @@ fn run_with_config(config_body: &str) -> Result<String> {
     let out = outputs_under(tmp.path());
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, config_body)?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args(["--min-nodes", "8", "--config"])
         .arg(&config)
@@ -138,7 +138,7 @@ fn files_without_extensions_are_skipped_silently() -> Result<()> {
 fn missing_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let missing = tmp.path().join("does-not-exist.toml");
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .arg("--config")
         .arg(&missing)
@@ -157,7 +157,7 @@ fn invalid_exclude_pattern_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "[defaults]\nexclude = [\"[unclosed\"]\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .arg("--config")
         .arg(&config)
@@ -175,7 +175,7 @@ fn malformed_config_file_reports_error() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let config = tmp.path().join("deslop.toml");
     fs::write(&config, "not valid toml = = =\n")?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .arg("--config")
         .arg(&config)
@@ -287,22 +287,53 @@ fn exclude_pattern_is_scan_root_relative() -> Result<()> {
     Ok(())
 }
 
-// Implements default output paths: running without `--output` writes
-// `deslop-report.{json,txt,html}` into the current working
-// directory. We run the command with `current_dir(tempdir)` so the
-// artefacts don't leak into the repo.
+// Implements [OUTPUT-DIR]: running without `--output` writes
+// `.deslop/deslop-report.{json,txt,html}` under the *scan root* — not
+// the working directory — so the CLI, LSP, and MCP all address one
+// location per workspace. Logs go to `.deslop/logs/`, and the cache to
+// `.deslop/cache/`, so `.deslop/` is the single directory a user has to
+// gitignore. The command runs from a separate working directory to
+// prove the outputs follow the scan root rather than the CWD.
 #[test]
-fn default_output_written_to_current_directory() -> Result<()> {
+fn default_output_written_to_deslop_dir_under_scan_root() -> Result<()> {
     let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_scan_root(&fixture("csharp-small"), &scan_root)?;
+    let cwd = tmp.path().join("elsewhere");
+    fs::create_dir_all(&cwd)?;
     let mut cmd = Command::cargo_bin("deslop")?;
     let _assertion = cmd
-        .current_dir(tmp.path())
-        .arg(fixture("csharp-small"))
+        .current_dir(&cwd)
+        .arg(&scan_root)
         .args(["--min-nodes", "8"])
         .assert()
         .success();
-    assert!(tmp.path().join("deslop-report.json").exists());
-    assert!(tmp.path().join("deslop-report.txt").exists());
-    assert!(tmp.path().join("deslop-report.html").exists());
+    let output_dir = scan_root.join(".deslop");
+    assert!(output_dir.join("deslop-report.json").exists());
+    assert!(output_dir.join("deslop-report.txt").exists());
+    assert!(output_dir.join("deslop-report.html").exists());
+    assert_eq!(
+        find_timestamped_logs(&output_dir)?.len(),
+        1,
+        "the run's log belongs in .deslop/logs/, not loose in .deslop/",
+    );
+    assert!(
+        output_dir.join("cache").join("fingerprints").is_dir(),
+        "--incremental must cache under .deslop/cache/, not a sibling .deslop-cache/",
+    );
+    assert!(
+        !scan_root.join(".deslop-cache").exists(),
+        "the pre-[OUTPUT-DIR] cache directory must no longer be written",
+    );
+    for stray in [
+        "deslop-report.json",
+        "deslop-report.txt",
+        "deslop-report.html",
+    ] {
+        assert!(
+            !cwd.join(stray).exists(),
+            "{stray} must not be dropped in the working directory",
+        );
+    }
     Ok(())
 }

@@ -8,7 +8,7 @@ use crate::support::*;
 fn run_min_nodes(fixture_name: &str, min_nodes: &str) -> Result<String> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture(fixture_name), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command(fixture_name, &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", min_nodes]).assert().success();
     Ok(fs::read_to_string(&out.json)?)
 }
@@ -22,7 +22,7 @@ fn run_with_args(fixture_name: &str, extra_args: &[&str]) -> Result<(PathBuf, se
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
     let scan_root = fixture(fixture_name);
-    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let mut cmd = fixture_command(fixture_name, &tmp.path().join("report"))?;
     let _assertion = cmd.args(extra_args).assert().success();
     let json = fs::read_to_string(&out.json)?;
     let report: serde_json::Value = serde_json::from_str(&json)?;

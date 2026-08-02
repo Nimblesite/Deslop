@@ -15,14 +15,30 @@
 //! `report/changed`, so every subscriber re-fetched a report that had not
 //! changed.
 //!
-//! Black-box only: drives the public [`AnalysisSession`] surface, exactly as
-//! the watcher, the freshness tracker, and an LSP `didSave` feed it.
+//! #314 is the same wound one layer up: even after the render early-out, the
+//! scheduler still announced every pass, so a no-op pass sent `report/changed`
+//! and each subscriber answered with `reportDelta` → `reportGet` over an
+//! identical report. Two hours of build churn produced 281 such `reportGet`
+//! calls against a 262,000-fingerprint corpus.
+//!
+//! Black-box only: drives the public [`AnalysisSession`] and [`Scheduler`]
+//! surfaces, exactly as the watcher, the freshness tracker, and an LSP
+//! `didSave` feed them.
 
 #![cfg(feature = "live")]
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use deslop_core::live::{AnalysisState, Clock, Scheduler, CAP_MS};
+use tokio::sync::broadcast::{error::TryRecvError, Receiver};
 
 mod common;
 use crate::common::*;
@@ -164,6 +180,27 @@ async fn inert_paths_never_publish_a_new_generation() -> Result<()> {
     Ok(())
 }
 
+/// Issue #314: duplicate editor/watcher delivery for an unchanged analysed
+/// file must not run the whole-corpus render or publish a new generation.
+#[tokio::test(flavor = "multi_thread")]
+async fn unchanged_analysed_file_does_not_publish_new_generation() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let mut session = live_session(tmp.path())?;
+    let unchanged = tmp.path().join("Alpha.cs");
+    let baseline_generation = session.generation();
+
+    let _delta = session
+        .apply_changes(std::slice::from_ref(&unchanged))
+        .context("apply unchanged analysed file")?;
+
+    assert_eq!(
+        session.generation(),
+        baseline_generation,
+        "unchanged analysed bytes must reuse the current report instead of re-rendering",
+    );
+    Ok(())
+}
+
 /// The control. A fix that simply stopped bumping the generation would pass
 /// the test above and break the entire live loop, so prove the same session
 /// still publishes when an analysed file genuinely changes — and that it does
@@ -201,6 +238,170 @@ async fn a_real_edit_still_publishes_after_inert_rounds() -> Result<()> {
             && delta.clusters_removed.is_empty()
             && delta.clusters_updated.is_empty()),
         "a real edit must produce a non-empty delta, got {delta:?}",
+    );
+    Ok(())
+}
+
+/// Hands out a timestamp a full [`CAP_MS`] beyond the previous one, so the
+/// debouncer reports ready the first time the scheduler ticks. Keeps the
+/// scheduler tests free of `sleep` and wall-clock timing.
+#[derive(Debug, Default)]
+struct RunawayClock {
+    /// Monotonic counter; each read advances it by one debounce cap.
+    elapsed_ms: AtomicU64,
+}
+
+impl Clock for RunawayClock {
+    fn now_ms(&self) -> u64 {
+        self.elapsed_ms.fetch_add(CAP_MS, Ordering::SeqCst)
+    }
+}
+
+/// Blocks until the scheduler reports the pass finished. `Running` is the
+/// leading edge of the same pass, so it is skipped; `Errored` fails the test
+/// rather than hanging on a state that will never arrive.
+async fn await_pass_complete(state_rx: &mut Receiver<AnalysisState>) -> Result<()> {
+    loop {
+        match state_rx.recv().await.context("analysis/state closed")? {
+            AnalysisState::Idle => return Ok(()),
+            AnalysisState::Errored { message } => bail!("scheduler pass failed: {message}"),
+            AnalysisState::Running { .. } => {}
+        }
+    }
+}
+
+/// Issue #314: the scheduler must stay silent when a pass leaves the
+/// generation where it was. `analysis/state` still reports the pass, because
+/// the panel's spinner is driven by it and costs one enum on the wire; what
+/// must not go out is the `report/changed` that makes every subscriber
+/// re-fetch a report it already holds.
+#[tokio::test(flavor = "multi_thread")]
+async fn no_op_pass_broadcasts_no_report_changed() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let session = Arc::new(tokio::sync::Mutex::new(live_session(tmp.path())?));
+    let baseline_generation = session.lock().await.generation();
+    let (events_tx, events_rx) = tokio::sync::mpsc::channel(8);
+    let scheduler = Scheduler::start(
+        Arc::clone(&session),
+        events_rx,
+        Arc::new(RunawayClock::default()),
+    );
+    let mut report_rx = scheduler.subscribe_report_changed();
+    let mut state_rx = scheduler.subscribe_state();
+
+    let path = tmp.path().join("Alpha.cs");
+    events_tx
+        .send(path.clone())
+        .await
+        .context("queue unchanged path")?;
+    await_pass_complete(&mut state_rx).await?;
+    assert!(
+        matches!(report_rx.try_recv(), Err(TryRecvError::Empty)),
+        "a pass over an unchanged analysed file must broadcast nothing — the \
+         report is the object every subscriber already holds (#314)",
+    );
+    assert_eq!(
+        session.lock().await.generation(),
+        baseline_generation,
+        "the no-op pass must leave the generation alone",
+    );
+
+    // The control. Suppressing every broadcast would pass the assertion
+    // above and silence the live loop, so drive a real edit through the
+    // same scheduler and require it to reach the same subscriber.
+    fs::write(
+        &path,
+        b"namespace Alpha { public class Differ { public int Run(int x) { return x + 2; } } }\n",
+    )
+    .context("write Alpha")?;
+    events_tx.send(path).await.context("queue real edit")?;
+    await_pass_complete(&mut state_rx).await?;
+    let published = report_rx
+        .try_recv()
+        .context("a real edit must broadcast report/changed")?;
+    assert_eq!(
+        published.generation,
+        baseline_generation.saturating_add(1),
+        "the edit must publish exactly one generation past the baseline",
+    );
+    assert_eq!(
+        published.summary.clusters_removed, 1,
+        "rewriting one half of the fixture's only clone pair must report the \
+         cluster as removed, got {:?}",
+        published.summary,
+    );
+    Ok(())
+}
+
+/// Issue #314, the trap the naive fix falls into. Every read through
+/// `LiveApi` calls `refresh_if_stale`, which ingests edits and advances the
+/// generation *without* broadcasting — so on a busy editor the read path
+/// routinely wins the race against the watcher. A scheduler that asked "did
+/// my own pass change anything" would then find nothing to do and stay
+/// silent, and the panel would sit on a stale report forever. Ask instead
+/// whether subscribers have heard about this generation.
+#[tokio::test(flavor = "multi_thread")]
+async fn generation_advanced_out_of_band_still_reaches_subscribers() -> Result<()> {
+    let tmp = copy_fixture("csharp-small")?;
+    let session = Arc::new(tokio::sync::Mutex::new(live_session(tmp.path())?));
+    let baseline_generation = session.lock().await.generation();
+    let (events_tx, events_rx) = tokio::sync::mpsc::channel(8);
+    let scheduler = Scheduler::start(
+        Arc::clone(&session),
+        events_rx,
+        Arc::new(RunawayClock::default()),
+    );
+    let mut report_rx = scheduler.subscribe_report_changed();
+    let mut state_rx = scheduler.subscribe_state();
+
+    // One quiet pass first, so the scheduler has definitely recorded the
+    // baseline generation before the race below is set up.
+    let path = tmp.path().join("Alpha.cs");
+    events_tx
+        .send(path.clone())
+        .await
+        .context("queue warm-up event")?;
+    await_pass_complete(&mut state_rx).await?;
+
+    // The read path beats the watcher: the edit is already ingested, and
+    // its generation was published to nobody.
+    fs::write(
+        &path,
+        b"namespace Alpha { public class Differ { public int Run(int x) { return x + 3; } } }\n",
+    )
+    .context("write Alpha")?;
+    let mut guard = session.lock().await;
+    let _delta = guard
+        .apply_changes(std::slice::from_ref(&path))
+        .context("out-of-band ingest")?;
+    let silent_generation = guard.generation();
+    drop(guard);
+    assert_eq!(
+        silent_generation,
+        baseline_generation.saturating_add(1),
+        "the out-of-band ingest must advance the generation",
+    );
+
+    // The watcher event for the same edit now arrives. Its bytes are
+    // already in the corpus, so the pass itself changes nothing — and the
+    // announcement still has to go out.
+    events_tx.send(path).await.context("queue watcher event")?;
+    await_pass_complete(&mut state_rx).await?;
+    let published = report_rx
+        .try_recv()
+        .context("a generation nobody has heard about must still be broadcast")?;
+    assert_eq!(
+        published.generation, silent_generation,
+        "the broadcast must carry the generation the silent ingest produced",
+    );
+    assert_eq!(
+        session.lock().await.generation(),
+        silent_generation,
+        "re-reading identical bytes must not advance the generation again",
+    );
+    assert!(
+        matches!(report_rx.try_recv(), Err(TryRecvError::Empty)),
+        "exactly one announcement — the pass must not also emit a second",
     );
     Ok(())
 }

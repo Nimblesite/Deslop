@@ -41,9 +41,9 @@ flowchart LR
 
     CliProc(["deslop CLI process\n(one-shot batch)"])
 
-    StateFile[(".deslop-cache/live-report.json")]
-    IpcSocket[(".deslop-cache/deslop.sock\nor .deslop-cache/deslop.port")]
-    DiskCache[(".deslop-cache/\nfingerprints + embeddings")]
+    StateFile[(".deslop/cache/live-report.json")]
+    IpcSocket[(".deslop/cache/deslop.sock\nor .deslop/cache/deslop.port")]
+    DiskCache[(".deslop/cache/\nfingerprints + embeddings")]
     Workspace[(Workspace files)]
     Ollama[(Ollama)]
 
@@ -113,7 +113,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Transitive-closure clustering | ✅ | `crates/deslop-core/src/cluster.rs` |
 | Worst-offenders ranking ([PIPELINE-RANK-WORST-FIRST]) | ✅ `nodes × (size−1) × log2(1 + spanned_bytes)` | `crates/deslop-core/src/cluster.rs::rank_weight` |
 | Repo-wide metrics + fail-over threshold ([METRICS-REPO], [EXIT-CODES]) | ✅ exit 3 on breach | `crates/deslop-core/src/report_metrics.rs`, `crates/deslop/src/main.rs` |
-| Incremental fingerprint cache ([PIPELINE-INCREMENTAL]) | ✅ opt-in `--incremental` | `crates/deslop-core/src/fpcache.rs` |
+| Incremental fingerprint cache ([PIPELINE-INCREMENTAL]) | ✅ on by default, `--no-incremental` opts out | `crates/deslop-core/src/fpcache.rs` |
 | JSON / text / human-HTML renderers ([OUTPUT-SCHEMA-JSON], [OUTPUT-HUMAN-HTML]) | ✅ | `crates/deslop-core/src/render/`, `crates/deslop-core/src/report_render.rs` |
 | Live `AnalysisSession` + watcher + scheduler ([LIVE-*]) | ✅ debounce 250 ms / cap 2 s | `crates/deslop-core/src/live/` (`session.rs`, `watcher.rs`, `scheduler.rs`, `debouncer.rs`) |
 | LSP server with diagnostics, hover, code lens, custom `deslop/*` methods ([LSP-*]) | ✅ | `crates/deslop-lsp/src/` |

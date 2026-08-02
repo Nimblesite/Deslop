@@ -11,7 +11,6 @@ use crate::{
     ast::NormalizedNode,
     boilerplate::{collect_import_boilerplate_ranges, BoilerplateRange},
     discover::DiscoveredFile,
-    embedding::cache::DEFAULT_CACHE_DIR_NAME,
     error::CoreError,
     fingerprint::{collect_non_boilerplate_fingerprints, Fingerprint},
     fpcache::{CachedFile, FingerprintCache},
@@ -68,7 +67,7 @@ pub fn fingerprint_corpus(
 ) -> Result<FingerprintCorpus, CoreError> {
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
-    let cache_base = config.root.join(DEFAULT_CACHE_DIR_NAME);
+    let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
     for discovered in files {
         let Some(parser) = parser_for_language(parsers, discovered.language) else {
@@ -143,7 +142,7 @@ pub fn parse_one_file(
     stats: &mut CacheStats,
 ) -> Result<(CachedFile, Vec<u8>, u64), CoreError> {
     let source = read_source(path)?;
-    let cache_base = config.root.join(DEFAULT_CACHE_DIR_NAME);
+    let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
     let cache = if config.incremental {
         fingerprint_cache_for(&mut caches, &cache_base, parser.id(), config.min_nodes)

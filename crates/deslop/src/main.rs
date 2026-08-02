@@ -50,8 +50,8 @@ struct Cli {
     min_nodes: u32,
 
     /// Base path for the rendered reports. Extensions `.json`, `.txt`,
-    /// `.html` are appended. Defaults to `deslop-report` in the
-    /// current working directory.
+    /// `.html` are appended. Defaults to `.deslop/deslop-report` under
+    /// the scan root; logs follow the reports into `<dir>/logs/`.
     #[arg(long, value_name = "PATH_PREFIX")]
     output: Option<PathBuf>,
 
@@ -183,17 +183,21 @@ struct SuppressFlags {
 /// rationale as [`SuppressFlags`].
 #[derive(Debug, clap::Args)]
 struct BehaviourFlags {
-    /// Enable the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]).
-    /// When set, the pipeline caches parsed AST + fingerprints under
-    /// `<root>/.deslop-cache/fingerprints/...` keyed by
-    /// `(language, tool_version, min_nodes, content_hash)`. On the
-    /// next run, unchanged files skip tree-sitter entirely. Off by
-    /// default — analysing a read-only checkout should not mutate it.
+    /// Disable the on-disk fingerprint cache ([PIPELINE-INCREMENTAL]).
+    /// The cache is **on by default**: the pipeline caches parsed AST +
+    /// fingerprints under `<root>/.deslop/cache/fingerprints/...` keyed
+    /// by `(language, tool_version, min_nodes, content_hash)`, so the
+    /// next run skips tree-sitter entirely for unchanged files. This is
+    /// the same first-class incremental path the LSP runs on — a batch
+    /// run is just "incremental starting from an empty cache". Pass
+    /// this flag to analyse without reading or writing the cache; an
+    /// unwritable cache directory already degrades to a full parse on
+    /// its own, so read-only checkouts need no flag.
     #[arg(long)]
-    incremental: bool,
+    no_incremental: bool,
     /// Send log events to stderr instead of a timestamped file. By
-    /// default the CLI writes logs to `deslop-<timestamp>.log`
-    /// next to the report so the stderr stream stays readable.
+    /// default the CLI writes logs to `logs/deslop-<timestamp>.log`
+    /// beside the report so the stderr stream stays readable.
     #[arg(long)]
     log_to_console: bool,
     /// Minimum log severity emitted. Accepts `error`, `warn`, `info`,
@@ -205,6 +209,14 @@ struct BehaviourFlags {
     /// `NO_COLOR` environment variable is set.
     #[arg(long)]
     no_color: bool,
+}
+
+impl BehaviourFlags {
+    /// Whether the on-disk fingerprint cache is active for this run —
+    /// the inverse of `--no-incremental` ([PIPELINE-INCREMENTAL]).
+    fn incremental(&self) -> bool {
+        !self.no_incremental
+    }
 }
 
 fn main() {
@@ -238,11 +250,15 @@ fn run_cli() -> Result<()> {
     }
     validate_scan_path(&args.path)?;
     let formats = FormatSelection::from_args(&args)?;
-    let output = OutputPaths::new(args.output.as_deref());
+    let output = OutputPaths::new(args.output.as_deref(), &args.path);
     let mode: EmbeddingMode = parse_embedding_mode(&args.embeddings)?;
     let log_level = parse_log_level(&args.behaviour.log_level)?;
     let color = ColorChoice::resolve(args.behaviour.no_color);
-    let log_sink = logging::init(output.directory(), args.behaviour.log_to_console, log_level)?;
+    let log_sink = logging::init(
+        &output.log_directory(),
+        args.behaviour.log_to_console,
+        log_level,
+    )?;
     summary::preamble(
         color,
         &args.path,
@@ -251,7 +267,7 @@ fn run_cli() -> Result<()> {
         &PreambleKnobs {
             min_nodes: args.min_nodes,
             embedding_mode: mode.as_str(),
-            incremental: args.behaviour.incremental,
+            incremental: args.behaviour.incremental(),
             technical: args.technical,
         },
     );
@@ -262,7 +278,7 @@ fn run_cli() -> Result<()> {
         text = formats.text_enabled(),
         html = formats.html_enabled(),
         embeddings = mode.as_str(),
-        incremental = args.behaviour.incremental,
+        incremental = args.behaviour.incremental(),
         "deslop invoked",
     );
     let outcome = match produce_report(&args, mode, &formats) {
@@ -440,7 +456,7 @@ fn produce_report(
     let (mut session, initial) = PipelineSession::initialise(
         args.path.clone(),
         args.min_nodes,
-        args.behaviour.incremental,
+        args.behaviour.incremental(),
         args.config.clone(),
         embedding(),
     )

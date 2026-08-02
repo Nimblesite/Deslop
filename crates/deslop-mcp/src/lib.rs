@@ -4,7 +4,7 @@
 //! Implements [mcp.md]: peer of the LSP shell ([lsp.md]), thin wrapper
 //! around the LSP IPC socket via [`backend::LiveBackend`]. Every read
 //! and compute call delegates to the LSP's in-memory `latest_report`
-//! over `.deslop-cache/deslop.sock` — the LSP is the single source of
+//! over `.deslop/cache/deslop.sock` — the LSP is the single source of
 //! truth and there is no on-disk staleness window between MCP and LSP.
 //!
 //! Implements:

@@ -1,15 +1,11 @@
 //! Report output helpers for the `deslop` CLI.
 
-use std::{env, fs, io::Write as _, path::PathBuf};
+use std::{fs, io::Write as _, path::PathBuf};
 
 use anyhow::{Context, Result};
-use deslop_core::{render::render_html, render::render_text, Report};
+use deslop_core::{paths, render::render_html, render::render_text, Report};
 
 use crate::Cli;
-
-/// Default base name for the three-format output written to CWD when
-/// `--output` is not provided.
-const DEFAULT_OUTPUT_STEM: &str = "deslop-report";
 
 /// A post-parse usage error: an invalid flag combination clap's
 /// declarative rules cannot express. `main` maps it to exit `2` — the
@@ -79,14 +75,14 @@ pub(crate) struct OutputPaths {
 }
 
 impl OutputPaths {
-    /// Picks the base path for rendered reports.
-    pub(crate) fn new(explicit: Option<&std::path::Path>) -> Self {
+    /// Picks the base path for rendered reports: the explicit
+    /// `--output` prefix when given, else [OUTPUT-DIR]'s
+    /// `<scan_root>/.deslop/deslop-report`. Defaulting against the scan
+    /// root rather than the working directory is what makes the CLI,
+    /// LSP, and MCP agree on one location for a given workspace.
+    pub(crate) fn new(explicit: Option<&std::path::Path>, scan_root: &std::path::Path) -> Self {
         let base = explicit.map_or_else(
-            || {
-                env::current_dir()
-                    .unwrap_or_default()
-                    .join(DEFAULT_OUTPUT_STEM)
-            },
+            || paths::report_base(scan_root),
             std::path::Path::to_path_buf,
         );
         Self { base }
@@ -114,6 +110,14 @@ impl OutputPaths {
     /// Directory that the report files sit in.
     pub(crate) fn directory(&self) -> &std::path::Path {
         self.base.parent().unwrap_or(std::path::Path::new("."))
+    }
+
+    /// Directory that timestamped log files sit in — a `logs/`
+    /// subdirectory of [`Self::directory`] ([OUTPUT-DIR]), so the log
+    /// files that accumulate run after run never bury the three report
+    /// files a user actually opens.
+    pub(crate) fn log_directory(&self) -> PathBuf {
+        paths::logs_dir(self.directory())
     }
 }
 

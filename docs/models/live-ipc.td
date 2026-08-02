@@ -1,7 +1,7 @@
 typeDiagram
 
 # [LIVE-IPC-TCP] On-disk discovery record for the TCP loopback IPC
-# transport. Written to `.deslop-cache/deslop.port` by deslop-lsp when
+# transport. Written to `.deslop/cache/deslop.port` by deslop-lsp when
 # TCP carries the IPC protocol (default on Windows, opt-in elsewhere via
 # `--ipc-transport tcp`); read by deslop-mcp to locate and authenticate
 # against the live server ([MCP-IPC-DISCOVERY]).

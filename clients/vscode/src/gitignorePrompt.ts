@@ -1,13 +1,13 @@
-// [VSIX-CACHE-IGNORE] Deslop writes its analysis cache into
-// `<workspace>/.deslop-cache/` — fingerprints, one blob per embedded
-// subtree, the live report, and the IPC endpoint records. On a large
-// repo that is hundreds of thousands of files. An F# user reported it
-// reaching 700 MB and becoming "95% of the files in the repo by count"
-// because nothing ever told git to ignore it (#286). Deslop's own
-// `.gitignore` has carried `.deslop-cache/` since day one, which is
-// exactly why nobody here ever felt it.
+// [VSIX-CACHE-IGNORE] Deslop writes everything it produces for a
+// workspace into `<workspace>/.deslop/` ([OUTPUT-DIR]) — reports, logs,
+// fingerprints, one blob per embedded subtree, the live report, and the
+// IPC endpoint records. On a large repo that is hundreds of thousands of
+// files. An F# user reported it reaching 700 MB and becoming "95% of the
+// files in the repo by count" because nothing ever told git to ignore it
+// (#286). Deslop's own `.gitignore` has carried the entry since day one,
+// which is exactly why nobody here ever felt it.
 //
-// The cache directory is ours to write. The user's `.gitignore` is not:
+// The output directory is ours to write. The user's `.gitignore` is not:
 // it is tracked source that lands in their next commit and changes what
 // their whole team sees. So this asks, once, and writes only on an
 // explicit Yes — never silently, and never again after a No.
@@ -18,8 +18,9 @@ import * as vscode from "vscode";
 import { log } from "./logging";
 
 /// The entry written into `.gitignore` on consent. Trailing slash so it
-/// matches the directory only, exactly as Deslop's own repo spells it.
-export const CACHE_IGNORE_ENTRY = ".deslop-cache/";
+/// matches the output directory only — never the user's `.deslop.toml`
+/// config file — exactly as Deslop's own repo spells it.
+export const CACHE_IGNORE_ENTRY = ".deslop/";
 
 /// Prompt text and its two answers. `No` is a real button rather than a
 /// dismissal so declining is recorded rather than re-asked next session.
@@ -31,14 +32,16 @@ const NO = "No";
 /// the answer is about this repository's `.gitignore`.
 export const DECLINED_KEY = "deslop.cacheIgnoreDeclined";
 
-/// True when `gitignoreText` already ignores the cache directory, with or
-/// without the trailing slash. Comment lines never count as a match, so a
-/// commented-out entry still prompts.
+/// True when `gitignoreText` already ignores the output directory, with
+/// or without the trailing slash. Comment lines never count as a match,
+/// so a commented-out entry still prompts. A pre-[OUTPUT-DIR]
+/// `.deslop-cache/` entry does not count: that directory is no longer
+/// written, and the workspace still needs `.deslop/` covered.
 export function isCacheIgnored(gitignoreText: string): boolean {
   return gitignoreText
     .split("\n")
     .map((line) => line.trim())
-    .some((line) => line === ".deslop-cache/" || line === ".deslop-cache");
+    .some((line) => line === ".deslop/" || line === ".deslop");
 }
 
 /// `existing` with the cache entry appended, preserving whatever was

@@ -42,7 +42,7 @@ fn run_ollama_pass(
 /// argument/provider rejection tests.
 fn assert_cli_rejects(args: &[&str], expected: &str) -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd.args(args).assert().failure().stderr(contains(expected));
     Ok(())
 }
@@ -51,7 +51,7 @@ fn assert_cli_rejects(args: &[&str], expected: &str) -> Result<()> {
 fn default_run_records_embeddings_off_provenance() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd.args(["--min-nodes", "8"]).assert().success();
     let json = fs::read_to_string(&out.json)?;
     assert!(
@@ -70,7 +70,7 @@ fn default_run_records_embeddings_off_provenance() -> Result<()> {
 #[test]
 fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
     let tmp = tempfile::tempdir()?;
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args([
             "--min-nodes",
@@ -93,7 +93,7 @@ fn embeddings_required_hard_fails_when_provider_unreachable() -> Result<()> {
 fn embeddings_auto_falls_back_when_provider_unreachable() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let out = outputs_under(tmp.path());
-    let mut cmd = deslop_command(&fixture("csharp-small"), &tmp.path().join("report"))?;
+    let mut cmd = fixture_command("csharp-small", &tmp.path().join("report"))?;
     let _assertion = cmd
         .args([
             "--min-nodes",
@@ -177,7 +177,7 @@ fn mock_ollama_populates_embedding_cache() -> Result<()> {
         server.endpoint(),
     )?;
     let cache_dir = scan_root
-        .join(".deslop-cache")
+        .join(".deslop/cache")
         .join("embeddings")
         .join("ollama")
         .join("nomic-embed-text");
