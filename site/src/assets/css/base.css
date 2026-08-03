@@ -438,7 +438,7 @@ body.menu-open .drawer-scrim { opacity: 1; visibility: visible; }
   .is-docs .nav-links { display: none; }
 }
 
-@media (max-width: 359.98px) {
+@media (max-width: 399.98px) {
   .logo-badge { display: none; }
 }
 

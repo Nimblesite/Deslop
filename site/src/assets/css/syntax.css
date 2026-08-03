@@ -3,9 +3,31 @@
   .nav { padding: var(--space-3) var(--space-4); }
   .hero { padding: var(--space-16) var(--space-4) var(--space-12); gap: var(--space-12); }
   .hero h1 { font-size: clamp(2rem, 9vw, 3rem); }
-  .bento { padding: var(--space-16) var(--space-4); }
-  .report-card { transform: none; }
   .footer-grid { padding-bottom: var(--space-8); }
+  .logo,
+  .skip-link:focus,
+  .nav-link,
+  .lang-link,
+  .theme-toggle,
+  .mobile-menu-toggle,
+  .editor-card__review { min-height: 3rem; }
+  .lang-link,
+  .theme-toggle,
+  .mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3rem;
+  }
+  .nav-link { display: flex; align-items: center; }
+  .footer-section ul { gap: 0; }
+  .footer-section a,
+  .footer-bottom a {
+    display: inline-flex;
+    align-items: center;
+    min-width: 3rem;
+    min-height: 3rem;
+  }
   .docs-main { padding: var(--space-6) var(--space-4); }
   .post-article { padding: var(--space-10) var(--space-4); }
   .blog-container { padding: var(--space-10) var(--space-4); }
