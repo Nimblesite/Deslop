@@ -5,7 +5,7 @@ description: Deslop.live GitHub Action 的完整配置 — 每一个输入与输
 keywords: deslop, github action, ci 门禁, 重复代码, fail-over, 重复率阈值, 代码质量, 持续集成
 eleventyNavigation:
   key: GitHub Action
-  order: 8
+  order: 6
 icon: rule
 lang: zh
 ---
@@ -125,7 +125,7 @@ jobs:
           nohtml: "true"        # 仅 JSON + 文本
 ```
 
-HTML 报告是给人看的；JSON 报告是用来解析的。各自的结构见[输出格式](/zh/docs/output-formats/)。
+HTML 报告是给人看的；JSON 报告是用来解析的。各自的结构见[报告输出](/zh/docs/configuration/#report-output)。
 
 ## 受支持的运行器
 
@@ -159,4 +159,4 @@ deslop . --fail-over 5.0
 
 退出码 `3` 会像任何非零状态一样让步骤失败。各平台的归档见[发布页](https://github.com/Nimblesite/Deslop/releases)。
 
-在 CI 中驱动 Deslop 的智能体应阅读 [For AI](/zh/docs/for-ai/) 指南，其中包含同样的门禁以及如何解析 JSON 报告。
+在 CI 中驱动 Deslop 的智能体应阅读 [For AI](/zh/docs/ai-integration/) 指南，其中包含同样的门禁以及如何解析 JSON 报告。

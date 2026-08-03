@@ -35,7 +35,7 @@
 .eyebrow-chip > span {
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  color: var(--primary);
+  color: var(--on-surface-variant);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -49,7 +49,7 @@
 }
 .hero h1 em {
   font-style: normal;
-  color: var(--primary-container);
+  color: var(--primary);
   display: block;
   margin-top: var(--space-2);
 }
@@ -279,9 +279,9 @@
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--on-surface);
   text-decoration: none;
   transition: color var(--dur) var(--ease);
 }
-.editor-card__review:hover { color: var(--on-surface); }
+.editor-card__review:hover { color: var(--on-surface-variant); }
 .editor-card__review .material-symbols-outlined { font-size: 1.125rem; }

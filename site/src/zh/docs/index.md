@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: 快速开始 — 安装 Deslop 的实时 LSP + MCP 服务器
-description: 安装 Deslop —— 面向 AI 智能体的实时 LSP + MCP 重复代码服务器。VS Code VSIX 一次安装即捆绑 LSP、MCP 与 CLI。仅需 CLI 可使用 Homebrew 和 Scoop。
+title: 快速开始 — 安装 Deslop 并查找重复代码
+description: 安装 Deslop，在九种编程语言中查找重复代码。VS Code 扩展一次安装即捆绑实时编辑器警告、面向编码智能体的检查与 CLI。仅需 CLI 可使用 Homebrew 和 Scoop。
 eleventyNavigation:
   key: 快速开始
   order: 1
@@ -11,7 +11,9 @@ lang: zh
 
 # 快速开始
 
-Deslop 是一个**实时重复代码分析服务器** —— LSP + MCP，运行于你的工作区，在*代码正被编写时*将实时的克隆信号流式传输到 Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器。安装它的首选方式是 **VS Code 扩展** —— 该扩展一次安装即捆绑 LSP 服务器、MCP 服务器**以及** CLI。
+**Deslop 在九种编程语言中查找重复代码，按影响程度排列最值得移除的重复，并在相似代码已经存在时告诉你的编码智能体。** 它运行于你的工作区，并随你的输入实时更新 —— Claude Code、Cursor、Copilot、Continue、Codex 以及你的编辑器读取的都是同一份实时分析。
+
+安装它的首选方式是 **VS Code 扩展**。一次安装即可获得全部三个接口面：实时编辑器警告、智能体写代码前所做的那次检查，以及 CLI。
 
 > **JetBrains 插件**（先支持 Rider，随后是 IntelliJ IDEA、PyCharm、WebStorm、RustRover、CLion）正在积极开发中。Zed 与 Neovim 已列入路线图。在它们发布之前，VSIX 是首要安装方式，而 Homebrew tap / Scoop bucket 则是仅需 CLI 时的快捷方式。
 
@@ -141,13 +143,12 @@ deslop . --fail-over 5.0          # exit 3 if more than 5% of analysed LOC is du
 max_duplication_percent = 5.0
 ```
 
-`--fail-over` 会覆盖配置键；`--fail-over 0` 在任何重复时都会失败；`--no-fail-over` 会为单次本地运行清除门禁。完整的退出码对照表见 [输出格式](/zh/docs/output-formats/#exit-codes)，一个可直接粘贴的 GitHub Actions 作业见 [面向 AI](/zh/docs/for-ai/#run-in-ci)。
+`--fail-over` 会覆盖配置键；`--fail-over 0` 在任何重复时都会失败；`--no-fail-over` 会为单次本地运行清除门禁。完整的[退出码对照表](/zh/docs/configuration/#exit-codes)在配置参考中，而 [GitHub Action](/zh/docs/github-action/) 为 CI 封装了同一套门禁。
 
 ## 下一步做什么
 
 1. 阅读 [工作原理](/zh/docs/how-it-works/)，理解排名公式与实时流水线。
-2. 阅读 [AI 集成](/zh/docs/ai-integration/)，将 `deslop-mcp` 接入 Claude Code、Claude Desktop、Cursor、Continue 或 Codex。
-3. 在自行解析 JSON 之前，先阅读 [输出格式](/zh/docs/output-formats/)。
-4. 当你需要了解某个面板标签、评分或操作的含义时，阅读 [VS Code 簇面板](/zh/docs/vscode-cluster-panel/)。
-5. 如果你是（或正在配置）一个编码智能体，阅读 [面向 AI](/zh/docs/for-ai/) —— 这是关于 `.deslop.toml`、CI 门禁与解析 JSON 报告的操作手册。
-6. 查看[发布](/zh/releases/)以获取当前 VSIX、CLI 归档、校验和与变更日志链接。
+2. 如果你是（或正在配置）一个编码智能体，阅读 [AI 智能体](/zh/docs/ai-integration/) —— 如何将 `deslop-mcp` 接入 Claude Code、Cursor、Continue 或 Codex，以及接好之后智能体所遵循的那一条规则。
+3. 当你需要了解某个面板标签、评分或操作的含义时，阅读 [VS Code](/zh/docs/vscode-cluster-panel/)。
+4. 阅读[配置与报告](/zh/docs/configuration/)，了解每一个 `.deslop.toml` 键、每一个命令行参数、三种报告格式与退出码。
+5. 查看[发布](/zh/releases/)以获取当前 VSIX、CLI 归档、校验和与变更日志链接。

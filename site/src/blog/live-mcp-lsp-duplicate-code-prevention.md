@@ -101,7 +101,7 @@ Deslop's MCP surface returns duplicate clusters worst-first, with the fields an 
 - an interpretation string,
 - action hints.
 
-The report is deliberately JSON-first. The human-readable text and HTML views are renderings of the same schema, not a second truth. The docs page on [Output Formats](/docs/output-formats/) explains the consumer contract, and [How It Works](/docs/how-it-works/) explains the parse, normalize, fingerprint, cluster, and rank pipeline.
+The report is deliberately JSON-first. The human-readable text and HTML views are renderings of the same schema, not a second truth. The docs page on [Output Formats](/docs/configuration/#report-output) explains the consumer contract, and [How It Works](/docs/how-it-works/) explains the parse, normalize, fingerprint, cluster, and rank pipeline.
 
 The MCP tools also carry an occurrence budget. Real repositories can have clusters with dozens of locations, and dumping every occurrence into an agent context window is not helpful. Deslop tools such as `top-offenders`, `report-for-file`, `report-for-range`, and `find-similar` accept a `max_occurrences` budget so the result stays useful instead of becoming a transcript flood. When an agent truly needs the full cluster, it can follow up with `cluster-by-id`.
 

@@ -40,21 +40,22 @@
   --code-bg: var(--surface-container-lowest);
   --code-fg: var(--on-surface);
   --code-comment: color-mix(in srgb, var(--on-surface-variant) 70%, transparent);
-  --code-keyword: var(--primary);
-  --code-string: #9bcbff;
+  --code-keyword: #c8a6ff;
+  --code-string: #8fd694;
   --code-number: #ffd28a;
-  --code-function: #ffb4aa;
+  --code-function: #9bcbff;
   --code-punctuation: color-mix(in srgb, var(--on-surface-variant) 85%, transparent);
   --code-variable: var(--on-surface);
   --code-operator: var(--on-surface-variant);
-  --code-builtin: #c8a6ff;
+  --code-builtin: #7fd1d8;
 }
 :root[data-theme="light"] {
   --code-comment: color-mix(in srgb, var(--on-surface-variant) 80%, transparent);
+  --code-keyword: #6d3fb8;
   --code-string: #006b5d;
   --code-number: #8a4f00;
-  --code-function: #b3261e;
-  --code-builtin: #5d2fa8;
+  --code-function: #00619e;
+  --code-builtin: #00696e;
 }
 pre[class*="language-"],
 code[class*="language-"] {

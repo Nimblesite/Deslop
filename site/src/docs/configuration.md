@@ -1,16 +1,17 @@
 ---
 layout: layouts/docs.njk
-title: Configuration Reference — .deslop.toml and CLI flags
-description: Every Deslop knob in one place — the .deslop.toml sections (exclude, report_hide, threshold, ranking, analysis, report), the built-in rules you can't turn off, every CLI flag, and the precedence between them.
+title: Configuration and Reports — .deslop.toml, flags, output
+description: Every Deslop knob in one place — the .deslop.toml sections (exclude, report_hide, threshold, ranking, analysis, report), the built-in rules you can't turn off, every CLI flag, the three report formats, and the exit codes.
+keywords: deslop, configuration, .deslop.toml, cli flags, exclude, report_hide, threshold, exit codes, json report, html report
 eleventyNavigation:
   key: Configuration
-  order: 6
+  order: 5
 icon: tune
 ---
 
-# Configuration Reference
+# Configuration and Reports
 
-Deslop is configured two ways:
+What goes in, and what comes out. Deslop takes its settings from two places and writes three reports from every run.
 
 - **`.deslop.toml`** — a committed file next to your code. This is where project-wide policy lives: what to skip, what to hide, and when to fail CI.
 - **CLI flags** — per-run overrides. A flag always wins over the matching config key.
@@ -98,7 +99,7 @@ max_duplication_percent = 20
 | --- | --- | --- | --- |
 | `max_duplication_percent` | float | `0.0`–`100.0` | When repo-wide `duplication_percent` exceeds this, `deslop` exits **`3`** and fails CI. |
 
-This is the **only** opt-in failure path. With no `[threshold]` block (and no `--fail-over`), `deslop` always exits `0` no matter how much duplication it finds. The CLI `--fail-over` flag overrides this key; `--no-fail-over` clears it for a single run. See [Output Formats → Exit codes](/docs/output-formats/#exit-codes).
+This is the **only** opt-in failure path. With no `[threshold]` block (and no `--fail-over`), `deslop` always exits `0` no matter how much duplication it finds. The CLI `--fail-over` flag overrides this key; `--no-fail-over` clears it for a single run. See [Exit codes](#exit-codes) below.
 
 ## `[analysis]`
 
@@ -248,3 +249,69 @@ Two environment variables also apply:
 
 - **`RUST_LOG`** — overrides `--log-level` using the standard `tracing` filter syntax.
 - **`NO_COLOR`** — disables colour even without `--no-color`. Colour is also suppressed automatically when stderr is not a terminal.
+
+## Report output
+
+Every run emits three reports. The JSON is the product; the text and HTML are renderers over the same data. No claim appears in TXT or HTML that is not also present in the JSON.
+
+### JSON — canonical
+
+`deslop-report.json` is what agents read and what schema consumers should parse. Its full shape, field by field, is in [AI Agents → Reading the JSON](/docs/ai-integration/#reading-the-json).
+
+Guarantees:
+
+- Fields marked `optional` in the schema may be absent. Fields marked `required` are always present.
+- Clusters are sorted by `weight` descending. `clusters[0]` is always the worst offender.
+- UTF-8. No BOM. LF line endings.
+
+### TXT — terminal
+
+`deslop-report.txt` is ASCII, line-oriented, and deliberately boring. No ANSI colours, no unicode box-drawing, no paging escape codes. Pipeable into `head`, `grep`, `awk` without surprises.
+
+```
+deslop 0.0.0-dev -- 840 file(s), 142 cluster(s), 0 hidden
+repo: 2.6% duplicated (48120 / 1832044 LOC, 142 clusters across 318 files)
+embeddings: off
+-- action hints --
+  [identical] Extract the shared code into one definition and call it from every duplicate site.
+#1 [0362505641efe3c7] weight=1252.80 size=3 nodes=58
+  3 near-identical copies — safe to extract.
+  :: Nearly identical across UserRepository.cs, ProductRepository.cs, OrderRepository.cs.
+```
+
+Each cluster is a numbered block — `#1` is the worst offender — with its weight, size, and node count, followed by a plain-English summary and a one-line interpretation. Clusters are listed worst-first. This format survives every terminal, every SSH session, and every CI log.
+
+### HTML — portable
+
+`deslop-report.html` is a single file. All CSS is inlined. No network requests. Drop it into a CI artifact, email it, open it on an airplane — it renders.
+
+The HTML renderer uses the same ranking and the same cluster summaries as JSON and TXT. It adds:
+
+- syntax-highlighted example snippets, with long snippets and extra locations folded into collapsible toggles
+- an "AI match" badge and an impact chip on each duplicate group
+- a per-group signals table (structural / token / embedding / fused) in a collapsible "Run details" footer
+
+It does not add: scores not in the JSON, commentary beyond the `summary` field, or links to external services.
+
+### Where the files land
+
+Everything Deslop writes goes into one `.deslop/` directory at the root of the scanned project, or the prefix you pass to `--output`. To emit only the JSON report, suppress the other two formats:
+
+```bash
+deslop . --notext --nohtml      # writes .deslop/deslop-report.json
+```
+
+Diagnostics are separate from reports. By default they go to a timestamped log file (`.deslop/logs/deslop-<timestamp>.log`) via `tracing` with structured fields; pass `--log-to-console` to send them to `stderr` instead. The human-readable preamble and summary always go to `stderr`.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Completed. Duplication was below the threshold, or no threshold was set. |
+| `1` | Runtime error — nonexistent scan path, analysis failure, I/O error, or a `required` embedding provider that was unreachable. Never a panic. |
+| `2` | Usage error — unknown flag, or an out-of-range / non-finite threshold value, rejected before the run starts. |
+| `3` | **Threshold breached.** The full report is still written to disk so the offenders can be surfaced. |
+
+`deslop` never panics on user input. Failures surface through these exit codes and a structured error on `stderr`.
+
+Exit `3` is the **CI gate**. It only ever fires when you opt in — by passing `--fail-over <percent>` or setting `[threshold] max_duplication_percent`. See [Gate CI on a duplication threshold](/docs/#gate-ci-on-a-duplication-threshold) for the walkthrough, or the [GitHub Action](/docs/github-action/) for a ready-to-use CI job.

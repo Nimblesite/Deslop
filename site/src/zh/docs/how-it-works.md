@@ -95,13 +95,9 @@ weight = clone_node_count × (cluster_size − 1) × log2(1 + spanned_bytes)
 
 ## Render（渲染）
 
-三个渲染器读取同一份物化视图：
+三个渲染器读取同一份物化视图：面向智能体的规范 **JSON**、面向终端的按行组织的 **TXT**，以及面向人类的独立 **HTML**。智能体消费 JSON；人类在终端阅读 TXT，或在浏览器中打开 HTML。TXT 或 HTML 所作的每一项陈述也都呈现在 JSON 中。
 
-- **JSON** —— 规范且严格类型化。携带内嵌的 `schema_doc`、`action_hints`、覆盖全仓库的 `metrics` 以及 `embedding_provenance`。
-- **TXT** —— ASCII、面向行、无 ANSI。可通过管道送入 `head`、`grep`、`awk`。
-- **HTML** —— 独立、内联 CSS、零网络依赖。它嵌入源代码片段并采用 tree-sitter 驱动的语法高亮；当某文件的源代码不再可用时，卡片会回退为仅含路径、不带片段的摘要。
-
-智能体消费 JSON。人类在终端阅读 TXT，或在浏览器中打开 HTML。TXT 或 HTML 所作的每一项陈述也都呈现在 JSON 中。
+三者各自的结构以及一次运行返回的退出码，参见[报告输出](/zh/docs/configuration/#report-output)。
 
 ## 实时 = 响应式
 

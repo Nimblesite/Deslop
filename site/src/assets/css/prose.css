@@ -98,7 +98,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 }
 .docs-sidebar__link.is-active {
   background: color-mix(in srgb, var(--surface-container-high) 50%, transparent);
-  color: var(--primary);
+  color: var(--on-surface);
   font-weight: 700;
 }
 .docs-sidebar__link--child { padding-left: var(--space-10); }
@@ -150,7 +150,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .docs-breadcrumb a { color: inherit; }
 .docs-breadcrumb a:hover { color: var(--on-surface); }
 .docs-breadcrumb .material-symbols-outlined { font-size: 0.75rem; }
-.docs-breadcrumb__current { color: var(--primary); }
+.docs-breadcrumb__current { color: var(--on-surface); }
 
 /* Markdown-driven docs title (h1 leads the body). Scoped so blog bodies, whose
    title lives in the template header, are never affected. */
@@ -189,12 +189,12 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   gap: var(--space-2);
   font-family: var(--font-mono);
   font-size: 0.8125rem;
-  color: var(--on-surface);
+  color: var(--on-surface-variant);
   transition: color var(--dur) var(--ease);
 }
 .docs-article__prev:hover,
 .docs-article__next:hover,
-.post-article__back:hover { color: var(--primary); }
+.post-article__back:hover { color: var(--on-surface); }
 .docs-article__prev.is-disabled { opacity: 0.4; cursor: not-allowed; color: var(--on-surface-variant); }
 .docs-article__prev .material-symbols-outlined,
 .docs-article__next .material-symbols-outlined,
@@ -311,7 +311,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   letter-spacing: -0.02em;
   line-height: 1.25;
 }
-.post-card__title:hover { color: var(--primary); }
+.post-card__title:hover { color: var(--on-surface-variant); }
 .post-card--featured .post-card__title { font-size: clamp(1.75rem, 3vw, 2.25rem); }
 
 .post-card__excerpt {
@@ -332,7 +332,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--on-surface);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: inline-flex;
@@ -359,7 +359,7 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
   letter-spacing: 0.08em;
   margin: 0 0 var(--space-4);
 }
-.post-article__meta a { color: var(--primary); }
+.post-article__meta a { color: var(--on-surface); }
 .post-article__author { color: var(--on-surface); }
 
 .post-article__tags { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -433,10 +433,12 @@ body.menu-open .docs-sidebar { transform: translateX(0); }
 .prose p { color: var(--on-surface-variant); line-height: 1.75; font-size: 1.0625rem; }
 .prose ul, .prose ol { color: var(--on-surface-variant); padding-left: var(--space-6); line-height: 1.75; }
 .prose li { margin-bottom: var(--space-2); }
-.prose li::marker { color: var(--primary); }
+.prose li::marker { color: var(--outline); }
 .prose strong { color: var(--on-surface); font-weight: 700; }
-.prose a:not(.header-anchor) { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
-.prose a:not(.header-anchor):hover { color: var(--on-surface); }
+/* Links read as links through weight and rule, not hue — body copy is
+   --on-surface-variant, so a link is the brighter, underlined text. */
+.prose a:not(.header-anchor) { color: var(--on-surface); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.prose a:not(.header-anchor):hover { color: var(--on-surface-variant); }
 .prose a.header-anchor { color: inherit; text-decoration: none; }
 .prose pre { background: var(--surface-container-lowest); padding: var(--space-6); border-radius: var(--radius-sm); font-size: 0.875rem; overflow-x: auto; }
 .prose :not(pre) > code { background: var(--surface-container-high); color: var(--on-surface); padding: 0.15em 0.4em; border-radius: var(--radius-sm); font-size: 0.875em; overflow-wrap: anywhere; }

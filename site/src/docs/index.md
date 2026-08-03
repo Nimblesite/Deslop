@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
-title: Getting Started — Install Deslop's live LSP + MCP server
-description: Install Deslop — the live LSP + MCP duplicate-code server for AI agents. The VS Code VSIX bundles LSP, MCP, and CLI in one install. Homebrew and Scoop for CLI-only.
+title: Getting Started — Install Deslop and find duplicate code
+description: Install Deslop and find duplicate code across nine languages. The VS Code extension bundles live editor warnings, checks for coding agents, and the CLI in one install. Homebrew and Scoop for CLI-only.
 eleventyNavigation:
   key: Getting Started
   order: 1
@@ -10,7 +10,9 @@ icon: rocket_launch
 
 # Getting Started
 
-Deslop is a **live duplicate-code analysis server** — LSP + MCP, running in your workspace, streaming real-time clone signals to Claude Code, Cursor, Copilot, Continue, Codex, and your editor *as code is being written*. The preferred way to install it is the **VS Code extension** — the extension bundles the LSP server, the MCP server, **and** the CLI in one install.
+**Deslop finds duplicate code across nine languages, ranks what to remove first, and tells your coding agent when similar code already exists.** It runs on your workspace and updates as you type — Claude Code, Cursor, Copilot, Continue, Codex, and your editor all read the same live analysis.
+
+The preferred way to install it is the **VS Code extension**. One install bundles all three surfaces: live editor warnings, the check agents call before writing code, and the CLI.
 
 > The **JetBrains plugin** (Rider first, then IntelliJ IDEA, PyCharm, WebStorm, RustRover, CLion) is in active development. Zed and Neovim are on the roadmap. Until those ship, the VSIX is the headline install, and the Homebrew tap / Scoop bucket are the CLI-only shortcuts.
 
@@ -138,13 +140,12 @@ deslop . --fail-over 5.0          # exit 3 if more than 5% of analysed LOC is du
 max_duplication_percent = 5.0
 ```
 
-`--fail-over` overrides the config key; `--fail-over 0` fails on any duplication; `--no-fail-over` clears the gate for a single local run. The full exit-code table lives in [Output Formats](/docs/output-formats/#exit-codes), and a ready-to-paste GitHub Actions job is in [For AI](/docs/for-ai/#run-in-ci).
+`--fail-over` overrides the config key; `--fail-over 0` fails on any duplication; `--no-fail-over` clears the gate for a single local run. The full [exit-code table](/docs/configuration/#exit-codes) is in the configuration reference, and the [GitHub Action](/docs/github-action/) wraps the same gate for CI.
 
 ## What to do next
 
 1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula and the live pipeline.
-2. Read [AI Integration](/docs/ai-integration/) to wire `deslop-mcp` into Claude Code, Claude Desktop, Cursor, Continue, or Codex.
-3. Read [Output Formats](/docs/output-formats/) before parsing the JSON yourself.
-4. Read [VS Code Cluster Panel](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
-5. Read [For AI](/docs/for-ai/) if you are (or are configuring) a coding agent — the operating manual for `.deslop.toml`, CI gating, and parsing the JSON report.
-6. Check [Releases](/releases/) for the current VSIX, CLI archives, checksums, and changelog links.
+2. Read [AI Agents](/docs/ai-integration/) if you are (or are configuring) a coding agent — how to wire `deslop-mcp` into Claude Code, Cursor, Continue, or Codex, and the one rule an agent follows once it is wired.
+3. Read [VS Code](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
+4. Read [Configuration and Reports](/docs/configuration/) for every `.deslop.toml` key, every CLI flag, the three report formats, and the exit codes.
+5. Check [Releases](/releases/) for the current VSIX, CLI archives, checksums, and changelog links.

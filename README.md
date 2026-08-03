@@ -103,7 +103,7 @@ deslop . --output ./report     # write report.json, report.txt, report.html
 
 Configuration lives in `.deslop.toml`. See the
 [configuration reference](https://deslop.live/docs/configuration/) and
-[output format guide](https://deslop.live/docs/output-formats/).
+[configuration and reports guide](https://deslop.live/docs/configuration/#report-output).
 
 ## Project direction
 

@@ -102,7 +102,7 @@ Deslop 的 MCP 界面按最严重优先的顺序返回重复的簇，并附带�
 - 一段解读文字，
 - 行动提示。
 
-这份报告刻意以 JSON 为先。人类可读的文本视图和 HTML 视图，都是同一套 schema 的渲染结果，而不是另一份真相。文档中的[输出格式](/zh/docs/output-formats/)页面解释了消费方的契约，而[工作原理](/zh/docs/how-it-works/)则解释了解析、归一化、指纹、聚簇和排名这条流水线。
+这份报告刻意以 JSON 为先。人类可读的文本视图和 HTML 视图，都是同一套 schema 的渲染结果，而不是另一份真相。文档中的[输出格式](/zh/docs/configuration/#report-output)页面解释了消费方的契约，而[工作原理](/zh/docs/how-it-works/)则解释了解析、归一化、指纹、聚簇和排名这条流水线。
 
 MCP 工具还带有一个出现次数预算。真实的仓库里，一个簇可能有几十处位置，把每一次出现都倾倒进智能体的上下文窗口并无益处。诸如 `top-offenders`、`report-for-file`、`report-for-range` 和 `find-similar` 这样的 Deslop 工具都接受一个 `max_occurrences` 预算，好让结果保持有用，而不至于沦为一场刷屏。当智能体确实需要完整的簇时，它可以再用 `cluster-by-id` 跟进。
 
