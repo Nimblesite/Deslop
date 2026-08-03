@@ -14,7 +14,10 @@
 }
 
 @media (min-width: 1024px) {
-  .hero { flex-direction: row; }
+  .hero {
+    flex-direction: row;
+    min-height: calc(100dvh - var(--header-height));
+  }
 }
 
 .hero__left { flex: 1; z-index: 10; }
