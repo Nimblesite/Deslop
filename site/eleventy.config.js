@@ -647,9 +647,7 @@ export default function (eleventyConfig) {
       name: "Deslop",
       url: "https://deslop.live",
       description:
-        "The live LSP + MCP duplicate-code server for AI coding agents. Deslop streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex as code is written — find-similar prevents the copy-paste before it lands. Install via the VS Code VSIX (bundles LSP, MCP server, and CLI); JetBrains plugin in active development.",
-      keywords:
-        "deslop, duplicate code, code clone detection, AI code duplication, LLM duplicate code, MCP server, LSP server, claude code, claude desktop, cursor, copilot, continue, codex, tree-sitter, AST clone detection, find-similar, VS Code extension, JetBrains plugin, code deduplication",
+        "Find duplicate code in nine languages. Deslop ranks what to remove first and tells your coding agent when similar code already exists — live in VS Code.",
       ogImage: "/assets/img/og-card.png",
       ogImageWidth: "1200",
       ogImageHeight: "630",

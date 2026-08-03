@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "npx @11ty/eleventy --serve",
     "build": "npx @11ty/eleventy",
-    "clean": "rm -rf _site"
+    "clean": "rm -rf _site",
+    "test": "playwright test"
   },
   "dependencies": {
     "@11ty/eleventy": "^3.1.6",
     "eleventy-plugin-techdoc": "^0.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.0",
     "@11ty/eleventy-plugin-syntaxhighlight": "^5.0.2"
   }
 }

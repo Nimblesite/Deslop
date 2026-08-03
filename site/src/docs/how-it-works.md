@@ -94,13 +94,9 @@ Bigger fragments count more (`clone_node_count`). More copies count more (`clust
 
 ## Render
 
-Three renderers read the same materialized view:
+Three renderers read the same materialized view: canonical **JSON** for agents, line-oriented **TXT** for terminals, and standalone **HTML** for humans. Agents consume the JSON; humans read the TXT in the terminal or open the HTML in a browser. Every claim the TXT or HTML makes is also present in the JSON.
 
-- **JSON** — canonical and strictly typed. Carries the embedded `schema_doc`, `action_hints`, repo-wide `metrics`, and `embedding_provenance`.
-- **TXT** — ASCII, line-oriented, no ANSI. Pipeable into `head`, `grep`, `awk`.
-- **HTML** — standalone, inlined CSS, zero network dependencies. It embeds source snippets with tree-sitter-driven syntax highlighting; when a file's source is no longer available, the card falls back to a path-only summary without snippets.
-
-Agents consume JSON. Humans read TXT in the terminal or open the HTML in a browser. Every claim the TXT or HTML makes is also present in the JSON.
+The shape of each, and the exit codes a run returns, are in [Report output](/docs/configuration/#report-output).
 
 ## Live = reactive
 

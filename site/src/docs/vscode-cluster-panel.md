@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
-title: VS Code Cluster Panel — Reading a Deslop clone cluster
-description: Field guide for the Deslop VS Code cluster detail panel, including cluster ids, ranking, signals, occurrences, and comparison actions.
+title: VS Code — Reading a duplicate-code cluster in the editor
+description: Field guide to the Deslop VS Code extension — the Top Offenders tree, the live duplicate warning, and the cluster detail panel, including cluster ids, ranking, signals, occurrences, and comparison actions.
 eleventyNavigation:
-  key: VS Code Cluster Panel
-  order: 7
+  key: VS Code
+  order: 4
 icon: account_tree
 ---
 
@@ -25,7 +25,7 @@ The cluster panel is the detailed view behind a Deslop duplicate-code finding. I
 
 Three surfaces are visible, and all of them read the same live report:
 
-- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, a severity dot, and a plain-English bucket ("Identical code", "Nearly identical code"), and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/output-formats/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
+- **The sidebar (left)** stacks three views. **Top Offenders** is the worst-first ranked list of every clone cluster in the workspace — each row shows the cluster id, a severity dot, and a plain-English bucket ("Identical code", "Nearly identical code"), and expands to its occurrences; cluster `#1` is the single highest-impact offender, always one click away. **Duplication** drills the tree workspace → folder → file with a duplication percentage on every node — the same repo-wide number a [CI gate](/docs/configuration/#exit-codes) fails on. **Session** shows the running server: the embedding-model picker (the semantic *same behavior, different code* pass, off until you choose a model), the cache size, the file count, and the live analysis State.
 - **The editor (centre)** is where the LSP draws the finding inline. The duplicated span is underlined as you type, and a message states the bucket and the copy count — *"Identical code × 3 — Safe to extract — every copy is the same."* — then names the **canonical** occurrence used as the comparison anchor. Three actions sit on the finding: **Compare with canonical**, **View cluster**, and **Copy for AI** (the AI-ready context block, available on every Deslop surface).
 - **The Compare diff (right)** is VS Code's native side-by-side editor, opened by **Compare with canonical**: this occurrence on the left, the canonical on the right, with matching rows aligned so you can confirm the duplication before extracting a shared helper.
 

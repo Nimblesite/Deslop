@@ -1,8 +1,7 @@
 ---
 layout: layouts/base.njk
-title: Deslop — Live MCP + LSP duplicate-code server for AI agents
-description: Live LSP + MCP duplicate-code server. Streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex — find-similar prevents the copy-paste before it lands.
-keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM duplicate code, MCP server, LSP server, claude code, cursor, copilot, continue, codex, tree-sitter, AST clone detection, find-similar, VS Code extension, JetBrains plugin, code deduplication, copy paste detector
+title: "Find Duplicate Code Across 9 Programming Languages | Deslop"
+description: "Find duplicate code in nine languages. Deslop ranks what to remove first and tells your coding agent when similar code already exists — live in VS Code."
 ---
 
 {% block head %}
@@ -18,14 +17,11 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
   "downloadUrl": "https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live",
   "softwareHelp": "https://deslop.live/docs/",
   "license": "https://github.com/Nimblesite/Deslop/blob/main/LICENSE",
-  "description": "Live LSP + MCP duplicate-code server for AI coding agents. Streams real-time clone signals to Claude Code, Cursor, Copilot, Continue, and Codex as code is written. Tree-sitter parsing, AST fingerprints, MinHash LSH, HNSW embeddings.",
+  "description": "Find duplicate code in C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go. Deslop ranks the worst offenders first and tells coding agents when similar code already exists.",
   "featureList": [
-    "Live LSP server with a reactive file watcher",
-    "MCP server led by find-similar — the call the agent makes before writing new code; the rest are read-only and on-demand",
-    "Tree-sitter parsing for C#, Rust, Python, Dart, JavaScript, TypeScript, PHP, F#, Go",
-    "Clone detection across all five buckets: identical code [Type-1/2], nearly identical code [Type-3], same shape different content [structural-only], loosely similar code [weak LSH], same behavior different code [Type-4]",
-    "VS Code extension bundling LSP, MCP server, and CLI",
-    "JetBrains plugin in active development (Rider, IntelliJ, PyCharm, WebStorm, RustRover, CLion)"
+    "Duplicate-code detection for C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go",
+    "Worst-first ranking with a canonical occurrence for comparison",
+    "Live VS Code warnings and MCP similarity checks for coding agents"
   ],
   "publisher": {
     "@type": "Organization",
@@ -44,129 +40,58 @@ keywords: deslop, duplicate code, code clone detection, AI code duplication, LLM
 <div class="home">
   <section class="hero">
     <div class="hero__left">
-      <div class="eyebrow-chip"><span>Live MCP + LSP · prevents the copy-paste · reactive on every edit</span></div>
+      <div class="eyebrow-chip"><span>Live duplicate-code analysis</span></div>
       <h1>
-        Your agent is about to copy-paste.
-        <em>Deslop tells it not to.</em>
+        Find duplicate code
+        <em>across nine languages.</em>
       </h1>
       <p class="hero__lede">
-        Deslop is a <strong>live LSP + MCP server</strong> running in your workspace. It streams real-time duplicate-code signals to <strong>Claude Code, Cursor, Copilot, Continue, Codex</strong> — and your editor — <em>as code is written</em>. The agent calls <code>find-similar</code> <em>before</em> writing a new function. If the pattern already exists, it reuses the canonical. The copy-paste never happens.
+        Deslop finds duplicate functions and repeated source code in <strong>C#, Rust, Python, Dart, JavaScript, TypeScript/TSX, PHP, F#, and Go</strong>. It ranks what to remove first and tells your coding agent when similar code already exists.
       </p>
       <div class="hero__cta">
-        <a href="https://marketplace.visualstudio.com/items?itemName=nimblesite.deslop-live" class="btn-primary" target="_blank" rel="noopener noreferrer">Install from the VS Code Marketplace</a>
-        <div class="install-chip">
-          <code>code --install-extension nimblesite.deslop-live</code>
-          <button aria-label="Copy install command">
-            <span class="material-symbols-outlined">content_copy</span>
-          </button>
-        </div>
+        <a href="vscode:extension/Nimblesite.deslop-live" class="btn-primary">Install Deslop for VS Code</a>
       </div>
       <p class="hero__sublede">
-        The <strong>VSIX is the one install that gives you everything</strong> — live bubble, LSP server, MCP server, and the <code>deslop</code> CLI in one bundle. JetBrains plugin (Rider, IntelliJ, PyCharm, WebStorm, RustRover, CLion) is in active development; Zed and Neovim on the roadmap. Just want the CLI? <code>brew install nimblesite/tap/deslop</code> or <code>scoop install deslop</code> (after adding the <a href="https://github.com/Nimblesite/scoop-bucket" target="_blank" rel="noopener noreferrer">Nimblesite bucket</a>).{% if releases.latest %} Current stable release: <a href="/releases/">{{ releases.latest.tag }}</a>.{% else %} Release artifacts are indexed on the <a href="/releases/">Releases page</a>.{% endif %}
+        One extension bundles live editor warnings, MCP checks for agents, and the CLI.
       </p>
     </div>
 
     <div class="hero__right">
-      <div class="report-card">
-        <div class="report-chrome">
-          <div class="report-chrome__dots"><span></span><span></span><span></span></div>
-          <span class="report-chrome__path">deslop-mcp · live · claude-code</span>
-        </div>
-        <pre class="report-body"><span class="muted">→ agent: <span class="ok">find-similar</span> { path: "auth/middleware.ts", range: L42–L71 }</span>
-<span class="muted">← deslop: streaming clusters…</span>
-<div class="cluster">
-  <div class="cluster__head">
-    <span class="cluster__title">Nearly identical code [Type-3]</span>
-    <span class="cluster__cost">fused 0.94</span>
-  </div>
-  <div class="cluster__files">
-    <span>src/utils/legacy_auth.ts</span><span>L104–L176</span>
-    <span>src/middleware/auth.ts</span><span>L12–L84</span>
-  </div>
-</div>
-<div class="cluster cluster--low">
-  <div class="cluster__head">
-    <span class="cluster__title">Same behavior, different code [Type-4]</span>
-    <span class="cluster__cost">embed 0.82</span>
-  </div>
-  <div class="cluster__files">
-    <span>src/db/connection.rs</span><span>L40–L55</span>
-    <span>src/db/pool.rs</span><span>L12–L27</span>
-  </div>
-</div>
-<span class="muted">agent decision: <strong>reuse `legacy_auth.verify()`</strong> · no copy-paste emitted</span>
-<div class="report-footer">Live LSP · file watcher · debounced · reactive on every file change</div></pre>
-      </div>
-    </div>
-  </section>
-
-  <section class="bento">
-    <div class="bento__grid">
-      <div class="bento__cell">
-        <span class="bento__label">Reactive Watcher</span>
-        <div class="bento__row">
-          <span class="bento__value">On every edit</span>
-          <span class="bento__icon material-symbols-outlined">bolt</span>
-        </div>
-      </div>
-
-      <div class="bento__cell">
-        <span class="bento__label">Languages</span>
-        <div class="bento__row">
-          <span class="bento__value">C# · Rust · Python · Dart · JS · TS · PHP · F# · Go</span>
-          <span class="bento__icon material-symbols-outlined">code</span>
-        </div>
-      </div>
-
-      <div class="bento__cell bento__cell--recess bento__cell--wide-2">
-        <div class="bento__top">
-          <span class="bento__label">Keystone Tool</span>
-          <span class="bento__critical">PREVENT</span>
-        </div>
-        <div>
-          <div class="bento__offender">find-similar</div>
-          <p class="bento__blurb">Agent matches a proposed snippet against the live corpus <em>before</em> writing it. Existing pattern wins. No duplicate lands.</p>
-        </div>
-      </div>
-
-      <div class="bento__cell bento__cell--panorama bento__cell--wide-4">
-        <div class="bento__panorama-inner">
-          <div>
-            <span class="bento__label">Watcher → Editor → Agent</span>
-            <span class="bento__value bento__value--hero">1<span class="unit">report</span></span>
-          </div>
-          <p class="bento__panorama-note">Incremental parse on every change. One in-memory report fans out to every editor surface and MCP client at once via <code>deslop/reportChanged</code>. Stale UI is a correctness bug.</p>
-        </div>
-      </div>
+      <figure class="product-shot">
+        <img src="/assets/img/deslop-report.png"
+             alt="A real Deslop report finding repeated C# code, with the duplicate group and example source shown."
+             width="1280" height="760" decoding="async">
+        <figcaption>Real Deslop output from a C# fixture: the duplicate group, matched source, and other location.</figcaption>
+      </figure>
     </div>
   </section>
 
   <section class="showcase">
     <div class="showcase__head">
       <div class="eyebrow-chip"><span>In your editor</span></div>
-      <h2 class="showcase__title">One live report, three surfaces.</h2>
-      <p class="showcase__lede">The VS Code extension bundles the LSP and MCP servers and renders the running analysis inline — worst-first clusters in the sidebar, a live clone warning right at your cursor, and a side-by-side diff against the canonical copy. The agent driving your editor reads the same report over MCP.</p>
+      <h2 class="showcase__title">See what to remove first.</h2>
+      <p class="showcase__lede">Duplicate-code clusters are ranked by impact and anchored to one copy for comparison. Your editor and coding agent read the same live analysis.</p>
     </div>
     <figure class="showcase__figure">
       <img src="/assets/img/screenshot.webp"
-           alt="The Deslop VS Code extension analysing a live workspace: a worst-first Top Offenders tree and a per-directory Duplication breakdown in the sidebar, a live clone warning in the editor with Compare, View cluster and Copy for AI actions, and a side-by-side Compare diff against the canonical occurrence."
-           width="2560" height="1492" loading="lazy" decoding="async">
+           alt="The Deslop VS Code extension ranking duplicate-code clusters in a real workspace, showing a live warning and a side-by-side canonical comparison."
+           width="2560" height="1492" loading="eager" decoding="sync">
     </figure>
     <ol class="showcase__legend">
       <li class="showcase__cell">
         <span class="showcase__pos">Left · sidebar</span>
-        <strong>Top Offenders, Duplication, Session</strong>
-        <p>Top Offenders ranks every clone cluster worst-first — id, severity, plain-English bucket. Duplication breaks the repo down folder-by-folder with a duplicated-percentage on every node. Session shows the live server and the embedding-model picker.</p>
+        <strong>Worst offenders first</strong>
+        <p>The highest-impact duplicate-code clusters stay at the top.</p>
       </li>
       <li class="showcase__cell">
         <span class="showcase__pos">Centre · editor</span>
-        <strong>Live clone warning</strong>
-        <p>The LSP underlines the duplicate as you type, names the canonical copy used as the anchor, and offers <em>Compare with canonical</em>, <em>View cluster</em>, and <em>Copy for AI</em> right on the finding.</p>
+        <strong>Live duplicate warning</strong>
+        <p>Compare the match, open its cluster, or copy the context for AI.</p>
       </li>
       <li class="showcase__cell">
         <span class="showcase__pos">Right · diff</span>
-        <strong>Compare against canonical</strong>
-        <p>VS Code's native side-by-side editor lines this occurrence up against the canonical one, matching rows aligned, so you can confirm the duplication before extracting a shared helper.</p>
+        <strong>Canonical comparison</strong>
+        <p>Review both copies side by side before you refactor.</p>
       </li>
     </ol>
   </section>

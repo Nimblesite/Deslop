@@ -5,7 +5,7 @@ description: Full configuration for the Deslop.live GitHub Action — every inpu
 keywords: deslop, github action, ci gate, duplicate code, fail-over, duplication threshold, code quality, continuous integration
 eleventyNavigation:
   key: GitHub Action
-  order: 8
+  order: 6
 icon: rule
 ---
 
@@ -124,7 +124,7 @@ By default the action writes `deslop-report.json`, `deslop-report.txt` and `desl
           nohtml: "true"        # JSON + text only
 ```
 
-The HTML report is the one to open as a human; the JSON report is the one to parse. See [Output Formats](/docs/output-formats/) for the shape of each.
+The HTML report is the one to open as a human; the JSON report is the one to parse. See [Report output](/docs/configuration/#report-output) for the shape of each.
 
 ## Supported runners
 
@@ -158,4 +158,4 @@ deslop . --fail-over 5.0
 
 Exit code `3` fails the step like any other non-zero status. Archives for every platform are on the [Releases page](https://github.com/Nimblesite/Deslop/releases).
 
-Agents driving CI should read the [For AI](/docs/for-ai/) guide for the same gate plus how to parse the JSON report.
+Agents driving CI should read the [AI Agents](/docs/ai-integration/) guide for the same gate plus how to parse the JSON report.

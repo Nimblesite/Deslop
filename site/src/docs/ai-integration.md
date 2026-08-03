@@ -1,35 +1,52 @@
 ---
 layout: layouts/docs.njk
-title: AI Integration — MCP server for Claude, Cursor, Copilot
-description: Wire deslop-mcp into Claude Code, Claude Desktop, Cursor, Continue, or Codex. A lean, live MCP surface led by find-similar — prevent the copy-paste before it lands.
+title: AI Agents — MCP setup for Claude Code, Cursor, and Copilot
+description: Tell your coding agent when similar code already exists, before it writes another copy. Wire deslop-mcp into Claude Code, Cursor, Continue, or Codex, and use find-similar to prevent the duplicate.
+keywords: deslop, mcp server, claude code, cursor, copilot, continue, codex, find-similar, duplicate code, coding agent
 eleventyNavigation:
-  key: AI Integration
+  key: AI Agents
   order: 3
 icon: smart_toy
 ---
 
-# AI Integration
+# AI Agents
 
-Deslop was designed from the first commit with coding agents as a first-class audience. The MCP and LSP shells ship today — both consume the same `deslop-core` pipeline, the same JSON schema, and the same on-disk caches as the CLI. Every MCP tool response is computed against the **live** workspace state — the LSP holds the live report in memory and refreshes it on every change (debounced, with a hard cap), and the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step. There is no stale cache.
+**Deslop tells your coding agent when similar code already exists, before it writes another copy.** The agent asks; Deslop answers from the live analysis of the repository the agent is working in. Nothing is scheduled, nothing is batched, and no one has to remember to run a scan.
+
+This page covers both sides of that: how to wire the MCP server into your client, and the one rule an agent follows once it is wired.
+
+## The one rule: check before you write
+
+Deslop earns its keep through **prevention**, not cleanup. Before authoring any new function, method, class, helper, fixture, or test setup, an agent calls the `find-similar` MCP tool with the proposed snippet (or its byte range) and reads the response:
+
+- `signals.fused ≥ 0.85`, or bucket `identical` / `nearly_identical` → **do not write the copy.** Reuse the canonical occurrence the tool returns; extract a shared helper if needed.
+- `signals.fused < 0.6`, or an empty response → proceed with authoring.
+- `0.6 ≤ fused < 0.85` → read the canonical occurrence and bias toward reuse.
+
+`find-similar` is for **authoring**. When cleaning up duplicates that already exist, start with `top-offenders`, then `cluster-by-id` for the cluster you are about to merge.
+
+The paste-ready rule block for your project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md). It works with Claude Code, Cursor, Copilot, Continue, and Codex.
 
 ## The MCP tools, all live
 
-Only `find-similar` belongs in the authoring inner loop — it's the one call the agent makes before writing new code. Everything else is a read-only report query or a config tool you reach for on demand, so the agent's working context stays lean instead of carrying a wall of tool output.
+Only `find-similar` belongs in the authoring inner loop. Everything else is a read-only report query or a config tool you reach for on demand, so the agent's working context stays lean instead of carrying a wall of tool output.
 
-| Tool | Purpose |
+| Tool | When to call it |
 | --- | --- |
-| `find-similar` | **The prevention tool.** Match a proposed snippet against the live corpus before the agent writes it. |
-| `top-offenders` | Ranked worst clusters in the workspace. |
+| `find-similar` | **Before** writing new code — does an equivalent already exist? This is the prevention tool. |
+| `top-offenders` | Worst clusters in the workspace, worst first. Start cleanup here. |
+| `cluster-by-id` | Full member list and signals for one cluster you are about to merge. |
 | `report-for-file` | Per-file cluster slice. |
 | `report-for-range` | Per-selection cluster slice. |
-| `cluster-by-id` | Full member list and signals for one cluster. |
 | `report-get` | Whole-workspace report. |
 | `report-query` | Filtered query over the report. |
 | `rescan` | Force-refresh after large external changes. |
 | `list-embedding-models` | Models the provider advertises. |
-| `set-embedding-model` | Switch the Type-4 (same behavior, different code) semantic model at runtime. |
+| `set-embedding-model` | Switch the same behavior, different code [Type-4] semantic model at runtime. |
 | `session-config` | Inspect the running server's effective config. |
-| `schema-doc` | Self-describing JSON schema for every response. |
+| `schema-doc` | Authoritative JSON schema for every response. Call **once** per session, not per response. |
+
+Every response is computed against the **live** workspace state. The editor server holds the live report in memory and refreshes it on every change (debounced, with a hard cap); the MCP server reads that live state over the local IPC endpoint on the next tool call. macOS and Linux use `.deslop/cache/deslop.sock`; Windows uses a token-gated TCP loopback endpoint discovered through `.deslop/cache/deslop.port`. There is no batch step. There is no stale cache.
 
 ## Wire `deslop-mcp` into your client — point at the VSIX-bundled binary
 
@@ -101,40 +118,51 @@ Three things to know:
 - **`deslop-mcp` not found on `$PATH`?** It was added to the brew/scoop packages in v0.13.0. On an older install, run `brew upgrade deslop` (or `scoop update deslop`) — the current release ships `deslop-mcp` and `deslop-lsp` on `$PATH`.
 - **Building from source does not put anything on `$PATH`.** Only `brew` / `scoop` do. Those package managers version the binary lock-step with the release; a `cargo build` does not.
 
-## Prevention beats cure — `find-similar` is the keystone
-
-The fastest deduplication is the one that never lands. Deslop's MCP server exposes `find-similar` as the **prevention** tool: an agent calls it *before* writing a new function, helper, or test setup. If the proposed pattern already exists with high similarity, the agent reuses the canonical implementation instead of authoring a fresh copy.
-
-Paste-ready `AGENTS.md` / `CLAUDE.md` snippet that teaches this to your agents lives at [`docs/snippets/agents-md-recipe.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md). It works with Claude Code, Cursor, Copilot, Continue, and Codex.
-
-## The agent loop (live MCP)
+## The agent loop
 
 The headline workflow is reactive, not batch:
 
-1. Agent proposes a change. Before it writes the new code, it calls `find-similar` over the proposed snippet via MCP.
-2. If `find-similar` returns a cluster above the configured similarity floor, the agent reuses the canonical or rewrites the call site.
-3. As the agent edits files, the LSP file watcher fires `deslop/reportChanged`. The MCP server queries the LSP's freshly refreshed report over the IPC socket and serves the new state on the next tool call.
+1. The agent proposes a change. Before it writes the new code, it calls `find-similar` over the proposed snippet.
+2. If `find-similar` returns a cluster above the similarity floor, the agent reuses the canonical occurrence or rewrites the call site.
+3. As the agent edits files, the file watcher fires and the analysis refreshes. The MCP server serves the new state on the next tool call.
 4. The agent re-queries `top-offenders` or `report-for-file` to confirm the cluster is gone. No re-run, no flag, no batch CLI invocation.
 
 For a CLI-only loop (CI gates, cold-cache audits, or agents without MCP), the workflow degrades to:
 
-1. Agent proposes code changes.
-2. Agent (or harness) runs `deslop . --output report` (writes `report.json`/`.txt`/`.html`).
-3. Agent reads the top `N` clusters from `report.json`.
+1. The agent proposes code changes.
+2. The agent (or harness) runs `deslop . --output report`.
+3. The agent reads the top `N` clusters from `report.json`.
 4. For every cluster above threshold, the agent has three choices: extract to a shared function, reuse the existing implementation, or accept the duplication and annotate why.
-5. Agent re-runs Deslop. The top cluster should be different or smaller.
+5. The agent re-runs Deslop. The top cluster should be different or smaller.
 
-The incremental cache — on by default — means step 5 only pays the cost of parsing files the agent actually touched — unchanged files skip tree-sitter entirely, so a warm pass stays proportional to the size of the change, not the size of the repo.
+The incremental cache — on by default — means step 5 only pays the cost of parsing files the agent actually touched. Unchanged files skip tree-sitter entirely, so a warm pass stays proportional to the size of the change, not the size of the repo.
+
+## Configure it
+
+An agent configuring Deslop for a repository needs three things, all documented in the [Configuration reference](/docs/configuration/):
+
+- **[`exclude` vs `report_hide`](/docs/configuration/#exclude-vs-report_hide--the-core-idea)** — `exclude` drops a file before analysis; `report_hide` analyses it but keeps it out of the headline, so "hand-written code duplicates generated code" still surfaces.
+- **[Built-in rules](/docs/configuration/#built-in-rules-always-on)** — `node_modules`, `target`, `dist`, generated-code suffixes, and generated-banner detection are already covered. Do not re-add them.
+- **[`[threshold]`](/docs/configuration/#threshold--the-ci-gate)** — the opt-in CI gate. Commit the ceiling so local runs, CI, and agents all share one number.
+
+To gate a build on duplication, use the [GitHub Action](/docs/github-action/) — it wraps the same exit-code contract.
 
 ## Reading the JSON
 
-Every report begins with an embedded `schema_doc` explaining the shape to the agent consuming it — the model does not need a separate reference to understand the payload:
+`deslop-report.json` is canonical and the **only** file an agent should parse — `.txt` and `.html` are renderers over it. Every report begins with an embedded `schema_doc` explaining the shape to the agent consuming it, so the model does not need a separate reference to understand the payload:
 
 ```json
 {
   "tool_version": "0.0.0-dev",
   "schema_doc": "…inline description of every field…",
-  "metrics": { "analysed_loc": 1832044, "duplicated_loc": 48120, "duplication_percent": 2.63, "clusters_total": 142, "duplicated_files": 318 },
+  "metrics": {
+    "analysed_loc": 1832044,
+    "duplicated_loc": 48120,
+    "duplication_percent": 2.63,
+    "clusters_total": 142,
+    "duplicated_files": 318,
+    "threshold": { "percent": 5.0, "breached": false, "source": "config" }
+  },
   "action_hints": [
     { "pattern": "bucket=identical", "recommendation": "Identical code. Safe to extract — every copy is the same." }
   ],
@@ -149,14 +177,25 @@ Every report begins with an embedded `schema_doc` explaining the shape to the ag
       "summary": "3 near-identical copies of a 42-node method across UserRepository.cs:120-180, ProductRepository.cs:58-118, OrderRepository.cs:40-102 — safe to extract.",
       "interpretation": "Nearly identical code. Review the locations — small differences may matter.",
       "occurrences": [
-        { "path": "UserRepository.cs", "start_byte": 3104, "end_byte": 4820, "start_line": 120, "end_line": 180 }
+        { "path": "UserRepository.cs", "start_byte": 3104, "end_byte": 4820, "start_line": 120, "end_line": 180, "hidden": false }
       ]
     }
   ]
 }
 ```
 
-`summary` and `interpretation` are pre-written for an agent reader: they state what was found, where, and — when the signals agree — whether the duplication is safe to extract. Repository-level remediation guidance lives in the top-level `action_hints`, keyed by `bucket`; it is derived from the signals, never guessed.
+`summary` and `interpretation` are pre-written for an agent reader: they state what was found, where, and — when the signals agree — whether the duplication is safe to extract. Repository-level guidance lives in the top-level `action_hints`, keyed by `bucket`; it is derived from the signals, never guessed.
+
+| Field | How to act on it |
+| --- | --- |
+| `metrics.duplication_percent` | The repo-wide headline number the CI gate compares against. |
+| `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
+| `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down. |
+| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → only the code shape matches (no token or semantic evidence) — verify it is a real duplicate before extracting; demoted in ranking by default. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (needs `--embeddings`). |
+| `signals.fused` | Unit-bounded confidence. `≥ 0.85` is the act-now line, the same threshold as the rule above. |
+| `occurrences[].hidden` | `true` marks a `report_hide` match — a hand-written clone of generated code. |
+
+Do not silence findings by widening the threshold, marking code `hidden`, or splitting it into trivially different shapes. If Deslop flags it, treat it as a real signal until you have shown otherwise.
 
 ## Byte ranges, not line numbers
 
@@ -166,11 +205,11 @@ Deslop's source of truth is `[byte_start, byte_end)`. Line numbers are derived a
 
 Cluster IDs are short hex digests of the cluster's content fingerprint — the first 8 bytes of the cluster's smallest member BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). They carry no timestamp, so feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
 
-## MCP and LSP — shipping
+## One engine, three surfaces
 
 The `deslop-core` crate owns the entire pipeline. Three shells consume it:
 
-- **MCP server (`deslop-mcp`)** — the agent surface. find-similar plus a focused set of read-only and config tools (see the table above). The server delegates every read — `top-offenders`, `report-get`, `report-for-file`, `find-similar`, and the rest — to the running LSP over the local IPC endpoint, so every response is computed against the LSP's live in-memory corpus, not a stale on-disk cache. Unix hosts use `.deslop/cache/deslop.sock`; Windows uses token-gated TCP loopback with `.deslop/cache/deslop.port` discovery. When the LSP isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
+- **MCP server (`deslop-mcp`)** — the agent surface. `find-similar` plus the focused set of read-only and config tools above. The server delegates every read to the running editor server over the local IPC endpoint, so every response is computed against the live in-memory corpus, not a stale on-disk cache. When the editor server isn't running, the MCP returns an actionable error; CI and one-shot audits use the `deslop` CLI instead.
 - **LSP server (`deslop-lsp`)** — the editor surface. Diagnostics, hover, code lens, `textDocument/definition`, virtual `deslop://` documents, and custom `deslop/*` methods (`reportGet`, `reportDelta`, `reportForFile`, `reportForRange`, `clusterById`, `duplicatesFindSimilar`, `embeddingListModels`, `embeddingSetModel`, `sessionConfig`, `reportSchemaDoc`, `virtualDocument`, `cpuReport`). Fires `deslop/reportChanged`, `deslop/analysisState`, and `deslop/embeddingProgress` notifications. Owns the file watcher, the debouncer, and the analysis scheduler.
 - **CLI (`deslop`)** — the cold-cache fallback for CI gates and one-shot audits.
 
@@ -178,7 +217,7 @@ All three reuse the same cache layout (`.deslop/cache/fingerprints/`, `.deslop/c
 
 ### Push notifications
 
-The LSP fires `deslop/reportChanged` over the LSP wire and `resources/updated` + `deslop/reportChanged` over the MCP wire as soon as a watcher pass completes. Editor surfaces, agent caches, and webviews all observe the new report as soon as the pass commits. Stale UI is a correctness bug per the [LIVE-IS-REACTIVE](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/principles.md#principles-live-is-reactive) invariant.
+The editor server fires `deslop/reportChanged` over the LSP wire and `resources/updated` + `deslop/reportChanged` over the MCP wire as soon as a watcher pass completes. Editor surfaces, agent caches, and webviews all observe the new report as soon as the pass commits. Stale UI is a correctness bug per the [LIVE-IS-REACTIVE](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/principles.md#principles-live-is-reactive) invariant.
 
 ## JetBrains plugin (in development)
 
@@ -186,7 +225,7 @@ The JetBrains plugin in `clients/jetbrains/` registers an IntelliJ Platform `lsp
 
 ## What Deslop deliberately does not do
 
-- It does not rewrite your code. Extraction is your call.
-- It does not fail CI unless you set `--fail-over <percent>` yourself — a repo-wide duplication-percentage gate that exits `3` when exceeded.
+- It does not rewrite your code. Deslop finds, ranks, compares, and prevents duplication; extraction is your call. Automated cleanup is a direction, not a shipped capability.
+- It does not fail CI unless you set a threshold yourself.
 - It does not assume "near-miss = bug." Some duplication is intentional (test fixtures, bootstrapping). Deslop reports; you decide.
 - It does not talk to the network unless you explicitly pick a remote embedding model.

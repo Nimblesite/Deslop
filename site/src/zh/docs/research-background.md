@@ -3,8 +3,8 @@ layout: layouts/docs.njk
 title: 研究背景 — 代码克隆检测算法
 description: Deslop 的研究脉络 — Baxter 1998、Chilowicz 2009 的 Merkle 指纹、Broder 1997 的 MinHash、Indyk-Motwani 1998 的 LSH、SSCD 2024 的 HNSW。每一条都对应一个真实文件。
 eleventyNavigation:
-  key: 研究背景
-  order: 8
+  key: 研究
+  order: 7
 icon: science
 lang: zh
 ---

@@ -37,19 +37,14 @@
           "url": "/docs/how-it-works/"
         },
         {
-          "text": "AI Integration",
+          "text": "AI Agents",
           "i18nKey": "footer.aiIntegration",
           "url": "/docs/ai-integration/"
         },
         {
-          "text": "For AI",
-          "i18nKey": "footer.forAI",
-          "url": "/docs/for-ai/"
-        },
-        {
-          "text": "Output Formats",
-          "i18nKey": "footer.outputFormats",
-          "url": "/docs/output-formats/"
+          "text": "VS Code",
+          "i18nKey": "footer.clusterPanel",
+          "url": "/docs/vscode-cluster-panel/"
         },
         {
           "text": "Configuration",
@@ -62,9 +57,9 @@
           "url": "/docs/github-action/"
         },
         {
-          "text": "VS Code Cluster Panel",
-          "i18nKey": "footer.clusterPanel",
-          "url": "/docs/vscode-cluster-panel/"
+          "text": "Research",
+          "i18nKey": "footer.research",
+          "url": "/docs/research-background/"
         },
         {
           "text": "Releases",
