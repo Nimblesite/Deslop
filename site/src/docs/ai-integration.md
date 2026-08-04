@@ -13,17 +13,9 @@ icon: smart_toy
 
 **Deslop tells your coding agent when similar code already exists, before it writes another copy.** The agent asks; Deslop answers from the live analysis of the repository the agent is working in. Nothing is scheduled, nothing is batched, and no one has to remember to run a scan.
 
-This page covers both sides of that: how to wire the MCP server into your client, and the one rule an agent follows once it is wired.
+**This page is for you, the human wiring it up.** It covers what the MCP server offers and how to connect each client to it.
 
-## The one rule: check before you write
-
-Deslop earns its keep through **prevention**, not cleanup. Before authoring any new function, method, class, helper, fixture, or test setup, an agent calls the `find-similar` MCP tool with the proposed snippet (or its byte range) and reads the response:
-
-- `signals.fused ≥ 0.85`, or bucket `identical` / `nearly_identical` → **do not write the copy.** Reuse the canonical occurrence the tool returns; extract a shared helper if needed.
-- `signals.fused < 0.6`, or an empty response → proceed with authoring.
-- `0.6 ≤ fused < 0.85` → read the canonical occurrence and bias toward reuse.
-
-`find-similar` is for **authoring**. When cleaning up duplicates that already exist, start with `top-offenders`, then `cluster-by-id` for the cluster you are about to merge.
+The instructions for the agent itself — the rule it follows before writing code, the similarity thresholds, the CLI fallback when MCP is unavailable, and how to parse the report — are on **[For AI](/docs/for-ai/)**. That page is written in the second person and addressed to the machine. Point your agent at that URL.
 
 The paste-ready rule block for your project's `AGENTS.md` / `CLAUDE.md` is in the [agent recipe](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md). It works with Claude Code, Cursor, Copilot, Continue, and Codex.
 
@@ -127,15 +119,7 @@ The headline workflow is reactive, not batch:
 3. As the agent edits files, the file watcher fires and the analysis refreshes. The MCP server serves the new state on the next tool call.
 4. The agent re-queries `top-offenders` or `report-for-file` to confirm the cluster is gone. No re-run, no flag, no batch CLI invocation.
 
-For a CLI-only loop (CI gates, cold-cache audits, or agents without MCP), the workflow degrades to:
-
-1. The agent proposes code changes.
-2. The agent (or harness) runs `deslop . --output report`.
-3. The agent reads the top `N` clusters from `report.json`.
-4. For every cluster above threshold, the agent has three choices: extract to a shared function, reuse the existing implementation, or accept the duplication and annotate why.
-5. The agent re-runs Deslop. The top cluster should be different or smaller.
-
-The incremental cache — on by default — means step 5 only pays the cost of parsing files the agent actually touched. Unchanged files skip tree-sitter entirely, so a warm pass stays proportional to the size of the change, not the size of the repo.
+When MCP is not available — CI, a cold-cache audit, or an agent with no MCP client — the loop degrades to the `deslop` CLI, which runs the identical pipeline and emits the identical JSON. The incremental cache is on by default, so a re-run after an edit only re-parses the files that changed. The step-by-step fallback is on [For AI](/docs/for-ai/#if-the-mcp-server-is-unavailable-use-the-cli).
 
 ## Configure it
 
@@ -147,63 +131,9 @@ An agent configuring Deslop for a repository needs three things, all documented 
 
 To gate a build on duplication, use the [GitHub Action](/docs/github-action/) — it wraps the same exit-code contract.
 
-## Reading the JSON
+## What the agent reads back
 
-`deslop-report.json` is canonical and the **only** file an agent should parse — `.txt` and `.html` are renderers over it. Every report begins with an embedded `schema_doc` explaining the shape to the agent consuming it, so the model does not need a separate reference to understand the payload:
-
-```json
-{
-  "tool_version": "0.0.0-dev",
-  "schema_doc": "…inline description of every field…",
-  "metrics": {
-    "analysed_loc": 1832044,
-    "duplicated_loc": 48120,
-    "duplication_percent": 2.63,
-    "clusters_total": 142,
-    "duplicated_files": 318,
-    "threshold": { "percent": 5.0, "breached": false, "source": "config" }
-  },
-  "action_hints": [
-    { "pattern": "bucket=identical", "recommendation": "Identical code. Safe to extract — every copy is the same." }
-  ],
-  "clusters": [
-    {
-      "id": "0362505641efe3c7",
-      "weight": 2184.0,
-      "bucket": "nearly_identical",
-      "size": 3,
-      "canonical_node_count": 42,
-      "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91, "fused": 0.99 },
-      "summary": "3 near-identical copies of a 42-node method across UserRepository.cs:120-180, ProductRepository.cs:58-118, OrderRepository.cs:40-102 — safe to extract.",
-      "interpretation": "Nearly identical code. Review the locations — small differences may matter.",
-      "occurrences": [
-        { "path": "UserRepository.cs", "start_byte": 3104, "end_byte": 4820, "start_line": 120, "end_line": 180, "hidden": false }
-      ]
-    }
-  ]
-}
-```
-
-`summary` and `interpretation` are pre-written for an agent reader: they state what was found, where, and — when the signals agree — whether the duplication is safe to extract. Repository-level guidance lives in the top-level `action_hints`, keyed by `bucket`; it is derived from the signals, never guessed.
-
-| Field | How to act on it |
-| --- | --- |
-| `metrics.duplication_percent` | The repo-wide headline number the CI gate compares against. |
-| `metrics.threshold.breached` | `true` → the run exited `3` and the gate failed. `source` is `cli`, `config`, or `none`. |
-| `clusters` | Sorted by `weight` **descending** — `clusters[0]` is always the worst offender. Work top-down. |
-| `bucket` | `identical` / `nearly_identical` → extract a shared definition. `structural_only` → only the code shape matches (no token or semantic evidence) — verify it is a real duplicate before extracting; demoted in ranking by default. `loosely_similar` → parametrise the difference. `same_behavior` → reconcile two implementations of one behaviour (needs `--embeddings`). |
-| `signals.fused` | Unit-bounded confidence. `≥ 0.85` is the act-now line, the same threshold as the rule above. |
-| `occurrences[].hidden` | `true` marks a `report_hide` match — a hand-written clone of generated code. |
-
-Do not silence findings by widening the threshold, marking code `hidden`, or splitting it into trivially different shapes. If Deslop flags it, treat it as a real signal until you have shown otherwise.
-
-## Byte ranges, not line numbers
-
-Deslop's source of truth is `[byte_start, byte_end)`. Line numbers are derived at render time only. Agents editing files should slice by byte range — line-based edits drift when surrounding code moves.
-
-## Stable IDs
-
-Cluster IDs are short hex digests of the cluster's content fingerprint — the first 8 bytes of the cluster's smallest member BLAKE3 hash, rendered as 16 hex characters (e.g. `0362505641efe3c7`). They carry no timestamp, so feeding the same repo to the same binary twice produces the same IDs. An agent can reference a cluster across runs.
+`deslop-report.json` is canonical; `.txt` and `.html` are renderers over it. Every report carries an embedded `schema_doc`, so a model can parse the payload without a separate reference. The field-by-field guide — what `bucket`, `signals.fused`, and `occurrences[].hidden` mean and how to act on each — is on [For AI](/docs/for-ai/#read-the-json).
 
 ## One engine, three surfaces
 

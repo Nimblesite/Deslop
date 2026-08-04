@@ -4,7 +4,7 @@ title: VS Code — 在编辑器中解读重复代码簇
 description: Deslop VS Code 扩展的实用指南 —— Top Offenders 树、实时重复警告与簇详情面板，涵盖簇 id、排名、信号、出现位置以及比较操作。
 eleventyNavigation:
   key: VS Code
-  order: 4
+  order: 5
 icon: account_tree
 lang: zh
 ---

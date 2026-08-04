@@ -145,7 +145,7 @@ max_duplication_percent = 5.0
 ## What to do next
 
 1. Read [How It Works](/docs/how-it-works/) to understand the ranking formula and the live pipeline.
-2. Read [AI Agents](/docs/ai-integration/) if you are (or are configuring) a coding agent — how to wire `deslop-mcp` into Claude Code, Cursor, Continue, or Codex, and the one rule an agent follows once it is wired.
+2. Read [AI Agents](/docs/ai-integration/) to wire `deslop-mcp` into Claude Code, Cursor, Continue, or Codex — then point the agent itself at [For AI](/docs/for-ai/), the operating manual written for the machine, including what to do when MCP is unavailable.
 3. Read [VS Code](/docs/vscode-cluster-panel/) when you need the meaning of a panel label, score, or action.
 4. Read [Configuration and Reports](/docs/configuration/) for every `.deslop.toml` key, every CLI flag, the three report formats, and the exit codes.
 5. Check [Releases](/releases/) for the current VSIX, CLI archives, checksums, and changelog links.
