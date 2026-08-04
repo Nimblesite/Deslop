@@ -5,7 +5,7 @@ description: Every Deslop knob in one place — the .deslop.toml sections (exclu
 keywords: deslop, configuration, .deslop.toml, cli flags, exclude, report_hide, threshold, exit codes, json report, html report
 eleventyNavigation:
   key: Configuration
-  order: 5
+  order: 6
 icon: tune
 ---
 
@@ -256,7 +256,7 @@ Every run emits three reports. The JSON is the product; the text and HTML are re
 
 ### JSON — canonical
 
-`deslop-report.json` is what agents read and what schema consumers should parse. Its full shape, field by field, is in [AI Agents → Reading the JSON](/docs/ai-integration/#reading-the-json).
+`deslop-report.json` is what agents read and what schema consumers should parse. Its full shape, field by field, is in [For AI → Read the JSON](/docs/for-ai/#read-the-json).
 
 Guarantees:
 

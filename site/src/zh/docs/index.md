@@ -148,7 +148,7 @@ max_duplication_percent = 5.0
 ## 下一步做什么
 
 1. 阅读 [工作原理](/zh/docs/how-it-works/)，理解排名公式与实时流水线。
-2. 如果你是（或正在配置）一个编码智能体，阅读 [AI 智能体](/zh/docs/ai-integration/) —— 如何将 `deslop-mcp` 接入 Claude Code、Cursor、Continue 或 Codex，以及接好之后智能体所遵循的那一条规则。
+2. 阅读 [AI 智能体](/zh/docs/ai-integration/)，把 `deslop-mcp` 接入 Claude Code、Cursor、Continue 或 Codex —— 然后把智能体本身指向[面向 AI](/zh/docs/for-ai/)，那是写给机器的操作手册，其中包括 MCP 不可用时该怎么做。
 3. 当你需要了解某个面板标签、评分或操作的含义时，阅读 [VS Code](/zh/docs/vscode-cluster-panel/)。
 4. 阅读[配置与报告](/zh/docs/configuration/)，了解每一个 `.deslop.toml` 键、每一个命令行参数、三种报告格式与退出码。
 5. 查看[发布](/zh/releases/)以获取当前 VSIX、CLI 归档、校验和与变更日志链接。

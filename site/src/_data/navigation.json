@@ -42,6 +42,11 @@
           "url": "/docs/ai-integration/"
         },
         {
+          "text": "For AI",
+          "i18nKey": "footer.forAI",
+          "url": "/docs/for-ai/"
+        },
+        {
           "text": "VS Code",
           "i18nKey": "footer.clusterPanel",
           "url": "/docs/vscode-cluster-panel/"

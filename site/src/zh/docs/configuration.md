@@ -5,7 +5,7 @@ description: 一处汇总 Deslop 的输入与输出 — .deslop.toml 的各个�
 keywords: deslop, 配置, .deslop.toml, 命令行参数, exclude, report_hide, 阈值, 退出码, json 报告, html 报告
 eleventyNavigation:
   key: 配置
-  order: 5
+  order: 6
 icon: tune
 lang: zh
 ---
@@ -265,7 +265,7 @@ structural_only = "ignore"
 
 ### JSON — 规范格式
 
-`deslop-report.json` 是智能体读取的内容，也是 schema 消费方应当解析的内容。逐字段的完整结构参见 [AI 智能体 → 读取 JSON](/zh/docs/ai-integration/#reading-the-json)。
+`deslop-report.json` 是智能体读取的内容，也是 schema 消费方应当解析的内容。逐字段的完整结构参见[面向 AI → 读取 JSON](/zh/docs/for-ai/#read-the-json)。
 
 保证：
 

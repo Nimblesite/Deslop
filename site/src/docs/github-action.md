@@ -5,7 +5,7 @@ description: Full configuration for the Deslop.live GitHub Action — every inpu
 keywords: deslop, github action, ci gate, duplicate code, fail-over, duplication threshold, code quality, continuous integration
 eleventyNavigation:
   key: GitHub Action
-  order: 6
+  order: 7
 icon: rule
 ---
 

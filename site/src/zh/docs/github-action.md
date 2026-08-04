@@ -5,7 +5,7 @@ description: Deslop.live GitHub Action 的完整配置 — 每一个输入与输
 keywords: deslop, github action, ci 门禁, 重复代码, fail-over, 重复率阈值, 代码质量, 持续集成
 eleventyNavigation:
   key: GitHub Action
-  order: 6
+  order: 7
 icon: rule
 lang: zh
 ---

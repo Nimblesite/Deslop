@@ -14,17 +14,9 @@ lang: zh
 
 **在你的编码智能体写出另一个副本之前，Deslop 会告诉它相似代码已经存在。** 智能体发问，Deslop 依据它正在工作的这个仓库的实时分析作答。没有定时任务，没有批处理，也不需要谁记得去跑一次扫描。
 
-本页涵盖这件事的两面：如何把 MCP 服务器接入你的客户端，以及接好之后智能体所遵循的那一条规则。
+**本页是写给你 —— 正在做配置的人类。** 它说明 MCP 服务器提供了什么，以及如何把各个客户端连接上去。
 
-## 唯一法则：写之前先查
-
-Deslop 的价值通过**预防**而非清理来体现。在编写任何新的函数、方法、类、辅助函数、fixture 或测试初始化代码之前，智能体会使用拟写的代码片段（或其字节范围）调用 `find-similar` MCP 工具，并阅读其响应：
-
-- `signals.fused ≥ 0.85`，或归入 `identical` / `nearly_identical` 桶 → **不要编写这份副本。** 复用该工具返回的规范出现位置；如有必要，提取一个共享的辅助函数。
-- `signals.fused < 0.6`，或响应为空 → 继续编写。
-- `0.6 ≤ fused < 0.85` → 阅读该规范出现位置，并倾向于复用。
-
-`find-similar` 用于**编写代码**。当你在清理已经存在的重复时，先从 `top-offenders` 开始，再对你将要合并的簇调用 `cluster-by-id`。
+写给智能体本身的说明 —— 它在写代码前遵循的规则、相似度阈值、MCP 不可用时的 CLI 回退，以及如何解析报告 —— 都在 **[面向 AI](/zh/docs/for-ai/)**。那一页以第二人称写成，直接写给机器。请把你的智能体指向那个 URL。
 
 可直接粘贴到你项目 `AGENTS.md` / `CLAUDE.md` 的规则块参见[智能体配方](https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md)。它适用于 Claude Code、Cursor、Copilot、Continue 与 Codex。
 
@@ -128,15 +120,7 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 3. 当智能体编辑文件时，LSP 文件监视器触发 `deslop/reportChanged`。MCP 服务器通过 IPC 套接字查询 LSP 刚刷新的报告，并在下一次工具调用时提供新状态。
 4. 智能体重新查询 `top-offenders` 或 `report-for-file`，确认该簇已消失。无需重新运行、无需标志、无需批处理 CLI 调用。
 
-对于仅 CLI 的循环（CI 门禁、冷缓存审计，或没有 MCP 的智能体），工作流降级为：
-
-1. 智能体提出代码改动。
-2. 智能体（或外壳）运行 `deslop . --output report`（写出 `report.json`/`.txt`/`.html`）。
-3. 智能体从 `report.json` 读取排名靠前的 `N` 个簇。
-4. 对于每个高于阈值的簇，智能体有三种选择：提取为共享函数、复用现有实现，或接受重复并注明原因。
-5. 智能体重新运行 Deslop。排名最靠前的簇应当不同或更小。
-
-增量缓存（默认开启）意味着第 5 步只为解析智能体实际改动过的文件付出成本——未改动的文件完全跳过 tree-sitter，因此一次热运行的耗时与改动规模成正比，而非与仓库规模成正比。
+当 MCP 不可用时 —— CI、冷缓存审计，或没有 MCP 客户端的智能体 —— 循环会降级到 `deslop` CLI，它运行完全相同的流水线，产出完全相同的 JSON。指纹缓存默认开启，因此编辑后的重新运行只会重新解析发生变化的文件。逐步的回退方案见[面向 AI](/zh/docs/for-ai/#cli-fallback)。
 
 ## 配置它
 
@@ -148,58 +132,9 @@ claude mcp add deslop -s user -- deslop-mcp --root .
 
 要基于重复拦截构建，请使用 [GitHub Action](/zh/docs/github-action/) —— 它封装了同一套退出码约定。
 
-<span id="reading-the-json"></span>
+## 智能体读回什么
 
-## 读取 JSON
-
-`deslop-report.json` 是规范文件，也是智能体**唯一**应当解析的文件——`.txt` 和 `.html` 都是基于它的渲染器。每个报告都以一段嵌入的 `schema_doc` 开头，向消费它的智能体解释其结构——模型无需另一份参考资料就能理解负载：
-
-```json
-{
-  "tool_version": "0.0.0-dev",
-  "schema_doc": "…inline description of every field…",
-  "metrics": { "analysed_loc": 1832044, "duplicated_loc": 48120, "duplication_percent": 2.63, "clusters_total": 142, "duplicated_files": 318 },
-  "action_hints": [
-    { "pattern": "bucket=identical", "recommendation": "Identical code. Safe to extract — every copy is the same." }
-  ],
-  "clusters": [
-    {
-      "id": "0362505641efe3c7",
-      "weight": 2184.0,
-      "bucket": "nearly_identical",
-      "size": 3,
-      "canonical_node_count": 42,
-      "signals": { "structural": 1.0, "token_jaccard": 0.97, "embedding_cos": 0.91, "fused": 0.99 },
-      "summary": "3 near-identical copies of a 42-node method across UserRepository.cs:120-180, ProductRepository.cs:58-118, OrderRepository.cs:40-102 — safe to extract.",
-      "interpretation": "Nearly identical code. Review the locations — small differences may matter.",
-      "occurrences": [
-        { "path": "UserRepository.cs", "start_byte": 3104, "end_byte": 4820, "start_line": 120, "end_line": 180 }
-      ]
-    }
-  ]
-}
-```
-
-`summary` 与 `interpretation` 是为智能体读者预先撰写的：它们说明发现了什么、在哪里，以及——当信号一致时——该重复是否可以安全提取。仓库级别的指导位于顶层 `action_hints`，以 `bucket` 为键；它由信号推导得出，绝不靠猜测。
-
-| 字段 | 如何据此行动 |
-| --- | --- |
-| `metrics.duplication_percent` | CI 门禁所比较的全仓库头条数字。 |
-| `metrics.threshold.breached` | `true` → 该次运行以 `3` 退出，门禁失败。`source` 为 `cli`、`config` 或 `none`。 |
-| `clusters` | 按 `weight` **降序**排序 —— `clusters[0]` 始终是最严重的重复。自上而下处理。 |
-| `bucket` | `identical` / `nearly_identical` → 提取一个共享定义。`structural_only` → 只有代码形状匹配（没有词法或语义证据）—— 提取前先确认它确实是重复；默认在排名中被降权。`loosely_similar` → 将差异参数化。`same_behavior` → 调和同一行为的两种实现（需要 `--embeddings`）。 |
-| `signals.fused` | 取值有界的置信度。`≥ 0.85` 是立即行动线，与上文规则中的阈值相同。 |
-| `occurrences[].hidden` | `true` 标记一次 `report_hide` 命中 —— 手写代码克隆了生成代码。 |
-
-不要通过放宽阈值、把代码标记为 `hidden`，或将其拆成形状略有差异的片段来消音。如果 Deslop 标记了它，在你证明并非如此之前，都应当把它当作真实信号。
-
-## 字节范围，而非行号
-
-Deslop 的事实来源是 `[byte_start, byte_end)`。行号仅在渲染时派生。编辑文件的智能体应按字节范围切片——当周围代码移动时，基于行的编辑会发生漂移。
-
-## 稳定的 ID
-
-簇 ID 是簇内容指纹的短十六进制摘要——取簇中最小成员 BLAKE3 哈希的前 8 字节，渲染为 16 个十六进制字符（例如 `0362505641efe3c7`）。它们不携带时间戳，因此将同一个仓库两次喂给同一个二进制文件会产生相同的 ID。智能体可以跨多次运行引用同一个簇。
+`deslop-report.json` 是规范产物；`.txt` 与 `.html` 是其之上的渲染器。每份报告都带有内嵌的 `schema_doc`，因此模型无需另一份参考文档就能解析载荷。逐字段说明 —— `bucket`、`signals.fused` 与 `occurrences[].hidden` 各自的含义以及如何据此行动 —— 见[面向 AI](/zh/docs/for-ai/#read-the-json)。
 
 ## 一套引擎，三种接口
 
