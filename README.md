@@ -116,6 +116,18 @@ See [the messaging guide](docs/messaging.md) and
 
 ## Contributing
 
+Please do log issues — especially if you can reproduce the bug or add a lot of
+detail. Those are genuinely useful.
+
+Code contributions are discouraged at the moment. We will only consider a pull
+request that:
+
+1. directly addresses an existing, confirmed bug, and
+2. comes with several end-to-end tests proving the bug is thoroughly fixed.
+
+Anything outside that is likely to be closed unmerged, so please open an issue
+first rather than writing the patch.
+
 Requires Rust 1.80+ and GNU Make.
 
 ```bash
