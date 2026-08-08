@@ -3,10 +3,44 @@
 // a seeded store.
 
 import * as assert from "node:assert/strict";
+import * as path from "node:path";
+import * as vscode from "vscode";
+import { resolveWorkspaceRoot } from "../../extension";
 import { MetricsProvider, StatusTicker } from "../../tree/providers";
 import { FileMetricNode, FolderMetricNode, MetricsHeadlineNode } from "../../tree/nodes";
 import { ReportStore } from "../../reportStore";
 import { fileMetric, labelText, report } from "./tree.helpers";
+
+/** Builds a Duplication panel over a report describing exactly one file, so
+ * the path-resolution cases below differ only in the path they feed in. */
+function panelForOneFile(
+  metricPath: string,
+  analysedLoc: number,
+  duplicatedLoc: number,
+): MetricsProvider {
+  const store = new ReportStore();
+  store.setSnapshot(
+    report([], {
+      duplicated_loc: duplicatedLoc,
+      per_file: [fileMetric(metricPath, analysedLoc, duplicatedLoc)],
+    }),
+    0,
+  );
+  return new MetricsProvider(store, new StatusTicker());
+}
+
+/** Reads the URI a file row hands to `vscode.open` when it is clicked. */
+function clickTarget(row: FileMetricNode): vscode.Uri | undefined {
+  return row.command?.arguments?.[0] as vscode.Uri | undefined;
+}
+
+/** Workspace root the unit suite runs against (the csharp-small fixture),
+ * read through the same resolver the extension itself uses. */
+function fixtureRoot(): string {
+  const root = resolveWorkspaceRoot();
+  assert.ok(root, "the unit suite runs with the csharp-small fixture open");
+  return root;
+}
 
 suite("MetricsProvider", () => {
   test("shows a spinner before the first report arrives", () => {
@@ -134,6 +168,70 @@ suite("MetricsProvider", () => {
     const [onlyFile] = files;
     assert.ok(onlyFile);
     assert.equal(labelText(onlyFile), "Alpha.cs");
+  });
+
+  // [Deslop#328] The engine renders every `per_file` path relative to the
+  // scan root (`report_metrics.rs` `relative_to_scan_root`, added for #286),
+  // the same form occurrence rows carry. A file row must resolve that against
+  // the workspace before opening, or the click lands on a phantom path at the
+  // filesystem root and VS Code offers to create the file.
+  test("opens the workspace file when the metric path is scan-root-relative", async () => {
+    const root = fixtureRoot();
+    const provider = panelForOneFile("Alpha.cs", 100, 60);
+    const fileNode = provider.getChildren().find((node) => node instanceof FileMetricNode);
+    assert.ok(fileNode instanceof FileMetricNode, "the relative-path metric renders a file row");
+
+    const target = clickTarget(fileNode);
+    assert.ok(target, "the file row carries an open target");
+    const opened = await vscode.workspace.openTextDocument(target);
+    assert.match(
+      opened.getText(),
+      /public class Alpha/,
+      "clicking the row opens the real fixture file",
+    );
+
+    const expected = path.join(root, "Alpha.cs");
+    assert.equal(target.fsPath, expected, "the open target is the workspace file");
+    assert.equal(
+      fileNode.resourceUri?.fsPath,
+      expected,
+      "resourceUri drives the file icon and decorations, so it must resolve too",
+    );
+  });
+
+  // [Deslop#328] The reported case: a file several folders deep. The row is
+  // reached by expanding the folder rollup, and both the click target and the
+  // decoration URI must still name the workspace file.
+  test("resolves a deeply nested scan-root-relative metric path against the workspace", () => {
+    const root = fixtureRoot();
+    const relative = "admin/src/components/ui/avatar.tsx";
+    const provider = panelForOneFile(relative, 110, 110);
+    const folder = provider.getChildren().find((node) => node instanceof FolderMetricNode);
+    assert.ok(folder instanceof FolderMetricNode, "nested files roll up into a folder row");
+    const [fileNode] = provider.getChildren(folder);
+    assert.ok(fileNode instanceof FileMetricNode, "the folder expands to the file row");
+    assert.equal(labelText(fileNode), "avatar.tsx");
+
+    const expected = path.join(root, ...relative.split("/"));
+    const target = clickTarget(fileNode);
+    assert.equal(target?.fsPath, expected, "the click target is the workspace file");
+    assert.equal(fileNode.resourceUri?.fsPath, expected, "so is the decoration URI");
+  });
+
+  // [Deslop#328] An absolute `per_file` path must survive untouched — the
+  // resolver may not prefix the workspace onto a path that already has a root.
+  test("leaves an absolute metric path untouched", () => {
+    const absolute = path.join(path.sep, "elsewhere", "Alpha.cs");
+    const provider = panelForOneFile(absolute, 100, 60);
+    const folder = provider.getChildren().find((node) => node instanceof FolderMetricNode);
+    assert.ok(folder instanceof FolderMetricNode);
+    const [fileNode] = provider.getChildren(folder);
+    assert.ok(fileNode instanceof FileMetricNode);
+    assert.equal(
+      clickTarget(fileNode)?.fsPath,
+      absolute,
+      "an already-absolute path is used verbatim",
+    );
   });
 
   test("surfaces a failed lifecycle as an error status row", () => {
