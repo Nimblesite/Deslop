@@ -8,6 +8,7 @@ import * as vscode from "vscode";
 
 import { clusterSlug } from "../clusterHover";
 import { occurrenceDisplayLocation } from "../locations";
+import { resolveWorkspacePath } from "../pathUtils";
 import { SEVERITY_DOT } from "../severity";
 import {
   Bucket,
@@ -335,7 +336,12 @@ export class FileMetricNode extends vscode.TreeItem {
     this.description = `${formatPercent(metric.duplication_percent)} · ${metric.duplicated_loc}/${metric.analysed_loc} LOC`;
     this.contextValue = "deslop.fileMetric";
     this.iconPath = new vscode.ThemeIcon("file");
-    this.resourceUri = vscode.Uri.file(metric.path);
+    // `metric.path` is rendered relative to the scan root by the engine, so
+    // it must be resolved against the workspace before it names a file on
+    // disk — otherwise the row opens a phantom path at the filesystem root
+    // ([Deslop#328]).
+    const fileUri = vscode.Uri.file(resolveWorkspacePath(metric.path));
+    this.resourceUri = fileUri;
     this.tooltip = new vscode.MarkdownString(
       `\`${metric.path}\`\n\n` +
         `${formatPercent(metric.duplication_percent)} duplicated · ${metric.duplicated_loc} / ${metric.analysed_loc} LOC`,
@@ -343,7 +349,7 @@ export class FileMetricNode extends vscode.TreeItem {
     this.command = {
       command: "vscode.open",
       title: "Open file",
-      arguments: [vscode.Uri.file(metric.path)],
+      arguments: [fileUri],
     };
   }
 }

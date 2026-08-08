@@ -10,22 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { activateExtension } from "./helpers";
-
-async function waitFor<T>(
-  predicate: () => T | undefined,
-  timeoutMs: number,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const value = predicate();
-    if (value !== undefined) return value;
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 100);
-    });
-  }
-  throw new Error(`waitFor timed out after ${timeoutMs}ms`);
-}
+import { activateExtension, waitFor } from "./helpers";
 
 suite("live tree refresh", () => {
   let fixtureDir: string;
