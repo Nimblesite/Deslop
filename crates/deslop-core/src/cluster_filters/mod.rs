@@ -199,11 +199,7 @@ pub(crate) fn classify_clone_category<S: BuildHasher>(
 /// recognises collection literals of constructor rows
 /// ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]), whose identifier-heavy rows
 /// sit below the literal-dominance floor.
-fn is_data_table_cluster(
-    language: &str,
-    literal_fraction: f64,
-    snippets: &[Snippet<'_>],
-) -> bool {
+fn is_data_table_cluster(language: &str, literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
     is_literal_dominated_table(literal_fraction, snippets)
         || match language {
             "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),

@@ -12,12 +12,8 @@
 use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
-    ast::NormalizedNode,
-    cluster::Cluster,
-    fingerprint::Fingerprint,
-    lang::shared::LITERAL_KIND,
-    state::FileId,
-    tokens::collapsed_leaves,
+    ast::NormalizedNode, cluster::Cluster, fingerprint::Fingerprint, lang::shared::LITERAL_KIND,
+    state::FileId, tokens::collapsed_leaves,
 };
 
 /// Minimum literal-leaf count before a subtree's literal dominance is
@@ -39,7 +35,8 @@ pub fn attach_content_agreement<S: BuildHasher>(
     let tree_index: HashMap<FileId, &NormalizedNode> =
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     for cluster in clusters {
-        cluster.content_agreement = cluster_content_agreement(&cluster.members, &tree_index, sources);
+        cluster.content_agreement =
+            cluster_content_agreement(&cluster.members, &tree_index, sources);
         cluster.literal_fraction = cluster_literal_fraction(&cluster.members, &tree_index);
     }
     tracing::debug!("content agreement attached");
@@ -57,7 +54,11 @@ fn cluster_literal_fraction(
 ) -> f64 {
     let leaves = members
         .first()
-        .and_then(|canonical| tree_index.get(&canonical.file_id).map(|root| (root, canonical)))
+        .and_then(|canonical| {
+            tree_index
+                .get(&canonical.file_id)
+                .map(|root| (root, canonical))
+        })
         .and_then(|(root, canonical)| collapsed_leaves(root, canonical));
     let Some(leaves) = leaves else {
         return 0.0;
@@ -125,11 +126,7 @@ fn duplicated_member_share(member_keys: &[Option<Vec<u64>>]) -> f64 {
             *entry = entry.saturating_add(1);
         }
     }
-    let duplicated: usize = counts
-        .values()
-        .filter(|count| **count >= 2)
-        .copied()
-        .sum();
+    let duplicated: usize = counts.values().filter(|count| **count >= 2).copied().sum();
     if member_keys.is_empty() {
         return 0.0;
     }

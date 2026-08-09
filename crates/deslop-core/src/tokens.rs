@@ -193,7 +193,11 @@ fn collect_tokens_in_range(
 /// sibling range covers. Shared by the token stream extraction and the
 /// content-agreement walk ([FUSION-CONTENT-GATE]) so the two signals
 /// always see the same code.
-fn resolve_range_nodes(node: &NormalizedNode, start: usize, end: usize) -> Option<Vec<&NormalizedNode>> {
+fn resolve_range_nodes(
+    node: &NormalizedNode,
+    start: usize,
+    end: usize,
+) -> Option<Vec<&NormalizedNode>> {
     if node.byte_range.start == start && node.byte_range.end == end {
         return Some(vec![node]);
     }

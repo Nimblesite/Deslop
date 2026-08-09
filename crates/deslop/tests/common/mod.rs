@@ -424,7 +424,11 @@ pub(crate) fn fsharp_tables_corpus() -> Vec<(String, String)> {
             )
         })
         .collect();
-    files.extend(genuine_pair("parse_a.fs", "parse_b.fs", FSHARP_GENUINE_CLONE));
+    files.extend(genuine_pair(
+        "parse_a.fs",
+        "parse_b.fs",
+        FSHARP_GENUINE_CLONE,
+    ));
     files
 }
 

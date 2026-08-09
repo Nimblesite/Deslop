@@ -151,7 +151,10 @@ fn assert_shape_only_family_demoted(
 ) -> Result<()> {
     let genuine_rank = assert_genuine_clone_rank(report, genuine_files)?;
     for (rank, cluster) in clusters(report).iter().enumerate() {
-        if cluster_file_set(cluster).iter().any(|name| is_noise_file(name)) {
+        if cluster_file_set(cluster)
+            .iter()
+            .any(|name| is_noise_file(name))
+        {
             assert_shape_only_cluster(cluster, rank, genuine_rank);
         }
     }
@@ -166,9 +169,7 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
     let mut files: Vec<(String, String)> = WIDGETS
         .iter()
         .enumerate()
-        .map(|(index, (name, body))| {
-            (format!("widget_{index}.dart"), dart_widget_file(name, body))
-        })
+        .map(|(index, (name, body))| (format!("widget_{index}.dart"), dart_widget_file(name, body)))
         .collect();
     files.extend(genuine_pair(
         "metrics_a.dart",
@@ -177,11 +178,9 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
     ));
 
     let report = report_for(&files, 20)?;
-    assert_shape_only_family_demoted(
-        &report,
-        &["metrics_a.dart", "metrics_b.dart"],
-        |name| name.starts_with("widget_"),
-    )
+    assert_shape_only_family_demoted(&report, &["metrics_a.dart", "metrics_b.dart"], |name| {
+        name.starts_with("widget_")
+    })
 }
 
 // [CLONE-NOISE-DART-WIDGET-SCAFFOLD] / #331: template-stamped example

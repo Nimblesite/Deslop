@@ -306,10 +306,13 @@ pub fn content_gated_signals(
     // construction and the true token Jaccard is 1.0 — the same GH #232
     // argument the byte-equivalence upgrade applies to `Identical`. A
     // lower rendered value is a fingerprint-scoped fallback-signature
-    // artifact (gh #339), not evidence, so it is corrected here.
-    // `StructuralOnly` keeps its unscored signal: absent token support
-    // is that bucket's defining signature ([RANK-STRUCTURAL-ONLY]).
-    let token_jaccard = if kind == ClusterKind::NearlyIdentical {
+    // artifact (gh #339), not evidence, so it is corrected here. The
+    // `structural` guard scopes the correction to clusters the Merkle
+    // argument actually covers — a mixed LSH-glued cluster keeps its
+    // estimated value. `StructuralOnly` keeps its unscored signal:
+    // absent token support is that bucket's defining signature
+    // ([RANK-STRUCTURAL-ONLY]).
+    let token_jaccard = if kind == ClusterKind::NearlyIdentical && signals.structural >= 0.99 {
         1.0
     } else {
         signals.token_jaccard
