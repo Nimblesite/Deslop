@@ -1,0 +1,36 @@
+{
+  "_what": "[CORPUS-BASELINE] Corpus checks that already fail, so scheduled CI can report them without blocking merges. This is a RATCHET, not an excuse list.",
+
+  "_rules": [
+    "Every entry names a tracked issue. No entry without one.",
+    "Adding an entry is admitting a defect shipped. Fixing it and deleting the entry is the only correct exit.",
+    "Anything NOT listed here fails CI even in baseline mode — that is the regression gate.",
+    "`make test-corpus` locally ignores this file entirely and fails on everything. Local runs stay honest.",
+    "Check ids are rank-independent on purpose: #301 moves cluster ranks between runs, so a rank-bearing key would churn."
+  ],
+
+  "_checks": {
+    "recall": "A hand-verified duplicate was not reported (false negative).",
+    "boilerplate_rank": "Framework-mandated scaffolding ranked in the top N.",
+    "data_table_rank": "A numeric data table ranked in the top N categorised as `logic`.",
+    "memory": "Peak RSS exceeded the runner budget.",
+    "wall": "Scan exceeded the wall-clock ceiling.",
+    "determinism": "Two identical scans disagreed."
+  },
+
+  "known_failures": {
+    "flutter": ["boilerplate_rank", "memory"],
+    "fsharp": ["data_table_rank", "memory"],
+    "nest": ["determinism"],
+    "jellyfin": ["determinism"]
+  },
+
+  "_issues": {
+    "flutter/boilerplate_rank": 331,
+    "flutter/memory": 166,
+    "fsharp/data_table_rank": 336,
+    "fsharp/memory": 166,
+    "nest/determinism": 301,
+    "jellyfin/determinism": 301
+  }
+}

@@ -169,6 +169,19 @@ consumer resolves — deriving from the ref sidesteps that entirely. A commit-SH
 or branch pin carries no version and is a hard error naming the fix, never a
 silent fall back to "latest".
 
+**The committed pin is a published surface.** Because the stamp never reaches
+the commit, whatever `uses:` version is committed is what the tag carries — and
+the tag's README is the body of the Marketplace listing. v0.30.0 shipped a
+listing advertising `@v0.27.0`, so every visitor who copied the quickstart
+installed a three-release-old CLI. `test-action-contract.mjs` therefore asserts
+that every pin across `README.md` and both locales of the Action doc page names
+one single version, and — given `--latest-release`, which `action-selftest.yml`
+supplies from the resolved newest release — that the version is the current one.
+A pin is closed by the first character SemVer does not permit, not by the first
+space: the Action doc page quotes a pin inline in prose, where the terminator is
+a backtick, and reading to the space swallowed it into the version token and
+dropped it on stamping.
+
 **No mutable major alias.** Marketplace consumers conventionally pin `@v1` and
 the publisher re-points it each release. Deslop does not publish one: it would
 contradict [SWR-SEC-ACTION-PINNING], and `v1` would match the release trigger
@@ -244,6 +257,16 @@ asserting a clean run publishes a finite percentage and the installed
 `deslop --version` matches the requested version, a breach fails the step but
 still leaves a browsable report, and an out-of-range threshold fails without
 rendering one.
+
+The matrix installs an explicit `version:`, because a pull request cannot install
+the release for its own tag — that release does not exist yet. So the derivation
+path a Marketplace consumer actually takes is proven by a separate
+`derived-version` job that pins `Nimblesite/Deslop@vX.Y.Z` with no `version:` at
+all and asserts the CLI that lands is the tag. It pins by tag rather than by SHA
+on purpose: a SHA carries no version and is a documented hard error, so a SHA pin
+would prove the opposite. Its tag is not required to be the newest release — any
+tag carrying `action.yml` proves the derivation, and coupling it to the release
+cadence would redden `main` for a pin bump.
 
 **Binary resolution — bundled, no fallback.**
 

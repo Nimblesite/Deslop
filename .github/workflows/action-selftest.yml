@@ -23,6 +23,9 @@ on:
       - action.yml
       - scripts/action-*.mjs
       - scripts/test-action-contract.mjs
+      # The contract test imports the pin list and its parser from here, so a
+      # change to the stamper changes what the test checks. [ACTION-VERSION]
+      - scripts/stamp-release-version.mjs
       - .github/workflows/action-selftest.yml
 
 permissions:
@@ -35,30 +38,22 @@ jobs:
     # directly. A github-actions SECURITY bump is force-opened against `main` and
     # edits .github/workflows/**, matching the paths filter above, so without
     # this gate it would run the whole hosted-runner matrix on a discarded bump.
-    # `gate` needs this job, so skipping here skips the matrix too.
+    # Every other job needs this one, so skipping here skips them all.
     # ([GITHUB-DEPENDABOT])
-    if: github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22.x"
-      - run: node scripts/test-action-contract.mjs
-
-  # A pull request cannot install the release for its own tag — that release does
-  # not exist yet. Resolve the newest published release instead, so the self-test
-  # never rots against a hard-coded version.
-  target-version:
-    name: Resolve the release under test
-    # Skipped for Dependabot for the same reason as `contract` above.
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.latest.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.x"
+
+      # A pull request cannot install the release for its own tag — that release
+      # does not exist yet. Resolve the newest published release instead, so the
+      # matrix below never rots against a hard-coded version.
       - id: latest
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,9 +63,57 @@ jobs:
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
           echo "Testing the action against deslop ${tag#v}"
 
+      # `--latest-release` adds the freshness half of the documented-pin check,
+      # which `make deployment-verify` cannot run offline. The tag's README is
+      # the body of the Marketplace listing and `stamp-release-version.mjs`
+      # stamps the build rather than the commit, so a stale committed pin hands
+      # every listing visitor a workflow that installs an older CLI — which is
+      # exactly what v0.30.0 shipped. [ACTION-VERSION]
+      - run: node scripts/test-action-contract.mjs --latest-release "${{ steps.latest.outputs.version }}"
+
+  # [ACTION-VERSION] end to end. Every other job passes `version:` explicitly, so
+  # the derivation path every Marketplace consumer actually takes — no `version:`
+  # at all, the CLI resolved from the ref — is exercised nowhere else.
+  #
+  # Pinned by tag, not by the 40-character SHA [SWR-SEC-ACTION-PINNING] requires
+  # of third-party actions: a SHA carries no version and is a documented hard
+  # error here, so a SHA pin would prove the opposite of what this job exists for.
+  # This is Deslop's own action in its own repository, so no third party can
+  # re-point the tag. The tag is deliberately not asserted to be the newest
+  # release — any tag carrying action.yml proves the derivation, and coupling it
+  # to the release cadence would redden main for a pin bump.
+  derived-version:
+    name: Version derived from the pinned tag
+    needs: [contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the action pinned by tag, with no version input
+        id: derived
+        uses: Nimblesite/Deslop@v0.30.0
+        with:
+          path: examples/rust
+          no-fail-over: "true"
+          output: derived-report
+          upload-artifact: "false"
+
+      - name: The tag alone selected the CLI, and the run still measured the fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(deslop --version)" = "deslop 0.30.0"
+          test "${CODE}" = "0"
+          test -f derived-report.json
+          test "${CLUSTERS}" -ge 1
+        env:
+          CODE: ${{ steps.derived.outputs.exit-code }}
+          CLUSTERS: ${{ steps.derived.outputs.cluster-count }}
+
   gate:
     name: Gate (${{ matrix.artifact }})
-    needs: [contract, target-version]
+    needs: [contract]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -94,7 +137,7 @@ jobs:
         uses: ./
         with:
           path: examples/rust
-          version: ${{ needs.target-version.outputs.version }}
+          version: ${{ needs.contract.outputs.version }}
           fail-over: "100"
           output: pass-report
           artifact-name: deslop-report-${{ matrix.artifact }}
@@ -110,7 +153,7 @@ jobs:
           test "${CLUSTERS}" -ge 1
           test -f pass-report.json && test -f pass-report.txt && test -f pass-report.html
           # The action installed the CLI version it was asked for.
-          test "$(deslop --version)" = "deslop ${{ needs.target-version.outputs.version }}"
+          test "$(deslop --version)" = "deslop ${{ needs.contract.outputs.version }}"
         env:
           PERCENT: ${{ steps.pass.outputs.duplication-percent }}
           CLUSTERS: ${{ steps.pass.outputs.cluster-count }}
@@ -123,7 +166,7 @@ jobs:
         uses: ./
         with:
           path: examples/rust
-          version: ${{ needs.target-version.outputs.version }}
+          version: ${{ needs.contract.outputs.version }}
           fail-over: "0"
           output: breach-report
           upload-artifact: "false"
@@ -154,7 +197,7 @@ jobs:
         uses: ./
         with:
           path: examples/rust
-          version: ${{ needs.target-version.outputs.version }}
+          version: ${{ needs.contract.outputs.version }}
           fail-over: "101"
           output: usage-report
           upload-artifact: "false"
