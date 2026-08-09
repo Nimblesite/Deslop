@@ -25,18 +25,11 @@ If you encounter code that could cause a false negative or a false positive — 
 
 **Panics are NOT ALLOWED for control flow or error handling — but are MANDATED where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
 
-## Rule zero — run Deslop on Deslop
-
-**Use the Deslop MCP if it is available; fall back to the `deslop` CLI if it is not.**
-
-- **Prevent:** before writing any code unit past a few lines, `find-similar`. On a strong match, reuse the canonical occurrence — do not write the near-copy.
-- **Clean up:** `top-offenders` → `cluster-by-id` for existing duplicates; `report-for-file` / `report-for-range` for a specific target.
-- **A wrong, stale, or missing result from either surface is an accuracy defect** — `gh issue create` with the cluster id or triggering snippet. Never work around a defect, widen a threshold, or hide a cluster. (`gh` is the sole exception to the no-git rule.)
-
 ## Standing prohibitions
 
 - ⚠️ **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.
 - ⚠️ **No git.** No `add`, `commit`, `push`, `checkout`, `merge`, `rebase`, `worktree`. Never push to `main`, never stamp yourself as co-author. One branch at a time; never start a new branch when a feature branch exists; converge branches before other work. CI handles git. (`gh issue create` excepted.)
+- ⚠️ **No using text pattern matching on source code or structured data. No RegEx on code**. USE THE AST!
 - ⚠️ **Token discipline.** Check file size before reading. `Grep` over `Read`; use `offset`/`limit`. Smallest diff that solves the problem. Delete dead code, unused imports, stale comments. Call out irrelevant context — bloat degrades reasoning.
 - ⚠️ **A+ quality bar.** Every change must pass review at a top-tier engineering org. Substandard code is fixed immediately, never deferred.
 - ⚠️ **"Deslop.live" (reactive) means the whole loop** — watcher → scheduler → session → broadcast → UI. An incremental update drives the entire pipeline, including a reactive UI refresh.
@@ -44,6 +37,7 @@ If you encounter code that could cause a false negative or a false positive — 
 ## Testing — the accuracy enforcement surface
 
 - **Coarse E2E, black-box only.** No unit tests. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
+- **Many user interactions per test, MANY assertions per user interaction**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.
 - **Never delete a failing test, never skip one, never remove an assertion.** Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
 - **Meaningful assertions only.** `assert!(true)` is banned. Assert positive, human-readable values — not the absence of AI-style labels.
@@ -52,15 +46,6 @@ If you encounter code that could cause a false negative or a false positive — 
 - **`make test` is fail-fast** and always enforces coverage. Never `--no-fail-fast`. Target 100% coverage and a high mutation score.
 - **Deterministic.** No `sleep`, no timing dependencies, no random state.
 - **Coverage thresholds live in `coverage-thresholds.json`** at the repo root — never env vars, GitHub variables, or CI YAML. Monotonic increase only (−1% rounding allowance); falling below fails the pipeline.
-
-## Rust
-
-- No `unwrap()`/`expect()` in production code; tests may `expect` with a message.
-- No `panic!`/`todo!`/`unimplemented!`/`unreachable!` for control flow or error handling — return `Result<T, E>`; a panic there is a bug. Mandated only for the accuracy quarantine above.
-- No `unsafe {}` (`unsafe_code = "deny"`). All public items carry `///` docs (`missing_docs = "deny"`).
-- `thiserror` in `deslop-core`; `anyhow` allowed in the `deslop` binary.
-- Pattern matching over casting. Expressions over statements. Iterator chains over imperative loops. Early return with `?`.
-- Descriptive names — no single letters except in closures.
 
 ## Universal rules
 
@@ -79,6 +64,23 @@ If you encounter code that could cause a false negative or a false positive — 
 - **The VSIX is the only distribution.** Every build target leaves artifacts under `target/` only; `cargo install --path crates/deslop-*` is prohibited. Releases ship via `.vsix`, plus Homebrew/Scoop for the CLI.
 - **External MCP clients use the absolute VSIX path** — `~/.vscode/extensions/nimblesite.deslop-live-<VERSION>-<platform>/bin/<platform>/deslop-mcp`, equivalent on Windows; every doc snippet shows this form. A `PATH` binary shadows the versioned bundle and drifts analysis off the wire contract — an accuracy defect by construction. Bare-name `deslop-mcp` is valid only for Homebrew/Scoop installs.
 - **Logging:** `tracing` only, never `println!`/`eprintln!`. Structured fields, not interpolation — `tracing::info!(file_count = 42, lang = "csharp")`. Log entry and exit of significant operations (`error|warn|info|debug|trace`). Never log file contents, user-data paths, or secrets — counts and hashes only. Reports are not logs: they go to stdout or `--output <path>` via the renderer.
+
+## Rust
+
+- No `unwrap()`/`expect()` in production code; tests may `expect` with a message.
+- No `panic!`/`todo!`/`unimplemented!`/`unreachable!` for control flow or error handling — return `Result<T, E>`; a panic there is a bug. Mandated only for the accuracy quarantine above.
+- No `unsafe {}` (`unsafe_code = "deny"`). All public items carry `///` docs (`missing_docs = "deny"`).
+- `thiserror` in `deslop-core`; `anyhow` allowed in the `deslop` binary.
+- Pattern matching over casting. Expressions over statements. Iterator chains over imperative loops. Early return with `?`.
+- Descriptive names — no single letters except in closures.
+
+## Run Deslop on Deslop
+
+**Use the Deslop MCP if it is available; fall back to the `deslop` CLI if it is not.**
+
+- **Prevent:** before writing any code unit past a few lines, `find-similar`. On a strong match, reuse the canonical occurrence — do not write the near-copy.
+- **Clean up:** `top-offenders` → `cluster-by-id` for existing duplicates; `report-for-file` / `report-for-range` for a specific target.
+- **A wrong, stale, or missing result from either surface is an accuracy defect** — `gh issue create` with the cluster id or triggering snippet. Never work around a defect, widen a threshold, or hide a cluster. (`gh` is the sole exception to the no-git rule.)
 
 ## Architecture
 
