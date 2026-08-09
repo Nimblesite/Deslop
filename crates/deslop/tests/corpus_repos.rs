@@ -269,7 +269,11 @@ fn check_boilerplate_not_ranked_first(
         .filter_map(Value::as_str)
         .collect();
 
-    for (rank, cluster) in array(&run.report, "clusters").iter().take(top_n).enumerate() {
+    for (rank, cluster) in array(&run.report, "clusters")
+        .iter()
+        .take(top_n)
+        .enumerate()
+    {
         let text = first_occurrence_text(root, cluster)?;
         for shape in &forbidden {
             if text.contains(shape) {
