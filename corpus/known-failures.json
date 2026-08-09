@@ -1,5 +1,5 @@
 {
-  "_what": "Corpus checks that already fail, so scheduled CI can report them without blocking merges. This is a RATCHET, not an excuse list.",
+  "_what": "[CORPUS-BASELINE] Corpus checks that already fail, so scheduled CI can report them without blocking merges. This is a RATCHET, not an excuse list.",
 
   "_rules": [
     "Every entry names a tracked issue. No entry without one.",

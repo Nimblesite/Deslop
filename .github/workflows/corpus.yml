@@ -1,6 +1,6 @@
 name: Corpus accuracy
 
-# Deliberately NOT triggered by `pull_request`. The corpus suite is currently
+# [CORPUS-CI] Deliberately NOT triggered by `pull_request`. The corpus suite is currently
 # red on tracked defects (#166, #301, #331, #336), so it must never sit in the
 # merge path. It reports; it does not gate.
 #

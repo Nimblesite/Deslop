@@ -1,4 +1,4 @@
-// Clones every corpus repository pinned by `corpus/*.json` into `.corpus/`
+// [CORPUS-PIN] Clones every corpus repository pinned by `corpus/*.json` into `.corpus/`
 // (git-ignored) so the `corpus_*` accuracy and resource suite runs against
 // real code at a fixed commit.
 //

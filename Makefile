@@ -210,7 +210,7 @@ test-ollama: _vsix-test-ollama
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
 
-## test-corpus: Accuracy + resource suite against real public repositories
+## test-corpus: [CORPUS-*] Accuracy + resource suite against real public repos
 ##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
 ##              first (re-runs are free once cloned). Excluded from
 ##              `make test`/`make ci` via `--skip corpus_` because it needs

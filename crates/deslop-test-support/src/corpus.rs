@@ -1,4 +1,5 @@
-//! [CORPUS] Harness for the `corpus_*` accuracy and resource suite.
+//! [CORPUS-PIN] [CORPUS-CEILINGS] [CORPUS-BASELINE] Harness for the `corpus_*`
+//! accuracy and resource suite. Spec: `docs/specs/corpus.md`.
 //!
 //! The suite scans real public repositories, pinned to a commit by
 //! `corpus/*.json`, and asserts two things the small fixture suites cannot:
@@ -58,7 +59,7 @@ impl Failure {
     }
 }
 
-/// The set of checks already known to fail, per repository.
+/// [CORPUS-BASELINE] The set of checks already known to fail, per repository.
 ///
 /// This is a ratchet, not an excuse: entries record defects that already have
 /// a tracked issue, so CI reports them without blocking. Anything not listed
@@ -207,7 +208,8 @@ pub fn manifest(name: &str) -> Result<Value> {
         .with_context(|| format!("corpus manifest is not JSON: {}", path.display()))
 }
 
-/// Resolves the clone directory for a manifest, erroring when it is absent.
+/// [CORPUS-PIN] Resolves the clone directory for a manifest, erroring when
+/// it is absent.
 ///
 /// # Errors
 ///
@@ -341,7 +343,7 @@ fn with_json_extension(prefix: &Path) -> PathBuf {
     prefix.with_file_name(name)
 }
 
-/// Extracts peak RSS in mebibytes from `/usr/bin/time -l` (BSD/macOS, bytes)
+/// [CORPUS-CEILINGS] Extracts peak RSS in mebibytes from `/usr/bin/time -l` (BSD/macOS, bytes)
 /// or `/usr/bin/time -v` (GNU, kbytes) output. The unit is decided by the
 /// label itself rather than by the host, so a mislabelled build cannot be
 /// silently misread by three orders of magnitude.
@@ -392,8 +394,8 @@ fn occurrence_paths(cluster: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// True when some reported cluster covers every path in `files`. This is the
-/// recall predicate: a curated duplicate that no cluster spans is a false
+/// [CORPUS-RECALL] True when some reported cluster covers every path in
+/// `files`. This is the recall predicate: a curated duplicate that no cluster spans is a false
 /// negative.
 ///
 /// An empty `files` list is false, never true. `all()` over nothing is

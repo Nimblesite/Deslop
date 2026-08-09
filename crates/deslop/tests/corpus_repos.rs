@@ -1,5 +1,6 @@
-//! [CORPUS] Accuracy and resource gate against real public repositories,
-//! each pinned to a commit by `corpus/<name>.json`.
+//! [CORPUS-PIN] [CORPUS-RECALL] [CORPUS-PRECISION] [CORPUS-CEILINGS]
+//! Accuracy and resource gate against real public repositories, each pinned
+//! to a commit by `corpus/<name>.json`. Spec: `docs/specs/corpus.md`.
 //!
 //! One `#[test]` per repository, so a language that regresses is named
 //! directly in the failure output rather than hidden behind a sibling.
@@ -81,7 +82,7 @@ fn corpus_determinism_jellyfin_csharp() -> Result<()> {
     determinism_gate("jellyfin")
 }
 
-/// Scans the same pinned commit twice with identical flags and asserts the
+/// [PIPELINE-DETERMINISM] Scans the same pinned commit twice with identical flags and asserts the
 /// two reports agree. Everything else in this suite — and every `--fail-over`
 /// CI gate — is meaningless if the engine does not clear this bar, so it runs
 /// against the two cheapest corpora rather than not at all.
@@ -174,7 +175,7 @@ fn gate(name: &str) -> Result<()> {
     fail_on(name, GATE_CHECKS, &failures)
 }
 
-/// Classifies observed failures against `corpus/known-failures.json` and fails
+/// [CORPUS-BASELINE] Classifies observed failures against `corpus/known-failures.json` and fails
 /// the test on whatever survives. Strict mode fails on everything; baseline
 /// mode fails only on checks that are not already tracked, so CI reports the
 /// known defect list without blocking on it.
@@ -212,7 +213,7 @@ fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
     );
 }
 
-/// Shouts when a repository has no curated accuracy assertions at all, so a
+/// [CORPUS-RECALL] Shouts when a repository has no curated accuracy assertions at all, so a
 /// green result is never mistaken for evidence that Deslop is accurate on it.
 /// Such a run has proven only that the scan fit inside its resource budget.
 fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
@@ -227,7 +228,7 @@ fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
     }
 }
 
-/// Recall: every hand-verified duplicate in the manifest must be reported.
+/// [CORPUS-RECALL] Every hand-verified duplicate in the manifest must be reported.
 /// A miss is a false negative on code a human confirmed is byte-identical.
 fn check_recall(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) {
     for entry in array(manifest, "must_find") {
@@ -247,7 +248,7 @@ fn check_recall(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) 
     }
 }
 
-/// Precision: language- or framework-mandated scaffolding must never outrank
+/// [CORPUS-PRECISION] Language- or framework-mandated scaffolding must never outrank
 /// genuine copy-paste. Such a cluster is unactionable by construction, so it
 /// must not sit at the head of a "worst offenders first" report.
 fn check_boilerplate_not_ranked_first(
@@ -297,7 +298,7 @@ const RANKED_HEAD: usize = 10;
 /// Real logic carries identifiers and keywords, so it lands far below this.
 const DATA_TABLE_RATIO: f64 = 0.6;
 
-/// Precision, language-agnostic: a top-ranked cluster that is essentially a
+/// [CORPUS-PRECISION] Language-agnostic: a top-ranked cluster that is essentially a
 /// numeric table must not be classified `logic`. `CloneCategory::data`
 /// exists so such clusters can be demoted; when the classifier does not cover
 /// a language they arrive at full logic weight and outrank real clones.
@@ -358,7 +359,7 @@ fn as_f64(count: usize) -> f64 {
     u32::try_from(count).map_or(f64::from(u32::MAX), f64::from)
 }
 
-/// Resource: the scan must finish inside the manifest's wall-clock and memory
+/// [CORPUS-CEILINGS] The scan must finish inside the manifest's wall-clock and memory
 /// budget. The memory ceiling is a standard CI runner's RAM — a scan that
 /// exceeds it cannot run in the GitHub Action this project ships.
 fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>) -> Result<()> {
