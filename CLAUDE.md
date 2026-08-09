@@ -1,6 +1,10 @@
 <!-- agent-pmo:b636503 -->
 # Deslop Live — Agent Instructions
 
+Deslop is a code deduplication utility
+
+**We are in accuracy-audit mode**: every reported cluster must be a real duplicate, and every real duplicate must be reported
+
 ## Rule zero — query the Deslop MCP before you write code
 
 Deslop ships the duplicate-detector; its own code must be the cleanest in the

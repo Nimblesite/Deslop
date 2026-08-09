@@ -105,38 +105,24 @@ Configuration lives in `.deslop.toml`. See the
 [configuration reference](https://deslop.live/docs/configuration/) and
 [configuration and reports guide](https://deslop.live/docs/configuration/#report-output).
 
-## Project direction
+## Project direction — accuracy first
 
-Duplicate code is where Deslop starts, not where it ends. The broader goal is
-to find codebase slop, prevent more from appearing, and help remove it safely.
-Code removal is a direction of the project, not a shipping capability today.
+Deslop is proven useful across nine languages. Accuracy is now the
+highest-value aim, ahead of features, languages, UI, and performance: every
+reported cluster must be a real duplicate, and every real duplicate must be
+reported. Fixing code that can cause a false positive or false negative
+outranks all other work.
 
-See [the messaging guide](docs/messaging.md) and
+Duplicate code is where Deslop starts, not where it ends — finding slop,
+preventing more, and removing it safely is the longer arc. See
+[the messaging guide](docs/messaging.md) and
 [the design specification](docs/specs/SPEC.md).
 
 ## Contributing
 
-Please do log issues — especially if you can reproduce the bug or add a lot of
-detail. Those are genuinely useful.
-
-Code contributions are discouraged at the moment. We will only consider a pull
-request that:
-
-1. directly addresses an existing, confirmed bug, and
-2. comes with several end-to-end tests proving the bug is thoroughly fixed.
-
-Anything outside that is likely to be closed unmerged, so please open an issue
-first rather than writing the patch.
-
-Requires Rust 1.80+ and GNU Make.
-
-```bash
-make build
-make test
-make ci
-```
-
-Read [CLAUDE.md](CLAUDE.md) before contributing.
+Bug reports with a reproduction are the most useful thing you can send,
+especially inaccurate results. Code contributions are restricted while we audit
+for accuracy — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
