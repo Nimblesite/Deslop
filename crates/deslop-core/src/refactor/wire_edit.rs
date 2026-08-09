@@ -66,15 +66,21 @@ fn lsp_edit(text: &str, edit: &PlannedEdit, annotation_id: &str) -> serde_json::
     })
 }
 
-/// Minimal RFC 3986 `file://` URI for an absolute path (percent-encodes
-/// everything outside the unreserved set and `/`).
+/// RFC 8089 `file://` URI for an absolute path (issue #290). Backslash
+/// separators become `/`, a Windows drive letter keeps its unencoded
+/// colon behind the empty authority (`file:///C:/dir/file.rs`), and
+/// every remaining byte outside the unreserved set is percent-encoded.
 fn file_uri(path: &Path) -> String {
-    let mut uri = String::from("file://");
-    for byte in path.to_string_lossy().bytes() {
+    let text = path.to_string_lossy().replace('\\', "/");
+    let absolute = rooted_path(&text);
+    let drive_colon = drive_colon_index(absolute);
+    let mut uri = String::from("file:///");
+    for (index, byte) in absolute.bytes().enumerate() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
                 uri.push(char::from(byte));
             }
+            b':' if Some(index) == drive_colon => uri.push(':'),
             other => {
                 use std::fmt::Write as _;
                 let _formatted = write!(uri, "%{other:02X}");
@@ -82,4 +88,23 @@ fn file_uri(path: &Path) -> String {
         }
     }
     uri
+}
+
+/// The portion of a slash-normalised absolute path that follows
+/// `file:///`. Windows verbatim prefixes (`\\?\C:\…`, which
+/// `fs::canonicalize` always returns) are stripped so canonical and
+/// plain paths render identically. UNC shares are out of scope: they
+/// need a URI authority rather than a rooted path, and no deterministic
+/// test can drive one without a live network share.
+fn rooted_path(text: &str) -> &str {
+    text.strip_prefix("//?/")
+        .unwrap_or(text)
+        .trim_start_matches('/')
+}
+
+/// Byte index of the Windows drive-letter colon at the head of the path
+/// (`C:` in `C:/dir/file.rs`), which RFC 8089 leaves unencoded.
+fn drive_colon_index(absolute: &str) -> Option<usize> {
+    let mut chars = absolute.chars();
+    (chars.next()?.is_ascii_alphabetic() && chars.next()? == ':').then_some(1)
 }
