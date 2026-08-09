@@ -140,21 +140,40 @@ pub fn classify(
     baseline: &Baseline,
 ) -> Vec<Failure> {
     let known = baseline.known_for(repo);
-    let (mut fresh, mut carried) = (Vec::new(), Vec::new());
-    for failure in observed {
-        if known.contains(&failure.check) {
-            carried.push(failure.clone());
-        } else {
-            fresh.push(failure.clone());
-        }
-    }
+    let (fresh, carried): (Vec<Failure>, Vec<Failure>) = observed
+        .iter()
+        .cloned()
+        .partition(|failure| !known.contains(&failure.check));
 
-    for failure in &carried {
-        println!("  [KNOWN]  {repo}/{}: {}", failure.check, failure.detail);
+    print_failures("[KNOWN] ", repo, &carried);
+    print_failures("[NEW]   ", repo, &fresh);
+    print_possibly_fixed(repo, evaluated, observed, &known);
+
+    if baseline_mode() {
+        fresh
+    } else {
+        observed.to_vec()
     }
-    for failure in &fresh {
-        println!("  [NEW]    {repo}/{}: {}", failure.check, failure.detail);
+}
+
+/// Prints each failure under a classification label.
+fn print_failures(label: &str, repo: &str, failures: &[Failure]) {
+    for failure in failures {
+        println!("  {label} {repo}/{}: {}", failure.check, failure.detail);
     }
+}
+
+/// Prints the baseline entries that were evaluated this run and did not fire.
+///
+/// Scoped to `evaluated` on purpose: a repository's checks are split across
+/// more than one test, so an unscoped reconciliation would announce the
+/// determinism gate's live defect as fixed from inside the resource gate.
+fn print_possibly_fixed(
+    repo: &str,
+    evaluated: &[&str],
+    observed: &[Failure],
+    known: &BTreeSet<String>,
+) {
     let observed_checks: BTreeSet<&str> = observed
         .iter()
         .map(|failure| failure.check.as_str())
@@ -169,12 +188,6 @@ pub fn classify(
             "  [FIXED?] {repo}/{check}: baseline expects this to fail but it passed. \
              Confirm, then remove it from corpus/known-failures.json."
         );
-    }
-
-    if baseline_mode() {
-        fresh
-    } else {
-        observed.to_vec()
     }
 }
 
