@@ -169,6 +169,7 @@ fn cluster_over(id: &str, members: &[(deslop_core::state::FileId, ByteRange)]) -
             embedding_cos: 0.0,
         },
         content_agreement: 1.0,
+        literal_fraction: 0.0,
     }
 }
 

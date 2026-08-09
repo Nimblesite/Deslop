@@ -243,6 +243,7 @@ fn materialise_cluster<S: BuildHasher>(
     );
     let category = classify_clone_category(
         &cluster.members,
+        cluster.literal_fraction,
         inputs.sources,
         inputs.file_languages,
         parse_cache,

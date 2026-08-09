@@ -208,17 +208,19 @@ fn resolve_range_nodes(node: &NormalizedNode, start: usize, end: usize) -> Optio
         .find_map(|child| resolve_range_nodes(child, start, end))
 }
 
-/// Byte ranges of the normalisation-collapsed leaves (identifier and
-/// literal nodes) covered by `fingerprint`, in pre-order. `None` when
-/// the range resolves to no node or sibling window. Feeds the
-/// content-agreement signal ([FUSION-CONTENT-GATE], #331/#336): the
+/// Normalisation-collapsed leaves (identifier and literal nodes) covered
+/// by `fingerprint`, in pre-order, as `(kind, byte range)` pairs. `None`
+/// when the range resolves to no node or sibling window. Feeds the
+/// content-agreement signal ([FUSION-CONTENT-GATE], #331/#336) — the
 /// collapsed leaves are exactly the positions where two shape-identical
-/// subtrees can still disagree in raw source content.
+/// subtrees can still disagree in raw source content — and the
+/// literal-dominance measurement behind the language-agnostic data-table
+/// category ([CLONE-NOISE-LITERAL-TABLE]).
 #[must_use]
-pub(crate) fn collapsed_leaf_ranges(
+pub(crate) fn collapsed_leaves(
     root: &NormalizedNode,
     fingerprint: &Fingerprint,
-) -> Option<Vec<crate::ast::ByteRange>> {
+) -> Option<Vec<(&'static str, crate::ast::ByteRange)>> {
     let resolved = resolve_range_nodes(
         root,
         fingerprint.byte_range.start,
@@ -231,12 +233,15 @@ pub(crate) fn collapsed_leaf_ranges(
     Some(out)
 }
 
-/// Pre-order walk collecting the byte ranges of collapsed leaves.
-fn collect_collapsed_leaves(node: &NormalizedNode, out: &mut Vec<crate::ast::ByteRange>) {
+/// Pre-order walk collecting collapsed leaves as `(kind, range)` pairs.
+fn collect_collapsed_leaves(
+    node: &NormalizedNode,
+    out: &mut Vec<(&'static str, crate::ast::ByteRange)>,
+) {
     if node.kind == crate::lang::shared::IDENTIFIER_KIND
         || node.kind == crate::lang::shared::LITERAL_KIND
     {
-        out.push(node.byte_range);
+        out.push((node.kind, node.byte_range));
     }
     for child in &node.children {
         collect_collapsed_leaves(child, out);

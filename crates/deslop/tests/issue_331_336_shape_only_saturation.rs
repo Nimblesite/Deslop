@@ -18,8 +18,6 @@
 //!   outright). Complementary category labelling (`data`) is #336's
 //!   follow-up ask and is deliberately not asserted here.
 
-use std::fs;
-
 use serde_json::Value;
 
 mod common;
@@ -75,17 +73,6 @@ const DART_GENUINE_CLONE: &str = "int weightedTotal(List<int> values, int floor)
     \x20 return total;\n\
     }\n";
 
-/// A genuine copy-pasted F# function — byte-identical across two files.
-const FSHARP_GENUINE_CLONE: &str = "module ParseHelpers\n\n\
-    let accumulate (values: int list) (floor: int) =\n\
-    \x20   let mutable total = 0\n\
-    \x20   for value in values do\n\
-    \x20       if value > floor then\n\
-    \x20           total <- total + value * 2\n\
-    \x20       else\n\
-    \x20           total <- total - 1\n\
-    \x20   total\n";
-
 /// One Flutter widget file: the framework-mandated `StatefulWidget`
 /// declaration (the shared shape) plus a state class whose `build`
 /// body is unique per widget so only the declarations align.
@@ -103,44 +90,6 @@ fn dart_widget_file(name: &str, body: &str) -> String {
          \x20 }}\n\
          }}\n"
     )
-}
-
-/// One F# module holding a numeric array literal. Same length (same
-/// shape) across modules, entirely different values — the #336
-/// false-positive family.
-fn fsharp_table_file(module_name: &str, seed: usize) -> String {
-    let values: Vec<String> = (0_usize..24)
-        .map(|index| {
-            let mixed = seed
-                .saturating_mul(37)
-                .saturating_add(index.saturating_mul(13));
-            (mixed % 97).to_string()
-        })
-        .collect();
-    format!(
-        "module {module_name}\n\nlet lookup = [| {} |]\n",
-        values.join("; ")
-    )
-}
-
-/// Writes `(file_name, source)` pairs into a temp scan root and returns
-/// the rendered report at the shared `--min-nodes 20` operating point.
-fn report_for(files: &[(String, String)]) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let root = tmp.path().join("src");
-    fs::create_dir_all(&root)?;
-    for (file_name, source) in files {
-        fs::write(root.join(file_name), source)?;
-    }
-    run_report(&root, 20)
-}
-
-/// The two byte-identical files forming a genuine-clone recall guard.
-fn genuine_pair(first: &str, second: &str, source: &str) -> [(String, String); 2] {
-    [
-        (first.to_owned(), source.to_owned()),
-        (second.to_owned(), source.to_owned()),
-    ]
 }
 
 /// Asserts the genuine byte-identical clone spanning `files` is still
@@ -227,7 +176,7 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
         DART_GENUINE_CLONE,
     ));
 
-    let report = report_for(&files)?;
+    let report = report_for(&files, 20)?;
     assert_shape_only_family_demoted(
         &report,
         &["metrics_a.dart", "metrics_b.dart"],
@@ -240,20 +189,7 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
 // not be reported as act-now duplication above a genuine clone.
 #[test]
 fn issue_336_distinct_numeric_tables_must_not_saturate_fused_confidence() -> Result<()> {
-    let modules = ["TablesAlpha", "TablesBeta", "TablesGamma", "TablesDelta"];
-    let mut files: Vec<(String, String)> = modules
-        .iter()
-        .enumerate()
-        .map(|(index, module_name)| {
-            (
-                format!("tables_{index}.fs"),
-                fsharp_table_file(module_name, index),
-            )
-        })
-        .collect();
-    files.extend(genuine_pair("parse_a.fs", "parse_b.fs", FSHARP_GENUINE_CLONE));
-
-    let report = report_for(&files)?;
+    let report = report_for(&fsharp_tables_corpus(), 20)?;
     assert_shape_only_family_demoted(&report, &["parse_a.fs", "parse_b.fs"], |name| {
         name.starts_with("tables_")
     })

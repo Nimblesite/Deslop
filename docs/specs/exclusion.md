@@ -50,6 +50,14 @@ A top-level Dart collection literal whose elements are repeated near-identical d
 
 **Verbatim escape hatch.** Classification requires at least two members to differ in raw bytes (`raw_snippet_texts_differ`), matching #104/#133/#169. A *verbatim*-copied table is genuine copy-paste duplication and must still surface at full `logic` weight, never demoted.
 
+### [CLONE-NOISE-LITERAL-TABLE] Language-agnostic literal-dominated tables
+
+The Dart predicate above ships per-grammar CST knowledge, so every other language reported data tables at full `logic` weight (gh #336: an F# integer array literal family ranked #1 on `dotnet/fsharp`). The language-agnostic test needs no grammar tables: the pipeline already walks each cluster member's **normalised** tree for the content gate ([fusion.md §FUSION-CONTENT-GATE](fusion.md#fusion-content-gate)), and a subtree whose collapsed leaves are overwhelmingly `__literal__` positions *is* a data literal in any language.
+
+**Predicate.** A cluster is classified `data` ([RANK-CATEGORY]) when the canonical member's collapsed leaves are ≥ 0.8 literal positions with at least 8 literals (so a tiny literal-heavy subtree — a tuple return, a short argument list — never registers as a table), and at least two members differ in raw bytes — the same verbatim escape hatch as the Dart predicate. The fraction is measured in the pipeline, where normalised trees live, and travels on the cluster; the classifier composes with the per-language predicates rather than replacing them (identifier-heavy constructor-row tables stay Dart-specific).
+
+**Routing interaction.** A literal-dominated shape-only family stays in the surfaced `structural_only` tier instead of the hidden cross-file-scaffolding one: the `[ranking] data_clones` policy ([RANK-CATEGORY]) owns its visibility — demoted by default, dropped under `ignore`, restored by `data_clone_weight = 1.0` — and a policy knob cannot govern a cluster the renderer already hid.
+
 This predicate feeds the [RANK-CATEGORY] policy: under the default **demote** mode the table is down-weighted and labelled `category="data"`; under **ignore** it is dropped; under **keep** it ranks at full weight.
 
 ### [CONFIG-CROSS-LANGUAGE] Cross-language comparison

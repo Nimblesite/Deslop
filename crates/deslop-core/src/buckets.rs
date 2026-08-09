@@ -244,6 +244,15 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 /// same act-now grade as [FUSED-THRESHOLD]).
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
+/// Literal fraction at which a shape-identical cluster counts as a data
+/// literal ([CLONE-NOISE-LITERAL-TABLE], #336): the canonical member's
+/// collapsed leaves are overwhelmingly literal positions — a numeric
+/// array, a lookup table, generated test data — in any language. Such
+/// clusters are governed by the `[ranking] data_clones` policy
+/// ([RANK-CATEGORY]) instead of the scaffolding hide, so they stay
+/// labelled and policy-controllable rather than silently vanishing.
+pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
+
 /// True when a shape-identical cluster's only real evidence is its
 /// shape: the raw content of its collapsed leaves mostly disagrees and
 /// no semantic signal supports it ([FUSION-CONTENT-GATE]). Such

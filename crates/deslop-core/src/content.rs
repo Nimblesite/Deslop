@@ -15,13 +15,22 @@ use crate::{
     ast::NormalizedNode,
     cluster::Cluster,
     fingerprint::Fingerprint,
+    lang::shared::LITERAL_KIND,
     state::FileId,
-    tokens::collapsed_leaf_ranges,
+    tokens::collapsed_leaves,
 };
 
-/// Measures and attaches the content-agreement score for every cluster.
-/// Runs once per render, immediately after ranking; cost is one walk per
-/// cluster member over already-normalised trees — no re-parsing.
+/// Minimum literal-leaf count before a subtree's literal dominance is
+/// reported at all ([CLONE-NOISE-LITERAL-TABLE]). A data table is a run
+/// of values; a tiny subtree that happens to be mostly literals (a
+/// two-element tuple return, a short argument list) is not a table and
+/// must not reach the data-category classifier.
+const LITERAL_TABLE_MIN_LITERALS: usize = 8;
+
+/// Measures and attaches the content-agreement and literal-dominance
+/// scores for every cluster. Runs once per render, immediately after
+/// ranking; cost is one walk per cluster member over already-normalised
+/// trees — no re-parsing.
 pub fn attach_content_agreement<S: BuildHasher>(
     clusters: &mut [Cluster],
     trees: &[NormalizedNode],
@@ -31,8 +40,36 @@ pub fn attach_content_agreement<S: BuildHasher>(
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     for cluster in clusters {
         cluster.content_agreement = cluster_content_agreement(&cluster.members, &tree_index, sources);
+        cluster.literal_fraction = cluster_literal_fraction(&cluster.members, &tree_index);
     }
     tracing::debug!("content agreement attached");
+}
+
+/// Fraction of the canonical member's collapsed leaves that are literal
+/// positions, in `[0, 1]` — the language-agnostic "is this a data
+/// literal?" measurement ([CLONE-NOISE-LITERAL-TABLE]). `0.0` when the
+/// member cannot be resolved or carries fewer than
+/// [`LITERAL_TABLE_MIN_LITERALS`] literals, so tiny literal-heavy
+/// subtrees never register as tables.
+fn cluster_literal_fraction(
+    members: &[Fingerprint],
+    tree_index: &HashMap<FileId, &NormalizedNode>,
+) -> f64 {
+    let leaves = members
+        .first()
+        .and_then(|canonical| tree_index.get(&canonical.file_id).map(|root| (root, canonical)))
+        .and_then(|(root, canonical)| collapsed_leaves(root, canonical));
+    let Some(leaves) = leaves else {
+        return 0.0;
+    };
+    let literals = leaves
+        .iter()
+        .filter(|(kind, _)| *kind == LITERAL_KIND)
+        .count();
+    if literals < LITERAL_TABLE_MIN_LITERALS || leaves.is_empty() {
+        return 0.0;
+    }
+    member_count(literals) / member_count(leaves.len())
 }
 
 /// Mean agreement of every non-canonical member against the canonical
@@ -112,12 +149,10 @@ fn member_content_keys<S: BuildHasher>(
 ) -> Option<Vec<u64>> {
     let root = tree_index.get(&member.file_id)?;
     let source = sources.get(&member.file_id)?;
-    let ranges = collapsed_leaf_ranges(root, member)?;
-    ranges
+    let leaves = collapsed_leaves(root, member)?;
+    leaves
         .iter()
-        .map(|range| {
-            source.get(range.start..range.end).map(truncated_hash)
-        })
+        .map(|(_, range)| source.get(range.start..range.end).map(truncated_hash))
         .collect()
 }
 

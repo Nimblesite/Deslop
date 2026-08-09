@@ -39,6 +39,11 @@ pub struct Cluster {
     /// full agreement; `crate::content::attach_content_agreement` measures
     /// it during render, before bucket routing reads it.
     pub content_agreement: f64,
+    /// Fraction of the canonical member's collapsed leaves that are
+    /// literal positions, in `[0, 1]` ([CLONE-NOISE-LITERAL-TABLE]).
+    /// `0.0` until the same attach pass measures it; drives the
+    /// language-agnostic data-table category ([RANK-CATEGORY]).
+    pub literal_fraction: f64,
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -147,6 +152,7 @@ fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster
         weight,
         signals,
         content_agreement: 1.0,
+        literal_fraction: 0.0,
     }
 }
 
