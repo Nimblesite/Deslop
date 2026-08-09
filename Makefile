@@ -72,7 +72,7 @@ test: _delete-path-binaries typediagram-gen
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info -- --skip ollama_
+	    --lcov --output-path lcov.info -- --skip ollama_ --skip corpus_
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
 
 _coverage_check:
@@ -218,7 +218,8 @@ ci-ollama: ci test-ollama
 ##              runner-dependent. Run it when touching the pipeline.
 test-corpus:
 	node scripts/fetch-corpus.mjs
-	cargo test --release --workspace corpus_ -- --nocapture
+	cargo build --release --bin deslop
+	cargo test --release --workspace corpus_ -- --nocapture --test-threads=1
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
@@ -572,6 +573,7 @@ help:
 	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
+	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
 	@echo "  ci-ollama              - make ci plus make test-ollama"
 	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"

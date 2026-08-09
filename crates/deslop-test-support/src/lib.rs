@@ -11,6 +11,8 @@
 //! utilities (dev-dependency, never published); they do not duplicate the
 //! production protocol shell, which stays in `deslop-lsp` / `deslop-mcp`.
 
+pub mod corpus;
+
 use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
