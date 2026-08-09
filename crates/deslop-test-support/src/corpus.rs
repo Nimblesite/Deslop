@@ -14,7 +14,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output},
     time::{Duration, Instant},
 };
 
@@ -24,6 +24,16 @@ use serde_json::Value;
 /// Environment variable that switches the suite from strict mode (any failure
 /// fails the test) to baseline mode (only *new* failures fail).
 pub const BASELINE_ENV: &str = "DESLOP_CORPUS_BASELINE";
+
+/// `/usr/bin/time` flag that reports peak resident set size. BSD (macOS)
+/// spells it `-l`; GNU (Linux, which is what the scheduled corpus workflow
+/// runs on) has no `-l` at all and rejects the invocation outright, so a
+/// hard-coded `-l` would kill every scan before a single check ran.
+const PEAK_RSS_FLAG: &str = if cfg!(target_os = "macos") {
+    "-l"
+} else {
+    "-v"
+};
 
 /// One failed check, keyed by a rank-independent id.
 ///
@@ -41,7 +51,10 @@ pub struct Failure {
 impl Failure {
     /// Builds a failure for `check` with the given detail.
     pub fn new(check: &str, detail: impl Into<String>) -> Self {
-        Self { check: check.to_owned(), detail: detail.into() }
+        Self {
+            check: check.to_owned(),
+            detail: detail.into(),
+        }
     }
 }
 
@@ -141,8 +154,10 @@ pub fn classify(
     for failure in &fresh {
         println!("  [NEW]    {repo}/{}: {}", failure.check, failure.detail);
     }
-    let observed_checks: BTreeSet<&str> =
-        observed.iter().map(|failure| failure.check.as_str()).collect();
+    let observed_checks: BTreeSet<&str> = observed
+        .iter()
+        .map(|failure| failure.check.as_str())
+        .collect();
     let evaluated: BTreeSet<&str> = evaluated.iter().copied().collect();
     for check in known
         .iter()
@@ -188,7 +203,8 @@ pub fn manifest(name: &str) -> Result<Value> {
     let path = repo_root().join("corpus").join(format!("{name}.json"));
     let text = fs::read_to_string(&path)
         .with_context(|| format!("corpus manifest not readable: {}", path.display()))?;
-    serde_json::from_str(&text).with_context(|| format!("corpus manifest is not JSON: {}", path.display()))
+    serde_json::from_str(&text)
+        .with_context(|| format!("corpus manifest is not JSON: {}", path.display()))
 }
 
 /// Resolves the clone directory for a manifest, erroring when it is absent.
@@ -246,40 +262,14 @@ pub fn u64_field(value: &Value, name: &str) -> Result<u64> {
 /// Returns an error when the binary is missing, the scan exits non-zero, or
 /// the rendered report cannot be read.
 pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
-    let binary = repo_root().join("target").join("release").join("deslop");
-    if !binary.is_file() {
-        return Err(anyhow!(
-            "release binary missing at {}. Run `make test-corpus`, which builds it first.",
-            binary.display()
-        ));
-    }
+    let binary = release_binary()?;
 
     let started = Instant::now();
-    let output = Command::new("/usr/bin/time")
-        .arg("-l")
-        .arg(&binary)
-        .arg(scan_root)
-        .args(["--output"])
-        .arg(output_prefix)
-        .args([
-            "--no-incremental",
-            "--embeddings",
-            "off",
-            "--no-fail-over",
-            "--no-color",
-            "--notext",
-            "--nohtml",
-        ])
-        .output()
-        .context("failed to spawn /usr/bin/time")?;
+    let output = timed_scan(&binary, scan_root, output_prefix)?;
     let wall = started.elapsed();
 
     if !output.status.success() {
-        return Err(anyhow!(
-            "deslop exited {:?} scanning {}",
-            output.status.code(),
-            scan_root.display()
-        ));
+        return Err(scan_failure(scan_root, &output));
     }
 
     let report_path = with_json_extension(output_prefix);
@@ -291,6 +281,57 @@ pub fn scan(scan_root: &Path, output_prefix: &Path) -> Result<CorpusRun> {
         wall,
         peak_rss_mb: peak_rss_mb(&String::from_utf8_lossy(&output.stderr))?,
     })
+}
+
+/// Locates the release binary the suite measures.
+fn release_binary() -> Result<PathBuf> {
+    let binary = repo_root().join("target").join("release").join("deslop");
+    if binary.is_file() {
+        return Ok(binary);
+    }
+    Err(anyhow!(
+        "release binary missing at {}. Run `make test-corpus`, which builds it first.",
+        binary.display()
+    ))
+}
+
+/// Runs one scan under `/usr/bin/time`, capturing its output.
+fn timed_scan(binary: &Path, scan_root: &Path, output_prefix: &Path) -> Result<Output> {
+    Command::new("/usr/bin/time")
+        .arg(PEAK_RSS_FLAG)
+        .arg(binary)
+        .arg(scan_root)
+        .arg("--output")
+        .arg(output_prefix)
+        .args([
+            "--no-incremental",
+            "--embeddings",
+            "off",
+            "--no-fail-over",
+            "--no-color",
+            "--notext",
+            "--nohtml",
+        ])
+        .output()
+        .context("failed to spawn /usr/bin/time")
+}
+
+/// Describes a non-zero scan, quoting stderr.
+///
+/// The failing process may be `deslop` or `/usr/bin/time` itself — a flag the
+/// host's `time` does not accept dies here too — so the message names both
+/// rather than blaming the scan for a harness fault.
+fn scan_failure(scan_root: &Path, output: &Output) -> anyhow::Error {
+    anyhow!(
+        "`/usr/bin/time {PEAK_RSS_FLAG} deslop {}` exited {:?}: {}",
+        scan_root.display(),
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+            .lines()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" | ")
+    )
 }
 
 /// Appends `.json` to an `--output` prefix.
@@ -307,7 +348,10 @@ fn with_json_extension(prefix: &Path) -> PathBuf {
 fn peak_rss_mb(stderr: &str) -> Result<u64> {
     let line = stderr
         .lines()
-        .find(|line| line.to_ascii_lowercase().contains("maximum resident set size"))
+        .find(|line| {
+            line.to_ascii_lowercase()
+                .contains("maximum resident set size")
+        })
         .ok_or_else(|| anyhow!("/usr/bin/time did not report a maximum resident set size"))?;
 
     let value: u64 = line
@@ -316,7 +360,11 @@ fn peak_rss_mb(stderr: &str) -> Result<u64> {
         .ok_or_else(|| anyhow!("no numeric peak RSS in {line:?}"))?;
 
     let in_kbytes = line.to_ascii_lowercase().contains("kbytes");
-    Ok(if in_kbytes { value / 1024 } else { value / (1024 * 1024) })
+    Ok(if in_kbytes {
+        value / 1024
+    } else {
+        value / (1024 * 1024)
+    })
 }
 
 /// Every occurrence path in the report's `clusters`, grouped per cluster.
@@ -347,11 +395,21 @@ fn occurrence_paths(cluster: &Value) -> Vec<String> {
 /// True when some reported cluster covers every path in `files`. This is the
 /// recall predicate: a curated duplicate that no cluster spans is a false
 /// negative.
+///
+/// An empty `files` list is false, never true. `all()` over nothing is
+/// vacuously true, which would turn a manifest entry that lists no files into
+/// a recall assertion that always passes — the exact shape of a test that
+/// asserts nothing.
 #[must_use]
 pub fn reports_clone_spanning(report: &Value, files: &[String]) -> bool {
-    cluster_paths(report)
-        .iter()
-        .any(|paths| files.iter().all(|file| paths.iter().any(|path| path == file)))
+    if files.is_empty() {
+        return false;
+    }
+    cluster_paths(report).iter().any(|paths| {
+        files
+            .iter()
+            .all(|file| paths.iter().any(|path| path == file))
+    })
 }
 
 /// Reads the source slice a cluster's first occurrence points at.

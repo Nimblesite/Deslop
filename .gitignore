@@ -102,7 +102,7 @@ clients/vscode/out/
 # Corpus clone cache. `make test-corpus` clones pinned public repositories
 # here to measure accuracy and resource usage against real code. Clones are
 # large (Flutter alone is ~200 MB) and fully reproducible from the pinned
-# SHAs in `corpus/*.toml`, so they are never tracked.
+# SHAs in `corpus/*.json`, so they are never tracked.
 .corpus/
 
 # Pre-[OUTPUT-DIR] cache location. Kept ignored only so that a checkout still

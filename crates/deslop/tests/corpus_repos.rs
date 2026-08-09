@@ -104,7 +104,10 @@ fn determinism_gate(name: &str) -> Result<()> {
 
     let mut failures = Vec::new();
     if first_ids != second_ids {
-        let (left, right) = (duplication_percent(&first.report), duplication_percent(&second.report));
+        let (left, right) = (
+            duplication_percent(&first.report),
+            duplication_percent(&second.report),
+        );
         failures.push(Failure::new(
             "determinism",
             format!(
@@ -256,20 +259,16 @@ fn check_boilerplate_not_ranked_first(
     let Some(rule) = manifest.get("must_not_rank_first") else {
         return Ok(());
     };
-    let top_n = usize::try_from(u64_field(rule, "top_n")?).unwrap_or(0);
+    // Saturating up, never down: a `top_n` too large for the host widens the
+    // check to every cluster, where narrowing it to zero would silently switch
+    // the precision gate off.
+    let top_n = usize::try_from(u64_field(rule, "top_n")?).unwrap_or(usize::MAX);
     let forbidden: Vec<&str> = array(rule, "forbidden_top_shapes")
         .iter()
         .filter_map(Value::as_str)
         .collect();
 
-    let empty = Vec::new();
-    let clusters = run
-        .report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .unwrap_or(&empty);
-
-    for (rank, cluster) in clusters.iter().take(top_n).enumerate() {
+    for (rank, cluster) in array(&run.report, "clusters").iter().take(top_n).enumerate() {
         let text = first_occurrence_text(root, cluster)?;
         for shape in &forbidden {
             if text.contains(shape) {
@@ -307,17 +306,17 @@ fn check_data_tables_not_ranked_as_logic(
     run: &CorpusRun,
     failures: &mut Vec<Failure>,
 ) -> Result<()> {
-    let empty = Vec::new();
-    let clusters = run
-        .report
-        .get("clusters")
-        .and_then(Value::as_array)
-        .unwrap_or(&empty);
-
-    for (rank, cluster) in clusters.iter().take(RANKED_HEAD).enumerate() {
+    for (rank, cluster) in array(&run.report, "clusters")
+        .iter()
+        .take(RANKED_HEAD)
+        .enumerate()
+    {
         let text = first_occurrence_text(root, cluster)?;
         let ratio = data_character_ratio(&text);
-        let category = cluster.get("category").and_then(Value::as_str).unwrap_or("absent");
+        let category = cluster
+            .get("category")
+            .and_then(Value::as_str)
+            .unwrap_or("absent");
         if ratio >= DATA_TABLE_RATIO && category != "data" {
             failures.push(Failure::new(
                 "data_table_rank",
@@ -343,7 +342,9 @@ fn data_character_ratio(text: &str) -> f64 {
     if total == 0 {
         return 0.0;
     }
-    let data = significant().filter(|character| is_data_character(*character)).count();
+    let data = significant()
+        .filter(|character| is_data_character(*character))
+        .count();
     as_f64(data) / as_f64(total)
 }
 
@@ -381,7 +382,10 @@ fn check_ceilings(manifest: &Value, run: &CorpusRun, failures: &mut Vec<Failure>
     if run.peak_rss_mb > max_rss {
         failures.push(Failure::new(
             "memory",
-            format!("peak RSS {}MB exceeds the {max_rss}MB ceiling", run.peak_rss_mb),
+            format!(
+                "peak RSS {}MB exceeds the {max_rss}MB ceiling",
+                run.peak_rss_mb
+            ),
         ));
     }
     Ok(())
@@ -403,5 +407,8 @@ fn field_u64(value: &Value, name: &str) -> u64 {
 
 /// Unsigned scalar at a JSON pointer, or `0` when absent.
 fn pointer_u64(value: &Value, pointer: &str) -> u64 {
-    value.pointer(pointer).and_then(Value::as_u64).unwrap_or_default()
+    value
+        .pointer(pointer)
+        .and_then(Value::as_u64)
+        .unwrap_or_default()
 }

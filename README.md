@@ -107,7 +107,7 @@ Configuration lives in `.deslop.toml`. See the
 
 ## Project direction — accuracy first
 
-Deslop is proven useful across nine languages. Accuracy is now the
+Deslop is proven useful across every language it parses. Accuracy is now the
 highest-value aim, ahead of features, languages, UI, and performance: every
 reported cluster must be a real duplicate, and every real duplicate must be
 reported. Fixing code that can cause a false positive or false negative

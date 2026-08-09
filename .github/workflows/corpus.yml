@@ -39,6 +39,14 @@ jobs:
         with:
           node-version: "22"
 
+      # The harness measures peak RSS with `/usr/bin/time`, which is a separate
+      # package on Ubuntu — the shell's `time` keyword is not it and cannot
+      # report memory. Without this the first scan dies on spawn.
+      - name: Ensure GNU time is installed
+        run: |
+          command -v /usr/bin/time >/dev/null \
+            || sudo apt-get install -y --no-install-recommends time
+
       - name: Record runner capacity
         run: |
           echo "### Runner" >> "$GITHUB_STEP_SUMMARY"

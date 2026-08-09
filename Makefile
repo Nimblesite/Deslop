@@ -601,6 +601,7 @@ help:
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
 	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
+	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
 	@echo "  ci-ollama              - make ci plus make test-ollama"
 	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"
