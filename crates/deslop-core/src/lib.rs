@@ -22,6 +22,7 @@ pub mod clone_category;
 pub mod cluster;
 mod cluster_filters;
 pub mod config;
+pub mod content;
 pub mod delta;
 pub mod discover;
 pub mod embedding;

@@ -34,6 +34,11 @@ pub struct Cluster {
     /// because every member shares a Merkle hash and therefore a k-gram
     /// set. Fused clusters carry the mean of pair scores.
     pub signals: PairScore,
+    /// Raw-content agreement across the members' normalisation-collapsed
+    /// leaves, in `[0, 1]` ([FUSION-CONTENT-GATE], #331/#336). Starts at
+    /// full agreement; `crate::content::attach_content_agreement` measures
+    /// it during render, before bucket routing reads it.
+    pub content_agreement: f64,
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -141,6 +146,7 @@ fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster
         members,
         weight,
         signals,
+        content_agreement: 1.0,
     }
 }
 

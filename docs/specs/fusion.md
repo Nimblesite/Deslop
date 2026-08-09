@@ -62,6 +62,49 @@ Per the ensemble-LLM 2025 findings (max/sum with normalization):
 
 This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*.
 
+### [FUSION-CONTENT-GATE] Content agreement gates shape-identical confidence
+
+The max/sum ensemble above assumes independent members, but `structural_sim`
+and `token_jaccard` are both computed from the *normalised* representation
+(identifiers and literals collapsed), so on any exact shape match they agree by
+construction and their sum saturates the clamp: every structural cluster used
+to render `fused = 1.0` regardless of what the code actually said (gh #331,
+#336). The gate restores an independent member by measuring what normalisation
+erased:
+
+1. For each cluster, walk each member's normalised subtree and hash the **raw
+   source bytes** of every collapsed leaf (identifier / literal position).
+2. `content_agreement` = mean fraction of positions whose raw bytes match the
+   canonical member's, in `[0, 1]`. Byte-identical members score 1.0; a
+   renamed copy of real logic changes a handful of positions and stays high;
+   framework-mandated scaffolding (every name differs) and data tables (every
+   literal differs) fall low.
+3. **Rendered confidence**: for shape-identical clusters not proven
+   byte-equivalent, `fused = max(embedding_cos, structural × content_agreement)`.
+   LSH-only and embedding-discovered pairs keep the max/sum fusion unchanged.
+4. **Routing — three zones.** Below the support floor (0.7, the
+   [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff) with no semantic support,
+   the cluster joins the [RANK-STRUCTURAL-ONLY] routing — surfaced honestly
+   or hidden as cross-file scaffolding, and demoted in ranking. At or above
+   the promote bar (0.85, act-now grade) the cluster is a proven near-miss
+   and routes `nearly_identical` even when the token layer lost its
+   signature to the fingerprint-scoped fallback. Between the two, the legacy
+   signal routing stands: real-world sibling families (the #197 REST
+   settings surface measures 0.72–0.80) keep their demoted verdict.
+5. **Token-signal correction.** A shape-identical cluster shares one Merkle
+   hash, so its members' normalised k-gram sets are equal by construction;
+   for clusters routed `identical` / `nearly_identical` a lower rendered
+   `token_jaccard` is a fallback-signature artifact and is corrected to 1.0
+   (the GH #232 argument). `structural_only` keeps its unscored signal —
+   absent token support is that bucket's defining signature.
+
+`token_jaccard` itself stays rename-invariant (normalised k-grams); the gate
+adds evidence rather than redefining an existing signal. `data`-category
+clusters are exempt from the structural-only ranking demotion — their weight
+belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
+`data_clone_weight = 1.0` can still restore a table the gate routed to the
+structural-only bucket.
+
 ### [REMOVE-STUB] Test-only stub provider must never ship
 The deterministic BLAKE3 stub embedding provider named in [FUSION-EMBED-PROVIDER]
 exists purely so E2E tests can exercise the embedding path without a live model.
