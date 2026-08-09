@@ -99,6 +99,12 @@ clients/vscode/out/
 # tracked (this pattern is directory-only, so it does not match the file).
 .deslop/
 
+# Corpus clone cache. `make test-corpus` clones pinned public repositories
+# here to measure accuracy and resource usage against real code. Clones are
+# large (Flutter alone is ~200 MB) and fully reproducible from the pinned
+# SHAs in `corpus/*.toml`, so they are never tracked.
+.corpus/
+
 # Pre-[OUTPUT-DIR] cache location. Kept ignored only so that a checkout still
 # holding one — written by an extension build from before the move, which may
 # have a live `deslop.sock` bound inside it — does not show up as ~100 MB of

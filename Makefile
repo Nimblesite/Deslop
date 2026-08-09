@@ -210,6 +210,16 @@ test-ollama: _vsix-test-ollama
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
 
+## test-corpus: Accuracy + resource suite against real public repositories
+##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
+##              first (re-runs are free once cloned). Excluded from
+##              `make test`/`make ci` via `--skip corpus_` because it needs
+##              the network and measures wall time and peak memory, which are
+##              runner-dependent. Run it when touching the pipeline.
+test-corpus:
+	node scripts/fetch-corpus.mjs
+	cargo test --release --workspace corpus_ -- --nocapture
+
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
 ## deployment-verify: Validate deployment manifest and built binary contracts.
