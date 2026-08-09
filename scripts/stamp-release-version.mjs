@@ -4,6 +4,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const nodeProjects = [
   "clients/vscode",
@@ -25,15 +26,27 @@ const stagedDeploymentManifests = ["clients/vscode/shipwright.json"];
 // shows a copy-pasteable pin is listed here, in both locales — a doc page that
 // drifts is the same defect as a README that drifts. [ACTION-VERSION]
 const actionPinPrefix = "uses: Nimblesite/Deslop@v";
-const actionPinDocs = [
+// Every character SemVer permits in a version. A pin is closed by the first
+// character outside this set — a space in a YAML snippet, but a backtick where
+// the Action doc page quotes a pin inline in prose. Reading to the first space
+// instead swallowed the backtick into the version token and dropped it on
+// stamping, unterminating the code span. [ACTION-VERSION]
+const semverCharacters = new Set("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-+");
+/** Published surfaces carrying a copy-pasteable `uses:` pin, in stamp order. */
+export const actionPinDocs = [
   "README.md",
   "site/src/docs/github-action.md",
   "site/src/zh/docs/github-action.md",
 ];
 
-const { root, version } = parseArgs(process.argv.slice(2));
-stampReleaseVersion(root, version);
-console.log(`${root}: stamped release version ${version}`);
+// Importable by the contract test without stamping anything: the pin list and
+// its parser are the checkable half of [ACTION-VERSION], and a second copy of
+// either would drift from the copy that actually rewrites the files.
+if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+  const { root, version } = parseArgs(process.argv.slice(2));
+  stampReleaseVersion(root, version);
+  console.log(`${root}: stamped release version ${version}`);
+}
 
 export function stampReleaseVersion(rootPath, versionValue) {
   assertSemver(versionValue);
@@ -134,15 +147,38 @@ function stampActionPin(filePath, versionValue) {
 function replaceActionPins(text, versionValue) {
   let stamped = 0;
   const lines = text.split("\n").map((line) => {
-    const marker = line.indexOf(actionPinPrefix);
-    if (marker < 0) return line;
-    const tail = line.slice(marker + actionPinPrefix.length);
-    const space = tail.indexOf(" ");
+    const pin = splitActionPin(line);
+    if (pin === undefined) return line;
     stamped++;
-    return `${line.slice(0, marker)}${actionPinPrefix}${versionValue}${space < 0 ? "" : tail.slice(space)}`;
+    return `${pin.head}${actionPinPrefix}${versionValue}${pin.rest}`;
   });
   if (stamped === 0) throw new Error(`no ${actionPinPrefix} pin to stamp`);
   return lines.join("\n");
+}
+
+/**
+ * Splits a documented `uses:` line around its pinned version.
+ * @param {string} line
+ * @returns {{ head: string, version: string, rest: string } | undefined} undefined when the line carries no pin
+ */
+function splitActionPin(line) {
+  const marker = line.indexOf(actionPinPrefix);
+  if (marker < 0) return undefined;
+  const tail = line.slice(marker + actionPinPrefix.length);
+  // `split("")` cuts on UTF-16 code units, so the index addresses `tail`
+  // directly even on the localised pages.
+  const closed = tail.split("").findIndex((character) => !semverCharacters.has(character));
+  const stop = closed < 0 ? tail.length : closed;
+  return { head: line.slice(0, marker), version: tail.slice(0, stop), rest: tail.slice(stop) };
+}
+
+/**
+ * Every version pinned by a `uses:` line in one documented surface.
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function readActionPins(text) {
+  return text.split("\n").flatMap((line) => splitActionPin(line)?.version ?? []);
 }
 
 function parseArgs(args) {

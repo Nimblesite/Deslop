@@ -72,7 +72,7 @@ test: _delete-path-binaries typediagram-gen
 	@_rust_ignore=$$(jq -r '.rust.ignore_filename_regex' "$(_COVERAGE_THRESHOLDS_FILE)"); \
 	 cargo llvm-cov --workspace --all-targets --features deslop-core/live \
 	    --ignore-filename-regex "$$_rust_ignore" \
-	    --lcov --output-path lcov.info -- --skip ollama_
+	    --lcov --output-path lcov.info -- --skip ollama_ --skip corpus_
 	@$(MAKE) _coverage_check RUST_LCOV=lcov.info
 
 _coverage_check:
@@ -209,6 +209,44 @@ test-ollama: _vsix-test-ollama
 
 ## ci-ollama: `make ci` plus `make test-ollama`.
 ci-ollama: ci test-ollama
+
+## test-corpus: [CORPUS-*] Accuracy + resource suite against real public repos
+##              pinned by `corpus/*.json`. Clones into git-ignored `.corpus/`
+##              first (re-runs are free once cloned). Excluded from
+##              `make test`/`make ci` via `--skip corpus_` because it needs
+##              the network and measures wall time and peak memory, which are
+##              runner-dependent. Run it when touching the pipeline.
+test-corpus:
+	node scripts/fetch-corpus.mjs
+	cargo build --release --bin deslop
+	cargo test --release -p deslop --test corpus_repos -- --nocapture --test-threads=1
+
+## test-corpus-ci: `make test-corpus` in baseline mode — failures already
+##                 recorded in `corpus/known-failures.json` are reported but
+##                 do not fail the run; anything new does. Used by the
+##                 scheduled corpus workflow so tracked defects stay visible
+##                 without blocking. Local `make test-corpus` ignores the
+##                 baseline and stays strictly red.
+test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
+test-corpus-ci:
+	node scripts/fetch-corpus.mjs $(CORPUS_REPOS)
+	cargo build --release --bin deslop
+	@fail=0; for t in $(CORPUS_TESTS); do \
+	   cargo test --release -p deslop --test corpus_repos $$t -- --nocapture --test-threads=1 || fail=1; \
+	 done; \
+	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
+	 exit $$fail
+
+# Scheduled CI runs a deliberately small slice: clone + scan inside ~1 minute.
+# `tokio` is the fastest corpus and the only one that has ever been stable
+# across runs, so it is the control; `nest` is the cheapest repository that
+# still reproduces the determinism defect (#301).
+#
+# Precision defects (#331 Dart, #336 F#) are NOT covered here — those repos
+# peak above 13 GB (#166) and take minutes to scan. Run the full suite with
+# `make test-corpus` locally, or dispatch the workflow with `full`.
+CORPUS_REPOS ?= tokio nest
+CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
@@ -562,6 +600,8 @@ help:
 	@echo "  typediagram-gen        - Regenerate wire-format IPC models from docs/models/*.td"
 	@echo "  deployment-verify      - Validate deployment manifest and built binary contracts"
 	@echo "  test-ollama            - Ollama-gated Rust + VSIX tests (never in CI)"
+	@echo "  test-corpus            - Accuracy + resource gate against pinned real repositories"
+	@echo "  test-corpus-ci         - test-corpus in baseline mode (reports tracked defects)"
 	@echo "  ci-ollama              - make ci plus make test-ollama"
 	@echo "  vsix-package           - Build the platform-specific .vsix artifact + deployment gate"
 	@echo "  vsix-rebuild           - Nuke + rebuild + repackage + install the VSIX from scratch"
