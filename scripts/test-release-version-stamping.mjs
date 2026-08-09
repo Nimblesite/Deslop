@@ -220,7 +220,7 @@ function stamperStampsPinsQuotedInProse(work) {
   const after = read(work, "site/src/docs/github-action.md").split("\n");
 
   const prose = before.flatMap((line, index) =>
-    line.includes(actionPinPrefix) && line.includes(`${actionPinPrefix}`) && line.includes("`") ? [index] : [],
+    line.includes(actionPinPrefix) && line.includes("`") ? [index] : [],
   );
   if (prose.length === 0) throw new Error("no prose-quoted pin in the Action doc page to exercise");
 
