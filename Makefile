@@ -219,7 +219,7 @@ ci-ollama: ci test-ollama
 test-corpus:
 	node scripts/fetch-corpus.mjs
 	cargo build --release --bin deslop
-	cargo test --release --workspace corpus_ -- --nocapture --test-threads=1
+	cargo test --release -p deslop --test corpus_repos -- --nocapture --test-threads=1
 
 ## test-corpus-ci: `make test-corpus` in baseline mode — failures already
 ##                 recorded in `corpus/known-failures.json` are reported but
@@ -229,14 +229,24 @@ test-corpus:
 ##                 baseline and stays strictly red.
 test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
 test-corpus-ci:
-	node scripts/fetch-corpus.mjs
+	node scripts/fetch-corpus.mjs $(CORPUS_REPOS)
 	cargo build --release --bin deslop
-	cargo test --release --workspace corpus_ -- --nocapture --test-threads=1 $(CORPUS_SKIP)
+	@fail=0; for t in $(CORPUS_TESTS); do \
+	   cargo test --release -p deslop --test corpus_repos $$t -- --nocapture --test-threads=1 || fail=1; \
+	 done; \
+	 if [ $$fail -ne 0 ]; then echo "==> corpus: NEW failures (see [NEW] lines above)"; fi; \
+	 exit $$fail
 
-# flutter and fsharp peak above 13 GB (#166), beyond a standard CI runner.
-# The scheduled workflow passes CORPUS_SKIP to leave them out; a large-memory
-# machine runs everything by omitting it.
-CORPUS_SKIP ?=
+# Scheduled CI runs a deliberately small slice: clone + scan inside ~1 minute.
+# `tokio` is the fastest corpus and the only one that has ever been stable
+# across runs, so it is the control; `nest` is the cheapest repository that
+# still reproduces the determinism defect (#301).
+#
+# Precision defects (#331 Dart, #336 F#) are NOT covered here — those repos
+# peak above 13 GB (#166) and take minutes to scan. Run the full suite with
+# `make test-corpus` locally, or dispatch the workflow with `full`.
+CORPUS_REPOS ?= tokio nest
+CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.

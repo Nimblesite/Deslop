@@ -13,8 +13,8 @@ on:
     - cron: "0 14 * * *"
   workflow_dispatch:
     inputs:
-      include_large:
-        description: "Also run flutter + fsharp (needs >16 GB RAM; expect OOM on standard runners)"
+      full:
+        description: "Run the whole corpus, including flutter + fsharp (needs >16 GB RAM and ~20 min; expect OOM on standard runners)"
         type: boolean
         default: false
 
@@ -62,13 +62,14 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          if [ "${{ inputs.include_large }}" = "true" ]; then
-            SKIP=""
+          if [ "${{ inputs.full }}" = "true" ]; then
+            make test-corpus-ci \
+              CORPUS_REPOS="flutter jellyfin tokio django react nest laravel hugo fsharp" \
+              CORPUS_TESTS="corpus_" 2>&1 | tee corpus-output.txt
           else
-            SKIP="--skip corpus_flutter_dart --skip corpus_fsharp"
-            echo "SKIP_LARGE=1" >> "$GITHUB_ENV"
+            echo "PARTIAL=1" >> "$GITHUB_ENV"
+            make test-corpus-ci 2>&1 | tee corpus-output.txt
           fi
-          make test-corpus-ci CORPUS_SKIP="$SKIP" 2>&1 | tee corpus-output.txt
 
       - name: Publish report
         if: always()
@@ -97,11 +98,13 @@ jobs:
             echo ""
             grep -F '[FIXED?]' corpus-output.txt | sed 's/^/- /' || echo "- none"
 
-            if [ "${SKIP_LARGE:-0}" = "1" ]; then
+            if [ "${PARTIAL:-0}" = "1" ]; then
               echo ""
-              echo "> **Not run:** \`flutter\` and \`fsharp\` peak above 13 GB (#166) and are"
-              echo "> excluded from scheduled runs. Re-run this workflow with"
-              echo "> \`include_large\` to attempt them."
+              echo "> **Scheduled runs cover a slice, not the corpus.** Only \`tokio\` (control)"
+              echo "> and \`nest\` (reproduces #301) are scanned, to keep clone + scan around a"
+              echo "> minute. Precision defects #331 (Dart) and #336 (F#) are **not** gated here:"
+              echo "> those repositories peak above 13 GB (#166). Re-run with \`full\`, or use"
+              echo "> \`make test-corpus\` locally, for the whole corpus."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

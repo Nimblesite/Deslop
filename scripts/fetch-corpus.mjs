@@ -19,6 +19,12 @@ const manifestDir = resolve("corpus");
 const cacheDir = resolve(".corpus");
 const force = process.argv.includes("--force");
 
+// Bare arguments select which repositories to fetch, e.g.
+// `node scripts/fetch-corpus.mjs tokio nest`. With none, every manifest is
+// fetched. CI passes a short list so it clones tens of megabytes rather than
+// the ~600 MB the full corpus costs.
+const selected = new Set(process.argv.slice(2).filter((arg) => !arg.startsWith("--")));
+
 // `corpus/` also holds the known-failures baseline, which is not a repository.
 // Excluded by name rather than by shape, so a genuinely malformed manifest
 // still fails loudly instead of being silently skipped.
@@ -26,9 +32,16 @@ const NON_MANIFEST = new Set(["known-failures.json"]);
 
 const manifests = readdirSync(manifestDir)
   .filter((name) => name.endsWith(".json") && !NON_MANIFEST.has(name))
-  .map((name) => JSON.parse(readFileSync(join(manifestDir, name), "utf8")));
+  .map((name) => JSON.parse(readFileSync(join(manifestDir, name), "utf8")))
+  .filter((manifest) => selected.size === 0 || selected.has(manifest.name));
 
-if (manifests.length === 0) throw new Error(`no corpus manifests in ${manifestDir}`);
+if (manifests.length === 0) {
+  const wanted = selected.size === 0 ? "" : ` matching ${[...selected].join(", ")}`;
+  throw new Error(`no corpus manifests in ${manifestDir}${wanted}`);
+}
+
+const unknown = [...selected].filter((name) => !manifests.some((m) => m.name === name));
+if (unknown.length > 0) throw new Error(`unknown corpus repositories: ${unknown.join(", ")}`);
 
 mkdirSync(cacheDir, { recursive: true });
 for (const manifest of manifests) {
