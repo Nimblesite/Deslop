@@ -229,7 +229,10 @@ fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -
 /// also rely on the generic checks plus the fusion and report-hide gates.
 fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
     match language {
-        "dart" => dart::is_dart_class_field_declaration_cluster(snippets),
+        "dart" => {
+            dart::is_dart_class_field_declaration_cluster(snippets)
+                || dart::is_dart_widget_scaffold_cluster(snippets)
+        }
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets),
         "javascript" | "typescript" | "tsx" => {

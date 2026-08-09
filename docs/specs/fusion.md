@@ -99,7 +99,21 @@ erased:
    absent token support is that bucket's defining signature.
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate
-adds evidence rather than redefining an existing signal. `data`-category
+adds evidence rather than redefining an existing signal.
+
+**The token echo is shape evidence too.** The LSH pass hashes k-grams of the
+same normalised kinds the structural pass hashes, so a near-total
+`token_jaccard` (≥ 0.95, the near-identical routing line) saturates on shape
+matches exactly as `structural` does — the surviving flutter/flutter #331
+cluster read `structural=0.62, token_jaccard=0.98, fused=1.00` because
+transitive closure mixed structural and LSH pairs. The gate therefore fires on
+*either* saturating signal. Shape-mismatched members have no positional
+alignment, so their agreement is the key-set Jaccard of their content keys — a
+genuine Type-3 near-miss shares nearly all of them; renamed scaffolding shares
+few. The verbatim guard is proportional (≥ half the members must participate
+in byte-identical duplicates): a verbatim pair among a couple of lookalikes
+(#104) still vouches for its cluster, but two copied example widgets inside a
+453-member framework family (0.4%) do not. `data`-category
 clusters are exempt from the structural-only ranking demotion — their weight
 belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
 `data_clone_weight = 1.0` can still restore a table the gate routed to the

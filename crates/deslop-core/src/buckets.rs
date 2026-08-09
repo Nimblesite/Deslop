@@ -260,9 +260,21 @@ pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 /// bucket label and the ranking demotion stay in lockstep.
 #[must_use]
 pub fn lacks_content_support(signals: ReportSignals, content_agreement: f64) -> bool {
-    signals.structural >= 0.99
+    has_saturating_shape_evidence(signals)
         && content_agreement < CONTENT_SUPPORT_FLOOR
         && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
+}
+
+/// True when a cluster's deterministic signals are shape echoes that
+/// saturate by construction ([FUSION-CONTENT-GATE]): an exact Merkle
+/// match, or a near-total kind-stream Jaccard — the token LSH pass
+/// hashes the same normalised representation the structural pass does,
+/// so a `token_jaccard` at the [`classify_signals`] near-identical line
+/// is shape evidence too, not content evidence (gh #331's surviving
+/// mixed cluster read `structural=0.62, token_jaccard=0.98`).
+#[must_use]
+pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
+    signals.structural >= 0.99 || signals.token_jaccard >= 0.95
 }
 
 /// Corrects the rendered fused confidence for shape-identical clusters
@@ -282,12 +294,12 @@ pub fn content_gated_signals(
     content_agreement: f64,
     kind: ClusterKind,
 ) -> ReportSignals {
-    if kind == ClusterKind::Identical || signals.structural < 0.99 {
+    if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
         return signals;
     }
     let fused = signals
         .embedding_cos
-        .max(signals.structural * content_agreement)
+        .max(signals.structural.max(signals.token_jaccard) * content_agreement)
         .clamp(0.0, 1.0);
     // A shape-identical cluster routed `NearlyIdentical` shares one
     // Merkle hash, so the members' normalised kind streams are equal by

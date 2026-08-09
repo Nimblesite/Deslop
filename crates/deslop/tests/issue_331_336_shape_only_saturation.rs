@@ -184,6 +184,49 @@ fn issue_331_distinct_widget_declarations_must_not_saturate_fused_confidence() -
     )
 }
 
+// [CLONE-NOISE-DART-WIDGET-SCAFFOLD] / #331: template-stamped example
+// apps share one class name and most content, so content agreement
+// cannot demote them — the framework-scaffold filter must. The genuine
+// clone keeps surfacing (recall guard).
+#[test]
+fn issue_331_template_stamped_widget_scaffolds_do_not_surface() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("src");
+    std::fs::create_dir_all(&root)?;
+    let bodies = [
+        "Text(\"alpha\")",
+        "Column(children: [Text(\"beta\")])",
+        "Container(width: 4, color: Colors.red)",
+        "ListView(shrinkWrap: true)",
+    ];
+    for (index, body) in bodies.iter().enumerate() {
+        let source = format!(
+            "class ExampleApp extends StatelessWidget {{\n\
+             \x20 const ExampleApp({{super.key}});\n\
+             \x20 @override\n\
+             \x20 Widget build(BuildContext context) {{\n\
+             \x20   return MaterialApp(home: {body});\n\
+             \x20 }}\n\
+             }}\n"
+        );
+        std::fs::write(root.join(format!("example_{index}.dart")), source)?;
+    }
+    for (name, source) in genuine_pair("metrics_a.dart", "metrics_b.dart", DART_GENUINE_CLONE) {
+        std::fs::write(root.join(name), source)?;
+    }
+    let report = run_report(&root, 20)?;
+    let scaffolds = summaries_where(&report, &root, |text| {
+        text.contains("extends StatelessWidget")
+    })?;
+    assert_eq!(
+        scaffolds,
+        Vec::<String>::new(),
+        "framework-mandated widget scaffolds must not surface as duplication: {report:#}"
+    );
+    let _rank = assert_genuine_clone_rank(&report, &["metrics_a.dart", "metrics_b.dart"])?;
+    Ok(())
+}
+
 // [FUSION-STRATEGY-MAX-SUM] / #336: four numeric array literals share
 // only their length and element kinds — every value differs. They must
 // not be reported as act-now duplication above a genuine clone.

@@ -88,7 +88,7 @@ fn cluster_content_agreement<S: BuildHasher>(
         .iter()
         .map(|member| member_content_keys(member, tree_index, sources))
         .collect();
-    if has_duplicated_content(&member_keys) {
+    if duplicated_member_share(&member_keys) >= VERBATIM_MEMBER_SHARE_FLOOR {
         return 1.0;
     }
     let canonical_keys = member_keys.first().and_then(Option::as_deref);
@@ -100,36 +100,59 @@ fn cluster_content_agreement<S: BuildHasher>(
     total / member_count(members.len().saturating_sub(1))
 }
 
-/// True when two members carry the same non-empty content-key vector —
-/// a verbatim copy hiding among same-shape lookalikes (gh #104's
-/// body-equivalence guard). Transitive closure can merge a genuine
-/// byte-identical pair into a cluster of same-shape neighbours; the
-/// mean against one canonical member would then average the proven
-/// copy below the support floor and suppress real duplication, so a
-/// duplicated vector short-circuits to full agreement.
-fn has_duplicated_content(member_keys: &[Option<Vec<u64>>]) -> bool {
-    let mut seen: std::collections::HashSet<&[u64]> = std::collections::HashSet::new();
-    member_keys
-        .iter()
-        .flatten()
-        .filter(|keys| !keys.is_empty())
-        .any(|keys| !seen.insert(keys.as_slice()))
+/// Minimum share of members that must participate in verbatim
+/// duplicates before the guard vouches for the whole cluster. The #104
+/// mixed cluster is a verbatim pair among a couple of lookalikes
+/// (share ≥ 2/3) and must stay visible; the real-corpus failure mode is
+/// the opposite — two byte-identical example widgets hiding inside 453
+/// framework-mandated declarations (share ≈ 0.004), where full
+/// agreement would resurrect the exact #331 mega-cluster the content
+/// gate exists to demote.
+const VERBATIM_MEMBER_SHARE_FLOOR: f64 = 0.5;
+
+/// Share of members whose non-empty content-key vector also appears on
+/// another member — verbatim copies hiding among same-shape lookalikes
+/// (gh #104's body-equivalence guard). Transitive closure can merge a
+/// genuine byte-identical pair into a cluster of same-shape neighbours;
+/// the mean against one canonical member would average the proven copy
+/// below the support floor, so a cluster *dominated* by verbatim copies
+/// short-circuits to full agreement instead.
+fn duplicated_member_share(member_keys: &[Option<Vec<u64>>]) -> f64 {
+    let mut counts: HashMap<&[u64], usize> = HashMap::new();
+    for keys in member_keys.iter().flatten() {
+        if !keys.is_empty() {
+            let entry = counts.entry(keys.as_slice()).or_insert(0_usize);
+            *entry = entry.saturating_add(1);
+        }
+    }
+    let duplicated: usize = counts
+        .values()
+        .filter(|count| **count >= 2)
+        .copied()
+        .sum();
+    if member_keys.is_empty() {
+        return 0.0;
+    }
+    member_count(duplicated) / member_count(member_keys.len())
 }
 
-/// Positional agreement between two members' collapsed-leaf content
-/// keys. Shape-identical members always carry equal-length key vectors;
-/// anything else (including unresolvable members) scores `0.0`. Two
-/// empty vectors agree fully — a subtree with no identifiers or
-/// literals has no content left to disagree on.
+/// Agreement between two members' collapsed-leaf content keys.
+/// Shape-identical members carry equal-length key vectors and score the
+/// positional match fraction. Shape-*mismatched* members (an LSH-paired
+/// near-miss whose trees differ) have no positional alignment, so they
+/// score the key-set Jaccard instead — a genuine Type-3 near-miss
+/// shares nearly all its keys, while renamed scaffolding shares few.
+/// Unresolvable members score `0.0`; two empty vectors agree fully — a
+/// subtree with no identifiers or literals has nothing to disagree on.
 fn pair_agreement(canonical: Option<&[u64]>, member: Option<&[u64]>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
     };
-    if canonical.len() != member.len() {
-        return 0.0;
-    }
-    if canonical.is_empty() {
+    if canonical.is_empty() && member.is_empty() {
         return 1.0;
+    }
+    if canonical.len() != member.len() {
+        return key_set_jaccard(canonical, member);
     }
     let equal = canonical
         .iter()
@@ -137,6 +160,18 @@ fn pair_agreement(canonical: Option<&[u64]>, member: Option<&[u64]>) -> f64 {
         .filter(|(left, right)| left == right)
         .count();
     member_count(equal) / member_count(canonical.len())
+}
+
+/// Jaccard similarity of two members' content-key sets.
+fn key_set_jaccard(left: &[u64], right: &[u64]) -> f64 {
+    let left: std::collections::BTreeSet<u64> = left.iter().copied().collect();
+    let right: std::collections::BTreeSet<u64> = right.iter().copied().collect();
+    let intersection = left.intersection(&right).count();
+    let union = left.union(&right).count();
+    if union == 0 {
+        return 1.0;
+    }
+    member_count(intersection) / member_count(union)
 }
 
 /// One content key per collapsed leaf: a truncated blake3 hash of the

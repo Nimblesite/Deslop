@@ -16,8 +16,9 @@ use tree_sitter::Node;
 use crate::{
     ast::ByteRange,
     buckets::{
-        bucket_labels, classify_signals, content_gated_signals, is_structural_only_signals,
-        lacks_content_support, ClusterKind, CONTENT_PROMOTE_FLOOR, LITERAL_TABLE_MIN_FRACTION,
+        bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
+        is_structural_only_signals, lacks_content_support, ClusterKind, CONTENT_PROMOTE_FLOOR,
+        LITERAL_TABLE_MIN_FRACTION,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
@@ -343,7 +344,7 @@ fn route_shape_identical(
     if !matches!(
         kind,
         ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly
-    ) || signals.structural < 0.99
+    ) || !has_saturating_shape_evidence(signals)
     {
         return kind;
     }
