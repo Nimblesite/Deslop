@@ -11,6 +11,7 @@
 //! target to run, never a silent skip.
 
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -19,6 +20,147 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use serde_json::Value;
+
+/// Environment variable that switches the suite from strict mode (any failure
+/// fails the test) to baseline mode (only *new* failures fail).
+pub const BASELINE_ENV: &str = "DESLOP_CORPUS_BASELINE";
+
+/// One failed check, keyed by a rank-independent id.
+///
+/// The id must not embed a cluster rank or count. #301 makes ranks move
+/// between runs, so a rank-bearing key would churn the baseline and defeat
+/// the whole mechanism.
+#[derive(Debug, Clone)]
+pub struct Failure {
+    /// Stable check id, e.g. `memory` or `boilerplate_rank`.
+    pub check: String,
+    /// Human-readable detail for the report.
+    pub detail: String,
+}
+
+impl Failure {
+    /// Builds a failure for `check` with the given detail.
+    pub fn new(check: &str, detail: impl Into<String>) -> Self {
+        Self { check: check.to_owned(), detail: detail.into() }
+    }
+}
+
+/// The set of checks already known to fail, per repository.
+///
+/// This is a ratchet, not an excuse: entries record defects that already have
+/// a tracked issue, so CI reports them without blocking. Anything not listed
+/// is a regression and fails even in baseline mode.
+#[derive(Debug, Default)]
+pub struct Baseline {
+    /// Check ids already known to fail, keyed by repository name.
+    known: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl Baseline {
+    /// Loads `corpus/known-failures.json`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file exists but is not valid JSON.
+    pub fn load() -> Result<Self> {
+        let path = repo_root().join("corpus").join("known-failures.json");
+        let Ok(text) = fs::read_to_string(&path) else {
+            return Ok(Self::default());
+        };
+        let parsed: Value = serde_json::from_str(&text)
+            .with_context(|| format!("known-failures.json is not JSON: {}", path.display()))?;
+        let known = parsed
+            .get("known_failures")
+            .and_then(Value::as_object)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .map(|(repo, checks)| {
+                        let checks = checks
+                            .as_array()
+                            .map(|list| {
+                                list.iter()
+                                    .filter_map(Value::as_str)
+                                    .map(ToOwned::to_owned)
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        (repo.clone(), checks)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Self { known })
+    }
+
+    /// Checks recorded as already failing for `repo`.
+    #[must_use]
+    pub fn known_for(&self, repo: &str) -> BTreeSet<String> {
+        self.known.get(repo).cloned().unwrap_or_default()
+    }
+}
+
+/// True when the suite should report known failures instead of failing on them.
+#[must_use]
+pub fn baseline_mode() -> bool {
+    std::env::var(BASELINE_ENV).is_ok_and(|value| value != "0" && !value.is_empty())
+}
+
+/// Prints every observed failure, classified against the baseline, and returns
+/// the failures that should fail the test.
+///
+/// In strict mode (the default, and what `make test-corpus` runs locally) that
+/// is all of them. In baseline mode it is only the ones not already recorded.
+/// Checks in the baseline that did *not* fire are reported as possibly fixed
+/// but never fail a run — with #301 outstanding, a lucky pass is not proof.
+/// `evaluated` names the checks this caller actually ran. It is required
+/// because a repository's checks are split across more than one test: the
+/// determinism gate cannot observe `memory`, and the main gate cannot observe
+/// `determinism`. Without it, each test would report the other's baseline
+/// entries as possibly fixed while they were still failing elsewhere.
+#[must_use]
+pub fn classify(
+    repo: &str,
+    evaluated: &[&str],
+    observed: &[Failure],
+    baseline: &Baseline,
+) -> Vec<Failure> {
+    let known = baseline.known_for(repo);
+    let (mut fresh, mut carried) = (Vec::new(), Vec::new());
+    for failure in observed {
+        if known.contains(&failure.check) {
+            carried.push(failure.clone());
+        } else {
+            fresh.push(failure.clone());
+        }
+    }
+
+    for failure in &carried {
+        println!("  [KNOWN]  {repo}/{}: {}", failure.check, failure.detail);
+    }
+    for failure in &fresh {
+        println!("  [NEW]    {repo}/{}: {}", failure.check, failure.detail);
+    }
+    let observed_checks: BTreeSet<&str> =
+        observed.iter().map(|failure| failure.check.as_str()).collect();
+    let evaluated: BTreeSet<&str> = evaluated.iter().copied().collect();
+    for check in known
+        .iter()
+        .filter(|check| evaluated.contains(check.as_str()))
+        .filter(|check| !observed_checks.contains(check.as_str()))
+    {
+        println!(
+            "  [FIXED?] {repo}/{check}: baseline expects this to fail but it passed. \
+             Confirm, then remove it from corpus/known-failures.json."
+        );
+    }
+
+    if baseline_mode() {
+        fresh
+    } else {
+        observed.to_vec()
+    }
+}
 
 /// A scan's measured cost, alongside the parsed report it produced.
 #[derive(Debug)]

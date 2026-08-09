@@ -1,0 +1,121 @@
+name: Corpus accuracy
+
+# Deliberately NOT triggered by `pull_request`. The corpus suite is currently
+# red on tracked defects (#166, #301, #331, #336), so it must never sit in the
+# merge path. It reports; it does not gate.
+#
+# Failures already recorded in `corpus/known-failures.json` are printed and
+# pass. Anything NOT recorded there fails this workflow — that is the
+# regression gate, and a red run here is a signal to investigate, not a
+# blocked merge.
+on:
+  schedule:
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+    inputs:
+      include_large:
+        description: "Also run flutter + fsharp (needs >16 GB RAM; expect OOM on standard runners)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    name: Corpus (standard runners)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Record runner capacity
+        run: |
+          echo "### Runner" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          free -h >> "$GITHUB_STEP_SUMMARY"
+          nproc | sed 's/^/cores: /' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # Clones are pinned by SHA, so the cache key only has to track the
+      # manifests. A moved upstream tag is caught by fetch-corpus.mjs anyway.
+      - name: Cache corpus clones
+        uses: actions/cache@v4
+        with:
+          path: .corpus
+          key: corpus-${{ hashFiles('corpus/*.json') }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run corpus suite
+        id: corpus
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          if [ "${{ inputs.include_large }}" = "true" ]; then
+            SKIP=""
+          else
+            SKIP="--skip corpus_flutter_dart --skip corpus_fsharp"
+            echo "SKIP_LARGE=1" >> "$GITHUB_ENV"
+          fi
+          make test-corpus-ci CORPUS_SKIP="$SKIP" 2>&1 | tee corpus-output.txt
+
+      - name: Publish report
+        if: always()
+        run: |
+          {
+            echo "### Measurements"
+            echo ""
+            echo "| repo | files | LOC | clusters | dup% | wall | peak RSS |"
+            echo "|---|---|---|---|---|---|---|"
+            grep -oE '^[a-z]+ \[[a-z#]+\]: files=[0-9]+ loc=[0-9]+ clusters=[0-9]+ dup=[0-9.]+% wall=[0-9.]+s peak_rss=[0-9]+MB' corpus-output.txt \
+              | sed -E 's/^([a-z]+) \[[a-z#]+\]: files=([0-9]+) loc=([0-9]+) clusters=([0-9]+) dup=([0-9.]+)% wall=([0-9.]+)s peak_rss=([0-9]+)MB/| \1 | \2 | \3 | \4 | \5% | \6s | \7 MB |/' \
+              || echo "| (no measurements parsed) | | | | | | |"
+
+            echo ""
+            echo "### Known defects (tracked, not blocking)"
+            echo ""
+            grep -F '[KNOWN]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+
+            echo ""
+            echo "### NEW failures (regressions — investigate)"
+            echo ""
+            grep -F '[NEW]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+
+            echo ""
+            echo "### Possibly fixed (confirm, then delete from corpus/known-failures.json)"
+            echo ""
+            grep -F '[FIXED?]' corpus-output.txt | sed 's/^/- /' || echo "- none"
+
+            if [ "${SKIP_LARGE:-0}" = "1" ]; then
+              echo ""
+              echo "> **Not run:** \`flutter\` and \`fsharp\` peak above 13 GB (#166) and are"
+              echo "> excluded from scheduled runs. Re-run this workflow with"
+              echo "> \`include_large\` to attempt them."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail on regressions only
+        if: always()
+        run: |
+          if grep -qF '[NEW]' corpus-output.txt; then
+            echo "::error::Corpus suite found failures not present in corpus/known-failures.json"
+            grep -F '[NEW]' corpus-output.txt
+            exit 1
+          fi
+          if [ "${{ steps.corpus.outcome }}" = "failure" ] && ! grep -qF '[KNOWN]' corpus-output.txt; then
+            echo "::error::Corpus suite failed before reaching any check (build, clone, or harness error)"
+            tail -40 corpus-output.txt
+            exit 1
+          fi
+          echo "No regressions. Known defects reported in the job summary."

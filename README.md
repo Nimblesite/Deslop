@@ -35,7 +35,7 @@ in development.
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Nimblesite/Deslop@v0.27.0
+- uses: Nimblesite/Deslop@v0.30.0
   with:
     fail-over: "5.0" # fail above 5% duplicated lines
 ```

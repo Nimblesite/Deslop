@@ -19,8 +19,13 @@ const manifestDir = resolve("corpus");
 const cacheDir = resolve(".corpus");
 const force = process.argv.includes("--force");
 
+// `corpus/` also holds the known-failures baseline, which is not a repository.
+// Excluded by name rather than by shape, so a genuinely malformed manifest
+// still fails loudly instead of being silently skipped.
+const NON_MANIFEST = new Set(["known-failures.json"]);
+
 const manifests = readdirSync(manifestDir)
-  .filter((name) => name.endsWith(".json"))
+  .filter((name) => name.endsWith(".json") && !NON_MANIFEST.has(name))
   .map((name) => JSON.parse(readFileSync(join(manifestDir, name), "utf8")));
 
 if (manifests.length === 0) throw new Error(`no corpus manifests in ${manifestDir}`);

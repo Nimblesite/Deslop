@@ -15,6 +15,14 @@ import assert from "node:assert/strict";
 import { releaseArtifact, resolveRelease, resolveVersion } from "./action-resolve-artifact.mjs";
 import { expectedDigest, verifyChecksum } from "./action-verify-checksum.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
+import { actionPinDocs, readActionPins } from "./stamp-release-version.mjs";
+
+// `--latest-release <version>` adds the freshness half of the documented-pin
+// check. Omitted offline in `make deployment-verify`, where the newest published
+// release is unknowable; supplied by action-selftest.yml, which has already
+// resolved it. Consistency is proven in both modes.
+const latestReleaseFlag = process.argv.indexOf("--latest-release");
+const latestRelease = latestReleaseFlag < 0 ? undefined : process.argv[latestReleaseFlag + 1];
 
 const scratch = mkdtempSync(join(tmpdir(), "deslop-action-"));
 let checked = 0;
@@ -231,6 +239,49 @@ check("the nested action is pinned to a full-length commit SHA", () => {
     [...pin].every((character) => "0123456789abcdef".includes(character)),
     `upload-artifact pin "${pin}" is not hexadecimal`,
   );
+});
+
+// Every other layer passes `version:` explicitly, so this one line is the whole
+// derivation path for a Marketplace consumer. Drop it and `resolveVersion` still
+// passes every test above while the action silently demands a `version:` input
+// from everyone who pinned it by tag. [ACTION-VERSION]
+check("the pinned ref reaches the resolver", () => {
+  assert.ok(
+    action.includes("ACTION_REF: ${{ github.action_ref }}"),
+    "the resolve step must pass github.action_ref through env",
+  );
+  assert.ok(
+    action.includes('"${VERSION_INPUT}" "${ACTION_REF}"'),
+    "action-resolve-artifact.mjs must receive the version input and the action ref, in that order",
+  );
+});
+
+// The tag's README is the body of the Marketplace listing, and the tag is what
+// `stamp-release-version.mjs` never gets to rewrite — it stamps the build, not
+// the commit. So whatever is committed here is the workflow every listing
+// visitor copies, and a stale pin installs a stale CLI for all of them.
+// [ACTION-VERSION]
+check("every documented pin names one version", () => {
+  const pins = actionPinDocs.flatMap((doc) =>
+    readActionPins(readFileSync(doc, "utf8")).map((version) => ({ doc, version })),
+  );
+  assert.ok(pins.length >= actionPinDocs.length, `every doc in ${actionPinDocs.join(", ")} must show a pin`);
+  const [first, ...rest] = pins;
+  for (const pin of rest) {
+    assert.equal(
+      pin.version,
+      first.version,
+      `${pin.doc} pins v${pin.version} but ${first.doc} pins v${first.version} — a half-bump hands one audience a different CLI`,
+    );
+  }
+  if (latestRelease !== undefined) {
+    assert.equal(
+      first.version,
+      latestRelease,
+      `the docs pin v${first.version} but the newest release is v${latestRelease} — ` +
+        `run \`node scripts/stamp-release-version.mjs ${latestRelease}\` and commit the pins`,
+    );
+  }
 });
 
 check("the gate re-raises the CLI status rather than swallowing it", () => {

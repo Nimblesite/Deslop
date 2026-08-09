@@ -221,6 +221,23 @@ test-corpus:
 	cargo build --release --bin deslop
 	cargo test --release --workspace corpus_ -- --nocapture --test-threads=1
 
+## test-corpus-ci: `make test-corpus` in baseline mode — failures already
+##                 recorded in `corpus/known-failures.json` are reported but
+##                 do not fail the run; anything new does. Used by the
+##                 scheduled corpus workflow so tracked defects stay visible
+##                 without blocking. Local `make test-corpus` ignores the
+##                 baseline and stays strictly red.
+test-corpus-ci: export DESLOP_CORPUS_BASELINE = 1
+test-corpus-ci:
+	node scripts/fetch-corpus.mjs
+	cargo build --release --bin deslop
+	cargo test --release --workspace corpus_ -- --nocapture --test-threads=1 $(CORPUS_SKIP)
+
+# flutter and fsharp peak above 13 GB (#166), beyond a standard CI runner.
+# The scheduled workflow passes CORPUS_SKIP to leave them out; a large-memory
+# machine runs everything by omitting it.
+CORPUS_SKIP ?=
+
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.
 ## deployment-verify: Validate deployment manifest and built binary contracts.

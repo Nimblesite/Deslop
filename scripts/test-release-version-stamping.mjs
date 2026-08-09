@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { readActionPins } from "./stamp-release-version.mjs";
+
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const stamper = join(repoRoot, "scripts/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
@@ -24,6 +26,7 @@ const tests = [
   stamperStampsGeneratedVsixManifest,
   stamperStampsEveryWorkspaceCrateInLock,
   stamperStampsEveryReadmeActionPin,
+  stamperStampsPinsQuotedInProse,
   stamperRejectsInvalidVersion,
 ];
 
@@ -169,6 +172,16 @@ function assertDocPinsStamped(doc, before, after) {
 }
 
 // Returns true when the line carried a pin, so the caller can count them.
+//
+// The version comparison reuses the stamper's own parser rather than a second
+// copy of its rule, which keeps the two from drifting — but it means a
+// mis-parsed pin cannot be caught by parsing, because the check would repeat the
+// mistake and agree with it. Substituting the old token back in has the same
+// blind spot: whatever the parser wrongly ate is restored along with it. So the
+// corruption is caught structurally instead. A version token holds only
+// characters SemVer permits, so stamping one can never change how many backticks
+// a line has — and swallowing the backtick that closes a prose-quoted pin is
+// exactly what dropped it, unterminating the code span. [ACTION-VERSION]
 function assertLineStamped(doc, lineNumber, before, after) {
   if (!before.includes(actionPinPrefix)) {
     if (after !== before) {
@@ -176,28 +189,55 @@ function assertLineStamped(doc, lineNumber, before, after) {
     }
     return false;
   }
-  const wanted = pinParts(before);
-  const got = pinParts(after);
-  if (got.version !== version) {
-    throw new Error(`${doc}:${lineNumber} pins ${got.version}, expected ${version}`);
+  const [wanted] = readActionPins(before);
+  const [got] = readActionPins(after);
+  if (got !== version) {
+    throw new Error(`${doc}:${lineNumber} pins ${got}, expected ${version}`);
   }
-  if (got.prefix !== wanted.prefix || got.suffix !== wanted.suffix) {
+  if (after.split("`").length !== before.split("`").length) {
+    throw new Error(`${doc}:${lineNumber} stamping changed the inline code spans: ${after}`);
+  }
+  const reversed = after.split(actionPinPrefix + got).join(actionPinPrefix + wanted);
+  if (reversed !== before) {
     throw new Error(`${doc}:${lineNumber} stamping moved more than the version: ${after}`);
   }
   return true;
 }
 
-// Splits a pin line into the part before the version, the version token itself,
-// and whatever trails it (a `# comment`, nothing at end of line).
-function pinParts(line) {
-  const marker = line.indexOf(actionPinPrefix);
-  const tail = line.slice(marker + actionPinPrefix.length);
-  const space = tail.indexOf(" ");
-  return {
-    prefix: line.slice(0, marker),
-    version: space < 0 ? tail : tail.slice(0, space),
-    suffix: space < 0 ? "" : tail.slice(space),
-  };
+// A pin does not only appear as a bare YAML line. The Action doc page states the
+// derivation rule in prose — "so `uses: Nimblesite/Deslop@v0.27.0` installs
+// `deslop` 0.27.0" — where the pin is closed by a backtick, not a space. Reading
+// the version as everything up to the first space swallows that backtick into
+// the version token and drops it on stamping, which unterminates the inline code
+// span and leaves the rest of the sentence rendering as code, still quoting the
+// old version beside the new pin. Assert the reader-visible outcome: the stale
+// version is gone from the line and every backtick survives. [ACTION-VERSION]
+function stamperStampsPinsQuotedInProse(work) {
+  copyStampInputs(work);
+  const before = read(repoRoot, "site/src/docs/github-action.md").split("\n");
+  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
+  const after = read(work, "site/src/docs/github-action.md").split("\n");
+
+  const prose = before.flatMap((line, index) =>
+    line.includes(actionPinPrefix) && line.includes(`${actionPinPrefix}`) && line.includes("`") ? [index] : [],
+  );
+  if (prose.length === 0) throw new Error("no prose-quoted pin in the Action doc page to exercise");
+
+  for (const index of prose) {
+    const stamped = after[index];
+    const backticks = (text) => [...text].filter((character) => character === "`").length;
+    if (backticks(stamped) !== backticks(before[index])) {
+      throw new Error(
+        `site/src/docs/github-action.md:${index + 1} lost a backtick to stamping, breaking the code span: ${stamped}`,
+      );
+    }
+    if (!stamped.includes(`${actionPinPrefix}${version}\``)) {
+      throw new Error(
+        `site/src/docs/github-action.md:${index + 1} did not stamp the prose-quoted pin cleanly: ${stamped}`,
+      );
+    }
+  }
 }
 
 function stamperRejectsInvalidVersion(work) {
