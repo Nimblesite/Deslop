@@ -11,6 +11,10 @@
 
 #![allow(dead_code)]
 
+/// Fused-signal bands and assertion vocabulary ([FUSED-THRESHOLD]).
+pub(crate) mod signals;
+pub(crate) use signals::*;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
