@@ -23,7 +23,10 @@
 //! strings so the four parallel vocabularies we used to ship can never
 //! regrow. The helper carries all three forms; the renderer picks.
 
-use crate::report::{ReportCluster, ReportSignals};
+use crate::{
+    content::ContentEvidence,
+    report::{ReportCluster, ReportSignals},
+};
 
 /// Canonical bucket identity. The enum is the one source of truth;
 /// every human / agent label attaches to one of these variants via
@@ -254,14 +257,16 @@ pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
 
 /// True when a shape-identical cluster's only real evidence is its
-/// shape: the raw content of its collapsed leaves mostly disagrees and
-/// no semantic signal supports it ([FUSION-CONTENT-GATE]). Such
-/// clusters join the [`is_structural_only_signals`] routing so the
-/// bucket label and the ranking demotion stay in lockstep.
+/// shape: neither content population vouches for it — the pooled raw
+/// bytes mostly disagree, no consistent literal-anchored rename explains
+/// the differences ([`ContentEvidence::support`]), and no semantic
+/// signal supports it ([FUSION-CONTENT-GATE]). Such clusters join the
+/// [`is_structural_only_signals`] routing so the bucket label and the
+/// ranking demotion stay in lockstep.
 #[must_use]
-pub fn lacks_content_support(signals: ReportSignals, content_agreement: f64) -> bool {
+pub fn lacks_content_support(signals: ReportSignals, content: ContentEvidence) -> bool {
     has_saturating_shape_evidence(signals)
-        && content_agreement < CONTENT_SUPPORT_FLOOR
+        && content.support() < CONTENT_SUPPORT_FLOOR
         && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
 }
 
@@ -277,29 +282,43 @@ pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
     signals.structural >= 0.99 || signals.token_jaccard >= 0.95
 }
 
+/// Confidence discount applied to rename-consistency evidence when the
+/// gate fuses it ([FUSION-CONTENT-GATE]). A literal-anchored bijective
+/// rename is proven duplication, but its identifier positions matched
+/// through a mapping rather than byte equality — strictly weaker
+/// evidence than a verbatim copy. The discount keeps a proven Type-2
+/// rename above the [FUSED-THRESHOLD] act-now line while reserving
+/// saturation (`fused == 1.0`) for byte-proven duplication, so the
+/// rendered score still orders copy-paste above rename.
+pub const RENAME_CONSISTENCY_DISCOUNT: f64 = 0.9;
+
 /// Corrects the rendered fused confidence for shape-identical clusters
 /// ([FUSION-CONTENT-GATE], #331/#336). `structural` and `token_jaccard`
 /// are two views of one normalised representation, so summing them says
 /// nothing beyond "the shapes matched" — every shape match used to
 /// render `fused = 1.0`, which made the agent-facing act-now threshold
 /// unreachable from below. The honest confidence for a shape match is
-/// its structural certainty scaled by measured raw-content agreement,
-/// or the semantic signal when that is stronger. Byte-equivalence-proven
-/// [`ClusterKind::Identical`] clusters keep their saturated confidence,
-/// and clusters discovered without an exact shape match (LSH / embedding
-/// paths) keep the existing fusion.
+/// its structural certainty scaled by measured content evidence — pooled
+/// byte agreement or discounted rename consistency, whichever is the
+/// stronger proof — or the semantic signal when that beats both.
+/// Byte-equivalence-proven [`ClusterKind::Identical`] clusters keep
+/// their saturated confidence, and clusters discovered without an exact
+/// shape match (LSH / embedding paths) keep the existing fusion.
 #[must_use]
 pub fn content_gated_signals(
     signals: ReportSignals,
-    content_agreement: f64,
+    content: ContentEvidence,
     kind: ClusterKind,
 ) -> ReportSignals {
     if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
         return signals;
     }
+    let content_confidence = content
+        .agreement
+        .max(RENAME_CONSISTENCY_DISCOUNT * content.rename_consistency);
     let fused = signals
         .embedding_cos
-        .max(signals.structural.max(signals.token_jaccard) * content_agreement)
+        .max(signals.structural.max(signals.token_jaccard) * content_confidence)
         .clamp(0.0, 1.0);
     // A shape-identical cluster routed `NearlyIdentical` shares one
     // Merkle hash, so the members' normalised kind streams are equal by

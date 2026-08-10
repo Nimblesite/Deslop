@@ -243,7 +243,7 @@ fn materialise_cluster<S: BuildHasher>(
     );
     let category = classify_clone_category(
         &cluster.members,
-        cluster.literal_fraction,
+        cluster.content.literal_fraction,
         inputs.sources,
         inputs.file_languages,
         parse_cache,
@@ -334,14 +334,21 @@ fn cluster_is_hidden<S: BuildHasher>(
 /// shape-only-evidence cluster sinks below comparable full-evidence
 /// clones; both multipliers are `1.0` in `keep`/`ignore` modes and for
 /// non-matching clusters, which therefore keep their prior weight.
-/// Hidden occurrences still travel on each cluster for downstream context.
+/// The content-gated fused confidence then scales the weight
+/// continuously ([FUSION-CONTENT-GATE]): the bucket multipliers demote
+/// by class, the confidence orders within and across classes — at equal
+/// geometry a byte-proven copy outranks a consistent rename, which
+/// outranks shape-only coincidence, and two same-bucket clusters rank
+/// by how much of their content actually agrees. Hidden occurrences
+/// still travel on each cluster for downstream context.
 fn reweigh_by_visible_occurrences(clusters: &mut [ReportCluster], policy: RankingPolicy) {
     for cluster in &mut *clusters {
         let visible = visible_occurrence_count(cluster);
         let base = visible_rank_weight(cluster.canonical_node_count, visible);
         cluster.weight = base
             * category_multiplier(cluster, policy)
-            * structural_only_multiplier(cluster, policy);
+            * structural_only_multiplier(cluster, policy)
+            * confidence_factor(cluster);
     }
     clusters.sort_by(|left, right| {
         right
@@ -380,6 +387,20 @@ fn structural_only_multiplier(cluster: &ReportCluster, policy: RankingPolicy) ->
     } else {
         1.0
     }
+}
+
+/// Continuous confidence factor for the ranking weight
+/// ([FUSION-CONTENT-GATE]): the content-gated fused confidence, except
+/// for `data`-category clusters, whose demotion belongs exclusively to
+/// the user-configurable `[ranking] data_clones` policy
+/// ([RANK-CATEGORY]). Stacking the confidence demotion on top would
+/// make `data_clone_weight = 1.0` unable to restore a table — the same
+/// knob contract [`structural_only_multiplier`] already honours.
+fn confidence_factor(cluster: &ReportCluster) -> f64 {
+    if CloneCategory::from_wire_label(&cluster.category) == CloneCategory::DataTable {
+        return 1.0;
+    }
+    cluster.signals.fused
 }
 
 /// Counts non-hidden occurrences on a rendered cluster. Hidden

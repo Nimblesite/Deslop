@@ -30,7 +30,7 @@ use std::path::Path;
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{signals::*, *};
 
 /// Node floor for the golden corpora — matches the small-fixture value the
 /// TypeScript/JS feature suites use so every scenario subtree qualifies.
@@ -282,26 +282,46 @@ fn assert_band_separation(report: &Value, corpus: &Corpus) -> Result<()> {
 }
 
 /// Ranking half of the separation contract: every surviving shape-only
-/// family sits below both real clones in confidence and in rank.
+/// family sits below both real clones in confidence and in rank — the
+/// fused confidence must shape the weighting itself, not just the label
+/// ([RANK-STRUCTURAL-ONLY], [PIPELINE-RANK-WORST-FIRST]).
 fn assert_shape_ranks_below(report: &Value, corpus: &Corpus, rename: &Value) -> Result<()> {
-    let language = corpus.language;
     let verbatim_rank = rank_of(report, scenario_cluster(report, corpus, "verbatim")?)?;
+    let rename_rank = rank_of(report, rename)?;
     for cluster in shape_only_clusters(report) {
-        let shape_rank = rank_of(report, cluster)?;
-        assert!(
-            signal(rename, "fused") > signal(cluster, "fused"),
-            "{language}: a renamed real clone must outscore coincidental shape \
-             agreement — rename[{rename_dump}] shape[{shape_dump}]",
-            rename_dump = signal_dump(rename),
-            shape_dump = signal_dump(cluster),
-        );
-        assert!(
-            verbatim_rank < shape_rank,
-            "{language}: the genuine clone (rank #{verbatim_rank}) must outrank the \
-             shape-only family (rank #{shape_rank}) — {dump}",
-            dump = signal_dump(cluster),
-        );
+        assert_outscored_and_outranked(report, corpus, [verbatim_rank, rename_rank], rename, cluster)?;
     }
+    Ok(())
+}
+
+/// One shape-only family against both real clones: outscored in fused
+/// confidence by the rename, and outranked in the weighting by the
+/// verbatim copy and the rename alike — a four-member coincidence must
+/// not outrank a two-member proven clone on geometry.
+fn assert_outscored_and_outranked(
+    report: &Value,
+    corpus: &Corpus,
+    clone_ranks: [usize; 2],
+    rename: &Value,
+    cluster: &Value,
+) -> Result<()> {
+    let language = corpus.language;
+    let shape_rank = rank_of(report, cluster)?;
+    assert!(
+        signal(rename, "fused") > signal(cluster, "fused"),
+        "{language}: a renamed real clone must outscore coincidental shape \
+         agreement — rename[{rename_dump}] shape[{shape_dump}]",
+        rename_dump = signal_dump(rename),
+        shape_dump = signal_dump(cluster),
+    );
+    let [verbatim_rank, rename_rank] = clone_ranks;
+    assert!(
+        verbatim_rank < shape_rank && rename_rank < shape_rank,
+        "{language}: both genuine clones (verbatim #{verbatim_rank}, rename \
+         #{rename_rank}) must outrank the shape-only family (#{shape_rank}) in the \
+         weighting — {dump}",
+        dump = signal_dump(cluster),
+    );
     Ok(())
 }
 
@@ -387,7 +407,7 @@ fn fused_bands_mean_the_same_thing_in_every_language() -> Result<()> {
             language = corpus.language,
         ));
         assert!(
-            approx(verbatim, 1.0) && rename >= REUSE_FUSED && rename < 1.0,
+            approx(verbatim, 1.0) && (REUSE_FUSED..1.0).contains(&rename),
             "band contract broken — every language must report verbatim at 1.0 and a \
              Type-2 rename inside [{REUSE_FUSED}, 1.0): {verdicts:#?}"
         );

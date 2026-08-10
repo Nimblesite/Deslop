@@ -31,7 +31,7 @@ use std::{collections::BTreeSet, path::Path};
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{signals::*, *};
 
 /// Buckets whose evidence can justify a saturated confidence: byte
 /// equivalence proven outright, or the [FUSION-CONTENT-GATE] verbatim
