@@ -15,7 +15,11 @@ use tree_sitter::Node;
 
 use crate::{
     ast::ByteRange,
-    buckets::{bucket_labels, classify_signals, is_structural_only_signals, ClusterKind},
+    buckets::{
+        bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
+        is_structural_only_signals, lacks_content_support, ClusterKind, CONTENT_PROMOTE_FLOOR,
+        LITERAL_TABLE_MIN_FRACTION,
+    },
     cluster::Cluster,
     cluster_filters::ParseCache,
     config::ExclusionConfig,
@@ -59,12 +63,18 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     let raw_signals: ReportSignals = cluster.signals.into();
     let kind = report_bucket_kind(
         raw_signals,
+        cluster.content_agreement,
+        cluster.literal_fraction,
         &cluster.members,
         sources,
         file_languages,
         parse_cache,
     );
-    let signals = proven_identical_signals(raw_signals, kind);
+    let signals = content_gated_signals(
+        proven_identical_signals(raw_signals, kind),
+        cluster.content_agreement,
+        kind,
+    );
     let summary = summarise(
         cluster.members.len(),
         canonical_node_count,
@@ -267,6 +277,8 @@ fn proven_identical_signals(signals: ReportSignals, kind: ClusterKind) -> Report
 /// take the same downgrade instead of using a compatibility fallback.
 pub(crate) fn report_bucket_kind(
     signals: ReportSignals,
+    content_agreement: f64,
+    literal_fraction: f64,
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
@@ -308,17 +320,57 @@ pub(crate) fn report_bucket_kind(
     //   family (issue #197) is additionally hidden by the renderer's
     //   `cluster_is_hidden` AST pass, which needs the CST this
     //   signal-only routing does not have.
-    if matches!(
+    route_shape_identical(kind, signals, content_agreement, literal_fraction, members)
+}
+
+/// [FUSION-CONTENT-GATE] routing tail: for shape-identical clusters the
+/// measured content agreement decides in both directions. It subsumes
+/// the legacy `token_jaccard < 0.05` structural-only test (a
+/// fallback-signature artifact scores `0.0` content on unresolvable
+/// members) and overrides it the other way: a cluster whose raw content
+/// mostly agrees is a genuine near-miss even when the token layer lost
+/// its signature to the fingerprint-scoped fallback (gh #339). Content
+/// below the floor with no semantic support routes to the demoted
+/// structural-only tier — [`ClusterKind::LooselySimilar`] for the
+/// cross-file scaffolding spread (#134), [`ClusterKind::StructuralOnly`]
+/// otherwise.
+fn route_shape_identical(
+    kind: ClusterKind,
+    signals: ReportSignals,
+    content_agreement: f64,
+    literal_fraction: f64,
+    members: &[Fingerprint],
+) -> ClusterKind {
+    if !matches!(
         kind,
         ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly
-    ) && is_structural_only_signals(signals)
+    ) || !has_saturating_shape_evidence(signals)
     {
-        if is_cross_file_scaffolding(members) {
-            return ClusterKind::LooselySimilar;
-        }
-        return ClusterKind::StructuralOnly;
+        return kind;
     }
-    kind
+    let shape_only =
+        is_structural_only_signals(signals) || lacks_content_support(signals, content_agreement);
+    if !shape_only {
+        return kind;
+    }
+    // Promotion rescues the fallback-signature artifact for small
+    // spreads only. The cross-file scaffolding spread (#134) is
+    // excluded: contract-mandated wiring (trait adapter impls,
+    // framework overrides) pins the very identifiers content agreement
+    // measures, so a 3+-file same-shape family scoring high content is
+    // still scaffolding and keeps the legacy hidden destination.
+    if content_agreement >= CONTENT_PROMOTE_FLOOR && !is_cross_file_scaffolding(members) {
+        return ClusterKind::NearlyIdentical;
+    }
+    // Literal-dominated families ([CLONE-NOISE-LITERAL-TABLE], #336)
+    // stay in the surfaced `structural_only` tier instead of the hidden
+    // scaffolding one: the data-category policy ([RANK-CATEGORY]) owns
+    // their visibility, and a policy knob cannot govern a cluster the
+    // renderer already made disappear.
+    if is_cross_file_scaffolding(members) && literal_fraction < LITERAL_TABLE_MIN_FRACTION {
+        return ClusterKind::LooselySimilar;
+    }
+    ClusterKind::StructuralOnly
 }
 
 /// Returns true when a structural-only cluster spans enough distinct
@@ -574,6 +626,8 @@ mod tests {
         assert_eq!(
             report_bucket_kind(
                 identical_signals(),
+                1.0,
+                0.0,
                 &members,
                 &sources,
                 &file_languages,

@@ -7,21 +7,21 @@ function Inject(token: string): ParameterDecorator {
 
 @Controller("/orders")
 export abstract class OrderController {
-  protected readonly store: Map<string, unknown> = new Map();
+  protected readonly cache: Map<string, unknown> = new Map();
 
-  public constructor(@Inject("OrderService") private readonly gateway: OrderService) {}
+  public constructor(@Inject("OrderService") private readonly service: OrderService) {}
 
-  public async findOne(key: string): Promise<unknown> {
-    const hit = this.store.get(key);
-    if (hit !== undefined) {
-      return hit;
+  public async findOne(id: string): Promise<unknown> {
+    const cached = this.cache.get(id);
+    if (cached !== undefined) {
+      return cached;
     }
-    const fetched = await this.gateway.resolve(key);
-    this.store.set(key, fetched);
-    return fetched;
+    const loaded = await this.service.resolve(id);
+    this.cache.set(id, loaded);
+    return loaded;
   }
 
-  protected abstract authorize(key: string): boolean;
+  protected abstract authorize(id: string): boolean;
 }
 
 interface OrderService {

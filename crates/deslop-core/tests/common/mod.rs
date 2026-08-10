@@ -344,6 +344,8 @@ impl ReportFixture {
             members,
             weight: 10_000.0,
             signals,
+            content_agreement: 1.0,
+            literal_fraction: 0.0,
         }
     }
 

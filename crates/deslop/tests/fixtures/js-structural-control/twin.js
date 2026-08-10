@@ -1,9 +1,9 @@
-// Reduces a batch of shipments into a single weighted score.
-export function scoreShipments(shipments) {
-  let total = 0;
-  for (const shipment of shipments) {
-    const factor = shipment.urgency * shipment.mass;
-    total = total + factor;
+// Reduces a batch of orders into a single weighted score.
+export function scoreShipments(orders) {
+  let score = 0;
+  for (const order of orders) {
+    const mass = order.priority * order.volume;
+    score = score + mass;
   }
-  return total;
+  return score;
 }

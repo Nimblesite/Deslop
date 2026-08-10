@@ -224,6 +224,106 @@ pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
         && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
 }
 
+/// Lowest content agreement a shape-identical cluster may show while
+/// still counting as a Type-2/3 clone rather than shape-only
+/// scaffolding ([FUSION-CONTENT-GATE], #331/#336). Genuine renamed
+/// copies change a handful of collapsed-leaf positions and stay well
+/// above this floor; framework-mandated declarations and data tables
+/// change most positions and fall well below it. The 0.7 operating
+/// point matches the [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff.
+pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
+
+/// Content agreement required to *promote* a shape-identical cluster
+/// into the act-now `nearly_identical` bucket when the token layer lost
+/// its signature to the fingerprint-scoped fallback (gh #339). Between
+/// [`CONTENT_SUPPORT_FLOOR`] and this bar the legacy signal routing
+/// stands: real-world sibling families such as the #197 REST
+/// settings surface measure 0.72–0.80 (shared plumbing, differing
+/// endpoint literals) and must keep their demoted verdict, while a
+/// genuine near-miss window shares nearly every position (≥ 0.85 — the
+/// same act-now grade as [FUSED-THRESHOLD]).
+pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
+
+/// Literal fraction at which a shape-identical cluster counts as a data
+/// literal ([CLONE-NOISE-LITERAL-TABLE], #336): the canonical member's
+/// collapsed leaves are overwhelmingly literal positions — a numeric
+/// array, a lookup table, generated test data — in any language. Such
+/// clusters are governed by the `[ranking] data_clones` policy
+/// ([RANK-CATEGORY]) instead of the scaffolding hide, so they stay
+/// labelled and policy-controllable rather than silently vanishing.
+pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
+
+/// True when a shape-identical cluster's only real evidence is its
+/// shape: the raw content of its collapsed leaves mostly disagrees and
+/// no semantic signal supports it ([FUSION-CONTENT-GATE]). Such
+/// clusters join the [`is_structural_only_signals`] routing so the
+/// bucket label and the ranking demotion stay in lockstep.
+#[must_use]
+pub fn lacks_content_support(signals: ReportSignals, content_agreement: f64) -> bool {
+    has_saturating_shape_evidence(signals)
+        && content_agreement < CONTENT_SUPPORT_FLOOR
+        && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
+}
+
+/// True when a cluster's deterministic signals are shape echoes that
+/// saturate by construction ([FUSION-CONTENT-GATE]): an exact Merkle
+/// match, or a near-total kind-stream Jaccard — the token LSH pass
+/// hashes the same normalised representation the structural pass does,
+/// so a `token_jaccard` at the [`classify_signals`] near-identical line
+/// is shape evidence too, not content evidence (gh #331's surviving
+/// mixed cluster read `structural=0.62, token_jaccard=0.98`).
+#[must_use]
+pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
+    signals.structural >= 0.99 || signals.token_jaccard >= 0.95
+}
+
+/// Corrects the rendered fused confidence for shape-identical clusters
+/// ([FUSION-CONTENT-GATE], #331/#336). `structural` and `token_jaccard`
+/// are two views of one normalised representation, so summing them says
+/// nothing beyond "the shapes matched" — every shape match used to
+/// render `fused = 1.0`, which made the agent-facing act-now threshold
+/// unreachable from below. The honest confidence for a shape match is
+/// its structural certainty scaled by measured raw-content agreement,
+/// or the semantic signal when that is stronger. Byte-equivalence-proven
+/// [`ClusterKind::Identical`] clusters keep their saturated confidence,
+/// and clusters discovered without an exact shape match (LSH / embedding
+/// paths) keep the existing fusion.
+#[must_use]
+pub fn content_gated_signals(
+    signals: ReportSignals,
+    content_agreement: f64,
+    kind: ClusterKind,
+) -> ReportSignals {
+    if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
+        return signals;
+    }
+    let fused = signals
+        .embedding_cos
+        .max(signals.structural.max(signals.token_jaccard) * content_agreement)
+        .clamp(0.0, 1.0);
+    // A shape-identical cluster routed `NearlyIdentical` shares one
+    // Merkle hash, so the members' normalised kind streams are equal by
+    // construction and the true token Jaccard is 1.0 — the same GH #232
+    // argument the byte-equivalence upgrade applies to `Identical`. A
+    // lower rendered value is a fingerprint-scoped fallback-signature
+    // artifact (gh #339), not evidence, so it is corrected here. The
+    // `structural` guard scopes the correction to clusters the Merkle
+    // argument actually covers — a mixed LSH-glued cluster keeps its
+    // estimated value. `StructuralOnly` keeps its unscored signal:
+    // absent token support is that bucket's defining signature
+    // ([RANK-STRUCTURAL-ONLY]).
+    let token_jaccard = if kind == ClusterKind::NearlyIdentical && signals.structural >= 0.99 {
+        1.0
+    } else {
+        signals.token_jaccard
+    };
+    ReportSignals {
+        token_jaccard,
+        fused,
+        ..signals
+    }
+}
+
 /// Signals-only fallback for reports that do not carry `cluster.bucket`.
 #[must_use]
 pub fn classify_signals(signals: ReportSignals) -> ClusterKind {

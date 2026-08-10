@@ -6,15 +6,24 @@ export enum TaskState {
   Missing = 404,
 }
 
-export function describeState(state: TaskState): string {
-  switch (state) {
+export function describe(code: TaskState): string {
+  let label = "unknown";
+  let retries = 0;
+  switch (code) {
     case TaskState.Queued:
-      return "queued";
+      label = "accepted";
+      retries = retries + 1;
+      break;
     case TaskState.Running:
-      return "running";
+      label = "stored";
+      retries = retries + 2;
+      break;
     case TaskState.Failed:
-      return "failed";
+      label = "rejected";
+      retries = retries + 3;
+      break;
     default:
-      return "unknown";
+      label = "unmapped";
   }
+  return label + retries;
 }

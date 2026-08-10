@@ -1,19 +1,19 @@
-// Domain shape for a freight shipment with weighed parcels.
+// Domain shape for a freight shipment with priced line items.
 export interface Shipment {
-  parcels: Array<{ weight: number; units: number }>;
+  items: Array<{ price: number; quantity: number }>;
 }
 
 // Aggregates each shipment into a discounted total and keeps the positives.
-export async function summariseShipments(shipments: Shipment[]): Promise<number[]> {
-  const grands = await Promise.all(
-    shipments.map(async (shipment) => {
-      const partial = shipment.parcels.reduce(
-        (acc, parcel) => acc + parcel.weight * parcel.units,
+export async function summariseShipments(orders: Shipment[]): Promise<number[]> {
+  const totals = await Promise.all(
+    orders.map(async (order) => {
+      const subtotal = order.items.reduce(
+        (running, item) => running + item.price * item.quantity,
         0,
       );
-      const band = partial > 250 ? 'heavy' : 'light';
-      return band === 'heavy' ? partial * 0.75 : partial;
+      const tier = subtotal > 250 ? 'gold' : 'silver';
+      return tier === 'gold' ? subtotal * 0.9 : subtotal;
     }),
   );
-  return grands.filter((grand) => grand > 0);
+  return totals.filter((total) => total > 0);
 }

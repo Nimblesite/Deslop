@@ -1,9 +1,9 @@
 import { sql } from "./db.js";
 
-export function findOpenGroup(title, tier) {
+export function findOpenGroup(name, role) {
   const statement = sql`
     SELECT id, email FROM users
-    WHERE name = ${title} AND role = ${tier} AND active = true
+    WHERE name = ${name} AND role = ${role} AND active = true
   `;
   return statement.first();
 }
