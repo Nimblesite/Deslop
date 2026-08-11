@@ -7,6 +7,82 @@ use super::{
     Snippet,
 };
 
+/// Superclass markers of Flutter's mandated widget-declaration scaffold
+/// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD], #331). Every `StatefulWidget`
+/// must declare its own `createState`, every `StatelessWidget` its own
+/// `build`, and every state class extends `State<T>` — none of it can
+/// be extracted or merged, so a cluster of such declarations must never
+/// rank as actionable duplication.
+const WIDGET_SUPERCLASS_MARKERS: &[&str] = &["StatelessWidget", "StatefulWidget", "State<"];
+
+/// Returns true when every member of a Dart cluster covers only whole
+/// widget-scaffold class declarations ([CLONE-NOISE-DART-WIDGET-SCAFFOLD]).
+/// Containment is deliberate in both directions: a member must contain
+/// its classes entirely (so a subtree *inside* a widget body — the
+/// actual copy-pasted logic — never matches), and every top-level node
+/// the member touches must be such a class (so a window mixing a free
+/// function with a widget shell keeps clustering as logic). Body-level
+/// clones keep surfacing as their own subtree clusters, which is what
+/// makes hiding the shells recall-safe.
+pub(super) fn is_dart_widget_scaffold_cluster(snippets: &[Snippet<'_>]) -> bool {
+    snippets.len() >= 2 && snippets.iter().all(covers_only_widget_scaffold_classes)
+}
+
+/// True when the snippet covers ≥1 widget-scaffold class and nothing else.
+fn covers_only_widget_scaffold_classes(snippet: &Snippet<'_>) -> bool {
+    let Some(tree) = parse_for(snippet) else {
+        return false;
+    };
+    let root = tree.root_node();
+    let mut cursor = root.walk();
+    let mut covered_classes = 0_usize;
+    for child in root.named_children(&mut cursor) {
+        if !node_intersects_range(child, snippet.range) {
+            continue;
+        }
+        if is_contained_widget_scaffold_class(child, snippet) {
+            covered_classes = covered_classes.saturating_add(1);
+            continue;
+        }
+        if is_contained_main_launcher(child, snippet) {
+            continue;
+        }
+        return false;
+    }
+    covered_classes >= 1
+}
+
+/// True when `node` is fully inside the snippet range and is (part of)
+/// the mandated Flutter app launcher — `void main() => runApp(…)`. The
+/// Dart grammar splits a top-level function into signature and body
+/// siblings, so both halves are recognised by their launcher markers.
+fn is_contained_main_launcher(node: Node<'_>, snippet: &Snippet<'_>) -> bool {
+    if node.start_byte() < snippet.range.start || node.end_byte() > snippet.range.end {
+        return false;
+    }
+    node.utf8_text(snippet.source)
+        .is_ok_and(|text| text.starts_with("void main(") || text.contains("runApp("))
+}
+
+/// True when `node` is a class declaration fully inside the snippet
+/// range whose superclass names a Flutter widget marker.
+fn is_contained_widget_scaffold_class(node: Node<'_>, snippet: &Snippet<'_>) -> bool {
+    if node.kind() != "class_definition"
+        || node.start_byte() < snippet.range.start
+        || node.end_byte() > snippet.range.end
+    {
+        return false;
+    }
+    let mut cursor = node.walk();
+    let extends_widget = node.named_children(&mut cursor).any(|child| {
+        child.kind() == "superclass"
+            && child
+                .utf8_text(snippet.source)
+                .is_ok_and(|text| WIDGET_SUPERCLASS_MARKERS.iter().any(|m| text.contains(m)))
+    });
+    extends_widget
+}
+
 /// Returns true for repeated Dart field/const declarations. Field lists
 /// inside a class encode data shape, not extractable duplicate logic. This
 /// covers both a single field declaration and a run of sibling fields —

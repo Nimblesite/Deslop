@@ -77,11 +77,29 @@ export class LiveBubble implements vscode.Disposable {
       vscode.workspace.onDidChangeTextDocument((e) => this.onEdit(e)),
       vscode.window.onDidChangeActiveTextEditor(() => this.clearBubble()),
     );
-    this.tryRegister("deslop.bubble.dismiss", () => this.clearBubble());
-    this.tryRegister("deslop.bubble.dismissCluster", (id) => {
-      this.dismissedClusters.add(String(id));
-      this.clearBubble();
-    });
+    this.tryRegister("deslop.bubble.dismiss", () => this.dismiss());
+    this.tryRegister("deslop.bubble.dismissCluster", (id) =>
+      this.dismissCluster(String(id)),
+    );
+  }
+
+  // Clears the active bubble without suppressing the cluster — the next
+  // probe may paint it again. The `deslop.bubble.dismiss` command is a
+  // thin wrapper over this.
+  dismiss(): void {
+    this.clearBubble();
+  }
+
+  // Suppresses `clusterId` from every future render on this instance and
+  // clears the active bubble. The `deslop.bubble.dismissCluster` command
+  // is a thin wrapper over this. Exposed as a method because command
+  // registration is idempotent across instances (see `tryRegister`): only
+  // the first `LiveBubble` in a process owns the command id, so driving
+  // dismissal through `executeCommand` would target that instance rather
+  // than this one.
+  dismissCluster(clusterId: string): void {
+    this.dismissedClusters.add(clusterId);
+    this.clearBubble();
   }
 
   // Idempotent registration so multiple LiveBubble instances (real + tests)

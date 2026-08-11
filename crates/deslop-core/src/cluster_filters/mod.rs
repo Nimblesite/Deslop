@@ -175,6 +175,7 @@ pub(crate) fn is_noise_pattern<S: BuildHasher>(
 /// drops it per config rather than silently hiding it.
 pub(crate) fn classify_clone_category<S: BuildHasher>(
     members: &[Fingerprint],
+    literal_fraction: f64,
     sources: &HashMap<FileId, Vec<u8>>,
     file_languages: &HashMap<FileId, &'static str, S>,
     cache: &ParseCache,
@@ -185,21 +186,37 @@ pub(crate) fn classify_clone_category<S: BuildHasher>(
     let Some(snippets) = collect_snippets(members, sources, language, cache) else {
         return CloneCategory::Logic;
     };
-    if is_data_table_cluster(language, &snippets) {
+    if is_data_table_cluster(language, literal_fraction, &snippets) {
         CloneCategory::DataTable
     } else {
         CloneCategory::Logic
     }
 }
 
-/// Dispatches data-table detection by language. Dart covers
-/// collection-literal data tables today ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]);
-/// other languages have no collection-literal table filter yet.
-fn is_data_table_cluster(language: &str, snippets: &[Snippet<'_>]) -> bool {
-    match language {
-        "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
-        _ => false,
-    }
+/// Dispatches data-table detection. The language-agnostic
+/// literal-dominance test ([CLONE-NOISE-LITERAL-TABLE], #336) covers
+/// pure value tables in every language; the Dart predicate additionally
+/// recognises collection literals of constructor rows
+/// ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]), whose identifier-heavy rows
+/// sit below the literal-dominance floor.
+fn is_data_table_cluster(language: &str, literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
+    is_literal_dominated_table(literal_fraction, snippets)
+        || match language {
+            "dart" => dart_data_table::is_dart_collection_data_table_cluster(snippets),
+            _ => false,
+        }
+}
+
+/// Language-agnostic data-table test ([CLONE-NOISE-LITERAL-TABLE]): the
+/// cluster's normalised leaves are overwhelmingly literal positions —
+/// measured in the pipeline, where the normalised trees live — and at
+/// least two members differ in raw bytes. The verbatim escape hatch is
+/// the same #190 rule the Dart predicate applies: a byte-for-byte
+/// copied table is genuine duplication and stays `logic`.
+fn is_literal_dominated_table(literal_fraction: f64, snippets: &[Snippet<'_>]) -> bool {
+    literal_fraction >= crate::buckets::LITERAL_TABLE_MIN_FRACTION
+        && snippets.len() >= 2
+        && raw_snippet_texts_differ(snippets)
 }
 
 /// Language-specific idiom filters, dispatched by language so a cluster is
@@ -208,7 +225,10 @@ fn is_data_table_cluster(language: &str, snippets: &[Snippet<'_>]) -> bool {
 /// also rely on the generic checks plus the fusion and report-hide gates.
 fn language_specific_noise(language: &str, snippets: &[Snippet<'_>]) -> bool {
     match language {
-        "dart" => dart::is_dart_class_field_declaration_cluster(snippets),
+        "dart" => {
+            dart::is_dart_class_field_declaration_cluster(snippets)
+                || dart::is_dart_widget_scaffold_cluster(snippets)
+        }
         "python" => python_noise(snippets),
         "rust" => rust_noise(snippets),
         "javascript" | "typescript" | "tsx" => {

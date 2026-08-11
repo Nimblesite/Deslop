@@ -168,6 +168,7 @@ fn cluster_over(id: &str, members: &[(deslop_core::state::FileId, ByteRange)]) -
             token_jaccard: 0.97,
             embedding_cos: 0.0,
         },
+        content: deslop_core::content::ContentEvidence::unmeasured(),
     }
 }
 
