@@ -11,6 +11,12 @@
 
 #![allow(dead_code)]
 
+/// Fused-signal bands and assertion vocabulary ([FUSED-THRESHOLD]).
+/// Suites that assert on `signals.fused` import it explicitly with
+/// `use crate::common::signals::*;` — a glob re-export here would be an
+/// unused import in every binary that never touches the vocabulary.
+pub(crate) mod signals;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

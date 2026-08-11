@@ -73,30 +73,54 @@ to render `fused = 1.0` regardless of what the code actually said (gh #331,
 erased:
 
 1. For each cluster, walk each member's normalised subtree and hash the **raw
-   source bytes** of every collapsed leaf (identifier / literal position).
-2. `content_agreement` = mean fraction of positions whose raw bytes match the
-   canonical member's, in `[0, 1]`. Byte-identical members score 1.0; a
-   renamed copy of real logic changes a handful of positions and stays high;
-   framework-mandated scaffolding (every name differs) and data tables (every
-   literal differs) fall low.
+   source bytes** of every collapsed leaf, keeping the leaf's population
+   (identifier vs literal position).
+2. Measure two independent populations per member against the canonical
+   member, both in `[0, 1]`:
+   - `agreement` — fraction of all collapsed positions whose raw bytes match,
+     identifiers and literals pooled. Byte-identical members score 1.0;
+     lightly-edited copies stay high; framework-mandated scaffolding (every
+     name differs) and data tables (every literal differs) fall low.
+   - `rename_consistency` — the Type-2 discriminator: the lesser of literal
+     preservation (fraction of literal positions unchanged) and bijective
+     identifier-mapping coverage (fraction of identifier positions explained
+     by one consistent 1:1 substitution, modal in both directions). Zero
+     without positional alignment or with fewer than 4 literal anchors —
+     without anchors, a consistent mapping cannot tell a rename from sibling
+     scaffolding that also substitutes names consistently.
+   A maximally renamed clone of real logic scores low pooled `agreement` but
+   `rename_consistency ≈ 1.0`; pooling the populations into one mean is what
+   demoted textbook Type-2 clones to `structural_only`.
 3. **Rendered confidence**: for shape-identical clusters not proven
-   byte-equivalent, `fused = max(embedding_cos, structural × content_agreement)`.
-   LSH-only and embedding-discovered pairs keep the max/sum fusion unchanged.
-4. **Routing — three zones.** Below the support floor (0.7, the
-   [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff) with no semantic support,
-   the cluster joins the [RANK-STRUCTURAL-ONLY] routing — surfaced honestly
-   or hidden as cross-file scaffolding, and demoted in ranking. At or above
-   the promote bar (0.85, act-now grade) the cluster is a proven near-miss
-   and routes `nearly_identical` even when the token layer lost its
-   signature to the fingerprint-scoped fallback. Between the two, the legacy
-   signal routing stands: real-world sibling families (the #197 REST
-   settings surface measures 0.72–0.80) keep their demoted verdict.
+   byte-equivalent, `fused = max(embedding_cos, max(structural, token_jaccard)
+   × max(agreement, 0.9 × rename_consistency))`. The 0.9 discount reflects
+   that mapping-explained identifier positions are strictly weaker evidence
+   than byte equality, keeping a proven rename in the act-now band while
+   reserving `fused = 1.0` for byte-proven duplication. LSH-only and
+   embedding-discovered pairs keep the max/sum fusion unchanged.
+4. **Routing — three zones over `support = max(agreement,
+   rename_consistency)`** (either population may vouch; never their mean).
+   Below the support floor (0.7, the [TECH-TOKEN-SOURCERERCC] Type-3 overlap
+   cutoff) with no semantic support, the cluster joins the
+   [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
+   scaffolding, and demoted in ranking. At or above the promote bar (0.85,
+   act-now grade) the cluster is a proven clone — a byte-agreeing near-miss
+   or a consistent maximal rename — and routes `nearly_identical` even when
+   the token layer lost its signature to the fingerprint-scoped fallback.
+   Between the two, the legacy signal routing stands: real-world sibling
+   families (the #197 REST settings surface measures 0.72–0.80) keep their
+   demoted verdict.
 5. **Token-signal correction.** A shape-identical cluster shares one Merkle
    hash, so its members' normalised k-gram sets are equal by construction;
    for clusters routed `identical` / `nearly_identical` a lower rendered
    `token_jaccard` is a fallback-signature artifact and is corrected to 1.0
    (the GH #232 argument). `structural_only` keeps its unscored signal —
    absent token support is that bucket's defining signature.
+6. **Ranking.** The content-gated `fused` scales the final report weight as a
+   continuous factor alongside the [RANK-CATEGORY] and
+   [RANK-STRUCTURAL-ONLY] bucket multipliers: at equal geometry a byte-proven
+   copy outranks a consistent rename, which outranks shape-only coincidence,
+   and two same-bucket clusters rank by how much of their content agrees.
 
 `token_jaccard` itself stays rename-invariant (normalised k-grams); the gate
 adds evidence rather than redefining an existing signal.

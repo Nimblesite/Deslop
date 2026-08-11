@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use crate::{
     ast::NormalizedNode,
     cluster::build_ranked_fused_clusters,
-    content::attach_content_agreement,
+    content::attach_content_evidence,
     error::CoreError,
     fingerprint::Fingerprint,
     lsh::band_collisions,
@@ -77,7 +77,7 @@ impl PipelineSession {
         let fused_clusters = cluster_by_transitive_closure(&pairs);
         tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
         let mut clusters = build_ranked_fused_clusters(&corpus.fingerprints, &fused_clusters);
-        attach_content_agreement(&mut clusters, &corpus.trees, &corpus.sources);
+        attach_content_evidence(&mut clusters, &corpus.trees, &corpus.sources);
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = corpus.fingerprints.len(),
