@@ -89,8 +89,7 @@ fn audit_job(workflow: &str, job_name: &str, job: &Yaml) -> Option<CompilingJob>
 
 /// Parses the first YAML document in `path`.
 fn load_first_document(path: &Path) -> Result<Yaml> {
-    let source = fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?;
+    let source = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     YamlLoader::load_from_str(&source)
         .with_context(|| format!("parsing {}", path.display()))?
         .into_iter()
@@ -123,8 +122,8 @@ fn compiling_jobs(path: &Path) -> Result<Vec<CompilingJob>> {
 /// Every workflow file under `.github/workflows`, sorted for determinism.
 fn workflow_paths(root: &Path) -> Result<Vec<PathBuf>> {
     let directory = root.join(".github").join("workflows");
-    let entries = fs::read_dir(&directory)
-        .with_context(|| format!("listing {}", directory.display()))?;
+    let entries =
+        fs::read_dir(&directory).with_context(|| format!("listing {}", directory.display()))?;
     let mut paths = Vec::new();
     for entry in entries {
         let path = entry
@@ -144,8 +143,8 @@ fn workflow_paths(root: &Path) -> Result<Vec<PathBuf>> {
 /// Every `typediagram@<version>` pin in the Makefile, in file order.
 fn makefile_pins(root: &Path) -> Result<Vec<String>> {
     let makefile = root.join("Makefile");
-    let source = fs::read_to_string(&makefile)
-        .with_context(|| format!("reading {}", makefile.display()))?;
+    let source =
+        fs::read_to_string(&makefile).with_context(|| format!("reading {}", makefile.display()))?;
     Ok(source
         .split_whitespace()
         .filter_map(|token| token.strip_prefix("typediagram@"))
