@@ -8,7 +8,6 @@
 // These tests pin what the user must see on the live surface as a result.
 
 import * as assert from "node:assert/strict";
-import * as vscode from "vscode";
 import { LiveBubble, signalStrip } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
@@ -113,7 +112,7 @@ suite("LiveBubble fused confidence", () => {
 
       // 4. The user dismisses it; the act-now cluster must stay gone.
       await setBubbleMode("inline");
-      await vscode.commands.executeCommand("deslop.bubble.dismissCluster", "c-near");
+      bubble.dismissCluster("c-near");
       bubble.render(capture.editor, span(18), [near]);
       assert.equal(
         capture.visible(),
@@ -175,7 +174,7 @@ suite("LiveBubble fused confidence", () => {
       assertShowing(capture, "Nearly identical code", "back on the proven clone");
 
       // 4. Dismissing the winner must not promote the demoted family.
-      await vscode.commands.executeCommand("deslop.bubble.dismissCluster", "c-proven");
+      bubble.dismissCluster("c-proven");
       bubble.render(capture.editor, span(18), [shapeOnly, proven]);
       assert.equal(
         capture.visible(),

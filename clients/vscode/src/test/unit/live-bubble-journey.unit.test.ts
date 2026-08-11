@@ -8,7 +8,6 @@
 // and the sequence does not.
 
 import * as assert from "node:assert/strict";
-import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
@@ -142,7 +141,7 @@ suite("LiveBubble journeys", () => {
       assert.ok(capture.visibleHover() !== undefined, "back to inline: hover restored");
 
       // 4. Dismissing clears whichever surface is current.
-      await vscode.commands.executeCommand("deslop.bubble.dismiss");
+      bubble.dismiss();
       assert.equal(capture.visible(), undefined, "dismiss clears the inline surface");
 
       // 5. Plain dismiss is not sticky — the next probe paints it again.
@@ -175,7 +174,7 @@ suite("LiveBubble journeys", () => {
       assert.match(secondText, /×\s*2/, "step 1b: the second cluster brings its own count");
 
       // 2. Dismissing the first hides only the first.
-      await vscode.commands.executeCommand("deslop.bubble.dismissCluster", "c-first");
+      bubble.dismissCluster("c-first");
       bubble.render(capture.editor, span(12), [first]);
       assert.equal(capture.visible(), undefined, "step 2: the dismissed cluster stays hidden");
       bubble.render(capture.editor, span(18), [second]);

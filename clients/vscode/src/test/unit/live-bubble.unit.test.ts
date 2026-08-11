@@ -266,7 +266,7 @@ suite("LiveBubble render", () => {
         "a full-confidence cluster must bubble before it is dismissed",
       );
 
-      await vscode.commands.executeCommand("deslop.bubble.dismissCluster", "c-dismiss");
+      bubble.dismissCluster("c-dismiss");
       // The dismissedClusters filter drops it before the sort step, so
       // even at unchanged confidence it must not come back.
       bubble.render(capture.editor, span(6), [cluster("c-dismiss", 10, 0.95)]);
@@ -294,7 +294,7 @@ suite("LiveBubble render", () => {
       bubble.render(capture.editor, span(0), [cluster("c-clear", 10, 0.95)]);
       assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
 
-      await vscode.commands.executeCommand("deslop.bubble.dismiss");
+      bubble.dismiss();
       assert.equal(
         capture.visible(),
         undefined,
