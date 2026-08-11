@@ -1,7 +1,9 @@
 # Fused confidence — follow-ups for the next release
 
 What remains of the `[FUSION-CONTENT-GATE]` audit (formerly
-`fused-score-rollout.md`) after the `fusedhardening` branch shipped. The
+`fused-score-rollout.md`) after the `fusedhardening` branch shipped, plus
+the issues that came out of the v0.31.0 release triage — two of which
+(#347, #342) turned out to gate the accuracy work described here. The
 standing requirements live in
 [`docs/root-cause-fusion.md`](../root-cause-fusion.md); the mechanism shipped
 in this release is specified in
@@ -97,16 +99,120 @@ are not on the wire. Putting `agreement` / `rename_consistency` /
 engine's label unconditionally retires both. C and D are the rendering and
 severity rows of the same issue.
 
+## Triage — 12 Aug 2026
+
+Every open issue now carries a GitHub type (Bug / Task / Feature), and the
+blocking relationships below are recorded as GitHub issue dependencies — so
+the tracker *enforces* the order this document describes instead of merely
+restating it.
+
+**New this round:**
+
+| Issue | Type | Why it exists |
+|---|---|---|
+| **#347** | Bug | `corpus.yml` never installs `typediagram`, so `build.rs` cannot generate the wire models and the crate fails to compile. The `[CORPUS-CI]` accuracy gate has **never produced a measurement**: both runs since `fc779f7bc` — the commit that added it — died at ~70s, before a single repository was scanned. |
+| **#348** | Bug | One transient Marketplace timeout aborts the remaining platforms under `set -e`. v0.31.0 was live on darwin-arm64 only until the job was re-run by hand, while Open VSX served all five. `publish-openvsx` has the identical loop shape and survived by ordering luck. Release infrastructure — tracked outside the ordered work below. |
+| **#342** | Bug | `built_in_excluded` matches path components *above* the scan root, so a repo living under any folder named `dist`/`build`/`target`/`vendor`/`node_modules` analyses as zero files: clean report, exit code 0. See the section below — its pinning test does not exist. |
+
+**The dependency graph now recorded on GitHub:**
+
+```
+#347 corpus gate ──┬──► #301 determinism ──► #343 sum-then-clamp ──┬──► #344
+  (never booted)   │                                              ├──► #345
+                   └──────────────────────────────────────────────┘
+                                    #343 also blocks
+                        #71   #79   #103   #283   #284   #285
+
+#342 ancestor excludes ──► #298 add `out/` to the defaults
+```
+
+`root-cause-fusion.md` names one root cause behind eight bugs at
+`pair.rs:72`. Two of them (#331, #336) were fixed by #341; the remaining six
+are now formally blocked on #343 rather than sitting unattributed. #298 is
+blocked by #342 because adding `out` to the built-in defaults strictly
+widens #342's blast radius — #342 was found while investigating #298.
+
+**#331 and #336 are fixed but still open.**
+`issue_331_336_shape_only_saturation.rs` (3 tests) and
+`fsharp_issue_336_data_table_category.rs` (4 tests) are green, and #341
+deleted both `flutter/boilerplate_rank` and `fsharp/data_table_rank` from
+`corpus/known-failures.json` — which flips the gate from *tolerating* them
+to *demanding* they pass. But those are synthetic fixtures: they prove the
+mechanism demotes shape-only families, not the original claims (rank #1 on
+`flutter/flutter` at 453 occurrences; rank #1 on `dotnet/fsharp` at 3,544).
+The real-repository confirmation lives in `check_boilerplate_not_ranked_first`
+and `check_data_tables_not_ranked_as_logic`, inside the gate #347 says has
+never run. **Close them when a green corpus run exists, not before** —
+closing on evidence CI has never seen is precisely what #347 exists to
+prevent.
+
+## 🛑 #342 — a total false negative with no test pinning it
+
+Issue #342 states:
+
+> A failing E2E test
+> (`crates/deslop/tests/issue_<this>_scan_root_under_excluded_ancestor.rs`)
+> accompanies this issue: it scans a clone-bearing repo seeded under
+> `<tmp>/dist/` and asserts `files_analysed == 2` plus the reported clone
+> pair. It is red on `main` for exactly the defect above.
+
+**That test is not in the tree.** All 69 files under `crates/deslop/tests/`
+were searched for the filename, `excluded_ancestor`, `scan_root_under`, and
+`BUILTIN_EXCLUDE_COMPONENTS`. None exists. The unresolved placeholder in the
+issue's own filename (`issue_<this>_…`) is the tell: it was described, never
+written.
+
+So the most severe defect on the board has **no assertion pinning it**,
+while the tracker claims it does — and the defect is the quietest failure
+mode this product has. `built_in_excluded`
+(`crates/deslop-core/src/config.rs`) tests every component of the absolute
+discovered path, including components above the scan root, so a user whose
+checkout happens to sit under `~/build/` or `~/dist/` gets
+`files_analysed: 0`, `clusters: []`, exit code 0, and concludes their code
+has no duplication. Nothing in CI would notice this returning.
+
+**Write the test first and watch it fail** — per `CLAUDE.md`, the assertion
+outranks the fix. Roughly twenty lines:
+
+- Seed two files containing a genuine cross-file clone under
+  `<tmp>/dist/innocent-repo/src/`; run with `--no-incremental --min-nodes 8
+  --embeddings off`; assert `files_analysed == 2`, a non-empty cluster list,
+  and that the reported cluster spans both files.
+- Then seed the **same** corpus under `<tmp>/innocent-repo/` and assert the
+  two reports agree. The delta between the two roots *is* the bug, and
+  asserting the equivalence is what stops a future change to the exclusion
+  list from silently reintroducing it — a single-root test would not.
+
+The fix the issue already describes: make only components **below** the scan
+root eligible for built-in exclusion, matching
+`scan_root_contains_component_pair`, which encodes exactly this principle
+for the report-hide pairs ("the user intentionally asked to analyse that
+corpus") and which `built_in_excluded` has no equivalent of.
+
 ## Open work, in order
 
-### 1. Close #301 — determinism first
+### 1. #347 — make the corpus gate boot
+
+Everything below is measured by an instrument that has never been switched
+on. Add the `typediagram@0.11.0` install step to `corpus.yml` to match the
+four jobs in `ci.yml` (keeping the pin in sync per the dependency-sync
+rule), `workflow_dispatch` the gate, and reconcile
+`corpus/known-failures.json` against its first real run — that baseline has
+never been confirmed by a passing run, so entries may be stale in either
+direction. The workflow's own contract, "anything NOT recorded in
+`known-failures.json` fails this workflow — that is the regression gate",
+has been vacuous since it was written.
+
+### 2. Close #301 — determinism
 
 `nest` and `jellyfin` remain baselined as `determinism` failures in
 `corpus/known-failures.json`. While identical runs disagree, no
 before/after accuracy measurement of the content gate is trustworthy. Close
-this before tuning any threshold introduced below.
+this before tuning any threshold introduced below. Blocked by #347: the
+determinism checks are corpus checks, so the evidence for closing this
+cannot exist until the gate runs.
 
-### 2. #343 — replace sum-then-clamp saturation
+### 3. #343 — replace sum-then-clamp saturation
 
 `PairScore::fused()` still sums three correlated signals and clamps: a
 cluster at `structural = 0.62, token_jaccard = 0.80` sums to 1.42, clamps
@@ -118,7 +224,7 @@ than a render-time correction. `fused_golden_invariants.rs`
 (`fused == 1.0` requires a byte-identical pair) is the tripwire; add a
 mixed-band fixture the moment the arithmetic changes.
 
-### 3. #344 — carry the confidence to every consumer
+### 4. #344 — carry the confidence to every consumer
 
 Surfaces still running on the pre-gate world:
 
@@ -143,7 +249,7 @@ Plus, in the same issue:
   partial renames — the engine can carry the originals now, and the golden
   bands suite proves it per language.
 
-### 4. #345 — doc drift
+### 5. #345 — doc drift
 
 - `REPORTING-CONTEXT.md` (shipped to agents via `schema_doc`) still calls
   `FUSED_THRESHOLD = 0.85` what a pair needs "to enter a cluster"; the
@@ -159,7 +265,8 @@ Plus, in the same issue:
   when #343 lands. `SPEC.md` still marks the clamp as the strategy.
 - `corpus/known-failures.json` has no confidence check id — add a
   `fused_spread` / `type2_recall` check so the real-repository gate can
-  catch saturation and rename recall at scale.
+  catch saturation and rename recall at scale. Blocked by #347: adding a
+  check to a gate that cannot compile is a no-op.
 
 ## Requirement status ([`root-cause-fusion.md`](../root-cause-fusion.md))
 

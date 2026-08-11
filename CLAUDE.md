@@ -74,6 +74,13 @@ If you encounter code that could cause a false negative or a false positive — 
 - Pattern matching over casting. Expressions over statements. Iterator chains over imperative loops. Early return with `?`.
 - Descriptive names — no single letters except in closures.
 
+## Documentation
+
+- Each spec section must have a unique, heirarchical non-numeric spec Id
+- Spec ids must be cross referenced across tests, code specs and plans
+- Don't use line endings to force word wrap. Allow text to wrap naturally.
+- Remove line endings that only exist to wrap text
+
 ## Run Deslop on Deslop
 
 **Use the Deslop MCP if it is available; fall back to the `deslop` CLI if it is not.**
