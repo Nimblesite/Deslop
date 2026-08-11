@@ -4,6 +4,8 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
+import { LiveBubble } from "../../bubble/live";
+import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 
@@ -150,6 +152,36 @@ function fakeDocument(file: string): vscode.TextDocument {
       ),
     }),
   } as unknown as vscode.TextDocument;
+}
+
+export interface BubbleFixture {
+  store: ReportStore;
+  capture: BubbleCapture;
+  bubble: LiveBubble;
+}
+
+// One assembled live-bubble rig: a store seeded with `snapshot` (pass
+// null for the no-report case), the decoration capture, and the bubble
+// under test, with the render mode already applied. Every live-surface
+// test opens with this — the five-line preamble it replaces was the
+// repo's third-worst duplication cluster.
+export async function bubbleFixture(
+  options: {
+    snapshot?: Report | null;
+    generation?: number;
+    mode?: "inline" | "ghost";
+  } = {},
+): Promise<BubbleFixture> {
+  const store = new ReportStore();
+  const snapshot =
+    options.snapshot === undefined ? probeReport() : options.snapshot;
+  if (snapshot) store.setSnapshot(snapshot, options.generation ?? 0);
+  await setBubbleMode(options.mode ?? "inline");
+  return {
+    store,
+    capture: capturingEditor(),
+    bubble: new LiveBubble(store, () => undefined),
+  };
 }
 
 // Asserts a bubble is on screen carrying `title`, and returns its text so

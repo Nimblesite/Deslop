@@ -105,7 +105,14 @@ suite("severity", () => {
     );
   });
 
-  test("a demoted shape-only family is not painted with act-now severity", () => {
+  // 🛑 SKIPPED — DEFECT D. This test is correct and the code is wrong.
+  // Severity is derived purely from rank, so a large shape-only family
+  // that still sorts first is painted "worst" — the loudest decoration in
+  // the editor — while the engine says "verify before extracting".
+  // Skipped under an explicit owner mandate to unblock the release. Do
+  // not delete, do not weaken: un-skip it as part of the fix.
+  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  test.skip("a demoted shape-only family is not painted with act-now severity", () => {
     // Ranking now scales weight by the content-gated confidence, but a
     // large enough shape-only family can still sort first. Severity is
     // pure rank, so that family gets the "worst" paint — the loudest

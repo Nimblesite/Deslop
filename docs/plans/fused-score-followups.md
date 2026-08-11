@@ -63,6 +63,40 @@ the weak `token_jaccard < 0.05` fallback assertions were replaced with exact
 renamed `js-type2-pipeline`, since the old name asserted the verdict this
 release overturned.
 
+## 🛑 Skipped VSIX tests to restore
+
+**Six assertions-in-waiting are currently `test.skip`-ed. They are correct;
+the code they test is wrong.** They were skipped under an explicit owner
+mandate to unblock this release — a deliberate, one-time exception to the
+`CLAUDE.md` rule "never delete a failing test, never skip one". Nothing
+about them is negotiable on restore: **un-skip, do not weaken, do not
+delete.** Each carries a `🛑 SKIPPED — DEFECT <x>` comment at its
+definition pointing back to this section.
+
+Every one of these defects is **live in the shipped VSIX today**. Skipping
+removed the *signal*, not the bug.
+
+| # | Test | File | Defect |
+|---|---|---|---|
+| A | `an act-now near miss below the fused cutoff still reaches the bubble` | `live-bubble-fused.unit.test.ts` | `bestBubbleCluster` gates on a UI-local `fused >= FUSED_THRESHOLD` (0.85) instead of the engine's bucket, so act-now clusters below the cutoff are silently withheld from the live surface. |
+| B1 | `classifyCluster must not call a content-gated rename byte-identical` | `report-schema.unit.test.ts` | `classifyCluster` reads a proven rename's corrected signals as `identical` and tells the user "Safe to extract — every copy is the same" about code whose identifiers all differ. |
+| B2 | `classifyCluster must not promote a shape-only family the content gate demoted` | `report-schema.unit.test.ts` | A shape-only family with a non-trivial token signal falls through to the `structural >= 0.99` arm and is promoted to an act-now bucket — the false positive #341 exists to stop. |
+| C | `the signal strip distinguishes a proven rename from a verbatim copy` | `live-bubble-fused.unit.test.ts` | `signalStrip` never draws the fused confidence, so a verbatim copy and a proven rename both render `██▁`. |
+| D | `a demoted shape-only family is not painted with act-now severity` | `severity.unit.test.ts` | Severity is pure rank, so a large demoted family that still sorts first gets the loudest decoration in the editor. |
+| E | `a stale probe cannot resurrect a cluster the visible report dropped` | `live-bubble.unit.test.ts` | `bestBubbleCluster`'s `byId.get(id) ?? cluster` fallback re-paints a cluster the delta just cleared. **Least clear-cut of the six** — the same fallback legitimately serves clusters found live before a rescan. Settle the intended contract first, then fix the code or restate the test. |
+
+**Defect A is a regression this release introduced.** The content gate
+made `fused` systematically lower for act-now clusters (it is now shape ×
+content), so near misses that previously rendered at a clamped 1.0 and
+always bubbled now land near 0.80 and vanish. It is the one to fix first.
+
+B1 and B2 share a root cause with issue **#344**: the UI re-derives buckets
+from a signal triple that cannot see `ContentEvidence` because those fields
+are not on the wire. Putting `agreement` / `rename_consistency` /
+`literal_fraction` on `ReportSignals` and having `resolveBucket` trust the
+engine's label unconditionally retires both. C and D are the rendering and
+severity rows of the same issue.
+
 ## Open work, in order
 
 ### 1. Close #301 — determinism first

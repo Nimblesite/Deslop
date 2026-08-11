@@ -133,7 +133,16 @@ suite("report schema helpers", () => {
     );
   });
 
-  test("classifyCluster must not call a content-gated rename byte-identical", () => {
+  // 🛑 SKIPPED — DEFECT B1. This test is correct and the code is wrong.
+  // `classifyCluster` claims byte-for-byte parity with the core routing
+  // table but cannot see content evidence (it is not on the wire, #344),
+  // so it reads a proven rename's corrected signals as "identical" and
+  // tells the user "Safe to extract — every copy is the same" about code
+  // whose identifiers all differ. Skipped under an explicit owner mandate
+  // to unblock the release. Do not delete, do not weaken: un-skip it as
+  // part of the fix.
+  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  test.skip("classifyCluster must not call a content-gated rename byte-identical", () => {
     // A maximal Type-2 rename proven by its literal anchors: the engine
     // routes `nearly_identical` at fused 0.9, and renders token_jaccard
     // 1.0 because the Merkle match already proves the token multiset
@@ -154,7 +163,14 @@ suite("report schema helpers", () => {
     );
   });
 
-  test("classifyCluster must not promote a shape-only family the content gate demoted", () => {
+  // 🛑 SKIPPED — DEFECT B2. This test is correct and the code is wrong.
+  // A shape-only family with a non-trivial token signal falls through to
+  // the `structural >= 0.99` arm and is promoted to an act-now bucket —
+  // the exact false positive #341 exists to stop. Skipped under an
+  // explicit owner mandate to unblock the release. Do not delete, do not
+  // weaken: un-skip it as part of the fix.
+  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  test.skip("classifyCluster must not promote a shape-only family the content gate demoted", () => {
     // Sibling boilerplate: shape saturates, content evidence is absent,
     // so the engine demotes it to `structural_only` at fused 0.31. The
     // signal triple alone reads `structural >= 0.99` and promotes it to

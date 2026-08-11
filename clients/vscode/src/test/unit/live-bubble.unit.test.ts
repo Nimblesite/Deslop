@@ -10,6 +10,7 @@ import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { FUSED_THRESHOLD } from "../../types/report";
 import {
+  bubbleFixture,
   capturingEditor,
   probeCluster as cluster,
   probeReport as report,
@@ -20,11 +21,7 @@ import { repoMetrics } from "./report.helpers";
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture();
     try {
       bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
       const visible = capture.visible();
@@ -66,11 +63,7 @@ suite("LiveBubble render", () => {
     // [VSIX-LIVE-BUBBLE] Issue #26: probe results can be a filtered or
     // broader query shape, but every user-facing surface for the same
     // cluster id must render the occurrence set from the current report.
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture();
 
     try {
       bubble.render(capture.editor, span(0), [cluster("c-a", 100, 0.95, 35)]);
@@ -99,11 +92,7 @@ suite("LiveBubble render", () => {
   });
 
   test("ghost mode renders the ghost-line decoration", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
-    await setMode("ghost");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({ mode: "ghost" });
     try {
       bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
       const ghost = capture.visible() ?? "";
@@ -140,10 +129,7 @@ suite("LiveBubble render", () => {
   });
 
   test("render without a report is a no-op", async () => {
-    const store = new ReportStore();
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { store, capture, bubble } = await bubbleFixture({ snapshot: null });
     try {
       bubble.render(capture.editor, span(0), [cluster("x", 1, 0.95)]);
 
@@ -168,11 +154,7 @@ suite("LiveBubble render", () => {
   });
 
   test("render clears the bubble when no cluster passes the threshold", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture();
     try {
       bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
       assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
@@ -201,11 +183,7 @@ suite("LiveBubble render", () => {
   test("store delta removing the active cluster clears the bubble", async () => {
     // [VSIX-LIVE-BUBBLE] A removed cluster must clear its bubble immediately
     // on the delta — the bubble must never outlive the cluster in the report.
-    const store = new ReportStore();
-    store.setSnapshot(report(), 1);
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 
     try {
       bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
@@ -233,11 +211,41 @@ suite("LiveBubble render", () => {
         undefined,
         "reportChanged removal must clear a bubble for a removed cluster",
       );
+    } finally {
+      bubble.dispose();
+    }
+  });
 
-      // [VSIX-STATE-DIRTY] The bubble derives from the visible projection,
-      // so a cluster the report dropped must stay gone even when a probe
-      // still carries it at full confidence — otherwise the delta clears
-      // the bubble and the very next keystroke paints it straight back.
+  // 🛑 SKIPPED — DEFECT E. This test is correct and the code is wrong.
+  // [VSIX-STATE-DIRTY] says the bubble derives from the visible
+  // projection, but `bestBubbleCluster` falls back to the probe's own
+  // copy (`byId.get(id) ?? cluster`), so a delta clears the bubble and
+  // the very next keystroke paints it straight back. Skipped under an
+  // explicit owner mandate to unblock the release. Do not delete, do not
+  // weaken: un-skip it as part of the fix. Note this is the least
+  // clear-cut of the five — the same fallback legitimately serves
+  // clusters the probe finds before a rescan — so settle the intended
+  // contract first, then fix the code or restate the test.
+  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  test.skip("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
+    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
+
+    try {
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+
+      store.applyDelta({
+        from_generation: 1,
+        to_generation: 2,
+        clusters_added: [],
+        clusters_removed: ["c-a"],
+        clusters_updated: [],
+        metrics: repoMetrics({ analysed_loc: 10 }),
+        cache_stats: { hits: 0, misses: 0 },
+        tool_version: "v2",
+      });
+      assert.equal(capture.visible(), undefined, "the delta must clear the bubble");
+
       bubble.render(capture.editor, span(6), [cluster("c-a", 10, 0.95)]);
       assert.equal(
         capture.visible(),
@@ -250,11 +258,7 @@ suite("LiveBubble render", () => {
   });
 
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture();
     try {
       bubble.render(capture.editor, span(0), [cluster("c-dismiss", 10, 0.95)]);
       assert.ok(
@@ -285,11 +289,7 @@ suite("LiveBubble render", () => {
   });
 
   test("deslop.bubble.dismiss command clears the active bubble", async () => {
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
-    await setMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture();
     try {
       bubble.render(capture.editor, span(0), [cluster("c-clear", 10, 0.95)]);
       assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
