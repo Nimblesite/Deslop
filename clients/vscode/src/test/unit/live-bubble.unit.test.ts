@@ -1,83 +1,65 @@
 // Unit: LiveBubble.render — drive inline + ghost paths + dismissal + no-op.
+// Every render assertion goes through the shared decoration capture so the
+// suite pins the text the user actually sees, including the fused band
+// that decided whether the bubble appeared at all.
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
-import { Report, ReportCluster } from "../../types/report";
+import { FUSED_THRESHOLD } from "../../types/report";
+import {
+  capturingEditor,
+  probeCluster as cluster,
+  probeReport as report,
+  setBubbleMode as setMode,
+  span,
+} from "./bubble.helpers";
 import { repoMetrics } from "./report.helpers";
-
-function cluster(
-  id: string,
-  weight: number,
-  fused: number,
-  occurrenceTotal?: number,
-): ReportCluster {
-  const out: ReportCluster = {
-    id,
-    weight,
-    size: occurrenceTotal ?? 2,
-    canonical_node_count: 4,
-    bucket: "identical",
-    signals: {
-      structural: 1,
-      token_jaccard: 1,
-      embedding_cos: 0.5,
-      fused,
-    },
-    occurrences: [
-      { path: "/tmp/A.cs", start_byte: 0, end_byte: 10, hidden: false },
-      { path: "/tmp/B.cs", start_byte: 0, end_byte: 10, hidden: false },
-    ],
-    occurrences_total: 0,
-    occurrences_truncated: false,
-    summary: "",
-    interpretation: "interp",
-  };
-  if (occurrenceTotal !== undefined) out.occurrences_total = occurrenceTotal;
-  return out;
-}
-
-function report(): Report {
-  return {
-    tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 2,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: repoMetrics({
-      analysed_loc: 10,
-      duplicated_loc: 2,
-      duplication_percent: 20,
-      clusters_total: 1,
-      duplicated_files: 2,
-    }),
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
-    clusters: [cluster("c-a", 10, 0.95, 5)],
-  };
-}
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "line one\nline two\n",
-      language: "plaintext",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
-    const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-    bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
-    // idempotent re-render (same cluster + range) is a no-op
-    bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
-    bubble.dispose();
+    try {
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      const visible = capture.visible();
+
+      assert.ok(
+        visible !== undefined,
+        `fused 0.95 clears FUSED_THRESHOLD ${FUSED_THRESHOLD} and must render`,
+      );
+      assert.match(visible ?? "", /Identical code/, "bubble carries the wire bucket title");
+      assert.match(visible ?? "", /×\s*5/, "count comes from the authoritative report");
+      assert.match(visible ?? "", /A\.cs/, "bubble names the canonical file");
+      assert.ok(
+        capture.visibleHover() !== undefined,
+        "an inline bubble must carry its hover card",
+      );
+
+      // Idempotent re-render (same cluster + range) must not repaint.
+      const before = capture.calls.length;
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      assert.equal(
+        capture.calls.length,
+        before,
+        "re-rendering the same cluster at the same range must be a no-op",
+      );
+
+      // A probe whose only cluster sits under the cutoff clears the surface.
+      bubble.render(capture.editor, span(6), [cluster("c-low", 10, 0.2)]);
+      assert.equal(
+        capture.visible(),
+        undefined,
+        `fused 0.2 is under FUSED_THRESHOLD ${FUSED_THRESHOLD} and must clear the bubble`,
+      );
+    } finally {
+      bubble.dispose();
+    }
   });
 
   test("inline render uses the authoritative report occurrence count for a probe hit", async () => {
@@ -86,88 +68,134 @@ suite("LiveBubble render", () => {
     // cluster id must render the occurrence set from the current report.
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
-    const captured: string[] = [];
-    const document = {
-      uri: vscode.Uri.file("/tmp/A.cs"),
-      lineAt: () => ({
-        range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 10)),
-      }),
-    } as unknown as vscode.TextDocument;
-    const editor = {
-      document,
-      setDecorations: (_type: vscode.TextEditorDecorationType, options: readonly unknown[]) => {
-        for (const option of options) {
-          const text = (option as {
-            renderOptions?: { after?: { contentText?: string } };
-          }).renderOptions?.after?.contentText;
-          if (text) captured.push(text);
-        }
-      },
-    } as unknown as vscode.TextEditor;
 
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-a", 100, 0.95, 35)]);
+      bubble.render(capture.editor, span(0), [cluster("c-a", 100, 0.95, 35)]);
+      const visible = capture.visible() ?? "";
 
-      assert.equal(captured.length, 1, `expected one inline decoration: ${captured.join(", ")}`);
-      assert.match(captured[0] ?? "", /×\s*5/, "bubble count must match the report snapshot");
+      assert.equal(
+        capture.history().length,
+        1,
+        `expected one inline decoration: ${capture.history().join(", ")}`,
+      );
+      assert.match(visible, /×\s*5/, "bubble count must match the report snapshot");
       assert.doesNotMatch(
-        captured[0] ?? "",
+        visible,
         /×\s*35/,
         "bubble count must not use the live probe occurrence total",
       );
-      assert.match(captured[0] ?? "", /A\.cs/, "bubble keeps the authoritative representative");
+      assert.match(visible, /A\.cs/, "bubble keeps the authoritative representative");
+      assert.match(
+        visible,
+        /Identical code/,
+        "the report's bucket wins over the probe's copy of the cluster",
+      );
     } finally {
       bubble.dispose();
     }
   });
 
   test("ghost mode renders the ghost-line decoration", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "ghost one\nghost two\n",
-      language: "plaintext",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("liveBubble.mode", "ghost", vscode.ConfigurationTarget.Workspace);
+    await setMode("ghost");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
-    const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-    bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
-    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
-    bubble.dispose();
+    try {
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      const ghost = capture.visible() ?? "";
+
+      assert.match(ghost, /└─/, "ghost mode renders the tree-branch prefix");
+      assert.match(ghost, /Identical code/, "ghost line carries the bucket title");
+      assert.match(
+        ghost,
+        /[▁▂▃▄▅▆▇█]{3}/u,
+        "ghost line carries the three-bar signal strip",
+      );
+      assert.match(ghost, /×\s*5/, "ghost line carries the occurrence count");
+      assert.equal(
+        capture.visibleHover(),
+        undefined,
+        "ghost decorations are pure-visual and carry no hover card",
+      );
+
+      // Switching mode mid-session must move the same cluster to the
+      // other surface rather than leaving both painted.
+      await setMode("inline");
+      bubble.render(capture.editor, span(6), [cluster("c-a", 10, 0.95)]);
+      const inline = capture.visible() ?? "";
+      assert.doesNotMatch(inline, /└─/, "inline mode drops the ghost prefix");
+      assert.match(inline, /Identical code/, "the bucket title survives the mode switch");
+      assert.ok(
+        capture.visibleHover() !== undefined,
+        "the inline surface restores the hover card",
+      );
+    } finally {
+      await setMode("inline");
+      bubble.dispose();
+    }
   });
 
   test("render without a report is a no-op", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "text",
-      language: "plaintext",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
-    const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 2));
-    bubble.render(editor, range, [cluster("x", 1, 0.95)]);
-    bubble.dispose();
+    try {
+      bubble.render(capture.editor, span(0), [cluster("x", 1, 0.95)]);
+
+      assert.equal(
+        capture.calls.length,
+        0,
+        "with no snapshot the bubble must not touch the decoration surface at all",
+      );
+      assert.equal(capture.visible(), undefined, "nothing can be visible without a report");
+
+      // Once a snapshot lands the very same probe renders.
+      store.setSnapshot(report(), 0);
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      assert.ok(
+        capture.visible() !== undefined,
+        "the identical probe must render once a report exists",
+      );
+      assert.match(capture.visible() ?? "", /Identical code/, "and carry its bucket title");
+    } finally {
+      bubble.dispose();
+    }
   });
 
   test("render clears the bubble when no cluster passes the threshold", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "text",
-      language: "plaintext",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
-    const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 2));
-    // fused below FUSED_THRESHOLD (0.85)
-    bubble.render(editor, range, [cluster("y", 1, 0.5)]);
-    bubble.dispose();
+    try {
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
+      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+
+      bubble.render(capture.editor, span(6), [cluster("y", 1, 0.5)]);
+      assert.ok(0.5 < FUSED_THRESHOLD, "fixture must sit below the cutoff to prove anything");
+      assert.equal(
+        capture.visible(),
+        undefined,
+        `fused 0.5 under FUSED_THRESHOLD ${FUSED_THRESHOLD} must clear the bubble`,
+      );
+
+      // An empty probe keeps the surface clear rather than restoring the
+      // previous winner.
+      bubble.render(capture.editor, span(12), []);
+      assert.equal(
+        capture.visible(),
+        undefined,
+        "an empty probe must leave the surface clear",
+      );
+    } finally {
+      bubble.dispose();
+    }
   });
 
   test("store delta removing the active cluster clears the bubble", async () => {
@@ -175,32 +203,18 @@ suite("LiveBubble render", () => {
     // on the delta — the bubble must never outlive the cluster in the report.
     const store = new ReportStore();
     store.setSnapshot(report(), 1);
-    const cfg = vscode.workspace.getConfiguration("deslop");
-    await cfg.update("liveBubble.mode", "inline", vscode.ConfigurationTarget.Workspace);
-    const calls: (readonly unknown[])[] = [];
-    const document = {
-      uri: vscode.Uri.file("/tmp/A.cs"),
-      lineAt: () => ({
-        range: new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 10)),
-      }),
-    } as unknown as vscode.TextDocument;
-    const editor = {
-      document,
-      setDecorations: (_type: vscode.TextEditorDecorationType, options: readonly unknown[]) => {
-        calls.push(options);
-      },
-    } as unknown as vscode.TextEditor;
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
 
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-a", 10, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
       assert.ok(
-        calls.some((options) => options.length > 0),
+        capture.visible() !== undefined,
         "fixture must start with an active inline bubble",
       );
+      assert.match(capture.visible() ?? "", /Identical code/, "seeded at full confidence");
 
-      const beforeDelta = calls.length;
       store.applyDelta({
         from_generation: 1,
         to_generation: 2,
@@ -213,11 +227,22 @@ suite("LiveBubble render", () => {
         cache_stats: { hits: 0, misses: 0 },
         tool_version: "v2",
       });
-      const deltaCalls = calls.slice(beforeDelta);
 
-      assert.ok(
-        deltaCalls.some((options) => options.length === 0),
+      assert.equal(
+        capture.visible(),
+        undefined,
         "reportChanged removal must clear a bubble for a removed cluster",
+      );
+
+      // [VSIX-STATE-DIRTY] The bubble derives from the visible projection,
+      // so a cluster the report dropped must stay gone even when a probe
+      // still carries it at full confidence — otherwise the delta clears
+      // the bubble and the very next keystroke paints it straight back.
+      bubble.render(capture.editor, span(6), [cluster("c-a", 10, 0.95)]);
+      assert.equal(
+        capture.visible(),
+        undefined,
+        "a stale probe must not resurrect a cluster the visible report dropped",
       );
     } finally {
       bubble.dispose();
@@ -225,39 +250,63 @@ suite("LiveBubble render", () => {
   });
 
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "line one\nline two\n",
-      language: "plaintext",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-dismiss", 10, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster("c-dismiss", 10, 0.95)]);
+      assert.ok(
+        capture.visible() !== undefined,
+        "a full-confidence cluster must bubble before it is dismissed",
+      );
+
       await vscode.commands.executeCommand("deslop.bubble.dismissCluster", "c-dismiss");
-      // After dismissal, re-rendering the same cluster must clear — the
-      // dismissedClusters filter drops it before the sort step.
-      bubble.render(editor, range, [cluster("c-dismiss", 10, 0.95)]);
+      // The dismissedClusters filter drops it before the sort step, so
+      // even at unchanged confidence it must not come back.
+      bubble.render(capture.editor, span(6), [cluster("c-dismiss", 10, 0.95)]);
+      assert.equal(
+        capture.visible(),
+        undefined,
+        "a dismissed cluster must stay hidden even at fused 0.95",
+      );
+
+      // Dismissal is per-cluster, not a global mute.
+      bubble.render(capture.editor, span(12), [cluster("c-other", 10, 0.95)]);
+      assert.ok(
+        capture.visible() !== undefined,
+        "a different cluster at the same confidence must still render",
+      );
+      assert.match(capture.visible() ?? "", /Identical code/, "and keep its bucket title");
     } finally {
       bubble.dispose();
     }
   });
 
   test("deslop.bubble.dismiss command clears the active bubble", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "line one\nline two\n",
-      language: "plaintext",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
     const store = new ReportStore();
     store.setSnapshot(report(), 0);
+    await setMode("inline");
+    const capture = capturingEditor();
     const bubble = new LiveBubble(store, () => undefined);
     try {
-      const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));
-      bubble.render(editor, range, [cluster("c-clear", 10, 0.95)]);
+      bubble.render(capture.editor, span(0), [cluster("c-clear", 10, 0.95)]);
+      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+
       await vscode.commands.executeCommand("deslop.bubble.dismiss");
+      assert.equal(
+        capture.visible(),
+        undefined,
+        "the dismiss command must clear the active bubble",
+      );
+
+      // Plain dismiss is not sticky — it clears, it does not blacklist.
+      bubble.render(capture.editor, span(6), [cluster("c-clear", 10, 0.95)]);
+      assert.ok(
+        capture.visible() !== undefined,
+        "plain dismiss must not blacklist the cluster from later probes",
+      );
     } finally {
       bubble.dispose();
     }
@@ -348,18 +397,30 @@ suite("LiveBubble render", () => {
       sendRequest: () => Promise.reject(new Error("probe boom")),
     } as unknown as LanguageClient;
     const bubble = new LiveBubble(store, () => fakeClient);
+    const capture = capturingEditor();
     try {
       // Seed an active bubble so we can observe the rejection → clearBubble path
       // exercise the `active.editor` branch of clearBubble.
-      bubble.render(
-        editor,
-        new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 2)),
-        [cluster("c-seed", 10, 0.95)],
-      );
+      bubble.render(capture.editor, span(0), [cluster("c-seed", 10, 0.95)]);
+      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+
       await editor.edit((builder) => builder.insert(new vscode.Position(0, 3), "d"));
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 500);
       });
+
+      // A rejected probe must not poison the surface: the next successful
+      // render still paints, at unchanged confidence.
+      bubble.render(capture.editor, span(6), [cluster("c-after", 10, 0.95)]);
+      assert.ok(
+        capture.visible() !== undefined,
+        "a rejected probe must not disable later renders",
+      );
+      assert.match(
+        capture.visible() ?? "",
+        /Identical code/,
+        "the recovered bubble keeps its bucket title",
+      );
     } finally {
       bubble.dispose();
     }

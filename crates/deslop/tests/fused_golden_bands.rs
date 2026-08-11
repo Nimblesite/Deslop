@@ -289,7 +289,13 @@ fn assert_shape_ranks_below(report: &Value, corpus: &Corpus, rename: &Value) -> 
     let verbatim_rank = rank_of(report, scenario_cluster(report, corpus, "verbatim")?)?;
     let rename_rank = rank_of(report, rename)?;
     for cluster in shape_only_clusters(report) {
-        assert_outscored_and_outranked(report, corpus, [verbatim_rank, rename_rank], rename, cluster)?;
+        assert_outscored_and_outranked(
+            report,
+            corpus,
+            [verbatim_rank, rename_rank],
+            rename,
+            cluster,
+        )?;
     }
     Ok(())
 }

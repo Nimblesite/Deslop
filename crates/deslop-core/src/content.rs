@@ -231,7 +231,10 @@ fn population(canonical: &[LeafKey], member: &[LeafKey], literal: bool) -> Vec<(
 /// preserves its literals; a sibling scaffold or a data table does not.
 /// Callers guarantee a non-empty population via the anchor floor.
 fn literal_preservation(literals: &[(u64, u64)]) -> f64 {
-    let matched = literals.iter().filter(|(left, right)| left == right).count();
+    let matched = literals
+        .iter()
+        .filter(|(left, right)| left == right)
+        .count();
     member_count(matched) / member_count(literals.len())
 }
 

@@ -16,11 +16,19 @@ import {
   type ReportSignals,
 } from "../../types/report";
 
-const signals = (s: number, j: number, e: number): ReportSignals => ({
+// `fused` is a confidence in [0,1], never a raw sum — the engine's gate
+// multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
+// Tests that need a specific band pass it explicitly.
+const signals = (
+  s: number,
+  j: number,
+  e: number,
+  fused = Math.min(1, Math.max(s, j, e)),
+): ReportSignals => ({
   structural: s,
   token_jaccard: j,
   embedding_cos: e,
-  fused: s + j + e,
+  fused,
 });
 
 const cluster = (overrides: Partial<ReportCluster> = {}): ReportCluster => ({
@@ -100,6 +108,120 @@ suite("report schema helpers", () => {
 
   test("classifyCluster loosely_similar as the safe fallback", () => {
     assert.equal(classifyCluster(signals(0.3, 0.4, 0.2)), "loosely_similar");
+  });
+
+  test("fused is a confidence in [0,1] that the content gate may pull below shape", () => {
+    // A fused value outside the unit interval is not a confidence, and a
+    // fixture carrying one silently invalidates every band built on it.
+    // The gate is one-directional: content evidence can only discount
+    // shape evidence, never inflate it past full confidence.
+    const gated = signals(1.0, 0.3, 0, 0.31);
+    for (const triple of [signals(1.0, 1.0, 0), signals(0.2, 0.3, 0.9), gated]) {
+      assert.ok(
+        triple.fused >= 0 && triple.fused <= 1,
+        `fused must be a confidence in [0,1], got ${triple.fused}`,
+      );
+    }
+    assert.ok(
+      gated.fused < gated.structural,
+      "a demoted cluster's confidence must sit below its shape evidence",
+    );
+    assert.equal(
+      signals(1.0, 1.0, 0).fused,
+      1,
+      "byte-identical evidence carries full confidence",
+    );
+  });
+
+  test("classifyCluster must not call a content-gated rename byte-identical", () => {
+    // A maximal Type-2 rename proven by its literal anchors: the engine
+    // routes `nearly_identical` at fused 0.9, and renders token_jaccard
+    // 1.0 because the Merkle match already proves the token multiset
+    // (#232). Reading the triple alone therefore says "identical" —
+    // "Safe to extract — every copy is the same" — about code whose
+    // identifiers all differ. The UI must not out-claim the engine.
+    const rename = signals(1.0, 1.0, 0, 0.9);
+    assert.ok(rename.fused < 1.0, "fixture: a proven rename is not full confidence");
+    assert.equal(
+      classifyCluster(rename),
+      "nearly_identical",
+      "a rename below full confidence must not be labelled byte-identical",
+    );
+    assert.equal(
+      bucketLabels(classifyCluster(rename)).actionSentence,
+      "Review the locations — small differences may matter.",
+      "the user must be told to review, not that extraction is safe",
+    );
+  });
+
+  test("classifyCluster must not promote a shape-only family the content gate demoted", () => {
+    // Sibling boilerplate: shape saturates, content evidence is absent,
+    // so the engine demotes it to `structural_only` at fused 0.31. The
+    // signal triple alone reads `structural >= 0.99` and promotes it to
+    // an act-now bucket — the exact false positive #341 exists to stop.
+    const shapeOnly = signals(1.0, 0.3, 0, 0.31);
+    assert.ok(shapeOnly.fused < FUSED_THRESHOLD, "fixture: demoted, well under the cutoff");
+    assert.equal(
+      classifyCluster(shapeOnly),
+      "structural_only",
+      "shape without content evidence must never reach an act-now bucket",
+    );
+    assert.equal(
+      bucketLabels(classifyCluster(shapeOnly)).plainTitle,
+      "Same shape, different content",
+      "the demoted family must keep its honest title",
+    );
+  });
+
+  test("every routed bucket carries a coherent, self-consistent label set", () => {
+    // Walks the routing table row by row. Each row asserts the bucket the
+    // UI derives, then that the labels it will render for that bucket are
+    // usable on every surface: a jargon-free plain title, a hybrid title
+    // carrying the bracketed taxonomy for AI scrapers, and a complete
+    // action sentence. A row that routes correctly but renders an empty
+    // or malformed label is still a broken user-facing surface.
+    const rows = [
+      { signals: signals(1.0, 1.0, 0, 1.0), bucket: "identical" as const },
+      { signals: signals(0.2, 0.3, 0.9, 0.9), bucket: "same_behavior" as const },
+      { signals: signals(1.0, 0.0, 0.0, 0.31), bucket: "structural_only" as const },
+      { signals: signals(0.0, 0.95, 0, 0.95), bucket: "nearly_identical" as const },
+      { signals: signals(0.3, 0.4, 0.2, 0.4), bucket: "loosely_similar" as const },
+    ];
+
+    for (const row of rows) {
+      const routed = classifyCluster(row.signals);
+      assert.equal(
+        routed,
+        row.bucket,
+        `routing drifted for ${JSON.stringify(row.signals)}`,
+      );
+      const labels = bucketLabels(routed);
+      assert.ok(labels.plainTitle.length > 0, `${routed}: plain title must not be empty`);
+      assert.doesNotMatch(
+        labels.plainTitle,
+        /\bType-\d/,
+        `${routed}: the plain title must stay jargon-free`,
+      );
+      assert.match(
+        labels.hybridTitle,
+        /\[.+\]/,
+        `${routed}: the hybrid title must carry a bracketed taxonomy`,
+      );
+      assert.ok(
+        labels.hybridTitle.startsWith(labels.plainTitle),
+        `${routed}: the hybrid title must extend the plain title, not restate it`,
+      );
+      assert.match(
+        labels.actionSentence,
+        /\.$/,
+        `${routed}: the action sentence must be a complete sentence`,
+      );
+      assert.equal(
+        labels.aiMatch,
+        routed === "same_behavior",
+        `${routed}: only the embedding-pass bucket is an AI match`,
+      );
+    }
   });
 
   test("report types do not keep legacy clone bucket aliases (#84)", () => {

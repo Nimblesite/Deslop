@@ -122,8 +122,9 @@ impl Sweep {
                 < pair.last().copied().unwrap_or_default()
         });
         if unsorted {
-            self.violations
-                .push(format!("[{dir}] ranked report is not worst-first: {weights:?}"));
+            self.violations.push(format!(
+                "[{dir}] ranked report is not worst-first: {weights:?}"
+            ));
         }
     }
 
@@ -144,16 +145,28 @@ impl Sweep {
         let bucket = cluster_bucket(cluster);
         let fused = signal(cluster, "fused");
         if fused >= ACT_NOW_FUSED && !ACT_NOW_BUCKETS.contains(&bucket) {
-            self.record(dir, cluster, "act-now confidence under a non-act-now bucket");
+            self.record(
+                dir,
+                cluster,
+                "act-now confidence under a non-act-now bucket",
+            );
         }
         if HONEST_SHAPE_ONLY_BUCKETS.contains(&bucket) && fused >= ACT_NOW_FUSED {
             self.record(dir, cluster, "shape-only evidence reached the act-now line");
         }
         if bucket == "identical" && !approx(fused, 1.0) {
-            self.record(dir, cluster, "proven-identical cluster below full confidence");
+            self.record(
+                dir,
+                cluster,
+                "proven-identical cluster below full confidence",
+            );
         }
         if bucket == "identical" && !approx(signal(cluster, "structural"), 1.0) {
-            self.record(dir, cluster, "proven-identical cluster without full structure");
+            self.record(
+                dir,
+                cluster,
+                "proven-identical cluster without full structure",
+            );
         }
     }
 

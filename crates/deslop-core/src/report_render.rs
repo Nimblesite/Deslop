@@ -347,8 +347,7 @@ fn route_shape_identical(
     {
         return kind;
     }
-    let shape_only =
-        is_structural_only_signals(signals) || lacks_content_support(signals, content);
+    let shape_only = is_structural_only_signals(signals) || lacks_content_support(signals, content);
     if !shape_only {
         return kind;
     }

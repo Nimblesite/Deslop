@@ -4,11 +4,14 @@
 //!
 //! These pin where the new languages land on the Type-1 / Type-2 / Type-3
 //! axis. A byte-identical pair must reach the actionable `identical`
-//! bucket; a renamed copy that the token layer does not independently
-//! confirm routes to the demoted `structural_only` bucket by design (#134),
-//! and near-miss edits surface either a token-supported `nearly_identical`
-//! cluster or a `structural_only` shared subtree. Every bucket here is the
-//! real value the engine produced for the fixture.
+//! bucket. Renamed copies split on content evidence per
+//! [FUSION-CONTENT-GATE]: a rename that preserves enough positional literal
+//! anchors to prove its identifier mapping is promoted to the act-now
+//! `nearly_identical` bucket, while an anchor-poor rename carries no
+//! content proof in either direction and stays conservatively
+//! `structural_only` (#134). Near-miss edits surface either a
+//! content-supported `nearly_identical` cluster or a `structural_only`
+//! shared subtree.
 
 use anyhow::Result;
 
@@ -39,9 +42,9 @@ fn typescript_byte_identical_pair_is_identical_bucket() -> Result<()> {
 fn javascript_renamed_loop_clone_routes_to_structural_only() -> Result<()> {
     let report = run_report(&fixture("js-type2-loop"), 10)?;
     // Same loop-with-guards routine, every identifier renamed. It is a real
-    // Type-2 clone (structural==1.0, cross-file) but, with no independent
-    // token confirmation, it lands in the demoted `structural_only` bucket
-    // rather than `identical` — the conservative routing from #134.
+    // Type-2 clone (structural==1.0, cross-file) but, anchor-poor, it
+    // carries no content proof of the rename, so it lands in the demoted
+    // `structural_only` bucket — the conservative routing from #134.
     let clone = expect_cluster_spanning(&report, &["inventory_gamma.js", "tax_alpha.js"])?;
     assert_eq!(cluster_bucket(clone), "structural_only");
     assert!(approx(signal(clone, "structural"), 1.0));
@@ -60,15 +63,19 @@ fn typescript_renamed_loop_clone_routes_to_structural_only() -> Result<()> {
 }
 
 #[test]
-fn javascript_renamed_map_reduce_arrow_is_structural_only() -> Result<()> {
-    let report = run_report(&fixture("js-structural-only"), 8)?;
-    // A deeply-nested map/reduce/arrow pipeline, renamed: the structural
-    // Merkle layer matches but the token signature is dominated by
-    // placeholders, so it routes to `structural_only` (#134).
+fn javascript_renamed_map_reduce_arrow_is_nearly_identical() -> Result<()> {
+    let report = run_report(&fixture("js-type2-pipeline"), 8)?;
+    // A deeply-nested map/reduce/arrow pipeline, maximally renamed
+    // (invoice→order, rate→price, hours→quantity, deduction→discount) with
+    // all five numeric literals preserved in position. The anchors prove
+    // the bijective identifier mapping, so [FUSION-CONTENT-GATE] promotes
+    // the pair to the act-now `nearly_identical` bucket, and the
+    // shape-identical Merkle match corrects the placeholder-dominated token
+    // fallback to its true value of 1.0 (#232).
     let clone = expect_cluster_spanning(&report, &["invoices.js", "orders.js"])?;
-    assert_eq!(cluster_bucket(clone), "structural_only");
+    assert_eq!(cluster_bucket(clone), "nearly_identical");
     assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(signal(clone, "token_jaccard") < 0.05);
+    assert!(approx(signal(clone, "token_jaccard"), 1.0));
     Ok(())
 }
 
@@ -101,11 +108,18 @@ fn javascript_near_miss_extra_statement_keeps_shared_subtree_and_excludes_unrela
 }
 
 #[test]
-fn typescript_near_miss_reordered_statements_cluster_structural_only() -> Result<()> {
+fn typescript_near_miss_reordered_statements_cluster_nearly_identical() -> Result<()> {
     let report = run_report(&fixture("ts-type3-reorder"), 10)?;
+    // Two normalizers, byte-identical except two independent statements
+    // swapped and the function renamed — the canonical Type-3 near miss.
+    // Positional content agreement stays high across the swap, so
+    // [FUSION-CONTENT-GATE] keeps the pair in the act-now
+    // `nearly_identical` bucket instead of demoting identical-content,
+    // reordered code to "same shape, different content".
     let clone = expect_cluster_spanning(&report, &["normalizeContact.ts", "normalizeUser.ts"])?;
-    assert_eq!(cluster_bucket(clone), "structural_only");
+    assert_eq!(cluster_bucket(clone), "nearly_identical");
     assert!(approx(signal(clone, "structural"), 1.0));
+    assert!(approx(signal(clone, "token_jaccard"), 1.0));
     Ok(())
 }
 
