@@ -55,7 +55,11 @@ pub fn start(
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    // Bound to `root` so built-in exclusion is scoped to the analysed
+    // corpus rather than the absolute path (#342). A rootless config
+    // cannot tell a `node_modules` inside the workspace from a
+    // `node_modules` the workspace merely happens to live under.
+    let exclusion = Arc::new(ExclusionConfig::empty().with_scan_root(root));
     let config_paths = watched_config_paths(root, config_path);
     let (watcher, watcher_rx) =
         LiveWatcher::start(root, extensions, exclusion, config_paths.clone()).map_err(|err| {

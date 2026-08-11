@@ -70,19 +70,37 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// dependency files, and because ranking is worst-offenders-first the
 /// resulting third-party duplication outranks every first-party finding
 /// the user can actually act on.
-const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
+/// Third-party *library source* vendored or installed into the corpus.
+/// These are real, readable source files the user did not write, so
+/// analysing them is a legitimate — if unusual — request: auditing a
+/// dependency for duplication, or checking whether first-party code
+/// duplicates a library it already depends on. Governed by
+/// `[analysis] include_dependencies` ([CONFIG-EXCLUDE-DEPENDENCIES]),
+/// which defaults to `false`.
+const BUILTIN_DEPENDENCY_COMPONENTS: &[&str] = &[
     "node_modules",
+    "vendor",
+    ".cargo",
+    ".pub-cache",
+    ".venv",
+];
+
+/// Build output, tool caches, and working-tree copies
+/// ([CONFIG-EXCLUDE-BUILTIN]). Excluded unconditionally: none of it is
+/// source the user wrote, and none of it is a "library the code depends
+/// on", so no configuration opts back in.
+/// `target`, `dist`, `build`, `__pycache__` and `.dart_tool` are compiler
+/// and codegen output; `.git` and `.claude` are whole additional checkouts
+/// of the same repository ([#222]) which would otherwise report every file
+/// as N identical copies.
+const BUILTIN_ARTEFACT_COMPONENTS: &[&str] = &[
     "target",
     "dist",
     "build",
-    ".venv",
     "__pycache__",
-    ".cargo",
+    ".dart_tool",
     ".git",
     ".claude",
-    ".dart_tool",
-    ".pub-cache",
-    "vendor",
 ];
 
 /// Directory components that are always analysed but hidden from summaries.
@@ -333,6 +351,12 @@ struct RawAnalysis {
     /// Whether candidate pairs may span different parser language ids.
     #[serde(default)]
     allow_cross_language_comparison: bool,
+    /// Whether third-party library source vendored or installed into the
+    /// corpus is analysed ([CONFIG-EXCLUDE-DEPENDENCIES]). Off by default:
+    /// ranking is worst-offenders-first, so dependency duplication the
+    /// user cannot act on would outrank every first-party finding.
+    #[serde(default)]
+    include_dependencies: bool,
 }
 
 /// Raw on-disk shape of the `[report]` section.
@@ -406,6 +430,9 @@ pub struct ExclusionConfig {
     /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
     /// on same-language refactoring.
     allow_cross_language_comparison: bool,
+    /// Whether third-party library source inside the corpus is analysed
+    /// ([CONFIG-EXCLUDE-DEPENDENCIES]). Defaults off.
+    include_dependencies: bool,
     /// Whether the HTML report splits clusters into per-language
     /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Defaults off.
     split_by_language: bool,
@@ -439,6 +466,7 @@ impl ExclusionConfig {
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
             allow_cross_language_comparison: false,
+            include_dependencies: false,
             split_by_language: false,
             ranking_policy: RankingPolicy::default().with_global_override(),
         }
@@ -529,14 +557,20 @@ impl ExclusionConfig {
             default_boilerplate_imports,
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
+            include_dependencies: raw.analysis.include_dependencies,
             split_by_language: raw.report.split_by_language,
             ranking_policy,
         })
     }
 
     /// Returns a copy of this config bound to `scan_root`.
+    ///
+    /// Binding the root is required for accurate built-in exclusion: it is
+    /// what confines [`corpus_built_in_excluded`] to the analysed corpus
+    /// instead of the whole filesystem path (#342). Watcher call sites that
+    /// build an [`ExclusionConfig::empty`] must bind their root here.
     #[must_use]
-    fn with_scan_root(mut self, scan_root: &Path) -> Self {
+    pub fn with_scan_root(mut self, scan_root: &Path) -> Self {
         self.scan_root = Some(scan_root.to_path_buf());
         self
     }
@@ -587,7 +621,7 @@ impl ExclusionConfig {
     /// match how [`crate::discover`] walks the tree.
     #[must_use]
     pub fn is_excluded(&self, path: &Path, language: Option<&str>) -> bool {
-        if built_in_excluded(path) {
+        if corpus_built_in_excluded(path, self.scan_root.as_deref(), self.include_dependencies) {
             return true;
         }
         if matches(&self.default_exclude, path) {
@@ -633,11 +667,11 @@ impl ExclusionConfig {
 ///
 /// # QUARANTINED — #342, `[CONFIG-EXCLUDE-BUILTIN]`
 ///
-/// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL
+/// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL.
 /// NO CODE IS ALLOWED TO CALL THIS AND THIS MUST ALWAYS
-/// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE
-/// 
-/// The deleted body matched `BUILTIN_EXCLUDE_COMPONENTS` against **every**
+/// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE.
+///
+/// The deleted body matched the built-in component list against **every**
 /// `Component::Normal` of the absolute discovered path — including the
 /// components *above* the scan root, which the user never asked deslop to
 /// reason about:
@@ -656,22 +690,96 @@ impl ExclusionConfig {
 /// false negative: the user is told their repository has no duplication and
 /// nothing anywhere signals that nothing was read.
 ///
-/// The sibling rule nine lines below already encodes the correct principle —
+/// The sibling rule already encodes the correct principle —
 /// [`built_in_report_hidden`] takes `scan_root` so
 /// [`scan_root_contains_component_pair`] can exempt the root the user chose.
 /// This function took no scan root at all, so it had no such carve-out.
 ///
-/// Pinned by `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`.
-fn built_in_excluded(path: &Path) -> bool {
+/// The accurate replacement is [`corpus_built_in_excluded`]. Pinned by
+/// `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`.
+///
+/// # Panics
+///
+/// Always. This function has no callers and must never gain one.
+#[must_use]
+#[allow(
+    clippy::panic,
+    reason = "[CONFIG-EXCLUDE-BUILTIN] #342 accuracy quarantine. CLAUDE.md mandates \
+              replacing code that causes a false negative with a panic, which the \
+              workspace `panic = \"deny\"` gate would otherwise reject. The \
+              no-suppressions rule yields to the quarantine rule here by explicit \
+              instruction; this allow is legal only on quarantined code."
+)]
+pub fn built_in_excluded(path: &Path) -> bool {
     panic!(
         "QUARANTINED #342: built_in_excluded matched built-in exclude components \
          against ancestors of the scan root, silently excluding every file in any \
          repository nested under a directory named e.g. `dist`/`build`/`vendor`. \
+         Use corpus_built_in_excluded. \
          Pinned by issue_342_scan_root_under_excluded_ancestor.rs. \
-         path_components={} builtin_components={}",
-        path_components(path).count(),
-        BUILTIN_EXCLUDE_COMPONENTS.len()
+         path_components={}",
+        path_components(path).count()
     )
+}
+
+/// Returns true when `path` sits in a built-in excluded tree **inside the
+/// analysed corpus** ([CONFIG-EXCLUDE-BUILTIN], #342).
+///
+/// Only components at or below `scan_root` are considered. The rule prunes
+/// dependency and build trees *within the corpus the user asked for*; a
+/// directory name above the scan root describes where the checkout happens
+/// to sit on disk and says nothing about its contents. Matching those
+/// ancestors excluded every file in any repository nested under e.g.
+/// `dist`, `build`, `target`, `vendor` or `node_modules`, yielding
+/// `files_analysed: 0`, `clusters: []`, `threshold.breached: false` and a
+/// successful exit — a total, silent false negative. This mirrors the
+/// carve-out [`scan_root_contains_component_pair`] already applies to the
+/// report-hide tier.
+///
+/// When `include_dependencies` is set, [`BUILTIN_DEPENDENCY_COMPONENTS`]
+/// stops applying and third-party library source enters the analysis;
+/// [`BUILTIN_ARTEFACT_COMPONENTS`] applies regardless
+/// ([CONFIG-EXCLUDE-DEPENDENCIES]).
+///
+/// A path outside `scan_root`, or a config with no known root, is not part
+/// of any corpus this rule governs, so the rule does not fire. That
+/// direction can only admit a file for analysis — it can never silently
+/// discard one.
+///
+/// Pinned by `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`
+/// and `crates/deslop/tests/go_vendor_exclusion.rs`.
+fn corpus_built_in_excluded(
+    path: &Path,
+    scan_root: Option<&Path>,
+    include_dependencies: bool,
+) -> bool {
+    let Some(components) = corpus_components(path, scan_root) else {
+        return false;
+    };
+    components.into_iter().any(|component| {
+        BUILTIN_ARTEFACT_COMPONENTS
+            .iter()
+            .chain(dependency_components(include_dependencies))
+            .any(|excluded| component == *excluded)
+    })
+}
+
+/// The dependency component list when it applies, or nothing when the user
+/// opted into analysing libraries ([CONFIG-EXCLUDE-DEPENDENCIES]).
+fn dependency_components(include_dependencies: bool) -> &'static [&'static str] {
+    if include_dependencies {
+        &[]
+    } else {
+        BUILTIN_DEPENDENCY_COMPONENTS
+    }
+}
+
+/// Returns the lowercased components of `path` lying strictly below
+/// `scan_root` — the part of the path the user asked deslop to analyse.
+/// `None` when no corpus boundary is known or `path` sits outside it.
+fn corpus_components(path: &Path, scan_root: Option<&Path>) -> Option<Vec<String>> {
+    let relative = scan_root.and_then(|root| path.strip_prefix(root).ok())?;
+    Some(path_components(relative).collect())
 }
 
 /// Returns true when built-in generated-code rules hide a path from summaries.

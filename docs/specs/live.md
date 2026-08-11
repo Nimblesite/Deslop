@@ -170,7 +170,7 @@ Where Unix domain sockets do not exist (Windows) — or when `deslop-lsp` is sta
 
 Use the `notify` crate (cross-platform, zero C deps). Watch the workspace root recursively, filtered by `LanguageParser::file_extensions()`. Debounce: **250 ms** of quiet after the last event, capped at **2 s** total accumulation so a formatter burst doesn't starve the scheduler.
 
-Events matching `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debounce.
+Events matching `[EXCLUSION-CONFIG]` `exclude` patterns are dropped before debounce. The watcher has no hidden-directory filter and no `.gitignore` pass, so [CONFIG-EXCLUDE-BUILTIN] is its only built-in filter; it must bind the workspace root into the `ExclusionConfig` (`with_scan_root`) or that rule cannot tell a `node_modules` inside the workspace from one the workspace merely sits under.
 
 The LSP supplements the watcher with `textDocument/didChange` and `workspace/didChangeWatchedFiles` from the editor — belt-and-suspenders for in-buffer edits where the OS watcher may lag. Both paths converge on the same `AnalysisSession`.
 

@@ -19,7 +19,7 @@ Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One meas
 If you encounter code that could cause a false negative or a false positive — whether or not it is the code you were sent to change — do this, in order, and nothing else:
 
 1. **Write a test that fails because of the bug.** It must fail for the real reason, and you must watch it fail.
-2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it.
+2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it. You need to put a panic = "deny" ignore in for these kinds of panics
 3. **Report to the user** — file, defect, failing test, what you removed — and why.
 4. 🛑 **STOP.** Do not repair it, do not work around it, do not resume the original task.
 
@@ -78,8 +78,10 @@ If you encounter code that could cause a false negative or a false positive — 
 
 - Each spec section must have a unique, heirarchical non-numeric spec Id
 - Spec ids must be cross referenced across tests, code specs and plans
+- Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
 - Don't use line endings to force word wrap. Allow text to wrap naturally.
 - Remove line endings that only exist to wrap text
+- Remove fluff from the specs that don't specify anything
 
 ## Run Deslop on Deslop
 

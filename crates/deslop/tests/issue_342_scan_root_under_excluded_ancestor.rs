@@ -104,6 +104,53 @@ fn nested_excluded_ancestors_are_ignored_to_any_depth() -> Result<()> {
     )
 }
 
+/// Asserts no rendered occurrence sits under a `node_modules` component.
+/// Split on both separators so the assertion holds on Windows runners.
+fn assert_no_dependency_leaked(report: &Value) {
+    for cluster in clusters(report) {
+        for path in occurrence_paths(cluster) {
+            assert!(
+                !path.split(['/', '\\']).any(|part| part == "node_modules"),
+                "a dependency tree inside the scan root leaked into the report: {path}",
+            );
+        }
+    }
+}
+
+#[test]
+fn a_dependency_tree_inside_the_scan_root_is_still_excluded() -> Result<()> {
+    // The other direction, and the one a careless fix breaks: ignoring
+    // ancestors must not also stop excluding a real dependency tree
+    // *below* the root. Both corpora are the same fixture, so a leak
+    // shows up as four analysed files rather than two.
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("dist").join("innocent-repo").join("src");
+    seed(&fixture("ts-type1-identical"), &root)?;
+    seed(
+        &fixture("ts-type1-identical"),
+        &root.join("node_modules").join("pkg"),
+    )?;
+    let report = run_report(&root, MIN_NODES)?;
+    assert_clone_reported(&report, "excluded ancestor with inner node_modules")?;
+    assert_no_dependency_leaked(&report);
+    Ok(())
+}
+
+#[test]
+fn a_scan_root_named_like_an_excluded_component_is_analysed() -> Result<()> {
+    // Pointing deslop at a directory *is* the request to analyse it. The
+    // root's own name is therefore never grounds to exclude its contents,
+    // exactly as `scan_root_contains_component_pair` already exempts a
+    // root that sits inside a hidden component pair.
+    for name in ANCESTOR_NAMES {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path().join(name);
+        seed(&fixture("ts-type1-identical"), &root)?;
+        assert_clone_reported(&run_report(&root, MIN_NODES)?, name)?;
+    }
+    Ok(())
+}
+
 #[test]
 fn the_ancestor_directory_name_cannot_change_the_report() -> Result<()> {
     // The equivalence is the load-bearing assertion: a single-root test
