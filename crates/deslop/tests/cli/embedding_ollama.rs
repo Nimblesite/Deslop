@@ -90,6 +90,7 @@ fn huge_csharp_source(minimum_chars: usize) -> String {
 #[test]
 fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Result<()> {
     let (tmp, scan_root) = seed_scan("csharp-type4")?;
+    let server = MockOllama::spawn()?;
     let oversized = 12_000;
     assert!(
         u64::try_from(oversized).unwrap_or(u64::MAX) < MOCK_CONTEXT_TOKENS.saturating_mul(3),
@@ -98,11 +99,13 @@ fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Res
     fs::write(scan_root.join("Huge.cs"), huge_csharp_source(oversized))?;
     let out = outputs_under(tmp.path());
 
-    run_deslop(
-        &scan_root,
-        &tmp.path().join("report"),
-        &["--min-nodes", "15", "--embeddings", "required"],
-    )?;
+    let mut cmd = deslop_command(&scan_root, &tmp.path().join("report"))?;
+    let _assertion = cmd
+        .args(["--min-nodes", "15", "--embeddings", "required"])
+        .arg("--embedding-endpoint")
+        .arg(server.endpoint())
+        .assert()
+        .success();
 
     let json = load_report_json(&out.json)?;
     let provenance = object_field(
@@ -126,6 +129,15 @@ fn issue_286_large_subtree_survives_when_the_model_declares_the_context() -> Res
     assert!(
         indexed > 0,
         "the oversized file must contribute indexed subtrees: {provenance:?}"
+    );
+    assert!(
+        server.max_embed_input_chars() >= oversized,
+        "the provider declared room for {oversized} characters, but production sent no input larger than {} — a prefix vector must never represent the full subtree",
+        server.max_embed_input_chars(),
+    );
+    assert!(
+        !server.embed_truncation_enabled(),
+        "every input passed the provider-derived budget; asking Ollama to truncate can silently associate a prefix vector with a full source range",
     );
     Ok(())
 }

@@ -1,20 +1,17 @@
 //! Call-expression shape analysis shared by the language-agnostic
-//! literal-variation cluster filter.
-//!
-//! Issues addressed (see parent `mod.rs` header):
-//! - **#70 / #71 / #72** — test-data / scaffolding clusters whose calls
-//!   share the same callee but vary in one or more string literal
-//!   arguments.
+//! literal-variation cluster filter
+//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 
 use tree_sitter::Node;
 
 use super::{enclosing_kind, parse_for, Snippet};
 use crate::ast::ByteRange;
 
-/// Detects **issues #70 / #71 / #72**: every cluster member is an
-/// expression (or expression statement) whose top-level call has the
-/// same callee chain across the cluster but **at least one string
-/// literal argument differs**.
+/// Detects literal-variation call scaffolding
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): every cluster member
+/// resolves to the same callee/arity call shape — one enclosing call,
+/// or the same ordered call sequence — with **at least one string
+/// literal argument differing** across members.
 pub(super) fn is_literal_variation_call_cluster(snippets: &[Snippet<'_>]) -> bool {
     let calls: Option<Vec<CallShape>> = snippets.iter().map(call_shape).collect();
     if is_literal_variation_call_set(calls) {
@@ -101,7 +98,20 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
     if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
+    if !suppressible_scaffolding_shape(snippets.len(), first.len()) {
+        return false;
+    }
     (0..first.len()).any(|index| sequence_position_differs(&sequences, index))
+}
+
+/// Bounds the sequence rule to scaffolding shapes
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): a single-call body (the
+/// varying call is the member's entire logic) or a family of three-plus
+/// members. A *pair* of multi-call bodies agreeing at every position
+/// except a varying literal carries substantial invariant logic — a
+/// genuine Type-2 clone that must stay visible.
+const fn suppressible_scaffolding_shape(member_count: usize, sequence_len: usize) -> bool {
+    sequence_len == 1 || member_count >= 3
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving
@@ -221,7 +231,7 @@ fn unwrap_argument(node: Node<'_>) -> Node<'_> {
 /// Returns the bytes of `node` when it is a string-literal-like leaf.
 /// Covers Python plain `string`, f-string, and C# `string_literal` /
 /// `interpolated_string_expression` so f-string template differences
-/// in issue #71 are captured.
+/// count as literal variation.
 fn string_literal_bytes(node: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
     let kind = node.kind();
     let is_string = matches!(

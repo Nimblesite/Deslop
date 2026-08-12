@@ -39,6 +39,23 @@ members do not all resolve to the same role. It engages exclusively for the
 `same_behavior` bucket, leaving the deterministic Type-1/2/3 buckets untouched,
 and never suppresses when a member's role cannot be resolved.
 
+### [CLONE-NOISE-LITERAL-VARIATION-CALLS] Literal-variation call scaffolding
+Scaffolding repeats one call shape varying only its string-literal arguments —
+`setenv` keys, event names, endpoint paths — so after literal normalisation the
+members collapse to one subtree even though the differing literals are payload,
+not extractable logic. A cluster is suppressed when every member resolves to the
+same callee and arity (one enclosing call per member, or the same ordered call
+sequence contained in each member's range) and at least one argument position
+differs in string-literal bytes. Members whose literals all agree never match,
+so byte-identical copies keep the family's verbatim escape hatch.
+
+The sequence form is bounded to scaffolding shapes: it fires only when each
+member's sequence is a single call (the varying call is the member's entire
+logic) or the cluster has three or more members (a scaffolding family). A pair
+of multi-call bodies agreeing at every position except a varying literal
+carries substantial invariant logic — a genuine Type-2 clone that must
+surface.
+
 ## Python idioms
 
 ### [CLONE-NOISE-PY-ALL-EXPORTS] `__all__` export lists

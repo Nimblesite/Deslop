@@ -63,6 +63,46 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     Ok(())
 }
 
+/// [PRINCIPLES-LIVE-IS-REACTIVE] Opted-in dependency files are first-class
+/// live corpus members after the cold scan: editing one must drive the same
+/// watcher → scheduler → report transition as editing a first-party file.
+#[test]
+fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Result<()> {
+    let canonical_temp = fs::canonicalize(std::env::temp_dir())?;
+    let workspace = tempfile::tempdir_in(canonical_temp)?;
+    let root = workspace.path().join("node_modules/workspace");
+    seed_workspace(&root)?;
+    let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
+    let initialize = handshake(&mut stdin, &mut stdout)?;
+    assert_eq!(initialize["result"]["serverInfo"]["name"], "deslop-lsp");
+    assert!(initialize.get("error").is_none(), "{initialize:#}");
+
+    let initial = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
+        report["files_analysed"].as_u64() == Some(4)
+    })?;
+    assert_initial_report(&initial);
+    assert_eq!(initial["metrics"]["duplicated_files"], 4, "{initial:#}");
+
+    fs::write(root.join("node_modules/pkg/Beta.cs"), unrelated_csharp())?;
+    let changed = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
+        report["files_analysed"].as_u64() == Some(4)
+            && report["clusters"] != initial["clusters"]
+    })?;
+
+    assert_eq!(changed["files_analysed"], 4, "edited dependency stays analysed");
+    assert_ne!(changed["clusters"], initial["clusters"], "cluster wire stayed stale");
+    assert_ne!(changed["metrics"], initial["metrics"], "repo metrics stayed stale");
+    assert!(
+        changed["metrics"]["duplicated_files"].as_u64().unwrap_or_default() < 4,
+        "the unrelated dependency must leave the duplicate population: {changed:#}"
+    );
+    assert!(
+        changed["metrics"]["duplication_percent"].as_f64().unwrap_or(100.0) < 100.0,
+        "the report must stop claiming the edited corpus is 100% duplicated: {changed:#}"
+    );
+    Ok(())
+}
+
 fn seed_workspace(root: &Path) -> Result<()> {
     copy_pair(root)?;
     copy_pair(&root.join("node_modules/pkg"))?;

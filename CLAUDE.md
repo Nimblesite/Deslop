@@ -36,10 +36,11 @@ If you encounter code that could cause a false negative or a false positive — 
 
 ## Testing — the accuracy enforcement surface
 
-- **Coarse E2E, black-box only.** No unit tests. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
+- **Coarse E2E, black-box only.**. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
 - **Many user interactions per test, MANY assertions per user interaction**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.
 - **Never delete a failing test, never skip one, never remove an assertion.** Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
+- **Unit tests are only for isolating behavior of functions**
 - **Meaningful assertions only.** `assert!(true)` is banned. Assert positive, human-readable values — not the absence of AI-style labels.
 - **No try/catch that swallows an error and then asserts success.**
 - **No fake LSP/MCP.** UI and extension tests build and install the latest binaries first.
