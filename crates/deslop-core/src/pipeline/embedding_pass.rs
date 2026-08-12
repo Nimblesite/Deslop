@@ -23,8 +23,8 @@ use super::{
     config::PipelineConfig,
     corpus::FingerprintCorpus,
     embedding_batch::{
-        pairs_from_successful_embeddings, provenance_from, snippet_for, EmbeddingBatch,
-        PendingEmbedding,
+        pairs_from_successful_embeddings, provenance_from, snippet_for, vectors_by_fingerprint,
+        EmbeddingBatch, PendingEmbedding,
     },
     embedding_observability::{token_count, EmbeddingObserver},
 };
@@ -35,6 +35,13 @@ use super::{
 pub struct EmbeddingOutcome {
     /// ANN-nearest-neighbour pairs produced by the embedding pass.
     pub pairs: Vec<EmbeddingPair>,
+    /// Every successfully embedded vector, keyed by fingerprint index.
+    ///
+    /// Cluster materialisation measures `embedding_cos` between the
+    /// occurrences it actually renders, which needs the vectors — the
+    /// ANN pair list alone only covers the neighbours the index
+    /// surfaced. Empty when the pass was skipped or failed gracefully.
+    pub vectors: HashMap<usize, Vec<f32>>,
     /// Provenance to record in the rendered report.
     pub provenance: Option<EmbeddingProvenance>,
 }
@@ -104,14 +111,16 @@ fn embed_corpus(
     );
     let pairs = pairs_from_successful_embeddings(&corpus.fingerprints, &batch.vectors);
     observer.log_final(pairs.len(), batch.vectors.len(), batch.failures);
+    let provenance = provenance_from(
+        spec,
+        attempted_subtrees(corpus.fingerprints.len(), &batch),
+        batch.vectors.len(),
+        batch.failures,
+    );
     Ok(EmbeddingOutcome {
         pairs,
-        provenance: Some(provenance_from(
-            spec,
-            attempted_subtrees(corpus.fingerprints.len(), &batch),
-            batch.vectors.len(),
-            batch.failures,
-        )),
+        vectors: vectors_by_fingerprint(batch.vectors),
+        provenance: Some(provenance),
     })
 }
 

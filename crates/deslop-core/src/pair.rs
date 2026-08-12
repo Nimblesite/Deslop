@@ -112,12 +112,16 @@ pub struct CandidatePair {
 }
 
 /// A cluster discovered via transitive closure of surviving candidate pairs.
+///
+/// Carries membership only. Signals are **not** aggregated here: the
+/// pairs that glued a component together are discovery evidence, and
+/// averaging them once diluted byte-proven pairs with every weaker edge
+/// in the component. The rendered signal breakdown is measured between
+/// the rendered occurrences in `crate::cluster` instead.
 #[derive(Debug, Clone)]
 pub struct FusedCluster {
     /// Members of the cluster, sorted ascending by fingerprint index.
     pub members: Vec<usize>,
-    /// Mean pair score across the pairs that entered this cluster.
-    pub mean_score: PairScore,
 }
 
 /// Reason one candidate pair did or did not enter transitive closure.
@@ -220,81 +224,23 @@ pub fn cluster_by_transitive_closure(pairs: &[CandidatePair]) -> Vec<FusedCluste
         let _right = ensure_root(&mut parents, pair.right);
         union(&mut parents, pair.left, pair.right);
     }
-    build_clusters(&mut parents, &surviving)
+    build_clusters(&mut parents)
 }
 
-/// Groups members by root and attaches aggregate scores.
-fn build_clusters(
-    parents: &mut BTreeMap<usize, usize>,
-    surviving: &[&CandidatePair],
-) -> Vec<FusedCluster> {
+/// Groups members by union-find root into membership-only clusters.
+fn build_clusters(parents: &mut BTreeMap<usize, usize>) -> Vec<FusedCluster> {
     let mut groups: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let members: Vec<usize> = parents.keys().copied().collect();
     for member in members {
         let root = find(parents, member);
         let _inserted = groups.entry(root).or_default().insert(member);
     }
-    let mut totals: BTreeMap<usize, ClusterTotals> = BTreeMap::new();
-    for pair in surviving {
-        let root = find(parents, pair.left);
-        let entry = totals.entry(root).or_default();
-        entry.add(pair.score);
-    }
     groups
-        .into_iter()
-        .map(|(root, members)| build_cluster(root, members, &totals))
+        .into_values()
+        .map(|members| FusedCluster {
+            members: members.into_iter().collect(),
+        })
         .collect()
-}
-
-/// Running totals per cluster root. Kept in one struct so the
-/// per-cluster mean score stays symmetric across all three signals.
-#[derive(Debug, Default, Clone, Copy)]
-struct ClusterTotals {
-    /// Sum of structural scores across pairs in the cluster.
-    structural: f64,
-    /// Sum of token-Jaccard scores.
-    token_jaccard: f64,
-    /// Sum of embedding cosines.
-    embedding_cos: f64,
-    /// Number of pairs folded into the totals.
-    count: u32,
-}
-
-impl ClusterTotals {
-    /// Folds a single pair's score into the running totals.
-    fn add(&mut self, score: PairScore) {
-        self.structural += score.structural;
-        self.token_jaccard += score.token_jaccard;
-        self.embedding_cos += score.embedding_cos;
-        self.count = self.count.saturating_add(1);
-    }
-
-    /// Returns the per-signal mean. When no pairs were folded in the
-    /// numerators are already zero, so dividing by one preserves the
-    /// zero score without a separate branch.
-    fn mean(self) -> PairScore {
-        let divisor = f64::from(self.count.max(1));
-        PairScore {
-            structural: self.structural / divisor,
-            token_jaccard: self.token_jaccard / divisor,
-            embedding_cos: self.embedding_cos / divisor,
-        }
-    }
-}
-
-/// Builds one [`FusedCluster`] from a connected-component membership set
-/// and the precomputed pair-score totals.
-fn build_cluster(
-    root: usize,
-    members: BTreeSet<usize>,
-    totals: &BTreeMap<usize, ClusterTotals>,
-) -> FusedCluster {
-    let ordered_members: Vec<usize> = members.into_iter().collect();
-    let mean_score = totals.get(&root).copied().unwrap_or_default().mean();
-    FusedCluster {
-        members: ordered_members,
-        mean_score,
-    }
 }
 
 /// Ensures `id` has a parent entry (itself) in the union-find.

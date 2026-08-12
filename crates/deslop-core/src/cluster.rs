@@ -9,14 +9,19 @@
 //! (b) token LSH bucket collisions per `SourcererCC`
 //! ([TECH-TOKEN-SOURCERERCC]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     content::ContentEvidence,
     fingerprint::{ranges_overlap, Fingerprint},
+    lsh::Signature,
     pair::{FusedCluster, PairScore},
     state::FileId,
 };
+
+/// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
+mod signals;
+use signals::measured_signals;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.
@@ -30,10 +35,12 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
-    /// Per-cluster signal breakdown, when available. Structural-only
-    /// exact clusters report `structural = 1.0`, `token_jaccard = 1.0`
-    /// because every member shares a Merkle hash and therefore a k-gram
-    /// set. Fused clusters carry the mean of pair scores.
+    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): the
+    /// per-signal mean over every unordered pair of the rendered
+    /// members — Merkle-hash equality for `structural`, MinHash
+    /// Jaccard for `token_jaccard`, vector cosine for `embedding_cos`.
+    /// Never aggregated from the discovery edges that glued the
+    /// transitive-closure component together.
     pub signals: PairScore,
     /// Measured raw-content evidence across the members'
     /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE], #331/#336):
@@ -55,15 +62,20 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// [`Cluster`] so the ranking and rendering stages do not have to know
 /// how the cluster was discovered.
 ///
-/// Signal breakdown comes from `cluster.mean_score`. Cluster ids are
-/// derived from the smallest member's hash so identical fused clusters
-/// across runs always report the same id.
+/// The signal breakdown is measured between each cluster's rendered
+/// occurrences ([FUSION-CLUSTER-SIGNALS]) from `signatures` and
+/// `embedding_vectors`. Cluster ids are derived from the smallest
+/// member's hash so identical fused clusters across runs always report
+/// the same id.
 #[must_use]
 pub fn build_ranked_fused_clusters(
     fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>>,
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
-    let mut clusters = reportable_clusters(fingerprints, fused_clusters);
+    let mut clusters =
+        reportable_clusters(fingerprints, signatures, embedding_vectors, fused_clusters);
     let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
@@ -80,11 +92,15 @@ pub fn build_ranked_fused_clusters(
 /// Materialises every fused cluster that remains reportable.
 fn reportable_clusters(
     fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>>,
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
     fused_clusters
         .iter()
-        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
+        .filter_map(|fused| {
+            build_fused_cluster(fingerprints, signatures, embedding_vectors, fused)
+        })
         .collect()
 }
 
@@ -117,24 +133,43 @@ fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
 /// Same-file overlap collapse can reduce a fused group to one logical
 /// location; those groups are artifacts, not duplicates, and are
-/// dropped before ranking.
-fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Option<Cluster> {
-    let members = collapsed_members(fingerprints, fused);
-    if members.len() < MIN_REPORTABLE_MEMBERS {
+/// dropped before ranking. Signals are measured **after** the collapse
+/// so they describe exactly the occurrences the report shows.
+fn build_fused_cluster(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>>,
+    fused: &FusedCluster,
+) -> Option<Cluster> {
+    let occurrence_indices = collapsed_member_indices(fingerprints, fused);
+    if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
     }
-    Some(materialize_cluster(members, fused.mean_score))
-}
-
-/// Collects valid fingerprints for one fused cluster and collapses
-/// overlapping same-file artifacts.
-fn collapsed_members(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<Fingerprint> {
-    let raw_members = fused
-        .members
+    let measured = measured_signals(
+        &occurrence_indices,
+        fingerprints,
+        signatures,
+        embedding_vectors,
+    );
+    let members: Vec<Fingerprint> = occurrence_indices
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    collapse_overlapping_per_file(raw_members)
+    Some(materialize_cluster(members, measured))
+}
+
+/// Collects valid fingerprint indices for one fused cluster and
+/// collapses overlapping same-file artifacts. Indices (not cloned
+/// fingerprints) survive the collapse so signal measurement can reach
+/// each rendered occurrence's signature and embedding vector.
+fn collapsed_member_indices(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<usize> {
+    let raw_members: Vec<usize> = fused
+        .members
+        .iter()
+        .copied()
+        .filter(|index| *index < fingerprints.len())
+        .collect();
+    collapse_overlapping_per_file(raw_members, fingerprints)
 }
 
 /// Builds the final reportable cluster from already-filtered members.
@@ -217,12 +252,18 @@ fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
 /// only a transitively overlapping chain collapses to one canonical
 /// member (the widest window, i.e. the largest byte span).
 #[must_use]
-fn collapse_overlapping_per_file(members: Vec<Fingerprint>) -> Vec<Fingerprint> {
-    let mut by_file: BTreeMap<FileId, Vec<Fingerprint>> = BTreeMap::new();
-    for member in members {
-        by_file.entry(member.file_id).or_default().push(member);
+fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprint]) -> Vec<usize> {
+    let mut by_file: BTreeMap<FileId, Vec<(usize, Fingerprint)>> = BTreeMap::new();
+    for index in members {
+        let Some(member) = fingerprints.get(index) else {
+            continue;
+        };
+        by_file
+            .entry(member.file_id)
+            .or_default()
+            .push((index, member.clone()));
     }
-    let mut out: Vec<Fingerprint> = Vec::new();
+    let mut out: Vec<usize> = Vec::new();
     for bucket in by_file.into_values() {
         out.extend(collapse_overlapping_single_file(bucket));
     }
@@ -234,25 +275,25 @@ fn collapse_overlapping_per_file(members: Vec<Fingerprint>) -> Vec<Fingerprint> 
 /// member with the widest byte range (largest physical clone) as the
 /// representative. Equal-width ties keep the first-encountered member
 /// so the result stays deterministic across runs.
-fn collapse_overlapping_single_file(mut bucket: Vec<Fingerprint>) -> Vec<Fingerprint> {
-    bucket.sort_by_key(|member| {
+fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Vec<usize> {
+    bucket.sort_by_key(|(_, member)| {
         (
             member.byte_range.start,
             usize::MAX.saturating_sub(member.byte_range.end),
         )
     });
-    let mut kept: Vec<Fingerprint> = Vec::with_capacity(bucket.len());
+    let mut kept: Vec<(usize, Fingerprint)> = Vec::with_capacity(bucket.len());
     for candidate in bucket {
         match kept.last_mut() {
-            Some(current) if ranges_overlap(current, &candidate) => {
-                if candidate.byte_range.len() > current.byte_range.len() {
+            Some(current) if ranges_overlap(&current.1, &candidate.1) => {
+                if candidate.1.byte_range.len() > current.1.byte_range.len() {
                     *current = candidate;
                 }
             }
             _ => kept.push(candidate),
         }
     }
-    kept
+    kept.into_iter().map(|(index, _)| index).collect()
 }
 
 /// Returns `true` when `inner` lies fully inside `outer` in the same file.

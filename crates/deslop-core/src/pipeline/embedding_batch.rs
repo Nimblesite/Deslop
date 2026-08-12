@@ -81,6 +81,19 @@ pub(super) struct IndexedEmbedding {
     vector: Vec<f32>,
 }
 
+/// Consumes successful embeddings into a fingerprint-index → vector map
+/// for cluster-level signal measurement.
+///
+/// Every fingerprint routed through the pass appears at most once in
+/// `indexed` (each fingerprint belongs to exactly one snippet group), so
+/// the map is a plain re-keying, not an aggregation.
+pub(super) fn vectors_by_fingerprint(indexed: Vec<IndexedEmbedding>) -> HashMap<usize, Vec<f32>> {
+    indexed
+        .into_iter()
+        .map(|item| (item.fingerprint_index, item.vector))
+        .collect()
+}
+
 /// Builds ANN pairs from successfully embedded snippets.
 pub(super) fn pairs_from_successful_embeddings(
     fingerprints: &[Fingerprint],

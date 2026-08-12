@@ -32,7 +32,7 @@ pub use ollama::{
     list_models as list_ollama_models, OllamaModelInfo, OllamaProvider, DEFAULT_OLLAMA_ENDPOINT,
     DEFAULT_OLLAMA_MODEL,
 };
-pub use pairs::{embedding_pairs, EmbeddingPair};
+pub use pairs::{cosine_similarity, embedding_pairs, EmbeddingPair};
 pub use provider::{
     EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_MAX_INPUT_CHARS, DEFAULT_PROVIDER_ID,
 };

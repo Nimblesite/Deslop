@@ -120,6 +120,20 @@ fn cosine_between(left: &CosinePoint, right: &CosinePoint) -> f64 {
     cosine_from_distance(f64::from(left.distance(right)))
 }
 
+/// Returns the cosine similarity of two raw vectors in `[0, 1]`.
+///
+/// This is the crate's single definition of cosine similarity: the same
+/// L2 normalisation, dot product, and negative-cosine clamp the ANN pass
+/// applies to every [`EmbeddingPair`]. Cluster-level signal measurement
+/// calls this so a rendered `embedding_cos` is always computed by the
+/// identical arithmetic that admitted the pair evidence — a second,
+/// subtly different cosine would let the report disagree with the
+/// pipeline about the same two vectors.
+#[must_use]
+pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
+    cosine_between(&CosinePoint::new(left), &CosinePoint::new(right))
+}
+
 /// Runs a single HNSW query and appends any surviving pairs to `out`.
 fn collect_neighbours(
     map: &instant_distance::HnswMap<CosinePoint, usize>,

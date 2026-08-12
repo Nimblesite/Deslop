@@ -26,7 +26,7 @@ All three run by default. The research doesn't support shipping without embeddin
 
 ### [FUSION-STRATEGY-MAX-SUM] Fusion strategy (how the three signals combine)
 
-The ID records the strategy this section originally specified; the **sum arm was quarantined by gh #343** (`PairScore::fused`, pinned by `issue_343_sum_clamp_saturation.rs`) because the axes are correlated views of one normalised tree and their sum clamps mid-band clusters to a confidence of 1.0 that no single axis earned and no byte-identical pair backs. The strategy in force:
+The ID records the strategy this section originally specified; the **sum arm was removed by gh #343** (pinned by `issue_343_sum_clamp_saturation.rs`; `PairScore::bounded_fused` is the only fusion) because the axes are correlated views of one normalised tree and their sum clamps mid-band clusters to a confidence of 1.0 that no single axis earned and no byte-identical pair backs. The strategy in force:
 
 1. Compute a candidate set of clone pairs as the **union** of: structural-hash matches, LSH bucket collisions, and top-k embedding neighbors per subtree.
 2. For each candidate pair, compute three scores in [0,1]: `structural_sim`, `token_jaccard`, `embedding_cos`.
@@ -35,6 +35,12 @@ The ID records the strategy this section originally specified; the **sum arm was
 5. Weight each cluster by the ranking formula in §4 for "worst offenders first."
 
 This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
+
+### [FUSION-CLUSTER-SIGNALS] Rendered cluster signals are measured, never aggregated from discovery edges
+
+A rendered cluster's signal triple is **measured between the occurrences the report shows**: the per-signal mean over every unordered pair of rendered occurrences. Per pair: `structural` is Merkle-hash equality (1.0 or 0.0), `token_jaccard` is the MinHash Jaccard estimate between the two signatures, and `embedding_cos` is the cosine of the two vectors computed by the same arithmetic the ANN pass uses ([FUSION-EMBED-PROVIDER]), including its [0,1] clamp. A pair where either signal input is missing (no vector: embeddings off, oversized input, provider failure) contributes to neither that signal's numerator nor its denominator; a signal with no measurable pair reports 0.0, matching the embeddings-off convention, with the absence explained by the report's embedding provenance.
+
+Averaging the surviving pair scores of the transitive-closure component is prohibited. Closure admits every edge above threshold, so the edge mix is an artifact of discovery topology — structural star buckets, ANN top-k fan-out, LSH band width — not of the rendered occurrences. Under that mean, restored embedding evidence diluted a byte-identical file pair to `structural = 0.36` and routed it `same_behavior` instead of `identical` (gh #343 corpus, pinned by `issue_343_sum_clamp_saturation.rs`). The measured triple also feeds the cross-cluster subsumption pass, which compares structural values: diluted signals let contained artifact clusters escape collapse.
 
 ### [FUSION-CONTENT-GATE] Content agreement gates shape-identical confidence
 

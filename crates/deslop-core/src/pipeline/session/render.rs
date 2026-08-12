@@ -79,7 +79,17 @@ impl PipelineSession {
         );
         let fused_clusters = cluster_by_transitive_closure(&pairs);
         tracing::debug!(clusters = fused_clusters.len(), "building ranked clusters");
-        let mut clusters = build_ranked_fused_clusters(&corpus.fingerprints, &fused_clusters);
+        // [FUSION-CLUSTER-SIGNALS] One signature space per run: the
+        // cross-language space compares any pair when the audit mode is
+        // on; the per-language space is exact otherwise. Mixing spaces
+        // inside one cluster mean would average incomparable values.
+        let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(&signatures);
+        let mut clusters = build_ranked_fused_clusters(
+            &corpus.fingerprints,
+            measurement_signatures,
+            &embedding_outcome.vectors,
+            &fused_clusters,
+        );
         attach_content_evidence(&mut clusters, &corpus.trees, &corpus.sources);
         tracing::info!(
             ranked_clusters = clusters.len(),
