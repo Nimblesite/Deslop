@@ -26,6 +26,17 @@
 //! range *intersects* — enclosing or enclosed — sees one idiom at every
 //! depth. Pinned by
 //! `python_issue_107::chained_dict_assertions_across_test_files_do_not_cluster`.
+//!
+//! # Why that reach obliges the predicate to be exact
+//!
+//! Matching at every depth means one misjudged statement erases the
+//! assert run, its test function and its whole module together. The
+//! predicate therefore reads *both* operands: a chained subscript on the
+//! left and a literal on the right. `assert x["a"]["b"] ==
+//! reconcile_amount(...)` compares against computed logic, and logic
+//! duplicated across two modules is the thing this tool exists to
+//! report. Pinned by
+//! `python_dict_assert_rhs_logic::a_computed_right_operand_is_not_payload_noise`.
 
 use tree_sitter::Node;
 
@@ -140,27 +151,55 @@ fn is_literal_payload_assignment(statement: Node<'_>) -> bool {
         })
 }
 
-/// Returns true for `assert <chain> == <const>` / `is <const>` where the
-/// chain is two or more nested subscript accesses against an identifier.
+/// Returns true for `assert <chain>` or `assert <chain> <op> <const>`,
+/// where `<chain>` is two or more nested subscript accesses against an
+/// identifier.
+///
+/// A bare chain is a truthiness check on a lookup and carries no other
+/// operand to judge. Anything compared needs both sides read.
 fn assert_statement_is_chained_dict(assert_node: Node<'_>, source: &[u8]) -> bool {
     let mut cursor = assert_node.walk();
     let mut named = assert_node.named_children(&mut cursor);
     let Some(first) = named.next() else {
         return false;
     };
-    let chain = match first.kind() {
-        "comparison_operator" => comparison_left(first),
-        _ => Some(first),
-    };
-    let Some(chain) = chain else { return false };
-    subscript_chain_depth(chain, source) >= 2
+    match first.kind() {
+        "comparison_operator" => comparison_is_chain_against_constant(first, source),
+        _ => subscript_chain_depth(first, source) >= 2,
+    }
 }
 
-/// Returns the left operand of a Python `comparison_operator` node.
-fn comparison_left(comparison: Node<'_>) -> Option<Node<'_>> {
+/// Returns true when a comparison reads `<chain> <op> <constant>`: a
+/// two-hop subscript chain on the left, and nothing but literals after
+/// it.
+///
+/// The right operand is what separates test payload from program logic.
+/// `assert ledger["period"]["gross"] == reconcile_amount(...)` asserts a
+/// computed value, and two modules carrying that call with the same
+/// arguments have copy-pasted it. Judging the statement on its left side
+/// alone reads the copy as payload noise — and because the filter
+/// matches every `test_*` function the reported range intersects, that
+/// one misread erases the duplication from the assert-run, function and
+/// module views at once. Pinned by
+/// `python_dict_assert_rhs_logic::a_computed_right_operand_is_not_payload_noise`.
+fn comparison_is_chain_against_constant(comparison: Node<'_>, source: &[u8]) -> bool {
     let mut cursor = comparison.walk();
-    let first = comparison.named_children(&mut cursor).next();
-    first
+    let mut operands = comparison.named_children(&mut cursor);
+    let Some(left) = operands.next() else {
+        return false;
+    };
+    subscript_chain_depth(left, source) >= 2 && operands.all(is_literal_constant)
+}
+
+/// Returns true for a scalar literal — the only right-hand side a
+/// nested-shape assertion may carry. Calls, identifiers, subscripts and
+/// comprehensions are excluded by construction: each is executable
+/// logic, and executable logic is what this filter must never delete.
+fn is_literal_constant(node: Node<'_>) -> bool {
+    matches!(
+        node.kind(),
+        "string" | "concatenated_string" | "integer" | "float" | "true" | "false" | "none"
+    )
 }
 
 /// Counts subscript hops down a `subscript(subscript(identifier))` tower.

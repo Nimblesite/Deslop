@@ -89,9 +89,6 @@ pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
     {
         return false;
     }
-    if cluster.content.identifiers_vary {
-        return true;
-    }
     let Some(language) = uniform_language(&cluster.members, file_languages) else {
         return false;
     };

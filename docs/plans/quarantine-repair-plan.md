@@ -1,6 +1,8 @@
 # Quarantine repair plan — replacing the panics with working code
 
-Branch `fused` carried five accuracy quarantines. **Every one of them is purged.** No `panic!` survives, no dead panicking function is kept as a marker, no `clippy::panic` suppression remains anywhere in `crates/` — `grep -rn QUARANTINED crates/` and `grep -rn "allow(" crates/ | grep panic` both return nothing. [`BRANCH_REVIEW.md`](../../BRANCH_REVIEW.md) adds executable regressions against the same surfaces.
+Branch `fused` carried five accuracy quarantines. **Every one of them is purged.** No `panic!` survives, no dead panicking function is kept as a marker, no `clippy::panic` suppression remains anywhere in `crates/` — `grep -rn QUARANTINED crates/` and `grep -rn "allow(" crates/ | grep panic` both return nothing.
+
+The executable regressions against these surfaces are the pinning tests themselves, listed in the [merge gate](#merge-gate) — no review document supplies a test, and `BRANCH_REVIEW.md` is a working note that is not committed to either compared branch. Findings from it that outlive the branch are filed as issues: [#355](https://github.com/Nimblesite/Deslop/issues/355), [#356](https://github.com/Nimblesite/Deslop/issues/356), [#357](https://github.com/Nimblesite/Deslop/issues/357), [#358](https://github.com/Nimblesite/Deslop/issues/358), [#359](https://github.com/Nimblesite/Deslop/issues/359).
 
 | Site | Issue | Working replacement | Status |
 |---|---|---|---|
@@ -157,7 +159,25 @@ The **plurality** guard is the question the filter is named for and the one the 
 
 The **data-category** guard is the third. A table of constructor rows varies its literals by construction — that is what a table *is* — so the substance test convicts every one of them. But a table's payload is its substance, repeating it is a real finding, and the user already chooses its fate through the three-way `data_clones` policy. Without this guard the Dart `highlight_data.dart` table was hidden outright and `issue_190_data_table_demote` lost both `default_demotes_data_table_below_logic_clone` and `keep_mode_restores_data_table_to_the_top` — a false negative traded for the one being fixed.
 
-**Still open — `dart_issue_197` is RED.** One shape resists every signal above. The vendored meilisearch file contains twelve `resetX()` methods whose entire body is `return await _getTask(http.deleteMethod('<endpoint>'))`: same call targets, same shape, differing only in the endpoint literal. That is **structurally identical to `csharp-merge-drift`** — single file, sibling methods, consistent identifiers, varying literals — and every discriminator that hides the Dart family also erases the C# merge target. The only thing separating them is how much logic each body carries: one delegating statement versus eight, i.e. whether the extraction is worth doing at all. That is a product judgement about the reportable floor, not something the content evidence can answer, so the test is left red rather than resolved by a constant that would silently re-erase the merge fixtures. `refactor_merge` (9/9), both LSP `code_action` suites, `issue_190` (5/5), `rank_structural_only_policy` (5/5) and `issue_134` are green; `dart_issue_197` is the one that is not, and it is a real false positive.
+**Still open — `dart_issue_197` is RED, `#[ignore]`d for the release, tracked as [#355](https://github.com/Nimblesite/Deslop/issues/355).** One shape resists every signal above.
+
+Measured on the fixture: `clusters_hidden = 5`, so five of the six families *are* suppressed. One escapes — cluster `3c28e258f1d13dbd`, `structural_only`, `category=logic`, eight occurrences in `index.dart` — and carries `clusters_total = 1`, `duplicated_loc = 48`, `duplication_percent = 13.71` where the test demands zero. Every member is a one-statement delegating method:
+
+```dart
+Future<Task> resetSettings() async {
+  return await _getTask(http.deleteMethod('/indexes/$uid/settings'));
+}
+```
+
+It survives because the **plurality** guard is the one it fails: each window covers exactly one method, so `covers_sibling_declarations` returns false. And plurality is the only guard left that could catch it, because the family is **structurally identical to `csharp-merge-drift`** — single file, sibling members of one class, identical call targets (`_getTask`, `http.deleteMethod`), differing only in a literal. Five discriminator designs were built and measured; every one that hides the Dart family also erases the C# merge target, taking the LSP merge code action *and its refusal reason* with it. Differing literals can never be the discriminator, because differing literals are exactly what a parameterised merge lifts.
+
+The only remaining separator is how much logic each body carries — one delegating statement versus a multi-statement body. That is a reportable-floor product judgement, not something content evidence can answer, so the test is `#[ignore]`d with every assertion intact rather than made green by a constant that would silently re-erase the merge fixtures.
+
+**Regression status: this is branch-introduced, not pre-existing.** On `main` the family was suppressed by the two guards R9 deleted under the CODE RED order — the `members.len() < 3` cluster-size shortcut and the `descendant_for_byte_range` kind list. Those guards also erased `csharp-merge-rename`, a real liftable pair. The branch therefore trades a **false negative on `main`** for a **false positive on `fused`**, and the release ships knowingly on that trade.
+
+**The premise is worth re-testing before the filter is rewritten.** #197 argued this family is "the public REST API surface, not extract-worthy duplication". The public API does need eight named methods, but their bodies are mechanically liftable to `Future<Task> _resetSetting(String path) => _getTask(http.deleteMethod('/indexes/$uid/settings$path'))`. The disagreement may be about the floor rather than the finding.
+
+`refactor_merge` (9/9), both LSP `code_action` suites, `issue_190` (5/5), `rank_structural_only_policy` (5/5) and `issue_134` are green.
 
 **Deleted code** (verbatim, so the shortcut is recognisable if it is ever proposed again): the member-count floor; the same-`file_id` and `uniform_language` guards; `collect_snippets` + `snippets.iter().all(member_is_declaration_context)`; `member_is_declaration_context`, which took `descendant_for_byte_range(start, end-1)` and accepted `is_declaration_kind` or `is_declaration_body_kind`; and those two `matches!` kind lists (C# `method_declaration`/`constructor_declaration`/`property_declaration`/`field_declaration`/`class_declaration`/`struct_declaration`/`interface_declaration`/`record_declaration`; Rust `function_item`/`struct_item`/`impl_item`/`trait_item`/`mod_item`/`enum_item`; Python `function_definition`/`class_definition`/`decorated_definition`; Dart `method_signature`/`function_signature`/`declaration`/`extension_declaration`; JS/TS `method_definition`/`public_field_definition`/`function_declaration`/`generator_function_declaration`/`abstract_class_declaration`/`type_alias_declaration`/`enum_declaration`/`property_signature`; bodies `declaration_list`/`compilation_unit`/`source_file`/`class_body`/`extension_body`/`mixin_body`/`enum_body`/`program`/`interface_body`/`object_type`/`statement_block`).
 
@@ -187,7 +207,7 @@ Extracted from `python.rs` rather than added to it: that file was at 490 lines a
 | admission calibration 0.86 / 0.82 | green, and red against a restored sum (R5) |
 | corpus determinism `nest` / `jellyfin` | unchanged: 1293 / 30.0687%, 1933 / 19.8354% (R2) |
 | corpus gate, embeddings on | first recorded measurement (R1) |
-| `deslop --test dart_issue_197` · `single_file_structural_only_method_families_do_not_top_the_report` | green (R9) — and red against a restored member-count floor |
+| `deslop --test dart_issue_197` · `single_file_structural_only_method_families_do_not_top_the_report` | **deferred to [#355](https://github.com/Nimblesite/Deslop/issues/355)** — `#[ignore]`d, assertions intact. When reinstated: green, and red against a restored member-count floor |
 | `deslop-core --test refactor_merge` | 9/9 green (R9) — `csharp-merge-rename` must produce clusters |
 | `deslop --test issue_190_data_table_demote` | 5/5 green (R9) — a data table is demoted or restored by policy, never hidden |
 | `deslop --test python_issue_107_chained_dict_assert` | green (R10) — no whole-module view of the idiom reaches the report |
@@ -195,6 +215,24 @@ Extracted from `python.rs` rather than added to it: that file was at 490 lines a
 | `grep -rn "allow(" crates/ \| grep panic` | **zero hits** (R0 + R1 + R9) |
 
 The three R9 rows are required **together**, and that is the whole point of them. Each one alone is satisfiable by the defect in one of its directions — which is exactly how the member-count floor survived as long as it did, and how its removal then traded the Dart data table away for the C# clone. `dart_issue_197` alone passes with the floor. `refactor_merge` alone passes without it. `issue_190` alone passes if the filter never fires. Only the three together state the contract: **suppress sibling scaffolding, keep proven renames, and leave data tables to their policy.**
+
+## Release-gate exclusions — `[REPAIR-RELEASE-DEFERRALS]`
+
+Five assertions are `#[ignore]`d so the `fused` release is not blocked. **Nothing is deleted, skipped-by-deletion, or weakened** — every assertion in every one of them is byte-for-byte what it was, each carries an `#[ignore = "…"]` reason naming its issue, and each runs under `cargo test … -- --ignored`. This is a deliberate, tracked debt, not a green build.
+
+| Test | Issue | Ollama? | Regression? |
+|---|---|---|---|
+| `dart_issue_197::single_file_structural_only_method_families_do_not_top_the_report` | [#355](https://github.com/Nimblesite/Deslop/issues/355) | no | **yes — branch-introduced** (R9 traded it for the `csharp-merge-rename` false negative) |
+| `embedding_route_invariance::embeddings_on_reports_every_file_set_embeddings_off_reported` | [#356](https://github.com/Nimblesite/Deslop/issues/356) | yes | no — new test, pre-existing ANN-bridge defect |
+| `embedding_route_invariance::embeddings_on_never_moves_a_reported_bucket` | [#356](https://github.com/Nimblesite/Deslop/issues/356) | yes | no — new test, pre-existing ANN-bridge defect |
+| `embedding_perf::duplicate_subtree_embeddings_are_collapsed_before_ann` | [#357](https://github.com/Nimblesite/Deslop/issues/357) | yes | **unknown — bisect required** |
+| `python_issue_119::same_role_function_pair_still_surfaces` | [#358](https://github.com/Nimblesite/Deslop/issues/358) | yes | **unknown — bisect required** |
+
+The four ollama rows are excluded under the release decision to drop ollama-dependent suites from the gate. They drive `--embedding-provider ollama` against the in-process `MockOllama`, so they need no daemon — the exclusion is scope, not infrastructure. `make test` already drops the live-daemon suites by name (`--skip ollama_`) and the real-corpus sweep (`--skip corpus_`); these four have no `ollama_` name prefix, so `#[ignore]` is the mechanism that reaches them.
+
+`#[ignore]` was chosen over a `--skip` list in the Makefile deliberately: the reason travels with the test, `cargo test -- --ignored` still runs it, and the exclusion cannot silently outlive the defect the way an invisible Makefile filter can.
+
+**#356 must not be baselined.** `BRANCH_REVIEW.md` requires both route-invariance assertions stay red until the production path satisfies them. Ignoring them preserves that; changing their expectations would not.
 
 ---
 
@@ -217,8 +255,8 @@ The three R9 rows are required **together**, and that is the whole point of them
 
 Tests first — each must be watched failing for the real reason.
 
-- [x] Fixture: cross-file pair the mega-cluster hide could newly swallow (`structural < 0.10`, `embedding_cos ≥ 0.80`, `size > 10`, `canonical_node_count > 500`). Assert it stays **visible** after R1. → `embedding_route_invariance::embeddings_on_reports_every_file_set_embeddings_off_reported`, pinned as a sweep over every cluster of every corpus rather than one hand-built cluster. **RED** — see [the route-invariance findings](#embeddings-on-loses-findings-and-moves-buckets).
-- [x] Fixture: C# LSH Type-3 near miss (`report_render.rs:404` carve-out). Assert it keeps its bucket once it carries a cosine. → `embedding_route_invariance::embeddings_on_never_moves_a_reported_bucket`. **RED** — same section.
+- [x] Fixture: cross-file pair the mega-cluster hide could newly swallow (`structural < 0.10`, `embedding_cos ≥ 0.80`, `size > 10`, `canonical_node_count > 500`). Assert it stays **visible** after R1. → `embedding_route_invariance::embeddings_on_reports_every_file_set_embeddings_off_reported`, pinned as a sweep over every cluster of every corpus rather than one hand-built cluster. **RED**, `#[ignore]`d for the release as [#356](https://github.com/Nimblesite/Deslop/issues/356) — see [the route-invariance findings](#embeddings-on-loses-findings-and-moves-buckets) and [release-gate exclusions](#release-gate-exclusions--repair-release-deferrals).
+- [x] Fixture: C# LSH Type-3 near miss (`report_render.rs:404` carve-out). Assert it keeps its bucket once it carries a cosine. → `embedding_route_invariance::embeddings_on_never_moves_a_reported_bucket`. **RED**, `#[ignore]`d as [#356](https://github.com/Nimblesite/Deslop/issues/356) — same section.
 - [x] Test: **discovery-route invariance** — same two files, two `--min-nodes` values so one run finds the pair structurally/by LSH and the other only by ANN. Assert identical signal triple, bucket, visible count, hidden count across both runs.
 - [x] Test: cross-file LSH overlap with cosine ≥ 0.80 renders its cosine and routes to a visible bucket, not `loosely_similar`.
 - [x] Watch all four fail (the two invariance/overlap tests fail on the quarantine panic; the two fixtures fail or pass-for-the-wrong-reason — verify which). Both risk-row tests were watched failing, and both fail for the real reason, not the panic.

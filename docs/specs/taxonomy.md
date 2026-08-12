@@ -74,7 +74,16 @@ The canonical signal thresholds that map a cluster's `(structural, token_jaccard
 | `structural ≥ 0.99 ∨ (structural > 0 ∧ token_jaccard ≥ 0.95)`  | `NearlyIdentical` |
 | else                                                           | `LooselySimilar`  |
 
-`StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197). Its 0.05 ceilings live in `deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT` and tolerate MinHash collision noise. Two report-render refinements sit on top of the raw signal routing: a structural-only cluster whose raw source slices are byte-equivalent is **upgraded to `Identical`** (byte proof beats the unscored token signal, [CLONE-BUCKETS]), and a cross-file ≥3-member/≥3-file scaffolding spread is demoted to `LooselySimilar` (#134) which the renderer hides. Ranking: `StructuralOnly` clusters are weight-demoted by default via the `[ranking] structural_only` policy ([RANK-STRUCTURAL-ONLY]).
+`StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197).
+
+**Two routes reach it, and a consumer that knows only the first will misread the second.**
+
+1. **Evidence-free** (`is_structural_only_signals`) — token and embedding support both below `deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT` (0.05, tolerating MinHash collision noise). Shape is the only positive signal; the #197 REST settings family is the canonical case.
+2. **Content-gated** (`lacks_content_support`, [FUSION-CONTENT-GATE]) — the deterministic signals saturate *by construction* and therefore prove nothing about content. The token LSH pass hashes the same normalised representation the structural pass does, so an anchor-poor Type-2 rename reads `structural = 1.00, token_jaccard = 1.00` while its raw collapsed leaves disagree and no literal-anchored substitution explains them. `ContentEvidence::support()` below `CONTENT_SUPPORT_FLOOR` routes it here.
+
+Route 2 is why `token_jaccard < 0.05` is **not** a property of the bucket: the renamed-loop clones in `js-type2-loop` / `ts-type2-loop` are genuine cross-file Type-2 clones that land here with `token_jaccard = 1.00`. The invariant that does hold on both routes is that a `StructuralOnly` cluster carries no semantic support and stays below the act-now fused line; `common::signals::assert_structural_only_contract` is the shared assertion.
+
+Two report-render refinements sit on top of the raw signal routing: a structural-only cluster whose raw source slices are byte-equivalent is **upgraded to `Identical`** (byte proof beats the unscored token signal, [CLONE-BUCKETS]), and a cross-file ≥3-member/≥3-file scaffolding spread is demoted to `LooselySimilar` (#134) which the renderer hides. Ranking: `StructuralOnly` clusters are weight-demoted by default via the `[ranking] structural_only` policy ([RANK-STRUCTURAL-ONLY]).
 
 `SameBehavior` is tested **before** `NearlyIdentical` so a strong AI signal on two syntactically divergent implementations gets the AI label rather than being absorbed into near-miss. It is only reachable when the embedding pass ran (`--embeddings=auto|required`). When the pass is disabled, `embedding_cos` is `0.00` across the whole report and the `SameBehavior` branch is dead.
 
