@@ -102,65 +102,6 @@ impl PipelineSession {
         }))
     }
 
-    /// Flattens the per-file state into a [`FingerprintCorpus`].
-    ///
-    /// # QUARANTINED — #301, `[PIPELINE-DETERMINISM]`
-    ///
-    /// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL.
-    /// NO CODE IS ALLOWED TO CALL THIS AND THIS MUST ALWAYS
-    /// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE.
-    ///
-    /// The deleted body iterated `self.per_file.values()` — a
-    /// `HashMap` seeded with `RandomState`, so the fingerprint sequence
-    /// was permuted differently on every process:
-    ///
-    /// ```text
-    /// for cached in self.per_file.values() {
-    ///     fingerprints.extend(cached.fingerprints.clone());
-    ///     trees.push(cached.tree.clone());
-    /// }
-    /// ```
-    ///
-    /// Downstream, LSH band buckets pair their minimum-*index* member
-    /// with every other member, and the per-pair survival gates
-    /// (`LSH_ONLY_MIN_JACCARD`, node floor, fused threshold) then
-    /// admit or drop different pairs depending on that random index
-    /// assignment. Transitive closure amplifies each flipped pair into
-    /// merged-or-not clusters, so two scans of a byte-identical tree
-    /// disagreed on cluster ids, `clusters_total`, `duplicated_loc`,
-    /// and `duplication_percent` — measured at 1296 vs 1291 clusters,
-    /// 30.59% vs 30.08% on the pinned `nest` corpus, and up to a 1.8
-    /// point swing on `flutter`. Every run randomly loses real clusters
-    /// (false negatives) and every `--fail-over` CI verdict was a
-    /// coin flip.
-    ///
-    /// The accurate replacement is [`Self::snapshot_corpus_ordered`].
-    /// Pinned by `crates/deslop/tests/corpus_repos.rs::determinism_gate`.
-    ///
-    /// # Panics
-    ///
-    /// Always. This function has no callers and must never gain one.
-    #[allow(
-        dead_code,
-        clippy::panic,
-        reason = "[PIPELINE-DETERMINISM] #301 accuracy quarantine. CLAUDE.md mandates \
-                  replacing code that causes false negatives with a panic, which the \
-                  workspace `panic = \"deny\"` and `-D dead-code` gates would otherwise \
-                  reject. The no-suppressions rule yields to the quarantine rule here by \
-                  explicit instruction; this allow is legal only on quarantined code."
-    )]
-    pub(super) fn snapshot_corpus(&self) -> FingerprintCorpus {
-        panic!(
-            "QUARANTINED #301: snapshot_corpus iterated per_file in HashMap \
-             RandomState order, permuting the fingerprint sequence per process and \
-             making cluster detection nondeterministic. \
-             Use snapshot_corpus_ordered. \
-             Pinned by corpus_repos.rs::determinism_gate. \
-             per_file_len={}",
-            self.per_file.len()
-        )
-    }
-
     /// Flattens the per-file state into a [`FingerprintCorpus`] in
     /// ascending [`FileId`] order ([PIPELINE-DETERMINISM], #301).
     ///

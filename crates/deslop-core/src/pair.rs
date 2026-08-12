@@ -63,51 +63,6 @@ pub struct PairScore {
 }
 
 impl PairScore {
-    /// # QUARANTINED — #343, `[FUSION-STRATEGY-MAX-SUM]`
-    ///
-    /// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL.
-    /// NO CODE IS ALLOWED TO CALL THIS AND THIS MUST ALWAYS
-    /// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE.
-    ///
-    /// The deleted body summed the three axes and clamped:
-    /// `(structural + token_jaccard + embedding_cos).clamp(0.0, 1.0)`.
-    /// The axes are three correlated views of one normalised tree, so the
-    /// sum manufactures confidence none of them carries alone: a cluster
-    /// at `structural 0.00, token 0.30, embedding 0.94` clamps to a flat
-    /// `1.000` — rendered indistinguishable from a byte-proven verbatim
-    /// copy — and slips past [FUSION-CONTENT-GATE], whose corners engage
-    /// only at `structural >= 0.99` / `token >= 0.95`. The same clamp
-    /// inflated pair admission: axes that are individually weak summed
-    /// past `FUSED_THRESHOLD` and dragged unproven pairs into transitive
-    /// closure. Use [`PairScore::bounded_fused`].
-    /// Pinned by `issue_343_sum_clamp_saturation.rs`.
-    ///
-    /// # Panics
-    ///
-    /// Always. The quarantine mandates the panic: any caller reaching this
-    /// function is reproducing the #343 false positive.
-    #[allow(
-        dead_code,
-        clippy::panic,
-        reason = "[FUSION-STRATEGY-MAX-SUM] #343 accuracy quarantine. CLAUDE.md mandates \
-                  replacing code that causes false positives with a panic, which the \
-                  workspace `panic = \"deny\"` and `-D dead-code` gates would otherwise \
-                  reject. The no-suppressions rule yields to the quarantine rule here by \
-                  explicit instruction; this allow is legal only on quarantined code."
-    )]
-    #[must_use]
-    pub fn fused(self) -> f64 {
-        panic!(
-            "QUARANTINED #343: PairScore::fused summed three correlated signals and \
-             clamped, saturating mid-band clusters to a confidence of 1.0 that no \
-             single axis earned and no byte-identical pair backs. \
-             Use PairScore::bounded_fused. \
-             Pinned by issue_343_sum_clamp_saturation.rs. \
-             structural={} token_jaccard={} embedding_cos={}",
-            self.structural, self.token_jaccard, self.embedding_cos
-        )
-    }
-
     /// [FUSION-STRATEGY-MAX-SUM] Bounded fusion over the three signal
     /// axes: the strongest single axis, never their sum.
     ///

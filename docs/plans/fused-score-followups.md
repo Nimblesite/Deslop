@@ -2,6 +2,8 @@
 
 This plan tracks remaining `[FUSION-CONTENT-GATE]` work after `fusedhardening` and the v0.31.0 triage. Requirements live in [`root-cause-fusion.md`](../root-cause-fusion.md); the shipped mechanism is specified in [`fusion.md`](../specs/fusion.md#fusion-content-gate) and pinned by `fused_golden_bands.rs` and `fused_golden_invariants.rs`.
 
+Repairing the quarantine panics is planned separately in [`quarantine-repair-plan.md`](quarantine-repair-plan.md), which also absorbs the P0/P1 regressions from `BRANCH_REVIEW.md`.
+
 ## Status ledger — 12 Aug 2026, current branch
 
 What is fixed on this branch versus still outstanding. "Fixed" means the accuracy quarantine landed, the pinning test exists and is green, and the relevant suites passed locally — not that the issue is closed (closure waits on a green corpus CI run per the #331/#336 rule below).

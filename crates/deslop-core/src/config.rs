@@ -658,65 +658,6 @@ impl ExclusionConfig {
     }
 }
 
-/// Returns true when a path is in a built-in ignored dependency or build tree.
-///
-/// # QUARANTINED — #342, `[CONFIG-EXCLUDE-BUILTIN]`
-///
-/// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL.
-/// NO CODE IS ALLOWED TO CALL THIS AND THIS MUST ALWAYS
-/// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE.
-///
-/// The deleted body matched the built-in component list against **every**
-/// `Component::Normal` of the absolute discovered path — including the
-/// components *above* the scan root, which the user never asked deslop to
-/// reason about:
-///
-/// ```text
-/// path_components(path).any(|component| {
-///     BUILTIN_EXCLUDE_COMPONENTS.iter().any(|ignored| component == *ignored)
-/// })
-/// ```
-///
-/// Any checkout living beneath a directory named `dist`, `build`, `target`,
-/// `vendor`, `node_modules` (or any other built-in component) therefore
-/// excluded *every* file in the repository. The scan reported
-/// `files_analysed: 0`, `clusters: []`, `duplication_percent: 0.0`,
-/// `threshold.breached: false` — and exited successfully. A total, silent
-/// false negative: the user is told their repository has no duplication and
-/// nothing anywhere signals that nothing was read.
-///
-/// The sibling rule already encodes the correct principle —
-/// [`built_in_report_hidden`] takes `scan_root` so
-/// [`scan_root_contains_component_pair`] can exempt the root the user chose.
-/// This function took no scan root at all, so it had no such carve-out.
-///
-/// The accurate replacement is [`corpus_built_in_excluded`]. Pinned by
-/// `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`.
-///
-/// # Panics
-///
-/// Always. This function has no callers and must never gain one.
-#[must_use]
-#[allow(
-    clippy::panic,
-    reason = "[CONFIG-EXCLUDE-BUILTIN] #342 accuracy quarantine. CLAUDE.md mandates \
-              replacing code that causes a false negative with a panic, which the \
-              workspace `panic = \"deny\"` gate would otherwise reject. The \
-              no-suppressions rule yields to the quarantine rule here by explicit \
-              instruction; this allow is legal only on quarantined code."
-)]
-pub fn built_in_excluded(path: &Path) -> bool {
-    panic!(
-        "QUARANTINED #342: built_in_excluded matched built-in exclude components \
-         against ancestors of the scan root, silently excluding every file in any \
-         repository nested under a directory named e.g. `dist`/`build`/`vendor`. \
-         Use corpus_built_in_excluded. \
-         Pinned by issue_342_scan_root_under_excluded_ancestor.rs. \
-         path_components={}",
-        path_components(path).count()
-    )
-}
-
 /// Returns true when `path` sits in a built-in excluded tree **inside the
 /// analysed corpus** ([CONFIG-EXCLUDE-BUILTIN], #342).
 ///
