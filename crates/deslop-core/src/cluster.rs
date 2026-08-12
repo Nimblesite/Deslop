@@ -270,6 +270,12 @@ fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprin
     for bucket in by_file.into_values() {
         out.extend(collapse_overlapping_single_file(bucket));
     }
+    // Corpus-index order, not `FileId` order: ids encode registration
+    // history (a removed-and-restored file gets a fresh id), while the
+    // corpus index follows the path-ordered snapshot, so rendered
+    // occurrence order stays byte-identical across edit history
+    // ([PIPELINE-DETERMINISM], #301).
+    out.sort_unstable();
     out
 }
 

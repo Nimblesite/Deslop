@@ -29,14 +29,9 @@ Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `
 Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n). Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 
 ### [PIPELINE-DETERMINISM] Cross-run determinism
-Two runs of the pipeline over an unchanged corpus produce bit-identical
-deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram
-ordering), identical fused signal scores (`token_jaccard` compared bit-for-bit),
-identical candidate sets, cluster ids, and ranking. Determinism is what makes the
-fingerprint cache ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across
-sessions. The embedding/ANN layer is the only approximate stage and is bounded
-separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall,
-never changes existing cluster content.
+Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical fused signal scores (`token_jaccard` compared bit-for-bit), identical candidate sets, cluster ids, and ranking. Determinism is what makes the fingerprint cache ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes existing cluster content.
+
+Determinism holds over corpus *state*, not edit history: identical paths and bytes produce an identical report whatever sequence of edits got there. Every pipeline ordering is therefore keyed by workspace-relative path (with the registration id only as a tie-breaker), never by `FileId` alone — ids are append-only, so removing and restoring a byte-identical file would otherwise reorder the corpus, move the LSH star centre, and change rendered ranges and metrics for identical source. Rendered occurrence order follows the same path-ordered corpus. Pinned by the LSP `history_determinism` suite, which cycles a config exclusion over live files and asserts the restored report is field-for-field identical.
 
 ### [PIPELINE-INCREMENTAL] Incremental fingerprint cache
 On-disk cache keyed by `(language_id, tool_version, min_nodes, content_hash)`. Cache hit rehydrates both the structural fingerprints and the normalised AST from a compact little-endian binary blob, so unchanged files skip tree-sitter entirely; cache miss parses the file and persists the result. Any mismatch on the cache key — tool upgrade, grammar pin, `--min-nodes` change, source edit — degrades gracefully to a miss; stale blobs never leak into a run.
