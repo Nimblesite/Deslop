@@ -337,7 +337,13 @@ fn cluster_is_hidden<S: BuildHasher>(
     // consistent rename over preserved literals — stay visible (demoted,
     // not hidden).
     let single_file_declaration_family = kind == ClusterKind::StructuralOnly
-        && is_single_file_declaration_family(cluster, category);
+        && is_single_file_declaration_family(
+            cluster,
+            category,
+            inputs.sources,
+            inputs.file_languages,
+            parse_cache,
+        );
     token_only_or_mega || noise || role_mismatch || single_file_declaration_family
 }
 

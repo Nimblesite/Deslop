@@ -148,7 +148,11 @@ fn assert_only_body_in_range(body: Node<'_>, range: ByteRange) -> bool {
 }
 
 /// Returns true when the function's declared name starts with `prefix`.
-pub(super) fn python_function_name_starts_with(function: Node<'_>, source: &[u8], prefix: &[u8]) -> bool {
+pub(super) fn python_function_name_starts_with(
+    function: Node<'_>,
+    source: &[u8],
+    prefix: &[u8],
+) -> bool {
     let Some(name) = function.child_by_field_name("name") else {
         return false;
     };
