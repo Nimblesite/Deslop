@@ -23,8 +23,10 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { runContractSuite } from "./contract-suite.mjs";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const workflow = readFileSync(resolve(repoRoot, ".github/workflows/release.yml"), "utf8");
@@ -73,25 +75,10 @@ const tests = [
   marketplaceRetriesATransientTimeoutUntilThePlatformPublishes,
   openvsxAttemptsEveryPlatformWhenOneKeepsTimingOut,
   openvsxRetriesATransientTimeoutUntilThePlatformPublishes,
+  expectedPublishCountMatchesTheBuildMatrix,
 ];
 
-let failed = 0;
-for (const test of tests) {
-  try {
-    test();
-    console.log(`ok ${test.name}`);
-  } catch (error) {
-    failed++;
-    console.error(`not ok ${test.name}`);
-    console.error(`  ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
-if (failed > 0) {
-  console.error(`\n${failed} release publish contract test(s) failed`);
-  process.exit(1);
-}
-console.log(`\n${tests.length} release publish contract tests passed`);
+runContractSuite(tests, "release publish contract");
 
 function marketplaceAttemptsEveryPlatformWhenOneKeepsTimingOut() {
   assertSurvivesPersistentTimeout(marketplaceScenario(PERSISTENT), "Marketplace");
@@ -107,6 +94,33 @@ function openvsxAttemptsEveryPlatformWhenOneKeepsTimingOut() {
 
 function openvsxRetriesATransientTimeoutUntilThePlatformPublishes() {
   assertRetriesTransientTimeout(openvsxScenario(1), "Open VSX");
+}
+
+// The completeness check is only as good as its expected count. A sixth
+// platform added to the build matrix with a stale --expected would surface
+// only at release time — so every publish step's --expected must equal the
+// number of vsix_target entries the matrix produces.
+function expectedPublishCountMatchesTheBuildMatrix() {
+  const matrixCount = new Set(
+    workflow
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("vsix_target: ")),
+  ).size;
+  assert(matrixCount >= 1, "the build matrix declares no vsix_target entries");
+  const expectations = [...workflow.matchAll(/publish-vsixes\.mjs .*--expected (\d+)/g)].map(
+    (match) => Number(match[1]),
+  );
+  assert(
+    expectations.length === 2,
+    `both publish jobs must pass --expected to scripts/publish-vsixes.mjs; found ${expectations.length}`,
+  );
+  for (const expected of expectations) {
+    assert(
+      expected === matrixCount,
+      `--expected ${expected} disagrees with the ${matrixCount} vsix_target entries the build matrix produces`,
+    );
+  }
 }
 
 // One platform never reaches the registry no matter how often it is tried.
@@ -184,34 +198,19 @@ function openvsxScenario(failTimes) {
 
 // Executes a publish step's run block the way the runner does: cwd holding
 // the downloaded artifacts/ tree, PATH resolving npx and az to the stubs, and
-// the step's env populated. scripts/ is linked into the sandbox so the block
-// may delegate to repository scripts. DESLOP_PUBLISH_BACKOFF_SECONDS=0 keeps
-// any retry backoff out of the suite's runtime — tests must not sleep.
+// the step's env populated. DESLOP_PUBLISH_BACKOFF_SECONDS=0 keeps any retry
+// backoff out of the suite's runtime — tests must not sleep.
 function runPublishStep({ runBlock, failTimes, extraEnv }) {
   const sandbox = mkdtempSync(join(tmpdir(), "deslop-publish-contract-"));
   try {
-    for (const target of VSIX_TARGETS) {
-      const artifactDir = join(sandbox, "artifacts", `vsix-${target}`);
-      mkdirSync(artifactDir, { recursive: true });
-      writeFileSync(join(artifactDir, `deslop-live-${TEST_VERSION}-${target}.vsix`), "stub vsix");
-    }
-    symlinkSync(resolve(repoRoot, "scripts"), join(sandbox, "scripts"));
-    const stubBin = join(sandbox, "stub-bin");
-    mkdirSync(stubBin);
-    for (const [name, body] of [["npx", NPX_STUB], ["az", AZ_STUB]]) {
-      writeFileSync(join(stubBin, name), body);
-      chmodSync(join(stubBin, name), 0o755);
-    }
-    const log = join(sandbox, "publish-attempts.log");
-    writeFileSync(log, "");
-
+    const { stubBin, log } = buildSandbox(sandbox);
     const result = spawnSync(bash, ["-c", runBlock], {
       cwd: sandbox,
       encoding: "utf8",
       timeout: 120_000,
       env: {
         ...process.env,
-        PATH: `${stubBin}:${process.env.PATH}`,
+        PATH: `${stubBin}${delimiter}${process.env.PATH}`,
         STUB_LOG: log,
         FAIL_TARGET: TIMING_OUT_TARGET,
         FAIL_TIMES: String(failTimes),
@@ -221,25 +220,47 @@ function runPublishStep({ runBlock, failTimes, extraEnv }) {
       },
     });
     if (result.error) throw result.error;
-
-    const invocations = readFileSync(log, "utf8")
-      .split("\n")
-      .filter((line) => line !== "");
-    const attempts = Object.fromEntries(
-      VSIX_TARGETS.map((target) => [
-        target,
-        invocations.filter((line) => line.includes(`-${target}.vsix`)).length,
-      ]),
-    );
-    return {
-      status: result.status,
-      output: `${result.stdout ?? ""}${result.stderr ?? ""}`,
-      attempts,
-      invocations,
-    };
+    return summarize(result, readFileSync(log, "utf8"));
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
   }
+}
+
+// Five platform VSIX artifacts, the npx/az stubs, and the attempt log.
+// scripts/ is linked into the sandbox (a junction on Windows, where plain
+// symlinks need privileges) so the block may delegate to repository scripts.
+function buildSandbox(sandbox) {
+  for (const target of VSIX_TARGETS) {
+    const artifactDir = join(sandbox, "artifacts", `vsix-${target}`);
+    mkdirSync(artifactDir, { recursive: true });
+    writeFileSync(join(artifactDir, `deslop-live-${TEST_VERSION}-${target}.vsix`), "stub vsix");
+  }
+  symlinkSync(resolve(repoRoot, "scripts"), join(sandbox, "scripts"), "junction");
+  const stubBin = join(sandbox, "stub-bin");
+  mkdirSync(stubBin);
+  for (const [name, body] of [["npx", NPX_STUB], ["az", AZ_STUB]]) {
+    writeFileSync(join(stubBin, name), body);
+    chmodSync(join(stubBin, name), 0o755);
+  }
+  const log = join(sandbox, "publish-attempts.log");
+  writeFileSync(log, "");
+  return { stubBin, log };
+}
+
+function summarize(result, attemptsLog) {
+  const invocations = attemptsLog.split("\n").filter((line) => line !== "");
+  const attempts = Object.fromEntries(
+    VSIX_TARGETS.map((target) => [
+      target,
+      invocations.filter((line) => line.includes(`-${target}.vsix`)).length,
+    ]),
+  );
+  return {
+    status: result.status,
+    output: `${result.stdout ?? ""}${result.stderr ?? ""}`,
+    attempts,
+    invocations,
+  };
 }
 
 // The dedented body of the publish step's `run: |` block inside the given job.
