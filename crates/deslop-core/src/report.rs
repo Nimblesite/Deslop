@@ -260,7 +260,25 @@ fn materialise_cluster<S: BuildHasher>(
     let hidden = dropped_as_data
         || dropped_as_structural_only
         || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+    if hidden {
+        log_hidden_cluster(&report_cluster, dropped_as_data, dropped_as_structural_only);
+    }
     (report_cluster, hidden)
+}
+
+/// Records why a cluster left the visible report. A duplicate that
+/// silently disappears is the hardest defect class to notice, so the
+/// routing decision is traceable without re-running the pipeline.
+fn log_hidden_cluster(cluster: &ReportCluster, as_data: bool, as_structural_only: bool) {
+    tracing::debug!(
+        cluster = cluster.id.as_str(),
+        bucket = cluster.bucket.as_str(),
+        category = cluster.category.as_str(),
+        occurrences = cluster.occurrences.len(),
+        dropped_as_data = as_data,
+        dropped_as_structural_only = as_structural_only,
+        "cluster hidden from report",
+    );
 }
 
 /// Decides whether a cluster must be dropped from the ranked report.

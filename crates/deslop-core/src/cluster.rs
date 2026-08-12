@@ -21,7 +21,10 @@ use crate::{
 
 /// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
 mod signals;
+/// Cross-cluster subsumption ([PIPELINE-CLUSTER-EXACT], #50).
+mod subsume;
 use signals::measured_signals;
+use subsume::collapse_cross_cluster_overlap;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.
@@ -294,153 +297,6 @@ fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Ve
         }
     }
     kept.into_iter().map(|(index, _)| index).collect()
-}
-
-/// Returns `true` when `inner` lies fully inside `outer` in the same file.
-fn fingerprint_contains(outer: &Fingerprint, inner: &Fingerprint) -> bool {
-    outer.file_id == inner.file_id
-        && outer.byte_range.start <= inner.byte_range.start
-        && inner.byte_range.end <= outer.byte_range.end
-}
-
-/// Returns `true` when every occurrence in `inner_set` is strictly
-/// contained within at least one occurrence in `outer_set`.
-fn all_occurrences_contained_in_some(inner_set: &[Fingerprint], outer_set: &[Fingerprint]) -> bool {
-    !inner_set.is_empty()
-        && inner_set.iter().all(|candidate| {
-            outer_set
-                .iter()
-                .any(|other| fingerprint_contains(other, candidate))
-        })
-}
-
-/// Returns `true` when every file mentioned in `outer_set` is also
-/// mentioned in `inner_set`. When this is false the outer cluster
-/// covers additional files (e.g. cross-language) that the inner does
-/// not, so the outer must not be dropped.
-fn outer_files_covered_by_inner(inner_set: &[Fingerprint], outer_set: &[Fingerprint]) -> bool {
-    outer_set.iter().all(|outer_fp| {
-        inner_set
-            .iter()
-            .any(|inner_fp| inner_fp.file_id == outer_fp.file_id)
-    })
-}
-
-/// Returns `true` when `index` is already marked for removal.
-fn cluster_dropped(dropped: &[bool], index: usize) -> bool {
-    dropped.get(index).copied().unwrap_or(true)
-}
-
-/// Marks `index` for removal when the slot exists.
-fn drop_cluster(dropped: &mut [bool], index: usize) {
-    if let Some(slot) = dropped.get_mut(index) {
-        *slot = true;
-    }
-}
-
-/// Decision produced by [`evaluate_pair`] for one `(outer, inner)` cluster pair.
-enum PairDecision {
-    /// Discard the inner cluster; the outer subsumes it.
-    DropInner,
-    /// Discard the outer cluster; the inner subsumes it.
-    DropOuter,
-    /// Retain both clusters.
-    Keep,
-}
-
-/// Collapses redundant nested clusters produced by the same physical
-/// code being fingerprinted at multiple AST subtree depths.
-///
-/// Fixes issue #50 ([PIPELINE-CLUSTER-EXACT] cross-cluster overlap):
-/// nested AST subtrees over the same physical code (e.g.
-/// `attribute_list + method_declaration` vs. bare `method_declaration`)
-/// form separate fused clusters whose occurrence byte ranges nest inside
-/// one another. When every occurrence of an inner cluster is contained
-/// within some occurrence of an outer cluster they are logically the
-/// same duplicated region. Only one should survive.
-///
-/// Survivor selection:
-/// - Equal or better structural on the outer → drop inner (outer is
-///   heavier and at least as precise).
-/// - Inner has strictly better structural AND outer covers no files that
-///   inner does not → drop outer (inner is a higher-quality view of the
-///   same scope). The file-set guard preserves cross-language clusters:
-///   a cross-language outer cluster (cs + rs + py) must not be dropped
-///   when only a same-language inner cluster (cs only) has higher
-///   structural, because the outer conveys unique cross-file information.
-///
-/// Runs after sorting so the weight order is available for tiebreaking.
-fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
-    let len = clusters.len();
-    let mut dropped = vec![false; len];
-    for outer in 0..len {
-        if !cluster_dropped(&dropped, outer) {
-            scan_inner_pairs(&clusters, &mut dropped, outer, len);
-        }
-    }
-    clusters
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, cluster)| (!cluster_dropped(&dropped, index)).then_some(cluster))
-        .collect()
-}
-
-/// Evaluates every `(outer, inner)` pair for the given `outer` index and
-/// updates `dropped` accordingly. Breaks early when `outer` itself is dropped.
-fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) {
-    for inner in (outer.saturating_add(1))..len {
-        if cluster_dropped(dropped, inner) {
-            continue;
-        }
-        let Some(outer_cluster) = clusters.get(outer) else {
-            continue;
-        };
-        let Some(inner_cluster) = clusters.get(inner) else {
-            continue;
-        };
-        match evaluate_pair(outer_cluster, inner_cluster) {
-            PairDecision::DropInner => drop_cluster(dropped, inner),
-            PairDecision::DropOuter => {
-                drop_cluster(dropped, outer);
-                break;
-            }
-            PairDecision::Keep => {}
-        }
-    }
-}
-
-/// Decides which cluster to drop when their occurrence byte ranges nest.
-/// Returns [`PairDecision::Keep`] when neither cluster dominates the other.
-fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
-    if all_occurrences_contained_in_some(&inner.members, &outer.members) {
-        // Inner's occurrences all nest inside outer's — outer dominates.
-        if outer.signals.structural >= inner.signals.structural {
-            PairDecision::DropInner
-        } else if embedding_outer_should_survive(outer, inner) {
-            PairDecision::Keep
-        } else if outer_files_covered_by_inner(&inner.members, &outer.members) {
-            PairDecision::DropOuter
-        } else {
-            PairDecision::Keep
-        }
-    } else if all_occurrences_contained_in_some(&outer.members, &inner.members) {
-        // Outer's occurrences all nest inside inner's — inner dominates.
-        PairDecision::DropOuter
-    } else {
-        PairDecision::Keep
-    }
-}
-
-/// Returns true when a small structural cluster must not erase a larger
-/// embedding-dominant cluster that carries distinct semantic evidence.
-fn embedding_outer_should_survive(outer: &Cluster, inner: &Cluster) -> bool {
-    is_embedding_dominant(outer.signals) && inner.signals.structural > outer.signals.structural
-}
-
-/// Returns true for low-structural clusters created by the embedding pass.
-fn is_embedding_dominant(signals: PairScore) -> bool {
-    signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
-        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.
