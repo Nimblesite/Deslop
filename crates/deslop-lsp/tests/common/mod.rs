@@ -281,6 +281,33 @@ pub fn cluster_count(frame: &serde_json::Value) -> usize {
         .map_or(0, Vec::len)
 }
 
+/// Polls the real `deslop/reportGet` method until `predicate` accepts the
+/// returned report or `timeout` expires. The bounded poll waits on observable
+/// report state rather than assuming how long a cold or incremental pass takes.
+pub fn wait_for_report_matching(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    timeout: Duration,
+    predicate: impl Fn(&Value) -> bool,
+) -> Result<Value> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let frame = call(stdin, stdout, "deslop/reportGet", &json!({}))?;
+        let report = frame
+            .get("result")
+            .ok_or_else(|| anyhow!("reportGet returned no result: {frame}"))?;
+        if predicate(report) {
+            return Ok(report.clone());
+        }
+        if Instant::now() >= deadline {
+            return Err(anyhow!(
+                "report state did not converge within {timeout:?}: {report}"
+            ));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
 /// Analysis must settle within this budget on any dev machine; the
 /// code-action fixtures are single small files.
 pub const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);

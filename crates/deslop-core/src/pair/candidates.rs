@@ -267,10 +267,11 @@ fn add_lsh_pairs(lsh_pairs: &[(usize, usize)], scores: &mut HashMap<(usize, usiz
     }
 }
 
-/// Adds embedding ANN pairs. Structural pairs keep their exact-clone
-/// classification. Cross-file LSH-visible pairs keep unique-recall
-/// accounting, while same-file non-structural pairs retain the embedding
-/// cosine so incidental local token overlap cannot erase semantic signal.
+/// Adds embedding ANN pairs. Same-file non-structural pairs retain the
+/// embedding cosine so incidental local token overlap cannot erase
+/// semantic signal; fresh pairs enter with their cosine populated. Pairs
+/// already discovered structurally or by LSH hit the quarantine in
+/// [`add_embedding_pair`] — the old arms discarded their measured cosine.
 fn add_embedding_pairs(
     embedding_pairs: &[EmbeddingPair],
     fingerprints: &[Fingerprint],
@@ -283,6 +284,42 @@ fn add_embedding_pairs(
 }
 
 /// Merges one embedding pair into the candidate-score maps.
+///
+/// # QUARANTINED — measured cosines were silently discarded
+///
+/// The deleted arms threw away `pair.cosine` — a similarity the ANN pass
+/// actually measured — whenever the pair was already known:
+///
+/// - `Some(structural) if structural > 0.0 => {}` dropped the cosine for
+///   structurally-discovered pairs, so a byte-identical pair scanned with
+///   `--embeddings required` rendered `embedding_cos = 0.0` — a false
+///   reported figure indistinguishable from "semantically unrelated".
+/// - `Some(_) => {}` dropped the cosine for cross-file pairs LSH also
+///   surfaced. With the cosine zeroed, `survival_decision` classifies the
+///   pair `lsh_only` (`token_jaccard >= 0.90` to survive, instead of the
+///   fused gate), and `classify_signals` routes the cluster
+///   `loosely_similar` (hidden) instead of `same_behavior` (visible).
+///   The identical pair discovered by ANN alone survives and is shown —
+///   discovery order decided whether the user saw a real duplicate.
+///   A false-negative machine.
+///
+/// Pinned by `issue_343_sum_clamp_saturation.rs::
+/// byte_identical_pair_still_earns_full_confidence_under_the_bound`,
+/// which watched the structural arm render `embedding_cos = 0.0000` for
+/// two byte-identical files.
+///
+/// # Panics
+///
+/// Whenever a measured cosine reaches a pair whose evidence the deleted
+/// arms would have discarded. The accuracy quarantine mandates the panic:
+/// silently destroying measured evidence is worse than a crash.
+#[allow(
+    clippy::panic,
+    reason = "CLAUDE.md accuracy quarantine: measured-evidence discard causes false \
+              negatives and false reported figures, and quarantined code must panic. \
+              The workspace panic = \"deny\" gate would otherwise reject the mandated \
+              panic; this allow is legal only on quarantined code."
+)]
 fn add_embedding_pair(
     pair: &EmbeddingPair,
     fingerprints: &[Fingerprint],
@@ -291,9 +328,23 @@ fn add_embedding_pair(
 ) {
     let key = order(pair.left, pair.right);
     match scores.get(&key).copied() {
-        Some(structural) if structural > 0.0 => {}
+        Some(structural) if structural > 0.0 => panic!(
+            "QUARANTINED: add_embedding_pair discarded the measured cosine {cosine} for a \
+             structurally-discovered pair (structural={structural}), rendering \
+             embedding_cos = 0.0 as if the similarity had been measured and found absent. \
+             Pinned by issue_343_sum_clamp_saturation.rs::\
+             byte_identical_pair_still_earns_full_confidence_under_the_bound.",
+            cosine = pair.cosine,
+        ),
         Some(_) if same_file_pair(key, fingerprints) => record_cosine(key, pair.cosine, cosines),
-        Some(_) => {}
+        Some(_) => panic!(
+            "QUARANTINED: add_embedding_pair discarded the measured cosine {cosine} for a \
+             cross-file pair LSH also surfaced, reclassifying it lsh_only and hiding its \
+             cluster — a false negative decided by discovery order. Pinned by \
+             issue_343_sum_clamp_saturation.rs::\
+             byte_identical_pair_still_earns_full_confidence_under_the_bound.",
+            cosine = pair.cosine,
+        ),
         None => {
             let _previous = scores.insert(key, 0.0_f64);
             record_cosine(key, pair.cosine, cosines);
