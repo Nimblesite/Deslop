@@ -1,4 +1,4 @@
-//! Cross-cluster subsumption ([PIPELINE-CLUSTER-EXACT]).
+//! Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 //!
 //! Nested AST subtrees over the same physical code (e.g.
 //! `attribute_list + method_declaration` vs. bare `method_declaration`)
@@ -26,6 +26,13 @@
 //! method itself — the only extractable duplicate in the corpus,
 //! reported as unactionable line noise. The enclosing view is the
 //! duplication; the nested view re-describes it.
+//!
+//! *Before either question, file coverage.* A view that names a file
+//! the survivor does not name is never dropped, however deeply it nests
+//! and however imprecise it is: no other cluster reports that file, so
+//! the finding does not move to the survivor — it disappears. Enclosure
+//! makes this easy to get wrong, because the enclosing view can be the
+//! narrower one.
 
 use crate::fingerprint::Fingerprint;
 
@@ -33,9 +40,9 @@ use super::{Cluster, LOW_STRUCTURAL_TYPE4_CEILING, TYPE4_EMBEDDING_FLOOR};
 
 /// Collapses redundant clusters that cover the same physical bytes.
 ///
-/// Runs after ranking so the weight order is available: `outer` is
-/// always the heavier cluster of a pair, and [PIPELINE-CLUSTER-EXACT]
-/// keeps the outer view of a duplicated region.
+/// Runs after ranking, so `outer` is always the heavier cluster of a
+/// pair — weight orders the scan, [PIPELINE-CLUSTER-SUBSUME] decides the
+/// survivor.
 pub(super) fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
     let len = clusters.len();
     let mut dropped = vec![false; len];
@@ -114,20 +121,24 @@ fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
         return match preferred_view(inner, outer) {
             Preference::First => PairDecision::DropOuter,
             Preference::Second => PairDecision::DropInner,
+            Preference::Neither => PairDecision::Keep,
         };
     }
     match preferred_view(outer, inner) {
         Preference::First => PairDecision::DropInner,
         Preference::Second => PairDecision::DropOuter,
+        Preference::Neither => PairDecision::Keep,
     }
 }
 
 /// Which of two clusters covering one region reaches the report.
 enum Preference {
-    /// The first (proposed) view survives.
+    /// The first (proposed) view survives; the other re-describes it.
     First,
-    /// The second view overturns it.
+    /// The second view overturns the nomination.
     Second,
+    /// Neither subsumes the other — both are published.
+    Neither,
 }
 
 /// Returns `true` when the two clusters are views of one duplicated
@@ -142,18 +153,35 @@ fn covers_same_region(outer: &Cluster, inner: &Cluster) -> bool {
 /// caller nominated — the enclosing one where nesting decides, the
 /// heavier one where neither set nests.
 ///
-/// The nomination stands unless `other` is strictly more precise and
-/// names every file `proposed` names. That guard preserves
-/// cross-language clusters: a `cs + rs + py` view must survive a
-/// `cs`-only rival with higher structural, because it conveys
-/// duplication the rival cannot express. An embedding-dominant
-/// nomination also stands — it carries semantic evidence over the same
-/// bytes that a structural rival does not.
+/// File coverage decides first, and it is not a tie-break — it is a
+/// false-negative guard. Dropping a view that names a file the survivor
+/// does not name erases that file's duplication from the report
+/// entirely; no other cluster reports it. So a view survives whenever it
+/// is the only one naming some file, however imprecise it is and however
+/// deeply it nests, and when each view names a file the other does not,
+/// **both** are published. The same guard preserves a `cs + rs + py`
+/// view against a `cs`-only rival.
+///
+/// Only between two views over one file set does precision decide.
 fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
-    let other_is_more_precise = other.signals.structural > proposed.signals.structural;
-    if other_is_more_precise
+    match (
+        covers_every_file(&proposed.members, &other.members),
+        covers_every_file(&other.members, &proposed.members),
+    ) {
+        (false, false) => Preference::Neither,
+        (false, true) => Preference::Second,
+        (true, false) => Preference::First,
+        (true, true) => precision_preference(proposed, other),
+    }
+}
+
+/// Between two views of one region over one file set, the structurally
+/// more precise view wins. An embedding-dominant nomination stands even
+/// against a more precise rival: it carries semantic evidence over the
+/// same bytes that a structural view cannot express.
+fn precision_preference(proposed: &Cluster, other: &Cluster) -> Preference {
+    if other.signals.structural > proposed.signals.structural
         && !is_embedding_dominant(proposed.signals)
-        && covers_every_file(&other.members, &proposed.members)
     {
         Preference::Second
     } else {
@@ -203,9 +231,11 @@ fn occurrence_contains(outer: &Fingerprint, inner: &Fingerprint) -> bool {
 fn strictly_encloses(enclosing: &[Fingerprint], nested: &[Fingerprint]) -> bool {
     !enclosing.is_empty()
         && !nested.is_empty()
-        && nested
-            .iter()
-            .all(|inner| enclosing.iter().any(|outer| occurrence_contains(outer, inner)))
+        && nested.iter().all(|inner| {
+            enclosing
+                .iter()
+                .any(|outer| occurrence_contains(outer, inner))
+        })
         && enclosing
             .iter()
             .any(|outer| !nested.iter().any(|inner| occurrence_contains(inner, outer)))

@@ -6,7 +6,10 @@ mod common;
 use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
-use common::{at, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching, watched_file_changed, write_frame};
+use common::{
+    at, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching,
+    watched_file_changed, write_frame,
+};
 use serde_json::Value;
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -40,7 +43,10 @@ fn run_exclusion_cycle(excluded: &str) -> Result<()> {
 
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
     let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(json_path(&initialize, &["result", "serverInfo", "name"]), "deslop-lsp");
+    assert_eq!(
+        json_path(&initialize, &["result", "serverInfo", "name"]),
+        "deslop-lsp"
+    );
     assert!(initialize.get("error").is_none(), "{initialize:#}");
 
     let clean = wait_for_files(&mut stdin, &mut stdout, 4)?;
@@ -114,11 +120,31 @@ fn assert_clean_control(report: &Value) -> Result<()> {
     assert_eq!(at(cluster, "size"), 4, "{cluster:#}");
     assert_eq!(at(cluster, "occurrences_total"), 4, "{cluster:#}");
     assert_eq!(at(cluster, "occurrences_truncated"), false, "{cluster:#}");
-    assert_eq!(json_path(cluster, &["signals", "structural"]), 1.0, "{cluster:#}");
-    assert_eq!(json_path(cluster, &["signals", "token_jaccard"]), 1.0, "{cluster:#}");
-    assert_eq!(json_path(cluster, &["signals", "fused"]), 1.0, "{cluster:#}");
-    assert_eq!(json_path(report, &["metrics", "clusters_total"]), 1, "{report:#}");
-    assert_eq!(json_path(report, &["metrics", "duplicated_files"]), 4, "{report:#}");
+    assert_eq!(
+        json_path(cluster, &["signals", "structural"]),
+        1.0,
+        "{cluster:#}"
+    );
+    assert_eq!(
+        json_path(cluster, &["signals", "token_jaccard"]),
+        1.0,
+        "{cluster:#}"
+    );
+    assert_eq!(
+        json_path(cluster, &["signals", "fused"]),
+        1.0,
+        "{cluster:#}"
+    );
+    assert_eq!(
+        json_path(report, &["metrics", "clusters_total"]),
+        1,
+        "{report:#}"
+    );
+    assert_eq!(
+        json_path(report, &["metrics", "duplicated_files"]),
+        4,
+        "{report:#}"
+    );
     assert!(
         json_path(report, &["metrics", "duplicated_loc"])
             .as_u64()
@@ -130,7 +156,8 @@ fn assert_clean_control(report: &Value) -> Result<()> {
 
 fn assert_reduced_control(report: &Value, excluded: &str) {
     assert_eq!(
-        at(report, "files_analysed"), 2,
+        at(report, "files_analysed"),
+        2,
         "exclude {excluded}: {report:#}"
     );
     assert!(

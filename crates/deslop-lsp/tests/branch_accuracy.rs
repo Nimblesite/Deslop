@@ -17,7 +17,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{at, call, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching};
+use common::{
+    at, call, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching,
+};
 use mock_ollama::MockOllama;
 use serde_json::{json, Value};
 
@@ -159,7 +161,10 @@ fn assert_model_selection(
 }
 
 fn assert_initialize_contract(frame: &Value) {
-    assert_eq!(json_path(frame, &["result", "serverInfo", "name"]), "deslop-lsp");
+    assert_eq!(
+        json_path(frame, &["result", "serverInfo", "name"]),
+        "deslop-lsp"
+    );
     assert!(json_path(frame, &["result", "serverInfo", "version"]).is_string());
     assert!(json_path(frame, &["result", "capabilities"]).is_object());
     assert!(frame.get("error").is_none(), "initialize failed: {frame}");
@@ -193,7 +198,8 @@ fn assert_report_shell(report: &Value, expected_files: u64) {
             > 0.0
     );
     assert_eq!(
-        at(report, "schema_doc"), "",
+        at(report, "schema_doc"),
+        "",
         "LSP report must use the slim wire shape"
     );
     assert!(at(report, "action_hints").is_array());
@@ -264,7 +270,8 @@ fn assert_all_occurrences_visible(report: &Value) -> Result<()> {
     for cluster in report_clusters(report)? {
         for occurrence in at(cluster, "occurrences").as_array().unwrap_or(&Vec::new()) {
             assert_eq!(
-                at(occurrence, "hidden"), false,
+                at(occurrence, "hidden"),
+                false,
                 "unexpected hidden occurrence: {occurrence}"
             );
         }
@@ -333,7 +340,12 @@ fn assert_embedding_provenance(report: &Value) {
             .unwrap_or_default()
             > 0
     );
-    assert!(at(provenance, "indexed_subtrees").as_u64().unwrap_or_default() > 0);
+    assert!(
+        at(provenance, "indexed_subtrees")
+            .as_u64()
+            .unwrap_or_default()
+            > 0
+    );
 }
 
 fn ledger_cluster(report: &Value) -> Result<&Value> {
@@ -363,14 +375,21 @@ fn assert_ledger_cluster_identity(cluster: &Value) {
     assert_eq!(at(cluster, "occurrences_total"), 2, "{cluster:#}");
     assert_eq!(at(cluster, "occurrences_truncated"), false, "{cluster:#}");
     assert!(at(cluster, "id").as_str().is_some_and(|id| !id.is_empty()));
-    assert!(at(cluster, "canonical_node_count").as_u64().unwrap_or_default() >= 30);
+    assert!(
+        at(cluster, "canonical_node_count")
+            .as_u64()
+            .unwrap_or_default()
+            >= 30
+    );
     assert!(at(cluster, "weight").as_f64().unwrap_or_default() > 0.0);
     assert_eq!(
-        at(cluster, "summary"), "",
+        at(cluster, "summary"),
+        "",
         "LSP wire must omit derivable summary"
     );
     assert_eq!(
-        at(cluster, "interpretation"), "",
+        at(cluster, "interpretation"),
+        "",
         "LSP wire must omit derivable prose"
     );
 }
@@ -462,11 +481,13 @@ fn assert_repeated_report_identity(first: &Value, second: &Value) {
     assert_eq!(at(first, "files_analysed"), at(second, "files_analysed"));
     assert_eq!(at(first, "clusters_hidden"), at(second, "clusters_hidden"));
     assert_eq!(
-        at(first, "metrics"), at(second, "metrics"),
+        at(first, "metrics"),
+        at(second, "metrics"),
         "repo metrics drifted across refreshes"
     );
     assert_eq!(
-        at(first, "clusters"), at(second, "clusters"),
+        at(first, "clusters"),
+        at(second, "clusters"),
         "ordered clusters drifted across refreshes"
     );
     assert_eq!(
@@ -474,5 +495,8 @@ fn assert_repeated_report_identity(first: &Value, second: &Value) {
         at(second, "embedding_provenance")
     );
     assert_eq!(at(first, "action_hints"), at(second, "action_hints"));
-    assert_eq!(at(first, "boilerplate_hints"), at(second, "boilerplate_hints"));
+    assert_eq!(
+        at(first, "boilerplate_hints"),
+        at(second, "boilerplate_hints")
+    );
 }

@@ -24,13 +24,13 @@ use super::{
     embedding_refresh::{CommittedEmbeddingRefresh, EmbeddingRefreshInput, EmbeddingRefreshJob},
     errors::LiveError,
     freshness::FreshnessTracker,
-    watcher::{live_exclusion, publish_exclusion, LiveExclusion},
     session_helpers::{
         append_ollama_models, cluster_matches_any_hash, cluster_overlaps_range,
         cluster_touches_path, collapse_overlapping_clusters_for_range, earliest_byte_for_path,
         initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
         truncate, try_load_cached_report,
     },
+    watcher::{live_exclusion, publish_exclusion, LiveExclusion},
     wire::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
         FindSimilarResult, SessionConfig,
@@ -305,11 +305,10 @@ impl AnalysisSession {
         let mut freshness = FreshnessTracker::new();
         freshness.record_from_report(&init.root, &init.report);
         let latest_report = Arc::new(init.report);
-        let exclusion = live_exclusion(
-            init.pipeline
-                .as_ref()
-                .map_or_else(|| Arc::new(ExclusionConfig::empty().with_scan_root(&init.root)), PipelineSession::exclusion_handle),
-        );
+        let exclusion = live_exclusion(init.pipeline.as_ref().map_or_else(
+            || Arc::new(ExclusionConfig::empty().with_scan_root(&init.root)),
+            PipelineSession::exclusion_handle,
+        ));
         Self {
             root: init.root,
             min_nodes: init.min_nodes,

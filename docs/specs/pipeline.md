@@ -28,6 +28,17 @@ Bottom-up Merkle hash over `NormalizedNode`. Each node's hash combines its own `
 ### [PIPELINE-CLUSTER-EXACT] Exact subtree clustering
 Group `NormalizedNode` fingerprints by `hash`. Every bucket with ≥ 2 entries is a candidate clone cluster. Covers Type-1 and normalized Type-2 deterministically in O(n). Candidate pairs are language-scoped by default per [CONFIG-CROSS-LANGUAGE]; the exact same hash may still be compared across languages when `.deslop.toml` opts into cross-language comparison.
 
+### [PIPELINE-CLUSTER-SUBSUME] Cross-cluster subsumption
+One physical duplication is fingerprinted at several AST depths, so it can produce several clusters covering the same bytes — a duplicated method, and the run of single-statement clones inside it. Publishing both shows the user one duplicate twice and double-counts it in `clusters_total` and the duplication metric. Two independent questions decide the outcome.
+
+**Are these one duplication?** Occurrence *overlap*, not containment: every occurrence of at least one cluster overlaps an occurrence of the other in the same file. Containment misses the crossed case, where the depth difference falls on opposite sides in each file and neither occurrence set nests inside the other.
+
+**Which view survives?** File coverage first, then physical enclosure, then precision.
+
+- **A view that names a file the survivor does not name is never dropped.** No other cluster reports that file's duplication, so the finding disappears rather than moving. When each view names a file the other does not, both are published.
+- Between views over one file set, the *enclosing* view is the duplication and the nested view re-describes it. Ranking weight must not decide: the fine-grained view always ranks heavier because it contributes one occurrence per statement, so weight-based selection renders a duplicated 60-statement method as 120 one-line occurrences and drops the method itself.
+- Between views over one file set at the same nesting, the structurally more precise view wins. An embedding-dominant view survives a more precise structural rival: it carries semantic evidence over the same bytes that the rival cannot express.
+
 ### [PIPELINE-DETERMINISM] Cross-run determinism
 Two runs of the pipeline over an unchanged corpus produce bit-identical deterministic output: identical MinHash signatures (blake3 XOF, fixed k-gram ordering), identical fused signal scores (`token_jaccard` compared bit-for-bit), identical candidate sets, cluster ids, and ranking. Determinism is what makes the fingerprint cache ([PIPELINE-INCREMENTAL]) sound and cluster ids stable across sessions. The embedding/ANN layer is the only approximate stage and is bounded separately ([FUSION-EMBED-PROVIDER]); a missed ANN neighbour only loses recall, never changes existing cluster content.
 

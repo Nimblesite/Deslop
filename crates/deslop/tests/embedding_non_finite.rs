@@ -49,7 +49,10 @@ fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Resu
     let attempted = field(provenance, "attempted_subtrees")
         .as_u64()
         .unwrap_or_default();
-    assert!(attempted > 0, "fixture never exercised the provider: {report:#}");
+    assert!(
+        attempted > 0,
+        "fixture never exercised the provider: {report:#}"
+    );
     assert_eq!(
         field(provenance, "indexed_subtrees").as_u64(),
         Some(0),
@@ -68,8 +71,14 @@ fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Resu
             "invalid provider evidence escaped into a cluster: {cluster:#}"
         );
         let fused = field(signals, "fused").as_f64().unwrap_or(f64::NAN);
-        assert!(fused.is_finite(), "non-finite fused signal escaped: {cluster:#}");
-        assert!((0.0..=1.0).contains(&fused), "fused escaped [0,1]: {cluster:#}");
+        assert!(
+            fused.is_finite(),
+            "non-finite fused signal escaped: {cluster:#}"
+        );
+        assert!(
+            (0.0..=1.0).contains(&fused),
+            "fused escaped [0,1]: {cluster:#}"
+        );
     }
     Ok(())
 }

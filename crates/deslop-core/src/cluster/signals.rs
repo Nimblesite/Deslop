@@ -66,16 +66,21 @@ impl SignalTotals {
         embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     ) {
         if let (Some(left_fp), Some(right_fp)) = (fingerprints.get(left), fingerprints.get(right)) {
-            self.structural
-                .add(if left_fp.hash == right_fp.hash { 1.0 } else { 0.0 });
+            self.structural.add(if left_fp.hash == right_fp.hash {
+                1.0
+            } else {
+                0.0
+            });
         }
         if let (Some(left_sig), Some(right_sig)) = (signatures.get(left), signatures.get(right)) {
-            self.token_jaccard.add(estimate_jaccard(left_sig, right_sig));
+            self.token_jaccard
+                .add(estimate_jaccard(left_sig, right_sig));
         }
         if let (Some(left_vec), Some(right_vec)) =
             (embedding_vectors.get(&left), embedding_vectors.get(&right))
         {
-            self.embedding_cos.add(cosine_similarity(left_vec, right_vec));
+            self.embedding_cos
+                .add(cosine_similarity(left_vec, right_vec));
         }
     }
 

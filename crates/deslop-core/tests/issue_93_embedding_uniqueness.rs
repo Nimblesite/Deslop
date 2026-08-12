@@ -94,8 +94,7 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
     // their `EmbeddingPair` declared. One was also found by LSH and one
     // was not, and that difference changes nothing about the evidence.
     assert!(
-        (lsh_visible.score.embedding_cos - embedding_only.score.embedding_cos - 0.01).abs()
-            < 1e-9,
+        (lsh_visible.score.embedding_cos - embedding_only.score.embedding_cos - 0.01).abs() < 1e-9,
         "issue #351: both pairs must keep their own measured cosine (0.99 vs 0.98); got {} and {}",
         lsh_visible.score.embedding_cos,
         embedding_only.score.embedding_cos
@@ -178,9 +177,12 @@ fn assert_rendered_signals_are_measured(
 
 /// Finds a rendered cluster by the hash seed of its lowest member.
 fn find_by_leading_hash(clusters: &[Cluster], seed: u8) -> Option<&Cluster> {
-    clusters
-        .iter()
-        .find(|cluster| cluster.members.iter().any(|member| member.hash == [seed; 32]))
+    clusters.iter().find(|cluster| {
+        cluster
+            .members
+            .iter()
+            .any(|member| member.hash == [seed; 32])
+    })
 }
 
 fn embedding_roi_fixture() -> (Vec<Fingerprint>, Vec<Signature>) {

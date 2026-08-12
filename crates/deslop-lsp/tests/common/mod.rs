@@ -290,7 +290,9 @@ pub fn wait_for_report_matching(
     timeout: Duration,
     predicate: impl Fn(&Value) -> bool,
 ) -> Result<Value> {
-    let deadline = Instant::now().checked_add(timeout).unwrap_or_else(Instant::now);
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .unwrap_or_else(Instant::now);
     loop {
         let frame = call(stdin, stdout, "deslop/reportGet", &json!({}))?;
         let report = frame

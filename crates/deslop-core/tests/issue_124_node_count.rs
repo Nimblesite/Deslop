@@ -160,10 +160,7 @@ fn type4_weight_fixture() -> Type4Fixture {
         ],
         // Only the Type-4 pair was embedded; the exact pair was found
         // structurally, with no vectors to measure.
-        vectors: HashMap::from([
-            (0, vec![1.0, 0.0]),
-            (1, vec![0.94, 0.341_174_44]),
-        ]),
+        vectors: HashMap::from([(0, vec![1.0, 0.0]), (1, vec![0.94, 0.341_174_44])]),
         fused_clusters: vec![
             FusedCluster {
                 members: vec![0, 1],

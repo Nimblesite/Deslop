@@ -11,7 +11,9 @@
 
 #![allow(dead_code)]
 
+pub(crate) mod census;
 pub(crate) mod clusters;
+pub(crate) mod merge;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;

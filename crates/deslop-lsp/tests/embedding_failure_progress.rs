@@ -17,7 +17,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{POLL_INTERVAL, at, call, call_capturing, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching};
+use common::{
+    at, call, call_capturing, handshake, path as json_path, spawn_lsp_guarded,
+    wait_for_report_matching, POLL_INTERVAL,
+};
 use mock_ollama::{MockBehavior, MockOllama};
 use serde_json::{json, Value};
 
@@ -31,7 +34,10 @@ fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -
     let workspace = common::copy_fixture("ts-mixed-band")?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
     let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(json_path(&initialize, &["result", "serverInfo", "name"]), "deslop-lsp");
+    assert_eq!(
+        json_path(&initialize, &["result", "serverInfo", "name"]),
+        "deslop-lsp"
+    );
     assert!(initialize.get("error").is_none(), "{initialize:#}");
 
     let before = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
@@ -49,8 +55,14 @@ fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -
             "endpoint": server.endpoint(),
         }),
     )?;
-    assert!(selection.get("error").is_none(), "model was not queued: {selection:#}");
-    assert!(selection.get("result").is_some(), "model selection has no result: {selection:#}");
+    assert!(
+        selection.get("error").is_none(),
+        "model was not queued: {selection:#}"
+    );
+    assert!(
+        selection.get("result").is_some(),
+        "model selection has no result: {selection:#}"
+    );
 
     let terminal = wait_for_terminal_progress(&mut stdin, &mut stdout, initial_frames)?;
     let after = call(&mut stdin, &mut stdout, "deslop/reportGet", &json!({}))?;
@@ -58,15 +70,36 @@ fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -
         .get("result")
         .ok_or_else(|| anyhow!("reportGet returned no result: {after:#}"))?;
 
-    assert_eq!(json_path(&terminal, &["params", "provider_id"]), "ollama", "{terminal:#}");
-    assert_eq!(json_path(&terminal, &["params", "model_id"]), "nomic-embed-text", "{terminal:#}");
-    assert_eq!(json_path(&terminal, &["params", "phase"]), "failed", "{terminal:#}");
-    assert_eq!(json_path(&terminal, &["params", "done"]), 0, "failed work cannot be complete");
+    assert_eq!(
+        json_path(&terminal, &["params", "provider_id"]),
+        "ollama",
+        "{terminal:#}"
+    );
+    assert_eq!(
+        json_path(&terminal, &["params", "model_id"]),
+        "nomic-embed-text",
+        "{terminal:#}"
+    );
+    assert_eq!(
+        json_path(&terminal, &["params", "phase"]),
+        "failed",
+        "{terminal:#}"
+    );
+    assert_eq!(
+        json_path(&terminal, &["params", "done"]),
+        0,
+        "failed work cannot be complete"
+    );
     assert!(
-        json_path(&terminal, &["params", "message"]).as_str().is_some_and(|message| !message.is_empty()),
+        json_path(&terminal, &["params", "message"])
+            .as_str()
+            .is_some_and(|message| !message.is_empty()),
         "failed progress must explain the provider failure: {terminal:#}"
     );
-    assert_eq!(after_report, &before, "a failed refresh replaced the last good report");
+    assert_eq!(
+        after_report, &before,
+        "a failed refresh replaced the last good report"
+    );
     Ok(())
 }
 
@@ -81,16 +114,23 @@ fn wait_for_terminal_progress(
     loop {
         if let Some(terminal) = frames.iter().find(|frame| {
             at(frame, "method") == PROGRESS
-                && matches!(json_path(frame, &["params", "phase"]).as_str(), Some("complete" | "failed"))
+                && matches!(
+                    json_path(frame, &["params", "phase"]).as_str(),
+                    Some("complete" | "failed")
+                )
         }) {
             return Ok(terminal.clone());
         }
         if Instant::now() >= deadline {
-            return Err(anyhow!("no terminal embedding progress within {REPORT_TIMEOUT:?}: {frames:#?}"));
+            return Err(anyhow!(
+                "no terminal embedding progress within {REPORT_TIMEOUT:?}: {frames:#?}"
+            ));
         }
         let (response, emitted) = call_capturing(stdin, stdout, "deslop/reportGet", &json!({}))?;
         if response.get("result").is_none() {
-            return Err(anyhow!("reportGet returned no result while polling: {response:#}"));
+            return Err(anyhow!(
+                "reportGet returned no result while polling: {response:#}"
+            ));
         }
         frames.extend(emitted);
         std::thread::sleep(POLL_INTERVAL);

@@ -3,12 +3,7 @@
 //! [`EmbeddingProvider`] based on the run's [`EmbeddingMode`], and
 //! returns the ANN-nearest-neighbour pairs plus report provenance.
 
-use std::{
-    collections::HashMap,
-    path::Path,
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, path::Path, thread, time::Duration};
 
 use crate::{
     embedding::{

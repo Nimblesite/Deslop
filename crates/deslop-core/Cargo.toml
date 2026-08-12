@@ -49,6 +49,7 @@ nix = { version = "0.31", default-features = false, features = ["signal"] }
 
 [dev-dependencies]
 anyhow.workspace = true
+deslop-test-support = { path = "../deslop-test-support" }
 tokio = { workspace = true }
 tempfile.workspace = true
 

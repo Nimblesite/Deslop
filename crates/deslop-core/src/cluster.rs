@@ -104,9 +104,7 @@ fn reportable_clusters<S: BuildHasher>(
 ) -> Vec<Cluster> {
     fused_clusters
         .iter()
-        .filter_map(|fused| {
-            build_fused_cluster(fingerprints, signatures, embedding_vectors, fused)
-        })
+        .filter_map(|fused| build_fused_cluster(fingerprints, signatures, embedding_vectors, fused))
         .collect()
 }
 

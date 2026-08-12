@@ -49,12 +49,12 @@ sequence contained in each member's range) and at least one argument position
 differs in string-literal bytes. Members whose literals all agree never match,
 so byte-identical copies keep the family's verbatim escape hatch.
 
-The sequence form is bounded to scaffolding shapes: it fires only when each
-member's sequence is a single call (the varying call is the member's entire
-logic) or the cluster has three or more members (a scaffolding family). A pair
-of multi-call bodies agreeing at every position except a varying literal
-carries substantial invariant logic — a genuine Type-2 clone that must
-surface.
+The sequence form requires **every** position to vary. A sequence mixing
+varying calls with invariant ones is not payload: the invariant calls are
+shared logic the members genuinely duplicate, so the cluster stays visible.
+Two tests that fetch different URLs and then run the same four assertions —
+one varying call, four invariant — are a Type-2 clone, while scaffolding has
+nothing left once its literals are removed.
 
 ## Python idioms
 
