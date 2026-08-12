@@ -3,7 +3,7 @@
 
 Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One measure outranks everything else — not features, not languages, not UI, not performance:
 
-> **Every reported cluster is a real duplicate, and every real duplicate is reported.**
+> **Every reported cluster is a real duplicate, and every real duplicate is reported.** And, the reported figures like percentages are **transparent, accurate** calculations 
 
 ## The value assertion — test assertions outrank code
 

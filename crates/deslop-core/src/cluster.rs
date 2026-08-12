@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    content::ContentEvidence,
     fingerprint::{ranges_overlap, Fingerprint},
     pair::{FusedCluster, PairScore},
     state::FileId,
@@ -34,6 +35,14 @@ pub struct Cluster {
     /// because every member shares a Merkle hash and therefore a k-gram
     /// set. Fused clusters carry the mean of pair scores.
     pub signals: PairScore,
+    /// Measured raw-content evidence across the members'
+    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE], #331/#336):
+    /// pooled byte agreement, Type-2 rename consistency, and literal
+    /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
+    /// [`ContentEvidence::unmeasured`];
+    /// `crate::content::attach_content_evidence` measures it during
+    /// render, before bucket routing and the ranking weight read it.
+    pub content: ContentEvidence,
 }
 
 /// Minimum number of logical locations required for a reportable
@@ -141,6 +150,7 @@ fn materialize_cluster(members: Vec<Fingerprint>, signals: PairScore) -> Cluster
         members,
         weight,
         signals,
+        content: ContentEvidence::unmeasured(),
     }
 }
 

@@ -3,8 +3,10 @@
 //!
 //! The parsers use separate tree-sitter grammars but share the same
 //! normalisation function. These black-box CLI tests pin that contract:
-//! renamed Type-2 clones reach identical structural and token signals,
-//! and Type-3 near misses still surface through shared subtrees.
+//! renamed Type-2 clones reach identical structural and token signals and,
+//! because their preserved literal anchors prove the identifier mapping
+//! ([FUSION-CONTENT-GATE]), route to the act-now `nearly_identical`
+//! bucket; Type-3 near misses still surface through shared subtrees.
 
 use std::{collections::BTreeSet, path::Path};
 
@@ -15,39 +17,22 @@ mod common;
 use crate::common::*;
 
 #[test]
-fn javascript_type2_clone_has_structural_signal_of_one() -> Result<()> {
-    assert_type2_clone(
-        "javascript-small",
-        10,
-        "alpha.js",
-        "beta.js",
-        TokenCheck::StructuralOnly,
-        "structural_only",
-    )
+fn javascript_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
+    // `summarizeOrders` → `collectInvoices` is a maximal rename with all
+    // four numeric anchors (`0`, `100`, `0.9`, `0`) preserved in position,
+    // so the content gate proves the bijective mapping and promotes the
+    // pair out of the old #134 `structural_only` demotion.
+    assert_type2_clone("javascript-small", 10, "alpha.js", "beta.js")
 }
 
 #[test]
 fn typescript_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
-    assert_type2_clone(
-        "typescript-small",
-        12,
-        "alpha.ts",
-        "beta.ts",
-        TokenCheck::Required,
-        "nearly_identical",
-    )
+    assert_type2_clone("typescript-small", 12, "alpha.ts", "beta.ts")
 }
 
 #[test]
 fn tsx_type2_clone_has_structural_and_token_jaccard_of_one() -> Result<()> {
-    assert_type2_clone(
-        "tsx-small",
-        10,
-        "Card.tsx",
-        "Tile.tsx",
-        TokenCheck::Required,
-        "nearly_identical",
-    )
+    assert_type2_clone("tsx-small", 10, "Card.tsx", "Tile.tsx")
 }
 
 #[test]
@@ -60,47 +45,23 @@ fn typescript_near_miss_produces_cross_file_structural_cluster() -> Result<()> {
     assert_type3_clone("typescript-type3", 8, "delta.ts", "epsilon.ts")
 }
 
-/// Asserts that a renamed Type-2 fixture has perfect structural identity,
-/// the expected canonical `bucket`, and the token signal that bucket
-/// implies — a full Jaccard when the `MinHash` layer paired the clone, a
-/// near-zero one when only the structural Merkle layer did (the #134
-/// `structural_only` routing) — in its top-ranked cluster.
-fn assert_type2_clone(
-    fixture_name: &str,
-    min_nodes: u32,
-    left: &str,
-    right: &str,
-    token: TokenCheck,
-    bucket: &str,
-) -> Result<()> {
+/// Asserts that a renamed Type-2 fixture's top-ranked cluster has perfect
+/// structural identity, routes to the act-now `nearly_identical` bucket,
+/// and renders an exact token Jaccard — the content gate corrects the
+/// placeholder-dominated token fallback once the preserved anchors prove
+/// the rename ([FUSION-CONTENT-GATE]).
+fn assert_type2_clone(fixture_name: &str, min_nodes: u32, left: &str, right: &str) -> Result<()> {
     let report = run_report(&fixture(fixture_name), min_nodes)?;
     let top = top_cluster(&report, fixture_name)?;
     assert!(is_exact_one(signal(top, "structural")));
     assert_eq!(
         cluster_bucket(top),
-        bucket,
+        "nearly_identical",
         "{fixture_name} top cluster bucket mismatch: {report:#}"
     );
-    match token {
-        TokenCheck::Required => assert!(is_exact_one(signal(top, "token_jaccard"))),
-        TokenCheck::StructuralOnly => assert!(
-            signal(top, "token_jaccard") < 0.05,
-            "{fixture_name} structural_only routing needs a near-zero token signal: {report:#}"
-        ),
-    }
+    assert!(is_exact_one(signal(top, "token_jaccard")));
     assert!(spans_both(top, left, right));
     Ok(())
-}
-
-/// Whether a Type-2 assertion requires the `MinHash` layer to have paired
-/// the top cluster in addition to the structural Merkle layer.
-#[derive(Clone, Copy)]
-enum TokenCheck {
-    /// Only the structural Merkle layer paired this clone, so its token
-    /// Jaccard must stay near zero (`structural_only` routing).
-    StructuralOnly,
-    /// The fixture must also have exact token Jaccard.
-    Required,
 }
 
 /// Asserts that a Type-3 near miss surfaces a token-supported

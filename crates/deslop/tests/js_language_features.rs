@@ -6,9 +6,11 @@
 //! optional chaining, destructuring, and regex literals — proving the
 //! feature parses through `tree-sitter-javascript` and that identifier and
 //! literal normalisation keeps the clone detectable across the rename. The
-//! bucket asserted for each is the real value the engine produced: token-
-//! rich shapes reach `nearly_identical`, placeholder-dominated ones route to
-//! `structural_only` by design (#134).
+//! bucket asserted for each follows [FUSION-CONTENT-GATE]: a rename that
+//! preserves enough literal anchors to prove its identifier mapping (regex,
+//! destructuring) reaches the act-now `nearly_identical` bucket; anchor-poor
+//! shapes carry no content proof in either direction and stay honestly
+//! `structural_only` (#134).
 
 use anyhow::Result;
 
@@ -81,7 +83,7 @@ fn javascript_destructuring_clone_is_detected() -> Result<()> {
         "js-destructuring",
         8,
         &["build_point.js", "build_vertex.js"],
-        "structural_only",
+        "nearly_identical",
     )
 }
 
@@ -91,6 +93,6 @@ fn javascript_regex_literal_clone_is_detected() -> Result<()> {
         "js-regex",
         8,
         &["validate_email.js", "validate_handle.js"],
-        "structural_only",
+        "nearly_identical",
     )
 }

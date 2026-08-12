@@ -54,8 +54,25 @@ Implemented work intentionally not repeated here:
 - [Autofix — Mechanical (zero-risk) deduplication](autofix-extract-method-plan.md) — **implemented (v1.1).** LSP code actions (`refactor.extract` inline, `refactor.rewrite` lazily resolved) + the `merge-plan` MCP tool over the shared `deslop-core::refactor` module: `[AUTOFIX-EXTRACT]` Type-1 verbatim extract (C#/Rust/Python; refuses when span bindings are read after the span — including from Python's late-binding `def`/`lambda` bodies, `global`/`nonlocal` escapes, and PEP 572 walrus targets, #278 — and when a free variable is written inside the span, #280), `[AUTOFIX-MERGE]` leaf-gap merge via anti-unification (C#/Rust/Dart; Rust E2E compiles the result; Python refuses pending strict-typing detection), `[AUTOFIX-CONSOLIDATE]` cross-file consolidation (v1.1: Rust sibling modules incl. definition runs + the binding-drift gate, compile-verified) **surfaced end-to-end** — cross-file clusters offer *"Consolidate identical duplicates into one canonical definition"* in the editor and route through `merge-plan` for agents; refusals carry the reason (`[AUTOFIX-CONSOLIDATE-SURFACE]`, #277/#279). Open follow-ups: documented conservative limits — cross-file read horizon, Windows file URIs, buffer versions (#281).
 - [Autofix — AI-assisted Extract (fallback)](autofix-extract-ai-plan.md) — `extract-method-plan` + `extract-method-apply` MCP tools for the non-mechanical residue (structural drift, Type-4, readability naming). Blocked on the mechanical path landing.
 - [Interactive TUI](interactive-tui-plan.md) — deferred. Revisit after real CLI operator feedback.
+- [Fused confidence follow-ups](fused-score-followups.md) — what remains of the
+  `[FUSION-CONTENT-GATE]` rollout, **and the six skipped VSIX tests that must be
+  restored** (see the TODO immediately below).
 
 ## TODO
+
+### 🛑 Restore the skipped VSIX tests — do this first
+
+- [ ] **Un-skip six `test.skip`-ed VSIX tests and fix the defects they pin.**
+  They are correct; the code they test is wrong. They were skipped under a
+  one-time explicit owner mandate to unblock a release — a deliberate
+  exception to the `CLAUDE.md` rule "never delete a failing test, never skip
+  one". **Un-skip them, do not weaken them, do not delete them.** Every
+  defect is live in the shipped VSIX today: skipping removed the signal, not
+  the bug. The table of tests, files, defects, and root causes is in
+  [Fused confidence follow-ups §Skipped VSIX tests to restore](fused-score-followups.md#-skipped-vsix-tests-to-restore).
+  Start with **defect A** — the live bubble withholding act-now clusters
+  below `fused 0.85` — because it is a regression introduced by the content
+  gate, which made `fused` systematically lower for exactly those clusters.
 
 ### 🟡 Remaining features
 

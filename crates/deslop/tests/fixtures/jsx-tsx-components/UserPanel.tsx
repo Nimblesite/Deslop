@@ -1,22 +1,22 @@
 import { ReactElement } from "react";
 
 type UserPanelProps = {
-  heading: string;
-  badges: string[];
-  highlighted: boolean;
+  caption: string;
+  members: string[];
+  featured: boolean;
 };
 
-export function UserPanel({ heading, badges, highlighted }: UserPanelProps): ReactElement {
+export function UserPanel({ caption, members, featured }: UserPanelProps): ReactElement {
   return (
-    <section className={highlighted ? "panel panel--lit" : "panel"}>
+    <section className={featured ? "panel panel--lit" : "panel"}>
       <header className="panel__head">
-        <h3>{heading}</h3>
-        <small>{badges.length} items</small>
+        <h3>{caption}</h3>
+        <small>{members.length} items</small>
       </header>
       <ul className="panel__list">
-        {badges.map((badge) => (
-          <li key={badge} className="panel__item">
-            {badge.toUpperCase()}
+        {members.map((member) => (
+          <li key={member} className="panel__item">
+            {member.toUpperCase()}
           </li>
         ))}
       </ul>

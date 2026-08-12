@@ -10,7 +10,7 @@
 
 mod common;
 
-use std::fs;
+use std::{fs, path::Path};
 
 use anyhow::{anyhow, ensure, Context, Result};
 use deslop_core::{
@@ -28,8 +28,14 @@ use crate::common::{
 /// Computes merge plans for every cluster of a single-file fixture and
 /// returns them in rank order.
 fn merge_plans(fixture_name: &str, file_name: &str) -> Result<Vec<MergePlan>> {
-    let root = fixture(fixture_name);
-    let (session, report) = session(&root)?;
+    merge_plans_under(&fixture(fixture_name), file_name)
+}
+
+/// Computes merge plans for a fixture rooted at an already-resolved
+/// path, so a caller can choose the shape of the absolute path the
+/// plans are addressed with (plain, or canonicalised as the servers do).
+fn merge_plans_under(root: &Path, file_name: &str) -> Result<Vec<MergePlan>> {
+    let (session, report) = session(root)?;
     let absolute = root.join(file_name);
     let file_id = session
         .file_id_for(&absolute)
@@ -50,7 +56,8 @@ fn merge_plans(fixture_name: &str, file_name: &str) -> Result<Vec<MergePlan>> {
     let parser = refactor::parser_for_path(&absolute).context("parser registered for fixture")?;
     ensure!(
         !report.clusters.is_empty(),
-        "{fixture_name} must produce clusters"
+        "{} must produce clusters",
+        root.display()
     );
     report
         .clusters
@@ -197,6 +204,64 @@ fn csharp_leafgap_cluster_merges_to_golden() -> Result<()> {
         "applied merge must match golden.\n--- applied ---\n{applied}"
     );
     Ok(())
+}
+
+/// Asserts the RFC 8089 shape every wire `WorkspaceEdit` URI must have
+/// (issue #290): an empty authority and exactly three slashes, a
+/// forward-slash separated path ending at `tail`, and — because fixture
+/// paths are entirely unreserved — no percent-encoding whatsoever.
+fn ensure_rfc8089_uri(plan: &MergePlan, tail: &str) -> Result<()> {
+    let uri = plan
+        .workspace_edit
+        .as_ref()
+        .context("wire edit present")?
+        .pointer("/documentChanges/0/textDocument/uri")
+        .and_then(Value::as_str)
+        .context("edit uri present")?;
+    let path = uri
+        .strip_prefix("file:///")
+        .with_context(|| format!("empty authority plus a rooted path expected, got {uri}"))?;
+    ensure!(
+        !path.starts_with('/'),
+        "exactly three slashes — a fourth leaves an empty first path segment, got {uri}"
+    );
+    ensure!(
+        path.ends_with(tail),
+        "forward-slash separated path ending at {tail} expected, got {uri}"
+    );
+    ensure!(
+        !uri.contains('%'),
+        "an unreserved path needs no percent-encoding — `%3A` is an \
+         encoded drive colon, `%5C` a backslash separator, `%3F` a \
+         leaked verbatim marker, got {uri}"
+    );
+    Ok(())
+}
+
+/// [AUTOFIX-MERGE-MCP] (issue #290): the wire `WorkspaceEdit` names the
+/// edited file with an RFC 8089 `file:///` URI on every platform.
+/// Windows absolute paths must render as `file:///C:/…`, not with a
+/// percent-encoded drive colon or backslash separators, or LSP and MCP
+/// clients cannot resolve the document.
+#[test]
+fn wire_edit_uri_is_rfc8089_for_the_platform_absolute_path() -> Result<()> {
+    let plan = first_mechanical(merge_plans("csharp-merge-leafgap", "RateLimits.cs")?)?;
+    ensure_rfc8089_uri(
+        &plan,
+        "/deslop/tests/fixtures/csharp-merge-leafgap/RateLimits.cs",
+    )
+}
+
+/// [AUTOFIX-MERGE-MCP] (issue #290): the same URI contract holds for a
+/// canonicalised root, which is the shape the shipping servers address
+/// plans with — `deslop-mcp` canonicalises `--root` at startup, and on
+/// Windows `fs::canonicalize` returns the verbatim `\\?\C:\…` form. The
+/// verbatim marker must not survive into the URI.
+#[test]
+fn wire_edit_uri_is_rfc8089_for_a_canonicalised_absolute_path() -> Result<()> {
+    let root = fs::canonicalize(fixture("csharp-merge-leafgap")).context("canonical fixture")?;
+    let plan = first_mechanical(merge_plans_under(&root, "RateLimits.cs")?)?;
+    ensure_rfc8089_uri(&plan, "/csharp-merge-leafgap/RateLimits.cs")
 }
 
 /// Determinism: recomputing the plan yields identical JSON.
