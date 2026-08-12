@@ -50,7 +50,8 @@ const MIN_INSPECTED_CLUSTERS: usize = 20;
 const MIN_DISTINCT_FUSED_VALUES: usize = 3;
 
 /// Fixture corpora swept, with the node floor each is sized for.
-const SWEEP: [(&str, u32); 20] = [
+const SWEEP: [(&str, u32); 21] = [
+    ("ts-mixed-band", 12),
     ("fused-golden-csharp", 12),
     ("fused-golden-python", 12),
     ("fused-golden-typescript", 12),

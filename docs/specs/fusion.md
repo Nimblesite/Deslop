@@ -1,32 +1,6 @@
 # Pipeline design — hybrid, not pure-RAG
 
-**Research note: the state of the art is hybrid, not pure-RAG.**
-
-**The research is unambiguous: the state of the art is HYBRID, not pure-RAG.** Deslop is hybrid.
-
-**Research note: no paper recommends pure embeddings / pure RAG.**
-
-**No.** Across every 2024–2026 paper surveyed, no top-performing system is pure vector search. The strongest embedding-only approach (SSCD, Wiley 2024) frames itself as *"a BERT-based clone detection approach that targets high recall of Type 3 and Type 4 clones at scale"* — i.e. a **recall layer**, explicitly paired with structural/token methods in the surrounding pipeline. Every system that reports SOTA numbers fuses at least two representations.
-
-Concretely:
-
-| System (year) | Structure signal | Learned signal | Extra signal | Result |
-|---|---|---|---|---|
-| Rator (2025) | AST subtree encoding via node degrees-of-freedom | ML classifier over similarity features | — | F1 **0.99** BigCloneBench, 93× faster than ASTNN |
-| HyClone (2025) | — | LLM semantic screen | **Execution validation** via generated test inputs | SOTA on Python Type-4 |
-| SCOTT (2026) | Graph | Text/embedding | Unified framework | Type-1 → Type-4 in one pipeline |
-| Hybrid IR + BiLSTM (2025) | Baf + Jimple IR | BiLSTM over both | — | Strong Type-4 |
-| Ensemble-LLM (arXiv 2510.15480) | — | **Multiple** embedding models combined via max/sum | Score normalization | 46.91% precision vs 39.71% best-single, vs 19% CodeBERT |
-| SSCD (2024) | — | BERT embeddings + ANN | Token pre-filter | Beats SourcererCC + SAGA at scale |
-| Nuanced Clone Detection (2025) | AST graph | GAT + contrastive loss | **LLM code revision** | SOTA Type-3/4 |
-
-The pattern is consistent: **structure (AST/graph) + learned representation (embedding) + sometimes a third verification signal (execution, normalization, ensembling).**
-
-**Research note: why pure-RAG loses.**
-- **Empirical Study of LLM-Based Clone Detection** (arXiv 2511.01176, 2025): LLMs hit F1 0.943 on CodeNet but **drop significantly on BigCloneBench**. Pure-learned approaches are dataset-brittle. Structural signals anchor them.
-- **Cross-Lingual LLM Clone Detection Struggles** (arXiv 2408.04430): *"Embedding models enable the training of classifiers that outperform LLMs by ~1–20 percentage points"* — and those classifiers take structural features as input.
-- **Smaller embedding sizes beat larger ones** for clone detection. This directly contradicts the "bigger vector DB = better" intuition of pure-RAG.
-- **Reports must cite exact byte ranges** (LSP requirement per CLAUDE.md). Pure embedding similarity gives you "these two fragments are similar" but not "this specific subtree of fragment A matches this specific subtree of fragment B." AST fingerprinting gives that natively; Rator showed it's also achievable from tree encoding with Top-2/Top-3 localization.
+Deslop combines structural, token, and embedding analysis. The surveyed systems in [landscape.md](landscape.md) and [reading-list.md](reading-list.md) likewise combine representations rather than relying on vector search alone.
 
 ### [FUSION-SIGNALS-THREE-LAYER] Deslop is hybrid by design
 
@@ -44,7 +18,7 @@ All three run by default. The research doesn't support shipping without embeddin
 - **Default provider + model (overridable).** Provider defaults to `ollama` (local, no network) and model defaults to `nomic-embed-code` — these are recommended starting points from the 2025 ensemble paper's finding that *"smaller embedding sizes, smaller tokenizer vocabularies and tailored datasets are advantageous"*. CodeT5+110M and UniXCoder are alternate top performers cited in the literature; either should be selectable via `--embedding-model` once exposed through a provider.
 - **Local-only is a policy, not a hard requirement of the architecture.** The default stack never touches the network, but the trait doesn't forbid a hosted provider. A user configuring `--embedding-provider=hosted-foo` opts into that tradeoff deliberately; we don't enable it for them.
 - **ANN index: HNSW.** Use `usearch` or `instant-distance` (pure Rust, no C deps). SSCD validated HNSW at 250 MLOC.
-- **Ensemble by max/sum, never average.** The 2025 ensemble paper is specific: averaging *hurts*; max and sum help. Score normalization is mandatory before combining.
+- **Ensemble by max, never sum or average.** The 2025 ensemble paper's max/sum finding assumes independent members; Deslop's structural and token axes are two views of one normalised tree, so summing them manufactures confidence neither carries alone (gh #343). Fusion takes the strongest single axis; score normalization is mandatory before combining.
 - **Cache by `(file_content_hash, provider_id, model_id, model_version)`.** Re-runs are free; switching providers or models invalidates only the embedding layer and leaves structural/LSH caches intact. LSP incremental mode reuses the same cache unchanged.
 - **Index granularity: AST subtrees above min-node threshold**, not whole files. We already have those subtrees from the structural pass — embed them directly. This keeps embeddings byte-range-addressable and dramatically reduces the N in k-NN.
 - **The per-input character budget belongs to the provider, never to the pipeline.** A subtree longer than the budget is counted in `failed_subtrees` and never dispatched, because Ollama truncates silently (`truncate: true`) and a truncated vector misrepresents the code it claims to describe. The budget is therefore a property of the model behind the provider — `nomic-embed-text` carries a 2,048-token context, `mxbai-embed-large` 512, `qwen3-embedding` 32k — and is read from `EmbeddingProvider::max_input_chars`. `OllamaProvider` derives it at construction from the model's own `model_info["<arch>.context_length"]` via `POST /api/show`, converted at a deliberately conservative 3 chars/token, falling back to `DEFAULT_MAX_INPUT_CHARS` (6,000) when the endpoint or field is unavailable. A single pipeline-wide constant cannot be correct for two models an order of magnitude apart: gh #286 reported 14,723 of 175,160 subtrees (8.4%) dropped, at the large end where re-derived duplication is most expensive to miss, and no model swap could have recovered them while the cap sat upstream of the provider.
@@ -52,23 +26,23 @@ All three run by default. The research doesn't support shipping without embeddin
 
 ### [FUSION-STRATEGY-MAX-SUM] Fusion strategy (how the three signals combine)
 
-Per the ensemble-LLM 2025 findings (max/sum with normalization):
+The ID records the strategy this section originally specified; the **sum arm was quarantined by gh #343** (`PairScore::fused`, pinned by `issue_343_sum_clamp_saturation.rs`) because the axes are correlated views of one normalised tree and their sum clamps mid-band clusters to a confidence of 1.0 that no single axis earned and no byte-identical pair backs. The strategy in force:
 
 1. Compute a candidate set of clone pairs as the **union** of: structural-hash matches, LSH bucket collisions, and top-k embedding neighbors per subtree.
 2. For each candidate pair, compute three scores in [0,1]: `structural_sim`, `token_jaccard`, `embedding_cos`.
-3. Final pair score = **max-normalized sum** of the three (not average).
+3. Final pair score = the **strongest single axis** — `max(structural_sim, token_jaccard, embedding_cos)`, bounded to [0,1] (`PairScore::bounded_fused`). Never their sum, never their average.
 4. Cluster pairs by transitive closure above a threshold.
 5. Weight each cluster by the ranking formula in §4 for "worst offenders first."
 
-This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*.
+This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
 
 ### [FUSION-CONTENT-GATE] Content agreement gates shape-identical confidence
 
-The max/sum ensemble above assumes independent members, but `structural_sim`
-and `token_jaccard` are both computed from the *normalised* representation
-(identifiers and literals collapsed), so on any exact shape match they agree by
-construction and their sum saturates the clamp: every structural cluster used
-to render `fused = 1.0` regardless of what the code actually said (gh #331,
+`structural_sim` and `token_jaccard` are both computed from the *normalised*
+representation (identifiers and literals collapsed), so on any exact shape
+match they agree by construction: before gh #343 quarantined the sum their
+total saturated the clamp, and even under the bounded max a shape match still
+reads ≈1.0 while saying nothing about what the code actually said (gh #331,
 #336). The gate restores an independent member by measuring what normalisation
 erased:
 
@@ -97,7 +71,8 @@ erased:
    that mapping-explained identifier positions are strictly weaker evidence
    than byte equality, keeping a proven rename in the act-now band while
    reserving `fused = 1.0` for byte-proven duplication. LSH-only and
-   embedding-discovered pairs keep the max/sum fusion unchanged.
+   embedding-discovered pairs render the bounded max fusion unchanged — the
+   same formula with the content factor at its implicit 1.0.
 4. **Routing — three zones over `support = max(agreement,
    rename_consistency)`** (either population may vouch; never their mean).
    Below the support floor (0.7, the [TECH-TOKEN-SOURCERERCC] Type-3 overlap

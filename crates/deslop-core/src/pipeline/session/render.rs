@@ -2,8 +2,10 @@
 //!
 //! [`PipelineSession::render`] drives the full LSH → embedding → clustering
 //! → ranking → report pipeline over the in-memory corpus.
-//! [`PipelineSession::snapshot_corpus`] flattens the per-file state into
-//! the [`super::super::corpus::FingerprintCorpus`] consumed by those stages.
+//! [`PipelineSession::snapshot_corpus_ordered`] flattens the per-file state
+//! into the [`super::super::corpus::FingerprintCorpus`] consumed by those
+//! stages, in ascending [`crate::state::FileId`] order so the whole pipeline
+//! is reproducible ([PIPELINE-DETERMINISM], #301).
 
 use std::collections::HashMap;
 
@@ -17,6 +19,7 @@ use crate::{
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
     report_metrics::AnalysedLines,
+    state::FileId,
 };
 
 use super::{
@@ -35,7 +38,7 @@ impl PipelineSession {
         config: &PipelineConfig<'_>,
         last_pass_stats: CacheStats,
     ) -> Result<Report, CoreError> {
-        let corpus = self.snapshot_corpus();
+        let corpus = self.snapshot_corpus_ordered();
         tracing::debug!(
             fingerprints = corpus.fingerprints.len(),
             "building signatures"
@@ -99,14 +102,81 @@ impl PipelineSession {
         }))
     }
 
-    /// Flattens the per-file state into a [`FingerprintCorpus`]
-    /// suitable for the downstream LSH / embedding / clustering stages.
-    /// `per_file` is left empty because the session already owns the
-    /// authoritative map — the snapshot is consumed transiently.
+    /// Flattens the per-file state into a [`FingerprintCorpus`].
+    ///
+    /// # QUARANTINED — #301, `[PIPELINE-DETERMINISM]`
+    ///
+    /// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL.
+    /// NO CODE IS ALLOWED TO CALL THIS AND THIS MUST ALWAYS
+    /// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE.
+    ///
+    /// The deleted body iterated `self.per_file.values()` — a
+    /// `HashMap` seeded with `RandomState`, so the fingerprint sequence
+    /// was permuted differently on every process:
+    ///
+    /// ```text
+    /// for cached in self.per_file.values() {
+    ///     fingerprints.extend(cached.fingerprints.clone());
+    ///     trees.push(cached.tree.clone());
+    /// }
+    /// ```
+    ///
+    /// Downstream, LSH band buckets pair their minimum-*index* member
+    /// with every other member, and the per-pair survival gates
+    /// (`LSH_ONLY_MIN_JACCARD`, node floor, fused threshold) then
+    /// admit or drop different pairs depending on that random index
+    /// assignment. Transitive closure amplifies each flipped pair into
+    /// merged-or-not clusters, so two scans of a byte-identical tree
+    /// disagreed on cluster ids, `clusters_total`, `duplicated_loc`,
+    /// and `duplication_percent` — measured at 1296 vs 1291 clusters,
+    /// 30.59% vs 30.08% on the pinned `nest` corpus, and up to a 1.8
+    /// point swing on `flutter`. Every run randomly loses real clusters
+    /// (false negatives) and every `--fail-over` CI verdict was a
+    /// coin flip.
+    ///
+    /// The accurate replacement is [`Self::snapshot_corpus_ordered`].
+    /// Pinned by `crates/deslop/tests/corpus_repos.rs::determinism_gate`.
+    ///
+    /// # Panics
+    ///
+    /// Always. This function has no callers and must never gain one.
+    #[allow(
+        dead_code,
+        clippy::panic,
+        reason = "[PIPELINE-DETERMINISM] #301 accuracy quarantine. CLAUDE.md mandates \
+                  replacing code that causes false negatives with a panic, which the \
+                  workspace `panic = \"deny\"` and `-D dead-code` gates would otherwise \
+                  reject. The no-suppressions rule yields to the quarantine rule here by \
+                  explicit instruction; this allow is legal only on quarantined code."
+    )]
     pub(super) fn snapshot_corpus(&self) -> FingerprintCorpus {
+        panic!(
+            "QUARANTINED #301: snapshot_corpus iterated per_file in HashMap \
+             RandomState order, permuting the fingerprint sequence per process and \
+             making cluster detection nondeterministic. \
+             Use snapshot_corpus_ordered. \
+             Pinned by corpus_repos.rs::determinism_gate. \
+             per_file_len={}",
+            self.per_file.len()
+        )
+    }
+
+    /// Flattens the per-file state into a [`FingerprintCorpus`] in
+    /// ascending [`FileId`] order ([PIPELINE-DETERMINISM], #301).
+    ///
+    /// [`FileId`]s are issued densely in discovery-walk order, so this
+    /// yields the same fingerprint sequence on every run over an
+    /// unchanged tree — the property the whole downstream pipeline
+    /// (LSH star topology, pair gates, transitive closure) needs to be
+    /// reproducible. `per_file` is left empty because the session
+    /// already owns the authoritative map — the snapshot is consumed
+    /// transiently.
+    pub(super) fn snapshot_corpus_ordered(&self) -> FingerprintCorpus {
+        let mut file_ids: Vec<FileId> = self.per_file.keys().copied().collect();
+        file_ids.sort_unstable();
         let mut fingerprints: Vec<Fingerprint> = Vec::new();
-        let mut trees: Vec<NormalizedNode> = Vec::with_capacity(self.per_file.len());
-        for cached in self.per_file.values() {
+        let mut trees: Vec<NormalizedNode> = Vec::with_capacity(file_ids.len());
+        for cached in file_ids.iter().filter_map(|id| self.per_file.get(id)) {
             fingerprints.extend(cached.fingerprints.clone());
             trees.push(cached.tree.clone());
         }

@@ -63,18 +63,70 @@ pub struct PairScore {
 }
 
 impl PairScore {
-    /// Max/sum fusion projected back into the public `[0, 1]` confidence
-    /// interval. The ensemble-LLM 2025 paper is explicit that averaging
-    /// hurts; sum and max help, but report consumers require a bounded
-    /// confidence score.
+    /// # QUARANTINED — #343, `[FUSION-STRATEGY-MAX-SUM]`
+    ///
+    /// RESTORING THIS OR CALLING THIS FUNCTION IS ILLEGAL.
+    /// NO CODE IS ALLOWED TO CALL THIS AND THIS MUST ALWAYS
+    /// PANIC AND NOTHING ELSE. POINT CALL SITES ELSEWHERE.
+    ///
+    /// The deleted body summed the three axes and clamped:
+    /// `(structural + token_jaccard + embedding_cos).clamp(0.0, 1.0)`.
+    /// The axes are three correlated views of one normalised tree, so the
+    /// sum manufactures confidence none of them carries alone: a cluster
+    /// at `structural 0.00, token 0.30, embedding 0.94` clamps to a flat
+    /// `1.000` — rendered indistinguishable from a byte-proven verbatim
+    /// copy — and slips past [FUSION-CONTENT-GATE], whose corners engage
+    /// only at `structural >= 0.99` / `token >= 0.95`. The same clamp
+    /// inflated pair admission: axes that are individually weak summed
+    /// past `FUSED_THRESHOLD` and dragged unproven pairs into transitive
+    /// closure. Use [`PairScore::bounded_fused`].
+    /// Pinned by `issue_343_sum_clamp_saturation.rs`.
+    ///
+    /// # Panics
+    ///
+    /// Always. The quarantine mandates the panic: any caller reaching this
+    /// function is reproducing the #343 false positive.
+    #[allow(
+        dead_code,
+        clippy::panic,
+        reason = "[FUSION-STRATEGY-MAX-SUM] #343 accuracy quarantine. CLAUDE.md mandates \
+                  replacing code that causes false positives with a panic, which the \
+                  workspace `panic = \"deny\"` and `-D dead-code` gates would otherwise \
+                  reject. The no-suppressions rule yields to the quarantine rule here by \
+                  explicit instruction; this allow is legal only on quarantined code."
+    )]
     #[must_use]
     pub fn fused(self) -> f64 {
-        let raw = self.structural + self.token_jaccard + self.embedding_cos;
-        if raw.is_finite() {
-            raw.clamp(0.0, 1.0)
-        } else {
-            0.0
-        }
+        panic!(
+            "QUARANTINED #343: PairScore::fused summed three correlated signals and \
+             clamped, saturating mid-band clusters to a confidence of 1.0 that no \
+             single axis earned and no byte-identical pair backs. \
+             Use PairScore::bounded_fused. \
+             Pinned by issue_343_sum_clamp_saturation.rs. \
+             structural={} token_jaccard={} embedding_cos={}",
+            self.structural, self.token_jaccard, self.embedding_cos
+        )
+    }
+
+    /// [FUSION-STRATEGY-MAX-SUM] Bounded fusion over the three signal
+    /// axes: the strongest single axis, never their sum.
+    ///
+    /// The axes are correlated views of one normalised tree, so combining
+    /// them may sharpen a verdict but must never exceed the best evidence
+    /// — a confidence above every individual axis would be manufactured,
+    /// not measured. Non-finite axes contribute nothing. At render time
+    /// [FUSION-CONTENT-GATE] (`buckets.rs`) re-scores shape-saturating
+    /// clusters as `max(embedding_cos, shape × content)` — the same bound
+    /// with measured content evidence in place of this function's
+    /// implicit 1.0 — making the gate the definition of the rendered
+    /// confidence rather than a correction of it.
+    #[must_use]
+    pub fn bounded_fused(self) -> f64 {
+        [self.structural, self.token_jaccard, self.embedding_cos]
+            .into_iter()
+            .filter(|axis| axis.is_finite())
+            .fold(0.0_f64, f64::max)
+            .clamp(0.0, 1.0)
     }
 }
 
@@ -184,7 +236,7 @@ impl SurvivalStats {
 
 /// Applies the compound "survives clustering?" decision to a single pair.
 fn survival_decision(pair: &CandidatePair) -> PairSurvival {
-    if pair.score.fused() < pair.fused_min_score {
+    if pair.score.bounded_fused() < pair.fused_min_score {
         return PairSurvival::DroppedBelowFused;
     }
     let lsh_only = pair.score.structural <= 0.0 && pair.score.embedding_cos <= 0.0;

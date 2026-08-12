@@ -12,7 +12,7 @@ Stdio JSON-RPC 2.0 per the LSP base protocol. No TCP, no named pipes, no WebSock
 
 #### [LSP-NON-INTERFERENCE] Deslop is additive — it never touches the editor's standard features
 
-> **Hard invariant — non-negotiable.** Deslop's LSP is a *duplication linter*, **not** a language server. It MUST NOT register, intercept, override, suppress, or slow **any** standard language-intelligence request — **Go To Definition (`textDocument/definition`), Hover (`textDocument/hover`), Find References, Go To Implementation/Type Definition, Completion, Rename, Signature Help, Formatting, Document Highlight, Document/Workspace Symbols** — not one of them. Those belong **exclusively** to the editor's real language server (the Dart Analysis Server, OmniSharp/Roslyn, rust-analyzer, Pyright, …). Pressing **F12**, hovering, or invoking any built-in editor command in a Deslop-analysed file must behave **exactly** as it would with Deslop uninstalled.
+> **Hard invariant.** Deslop MUST NOT register, intercept, override, suppress, or slow standard language-intelligence requests, including definition, hover, references, implementation/type definition, completion, rename, signature help, formatting, highlights, and symbols. Those requests belong to the editor's language server.
 
 Deslop's only `initialize` capabilities are therefore **purely additive** — each one contributes a Deslop-owned surface that stacks on top of the editor's features without replacing any of them:
 
@@ -27,9 +27,9 @@ Deslop's only `initialize` capabilities are therefore **purely additive** — ea
 
 **Deslop deliberately does NOT advertise** `hoverProvider`, `definitionProvider`, `documentLinkProvider`, `referencesProvider`, `completionProvider`, `renameProvider`, or any other standard provider.
 
-**Why this is a hard rule, not a style preference.** When two providers answer the same request, VS Code (and every LSP client) *merges* their results and *waits for the slowest one before it can act*. A duplication analyser registered as a `definitionProvider` would (a) **pollute** F12 results with clone-peer locations that are not the symbol's definition, and (b) **hang** the editor's F12/hover spinner whenever its analysis is mid-pass — exactly the freeze reported on large Flutter monorepos on Windows, where uninstalling Deslop was the only fix. The cure is structural: Deslop simply never registers the standard providers, so it is physically incapable of intercepting or delaying them.
+LSP clients merge responses from multiple providers and wait for the slowest. Registering a standard provider would therefore add clone locations to unrelated results and could delay editor commands during analysis. Deslop avoids both failures by not registering those providers.
 
-Canonical-occurrence navigation is still one keystroke away — but always through Deslop-owned, non-conflicting surfaces, never by hijacking a standard key: the `deslop.jumpToNextOccurrence` code lens, the clone card's **Compare with canonical** command (`deslop.compareWithCanonical`), and the Top Offenders tree.
+Canonical-occurrence navigation uses Deslop-owned surfaces: the `deslop.jumpToNextOccurrence` code lens, `deslop.compareWithCanonical`, and the Top Offenders tree.
 
 ##### [LSP-NON-INTERFERENCE-NONBLOCKING] Even Deslop's own additive reads never block the editor
 

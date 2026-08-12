@@ -318,7 +318,7 @@ fn cache_write_failure_is_degraded_not_fatal() -> Result<()> {
     Ok(())
 }
 
-// Implements the P6 "perf pass" target in PLAN.md. The user-facing
+// Perf regression guard [PERF-BUDGET-TYPE12]. The user-facing
 // budget is <30 s on 100K-LOC C# with no embeddings. We can't assert
 // on wallclock directly from `cargo test` (coverage instrumentation
 // triples debug runtime), so this test exercises the pipeline on a

@@ -43,7 +43,7 @@ fn issue_91_embedding_only_pair_survives_when_lsh_misses_match() -> Result<()> {
         "embedding cosine should be retained on overlapped LSH pairs"
     );
     assert!(
-        candidate.score.fused() >= FUSED_THRESHOLD,
+        candidate.score.bounded_fused() >= FUSED_THRESHOLD,
         "AI evidence should be enough to clear the fused threshold"
     );
 

@@ -39,6 +39,13 @@ jobs:
         with:
           node-version: "22"
 
+      # See ci job — typediagram is required by deslop-core's build.rs, so
+      # without it the corpus suite dies before scanning a single repository
+      # (gh #347: both runs since the gate landed failed at ~70s here).
+      # Keep the pin in sync with ci.yml per the dependency-sync rule.
+      - name: Install typediagram
+        run: npm install -g typediagram@0.11.0
+
       # The harness measures peak RSS with `/usr/bin/time`, which is a separate
       # package on Ubuntu — the shell's `time` keyword is not it and cannot
       # report memory. Without this the first scan dies on spawn.

@@ -65,7 +65,7 @@ fn issue_93_embedding_signal_only_marks_pairs_that_lsh_missed() -> Result<()> {
         "embedding-only pair should retain high cosine evidence"
     );
     assert!(
-        embedding_only.score.fused() >= 0.85,
+        embedding_only.score.bounded_fused() >= 0.85,
         "embedding-only evidence should still survive fusion"
     );
 

@@ -63,7 +63,7 @@ Each row pairs a research line with the file that implements it (✅), the plan 
 | Boilerplate filtering (mature-tool convention) | Drop import / namespace / decorator clones before fingerprinting; re-surface as low-noise hints. | ✅ `crates/deslop-core/src/boilerplate.rs` and `report_boilerplate.rs` |
 | HyClone 2025 (arXiv 2508.01357) — execution-validated Type-4 | Generate test inputs and validate semantically equivalent pairs. | 🚫 Not implemented; Python-specific in the original paper |
 | Rator 2025 (Springer) — node degrees-of-freedom encoding | Encode subtrees by node DoF; fine-grained Top-2/Top-3 localization. | 🚫 Not implemented; LSH covers our recall budget today |
-| Autofix `refactor.extract` (LSP code action) | Rewrite Type-1 clusters into a single shared method. | ⏳ Tracked in [`docs/plans/autofix-extract-method-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-method-plan.md); blocked on the Type-1/Type-2 bucket split (gh #42) |
+| Autofix `refactor.extract` (LSP code action) | Rewrite Type-1 clusters into a single shared method. | ✅ Shipped — spec in [`docs/specs/autofix-extract.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/autofix-extract.md) |
 | AI-assisted Extract (MCP `extract-method-plan` / `-apply`) | Type-2/3 extraction with agent assistance. | ⏳ Tracked in [`docs/plans/autofix-extract-ai-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-ai-plan.md); blocked on the Type-1 path landing |
 
 ## Implemented pipeline

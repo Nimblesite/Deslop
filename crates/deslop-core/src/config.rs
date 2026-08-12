@@ -77,13 +77,8 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// duplicates a library it already depends on. Governed by
 /// `[analysis] include_dependencies` ([CONFIG-EXCLUDE-DEPENDENCIES]),
 /// which defaults to `false`.
-const BUILTIN_DEPENDENCY_COMPONENTS: &[&str] = &[
-    "node_modules",
-    "vendor",
-    ".cargo",
-    ".pub-cache",
-    ".venv",
-];
+const BUILTIN_DEPENDENCY_COMPONENTS: &[&str] =
+    &["node_modules", "vendor", ".cargo", ".pub-cache", ".venv"];
 
 /// Build output, tool caches, and working-tree copies
 /// ([CONFIG-EXCLUDE-BUILTIN]). Excluded unconditionally: none of it is

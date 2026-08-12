@@ -1,19 +1,12 @@
 # Severity model
 
-> **Status: ⏳ Planned (#177).** This file specifies the *target* two-map severity
-> model. It is **not yet shipped**: today the LSP publishes a diagnostic for every
-> cluster with severity resolved from its bucket (`Identical → Error`, the rest
-> `→ Warning`, no `deslop.diagnostics.enabled` gate and no percentile floor — see
-> [lsp.md §LSP-SEVERITY-BUCKET](lsp.md#lsp-severity-bucket)), and the VSIX colours
-> surfaces from a rank-percentile scale, not the bucket-colour map below. The
-> configurable maps, the off-by-default gate, and the percentile floors are the
-> roadmap captured here so the build is unambiguous when #177 lands.
+> **Status: ⏳ Planned (#177).** Today the LSP publishes every cluster using bucket severity (`Identical → Error`, others `→ Warning`) with no master gate or percentile floor, while the VSIX colours by rank percentile. This file specifies the target configurable maps, off-by-default gate, and percentile floors; see [LSP-SEVERITY-BUCKET](lsp.md#lsp-severity-bucket).
 
 Deslop owns a **severity** concept that is independent of any one editor surface. A cluster's severity is derived from its **bucket** ([taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets)) through user-configurable maps, and is then **projected** onto two surfaces that consume it differently. This file is the single source of truth for that model; [lsp.md §LSP-SEVERITY](lsp.md#lsp-severity) describes the diagnostic projection and [vsix.md §VSIX-SEVERITY-CONTROL](vsix.md#vsix-severity-control) describes the in-panel UI that drives it.
 
 ### [SEVERITY-MODEL] One identity, two maps, two projections
 
-The **bucket is the identity** — `Identical`, `NearlyIdentical`, `LooselySimilar`, `SameBehavior` ([taxonomy.md §CLONE-BUCKETS-DUAL-LABEL](taxonomy.md#clone-buckets-dual-label)). Severity is never stored on a cluster; it is resolved from the bucket at render time so a settings change re-colours and re-publishes without re-analysis ([VSIX-VIEW-STATE-UI-ONLY](vsix.md#vsix-view-state-ui-only)).
+The bucket is the identity ([CLONE-BUCKETS-DUAL-LABEL](taxonomy.md#clone-buckets-dual-label)). Severity is resolved at render time rather than stored on a cluster, so settings can recolour and republish without re-analysis ([VSIX-VIEW-STATE-UI-ONLY](vsix.md#vsix-view-state-ui-only)).
 
 Two maps key off the bucket, deliberately separated because the user asked for both knobs:
 
@@ -22,7 +15,7 @@ Two maps key off the bucket, deliberately separated because the user asked for b
 | **Deslop severity** | `deslop.severity.*` | `error · warning · information · hint` | **Yes** — colour is never silenced | Bubble / tree dot / code-lens glyph / gutter decoration **colour** on pure-visual surfaces ([SEVERITY-COLOR]) |
 | **Diagnostic severity** | `deslop.diagnostics.severity.*` | `error · warning · information · hint · none` | **No** — gated off by default | The VS Code **Problems panel** and squiggle, via the LSP ([SEVERITY-DIAGNOSTICS]) |
 
-The Deslop-severity map is the *primary, always-present* axis — it answers "how alarming does this kind of duplicate look on screen?" The diagnostic map is a *separate, opt-in projection* into the editor's Problems panel — it answers "does this kind of duplicate also raise a problem the build/CI surfaces care about?" They are decoupled so a user can run with **rich, colour-coded bubbles and a completely quiet Problems panel** — the default shipping posture.
+The maps are independent: visual surfaces remain coloured while the Problems panel stays quiet by default.
 
 ### [SEVERITY-DESLOP-MAP] Deslop severity — drives colour, always on
 
@@ -54,7 +47,7 @@ These per-bucket defaults **coincide** with [SEVERITY-DESLOP-MAP] (`Identical �
 
 A single boolean, **`deslop.diagnostics.enabled`, defaults to `false`.** With it off, **no clone diagnostics are published** regardless of the per-bucket map — the Problems panel and squiggle gutter stay empty. The live bubble, Top Offenders tree, code lens, and hover are unaffected and remain fully populated and coloured; the bubble is still the flagship in-your-face surface ([VSIX-PRINCIPLES] principle 1).
 
-The rationale for off-by-default: the always-on surfaces (bubble + tree) already deliver the "you are duplicating right now" moment, and a freshly-installed analyzer that floods Problems with thousands of pre-existing offenders trains users to ignore the panel. Diagnostics are therefore **opt-in**, surfaced through a one-click toggle in a prominent place ([VSIX-SEVERITY-CONTROL]) rather than buried in settings. This deliberately reverses the earlier "never silent by default" stance; the bubble carries the loudness now.
+Diagnostics are opt-in because the bubble and tree already surface duplication, while publishing every existing offender would flood the Problems panel. [VSIX-SEVERITY-CONTROL] provides the toggle.
 
 A diagnostic is published for an occurrence iff **all three** hold, in order:
 
@@ -71,7 +64,7 @@ Two visual channels carry two orthogonal facts on every cluster row and bubble:
 - **Colour** = the cluster's Deslop severity ([SEVERITY-DESLOP-MAP]). Answers *how alarming is this kind of duplicate*: red / amber / blue / grey.
 - **Glyph density** = the cluster's weight percentile ([lsp.md §LSP-SEVERITY-PERCENTILE](lsp.md#lsp-severity-percentile)). Answers *how big an offender is this specific cluster*: `●●` (worst) · `●` (top 10%) · `◐` (top 50%) · `○` (rest).
 
-So a faint-but-identical clone reads as a red `○`, and a high-impact loosely-similar cluster reads as a blue `●●`. Keeping these channels independent preserves the worst-first signal the product is built on while letting the user retune what each bucket *looks like*. A single helper — `resolveSeverity(bucket, percentile)` in `clients/vscode/src/severity.ts` — returns `{ color, glyph }` and is the only place either channel is computed, so the tree, bubble, code lens, and gutter decoration never drift ([VSIX-PRINCIPLES] principle 6). This is the same `clusterSlug()`-style "one helper, every surface" rule the taxonomy uses ([taxonomy.md §CLONE-BUCKETS-DUAL-LABEL] rule 6).
+A faint identical clone therefore renders as a red `○`, while a high-impact loosely-similar cluster renders as a blue `●●`. `resolveSeverity(bucket, percentile)` in `clients/vscode/src/severity.ts` is the single resolver for every visual surface ([VSIX-PRINCIPLES] principle 6).
 
 ### [SEVERITY-CONFIG] Configuration surface
 

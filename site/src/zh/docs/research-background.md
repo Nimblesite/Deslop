@@ -64,7 +64,7 @@ Deslop 遵循代码克隆文献中通用的标准克隆分类法：
 | 样板过滤（成熟工具的惯例） | 在指纹化前丢弃 import / namespace / decorator 克隆；以低噪声提示的形式重新呈现。 | ✅ `crates/deslop-core/src/boilerplate.rs` 与 `report_boilerplate.rs` |
 | HyClone 2025 (arXiv 2508.01357) — 执行验证的 Type-4 | 生成测试输入并验证语义等价的配对。 | 🚫 未实现；原论文中针对 Python |
 | Rator 2025 (Springer) — 节点自由度编码 | 通过节点自由度编码子树；细粒度 Top-2/Top-3 定位。 | 🚫 未实现；LSH 已覆盖我们当前的召回预算 |
-| Autofix `refactor.extract`（LSP 代码动作） | 将 Type-1 簇重写为单一的共享方法。 | ⏳ 在 [`docs/plans/autofix-extract-method-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-method-plan.md) 中跟踪；受阻于 Type-1/Type-2 分桶拆分 (gh #42) |
+| Autofix `refactor.extract`（LSP 代码动作） | 将 Type-1 簇重写为单一的共享方法。 | ✅ 已交付 — 规范见 [`docs/specs/autofix-extract.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/autofix-extract.md) |
 | AI 辅助抽取（MCP `extract-method-plan` / `-apply`） | 在智能体协助下进行 Type-2/3 抽取。 | ⏳ 在 [`docs/plans/autofix-extract-ai-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/autofix-extract-ai-plan.md) 中跟踪；受阻于 Type-1 路径的落地 |
 
 ## 已实现的流水线

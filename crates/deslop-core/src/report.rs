@@ -107,7 +107,7 @@ impl From<PairScore> for ReportSignals {
             structural: score.structural,
             token_jaccard: score.token_jaccard,
             embedding_cos: score.embedding_cos,
-            fused: score.fused(),
+            fused: score.bounded_fused(),
         }
     }
 }

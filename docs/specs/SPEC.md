@@ -1,8 +1,8 @@
 # Deslop — Research & Spec
 
-This doc indexes the formal research and design spec for Deslop. **Primary goal:** build a **live duplicate-code analysis server** (LSP + MCP) that stays fast enough to sit in an AI coding agent's inner loop and an editor's live edit loop — incremental, per-file, byte-range-addressable, cheap to keep live under a file watcher, and accurate across the five clone buckets in [CLONE-BUCKETS] (canonical human-facing labels; academic Type-1 → Type-4 mapping preserved in the same table). The CLI is a secondary surface — same engine, run once, emit a report — used for CI gates and cold-cache audits. Every design decision is judged against whether the pipeline still works when it runs a thousand times per minute, not once per PR.
+This document indexes Deslop's research and design specs. The primary product is an incremental, byte-range-addressable duplicate-code server for editors and AI agents; the same engine powers the one-shot CLI used by CI and cold-cache audits. Clone classification follows [CLONE-BUCKETS].
 
-**Live = Reactive.** *Live* means *reactive*: the moment a change to a watched file produces a new pipeline output, every reader of that output — every editor surface, every webview, every agent — observes the new state **immediately**. Not on the next save. Not when the editor refreshes. Not on a polling timer. Not after a manual command. **Immediately**, in the same microtask that the LSP fires `deslop/reportChanged`. A cluster removed from the source cannot remain visible in the tree, in the bubble, in a hover, in a code lens, in the status bar, in an MCP response, or in any future surface. The CLI is the **only** non-reactive surface in the product — it is the cold-cache fallback for CI gates and one-shot audits, and it exists because reactivity has no meaning for a process that exits before its caller reads the result. Every other surface is reactive by construction; "stale UI" is not a polish defect, it is a correctness bug that fails the brand promise. See [principles.md §[PRINCIPLES-LIVE-IS-REACTIVE]](principles.md#principles-live-is-reactive) for the enforcing rule, [live.md §[LIVE-NOTIFICATIONS]](live.md#live-notifications) for the wire contract, and [vsix.md §[VSIX-REACTIVITY-INVARIANT]](vsix.md#vsix-reactivity-invariant) for the editor-side acceptance test.
+**Live = Reactive.** Every long-running surface applies each `deslop/reportChanged` generation in the same microtask; removed clusters must disappear from every reader. The CLI is the sole non-reactive surface. See [PRINCIPLES-LIVE-IS-REACTIVE](principles.md#principles-live-is-reactive), [LIVE-NOTIFICATIONS](live.md#live-notifications), and [VSIX-REACTIVITY-INVARIANT](vsix.md#vsix-reactivity-invariant).
 
 The spec is split into topic files for readability and the 500-line file budget. Hierarchical `[GROUP-TOPIC-DETAIL]` IDs (e.g. `[PIPELINE-RANK-WORST-FIRST]`) are stable across the split — `grep -r '\[PIPELINE-' docs/` still finds every reference.
 
@@ -109,7 +109,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Embedding pass — local-by-default | ✅ Ollama provider | `crates/deslop-core/src/embedding/ollama.rs`, `crates/deslop-core/src/embedding/provider.rs` |
 | HNSW ANN index ([FUSION-EMBED-PROVIDER]) | ✅ `instant-distance` | `crates/deslop-core/src/embedding/pairs.rs` |
 | Embedding cache keyed by `(content, provider, model, version)` | ✅ | `crates/deslop-core/src/embedding/cache.rs` |
-| Max/sum fusion (ensemble-LLM 2025) ([FUSION-STRATEGY-MAX-SUM]) | ✅ clamped to `[0,1]` | `crates/deslop-core/src/pair.rs::PairScore::fused` |
+| Bounded max fusion — sum quarantined by gh #343 ([FUSION-STRATEGY-MAX-SUM]) | ✅ strongest single axis in `[0,1]` | `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` |
 | Cross-language opt-in ([CONFIG-CROSS-LANGUAGE]) | ✅ | `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` |
 | Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config.rs::corpus_built_in_excluded` |
 | Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config.rs::dependency_components` |
@@ -126,10 +126,10 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Deployment Toolkit manifest ([DEPLOY-*]) | ✅ | `shipwright.json`, `scripts/verify-*` |
 | VS Code extension ([VSIX-*]) | ✅ v0.1, signal-driven reactivity | `clients/vscode/` (preact-signals wired through `ReportStore`) |
 | JetBrains plugin ([JETBRAINS-*]) | ⏳ scaffold + LSP support; native UX in [`plans/jetbrains-ux-plan.md`](../plans/jetbrains-ux-plan.md) | `clients/jetbrains/` |
-| Type-1 / Type-2 bucket split (autofix prerequisite) | ⏳ tracked by [#42](https://github.com/Nimblesite/Deslop/issues/42) | — |
-| Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
-| Mechanical call-site merge — anti-unification + default params ([AUTOFIX-MERGE]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
-| Cross-file identical-definition consolidation ([AUTOFIX-CONSOLIDATE]) | ⏳ | [`plans/autofix-extract-method-plan.md`](../plans/autofix-extract-method-plan.md) |
+| Type-1 / Type-2 bucket split (autofix prerequisite) | ✅ byte-equivalence routing ([CLONE-BUCKETS-IDENTICAL]), shipped via [#42](https://github.com/Nimblesite/Deslop/issues/42) / PR #63 | `crates/deslop-core/src/buckets.rs` |
+| Autofix `refactor.extract` for Type-1 ([AUTOFIX-EXTRACT]) | ✅ C# / Rust / Python | `crates/deslop-core/src/refactor/` |
+| Mechanical call-site merge — anti-unification + default params ([AUTOFIX-MERGE]) | ✅ C# / Rust / Dart; Python refuses pending strict-typing detection | `crates/deslop-core/src/refactor/merge/` |
+| Cross-file identical-definition consolidation ([AUTOFIX-CONSOLIDATE]) | ✅ v1.1 Rust sibling modules incl. definition runs + binding-drift gate; conservative limits tracked in [#281](https://github.com/Nimblesite/Deslop/issues/281) | `crates/deslop-core/src/refactor/consolidate/` |
 | Autofix AI-assisted Extract — fallback after [AUTOFIX-MERGE] | ⏳ | [`plans/autofix-extract-ai-plan.md`](../plans/autofix-extract-ai-plan.md) |
 | Rator-style node degrees-of-freedom encoding | 🚫 not implemented | research only — would replace LSH if adopted; background in [landscape.md](landscape.md#tech-llm-hybrid) |
 | HyClone-style execution-validated Type-4 | 🚫 not implemented | research only — Python-specific; background in [landscape.md](landscape.md#tech-llm-hybrid) |
@@ -141,4 +141,4 @@ Site-facing version of the same map: [`site/src/docs/research-background.md`](..
 ## Sibling docs
 
 - [REPORTING-CONTEXT.md](REPORTING-CONTEXT.md) — embedded `schema_doc` agents see at the top of every JSON report.
-- [../plans/PLAN.md](../plans/PLAN.md) — execution plan + live TODO.
+- [../plans/](../plans/) — remaining work, one file per work stream.
