@@ -30,13 +30,25 @@ impl EmbeddingBatch {
         }
     }
 
-    /// Adds one successful embedding vector.
-    pub(super) fn push(&mut self, fingerprint_index: usize, vector: Vec<f32>, occurrences: usize) {
-        self.vectors.push(IndexedEmbedding {
-            fingerprint_index,
-            vector,
-        });
-        self.successes = self.successes.saturating_add(occurrences);
+    /// Adds one successful embedding vector for every fingerprint that
+    /// produced this snippet.
+    ///
+    /// Identical source text is embedded once — the provider call is the
+    /// expensive part — but the resulting vector belongs to *each*
+    /// fingerprint that shares it. Recording only the first would delete
+    /// the embedding evidence for exactly the pairs the tool exists to
+    /// find: the more perfect the duplicate, the more certainly its
+    /// cosine would go missing, and a missing cosine renders as
+    /// `embedding_cos = 0.0` — indistinguishable from "measured, and
+    /// found unrelated".
+    pub(super) fn push(&mut self, fingerprint_indices: &[usize], vector: &[f32]) {
+        for &fingerprint_index in fingerprint_indices {
+            self.vectors.push(IndexedEmbedding {
+                fingerprint_index,
+                vector: vector.to_vec(),
+            });
+        }
+        self.successes = self.successes.saturating_add(fingerprint_indices.len());
     }
 
     /// Returns successful vectors plus rejected occurrences.
@@ -48,14 +60,16 @@ impl EmbeddingBatch {
 /// Provider request waiting to be embedded.
 #[derive(Debug)]
 pub(super) struct PendingEmbedding {
-    /// Original fingerprint index represented by this request.
-    pub(super) fingerprint_index: usize,
+    /// Every fingerprint index whose source text is this snippet.
+    ///
+    /// One provider request, many owners: the request is deduplicated by
+    /// content hash, the *result* never is. Collapsing these to a single
+    /// index is what erased cosines between byte-identical clones.
+    pub(super) fingerprint_indices: Vec<usize>,
     /// Source text sent to the provider.
     pub(super) snippet: String,
     /// Stable content hash used for cache writes and diagnostics.
     pub(super) snippet_hash: String,
-    /// Logical duplicate occurrences represented by this snippet.
-    pub(super) occurrences: usize,
 }
 
 /// Successful vector tied to its original fingerprint index.

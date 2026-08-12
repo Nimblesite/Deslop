@@ -4,7 +4,7 @@
 //! returns the ANN-nearest-neighbour pairs plus report provenance.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     path::Path,
     thread,
     time::Duration,
@@ -166,10 +166,18 @@ fn compute_embeddings(
     batch
 }
 
-/// Walks the corpus once, loading cache hits and queuing unique misses.
-/// `max_input_chars` is the budget the provider declared for itself
-/// ([`EmbeddingProvider::max_input_chars`], #286) — never a constant of
-/// this pass's own.
+/// Walks the corpus once, grouping fingerprints by snippet content and
+/// routing each group whole: cache hit, oversized rejection, or one
+/// pending provider request. `max_input_chars` is the budget the provider
+/// declared for itself ([`EmbeddingProvider::max_input_chars`], #286) —
+/// never a constant of this pass's own.
+///
+/// Only the provider *request* is deduplicated by content hash; the
+/// resulting vector is recorded for **every** fingerprint in the group.
+/// Byte-identical clones share one snippet by definition, so collapsing a
+/// group to its first member deletes the embedding evidence for exactly
+/// the pairs this tool exists to find, rendering `embedding_cos = 0.0` —
+/// a measured-and-absent claim the pass never measured.
 fn lookup_phase(
     corpus: &FingerprintCorpus,
     cache: &EmbeddingCache,
@@ -177,77 +185,79 @@ fn lookup_phase(
     observer: &mut EmbeddingObserver,
     max_input_chars: usize,
 ) -> Vec<PendingEmbedding> {
-    let mut indexed_hashes: HashSet<String> = HashSet::new();
-    let mut pending_positions: HashMap<String, usize> = HashMap::new();
     let mut pending: Vec<PendingEmbedding> = Vec::new();
-    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
-        let snippet = snippet_for(fingerprint, &corpus.sources);
-        if snippet.chars().count() > max_input_chars {
-            record_oversized_input(batch, index, snippet, max_input_chars);
-            continue;
-        }
-        classify_snippet(
-            ClassifyContext {
-                index,
-                snippet,
-                cache,
-                batch,
-                observer,
-            },
-            &mut indexed_hashes,
-            &mut pending_positions,
-            &mut pending,
-        );
+    for group in group_snippets_by_content(corpus) {
+        route_snippet_group(group, cache, batch, observer, max_input_chars, &mut pending);
     }
     pending
 }
 
-/// Inputs for [`classify_snippet`].
-struct ClassifyContext<'a> {
-    /// Position of the fingerprint inside the corpus.
-    index: usize,
-    /// Source slice extracted for this fingerprint.
+/// Fingerprints sharing one exact source snippet.
+struct SnippetGroup {
+    /// Every fingerprint index whose source text is `snippet`, in
+    /// corpus order.
+    fingerprint_indices: Vec<usize>,
+    /// The shared source text.
     snippet: String,
-    /// Embedding cache consulted for warm-cache short-circuits.
-    cache: &'a EmbeddingCache,
-    /// Mutable batch where cache hits are recorded immediately.
-    batch: &'a mut EmbeddingBatch,
-    /// Pass-level observer updated on hit, miss, or duplicate.
-    observer: &'a mut EmbeddingObserver,
+    /// Stable content hash of `snippet`.
+    snippet_hash: String,
 }
 
-/// Routes one snippet onto cache-hit, dedup-merge, or queue-pending.
-fn classify_snippet(
-    ctx: ClassifyContext<'_>,
-    indexed_hashes: &mut HashSet<String>,
-    pending_positions: &mut HashMap<String, usize>,
+/// Groups corpus fingerprints by snippet content hash, preserving
+/// first-seen corpus order so downstream dispatch is deterministic.
+fn group_snippets_by_content(corpus: &FingerprintCorpus) -> Vec<SnippetGroup> {
+    let mut positions: HashMap<String, usize> = HashMap::new();
+    let mut groups: Vec<SnippetGroup> = Vec::new();
+    for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
+        let snippet = snippet_for(fingerprint, &corpus.sources);
+        let snippet_hash = content_hash(&snippet);
+        match positions.get(&snippet_hash) {
+            Some(&position) => extend_group(&mut groups, position, index),
+            None => {
+                let _previous = positions.insert(snippet_hash.clone(), groups.len());
+                groups.push(SnippetGroup {
+                    fingerprint_indices: vec![index],
+                    snippet,
+                    snippet_hash,
+                });
+            }
+        }
+    }
+    groups
+}
+
+/// Appends one more owner to an existing snippet group.
+fn extend_group(groups: &mut [SnippetGroup], position: usize, fingerprint_index: usize) {
+    if let Some(group) = groups.get_mut(position) {
+        group.fingerprint_indices.push(fingerprint_index);
+    }
+}
+
+/// Routes one snippet group onto cache-hit, oversized-rejection, or
+/// queue-pending. Every route applies to the whole group.
+fn route_snippet_group(
+    group: SnippetGroup,
+    cache: &EmbeddingCache,
+    batch: &mut EmbeddingBatch,
+    observer: &mut EmbeddingObserver,
+    max_input_chars: usize,
     pending: &mut Vec<PendingEmbedding>,
 ) {
-    let snippet_hash = content_hash(&ctx.snippet);
-    if indexed_hashes.contains(&snippet_hash) {
-        ctx.observer.record_duplicate();
+    if group.snippet.chars().count() > max_input_chars {
+        record_oversized_input(batch, group, max_input_chars);
         return;
     }
-    if let Some(position) = pending_positions.get(&snippet_hash).copied() {
-        if let Some(queued) = pending.get_mut(position) {
-            queued.occurrences = queued.occurrences.saturating_add(1);
-        }
-        ctx.observer.record_duplicate();
+    observer.record_group(group.fingerprint_indices.len());
+    if let Some(cached) = cache.get(&group.snippet) {
+        batch.push(&group.fingerprint_indices, &cached);
+        observer.record_cache_hit();
         return;
     }
-    if let Some(cached) = ctx.cache.get(&ctx.snippet) {
-        let _inserted = indexed_hashes.insert(snippet_hash);
-        ctx.batch.push(ctx.index, cached, 1);
-        ctx.observer.record_cache_hit();
-        return;
-    }
-    ctx.observer.record_cache_miss();
-    let _previous = pending_positions.insert(snippet_hash.clone(), pending.len());
+    observer.record_cache_miss();
     pending.push(PendingEmbedding {
-        fingerprint_index: ctx.index,
-        snippet: ctx.snippet,
-        snippet_hash,
-        occurrences: 1,
+        fingerprint_indices: group.fingerprint_indices,
+        snippet: group.snippet,
+        snippet_hash: group.snippet_hash,
     });
 }
 
@@ -275,19 +285,12 @@ fn attempted_subtrees(total_fingerprints: usize, batch: &EmbeddingBatch) -> usiz
     batch.vectors.len().saturating_add(batch.failures)
 }
 
-/// Counts an oversized snippet as skipped before provider dispatch.
-fn record_oversized_input(
-    batch: &mut EmbeddingBatch,
-    fingerprint_index: usize,
-    snippet: String,
-    max_input_chars: usize,
-) {
-    let snippet_hash = content_hash(&snippet);
+/// Counts an oversized snippet group as skipped before provider dispatch.
+fn record_oversized_input(batch: &mut EmbeddingBatch, group: SnippetGroup, max_input_chars: usize) {
     let item = PendingEmbedding {
-        fingerprint_index,
-        snippet,
-        snippet_hash,
-        occurrences: 1,
+        fingerprint_indices: group.fingerprint_indices,
+        snippet: group.snippet,
+        snippet_hash: group.snippet_hash,
     };
     record_failed_pending(batch, &item, &format!("exceeds {max_input_chars} chars"));
 }
@@ -428,7 +431,7 @@ fn push_fresh_embedding(
     if let Err(error) = cache.store(&item.snippet, &vector) {
         tracing::warn!(%error, content_hash = %item.snippet_hash, "embedding cache write failed");
     }
-    batch.push(item.fingerprint_index, vector, item.occurrences);
+    batch.push(&item.fingerprint_indices, &vector);
 }
 
 /// Records every pending item in a failed provider batch.
@@ -442,16 +445,20 @@ fn record_failed_chunk<E: std::fmt::Display>(
     }
 }
 
-/// Records one failed pending embedding request.
+/// Records one failed pending embedding request. Every fingerprint that
+/// shared the rejected snippet is counted failed — anything less would
+/// under-report the failure figure by exactly the duplicate count.
 fn record_failed_pending<E: std::fmt::Display>(
     batch: &mut EmbeddingBatch,
     item: &PendingEmbedding,
     error: &E,
 ) {
-    batch.failures = batch.failures.saturating_add(item.occurrences);
+    batch.failures = batch
+        .failures
+        .saturating_add(item.fingerprint_indices.len());
     tracing::warn!(
         error = %error,
-        occurrences = item.occurrences,
+        occurrences = item.fingerprint_indices.len(),
         snippet_chars = item.snippet.chars().count(),
         content_hash = %item.snippet_hash,
         "embedding provider rejected subtree — skipping embedding signal"
