@@ -8,8 +8,6 @@
 //!
 //! Issues addressed (see parent `mod.rs` header):
 //! - [CLONE-NOISE-PY-ASSERT-ONLY] — assert-only test bodies.
-//! - [CLONE-NOISE-PY-DICT-ASSERT] — chained `assert dict[k1][k2]`
-//!   shape across unrelated test files.
 //! - [CLONE-NOISE-PY-DICT-FIXTURE] — small nested-dict literals
 //!   across pytest fixture files.
 //! - [CLONE-NOISE-PY-PYTEST-FIXTURE] — pytest fixture boilerplate.
@@ -149,103 +147,8 @@ fn assert_only_body_in_range(body: Node<'_>, range: ByteRange) -> bool {
     saw_assert
 }
 
-/// Detects ****: chained `assert <var>[k1][k2] == V` shape
-/// across at least two unrelated pytest test functions. Identifier
-/// normalisation collapses the variable, keys and value, so the
-/// surviving structure is identical even though every test exercises a
-/// different contract.
-pub(super) fn is_chained_dict_assert_cluster(snippets: &[Snippet<'_>]) -> bool {
-    if !is_multi_member_language_cluster(snippets, "python") {
-        return false;
-    }
-    spans_multiple_files(snippets.iter().map(|snippet| snippet.file_id))
-        && snippets.iter().all(is_chained_dict_assert_snippet)
-}
-
-/// Returns true when `snippet` lives inside a pytest `test_*` function
-/// and the reported range contains only chained-subscript assertions.
-fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
-    let Some(tree) = parse_for(snippet) else {
-        return false;
-    };
-    let Some(range) = trimmed_snippet_range(snippet) else {
-        return false;
-    };
-    let Some(function) = enclosing_kind(tree.root_node(), range, &["function_definition"]) else {
-        return false;
-    };
-    if !python_function_name_starts_with(function, snippet.source, b"test_") {
-        return false;
-    }
-    let Some(body) = function.child_by_field_name("body") else {
-        return false;
-    };
-    body_has_only_chained_dict_asserts(body, range, snippet.source)
-}
-
-/// Returns true when every named child of `body` overlapping `range` is
-/// an `assert_statement` whose left-hand side is a `subscript(subscript)`
-/// chain — and at least one such assert is present.
-fn body_has_only_chained_dict_asserts(body: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
-    let mut cursor = body.walk();
-    let mut saw = false;
-    for child in body.named_children(&mut cursor) {
-        if !node_intersects_range(child, range) {
-            continue;
-        }
-        if child.kind() != "assert_statement" {
-            return false;
-        }
-        if !assert_statement_is_chained_dict(child, source) {
-            return false;
-        }
-        saw = true;
-    }
-    saw
-}
-
-/// Returns true for `assert <chain> == <const>` / `is <const>` where the
-/// chain is two or more nested subscript accesses against an identifier.
-fn assert_statement_is_chained_dict(assert_node: Node<'_>, source: &[u8]) -> bool {
-    let mut cursor = assert_node.walk();
-    let mut named = assert_node.named_children(&mut cursor);
-    let Some(first) = named.next() else {
-        return false;
-    };
-    let chain = match first.kind() {
-        "comparison_operator" => comparison_left(first),
-        _ => Some(first),
-    };
-    let Some(chain) = chain else { return false };
-    subscript_chain_depth(chain, source) >= 2
-}
-
-/// Returns the left operand of a Python `comparison_operator` node.
-fn comparison_left(comparison: Node<'_>) -> Option<Node<'_>> {
-    let mut cursor = comparison.walk();
-    let first = comparison.named_children(&mut cursor).next();
-    first
-}
-
-/// Counts subscript hops down a `subscript(subscript(identifier))` tower.
-fn subscript_chain_depth(node: Node<'_>, source: &[u8]) -> usize {
-    if node.kind() != "subscript" {
-        return 0;
-    }
-    let Some(value) = node.child_by_field_name("value") else {
-        return 0;
-    };
-    if value.kind() == "subscript" {
-        return subscript_chain_depth(value, source).saturating_add(1);
-    }
-    if value.kind() == "identifier" && source.get(value.start_byte()..value.end_byte()).is_some() {
-        return 1;
-    }
-    0
-}
-
 /// Returns true when the function's declared name starts with `prefix`.
-fn python_function_name_starts_with(function: Node<'_>, source: &[u8], prefix: &[u8]) -> bool {
+pub(super) fn python_function_name_starts_with(function: Node<'_>, source: &[u8], prefix: &[u8]) -> bool {
     let Some(name) = function.child_by_field_name("name") else {
         return false;
     };

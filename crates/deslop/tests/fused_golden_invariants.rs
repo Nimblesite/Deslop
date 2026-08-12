@@ -273,7 +273,7 @@ fn no_golden_report_renders_a_constant_fused_score() -> Result<()> {
     }
     assert_eq!(
         verdicts.len(),
-        6,
+        GOLDEN_CORPORA.len(),
         "every golden corpus must be exercised: {verdicts:#?}"
     );
     Ok(())

@@ -1,77 +1,77 @@
-//! Single-file sibling-declaration family filter — **QUARANTINED**
+//! Single-file sibling-declaration family filter
 //! ([RANK-STRUCTURAL-ONLY]).
 //!
-//! The filter suppressed a single-file `structural_only` family of
-//! sibling declarations: the in-class REST/CRUD, settings, builder or
-//! visitor idiom, where each method shares a skeleton but targets a
-//! different endpoint literal and return type, so the family fuses at
+//! Suppresses a single-file `structural_only` family of sibling
+//! declarations: the in-class REST/CRUD, settings, builder or visitor
+//! idiom, where each method shares a skeleton but targets a different
+//! endpoint literal and return type, so the family fuses at
 //! `structural = 1.00` with no token or embedding support and dominates
 //! `top-offenders` purely on size.
 //!
-//! **It could not tell that family from real duplication, in either
-//! configuration, and both errors are pinned by a red test.**
+//! # The question this filter must answer
 //!
-//! It asked two questions. The first was a bare member count — suppress
-//! only families of three or more — which is the same defect class as
-//! the literal-variation shortcut in `calls.rs`: a size threshold
-//! standing in for a structural question. With the floor in place a
-//! *two*-window settings family walks straight through: two 1.5 KB spans
-//! of `get`/`reset`/`update` methods in one Dart file, fused at
-//! `structural = 1.00` with `token_jaccard = 0.00`, topping the report as
-//! exactly the REST surface this filter exists to suppress. That is a
-//! **false positive**, pinned by
-//! `single_file_structural_only_method_families_do_not_top_the_report`.
+//! Both a real clone and a declaration family are shape-identical in one
+//! file — that is what put them in this bucket. The only thing that
+//! separates them is what normalisation erased, so that is what gets
+//! measured: **do the members preserve their literals and map their
+//! identifiers through one consistent substitution?**
 //!
-//! The second was the CST discriminator below — declaration context vs.
-//! statement context — which was meant to answer the same question
-//! honestly and let the floor go. It does not. With the floor removed,
-//! the `csharp-merge-rename` fixture produces **zero clusters**: a
-//! genuine two-method C# clone under consistent renames, which the merge
-//! planner can lift, is classified a sibling-declaration family and
-//! erased from the report. That is a **false negative**, pinned by
-//! `refactor_merge::consistent_renames_lift_without_parameters`.
+//! - `csharp-merge-rename`'s `TotalWithTax`/`SubtotalWithTax` keep every
+//!   literal (`0`, `100`) and rename only bound locals (`total`→`sum`,
+//!   `taxed`→`levy`) — one bijection explains the pair. Real duplication,
+//!   liftable by the merge planner, **kept**.
+//! - The vendored meilisearch settings family changes the endpoint string
+//!   at every method. No substitution explains a literal, so the members
+//!   share a skeleton and nothing else. Scaffolding, **hidden**.
 //!
-//! Neither setting is correct and the choice between them is a choice of
-//! which error to ship. `descendant_for_byte_range` returning
-//! `method_declaration` says only *where* the member sits, not whether
-//! its siblings differ solely in their literals — and that, not the
-//! member count and not the covering node kind, is the question the
-//! filter has to answer. The deleted code is reproduced in
-//! `docs/plans/quarantine-repair-plan.md`; a replacement must compare the
-//! members' normalized bodies and be green on **both** pinning tests
-//! before it returns anything.
+//! # Two answers that are not allowed
+//!
+//! A **member count** cannot decide it. A three-member floor let a
+//! two-window settings family walk straight through and top the report;
+//! it is the same defect class as the literal-variation shortcut in
+//! `calls.rs`, a size threshold standing in for a structural question.
+//! A body-difference threshold expressed as a member count is that same
+//! defect wearing a different constant.
+//!
+//! A **covering node kind** cannot decide it either.
+//! `descendant_for_byte_range` returning `method_declaration` says only
+//! *where* a member sits; asking it erased `csharp-merge-rename`
+//! entirely, because a genuine two-method clone also sits in a
+//! `method_declaration`.
+//!
+//! Both errors stay pinned:
+//! `single_file_structural_only_method_families_do_not_top_the_report`
+//! fails if the family surfaces, and
+//! `refactor_merge::consistent_renames_lift_without_parameters` fails if
+//! the clone is erased. Neither passes alone — only the pair states the
+//! contract.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use crate::{clone_category::CloneCategory, cluster::Cluster};
 
-use crate::{fingerprint::Fingerprint, state::FileId};
+use super::spans_multiple_files;
 
-use super::snippets::ParseCache;
-
-/// Quarantined: see the module docs. Answering this question wrongly
-/// either erases real duplication from the report or hands the user a
-/// REST surface as its top offender, and the deleted implementation did
-/// one or the other depending on a member-count constant.
+/// Returns true when `cluster` is a single-file family of sibling
+/// declarations rather than real duplication ([RANK-STRUCTURAL-ONLY]).
 ///
-/// # Panics
+/// Suppression requires positive proof of scaffolding on every count:
+/// the members live in one file, they are not a data table, and their
+/// collapsed leaves prove they differ in substance. A cluster whose
+/// content could not be measured is not proven to be anything and stays
+/// visible, demoted by the `structural_only` policy.
 ///
-/// Always. The caller reaches here for every single-file
-/// `structural_only` cluster, so any repository containing one aborts
-/// the run until the filter is rebuilt.
-#[allow(clippy::panic)]
-pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
-    _members: &[Fingerprint],
-    _sources: &HashMap<FileId, Vec<u8>>,
-    _file_languages: &HashMap<FileId, &'static str, S>,
-    _cache: &ParseCache,
+/// A **data-category** cluster is never a declaration family
+/// ([RANK-CATEGORY]). A table of constructor rows varies its literals by
+/// construction — that is what a table *is* — so the substance test
+/// convicts every one of them. But a table's payload is its substance,
+/// repeating it is a real finding, and the user already chooses its fate
+/// through the three-way `data_clones` policy: demote, drop, or keep.
+/// Hiding it here would erase both the finding and the choice.
+pub(crate) fn is_single_file_declaration_family(
+    cluster: &Cluster,
+    category: CloneCategory,
 ) -> bool {
-    panic!(
-        "[RANK-STRUCTURAL-ONLY] single-file declaration-family suppression is \
-         quarantined: with a member-count floor it published a two-window Dart \
-         settings family as the top offender \
-         (single_file_structural_only_method_families_do_not_top_the_report), \
-         and without one it erased the csharp-merge-rename clone entirely \
-         (refactor_merge::consistent_renames_lift_without_parameters). The CST \
-         declaration-vs-statement discriminator cannot separate the two; see \
-         docs/plans/quarantine-repair-plan.md"
-    )
+    category == CloneCategory::Logic
+        && !cluster.members.is_empty()
+        && !spans_multiple_files(cluster.members.iter().map(|member| member.file_id))
+        && cluster.content.substance_varies
 }

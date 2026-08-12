@@ -85,11 +85,10 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     );
     let interpretation = interpret(kind);
     // The bucket is the wire label of the routed kind — including
-    // `structural_only` ([RANK-STRUCTURAL-ONLY]), which
-    // introduced as a label-only override here. It is now a
-    // first-class [`ClusterKind`] routed in `report_bucket_kind`, so
-    // the label, the interpretation, and the ranking demotion can no
-    // longer diverge (inconsistency #1).
+    // `structural_only` ([RANK-STRUCTURAL-ONLY]), which was once a
+    // label-only override applied here. It is now a first-class
+    // [`ClusterKind`] routed in `report_bucket_kind`, so the label, the
+    // interpretation, and the ranking demotion can no longer diverge.
     let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
     ReportCluster {
@@ -267,7 +266,7 @@ fn proven_identical_signals(signals: ReportSignals, kind: ClusterKind) -> Report
 /// Routes the signal triple into the report bucket and is the *single
 /// source of truth* for the [CLONE-BUCKETS-IDENTICAL] downgrade.
 ///
-///: structural normalisation collapses identifiers and literals,
+/// Structural normalisation collapses identifiers and literals,
 /// so two snippets that share AST shape but differ in routes, handlers, or
 /// rate-limit policy literals still reach `structural=1.00, jaccard=1.00`.
 /// Calling them "Identical code / every copy is the same" is a lie — the

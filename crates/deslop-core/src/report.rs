@@ -259,7 +259,7 @@ fn materialise_cluster<S: BuildHasher>(
         policy.drops_structural_only() && classify(&report_cluster) == ClusterKind::StructuralOnly;
     let hidden = dropped_as_data
         || dropped_as_structural_only
-        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache, category);
     if hidden {
         log_hidden_cluster(&report_cluster, dropped_as_data, dropped_as_structural_only);
     }
@@ -302,6 +302,7 @@ fn cluster_is_hidden<S: BuildHasher>(
     report_cluster: &ReportCluster,
     inputs: &ReportInputs<'_, S>,
     parse_cache: &ParseCache,
+    category: CloneCategory,
 ) -> bool {
     let occurrences_all_hidden = !report_cluster.occurrences.is_empty()
         && report_cluster.occurrences.iter().all(|occ| occ.hidden);
@@ -328,19 +329,15 @@ fn cluster_is_hidden<S: BuildHasher>(
             inputs.file_languages,
             parse_cache,
         );
-    //: a single-file `structural_only` family of sibling
-    // declarations (REST CRUD / settings / builder methods) is the same
-    // evidence-free noise as the cross-file #134 scaffolding. The AST
-    // check confines this to declaration families, so worth-extracting
-    // statement-window clones stay visible (demoted, not hidden, per
-    // [RANK-STRUCTURAL-ONLY]).
+    // [RANK-STRUCTURAL-ONLY] A single-file `structural_only` family of
+    // sibling declarations (REST CRUD / settings / builder methods) is the
+    // same evidence-free noise as the cross-file scaffolding in
+    // [CLONE-NOISE-SCAFFOLDING]. The content check confines this to members
+    // that provably differ in substance, so worth-extracting clones — a
+    // consistent rename over preserved literals — stay visible (demoted,
+    // not hidden).
     let single_file_declaration_family = kind == ClusterKind::StructuralOnly
-        && is_single_file_declaration_family(
-            &cluster.members,
-            inputs.sources,
-            inputs.file_languages,
-            parse_cache,
-        );
+        && is_single_file_declaration_family(cluster, category);
     token_only_or_mega || noise || role_mismatch || single_file_declaration_family
 }
 

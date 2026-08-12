@@ -114,6 +114,7 @@ mod ecmascript;
 mod python;
 mod python_class_shapes;
 mod python_constants;
+mod python_dict_assert;
 mod python_idioms;
 mod python_module_preamble;
 mod python_orm;
@@ -246,7 +247,7 @@ fn python_noise(snippets: &[Snippet<'_>]) -> bool {
         || python_idioms::is_monkeypatch_scaffolding_literal_cluster(snippets)
         || python_idioms::is_python_all_exports_cluster(snippets)
         || python::is_python_assertion_only_cluster(snippets)
-        || python::is_chained_dict_assert_cluster(snippets)
+        || python_dict_assert::is_chained_dict_assert_cluster(snippets)
         || python_orm::is_kwargs_only_constructor_cluster(snippets)
         || python_orm::is_sqlalchemy_mapped_column_cluster(snippets)
         || python::is_test_dict_literal_cluster(snippets)

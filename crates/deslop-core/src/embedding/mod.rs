@@ -45,9 +45,9 @@ use std::sync::Arc;
 /// the "no embeddings" code path without crash-looping.
 ///
 /// For interactive server processes (LSP, MCP) embeddings are optional
-/// per [LSP-EMBEDDING-CONSENT] / — the server must stay alive
-/// regardless of mode. The caller decides how to log the failure
-/// (`error` for `Required`, `warn` for `Auto`).
+/// per [LSP-EMBEDDING-CONSENT] — the server must stay alive regardless
+/// of mode. The caller decides how to log the failure (`error` for
+/// `Required`, `warn` for `Auto`).
 #[must_use]
 pub fn try_connect_ollama(endpoint: &str, model: &str) -> Option<Arc<dyn EmbeddingProvider>> {
     match OllamaProvider::connect(endpoint, model) {

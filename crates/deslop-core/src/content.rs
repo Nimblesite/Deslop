@@ -70,6 +70,14 @@ pub struct ContentEvidence {
     /// Fraction of the canonical member's collapsed leaves that are
     /// literal positions ([CLONE-NOISE-LITERAL-TABLE]).
     pub literal_fraction: f64,
+    /// Positive proof that the members differ in *substance* rather than
+    /// in bound names ([RANK-STRUCTURAL-ONLY]): some aligned literal
+    /// position carries different bytes, or the identifier substitution
+    /// needs more than one consistent 1:1 mapping. `false` when the
+    /// members duplicate substance **and** when nothing could be
+    /// measured — a finding of scaffolding is positive evidence, never an
+    /// absent measurement.
+    pub substance_varies: bool,
 }
 
 impl ContentEvidence {
@@ -91,6 +99,7 @@ impl ContentEvidence {
             agreement: 1.0,
             rename_consistency: 0.0,
             literal_fraction: 0.0,
+            substance_varies: false,
         }
     }
 }
@@ -137,7 +146,46 @@ fn measure_cluster<S: BuildHasher>(
         agreement: cluster_agreement(&member_keys),
         rename_consistency: cluster_rename_consistency(canonical, &member_keys),
         literal_fraction: canonical_literal_fraction(canonical),
+        substance_varies: cluster_substance_varies(canonical, &member_keys),
     }
+}
+
+/// Proof that a cluster's members differ in substance rather than in
+/// bound names ([RANK-STRUCTURAL-ONLY]). One member that provably varies
+/// convicts the cluster: a sibling-declaration family only has to change
+/// one endpoint literal to stop being a copy of its neighbour.
+/// Degenerate and unresolvable clusters return `false` — nothing was
+/// measured, so nothing is proven.
+fn cluster_substance_varies(
+    canonical: Option<&[LeafKey]>,
+    member_keys: &[Option<Vec<LeafKey>>],
+) -> bool {
+    member_keys
+        .iter()
+        .skip(1)
+        .any(|keys| pair_substance_varies(canonical, keys.as_deref()))
+}
+
+/// Proof that two members differ in substance: their aligned leaves
+/// disagree on a literal, or their identifiers need more than one
+/// consistent substitution.
+///
+/// Deliberately carries no literal-anchor floor.
+/// [`RENAME_EVIDENCE_MIN_LITERALS`] guards a *score* against agreement by
+/// coincidence — few anchors make matching literals weak evidence *for* a
+/// rename. A *disagreement* needs no such floor: differing bytes at an
+/// anchored position are evidence on their own, and a two-literal body
+/// under a maximal rename is still a clone.
+fn pair_substance_varies(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> bool {
+    let (Some(canonical), Some(member)) = (canonical, member) else {
+        return false;
+    };
+    if canonical.len() != member.len() {
+        return true;
+    }
+    let literals = population(canonical, member, true);
+    let literals_vary = !literals.is_empty() && literal_preservation(&literals) < 1.0;
+    literals_vary || mapping_consistency(&population(canonical, member, false)) < 1.0
 }
 
 /// Fraction of the canonical member's collapsed leaves that are literal
