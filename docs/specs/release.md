@@ -125,6 +125,18 @@ than `v*` so a bare major alias can never re-fire the pipeline — see
   does not currently support OIDC trusted publishing, so the protected
   `release` environment must provide a separate `OPEN_VSX_PAT` token. Re-runs
   also use `--skip-duplicate`.
+- **Publish completeness** ([DEPLOY-PUBLISH-COMPLETE]) — both registry jobs
+  delegate the loop to `scripts/publish-vsixes.mjs`, one implementation so the
+  registries cannot drift apart. The script retries each platform up to three
+  times with linear backoff (`DESLOP_PUBLISH_BACKOFF_SECONDS`, default 20),
+  attempts every platform even when one keeps failing, refuses to start when
+  fewer VSIX artifacts exist than the build matrix produced (`--expected 5`),
+  and fails naming the platforms that never reached the registry. The v0.31.0
+  release showed why fail-fast is wrong here: one transient Marketplace
+  timeout aborted the loop after darwin-arm64, pinning every other platform to
+  v0.30.x while Open VSX served all five — a partial release nothing in the
+  run named. `scripts/test-release-publish-contract.mjs` executes both publish
+  steps against a scripted registry timeout and enforces the contract.
 - **Homebrew tap** — `publish-homebrew` renders `Formula/deslop.rb` and pushes
   to `Nimblesite/homebrew-tap` (secret `HOMEBREW_TAP_TOKEN`).
 - **Scoop bucket** — `publish-scoop` renders `bucket/deslop.json` and pushes to

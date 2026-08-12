@@ -633,7 +633,11 @@ jobs:
     # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
     if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # TIMEOUT EXCEPTION: the retrying publisher absorbs Marketplace request
+    # timeouts that take ~3 minutes each to surface (issue #348); 30 minutes
+    # covers retries on several flaky platforms while still bounding a dead
+    # registry.
+    timeout-minutes: 30
     # Passwordless publish via Microsoft Entra ID OIDC: the release environment
     # gives the GitHub OIDC subject a stable
     # repo:OWNER/REPO:environment:release shape for Entra federation.
@@ -642,6 +646,10 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # The publish loop lives in scripts/publish-vsixes.mjs, so the job needs
+      # the tagged source checked out alongside the downloaded artifacts.
+      - uses: actions/checkout@v7
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
@@ -656,39 +664,24 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      # One `vsce publish` per platform-specific VSIX — vsce silently uses only
-      # the first when several are globbed into a single call. The Marketplace
-      # forbids a SemVer prerelease suffix in the version field, so the VSIX is
-      # packaged with the core MAJOR.MINOR.PATCH (see stamp-release-version.mjs)
-      # and prerelease status is conveyed by the --pre-release flag for any
-      # hyphenated tag. The short-lived Marketplace token is minted from the
-      # Entra OIDC session and passed to vsce through VSCE_PAT; no PAT secret is
-      # stored. See docs/specs/release.md.
+      # One publish per platform-specific VSIX — vsce silently uses only the
+      # first when several are globbed into a single call. The loop, the
+      # per-platform retry, the completeness check, and the --pre-release
+      # handling for hyphenated tags live in scripts/publish-vsixes.mjs,
+      # shared with publish-openvsx so one flaky upload can neither suppress
+      # the remaining platforms nor let the two registries drift apart
+      # (issue #348, [DEPLOY-PUBLISH-COMPLETE]). The short-lived Marketplace
+      # token is minted from the Entra OIDC session and passed to vsce through
+      # VSCE_PAT; no PAT secret is stored. See docs/specs/release.md.
       - name: Publish each platform VSIX (Entra OIDC, no PAT)
         run: |
           set -euo pipefail
-          shopt -s globstar nullglob
-          flag=""
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            flag="--pre-release"
-            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
-          fi
           VSCE_PAT="$(az account get-access-token \
             --resource 499b84ac-1321-427f-aa17-267ca6975798 \
             --query accessToken -o tsv)"
           echo "::add-mask::${VSCE_PAT}"
           export VSCE_PAT
-          published=0
-          for vsix in artifacts/**/*.vsix; do
-            echo "Publishing ${vsix}"
-            npx --yes @vscode/vsce@3.9.2 publish --skip-duplicate ${flag} --packagePath "${vsix}"
-            published=$((published + 1))
-          done
-          if [ "${published}" -eq 0 ]; then
-            echo "::error::no VSIX artifacts found to publish"
-            exit 1
-          fi
-          echo "Published ${published} VSIX(es) to the Marketplace"
+          node scripts/publish-vsixes.mjs --tool vsce --expected 5
 
   publish-openvsx:
     name: Publish VSIX to Open VSX
@@ -696,13 +689,18 @@ jobs:
     # The VSIX changes on a rust (bundled binaries re-stamped) or vscode change.
     if: ${{ !cancelled() && (needs.changes.outputs.full == 'true' || needs.changes.outputs.vscode == 'true') && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # TIMEOUT EXCEPTION: same retry budget as publish-marketplace (issue #348).
+    timeout-minutes: 30
     # Open VSX has no OIDC trusted-publishing path today, so this uses a
     # separate Open VSX token scoped to the protected release environment.
     environment: release
     permissions:
       contents: read
     steps:
+      # The publish loop lives in scripts/publish-vsixes.mjs, so the job needs
+      # the tagged source checked out alongside the downloaded artifacts.
+      - uses: actions/checkout@v7
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22.x"
@@ -711,29 +709,12 @@ jobs:
         with:
           path: artifacts/
 
+      # Same shared publisher as publish-marketplace: per-platform retry and a
+      # fail-naming-the-missing-platforms completeness check, so this job
+      # carries the identical guarantee (issue #348, [DEPLOY-PUBLISH-COMPLETE]).
       - name: Publish each platform VSIX to Open VSX
         env:
           OVSX_PAT: ${{ secrets.OPEN_VSX_PAT }}
         run: |
           set -euo pipefail
-          if [ -z "${OVSX_PAT:-}" ]; then
-            echo "::error::OPEN_VSX_PAT secret is not set; cannot publish to Open VSX"
-            exit 1
-          fi
-          shopt -s globstar nullglob
-          flag=""
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            flag="--pre-release"
-            echo "Prerelease tag ${GITHUB_REF_NAME}; publishing with --pre-release"
-          fi
-          published=0
-          for vsix in artifacts/**/*.vsix; do
-            echo "Publishing ${vsix}"
-            npx --yes ovsx@1.0.0 publish --skip-duplicate ${flag} --packagePath "${vsix}"
-            published=$((published + 1))
-          done
-          if [ "${published}" -eq 0 ]; then
-            echo "::error::no VSIX artifacts found to publish"
-            exit 1
-          fi
-          echo "Published ${published} VSIX(es) to Open VSX"
+          node scripts/publish-vsixes.mjs --tool ovsx --expected 5
