@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 /// The closed `language` enum, derived from the core parser registry so the
 /// tool schemas can never drift from the set of supported languages
-/// ([MCP-TOOL-REPORT-QUERY]). Fixes the omission of `dart` (gh #170, #198).
+/// ([MCP-TOOL-REPORT-QUERY]). Fixes the omission of `dart`.
 fn language_enum() -> Value {
     Value::Array(language_ids().into_iter().map(Value::from).collect())
 }
@@ -15,7 +15,7 @@ fn language_enum() -> Value {
 /// emits ([CLONE-BUCKETS]) — the #170/#198 anti-drift lesson applied to
 /// buckets. Notably includes `structural_only` so agents can exclude
 /// (or isolate) demoted shape-only families ([RANK-STRUCTURAL-ONLY],
-/// gh #195/#197).
+///).
 fn bucket_enum() -> Value {
     Value::Array(
         ClusterKind::all()

@@ -328,7 +328,7 @@ fn cluster_is_hidden<S: BuildHasher>(
             inputs.file_languages,
             parse_cache,
         );
-    // Issue #197: a single-file `structural_only` family of sibling
+    //: a single-file `structural_only` family of sibling
     // declarations (REST CRUD / settings / builder methods) is the same
     // evidence-free noise as the cross-file #134 scaffolding. The AST
     // check confines this to declaration families, so worth-extracting

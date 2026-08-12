@@ -38,7 +38,7 @@ use super::BackendError;
 /// indicate the LSP and MCP have drifted out of sync.) JSON-RPC
 /// `-32601 method not found` from the LSP is surfaced with a
 /// version-mismatch hint so agents diagnose stale bundled binaries
-/// instead of generic "ipc rpc error" noise ([Deslop#148]).
+/// instead of generic "ipc rpc error" noise.
 pub fn ipc_call(root: &Path, method: &str, params: &Value) -> Result<Value, BackendError> {
     let stream = connect(root)?;
     call_over(stream, method, params)
@@ -87,7 +87,7 @@ fn call_over(mut stream: IpcStream, method: &str, params: &Value) -> Result<Valu
 }
 
 /// Parses the JSON-RPC response envelope, mapping `-32601` to the
-/// version-mismatch hint ([Deslop#148]).
+/// version-mismatch hint.
 fn decode_response(line: &str, method: &str) -> Result<Value, BackendError> {
     let response: Value = serde_json::from_str(line.trim()).map_err(|err| {
         BackendError::StateFileCorrupt(format!("ipc response not valid JSON: {err}"))

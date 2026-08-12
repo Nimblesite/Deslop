@@ -6,7 +6,7 @@
 //! into the [`super::super::corpus::FingerprintCorpus`] consumed by those
 //! stages, in ascending workspace-relative-path order so the whole pipeline
 //! is reproducible across both reruns and edit history
-//! ([PIPELINE-DETERMINISM], #301).
+//! ([PIPELINE-DETERMINISM]).
 
 use std::{collections::HashMap, path::PathBuf};
 
@@ -115,7 +115,7 @@ impl PipelineSession {
 
     /// Flattens the per-file state into a [`FingerprintCorpus`] in
     /// ascending workspace-relative-path order
-    /// ([PIPELINE-DETERMINISM], #301).
+    /// ([PIPELINE-DETERMINISM]).
     ///
     /// The sort key must be a property of the workspace *state*, never
     /// of its edit history. [`FileId`]s are append-only: removing and

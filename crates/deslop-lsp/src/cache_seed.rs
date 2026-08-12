@@ -1,4 +1,4 @@
-//! Cache-seeded LSP startup for GH #73.
+//! Cache-seeded LSP startup for.
 
 use std::{
     path::PathBuf,

@@ -17,9 +17,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{
-    call, call_capturing, handshake, spawn_lsp_guarded, wait_for_report_matching, POLL_INTERVAL,
-};
+use common::{POLL_INTERVAL, at, call, call_capturing, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching};
 use mock_ollama::{MockBehavior, MockOllama};
 use serde_json::{json, Value};
 
@@ -33,13 +31,13 @@ fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -
     let workspace = common::copy_fixture("ts-mixed-band")?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
     let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(initialize["result"]["serverInfo"]["name"], "deslop-lsp");
+    assert_eq!(json_path(&initialize, &["result", "serverInfo", "name"]), "deslop-lsp");
     assert!(initialize.get("error").is_none(), "{initialize:#}");
 
     let before = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        report["files_analysed"].as_u64() == Some(5)
+        at(report, "files_analysed").as_u64() == Some(5)
     })?;
-    assert!(before["embedding_provenance"].is_null(), "{before:#}");
+    assert!(at(&before, "embedding_provenance").is_null(), "{before:#}");
 
     let (selection, initial_frames) = call_capturing(
         &mut stdin,
@@ -60,12 +58,12 @@ fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -
         .get("result")
         .ok_or_else(|| anyhow!("reportGet returned no result: {after:#}"))?;
 
-    assert_eq!(terminal["params"]["provider_id"], "ollama", "{terminal:#}");
-    assert_eq!(terminal["params"]["model_id"], "nomic-embed-text", "{terminal:#}");
-    assert_eq!(terminal["params"]["phase"], "failed", "{terminal:#}");
-    assert_eq!(terminal["params"]["done"], 0, "failed work cannot be complete");
+    assert_eq!(json_path(&terminal, &["params", "provider_id"]), "ollama", "{terminal:#}");
+    assert_eq!(json_path(&terminal, &["params", "model_id"]), "nomic-embed-text", "{terminal:#}");
+    assert_eq!(json_path(&terminal, &["params", "phase"]), "failed", "{terminal:#}");
+    assert_eq!(json_path(&terminal, &["params", "done"]), 0, "failed work cannot be complete");
     assert!(
-        terminal["params"]["message"].as_str().is_some_and(|message| !message.is_empty()),
+        json_path(&terminal, &["params", "message"]).as_str().is_some_and(|message| !message.is_empty()),
         "failed progress must explain the provider failure: {terminal:#}"
     );
     assert_eq!(after_report, &before, "a failed refresh replaced the last good report");
@@ -77,11 +75,13 @@ fn wait_for_terminal_progress(
     stdout: &mut BufReader<ChildStdout>,
     mut frames: Vec<Value>,
 ) -> Result<Value> {
-    let deadline = Instant::now() + REPORT_TIMEOUT;
+    let deadline = Instant::now()
+        .checked_add(REPORT_TIMEOUT)
+        .unwrap_or_else(Instant::now);
     loop {
         if let Some(terminal) = frames.iter().find(|frame| {
-            frame["method"] == PROGRESS
-                && matches!(frame["params"]["phase"].as_str(), Some("complete" | "failed"))
+            at(frame, "method") == PROGRESS
+                && matches!(json_path(frame, &["params", "phase"]).as_str(), Some("complete" | "failed"))
         }) {
             return Ok(terminal.clone());
         }

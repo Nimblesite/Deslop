@@ -45,7 +45,7 @@ use std::sync::Arc;
 /// the "no embeddings" code path without crash-looping.
 ///
 /// For interactive server processes (LSP, MCP) embeddings are optional
-/// per [LSP-EMBEDDING-CONSENT] / issue #35 — the server must stay alive
+/// per [LSP-EMBEDDING-CONSENT] / — the server must stay alive
 /// regardless of mode. The caller decides how to log the failure
 /// (`error` for `Required`, `warn` for `Auto`).
 #[must_use]

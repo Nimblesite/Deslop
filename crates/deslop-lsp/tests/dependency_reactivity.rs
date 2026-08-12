@@ -7,7 +7,7 @@ mod common;
 use std::{fs, path::Path, time::Duration};
 
 use anyhow::Result;
-use common::{fixture, handshake, spawn_lsp_guarded, wait_for_report_matching};
+use common::{at, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching};
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
 const FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
@@ -27,7 +27,7 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
     let _initialize = handshake(&mut stdin, &mut stdout)?;
     let initial = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        report["files_analysed"].as_u64() == Some(4)
+        at(report, "files_analysed").as_u64() == Some(4)
     })?;
     assert_initial_report(&initial);
 
@@ -35,16 +35,16 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     let first_party_source = fs::read_to_string(&first_party)?;
     fs::write(&first_party, unrelated_csharp())?;
     let changed = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        report["clusters"] != initial["clusters"]
+        at(report, "clusters") != at(&initial, "clusters")
     })?;
     assert_changed_report(&changed, &initial);
 
     fs::write(&first_party, first_party_source)?;
     let restored = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        report["clusters"] == initial["clusters"]
+        at(report, "clusters") == at(&initial, "clusters")
     })?;
     assert_eq!(
-        restored["metrics"], initial["metrics"],
+        at(&restored, "metrics"), at(&initial, "metrics"),
         "restore must converge"
     );
 
@@ -52,14 +52,14 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
     let _bytes = fs::copy(fixture("csharp-small").join("Alpha.cs"), &dependency)?;
     let dependency_changed =
         wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-            report["files_analysed"].as_u64() == Some(5)
+            at(report, "files_analysed").as_u64() == Some(5)
         })?;
     assert_eq!(
-        dependency_changed["files_analysed"], 5,
+        at(&dependency_changed, "files_analysed"), 5,
         "new dependency source must be analysed"
     );
-    assert_ne!(dependency_changed["clusters"], restored["clusters"]);
-    assert_ne!(dependency_changed["metrics"], restored["metrics"]);
+    assert_ne!(at(&dependency_changed, "clusters"), at(&restored, "clusters"));
+    assert_ne!(at(&dependency_changed, "metrics"), at(&restored, "metrics"));
     Ok(())
 }
 
@@ -74,30 +74,30 @@ fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Resu
     seed_workspace(&root)?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
     let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(initialize["result"]["serverInfo"]["name"], "deslop-lsp");
+    assert_eq!(json_path(&initialize, &["result", "serverInfo", "name"]), "deslop-lsp");
     assert!(initialize.get("error").is_none(), "{initialize:#}");
 
     let initial = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        report["files_analysed"].as_u64() == Some(4)
+        at(report, "files_analysed").as_u64() == Some(4)
     })?;
     assert_initial_report(&initial);
-    assert_eq!(initial["metrics"]["duplicated_files"], 4, "{initial:#}");
+    assert_eq!(json_path(&initial, &["metrics", "duplicated_files"]), 4, "{initial:#}");
 
     fs::write(root.join("node_modules/pkg/Beta.cs"), unrelated_csharp())?;
     let changed = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
-        report["files_analysed"].as_u64() == Some(4)
-            && report["clusters"] != initial["clusters"]
+        at(report, "files_analysed").as_u64() == Some(4)
+            && at(report, "clusters") != at(&initial, "clusters")
     })?;
 
-    assert_eq!(changed["files_analysed"], 4, "edited dependency stays analysed");
-    assert_ne!(changed["clusters"], initial["clusters"], "cluster wire stayed stale");
-    assert_ne!(changed["metrics"], initial["metrics"], "repo metrics stayed stale");
+    assert_eq!(at(&changed, "files_analysed"), 4, "edited dependency stays analysed");
+    assert_ne!(at(&changed, "clusters"), at(&initial, "clusters"), "cluster wire stayed stale");
+    assert_ne!(at(&changed, "metrics"), at(&initial, "metrics"), "repo metrics stayed stale");
     assert!(
-        changed["metrics"]["duplicated_files"].as_u64().unwrap_or_default() < 4,
+        json_path(&changed, &["metrics", "duplicated_files"]).as_u64().unwrap_or_default() < 4,
         "the unrelated dependency must leave the duplicate population: {changed:#}"
     );
     assert!(
-        changed["metrics"]["duplication_percent"].as_f64().unwrap_or(100.0) < 100.0,
+        json_path(&changed, &["metrics", "duplication_percent"]).as_f64().unwrap_or(100.0) < 100.0,
         "the report must stop claiming the edited corpus is 100% duplicated: {changed:#}"
     );
     Ok(())
@@ -123,24 +123,24 @@ fn copy_pair(destination: &Path) -> Result<()> {
 }
 
 fn assert_initial_report(report: &serde_json::Value) {
-    assert_eq!(report["files_analysed"], 4, "{report:#}");
-    assert!(report["clusters"]
+    assert_eq!(at(report, "files_analysed"), 4, "{report:#}");
+    assert!(at(report, "clusters")
         .as_array()
         .is_some_and(|value| !value.is_empty()));
     assert!(
-        report["metrics"]["analysed_loc"]
+        json_path(report, &["metrics", "analysed_loc"])
             .as_u64()
             .unwrap_or_default()
             > 0
     );
     assert!(
-        report["metrics"]["duplicated_loc"]
+        json_path(report, &["metrics", "duplicated_loc"])
             .as_u64()
             .unwrap_or_default()
             > 0
     );
     assert!(
-        report["metrics"]["duplication_percent"]
+        json_path(report, &["metrics", "duplication_percent"])
             .as_f64()
             .unwrap_or_default()
             > 0.0
@@ -148,13 +148,13 @@ fn assert_initial_report(report: &serde_json::Value) {
 }
 
 fn assert_changed_report(changed: &serde_json::Value, previous: &serde_json::Value) {
-    assert_eq!(changed["files_analysed"], 4, "edited source stays analysed");
+    assert_eq!(at(changed, "files_analysed"), 4, "edited source stays analysed");
     assert_ne!(
-        changed["clusters"], previous["clusters"],
+        at(changed, "clusters"), at(previous, "clusters"),
         "cluster wire must refresh"
     );
     assert_ne!(
-        changed["metrics"], previous["metrics"],
+        at(changed, "metrics"), at(previous, "metrics"),
         "metrics must refresh"
     );
 }

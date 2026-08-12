@@ -114,7 +114,7 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     pub analysed_lines: &'a AnalysedLines,
     /// Scan root every `per_file` path is rendered relative to, so the
     /// metrics rows carry the same path form as occurrence rows
-    /// ([Deslop#286]).
+    ///.
     pub scan_root: &'a Path,
 }
 

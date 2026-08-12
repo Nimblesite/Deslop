@@ -1,7 +1,7 @@
-//! Single-file sibling-declaration family filter ([#197]).
+//! Single-file sibling-declaration family filter.
 //!
-//! Issue #134/#154 suppressed *cross-file* `structural_only` scaffolding
-//! (test boilerplate replicated across many files). Issue #197 is the
+//! suppressed *cross-file* `structural_only` scaffolding
+//! (test boilerplate replicated across many files). is the
 //! single-file twin: an in-class sibling-method family — the REST/CRUD,
 //! settings, builder, or visitor idiom — where each method shares a skeleton
 //! but targets a different endpoint literal and return type, so they fuse at

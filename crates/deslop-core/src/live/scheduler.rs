@@ -204,7 +204,7 @@ impl SchedulerTaskState {
     /// the diagnostics publisher and the MCP round-trip `reportDelta`
     /// → `reportGet` to re-fetch identical bytes. One production LSP
     /// served 281 such `reportGet` calls in two hours of build churn
-    /// (#314).
+    ///.
     ///
     /// The baseline is the last generation *announced*, never the one
     /// this pass happened to start from, so a generation an

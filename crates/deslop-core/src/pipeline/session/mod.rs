@@ -15,6 +15,7 @@ mod render;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::{
@@ -61,12 +62,12 @@ pub struct PipelineSession {
     /// Exclusion config loaded at [`PipelineSession::initialise`] and
     /// re-loaded by [`PipelineSession::reload_exclusion`] when the
     /// daemon detects a config change.
-    pub(super) exclusion: ExclusionConfig,
+    pub(super) exclusion: Arc<ExclusionConfig>,
     /// Ignore rules (`.gitignore`, `.ignore`, `.git/info/exclude`, hidden
     /// components) mirroring the ones [`discover_files`] gets from its
     /// walker. The live ingest path is handed individual paths and never
     /// walks, so it must apply these itself or it admits files discovery
-    /// would have pruned (#287). Rebuilt alongside `exclusion`.
+    /// would have pruned. Rebuilt alongside `exclusion`.
     pub(super) ignore_matcher: IgnoreMatcher,
     /// File registry shared across the whole session. New files
     /// register on their first `update_files` sighting; removed files
@@ -137,7 +138,7 @@ impl PipelineSession {
             supported_extensions = ?extension_to_language.keys().collect::<Vec<_>>(),
             "pipeline session initialising",
         );
-        let exclusion = load_exclusion(&root, config_path.as_deref())?;
+        let exclusion = Arc::new(load_exclusion(&root, config_path.as_deref())?);
         let ignore_matcher = IgnoreMatcher::build(&root);
         let discovery = discover_files(&root, &extension_to_language, &exclusion);
         log_discovery_summary(&discovery, &root);
@@ -198,7 +199,7 @@ impl PipelineSession {
     /// exclusion, or ignore gate, or named a file the corpus never held.
     /// The corpus is then provably unchanged, so the report is too, and
     /// re-deriving it is pure waste: one production LSP burned 11h17m of
-    /// CPU across 1086 such passes before this early-out existed (#299).
+    /// CPU across 1086 such passes before this early-out existed.
     /// Callers keep the report they already have.
     ///
     /// # Errors
@@ -310,8 +311,16 @@ impl PipelineSession {
 
     /// Returns the currently-loaded exclusion config.
     #[must_use]
-    pub const fn exclusion(&self) -> &ExclusionConfig {
+    pub fn exclusion(&self) -> &ExclusionConfig {
         &self.exclusion
+    }
+
+    /// Returns a shareable handle to the currently-loaded exclusion
+    /// config, so the live watcher applies the same policy the cold scan
+    /// resolved ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    #[must_use]
+    pub fn exclusion_handle(&self) -> Arc<ExclusionConfig> {
+        Arc::clone(&self.exclusion)
     }
 
     /// Returns the cumulative cache-hit telemetry since session start.
@@ -329,7 +338,7 @@ impl PipelineSession {
 
     /// Reloads the exclusion config from disk. Called from
     /// [`Self::update_files`] when a watched config path is in the
-    /// changed set ([LIVE-CONFIG-LIVE], #189).
+    /// changed set ([LIVE-CONFIG-LIVE]).
     ///
     /// # Errors
     ///
@@ -337,7 +346,7 @@ impl PipelineSession {
     /// when the new config is malformed. The session keeps the old
     /// config on failure so a bad edit does not brick the daemon.
     fn reload_exclusion(&mut self) -> Result<(), CoreError> {
-        self.exclusion = load_exclusion(&self.root, self.config_path.as_deref())?;
+        self.exclusion = Arc::new(load_exclusion(&self.root, self.config_path.as_deref())?);
         self.ignore_matcher = IgnoreMatcher::build(&self.root);
         Ok(())
     }

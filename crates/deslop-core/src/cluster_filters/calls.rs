@@ -86,6 +86,14 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8]) -> Option<CallShape> {
 
 /// Detects body-range clusters whose contained call sequence has the
 /// same callees but intentionally different literal test data.
+///
+/// Every position must vary. A sequence in which some calls carry
+/// differing literals while others are invariant is not payload — the
+/// invariant calls are shared logic the members genuinely duplicate, and
+/// hiding the cluster would lose a real Type-2 clone. Two `[Fact]` tests
+/// that fetch different URLs and then run the same four assertions are
+/// the case this distinguishes: one varying call, four invariant ones.
+/// Scaffolding has nothing left once the literals are removed.
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
     let sequences: Option<Vec<Vec<CallShape>>> =
         snippets.iter().map(call_shapes_in_range).collect();
@@ -98,20 +106,7 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
     if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
-    if !suppressible_scaffolding_shape(snippets.len(), first.len()) {
-        return false;
-    }
-    (0..first.len()).any(|index| sequence_position_differs(&sequences, index))
-}
-
-/// Bounds the sequence rule to scaffolding shapes
-/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): a single-call body (the
-/// varying call is the member's entire logic) or a family of three-plus
-/// members. A *pair* of multi-call bodies agreeing at every position
-/// except a varying literal carries substantial invariant logic — a
-/// genuine Type-2 clone that must stay visible.
-const fn suppressible_scaffolding_shape(member_count: usize, sequence_len: usize) -> bool {
-    sequence_len == 1 || member_count >= 3
+    (0..first.len()).all(|index| sequence_position_differs(&sequences, index))
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving

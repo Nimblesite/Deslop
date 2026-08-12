@@ -9,7 +9,10 @@
 //! (b) token LSH bucket collisions per `SourcererCC`
 //! ([TECH-TOKEN-SOURCERERCC]).
 
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
 use crate::{
     content::ContentEvidence,
@@ -21,7 +24,7 @@ use crate::{
 
 /// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
 mod signals;
-/// Cross-cluster subsumption ([PIPELINE-CLUSTER-EXACT], #50).
+/// Cross-cluster subsumption ([PIPELINE-CLUSTER-EXACT]).
 mod subsume;
 use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
@@ -40,13 +43,13 @@ pub struct Cluster {
     pub weight: f64,
     /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): the
     /// per-signal mean over every unordered pair of the rendered
-    /// members — Merkle-hash equality for `structural`, MinHash
+    /// members — Merkle-hash equality for `structural`, `MinHash`
     /// Jaccard for `token_jaccard`, vector cosine for `embedding_cos`.
     /// Never aggregated from the discovery edges that glued the
     /// transitive-closure component together.
     pub signals: PairScore,
     /// Measured raw-content evidence across the members'
-    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE], #331/#336):
+    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE]):
     /// pooled byte agreement, Type-2 rename consistency, and literal
     /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
@@ -71,10 +74,10 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// member's hash so identical fused clusters across runs always report
 /// the same id.
 #[must_use]
-pub fn build_ranked_fused_clusters(
+pub fn build_ranked_fused_clusters<S: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>>,
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
     let mut clusters =
@@ -93,10 +96,10 @@ pub fn build_ranked_fused_clusters(
 }
 
 /// Materialises every fused cluster that remains reportable.
-fn reportable_clusters(
+fn reportable_clusters<S: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>>,
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
     fused_clusters
@@ -138,10 +141,10 @@ fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
 /// location; those groups are artifacts, not duplicates, and are
 /// dropped before ranking. Signals are measured **after** the collapse
 /// so they describe exactly the occurrences the report shows.
-fn build_fused_cluster(
+fn build_fused_cluster<S: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>>,
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused: &FusedCluster,
 ) -> Option<Cluster> {
     let occurrence_indices = collapsed_member_indices(fingerprints, fused);
@@ -240,7 +243,7 @@ fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
 /// Collapses overlapping sibling-window occurrences that live in the
 /// same file into a single canonical member per overlapping region.
 ///
-/// Fixes issue #2 ([PIPELINE-CLUSTER-EXACT] sibling-extension runaway):
+/// Fixes ([PIPELINE-CLUSTER-EXACT] sibling-extension runaway):
 /// the sibling pass at [`crate::sibling`] emits one fingerprint per
 /// contiguous window of widths 2..=8. When a physical clone spans many
 /// siblings, several windows cover overlapping byte ranges in the same
@@ -274,7 +277,7 @@ fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprin
     // history (a removed-and-restored file gets a fresh id), while the
     // corpus index follows the path-ordered snapshot, so rendered
     // occurrence order stays byte-identical across edit history
-    // ([PIPELINE-DETERMINISM], #301).
+    // ([PIPELINE-DETERMINISM]).
     out.sort_unstable();
     out
 }

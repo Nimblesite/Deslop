@@ -178,7 +178,7 @@ fn compute_embeddings(
 /// Walks the corpus once, grouping fingerprints by snippet content and
 /// routing each group whole: cache hit, oversized rejection, or one
 /// pending provider request. `max_input_chars` is the budget the provider
-/// declared for itself ([`EmbeddingProvider::max_input_chars`], #286) —
+/// declared for itself ([`EmbeddingProvider::max_input_chars`]) —
 /// never a constant of this pass's own.
 ///
 /// Only the provider *request* is deduplicated by content hash; the
@@ -220,16 +220,15 @@ fn group_snippets_by_content(corpus: &FingerprintCorpus) -> Vec<SnippetGroup> {
     for (index, fingerprint) in corpus.fingerprints.iter().enumerate() {
         let snippet = snippet_for(fingerprint, &corpus.sources);
         let snippet_hash = content_hash(&snippet);
-        match positions.get(&snippet_hash) {
-            Some(&position) => extend_group(&mut groups, position, index),
-            None => {
-                let _previous = positions.insert(snippet_hash.clone(), groups.len());
-                groups.push(SnippetGroup {
-                    fingerprint_indices: vec![index],
-                    snippet,
-                    snippet_hash,
-                });
-            }
+        if let Some(&position) = positions.get(&snippet_hash) {
+            extend_group(&mut groups, position, index);
+        } else {
+            let _previous = positions.insert(snippet_hash.clone(), groups.len());
+            groups.push(SnippetGroup {
+                fingerprint_indices: vec![index],
+                snippet,
+                snippet_hash,
+            });
         }
     }
     groups
@@ -257,7 +256,17 @@ fn route_snippet_group(
         return;
     }
     observer.record_group(group.fingerprint_indices.len());
-    if let Some(cached) = cache.get(&group.snippet) {
+    // The cache is a deserialisation boundary: its entries are bytes
+    // from disk, not values this process produced. `push_fresh_embedding`
+    // guarantees nothing non-finite is ever written, so this check costs
+    // one pass over a hit and can only fire on an entry that predates
+    // that guarantee or was corrupted underneath us. A rejected hit
+    // falls through to a fresh provider request, so the snippet is
+    // re-measured rather than dropped.
+    if let Some(cached) = cache
+        .get(&group.snippet)
+        .filter(|vector| is_finite_vector(vector))
+    {
         batch.push(&group.fingerprint_indices, &cached);
         observer.record_cache_hit();
         return;
@@ -370,7 +379,7 @@ fn push_fresh_embeddings(
     dimensions: usize,
 ) {
     for (item, vector) in chunk.iter().zip(vectors) {
-        push_fresh_embedding(cache, batch, item, vector, dimensions);
+        push_fresh_embedding(cache, batch, item, &vector, dimensions);
     }
 }
 
@@ -424,12 +433,23 @@ fn maybe_yield_between_batches(
     }
 }
 
-/// Stores one successful provider vector when its dimensions match.
+/// Stores one successful provider vector when it is well-formed.
+///
+/// A vector must clear both gates before it reaches the cache, the ANN
+/// index, or a rendered signal. Dimension disagreement is the obvious
+/// one; finiteness is the quiet one. A response may be valid JSON and
+/// still overflow `f32` — `3.5e38` parses fine and becomes `inf`, whose
+/// normalization is `NaN`, and every comparison against `NaN` is false.
+/// Such a vector does not fail loudly downstream: it slips past the
+/// admission floors that are written as `cosine < MIN` and manufactures
+/// clusters out of malformed provider output. Rejecting at ingest is the
+/// only place the vector is still attributable to the request that
+/// produced it, so it is counted failed exactly like an oversized input.
 fn push_fresh_embedding(
     cache: &EmbeddingCache,
     batch: &mut EmbeddingBatch,
     item: &PendingEmbedding,
-    vector: Vec<f32>,
+    vector: &[f32],
     dimensions: usize,
 ) {
     if vector.len() != dimensions {
@@ -437,10 +457,20 @@ fn push_fresh_embedding(
         record_failed_pending(batch, item, &message);
         return;
     }
-    if let Err(error) = cache.store(&item.snippet, &vector) {
+    if !is_finite_vector(vector) {
+        let message = "non-finite vector component";
+        record_failed_pending(batch, item, &message);
+        return;
+    }
+    if let Err(error) = cache.store(&item.snippet, vector) {
         tracing::warn!(%error, content_hash = %item.snippet_hash, "embedding cache write failed");
     }
-    batch.push(&item.fingerprint_indices, &vector);
+    batch.push(&item.fingerprint_indices, vector);
+}
+
+/// Returns `true` when every component of `vector` is finite.
+fn is_finite_vector(vector: &[f32]) -> bool {
+    vector.iter().all(|value| value.is_finite())
 }
 
 /// Records every pending item in a failed provider batch.

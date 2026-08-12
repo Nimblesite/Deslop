@@ -130,7 +130,7 @@ fn mid_band_cluster_confidence_never_exceeds_its_strongest_axis() -> Result<()> 
     );
     let duplication = metric_field(&report, "duplication_percent")
         .as_f64()
-        .expect("duplication_percent is a number");
+        .ok_or_else(|| anyhow::anyhow!("duplication_percent is not a number: {report:#}"))?;
     assert!(
         duplication > 0.0,
         "a visible act-now cluster must register in the duplication metric, \
@@ -265,7 +265,7 @@ fn without_embeddings_the_mid_band_pair_stays_hidden() -> Result<()> {
     );
     let duplication = metric_field(&report, "duplication_percent")
         .as_f64()
-        .expect("duplication_percent is a number");
+        .ok_or_else(|| anyhow::anyhow!("duplication_percent is not a number: {report:#}"))?;
     assert!(
         approx(duplication, 0.0),
         "hidden clusters must not count as duplication, got {duplication}"

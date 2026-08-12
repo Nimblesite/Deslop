@@ -36,7 +36,7 @@ pub use session::{
     EmbeddingProgressReporter,
 };
 pub use session_helpers::STATE_FILE_NAME as LIVE_REPORT_FILE_NAME;
-pub use watcher::LiveWatcher;
+pub use watcher::{live_exclusion, publish_exclusion, LiveExclusion, LiveWatcher};
 pub use wire::{
     AnalysisState, ChangeSummary, EmbeddingModelInfo, EmbeddingPhase, EmbeddingProgress,
     FileReport, FindSimilarInput, FindSimilarRequest, FindSimilarResult, ReportChangedNotification,

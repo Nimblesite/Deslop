@@ -246,7 +246,7 @@ pub(super) fn cluster_matches_any_hash(
 /// read from this same file. Re-exported as
 /// [`crate::live::LIVE_REPORT_FILE_NAME`] so the MCP can name the
 /// on-disk fallback in its `LspNotRunning` recovery payload without
-/// duplicating the literal ([Deslop#157]).
+/// duplicating the literal.
 pub const STATE_FILE_NAME: &str = "live-report.json";
 
 /// [LIVE-SEED-CACHE] Writes `bytes` to `{dir}/live-report.json` via an

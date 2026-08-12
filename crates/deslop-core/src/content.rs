@@ -1,6 +1,6 @@
 //! Content-evidence measurement for shape-identical clone clusters.
 //!
-//! Implements [FUSION-CONTENT-GATE] (#331/#336): normalisation collapses
+//! Implements [FUSION-CONTENT-GATE]: normalisation collapses
 //! identifiers and literals, so `structural` and `token_jaccard` agree by
 //! construction on any shape match and cannot tell a renamed copy of real
 //! logic from mandatory scaffolding or a data table. This pass measures
@@ -284,7 +284,7 @@ fn modal_partners(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<u64, u64>
 
 /// Share of members whose non-empty content-key vector also appears on
 /// another member — verbatim copies hiding among same-shape lookalikes
-/// (gh #104's body-equivalence guard). Transitive closure can merge a
+/// ('s body-equivalence guard). Transitive closure can merge a
 /// genuine byte-identical pair into a cluster of same-shape neighbours;
 /// the mean against one canonical member would average the proven copy
 /// below the support floor, so a cluster *dominated* by verbatim copies

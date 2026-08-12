@@ -21,7 +21,7 @@ use deslop_core::{
     fingerprint::Fingerprint,
     lsh::{Signature, SIGNATURE_LEN},
     pair::{
-        candidate_pairs, cluster_by_transitive_closure, LSH_ONLY_MIN_JACCARD,
+        candidate_pairs, cluster_by_transitive_closure, FusedCluster, LSH_ONLY_MIN_JACCARD,
         LSH_ONLY_MIN_NODE_COUNT,
     },
     state::{FileId, FileRegistry},
@@ -117,18 +117,26 @@ fn issue_93_embedding_pass_recalls_lsh_missed_clusters_and_credits_every_cosine(
         "the LSH-missed pair must remain its own component"
     );
 
-    // [FUSION-CLUSTER-SIGNALS] Rendered signals are measured between the
-    // rendered occurrences. The LSH-visible pair's *discovery edge*
-    // deliberately withholds embedding credit (asserted above), but the
-    // report still shows the true cosine of the two vectors — discovery
-    // bookkeeping never becomes a rendered figure.
+    assert_rendered_signals_are_measured(&fingerprints, &signatures, &clusters)
+}
+
+/// [FUSION-CLUSTER-SIGNALS] Rendered signals are measured between the
+/// rendered occurrences. The LSH-visible pair's *discovery edge*
+/// deliberately withholds embedding credit (asserted by the caller), but
+/// the report still shows the true cosine of the two vectors — discovery
+/// bookkeeping never becomes a rendered figure.
+fn assert_rendered_signals_are_measured(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    clusters: &[FusedCluster],
+) -> Result<()> {
     let vectors = HashMap::from([
         (0, vec![1.0, 0.0]),
         (1, vec![0.99, 0.141_067_36]),
         (2, vec![1.0, 0.0]),
         (3, vec![0.98, 0.198_997_49]),
     ]);
-    let rendered = build_ranked_fused_clusters(&fingerprints, &signatures, &vectors, &clusters);
+    let rendered = build_ranked_fused_clusters(fingerprints, signatures, &vectors, clusters);
     assert_eq!(
         rendered.len(),
         2,

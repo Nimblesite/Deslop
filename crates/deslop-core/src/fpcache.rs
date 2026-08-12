@@ -6,7 +6,7 @@
 //! skipping tree-sitter entirely for unchanged files. Any mismatch on
 //! the cache key — or a blob whose tree nests past [`MAX_AST_DEPTH`] —
 //! degrades gracefully to a miss, so a stale or corrupt blob cannot
-//! corrupt or crash a run, at worst it wastes disk (#168).
+//! corrupt or crash a run, at worst it wastes disk.
 //!
 //! The on-disk format is a single little-endian binary blob. Nothing
 //! from `serde` — the shape is tight, versioned by a magic header, and
@@ -190,7 +190,7 @@ fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
 /// [`MAX_AST_DEPTH`] so a corrupt or pre-cap blob cannot overflow the
 /// stack here — `decode_tree` is the only `NormalizedNode` producer
 /// besides `normalise_node`, so the depth invariant must hold at both
-/// (#168). Over-deep blobs fail decode and are treated as a cache miss,
+///. Over-deep blobs fail decode and are treated as a cache miss,
 /// which re-parses and re-rejects through the normaliser.
 fn decode_tree(
     cursor: &mut Cursor<&[u8]>,
@@ -221,7 +221,7 @@ fn decode_tree(
 
 /// One node's decoded header: interned kind, byte range, and child count,
 /// read in the encoder's order. Split out of [`decode_tree`] so the
-/// recursive walk stays small after the depth guard was added (#168).
+/// recursive walk stays small after the depth guard was added.
 struct NodeHeader {
     /// Interned normalised node kind.
     kind: &'static str,

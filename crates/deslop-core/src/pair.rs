@@ -83,6 +83,32 @@ impl PairScore {
             .fold(0.0_f64, f64::max)
             .clamp(0.0, 1.0)
     }
+
+    /// Returns the score with every non-finite axis replaced by `0.0` —
+    /// absent evidence, which is what a `NaN` axis actually is.
+    ///
+    /// Predicates written as comparisons are silently false against
+    /// `NaN`, so a malformed axis reads as *positive* evidence to any
+    /// test of the form `axis <= 0.0`. Normalising before a decision, not
+    /// inside each predicate, keeps that from having to be re-remembered
+    /// at every call site.
+    #[must_use]
+    pub fn finite(self) -> Self {
+        Self {
+            structural: finite_or_zero(self.structural),
+            token_jaccard: finite_or_zero(self.token_jaccard),
+            embedding_cos: finite_or_zero(self.embedding_cos),
+        }
+    }
+}
+
+/// Returns `value` when finite, `0.0` otherwise.
+fn finite_or_zero(value: f64) -> f64 {
+    if value.is_finite() {
+        value
+    } else {
+        0.0
+    }
 }
 
 /// A candidate clone pair identified by fingerprint indices into the
@@ -195,11 +221,12 @@ impl SurvivalStats {
 
 /// Applies the compound "survives clustering?" decision to a single pair.
 fn survival_decision(pair: &CandidatePair) -> PairSurvival {
-    if pair.score.bounded_fused() < pair.fused_min_score {
+    let score = pair.score.finite();
+    if score.bounded_fused() < pair.fused_min_score {
         return PairSurvival::DroppedBelowFused;
     }
-    let lsh_only = pair.score.structural <= 0.0 && pair.score.embedding_cos <= 0.0;
-    if lsh_only && pair.score.token_jaccard < pair.lsh_only_min_jaccard {
+    let lsh_only = score.structural <= 0.0 && score.embedding_cos <= 0.0;
+    if lsh_only && score.token_jaccard < pair.lsh_only_min_jaccard {
         return PairSurvival::DroppedLshOnlyJaccard;
     }
     if lsh_only && pair.min_node_count < LSH_ONLY_MIN_NODE_COUNT {

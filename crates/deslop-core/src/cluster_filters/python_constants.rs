@@ -1,6 +1,6 @@
 //! Module-level constant-table filter for Python.
 //!
-//! Issue **#133** [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE]: a module that is
+//! Issue [CLONE-NOISE-PY-MODULE-CONSTANT-TABLE]: a module that is
 //! just a run of module-level `NAME = <literal>` constant assignments — a
 //! table of SQL query strings, registry/config values, or similar —
 //! normalises to the same structural subtree as any other such table once
@@ -10,8 +10,8 @@
 //! extractable logic — there is no shared control flow or abstraction to
 //! hoist.
 //!
-//! Mirrors the Dart const-registry filter (#169) and the module-preamble
-//! filter (#104): suppressed **only** when the members differ in raw
+//! Mirrors the Dart const-registry filter and the module-preamble
+//! filter: suppressed **only** when the members differ in raw
 //! bytes, so a constants module copied verbatim into two files still
 //! surfaces as genuine duplication.
 

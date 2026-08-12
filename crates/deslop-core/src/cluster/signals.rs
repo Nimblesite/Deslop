@@ -7,9 +7,9 @@
 //! artifact of discovery topology (structural star buckets, ANN top-k
 //! fan-out, LSH band width), and under that mean a byte-identical file
 //! pair once rendered `structural = 0.36` and routed `same_behavior`
-//! (gh #343 corpus, pinned by `issue_343_sum_clamp_saturation.rs`).
+//! (corpus, pinned by `issue_343_sum_clamp_saturation.rs`).
 
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::BuildHasher};
 
 use crate::{
     embedding::cosine_similarity,
@@ -22,18 +22,18 @@ use crate::{
 /// occurrence indices.
 ///
 /// Per occurrence pair: `structural` is Merkle-hash equality,
-/// `token_jaccard` is the MinHash estimate between the two signatures,
+/// `token_jaccard` is the `MinHash` estimate between the two signatures,
 /// and `embedding_cos` is [`cosine_similarity`] of the two vectors —
 /// the same arithmetic that admitted the ANN pair evidence. A pair
 /// missing an input for a signal (no vector: embeddings off, oversized
 /// input, provider failure) is excluded from that signal's numerator
 /// and denominator both, so absence never masquerades as a measured
 /// 0.0 inside the mean.
-pub(super) fn measured_signals(
+pub(super) fn measured_signals<S: BuildHasher>(
     occurrence_indices: &[usize],
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
-    embedding_vectors: &HashMap<usize, Vec<f32>>,
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
 ) -> PairScore {
     let mut totals = SignalTotals::default();
     for (position, &left) in occurrence_indices.iter().enumerate() {
@@ -49,7 +49,7 @@ pub(super) fn measured_signals(
 struct SignalTotals {
     /// Merkle-hash equality mean input.
     structural: MeanAccumulator,
-    /// MinHash Jaccard mean input.
+    /// `MinHash` Jaccard mean input.
     token_jaccard: MeanAccumulator,
     /// Vector cosine mean input.
     embedding_cos: MeanAccumulator,
@@ -57,13 +57,13 @@ struct SignalTotals {
 
 impl SignalTotals {
     /// Folds one occurrence pair into every signal it is measurable for.
-    fn add_pair(
+    fn add_pair<S: BuildHasher>(
         &mut self,
         left: usize,
         right: usize,
         fingerprints: &[Fingerprint],
         signatures: &[Signature],
-        embedding_vectors: &HashMap<usize, Vec<f32>>,
+        embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     ) {
         if let (Some(left_fp), Some(right_fp)) = (fingerprints.get(left), fingerprints.get(right)) {
             self.structural

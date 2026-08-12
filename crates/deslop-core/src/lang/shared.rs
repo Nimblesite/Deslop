@@ -35,7 +35,7 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// tree nests deeper than this are rejected with [`CoreError::AstTooDeep`]
 /// so the deep structure never reaches the pipeline's recursive tree
 /// walks (fingerprinting, sibling windows, token extraction), which would
-/// otherwise overflow the stack and abort the whole run (#168).
+/// otherwise overflow the stack and abort the whole run.
 ///
 /// Real source ASTs are at most low-hundreds deep, so this leaves ample
 /// headroom while staying well under the overflow threshold on both the
@@ -79,7 +79,7 @@ pub fn parse_source(
 ///
 /// Returns [`CoreError::AstTooDeep`] when the tree nests deeper than
 /// [`MAX_AST_DEPTH`], so a pathologically deep file is skipped rather than
-/// overflowing the pipeline's recursive walks (#168).
+/// overflowing the pipeline's recursive walks.
 pub fn build_normalised_root(
     tree: &Tree,
     file_id: FileId,

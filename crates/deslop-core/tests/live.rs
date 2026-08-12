@@ -18,8 +18,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use deslop_core::{
     embedding::{test_support::StubProvider, EmbeddingMode},
     live::{
-        AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest, LiveApi,
-        LiveError, LiveService, LiveWatcher, Scheduler,
+        live_exclusion, AnalysisSession, Clock, Debouncer, FindSimilarInput, FindSimilarRequest,
+        LiveApi, LiveError, LiveService, LiveWatcher, Scheduler,
     },
     pipeline::{run, EmbeddingSettings, PipelineConfig},
     EmbeddingProvider, EmbeddingSpec, ExclusionConfig, ProviderError,
@@ -72,7 +72,7 @@ async fn start_live_loop(
 )> {
     let session_lock = Arc::new(tokio::sync::Mutex::new(session));
     let owned_extensions = extensions.iter().map(|ext| (*ext).to_owned()).collect();
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let (watcher, watcher_rx) =
         LiveWatcher::start(scan_root, owned_extensions, exclusion, config_paths)
             .map_err(|err| anyhow!("watcher start: {err}"))?;
@@ -505,7 +505,7 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
     fs::write(&target, b"class A {}\n").context("seed file")?;
 
     let extensions = vec!["cs".to_owned()];
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let (_watcher_keep_alive, mut rx) =
         LiveWatcher::start(&root, extensions, exclusion, Vec::new())
             .map_err(|err| anyhow!("watcher start: {err}"))?;
@@ -557,7 +557,7 @@ async fn watcher_forwards_directory_removal_without_a_source_extension() -> Resu
     fs::write(nested.join("Sample.cs"), b"class A {}\n").context("seed file")?;
 
     let extensions = vec!["cs".to_owned()];
-    let exclusion = Arc::new(ExclusionConfig::empty());
+    let exclusion = live_exclusion(Arc::new(ExclusionConfig::empty()));
     let (_watcher_keep_alive, mut rx) =
         LiveWatcher::start(&root, extensions, exclusion, Vec::new())
             .map_err(|err| anyhow!("watcher start: {err}"))?;

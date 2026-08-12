@@ -95,7 +95,7 @@ pub fn fingerprint_corpus(
             Ok(processed) => processed,
             // A single pathologically deep file is skipped, not fatal: it
             // would otherwise overflow the recursive walks and abort the
-            // whole batch run (#168). Genuine parser errors still propagate.
+            // whole batch run. Genuine parser errors still propagate.
             Err(CoreError::AstTooDeep { language, limit }) => {
                 log_skip_too_deep(language, limit);
                 continue;
@@ -239,7 +239,7 @@ fn fingerprints_for(
     fingerprints
 }
 
-/// Logs that a pathologically deep file is being skipped (#168). Shared by
+/// Logs that a pathologically deep file is being skipped. Shared by
 /// the batch corpus loop and the live session ([`super::session`]) so the
 /// "skip, don't crash" decision carries one message. Logs only the language
 /// id and depth limit — never a path, per the project logging rules.
@@ -308,7 +308,7 @@ pub fn language_ids() -> Vec<&'static str> {
 /// registry's declared extensions, or `"unknown"`. The single labeling map
 /// shared by every human/agent surface (the HTML report highlighter, MCP page
 /// summaries) so the detected language can never drift between them — or from
-/// the registry when a language is added ([PIPELINE-LANG-TRAIT], #164).
+/// the registry when a language is added ([PIPELINE-LANG-TRAIT]).
 #[must_use]
 pub fn language_for_path(path: &Path) -> &'static str {
     let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {

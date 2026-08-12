@@ -129,7 +129,7 @@ pub struct ScopeKinds {
     /// Variable-writing node patterns. Rule 7 refuses extracts whose
     /// free variables are written inside the span — the helper would
     /// mutate its own parameter copy ([AUTOFIX-EXTRACT-PRECONDITIONS],
-    /// issue #280) — and merge check D refuses written holes and
+    ///) — and merge check D refuses written holes and
     /// context parameters ([AUTOFIX-MERGE-SAFETY]).
     pub write_kinds: &'static [WriteKind],
     /// Statement kinds whose meaning changes when the span relocates
@@ -140,7 +140,7 @@ pub struct ScopeKinds {
 }
 
 /// One variable-writing node pattern for rule 7 and merge check D
-/// ([AUTOFIX-EXTRACT-PRECONDITIONS] issue #280, [AUTOFIX-MERGE-SAFETY]).
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS], [AUTOFIX-MERGE-SAFETY]).
 ///
 /// A node of `node_kind` writes the name(s) in its target — the
 /// `target_field` child, or the node itself when `None` (grammars that

@@ -147,7 +147,7 @@ fn signature_for_tokens(
 
 /// Empty-token signatures are scoped to the exact fingerprint instead of a
 /// shared legacy default so unrelated empty token streams do not LSH-cluster
-/// through compatibility behavior (issue #86).
+/// through compatibility behavior.
 fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signature {
     let _ = language;
     fallback_signature(fingerprint)

@@ -66,7 +66,7 @@ fn lsp_edit(text: &str, edit: &PlannedEdit, annotation_id: &str) -> serde_json::
     })
 }
 
-/// RFC 8089 `file://` URI for an absolute path (issue #290). Backslash
+/// RFC 8089 `file://` URI for an absolute path. Backslash
 /// separators become `/`, a Windows drive letter keeps its unencoded
 /// colon behind the empty authority (`file:///C:/dir/file.rs`), and
 /// every remaining byte outside the unreserved set is percent-encoded.

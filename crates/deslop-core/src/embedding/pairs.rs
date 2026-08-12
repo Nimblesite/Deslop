@@ -105,7 +105,7 @@ fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec
             continue;
         };
         let cosine = cosine_between(left_point, right_point);
-        if cosine >= MIN_COSINE {
+        if admits_cosine(cosine) {
             pairs.push(EmbeddingPair {
                 left,
                 right,
@@ -148,11 +148,24 @@ fn collect_neighbours(
             continue;
         }
         let cosine = cosine_from_distance(f64::from(hit.distance));
-        if cosine < MIN_COSINE {
+        if !admits_cosine(cosine) {
             continue;
         }
         out.push(order_pair(query_index, neighbour, cosine));
     }
+}
+
+/// Returns `true` when a measured cosine is admissible evidence.
+///
+/// Finiteness is checked first and separately from the floor, because a
+/// non-finite cosine passes any `<` test by definition: written as
+/// `cosine < MIN_COSINE`, the ANN filter kept every `NaN` neighbour it
+/// was handed. `NaN` reaches here whenever a component overflows `f32`,
+/// so a malformed provider response would manufacture pairs rather than
+/// be discarded. Both the exact and ANN paths route through this one
+/// predicate so neither can drift open again.
+fn admits_cosine(cosine: f64) -> bool {
+    cosine.is_finite() && cosine >= MIN_COSINE
 }
 
 /// Converts instant-distance cosine **distance** back to a cosine

@@ -2,18 +2,18 @@
 //!
 //! Suppresses false-positive clusters whose shape is fixed by Python or
 //! pytest idioms rather than by the program under analysis. Pre-existing
-//! idiom filters (#72 / #96 / #114 / #126) live in `python_idioms.rs`
-//! and ORM-shaped filters (#100, #105) live in `python_orm.rs` so each
+//! idiom filters live in `python_idioms.rs`
+//! and ORM-shaped filters live in `python_orm.rs` so each
 //! file stays under the 500-LOC budget.
 //!
 //! Issues addressed (see parent `mod.rs` header):
-//! - **#99**  [CLONE-NOISE-PY-ASSERT-ONLY] — assert-only test bodies.
-//! - **#107** [CLONE-NOISE-PY-DICT-ASSERT] — chained `assert dict[k1][k2]`
+//! - [CLONE-NOISE-PY-ASSERT-ONLY] — assert-only test bodies.
+//! - [CLONE-NOISE-PY-DICT-ASSERT] — chained `assert dict[k1][k2]`
 //!   shape across unrelated test files.
-//! - **#112** [CLONE-NOISE-PY-DICT-FIXTURE] — small nested-dict literals
+//! - [CLONE-NOISE-PY-DICT-FIXTURE] — small nested-dict literals
 //!   across pytest fixture files.
-//! - **#121** [CLONE-NOISE-PY-PYTEST-FIXTURE] — pytest fixture boilerplate.
-//! - **#97**  [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] — `test_*`
+//! - [CLONE-NOISE-PY-PYTEST-FIXTURE] — pytest fixture boilerplate.
+//! - [CLONE-NOISE-PY-PARAMETRIC-INVARIANT-TESTS] — `test_*`
 //!   bodies that vary only by enum-member access (`X.K8S` vs `X.DOCKER`).
 
 use std::collections::BTreeSet;
@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{ast::ByteRange, state::FileId};
 
-/// Detects **issue #121**: pytest fixture functions that create ORM rows
+/// Detects ****: pytest fixture functions that create ORM rows
 /// all repeat the same session setup shape. The fixture is already the
 /// test abstraction, so surfacing those bodies as refactor targets adds
 /// noise instead of useful duplication.
@@ -101,7 +101,7 @@ fn decorator_line_has_fixture_callee(line: &str) -> bool {
     callee.rsplit('.').next() == Some("fixture")
 }
 
-/// Detects **issue #99**: blocks consisting only of Python `assert`
+/// Detects ****: blocks consisting only of Python `assert`
 /// statements across test files. Their AST/token shape is intentionally
 /// repetitive, but the concrete asserted paths and values differ.
 pub(super) fn is_python_assertion_only_cluster(snippets: &[Snippet<'_>]) -> bool {
@@ -149,7 +149,7 @@ fn assert_only_body_in_range(body: Node<'_>, range: ByteRange) -> bool {
     saw_assert
 }
 
-/// Detects **issue #107**: chained `assert <var>[k1][k2] == V` shape
+/// Detects ****: chained `assert <var>[k1][k2] == V` shape
 /// across at least two unrelated pytest test functions. Identifier
 /// normalisation collapses the variable, keys and value, so the
 /// surviving structure is identical even though every test exercises a
@@ -254,7 +254,7 @@ fn python_function_name_starts_with(function: Node<'_>, source: &[u8], prefix: &
         .is_some_and(|bytes| bytes.starts_with(prefix))
 }
 
-/// Detects **issue #112**: small nested-dict literals appearing across
+/// Detects ****: small nested-dict literals appearing across
 /// multiple pytest test files. Dict-literal fixtures in tests carry the
 /// same AST shape and token alphabet (`name`, `description`, ...) but
 /// encode unrelated request/response payloads. Fires only when every
@@ -371,7 +371,7 @@ fn dict_literal_key_sets_differ(shapes: &[DictLiteralShape]) -> bool {
     shapes.iter().any(|shape| shape.keys != first.keys)
 }
 
-/// Detects **issue #97**: every cluster occurrence is fully enclosed by
+/// Detects ****: every cluster occurrence is fully enclosed by
 /// a `test_*` pytest function AND every occurrence contains at least
 /// one `Capitalised.UPPER_SNAKE` enum-member access token. Each test
 /// name records a distinct spec assertion; collapsing the cluster would

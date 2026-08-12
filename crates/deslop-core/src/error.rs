@@ -102,7 +102,7 @@ pub enum CoreError {
     /// machine-generated nesting (e.g. thousands of nested collection
     /// literals) would overflow the pipeline's recursive tree walks, so
     /// the file is rejected and skipped rather than aborting the whole
-    /// run or crashing the long-lived LSP/MCP server (#168). Carries no
+    /// run or crashing the long-lived LSP/MCP server. Carries no
     /// path so it is safe to log as a structured field.
     #[error("{language} source nests deeper than the {limit}-level AST depth limit")]
     AstTooDeep {

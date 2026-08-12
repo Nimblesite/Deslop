@@ -27,7 +27,7 @@ use super::{
 ///
 /// A pass that touches no analysed file cannot change the report, so the
 /// whole LSH → embedding → pair → cluster → rank → render chain downstream
-/// of it is pure waste and is skipped (#299).
+/// of it is pure waste and is skipped.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CorpusEffect {
     /// At least one analysed file was added, replaced, or dropped.
@@ -58,7 +58,7 @@ impl CorpusEffect {
 impl PipelineSession {
     /// Applies one changed path: delete, update, or add. Reports whether
     /// the corpus actually moved, so a pass made entirely of paths the
-    /// gates below reject can skip the re-render (#299).
+    /// gates below reject can skip the re-render.
     pub(super) fn apply_one_change(
         &mut self,
         path: &Path,
@@ -80,7 +80,7 @@ impl PipelineSession {
         }
         // Discovery's walker prunes these; the live path is handed paths
         // directly and must apply the same rules or it admits files
-        // discovery never would (#287).
+        // discovery never would.
         if self.ignore_matcher.is_ignored(&absolute) {
             return Ok(self.drop_path(&absolute));
         }
@@ -95,7 +95,7 @@ impl PipelineSession {
             match parse_one_file(file_id, &absolute, parser, &config, stats) {
                 Ok(parsed) => parsed,
                 // A pathologically deep file must not crash the long-lived
-                // server (#168): drop it and keep serving, the same way an
+                // server: drop it and keep serving, the same way an
                 // excluded path is handled above. Real parser errors propagate.
                 Err(CoreError::AstTooDeep { language, limit }) => {
                     log_skip_too_deep(language, limit);
@@ -129,7 +129,7 @@ impl PipelineSession {
     /// Reloads `.deslop.toml` and re-evaluates the existing corpus
     /// against it: drops files the new `exclude` patterns now match
     /// and re-discovers files a removed pattern re-admits
-    /// ([LIVE-CONFIG-LIVE], #189). A malformed config is logged and
+    /// ([LIVE-CONFIG-LIVE]). A malformed config is logged and
     /// the prior exclusion is kept — a typo never bricks the daemon.
     pub(super) fn refresh_exclusion(
         &mut self,
@@ -196,14 +196,14 @@ impl PipelineSession {
     /// Evicts every live file at or under `prefix`. A directory removal
     /// reports only the directory path (no source extension, matching no
     /// live leaf), so the session must drop each registered descendant
-    /// to keep the report in sync ([LIVE-WATCHER], #223). Component-wise
+    /// to keep the report in sync ([LIVE-WATCHER]). Component-wise
     /// [`Path::starts_with`] means a removed `pkg` never evicts a
     /// sibling `pkg_twin`. The prefix is reflexive, so an exact-leaf
     /// deletion drops just that file. Reuses [`Self::drop_path`] per
     /// match so all maps, boilerplate ranges, and `files_analysed` stay
     /// consistent. Reports whether anything was actually evicted — a
     /// removal event for a path the corpus never held leaves it
-    /// [`CorpusEffect::Untouched`] (#299).
+    /// [`CorpusEffect::Untouched`].
     pub(super) fn drop_subtree(&mut self, prefix: &Path) -> CorpusEffect {
         let doomed: Vec<PathBuf> = self
             .live_paths

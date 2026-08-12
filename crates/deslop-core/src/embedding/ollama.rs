@@ -74,7 +74,7 @@ where
 /// Extracted because the identical builder chain sat in `probe`,
 /// `post_embeddings`, and `fetch_tags` — Deslop's own `find-similar`
 /// flagged it at `fused=1.00` when a fourth copy was about to be
-/// written for `/api/show` (#286).
+/// written for `/api/show`.
 fn ollama_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(HTTP_TIMEOUT))
@@ -102,7 +102,7 @@ pub struct OllamaProvider {
     /// Cached spec built at construction time (identity + dimensions).
     spec: EmbeddingSpec,
     /// Per-input character budget derived from the model's own context
-    /// length at construction time (#286).
+    /// length at construction time.
     max_input_chars: usize,
 }
 
@@ -370,7 +370,7 @@ struct ShowResponse {
 /// model's own context length. Falls back to [`DEFAULT_MAX_INPUT_CHARS`]
 /// whenever `/api/show`, the architecture key, or the context field is
 /// missing — the endpoint is incomplete on some Ollama builds, and a
-/// conservative budget is always safe (#286).
+/// conservative budget is always safe.
 fn fetch_context_chars(endpoint: &str, model: &str) -> usize {
     context_tokens(endpoint, model)
         .and_then(|tokens| tokens.checked_mul(CHARS_PER_TOKEN))

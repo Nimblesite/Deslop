@@ -17,7 +17,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use common::{call, fixture, handshake, spawn_lsp_guarded, wait_for_report_matching};
+use common::{at, call, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching};
 use mock_ollama::MockOllama;
 use serde_json::{json, Value};
 
@@ -39,10 +39,10 @@ fn lsp_scopes_builtin_exclusions_and_dependency_opt_in_to_workspace() -> Result<
     assert_report_shell(&included_report, 4);
     assert_included_dependency_paths(&included_report)?;
     assert!(
-        included_report["metrics"]["analysed_loc"]
+        json_path(&included_report, &["metrics", "analysed_loc"])
             .as_u64()
             .unwrap_or_default()
-            > default_report["metrics"]["analysed_loc"]
+            > json_path(&default_report, &["metrics", "analysed_loc"])
                 .as_u64()
                 .unwrap_or_default(),
         "opting dependencies in must increase analysed LOC: {included_report:#}"
@@ -86,7 +86,7 @@ fn dependency_report(include_dependencies: bool) -> Result<Value> {
     let _initialize = handshake(&mut stdin, &mut stdout)?;
     let expected = if include_dependencies { 4 } else { 2 };
     wait_for_report(&mut stdin, &mut stdout, |report| {
-        report["files_analysed"].as_u64() == Some(expected)
+        at(report, "files_analysed").as_u64() == Some(expected)
     })
 }
 
@@ -159,45 +159,45 @@ fn assert_model_selection(
 }
 
 fn assert_initialize_contract(frame: &Value) {
-    assert_eq!(frame["result"]["serverInfo"]["name"], "deslop-lsp");
-    assert!(frame["result"]["serverInfo"]["version"].is_string());
-    assert!(frame["result"]["capabilities"].is_object());
+    assert_eq!(json_path(frame, &["result", "serverInfo", "name"]), "deslop-lsp");
+    assert!(json_path(frame, &["result", "serverInfo", "version"]).is_string());
+    assert!(json_path(frame, &["result", "capabilities"]).is_object());
     assert!(frame.get("error").is_none(), "initialize failed: {frame}");
 }
 
 fn assert_report_shell(report: &Value, expected_files: u64) {
-    assert_eq!(report["files_analysed"], expected_files, "{report:#}");
-    assert_eq!(report["min_nodes"], 30, "{report:#}");
-    assert!(report["tool_version"]
+    assert_eq!(at(report, "files_analysed"), expected_files, "{report:#}");
+    assert_eq!(at(report, "min_nodes"), 30, "{report:#}");
+    assert!(at(report, "tool_version")
         .as_str()
         .is_some_and(|value| !value.is_empty()));
-    assert!(report["clusters"]
+    assert!(at(report, "clusters")
         .as_array()
         .is_some_and(|clusters| !clusters.is_empty()));
     assert!(
-        report["metrics"]["analysed_loc"]
+        json_path(report, &["metrics", "analysed_loc"])
             .as_u64()
             .unwrap_or_default()
             > 0
     );
     assert!(
-        report["metrics"]["duplicated_loc"]
+        json_path(report, &["metrics", "duplicated_loc"])
             .as_u64()
             .unwrap_or_default()
             > 0
     );
     assert!(
-        report["metrics"]["duplication_percent"]
+        json_path(report, &["metrics", "duplication_percent"])
             .as_f64()
             .unwrap_or_default()
             > 0.0
     );
     assert_eq!(
-        report["schema_doc"], "",
+        at(report, "schema_doc"), "",
         "LSP report must use the slim wire shape"
     );
-    assert!(report["action_hints"].is_array());
-    assert!(report["boilerplate_hints"].is_array());
+    assert!(at(report, "action_hints").is_array());
+    assert!(at(report, "boilerplate_hints").is_array());
 }
 
 fn assert_default_dependency_paths(report: &Value) -> Result<()> {
@@ -251,8 +251,8 @@ fn assert_included_dependency_paths(report: &Value) -> Result<()> {
 fn occurrence_paths(report: &Value) -> Result<BTreeSet<String>> {
     let mut paths = BTreeSet::new();
     for cluster in report_clusters(report)? {
-        for occurrence in cluster["occurrences"].as_array().unwrap_or(&Vec::new()) {
-            if let Some(path) = occurrence["path"].as_str() {
+        for occurrence in at(cluster, "occurrences").as_array().unwrap_or(&Vec::new()) {
+            if let Some(path) = at(occurrence, "path").as_str() {
                 let _inserted = paths.insert(path.replace('\\', "/"));
             }
         }
@@ -262,9 +262,9 @@ fn occurrence_paths(report: &Value) -> Result<BTreeSet<String>> {
 
 fn assert_all_occurrences_visible(report: &Value) -> Result<()> {
     for cluster in report_clusters(report)? {
-        for occurrence in cluster["occurrences"].as_array().unwrap_or(&Vec::new()) {
+        for occurrence in at(cluster, "occurrences").as_array().unwrap_or(&Vec::new()) {
             assert_eq!(
-                occurrence["hidden"], false,
+                at(occurrence, "hidden"), false,
                 "unexpected hidden occurrence: {occurrence}"
             );
         }
@@ -281,34 +281,34 @@ fn has_fragment(paths: &BTreeSet<String>, fragment: &str) -> bool {
 }
 
 fn report_has_two_files(report: &Value) -> bool {
-    report["files_analysed"].as_u64() == Some(2)
+    at(report, "files_analysed").as_u64() == Some(2)
 }
 
 fn report_has_ollama_provenance(report: &Value) -> bool {
-    report["embedding_provenance"]["provider_id"].as_str() == Some("ollama")
+    json_path(report, &["embedding_provenance", "provider_id"]).as_str() == Some("ollama")
 }
 
 fn report_has_embeddings_off(report: &Value) -> bool {
-    report_has_two_files(report) && report["embedding_provenance"].is_null()
+    report_has_two_files(report) && at(report, "embedding_provenance").is_null()
 }
 
 fn assert_embeddings_off(report: &Value) {
     assert_report_shell_without_clusters(report, 2);
-    assert!(report["embedding_provenance"].is_null(), "{report:#}");
+    assert!(at(report, "embedding_provenance").is_null(), "{report:#}");
     assert_eq!(
-        report["clusters"],
-        json!([]),
+        at(report, "clusters"),
+        &json!([]),
         "mid-band pair needs embedding evidence"
     );
 }
 
 fn assert_report_shell_without_clusters(report: &Value, expected_files: u64) {
-    assert_eq!(report["files_analysed"], expected_files, "{report:#}");
-    assert_eq!(report["min_nodes"], 30, "{report:#}");
-    assert!(report["tool_version"].is_string());
-    assert!(report["metrics"].is_object());
-    assert_eq!(report["schema_doc"], "");
-    assert!(report["clusters"].is_array());
+    assert_eq!(at(report, "files_analysed"), expected_files, "{report:#}");
+    assert_eq!(at(report, "min_nodes"), 30, "{report:#}");
+    assert!(at(report, "tool_version").is_string());
+    assert!(at(report, "metrics").is_object());
+    assert_eq!(at(report, "schema_doc"), "");
+    assert!(at(report, "clusters").is_array());
 }
 
 fn assert_embedding_report(report: &Value) -> Result<()> {
@@ -322,18 +322,18 @@ fn assert_embedding_report(report: &Value) -> Result<()> {
 }
 
 fn assert_embedding_provenance(report: &Value) {
-    let provenance = &report["embedding_provenance"];
-    assert_eq!(provenance["provider_id"], "ollama", "{report:#}");
-    assert_eq!(provenance["model_id"], "nomic-embed-text", "{report:#}");
-    assert_eq!(provenance["dimensions"], 4, "{report:#}");
-    assert_eq!(provenance["failed_subtrees"], 0, "{report:#}");
+    let provenance = at(report, "embedding_provenance");
+    assert_eq!(at(provenance, "provider_id"), "ollama", "{report:#}");
+    assert_eq!(at(provenance, "model_id"), "nomic-embed-text", "{report:#}");
+    assert_eq!(at(provenance, "dimensions"), 4, "{report:#}");
+    assert_eq!(at(provenance, "failed_subtrees"), 0, "{report:#}");
     assert!(
-        provenance["attempted_subtrees"]
+        at(provenance, "attempted_subtrees")
             .as_u64()
             .unwrap_or_default()
             > 0
     );
-    assert!(provenance["indexed_subtrees"].as_u64().unwrap_or_default() > 0);
+    assert!(at(provenance, "indexed_subtrees").as_u64().unwrap_or_default() > 0);
 }
 
 fn ledger_cluster(report: &Value) -> Result<&Value> {
@@ -347,30 +347,30 @@ fn ledger_cluster(report: &Value) -> Result<&Value> {
 }
 
 fn cluster_paths(cluster: &Value) -> BTreeSet<String> {
-    cluster["occurrences"]
+    at(cluster, "occurrences")
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|occurrence| occurrence["path"].as_str())
+        .filter_map(|occurrence| at(occurrence, "path").as_str())
         .map(|path| path.replace('\\', "/"))
         .collect()
 }
 
 fn assert_ledger_cluster_identity(cluster: &Value) {
-    assert_eq!(cluster["bucket"], "same_behavior", "{cluster:#}");
-    assert_eq!(cluster["category"], "logic", "{cluster:#}");
-    assert_eq!(cluster["size"], 2, "{cluster:#}");
-    assert_eq!(cluster["occurrences_total"], 2, "{cluster:#}");
-    assert_eq!(cluster["occurrences_truncated"], false, "{cluster:#}");
-    assert!(cluster["id"].as_str().is_some_and(|id| !id.is_empty()));
-    assert!(cluster["canonical_node_count"].as_u64().unwrap_or_default() >= 30);
-    assert!(cluster["weight"].as_f64().unwrap_or_default() > 0.0);
+    assert_eq!(at(cluster, "bucket"), "same_behavior", "{cluster:#}");
+    assert_eq!(at(cluster, "category"), "logic", "{cluster:#}");
+    assert_eq!(at(cluster, "size"), 2, "{cluster:#}");
+    assert_eq!(at(cluster, "occurrences_total"), 2, "{cluster:#}");
+    assert_eq!(at(cluster, "occurrences_truncated"), false, "{cluster:#}");
+    assert!(at(cluster, "id").as_str().is_some_and(|id| !id.is_empty()));
+    assert!(at(cluster, "canonical_node_count").as_u64().unwrap_or_default() >= 30);
+    assert!(at(cluster, "weight").as_f64().unwrap_or_default() > 0.0);
     assert_eq!(
-        cluster["summary"], "",
+        at(cluster, "summary"), "",
         "LSP wire must omit derivable summary"
     );
     assert_eq!(
-        cluster["interpretation"], "",
+        at(cluster, "interpretation"), "",
         "LSP wire must omit derivable prose"
     );
 }
@@ -431,7 +431,7 @@ fn assert_ledger_signal_contract(cluster: &Value) {
 }
 
 fn assert_ledger_occurrences(cluster: &Value) -> Result<()> {
-    let occurrences = cluster["occurrences"]
+    let occurrences = at(cluster, "occurrences")
         .as_array()
         .ok_or_else(|| anyhow!("cluster carries no occurrences: {cluster}"))?;
     assert_eq!(occurrences.len(), 2, "{cluster:#}");
@@ -441,38 +441,38 @@ fn assert_ledger_occurrences(cluster: &Value) -> Result<()> {
         "one occurrence per ledger file"
     );
     for occurrence in occurrences {
-        assert_eq!(occurrence["hidden"], false, "{occurrence}");
-        assert!(occurrence["start_byte"].as_u64() < occurrence["end_byte"].as_u64());
-        assert!(occurrence["start_line"].as_u64() <= occurrence["end_line"].as_u64());
+        assert_eq!(at(occurrence, "hidden"), false, "{occurrence}");
+        assert!(at(occurrence, "start_byte").as_u64() < at(occurrence, "end_byte").as_u64());
+        assert!(at(occurrence, "start_line").as_u64() <= at(occurrence, "end_line").as_u64());
     }
     Ok(())
 }
 
 fn signal(cluster: &Value, name: &str) -> f64 {
-    cluster["signals"][name].as_f64().unwrap_or(f64::NAN)
+    at(cluster, "signals")[name].as_f64().unwrap_or(f64::NAN)
 }
 
 fn report_clusters(report: &Value) -> Result<&Vec<Value>> {
-    report["clusters"]
+    at(report, "clusters")
         .as_array()
         .ok_or_else(|| anyhow!("report carries no clusters array: {report}"))
 }
 
 fn assert_repeated_report_identity(first: &Value, second: &Value) {
-    assert_eq!(first["files_analysed"], second["files_analysed"]);
-    assert_eq!(first["clusters_hidden"], second["clusters_hidden"]);
+    assert_eq!(at(first, "files_analysed"), at(second, "files_analysed"));
+    assert_eq!(at(first, "clusters_hidden"), at(second, "clusters_hidden"));
     assert_eq!(
-        first["metrics"], second["metrics"],
+        at(first, "metrics"), at(second, "metrics"),
         "repo metrics drifted across refreshes"
     );
     assert_eq!(
-        first["clusters"], second["clusters"],
+        at(first, "clusters"), at(second, "clusters"),
         "ordered clusters drifted across refreshes"
     );
     assert_eq!(
-        first["embedding_provenance"],
-        second["embedding_provenance"]
+        at(first, "embedding_provenance"),
+        at(second, "embedding_provenance")
     );
-    assert_eq!(first["action_hints"], second["action_hints"]);
-    assert_eq!(first["boilerplate_hints"], second["boilerplate_hints"]);
+    assert_eq!(at(first, "action_hints"), at(second, "action_hints"));
+    assert_eq!(at(first, "boilerplate_hints"), at(second, "boilerplate_hints"));
 }
