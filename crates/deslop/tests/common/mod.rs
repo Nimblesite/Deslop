@@ -217,10 +217,7 @@ pub(crate) fn assert_bucketed_clone(
         "{fixture_dir} renamed clone must reach structural identity: {report:#}"
     );
     if bucket == "structural_only" {
-        assert!(
-            signal(clone, "token_jaccard") < 0.05,
-            "{fixture_dir} structural_only routing needs a near-zero token signal: {report:#}"
-        );
+        signals::assert_structural_only_contract(clone, fixture_dir);
     } else {
         assert!(
             approx(signal(clone, "token_jaccard"), 1.0),

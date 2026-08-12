@@ -279,8 +279,16 @@ pub fn lacks_content_support(signals: ReportSignals, content: ContentEvidence) -
 /// mixed cluster read `structural=0.62, token_jaccard=0.98`).
 #[must_use]
 pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
-    signals.structural >= 0.99 || signals.token_jaccard >= 0.95
+    signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
 }
+
+/// Token overlap at or above which the token layer is echoing shape
+/// rather than reporting content ([FUSION-CONTENT-GATE]). Named because
+/// the assertion surface has to distinguish the two routes into
+/// `structural_only` — evidence-free below
+/// [`STRUCTURAL_ONLY_MAX_SUPPORT`], content-gated at or above this — and
+/// a test carrying its own copy of the number drifts from the router.
+pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
 
 /// Confidence discount applied to rename-consistency evidence when the
 /// gate fuses it ([FUSION-CONTENT-GATE]). A literal-anchored bijective

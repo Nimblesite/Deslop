@@ -9,6 +9,7 @@
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::anyhow;
+use deslop_core::buckets::{SATURATING_TOKEN_FLOOR, STRUCTURAL_ONLY_MAX_SUPPORT};
 use serde_json::Value;
 
 use super::{
@@ -33,6 +34,50 @@ pub(crate) const HONEST_SHAPE_ONLY_BUCKETS: [&str; 2] = ["structural_only", "loo
 
 /// Buckets a cluster may carry once it has reached the act-now line.
 pub(crate) const ACT_NOW_BUCKETS: [&str; 3] = ["identical", "nearly_identical", "same_behavior"];
+
+/// Asserts the full `structural_only` contract
+/// ([RANK-STRUCTURAL-ONLY], [FUSION-CONTENT-GATE]).
+///
+/// A cluster reaches this bucket by one of **two** routes, and a test
+/// that admits only one pins an implementation instead of the contract:
+///
+/// - **evidence-free** — token and embedding support below
+///   `STRUCTURAL_ONLY_MAX_SUPPORT`. Shape is the only signal, which is
+///   the #197 REST-family shape.
+/// - **content-gated** — the deterministic signals saturate *by
+///   construction*: the token LSH pass hashes the same normalised
+///   representation the structural pass does, so an anchor-poor Type-2
+///   rename reads `token_jaccard ≈ 1.00` while its raw collapsed leaves
+///   disagree and no literal-anchored substitution explains them.
+///
+/// Asserting `token_jaccard < 0.05` alone therefore fails every
+/// content-gated cluster — including the renamed-loop clones whose own
+/// test comments describe them as anchor-poor. The band *between* the
+/// two routes is produced by neither, so it is asserted against, and the
+/// demotion itself is asserted rather than assumed: whichever route it
+/// took, a `structural_only` cluster carries no act-now confidence.
+pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
+    let token = signal(cluster, "token_jaccard");
+    assert!(
+        !(STRUCTURAL_ONLY_MAX_SUPPORT..SATURATING_TOKEN_FLOOR).contains(&token),
+        "{label}: structural_only is reached evidence-free (token < \
+         {STRUCTURAL_ONLY_MAX_SUPPORT}) or content-gated (token >= \
+         {SATURATING_TOKEN_FLOOR}); a partial overlap is neither route: {dump}",
+        dump = signal_dump(cluster)
+    );
+    assert!(
+        signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT,
+        "{label}: semantic support disqualifies structural_only on both \
+         routes: {dump}",
+        dump = signal_dump(cluster)
+    );
+    assert!(
+        signal(cluster, "fused") < ACT_NOW_FUSED,
+        "{label}: structural_only is a demoted verdict and must stay below \
+         the act-now line: {dump}",
+        dump = signal_dump(cluster)
+    );
+}
 
 /// One-line dump of everything an accuracy assertion needs to explain
 /// itself, so a failure names the actual numbers instead of restating

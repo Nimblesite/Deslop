@@ -16,7 +16,7 @@
 use anyhow::Result;
 
 mod common;
-use crate::common::*;
+use crate::common::{signals::assert_structural_only_contract, *};
 
 #[test]
 fn javascript_byte_identical_pair_is_identical_bucket() -> Result<()> {
@@ -48,7 +48,7 @@ fn javascript_renamed_loop_clone_routes_to_structural_only() -> Result<()> {
     let clone = expect_cluster_spanning(&report, &["inventory_gamma.js", "tax_alpha.js"])?;
     assert_eq!(cluster_bucket(clone), "structural_only");
     assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(signal(clone, "token_jaccard") < 0.05);
+    assert_structural_only_contract(clone, "js-type2-loop");
     Ok(())
 }
 
@@ -58,7 +58,7 @@ fn typescript_renamed_loop_clone_routes_to_structural_only() -> Result<()> {
     let clone = expect_cluster_spanning(&report, &["inventory_gamma.ts", "tax_alpha.ts"])?;
     assert_eq!(cluster_bucket(clone), "structural_only");
     assert!(approx(signal(clone, "structural"), 1.0));
-    assert!(signal(clone, "token_jaccard") < 0.05);
+    assert_structural_only_contract(clone, "ts-type2-loop");
     Ok(())
 }
 
