@@ -1,6 +1,6 @@
 //! Candidate pair scoring and transitive-closure clustering.
 //!
-//! Implements the non-embedding half of [FUSION-STRATEGY-MAX-SUM]:
+//! Implements the non-embedding half of [FUSION-STRATEGY-BOUNDED-MAX]:
 //!
 //! 1. Take the union of structural-hash bucket members and token-LSH band
 //!    collisions as the candidate pair set.
@@ -48,7 +48,7 @@ pub const LSH_ONLY_MIN_NODE_COUNT: usize = 40;
 pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
 
 /// Per-pair score breakdown in `[0, 1]`. See
-/// [FUSION-STRATEGY-MAX-SUM] for the semantics. Three slots are reserved
+/// [FUSION-STRATEGY-BOUNDED-MAX] for the semantics. Three slots are reserved
 /// from v1 so the embedding pass in P5 is additive, not a schema bump:
 /// the ensemble-LLM 2025 finding is that sum/max fusion (never average)
 /// gives the biggest gain.
@@ -63,7 +63,7 @@ pub struct PairScore {
 }
 
 impl PairScore {
-    /// [FUSION-STRATEGY-MAX-SUM] Bounded fusion over the three signal
+    /// [FUSION-STRATEGY-BOUNDED-MAX] Bounded fusion over the three signal
     /// axes: the strongest single axis, never their sum.
     ///
     /// The axes are correlated views of one normalised tree, so combining

@@ -1,5 +1,5 @@
 //! End-to-end regression coverage for #331 / #336 — shape-only
-//! saturation ([FUSION-STRATEGY-MAX-SUM], [RANK-STRUCTURAL-ONLY]).
+//! saturation ([FUSION-STRATEGY-BOUNDED-MAX], [RANK-STRUCTURAL-ONLY]).
 //!
 //! Both showstoppers share one mechanism: identifier/literal
 //! normalisation makes `token_jaccard` a restatement of `structural`,
@@ -161,7 +161,7 @@ fn assert_shape_only_family_demoted(
     Ok(())
 }
 
-// [FUSION-STRATEGY-MAX-SUM] / #331: six distinct StatefulWidget
+// [FUSION-STRATEGY-BOUNDED-MAX] / #331: six distinct StatefulWidget
 // declarations share only the framework-mandated shape. They must not
 // be reported as act-now duplication above a genuine copy-pasted clone.
 #[test]
@@ -226,7 +226,7 @@ fn issue_331_template_stamped_widget_scaffolds_do_not_surface() -> Result<()> {
     Ok(())
 }
 
-// [FUSION-STRATEGY-MAX-SUM] / #336: four numeric array literals share
+// [FUSION-STRATEGY-BOUNDED-MAX] / #336: four numeric array literals share
 // only their length and element kinds — every value differs. They must
 // not be reported as act-now duplication above a genuine clone.
 #[test]

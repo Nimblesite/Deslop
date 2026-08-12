@@ -1,5 +1,5 @@
 //! Physical-enclosure predicates over rendered occurrences
-//! ([PIPELINE-CLUSTER-EXACT]).
+//! ([PIPELINE-CLUSTER-SUBSUME]).
 //!
 //! One physical duplication can be described by more than one cluster: a
 //! duplicated method, and the run of single-statement clones nested

@@ -1,7 +1,7 @@
 //! Clone cluster materialisation and ranking.
 //!
 //! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
-//! [FUSION-STRATEGY-MAX-SUM], and the "worst offenders first" scoring of
+//! [FUSION-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
 //! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
 //! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
 //! contributing to those clusters are (a) exact structural buckets per
@@ -16,7 +16,7 @@ use std::{
 
 use crate::{
     content::ContentEvidence,
-    fingerprint::{ranges_overlap, Fingerprint},
+    fingerprint::Fingerprint,
     lsh::Signature,
     pair::{FusedCluster, PairScore},
     state::FileId,
@@ -24,7 +24,7 @@ use crate::{
 
 /// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
 mod signals;
-/// Cross-cluster subsumption ([PIPELINE-CLUSTER-EXACT]).
+/// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
 mod subsume;
 use signals::measured_signals;
 use subsume::collapse_cross_cluster_overlap;
@@ -285,6 +285,15 @@ fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprin
 /// member with the widest byte range (largest physical clone) as the
 /// representative. Equal-width ties keep the first-encountered member
 /// so the result stays deterministic across runs.
+///
+/// The run's frontier is tracked separately from its representative
+/// ([PIPELINE-CLUSTER-EXACT]). Overlap is transitive, and the window
+/// that bridges two others is often narrower than both: for `[0,100]`,
+/// `[90,110]`, `[105,200]` the bridge loses the width contest, so a
+/// sweep that tests the next window against the representative alone
+/// finds `[105,200]` disjoint and publishes one physical region as two
+/// occurrences — inflating the cluster size, the occurrence list and the
+/// duplication percentage.
 fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Vec<usize> {
     bucket.sort_by_key(|(_, member)| {
         (
@@ -292,18 +301,56 @@ fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Ve
             usize::MAX.saturating_sub(member.byte_range.end),
         )
     });
-    let mut kept: Vec<(usize, Fingerprint)> = Vec::with_capacity(bucket.len());
+    let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
     for candidate in bucket {
-        match kept.last_mut() {
-            Some(current) if ranges_overlap(&current.1, &candidate.1) => {
-                if candidate.1.byte_range.len() > current.1.byte_range.len() {
-                    *current = candidate;
-                }
-            }
-            _ => kept.push(candidate),
+        match runs.last_mut() {
+            Some(run) if run.reaches(&candidate.1) => run.absorb(candidate),
+            _ => runs.push(OverlapRun::start(candidate)),
         }
     }
-    kept.into_iter().map(|(index, _)| index).collect()
+    runs.into_iter().map(|run| run.representative).collect()
+}
+
+/// One transitively-overlapping run of same-file occurrences, reduced to
+/// the reported location plus the frontier the next window is tested
+/// against.
+struct OverlapRun {
+    /// Fingerprint index of the widest member so far — the occurrence
+    /// the report publishes for this run.
+    representative: usize,
+    /// Byte width of the representative, for the width contest.
+    width: usize,
+    /// Highest end byte anywhere in the run, which is not always the
+    /// representative's end.
+    end: usize,
+}
+
+impl OverlapRun {
+    /// Opens a run at `member`.
+    fn start((index, member): (usize, Fingerprint)) -> Self {
+        Self {
+            representative: index,
+            width: member.byte_range.len(),
+            end: member.byte_range.end,
+        }
+    }
+
+    /// Returns `true` when `candidate` overlaps the run. Members arrive
+    /// in ascending start order, so reaching past the frontier is the
+    /// whole half-open overlap test.
+    fn reaches(&self, candidate: &Fingerprint) -> bool {
+        candidate.byte_range.start < self.end
+    }
+
+    /// Extends the run, promoting `member` to representative when it is
+    /// strictly wider than the incumbent.
+    fn absorb(&mut self, (index, member): (usize, Fingerprint)) {
+        self.end = self.end.max(member.byte_range.end);
+        if member.byte_range.len() > self.width {
+            self.representative = index;
+            self.width = member.byte_range.len();
+        }
+    }
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.

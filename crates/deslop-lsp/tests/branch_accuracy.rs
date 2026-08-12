@@ -52,7 +52,7 @@ fn lsp_scopes_builtin_exclusions_and_dependency_opt_in_to_workspace() -> Result<
     Ok(())
 }
 
-/// [FUSION-STRATEGY-MAX-SUM] / [PIPELINE-DETERMINISM]: selecting a model
+/// [FUSION-STRATEGY-BOUNDED-MAX] / [PIPELINE-DETERMINISM]: selecting a model
 /// through the editor-facing LSP method must expose honest bounded scores,
 /// and two full embedding refreshes over unchanged files must produce the
 /// same ordered clusters, identifiers, metrics, and signals.

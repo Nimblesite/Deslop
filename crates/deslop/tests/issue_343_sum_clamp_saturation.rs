@@ -1,4 +1,4 @@
-//! E2E regression for GH #343 [FUSION-STRATEGY-MAX-SUM]: sum-then-clamp
+//! E2E regression for GH #343 [FUSION-STRATEGY-BOUNDED-MAX]: sum-then-clamp
 //! fusion saturates on correlated mid-band evidence.
 //!
 //! `PairScore::fused()` sums three correlated views of the same code and

@@ -195,7 +195,11 @@ fn the_whole_body_census_separates_the_enclosing_view_from_a_nested_one() -> Res
         "var taxed = amount * taxRate / 100;\n            lines.Add(amount + taxed);",
     )?;
     ensure!(
-        statement_count(&nested, "var taxed = amount * taxRate / 100;", "TaxTable.cs")? == 1,
+        statement_count(
+            &nested,
+            "var taxed = amount * taxRate / 100;",
+            "TaxTable.cs"
+        )? == 1,
         "the nested window itself is deduplicated — that is what makes this \
          plan look correct to every other assertion"
     );

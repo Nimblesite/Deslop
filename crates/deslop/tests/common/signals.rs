@@ -1,5 +1,5 @@
 //! Fused-signal assertion vocabulary shared by the golden confidence
-//! suites ([FUSION-STRATEGY-MAX-SUM], [FUSION-CONTENT-GATE],
+//! suites ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE],
 //! [FUSED-THRESHOLD]).
 //!
 //! The bands, the honest shape-only bucket set, and the diagnostic dump

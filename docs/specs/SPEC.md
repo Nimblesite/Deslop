@@ -109,7 +109,7 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Embedding pass — local-by-default | ✅ Ollama provider | `crates/deslop-core/src/embedding/ollama.rs`, `crates/deslop-core/src/embedding/provider.rs` |
 | HNSW ANN index ([FUSION-EMBED-PROVIDER]) | ✅ `instant-distance` | `crates/deslop-core/src/embedding/pairs.rs` |
 | Embedding cache keyed by `(content, provider, model, version)` | ✅ | `crates/deslop-core/src/embedding/cache.rs` |
-| Bounded max fusion — sum quarantined by gh #343 ([FUSION-STRATEGY-MAX-SUM]) | ✅ strongest single axis in `[0,1]` | `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` |
+| Bounded max fusion — sum quarantined by gh #343 ([FUSION-STRATEGY-BOUNDED-MAX]) | ✅ strongest single axis in `[0,1]` | `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` |
 | Cross-language opt-in ([CONFIG-CROSS-LANGUAGE]) | ✅ | `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` |
 | Built-in exclusion scoped to the scan root ([CONFIG-EXCLUDE-BUILTIN]) | ✅ gh #342 | `crates/deslop-core/src/config.rs::corpus_built_in_excluded` |
 | Dependency analysis opt-in ([CONFIG-EXCLUDE-DEPENDENCIES]) | ✅ `[analysis] include_dependencies` | `crates/deslop-core/src/config.rs::dependency_components` |

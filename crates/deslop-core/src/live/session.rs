@@ -108,7 +108,7 @@ pub struct AnalysisSession {
     /// ([CONFIG-EXCLUDE-DEPENDENCIES]).
     exclusion: LiveExclusion,
     /// Mtime ledger consulted before every IPC read
-    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS],,). Refreshed
+    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS]). Refreshed
     /// after every analysis pass so a stale-mtime read forces a
     /// synchronous `apply_changes` ahead of serving the response.
     freshness: FreshnessTracker,

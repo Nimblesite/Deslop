@@ -41,17 +41,17 @@ fn member(file_id: FileId, start: usize, end: usize) -> Fingerprint {
 
 /// Runs the production clustering stage over `members` as a single fused
 /// cluster and returns the ranked result.
-fn ranked(members: Vec<Fingerprint>) -> Vec<Cluster> {
+fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
     let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
     }];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
-    build_ranked_fused_clusters(&members, &signatures, &vectors, &fused)
+    build_ranked_fused_clusters(members, &signatures, &vectors, &fused)
 }
 
 /// The occurrence byte ranges of the single published cluster.
-fn occurrence_ranges(members: Vec<Fingerprint>) -> Vec<(usize, usize)> {
+fn occurrence_ranges(members: &[Fingerprint]) -> Vec<(usize, usize)> {
     let clusters = ranked(members);
     assert_eq!(
         clusters.len(),
@@ -93,7 +93,7 @@ fn two_files() -> (FileId, FileId) {
 #[test]
 fn a_transitively_overlapping_run_collapses_to_one_occurrence() {
     let (alpha, beta) = two_files();
-    let ranges = occurrence_ranges(vec![
+    let ranges = occurrence_ranges(&[
         member(alpha, 0, 100),
         member(alpha, 90, 110),
         member(alpha, 105, 200),
@@ -119,7 +119,7 @@ fn a_transitively_overlapping_run_collapses_to_one_occurrence() {
 #[test]
 fn the_widest_window_of_a_run_represents_it_regardless_of_emission_order() {
     let (alpha, beta) = two_files();
-    let ranges = occurrence_ranges(vec![
+    let ranges = occurrence_ranges(&[
         member(alpha, 0, 40),
         member(alpha, 30, 60),
         member(alpha, 20, 200),
@@ -138,7 +138,7 @@ fn the_widest_window_of_a_run_represents_it_regardless_of_emission_order() {
 #[test]
 fn disjoint_windows_in_one_file_stay_separate_occurrences() {
     let (alpha, beta) = two_files();
-    let ranges = occurrence_ranges(vec![
+    let ranges = occurrence_ranges(&[
         member(alpha, 0, 100),
         member(alpha, 200, 300),
         member(beta, 0, 100),
@@ -157,7 +157,7 @@ fn disjoint_windows_in_one_file_stay_separate_occurrences() {
 #[test]
 fn a_run_collapsing_to_one_location_publishes_no_cluster() {
     let (alpha, _beta) = two_files();
-    let clusters = ranked(vec![
+    let clusters = ranked(&[
         member(alpha, 0, 100),
         member(alpha, 90, 110),
         member(alpha, 105, 200),

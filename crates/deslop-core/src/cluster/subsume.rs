@@ -9,13 +9,29 @@
 //!
 //! **Two questions, two predicates.**
 //!
-//! *Are these one duplication?* Occurrence overlap, not strict nesting:
-//! every occurrence of one cluster overlaps some occurrence of the other
-//! in the same file. Requiring containment here misses the *crossed*
+//! *Are these one duplication?* Bidirectional coverage by
+//! per-occurrence containment: every occurrence of each cluster
+//! contains — or is contained by — an occurrence of the other, in the
+//! same file. Three weaker predicates were each wrong in a different
+//! direction.
+//!
+//! Requiring the whole occurrence *set* to nest misses the *crossed*
 //! case, where the depth difference falls on opposite sides in each
 //! file: `ledger_c[0..1238] + ledger_a[0..1234]` and `ledger_c[0..1237]
 //! + ledger_a[0..1235]` are two views of one whole-file duplicate, yet
 //! neither set nests inside the other.
+//!
+//! Accepting bare *intersection* goes wrong the other way: two
+//! duplicated regions that share a single byte, where one ends and the
+//! next begins, are two findings, and treating them as one deletes a
+//! duplicate nothing else reports.
+//!
+//! Accepting coverage in *either* direction is wrong a third way. A wide
+//! cluster whose occurrences each happen to contain one member of a much
+//! larger, differently-scoped cluster satisfies it — and then a pair of
+//! byte-identical generated functions is deleted in favour of the
+//! one-line statement family nested inside them, which also reaches a
+//! file the functions never mention.
 //!
 //! *Which view survives?* Physical enclosure, not ranking weight. A
 //! whole-method clone and the run of single-statement clones inside it
@@ -142,11 +158,21 @@ enum Preference {
 }
 
 /// Returns `true` when the two clusters are views of one duplicated
-/// region: every occurrence of at least one lies over an occurrence of
-/// the other.
+/// region: **every** occurrence of each is paired by containment with an
+/// occurrence of the other.
+///
+/// Both directions, not either. One direction alone is satisfied by a
+/// wide cluster that merely happens to contain one occurrence of a much
+/// larger, differently-scoped cluster: a duplicated pair of generated
+/// functions each contain a copy of a one-line statement clone that also
+/// appears in a hand-written file, and the one-directional test calls
+/// those one duplication. They are two — the statement family names a
+/// file the function pair never mentions — and collapsing them replaces
+/// "these two functions are identical" with a list of one-line
+/// fragments.
 fn covers_same_region(outer: &Cluster, inner: &Cluster) -> bool {
-    all_occurrences_overlap_some(&inner.members, &outer.members)
-        || all_occurrences_overlap_some(&outer.members, &inner.members)
+    all_occurrences_paired(&inner.members, &outer.members)
+        && all_occurrences_paired(&outer.members, &inner.members)
 }
 
 /// Chooses between two views of one region. `proposed` is the view the
@@ -195,22 +221,28 @@ fn is_embedding_dominant(signals: crate::pair::PairScore) -> bool {
         && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
 }
 
-/// Returns `true` when two occurrences share a file and their byte
-/// ranges intersect.
-fn occurrences_overlap(left: &Fingerprint, right: &Fingerprint) -> bool {
-    left.file_id == right.file_id
-        && left.byte_range.start < right.byte_range.end
-        && right.byte_range.start < left.byte_range.end
+/// Returns `true` when two occurrences describe one location: same
+/// file, and one byte range wholly contains the other.
+///
+/// Containment, never bare intersection. Two duplicated regions that
+/// merely touch — partially, one-sidedly, or at the single byte where
+/// one ends and the next begins — are two findings, and an intersection
+/// test cannot tell them from a re-description. Containment can, and it
+/// still admits the crossed case, where each occurrence contains or is
+/// contained by its counterpart even though neither *set* nests.
+fn occurrences_describe_one_location(left: &Fingerprint, right: &Fingerprint) -> bool {
+    occurrence_contains(left, right) || occurrence_contains(right, left)
 }
 
-/// Returns `true` when every occurrence in `covered` overlaps at least
-/// one occurrence in `cover` — the "same physical bytes" test.
-fn all_occurrences_overlap_some(covered: &[Fingerprint], cover: &[Fingerprint]) -> bool {
+/// Returns `true` when every occurrence in `covered` is paired by
+/// containment with an occurrence in `cover` — the "same physical
+/// bytes" test.
+fn all_occurrences_paired(covered: &[Fingerprint], cover: &[Fingerprint]) -> bool {
     !covered.is_empty()
         && covered.iter().all(|candidate| {
             cover
                 .iter()
-                .any(|other| occurrences_overlap(other, candidate))
+                .any(|other| occurrences_describe_one_location(other, candidate))
         })
 }
 

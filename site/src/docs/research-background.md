@@ -58,7 +58,7 @@ Each row pairs a research line with the file that implements it (✅), the plan 
 | In Defense of MinHash Over SimHash (Shrivastava & Li 2014) | Use MinHash, not SimHash, for binarized features. | ✅ MinHash chosen; SimHash and Winnowing not used |
 | Neural semantic clone detection (CodeBERT, GraphCodeBERT, UniXCoder) | Use embeddings as a recall layer for Type-4 clones. | ✅ `EmbeddingProvider` trait in `crates/deslop-core/src/embedding/provider.rs`; Ollama provider in `embedding/ollama.rs`; default model `nomic-embed-text` |
 | [SSCD (Ahmed et al., Wiley 2024) — BERT + ANN at scale](https://onlinelibrary.wiley.com/doi/full/10.1002/spe.3355) | HNSW ANN over BERT-style embeddings as the Type-3/4 recall path. | ✅ `instant-distance` HNSW with deterministic seed, top-k retrieval, cosine threshold 0.80: `crates/deslop-core/src/embedding/pairs.rs` |
-| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum fusion](https://arxiv.org/abs/2510.15480) | Average hurts; max and sum help when fusing signals. | ✅ Three-signal max-normalized sum in `crates/deslop-core/src/pair.rs::PairScore::fused`, clamped to `[0,1]`. Multi-model embedding ensembling is **not** implemented (single embedding model today; provider trait keeps it open) |
+| [Ensemble-LLM 2025 (arXiv 2510.15480) — max/sum fusion](https://arxiv.org/abs/2510.15480) | Average hurts; max and sum help when fusing signals. | ✅ Bounded max over the three signals in `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` — the strongest single axis, in `[0,1]`. The paper's sum arm assumes independent members; the structural and token axes are two views of one normalised tree, so summing them was removed ([FUSION-STRATEGY-BOUNDED-MAX]). Multi-model embedding ensembling is **not** implemented (single embedding model today; provider trait keeps it open) |
 | Hybrid clone detection (no pure-RAG paper recommends pure embeddings) | Union structural + token + embedding pairs, fuse, cluster. | ✅ `crates/deslop-core/src/pair.rs::candidate_pairs`, transitive closure in `crates/deslop-core/src/cluster.rs` |
 | Boilerplate filtering (mature-tool convention) | Drop import / namespace / decorator clones before fingerprinting; re-surface as low-noise hints. | ✅ `crates/deslop-core/src/boilerplate.rs` and `report_boilerplate.rs` |
 | HyClone 2025 (arXiv 2508.01357) — execution-validated Type-4 | Generate test inputs and validate semantically equivalent pairs. | 🚫 Not implemented; Python-specific in the original paper |
@@ -152,7 +152,7 @@ Each pair carries:
 - `embedding_cos`,
 - `fused`.
 
-`PairScore::fused` sums the three signals and clamps the result to `[0.0, 1.0]`. `FUSED_THRESHOLD` is `0.85`. LSH-only pairs have additional guards: `token_jaccard >= 0.90` and both endpoints must have at least 40 AST nodes.
+`PairScore::bounded_fused` takes the strongest single axis of the three, in `[0.0, 1.0]`; it never sums or averages them. `FUSED_THRESHOLD` is `0.85`. LSH-only pairs have additional guards: `token_jaccard >= 0.90` and both endpoints must have at least 40 AST nodes.
 
 Cross-language comparison is off by default. `crates/deslop-core/src/config.rs` initializes `allow_cross_language_comparison` to `false`, and `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` drops cross-language pairs unless configuration enables them.
 
@@ -205,7 +205,7 @@ The MCP server in `crates/deslop-mcp/src/` exposes JSON-RPC tools over stdio and
 | Type-3 recall uses sibling windows and MinHash LSH. | `crates/deslop-core/src/sibling.rs`, `crates/deslop-core/src/tokens.rs`, `crates/deslop-core/src/lsh.rs` | `cargo test -p deslop --test sibling_ranking` |
 | Embeddings are optional and off by default in the CLI. | `crates/deslop/src/main.rs`, `crates/deslop-core/src/pipeline/embedding_pass.rs` | `cargo test -p deslop --test cli default_run_records_embeddings_off_provenance` |
 | Embedding neighbours are filtered by HNSW cosine threshold. | `crates/deslop-core/src/embedding/pairs.rs` | `cargo test -p deslop-core --test embedding_pairs` |
-| Fused score is bounded. | `crates/deslop-core/src/pair.rs::PairScore::fused` | `cargo test -p deslop --test fused_score_bounds` |
+| Fused score is the bounded strongest axis. | `crates/deslop-core/src/pair.rs::PairScore::bounded_fused` | `cargo test -p deslop --test fused_score_bounds` |
 | Cross-language comparison is disabled unless configured. | `crates/deslop-core/src/config.rs`, `crates/deslop-core/src/pair.rs::candidate_pairs_for_language_policy` | `cargo test -p deslop --test cross_language` |
 | Live/LSP paths use `LiveService` over `PipelineSession`. | `crates/deslop-core/src/live/`, `crates/deslop-lsp/src/backend.rs` | `cargo test -p deslop-lsp --test notifications` |
 | MCP tools are stdio JSON-RPC wrappers with root safety checks. | `crates/deslop-mcp/src/server.rs`, `crates/deslop-mcp/src/tools/mod.rs`, `crates/deslop-mcp/src/safety.rs` | `cargo test -p deslop-mcp --test cli` |

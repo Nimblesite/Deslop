@@ -3,7 +3,7 @@
 //! Pluggable `EmbeddingProvider` trait, a disk cache keyed by
 //! `(content_hash, provider_id, model_id, model_version)`, and an HNSW
 //! top-k pair generator that produces the `embedding_cos` signal
-//! consumed by [FUSION-STRATEGY-MAX-SUM].
+//! consumed by [FUSION-STRATEGY-BOUNDED-MAX].
 //!
 //! The module is deliberately small: the trait is the extension point
 //! per [PIPELINE-LANG-TRAIT]-style "single surface" design, and every

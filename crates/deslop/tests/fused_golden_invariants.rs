@@ -1,5 +1,5 @@
 //! Cross-language invariants the rendered fused confidence must satisfy
-//! in *every* report ([FUSION-STRATEGY-MAX-SUM], [FUSION-CONTENT-GATE],
+//! in *every* report ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE],
 //! [FUSED-THRESHOLD], [RANK-STRUCTURAL-ONLY]).
 //!
 //! `docs/root-cause-fusion.md` names the failure mode precisely: sum-then-
@@ -72,6 +72,21 @@ const SWEEP: [(&str, u32); 21] = [
     ("python-type3", 10),
     ("php-small", 10),
     ("rust-issue-232-token-jaccard", 10),
+];
+
+/// The corpora that stage several distinct degrees of duplication in
+/// one tree, and therefore cannot render one confidence for all of them.
+/// Listed explicitly: a positional slice of [`SWEEP`] silently changes
+/// which corpora are asserted whenever the sweep gains an entry, and
+/// prepending `ts-mixed-band` had already dropped PHP from this contract.
+const GOLDEN_CORPORA: [(&str, u32); 7] = [
+    ("ts-mixed-band", 12),
+    ("fused-golden-csharp", 12),
+    ("fused-golden-python", 12),
+    ("fused-golden-typescript", 12),
+    ("fused-golden-go", 12),
+    ("fused-golden-rust", 12),
+    ("fused-golden-php", 12),
 ];
 
 /// Accumulates every contract breach across the sweep so one failure
@@ -204,7 +219,7 @@ fn sweep_every_corpus() -> Result<Sweep> {
     Ok(sweep)
 }
 
-// [FUSION-STRATEGY-MAX-SUM] / [FUSION-CONTENT-GATE]: one contract, twenty
+// [FUSION-STRATEGY-BOUNDED-MAX] / [FUSION-CONTENT-GATE]: one contract, twenty
 // corpora, eight languages. Every breach is collected before the failure
 // so a regression shows its full blast radius in one run.
 #[test]
@@ -243,8 +258,8 @@ fn fused_confidence_obeys_one_contract_in_every_language() -> Result<()> {
 #[test]
 fn no_golden_report_renders_a_constant_fused_score() -> Result<()> {
     let mut verdicts: Vec<String> = Vec::new();
-    for (dir, min_nodes) in SWEEP.iter().take(6) {
-        let report = run_report(&fixture(dir), *min_nodes)?;
+    for (dir, min_nodes) in GOLDEN_CORPORA {
+        let report = run_report(&fixture(dir), min_nodes)?;
         let values: BTreeSet<String> = clusters(&report)
             .iter()
             .map(|cluster| format!("{fused:.4}", fused = signal(cluster, "fused")))

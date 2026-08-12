@@ -2,7 +2,7 @@
 # =============================================================================
 # Standard Makefile — Deslop
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
-# Rust CLI. See docs/specs/SPEC.md and docs/plans/PLAN.md.
+# Rust CLI. See docs/specs/SPEC.md and docs/repo-index.md.
 #
 # Targets prefixed with `_` are INTERNAL: hidden from the IDE make task list,
 # invoked only by other targets or by CI. The public targets below are the
