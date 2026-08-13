@@ -274,24 +274,56 @@ The default HTML renderer embeds, for each occurrence, the source bytes covered 
 
 ### [METRICS-REPO] Repo-wide duplication metrics
 
-One honest number, computed deterministically from the same cluster set the report already carries. Lives at `Report.metrics` and drives the fail-over threshold in [EXIT-CODES].
+Two honest numbers, computed deterministically from the same visible cluster set the report already carries, living at `Report.metrics` and driving the fail-over gates in [EXIT-CODES]: the **mechanical** percentage below — pure line coverage, never weighted, the default gate — and the **evidence-weighted** companion of [METRICS-REPO-WEIGHTED].
 
 `RepoMetrics` fields:
 
 - `analysed_loc: u64` — physical lines across every file in `files_analysed`. Counted once per file, regardless of clustering. Lines are `\n`-terminated plus the trailing partial line if any; empty files contribute zero.
-- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric. Literal-family clusters ([RANK-LITERAL-FAMILY]) are **excluded** from `duplicated_loc` / `duplication_percent` — the headline percentage keeps meaning fragment-clone duplication; `clusters_total` still counts them.
+- `duplicated_loc: u64` — lines covered by **≥ 2 clone occurrences across the whole corpus**, deduplicated per file so overlapping sibling-extension ranges do not double-count. Computed by projecting every `ReportOccurrence` from every non-hidden cluster onto a per-file `BTreeSet<line>`, unioning, and summing set sizes. Hidden occurrences (`[EXCLUSION-CONFIG]` `report_hide`) are **excluded** so a noisy generated-code tier cannot inflate the metric. Literal-family clusters ([RANK-LITERAL-FAMILY]) are **excluded** from `duplicated_loc` / `duplication_percent` — the headline percentage keeps meaning fragment-clone duplication; `clusters_total` still counts them. Every visible bucket counts here at equal weight: a `structural_only` line is the same one line as a byte-proven `identical` line. That is deliberate — this is the coverage measure — and it is also why the metric can overstate actionable duplication (gh #344, #355); the bucket-sensitive view is [METRICS-REPO-WEIGHTED], never this field.
 - `duplication_percent: f64` — `100.0 × duplicated_loc / analysed_loc`, clamped into `[0.0, 100.0]`. Zero when `analysed_loc == 0`. Rounded to two decimals in text + HTML; carried at full `f64` precision in JSON.
 - `clusters_total: usize` — count of non-hidden clusters carried in `clusters`, literal-family included; always equals `clusters.len()` but is carried explicitly so downstream consumers don't re-derive it. Only fragment-clone clusters contribute lines to `duplicated_loc` — [RANK-LITERAL-FAMILY] clusters are excluded from the line projection, not from this count.
 - `duplicated_files: usize` — count of files containing at least one non-hidden clone occurrence. Upper-bounded by `files_analysed`.
 - `per_file: Vec<FileMetric>` — per-file breakdown, one `FileMetric { path, analysed_loc, duplicated_loc, duplication_percent }` per analysed file (clean files included with `duplicated_loc == 0` so percentage denominators stay exact). Same per-file line-set computation as the repo aggregate, scoped to one file; `duplication_percent` uses that file's own `analysed_loc` as the denominator. Sorted by `duplication_percent` desc, path tiebreaker. **`path` is rendered relative to the scan root**, the same form `ReportOccurrence.path` carries, so a consumer that opens a `FileMetric` must resolve it against the workspace exactly as it resolves an occurrence — treating it as absolute names a file that does not exist. **Folders are not carried on the wire** — per-folder rollups are derived by consumers (the VSIX [VSIX-METRICS-PANEL], the HTML report) by summing the `analysed_loc` and `duplicated_loc` of every file under a path prefix, which keeps both numerator and denominator exact. Powers the per-folder/per-file breakdown in [VSIX-METRICS-PANEL].
 
+#### [METRICS-REPO-WEIGHTED] Evidence-weighted duplication percentage
+
+> **Status: specified, not shipped.** Lands with gh #344 per [weighted-metrics-plan.md](../plans/weighted-metrics-plan.md). Until it ships, `Report.metrics` carries only the mechanical fields above, and [EXIT-CODES-WEIGHTED] is unreachable.
+
+The mechanical numerator treats every visible line identically, so a repo full of shape-only boilerplate breaches a `--fail-over` gate exactly like a repo full of verbatim copy-paste (gh #344; gh #355 is a measured instance). Detection evidence is not uniform across clone classes — benchmark precision degrades as syntactic similarity falls ([Bellon et al. 2007](reading-list.md#read-list-metrics), [Svajlenko & Roy 2015](reading-list.md#read-list-metrics)), and case-studied shape-level cloning is frequently deliberate, benign boilerplate ([Kapser & Godfrey 2008](reading-list.md#read-list-metrics)). The weighted metric prices that evidence in; the mechanical metric stays the industry-comparable, exactly-reproducible default (unweighted duplicated-line density is the established CI gate — SonarQube's `duplicated_lines_density`).
+
+**Mechanism.** Same visible cluster set, same non-hidden occurrence projection, same literal-family exclusion, same per-file line sets as the mechanical metric — nothing about cluster selection changes. Each covered line then takes the weight of the strongest evidence covering it:
+
+- `line_weight = max` over covering occurrences of `bucket_weight(cluster.bucket) × category_weight(cluster.category)`. **Max, never sum**: overlapping clusters cannot push a line past `1.0`, and provably-duplicated lines are not diluted by a coincident weak cluster.
+- `weighted_duplicated_loc: f64 = Σ line_weight` per file, summed as the mechanical union is.
+- `weighted_duplication_percent = clamp(100 × weighted_duplicated_loc / analysed_loc, 0, 100)` — same denominator, same clamp, same zero-corpus rule.
+
+**Weights follow measured evidence class, not academic type number.** Deslop already routes weak evidence into its own buckets ([CLONE-BUCKETS-ROUTING]), so the discount attaches to the bucket, and to the category axis exactly as [RANK-CATEGORY] does. Defaults:
+
+| Key | Default | Rationale |
+|---|---|---|
+| `bucket_weights.identical` | `1.0` | Byte-equivalence proof ([CLONE-BUCKETS-IDENTICAL]). |
+| `bucket_weights.nearly_identical` | `1.0` | Token/anchor-proven Type-3 — the routing thresholds already demand strong content evidence. |
+| `bucket_weights.same_behavior` | `0.5` | Semantic evidence only, no syntactic proof; the WT3/T4 band is where benchmark agreement collapses (Svajlenko & Roy 2015). Visible in the gate, but an embedding model's judgment alone cannot fail CI. |
+| `bucket_weights.structural_only` | `0.15` | Shape is the only positive signal; equals [RANK-STRUCTURAL-ONLY]'s demote multiplier so ranking and metric tell one story. |
+| `bucket_weights.loosely_similar` | `0.0` | "Hint, not a directive" ([CLONE-BUCKETS]); a hint must not move a CI verdict. |
+| `category_weights.logic` | `1.0` | Ordinary duplicated logic. |
+| `category_weights.data` | `0.15` | Equals [RANK-CATEGORY]'s `data_clone_weight` default (gh #336). |
+
+Weights are configured under `[metrics]` in `.deslop.toml` ([EXCLUSION-CONFIG]); each value must be finite and in `[0.0, 1.0]`, rejected otherwise with a `ConfigThreshold`-style error naming the config path (exit `2`). `0.0` is legal — it excludes the class from the weighted numerator only. Weights are per-bucket declared constants, **not** the fused confidence: fused is still being hardened (gh #343 lineage) and a percentage must be recomputable from the report alone by anyone holding the weight table.
+
+**Wire.** `RepoMetrics` gains `weighted: WeightedMetrics { duplicated_loc: f64, duplication_percent: f64, threshold: ThresholdSummary, bucket_weights, category_weights }` — the resolved weight table is echoed on the wire so every consumer can recompute the number from the report alone. `FileMetric` gains `weighted_duplicated_loc` / `weighted_duplication_percent`; folder rollups sum the weighted numerators exactly as the unweighted ones. Modelled in [live-ipc.td](../models/live-ipc.td), regenerated, never hand-written.
+
+**Invariants** (each is a test assertion): with all weights `≤ 1.0`, `weighted_duplication_percent ≤ duplication_percent`; with all weights `= 1.0` the two are equal to full `f64` precision; the mechanical fields are byte-identical with and without a `[metrics]` section — **no knob may ever change `duplication_percent`**.
+
 Deliberate non-metrics:
 
-- No weight-sum percentage. `weight` is a ranking quantity, not a fraction, and mixing a log term into a percentage produces a number nobody can reason about.
+- No weight-sum percentage. The ranking `weight` is a log-scaled quantity, not a fraction, and it never enters any percentage — the evidence weights above are declared constants echoed on the wire, a different thing entirely.
+- No fused-scaled percentage. A continuous confidence multiplier makes the number a function of the fusion internals and irreproducible from the report; revisit only if the bucket constants prove insufficient.
+- No single blended number. Replacing the mechanical percentage would break comparability with every other line-density tool and every existing ratcheted threshold; the two metrics ship side by side.
 - No byte-level percentage. Developers reason in lines; a 3-line and a 30-line occurrence are not interchangeable even if their byte counts are similar.
 - No "clone density per KLOC". Derivable from `duplicated_loc / analysed_loc * 1000`; we don't ship two spellings of the same ratio.
 
-The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. HTML surfaces the same line in the report header and colours it by the fail-over threshold (green < threshold, red ≥ threshold, neutral when no threshold is set). JSON is canonical; both renderers read from `metrics`.
+The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. Once [METRICS-REPO-WEIGHTED] ships, the header carries the companion figure in the same line — `repo: 12.4% duplicated, 8.1% evidence-weighted (…)` — and never one without the other. HTML surfaces the same line in the report header and colours it by the fail-over threshold (green < threshold, red ≥ threshold, neutral when no threshold is set); when both gates are set, the breached one names itself. JSON is canonical; both renderers read from `metrics`.
 
 ### [EXIT-CODES] CLI exit codes and fail-over threshold
 
@@ -299,10 +331,10 @@ Deslop's default exit code is `0` on a successful analysis regardless of how muc
 
 Exit codes:
 
-- `0` — analysis succeeded; `duplication_percent ≤ threshold` (or no threshold was set).
+- `0` — analysis succeeded; no enabled gate breached.
 - `1` — unexpected runtime error (parse failure, I/O error, cache corruption that couldn't be recovered). Pre-existing behaviour; unchanged by this spec.
 - `2` — invalid CLI invocation (bad flag, incompatible combination, missing required argument). Pre-existing behaviour; unchanged.
-- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` after a successful analysis. The report is still written to disk in full so CI can surface the offenders.
+- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` — or, once [METRICS-REPO-WEIGHTED] ships, `weighted_duplication_percent > weighted threshold` ([EXIT-CODES-WEIGHTED]) — after a successful analysis. The report is still written to disk in full so CI can surface the offenders.
 
 Threshold sources, highest precedence first:
 
@@ -311,5 +343,11 @@ Threshold sources, highest precedence first:
 3. Absent — no threshold is enforced; exit `3` is unreachable and the text/HTML headers render the metric without a pass/fail verdict.
 
 A `--no-fail-over` flag (mutually exclusive with `--fail-over`) overrides a config-file threshold and restores the "report only" behaviour, so a developer can run the CLI locally against a repo whose CI gate they don't want to trip.
+
+#### [EXIT-CODES-WEIGHTED] Evidence-weighted gate
+
+> Lands with [METRICS-REPO-WEIGHTED] (gh #344); unreachable until then.
+
+A second, independent gate over `weighted_duplication_percent`, mirroring the mechanical gate exactly: `--fail-over-weighted <percent>` (highest precedence), then `[threshold] max_weighted_duplication_percent`, then absent → not enforced. Same validation, same full-precision strictly-greater comparison, equality passes. The two gates compose: either breach → exit `3`; the single `--no-fail-over` flag disables **both** — "report only" means report only. The mechanical gate remains the documented default in CI recipes; the weighted gate is opt-in for teams that want boilerplate-shaped findings priced below proven copy-paste, and each gate's verdict is carried separately on the wire (`metrics.threshold` / `metrics.weighted.threshold`) so a breach always names the ceiling it crossed.
 
 The renderer always states the active threshold in the report header (`threshold: 10.00% (breached)` / `threshold: 10.00% (ok)` / `threshold: none`) so the report is self-explanatory when read out of context. The threshold value and breach flag are carried on `Report.metrics.threshold { percent: f64, breached: bool, source: "cli" | "config" | "none" }` so downstream tools do not re-derive the verdict.

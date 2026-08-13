@@ -220,7 +220,7 @@ Surfaces still running on the pre-gate world:
 | Surface | Today |
 |---|---|
 | Pair admission to a cluster (`pair.rs`) | ✅ Fixed by #343 — admission now uses `bounded_fused()` (strongest single axis), no longer the raw clamped sum |
-| `metrics.duplication_percent` / exit-code gate (`report.rs`) | Counts lines of visible clusters, unweighted — shape matches breach like verbatim copy-paste |
+| `metrics.duplication_percent` / exit-code gate (`report.rs`) | Counts lines of visible clusters, unweighted — shape matches breach like verbatim copy-paste. Design settled: side-by-side evidence-weighted metric + second gate, specced in [pipeline.md §METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted), sequenced in [weighted-metrics-plan.md](weighted-metrics-plan.md) |
 | VSIX severity / decorations / tree (`severity.ts`) | Rank-derived, never reads `fused` |
 | CLI text report (`render/text.rs`) | Prints no signals at all |
 | LSP diagnostics / code lens (`deslop-lsp`) | No confidence anywhere |

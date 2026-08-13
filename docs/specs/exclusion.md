@@ -34,6 +34,19 @@ data_clone_weight = 0.15    # multiplier in demote mode; finite, in (0.0, 1.0]
 
 `data_clones` selects how `data`-category clusters ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]) are ranked: `demote` (default) down-weights them by `data_clone_weight`, `ignore` drops them from the report, `keep` ranks them at full weight. `data_clone_weight` must be finite and strictly inside `(0.0, 1.0]`; `NaN`, infinity, `0.0`, and values above `1.0` are rejected with a `ConfigThreshold`-style error naming the config path. The weight is consulted only in `demote` mode. Both keys are omittable; absence yields the default `demote` / `0.15`.
 
+**`[metrics]` section** (lands with gh #344, [pipeline.md §METRICS-REPO-WEIGHTED](pipeline.md#metrics-repo-weighted)). Overrides the evidence weights of the weighted duplication percentage:
+
+```toml
+[metrics.bucket_weights]
+structural_only = 0.15      # each key optional; defaults per [METRICS-REPO-WEIGHTED]
+same_behavior = 0.5
+
+[metrics.category_weights]
+data = 0.15
+```
+
+Every value must be finite and in `[0.0, 1.0]`, rejected otherwise with the same `ConfigThreshold`-style error as `[ranking]`. `0.0` is legal here (unlike the ranking multipliers): it removes that class from the weighted numerator only. Nothing in this section can alter the mechanical `duplication_percent` — that figure has no configuration surface, by design.
+
 **Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
 
 **Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.

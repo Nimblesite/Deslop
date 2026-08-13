@@ -81,6 +81,7 @@ If you encounter code that could cause a false negative or a false positive — 
 - Spec ids must be cross referenced across tests, code specs and plans
 - Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
 - Don't use line endings to force word wrap. Allow text to wrap naturally.
+- Keep PR documentation TIGHT and HUMAN READABLE (except for the AI section)
 - Remove line endings that only exist to wrap text
 - Remove fluff from the specs that don't specify anything
 

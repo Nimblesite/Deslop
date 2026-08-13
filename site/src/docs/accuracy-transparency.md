@@ -13,6 +13,8 @@ icon: fact_check
 
 Deslop's percentage is exact arithmetic over the findings in the current report. It is not a statistical estimate, and it is not a claim that detection has perfect precision or recall.
 
+It is a raw coverage figure: it measures how much of the codebase the detector currently flags, taking every surviving finding at face value. Nothing in it is discounted for how strong the evidence behind a finding is.
+
 ## How the percentage is calculated
 
 ```text
@@ -21,11 +23,15 @@ duplication_percent = clamp(100 × duplicated_loc / analysed_loc, 0, 100)
 
 - `analysed_loc` is the number of physical lines in every analysed source file. Blank and comment lines count; an empty file contributes zero. Files excluded before analysis contribute nothing.
 - `duplicated_loc` is the per-file union of physical line numbers touched by non-hidden occurrences in clusters that survive the report filters. A line covered by overlapping occurrences or clusters is counted once.
-- `report_hide` and generated-header occurrences do not enter the numerator. The percentage is not weighted by cluster rank, size, bucket or confidence: every covered line has equal weight.
+- `report_hide` and generated-header occurrences do not enter the numerator. Beyond that, no finding is discounted: rank, size, bucket and confidence all carry equal weight. A line whose only evidence is a matching code shape — the kind the report itself labels *"verify before extracting"* — counts exactly like a line in a copy proven identical byte for byte. That is what keeps the number reproducible, and it is also why it can read higher than the duplication you would actually act on ([#344](https://github.com/Nimblesite/Deslop/issues/344), [#355](https://github.com/Nimblesite/Deslop/issues/355)).
 - Per-file percentages use the same calculation. Folder percentages sum the files' duplicated and analysed line counts, then divide; they are never averages of file percentages.
 - A zero-line corpus reports `0%`. JSON carries the full floating-point value; human-facing reports round it for display.
 
 The implementation is public: [`render_report` selects the visible cluster set](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/report.rs#L152-L201), [`compute_repo_metrics` unions the covered lines](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/report_metrics.rs#L121-L216), and [`percent` performs the division and clamp](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/report_metrics.rs#L278-L320).
+
+## What we are building next
+
+A second, evidence-weighted percentage: the same line sets, with each line priced by the strength of the evidence behind the finding that covers it, so a proven copy weighs more than a shape-only resemblance. It gets its own opt-in CI gate and reports beside the raw figure — which keeps its exact meaning and stays the default, so no existing threshold shifts under you. The design, the weights, and the reasoning behind them are in [`weighted-metrics-plan.md`](https://github.com/Nimblesite/Deslop/blob/main/docs/plans/weighted-metrics-plan.md), tracked in [#344](https://github.com/Nimblesite/Deslop/issues/344).
 
 ## How the CI gate works
 
