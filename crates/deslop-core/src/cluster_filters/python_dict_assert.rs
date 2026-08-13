@@ -62,6 +62,14 @@
 //!   ways by `python_dict_assert_payload_proof::
 //!   executable_decorator_arguments_are_not_excused` and
 //!   `static_decorators_stay_within_the_idiom`.
+//! - What a decorator decorates must be a **function**. Proving the
+//!   decorators static says nothing about the definition underneath
+//!   them, and a decorated *class* body executes at import time where
+//!   no `test_*` walk reaches it — `session = build_session(...)`
+//!   beside the test methods would ride along unread. An undecorated
+//!   class at module scope already fails open, so a decorator may not
+//!   buy one a pass. Pinned by `python_dict_assert_payload_proof::
+//!   class_body_logic_under_a_static_decorator_is_not_excused`.
 //!
 //! A range with no payload assignment at all — the assert-run window
 //! whose dict sits above it — still qualifies on assertion shape alone;
@@ -130,11 +138,27 @@ fn module_scope_is_idiom_only(root: Node<'_>, range: ByteRange) -> bool {
             | "import_from_statement"
             | "future_import_statement"
             | "comment" => true,
-            "decorated_definition" => decorators_are_static(child),
+            "decorated_definition" => decorates_a_function(child) && decorators_are_static(child),
             "expression_statement" => is_docstring_statement(child),
             _ => false,
         });
     idiom_only
+}
+
+/// Returns true when what the decorators decorate is a function.
+///
+/// Proving the decorators static says nothing about the definition
+/// underneath them. A decorated **class** carries statements that no
+/// `test_*` walk ever reaches — `session = build_session(...)` in a
+/// class body executes at import time, and duplicated wiring is exactly
+/// what this filter must not erase. An undecorated class at module
+/// scope already fails open here; a decorator may not buy one a pass.
+/// Pinned by `python_dict_assert_payload_proof::
+/// class_body_logic_under_a_static_decorator_is_not_excused`.
+fn decorates_a_function(definition: Node<'_>) -> bool {
+    definition
+        .child_by_field_name("definition")
+        .is_some_and(|inner| inner.kind() == "function_definition")
 }
 
 /// Returns true when every decorator on the definition is proven

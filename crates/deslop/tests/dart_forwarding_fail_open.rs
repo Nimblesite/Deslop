@@ -33,6 +33,17 @@
 //! same-callee *string*-literal variation is already suppressed by
 //! design ([CLONE-NOISE-LITERAL-VARIATION-CALLS]); what is pinned here
 //! is the reach the forwarding proof added beyond that filter.
+//!
+//! **A collaborator call beside a same-class call.** Proving that *a*
+//! call in the body delegates says nothing about the others.
+//! `dart-forwarding-transform-after-delegation` binds the delegated
+//! response and then runs it through a sibling helper; `dart-forwarding-
+//! transform-before-delegation` computes with a sibling helper and
+//! submits the result. In both the delegating call is byte-identical
+//! across the pair, so it carries no duplication whatsoever — every
+//! liftable thing lives in the same-class call. A proof that stops at
+//! the first delegation reads the statement that is not the duplication
+//! and excuses the one that is.
 
 use anyhow::Result;
 
@@ -89,6 +100,63 @@ fn same_class_helper_calls_are_not_forwarding() -> Result<()> {
         );
     }
     assert_duplicated_loc_at_least(&report, 4);
+    Ok(())
+}
+
+#[test]
+fn a_same_class_call_after_delegation_is_not_forwarding() -> Result<()> {
+    let scan_root = fixture("dart-forwarding-transform-after-delegation");
+    let report = run_report(&scan_root, 12)?;
+
+    let cluster = expect_sole_cluster(
+        &report,
+        "both bodies hand the same byte-identical request to the injected \
+         client and then diverge inside `applyMarkup` — the one call that \
+         reaches back into the class is the one that differs, and it is \
+         liftable by parameterising it. Hiding the pair proves the forwarding \
+         proof stopped at the first delegating call.",
+    )?;
+    assert_single_file_cluster(cluster, 2, "Ledger.dart");
+    let texts = assert_cluster_mentions(
+        &scan_root,
+        cluster,
+        &["standardTotal", "premiumTotal", "applyMarkup"],
+    )?;
+    assert!(
+        texts.iter().any(|text| text.contains("\"standard\""))
+            && texts.iter().any(|text| text.contains("\"premium\"")),
+        "the differing tier literals are the parameter the lift would take; \
+         both must be reported: {texts:#?}"
+    );
+    assert_duplicated_loc_at_least(&report, 4);
+    Ok(())
+}
+
+#[test]
+fn a_same_class_call_before_delegation_is_not_forwarding() -> Result<()> {
+    let scan_root = fixture("dart-forwarding-transform-before-delegation");
+    let report = run_report(&scan_root, 12)?;
+
+    let cluster = expect_sole_cluster(
+        &report,
+        "the class computes on its own inputs through `normalise` and only \
+         then submits the result. No REST wrapper computes before it \
+         forwards; hiding this pair proves a trailing delegation excused the \
+         computation that preceded it.",
+    )?;
+    assert_single_file_cluster(cluster, 2, "Billing.dart");
+    let texts = assert_cluster_mentions(
+        &scan_root,
+        cluster,
+        &["quarterlyFee", "annualCharge", "normalise"],
+    )?;
+    assert!(
+        texts.iter().any(|text| text.contains("100"))
+            && texts.iter().any(|text| text.contains("250")),
+        "the differing base literals are what parameterising `normalise` \
+         would absorb; both must be reported: {texts:#?}"
+    );
+    assert_duplicated_loc_at_least(&report, 2);
     Ok(())
 }
 

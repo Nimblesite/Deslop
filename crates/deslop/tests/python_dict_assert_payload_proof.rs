@@ -20,6 +20,14 @@
 //!   `@pytest.mark.parametrize("case", [...])` table is test payload,
 //!   not logic; rejecting it would resurface the #107 noise class for
 //!   every decorated pytest module.
+//! - **A decorated class body is not a test function.** Proving the
+//!   decorators static said nothing about *what was decorated*. A
+//!   decorated `class_definition` carries statements that no `test_*`
+//!   walk ever reaches — `session = build_session(...)` executes at
+//!   import time — so the class-body statement rode along unread while
+//!   its `test_*` methods vouched for the range. An undecorated class
+//!   at module scope already fails open here; a decorator may not buy
+//!   one a pass.
 
 use anyhow::Result;
 
@@ -63,6 +71,27 @@ fn executable_decorator_arguments_are_not_excused() -> Result<()> {
         texts.iter().all(|text| text.contains("build_cases")),
         "the duplicated case-generation call lives in the decorator, outside \
          every test body the proof walks; the report must cover it: {texts:#?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn class_body_logic_under_a_static_decorator_is_not_excused() -> Result<()> {
+    let scan_root = fixture("python-dict-assert-decorated-class");
+    let report = run_report(&scan_root, 8)?;
+
+    let texts = expect_cross_file_duplicate(
+        &scan_root,
+        &report,
+        &["test_billing_contract.py", "test_shipping_contract.py"],
+        2,
+        2,
+    )?;
+    assert!(
+        texts.iter().all(|text| text.contains("build_session")),
+        "the duplicated session wiring executes in the class body at import \
+         time, outside every test method the proof walks; the report must \
+         cover it: {texts:#?}"
     );
     Ok(())
 }

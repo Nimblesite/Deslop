@@ -125,11 +125,15 @@ be closed over everything the range covers:
   operand is a scalar literal; a computed right operand is logic the idiom
   never proves.
 - Module scope within the range may hold only the test functions, imports,
-  docstrings and comments. A decorated test qualifies only when every
-  decorator is a dotted name, or a call on a dotted name whose every argument
-  is static data — `@pytest.mark.parametrize("case", [...])` is test payload,
-  while a computed decorator argument is case-generation wiring outside every
-  body the proof walks.
+  docstrings and comments. A decorated definition qualifies only when what it
+  decorates is a **function**, and every decorator is a dotted name or a call on
+  a dotted name whose every argument is static data —
+  `@pytest.mark.parametrize("case", [...])` is test payload, while a computed
+  decorator argument is case-generation wiring outside every body the proof
+  walks. A decorated **class** never qualifies: its body executes at import time
+  and no `test_*` walk reaches it, so `session = build_session(...)` beside the
+  test methods would ride along unread. An undecorated class at module scope
+  already fails open, and a decorator may not buy one a pass.
 
 A cluster is suppressed when it spans at least two files, members' raw bytes
 differ (a verbatim copy stays visible), and every member's range passes the
