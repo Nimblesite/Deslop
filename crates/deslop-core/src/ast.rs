@@ -83,6 +83,15 @@ impl NormalizedNode {
     }
 }
 
+impl Drop for NormalizedNode {
+    fn drop(&mut self) {
+        let mut stack = std::mem::take(&mut self.children);
+        while let Some(mut node) = stack.pop() {
+            stack.append(&mut node.children);
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::missing_docs_in_private_items)]
 mod tests {

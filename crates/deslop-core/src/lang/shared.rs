@@ -38,11 +38,10 @@ pub const LITERAL_KIND: &str = "__literal__";
 /// otherwise overflow the stack and abort the whole run (#168).
 ///
 /// Real source ASTs are at most low-hundreds deep, so this leaves ample
-/// headroom while staying well under the overflow threshold on both the
-/// CLI's 8 MB main thread and the LSP/MCP server's ~2 MB async worker
-/// threads (the fingerprint walk, the actual overflow site, runs only on
-/// accepted files at depth `< MAX_AST_DEPTH`).
-pub const MAX_AST_DEPTH: usize = 500;
+/// headroom while staying well under the overflow threshold on both 1 MB
+/// default thread stacks (Windows) and async worker threads (the
+/// fingerprint walk runs only on accepted files at depth `< MAX_AST_DEPTH`).
+pub const MAX_AST_DEPTH: usize = 150;
 
 /// Parses `source` with `language` and returns the tree-sitter
 /// [`Tree`]. Wraps the two possible failure modes in [`CoreError`]
