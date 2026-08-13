@@ -48,6 +48,12 @@ deliberate duplication retained:
 duplication limit before and after:
 ```
 
+## Check your understanding
+
+1. Which results must be compared before and after the cleanup?
+2. What should you investigate if the group disappears after a configuration change?
+3. When should the configured duplication limit be lowered?
+
 ## Instruction for coding agents
 
 ```text

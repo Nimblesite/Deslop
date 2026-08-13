@@ -66,6 +66,12 @@ The report now shows where the largest duplicate groups are. It does not show wh
 
 Create a temporary scratch directory, run the Workshop discovery audit without repository writes, and fill the baseline record. Confirm the target source and configuration remain unchanged.
 
+## Check your understanding
+
+1. Why should the first cleanup scan avoid changing the target repository?
+2. What information must be recorded before editing begins?
+3. Why does a large duplicate group still require inspection before a refactor?
+
 ## Instruction for coding agents
 
 ```text

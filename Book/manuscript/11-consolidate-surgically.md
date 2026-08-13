@@ -32,6 +32,12 @@ Change the shared implementation, its callers, and the tests required by the dec
 
 Run the passing baseline, extract the chosen decoder into its correct owner, adapt both callers, and add assertions that preserve each meaningful policy difference.
 
+## Check your understanding
+
+1. Why must the repository's tests run before cleanup begins?
+2. How do you choose the module that should own the shared implementation?
+3. When is keeping two specialised implementations safer than sharing code?
+
 ## Instruction for coding agents
 
 ```text

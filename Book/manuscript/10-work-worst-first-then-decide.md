@@ -60,6 +60,12 @@ Choose “wait for more information” only when a specific fact or missing test
 
 Inspect two Workshop groups. Merge one copied decoder whose differences can be expressed as named inputs. Keep another group separate when merging it would weaken unrelated static types. Record both decisions with stable IDs.
 
+## Check your understanding
+
+1. Why does cleanup normally begin with `top-offenders`?
+2. Which facts must you inspect before deciding to merge a group?
+3. Give one technical reason why similar code may need to remain separate.
+
 ## Instruction for coding agents
 
 ```text

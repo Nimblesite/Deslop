@@ -32,6 +32,12 @@ Identical code is the clearest candidate for sharing one implementation. Nearly 
 
 Create a note for one group. Record its visible label, stable ID, source ranges, current rank, reference occurrence, and the facts you still need before deciding whether to merge it.
 
+## Check your understanding
+
+1. What does the fused score help an agent decide?
+2. Why should cleanup notes use the stable group ID instead of the report position?
+3. Why does a strong similarity score not choose the correct module for shared code?
+
 ## Instruction for coding agents
 
 ```text

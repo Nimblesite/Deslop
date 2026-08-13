@@ -59,6 +59,12 @@ The agent proposes a payload decoder for the Workshop repository.
 
 The finished edition will include the exact request, response, source ranges, and product capture from the pinned release.
 
+## Check your understanding
+
+1. Why must `find-similar` run before the proposed code is added to a file?
+2. What should the agent do with a borderline match?
+3. Why can a low score permit writing code without proving that the code is unique?
+
 ## Instruction for coding agents
 
 ```text

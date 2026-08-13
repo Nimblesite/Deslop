@@ -32,6 +32,12 @@ Raising the duplication limit, hiding hand-written findings, or making trivial e
 
 Add the repository rule to both supported instruction files, begin a fresh agent session, propose a known duplicate, and capture whether the agent calls `find-similar` before editing.
 
+## Check your understanding
+
+1. Why is “check for duplication” too vague as an agent instruction?
+2. Which tools handle proposed code, and which tools start cleanup of existing code?
+3. What should an agent report when the live connection is unavailable?
+
 ## Instruction for coding agents
 
 The finished chapter will include a paste-ready rule checked against Deslop's official repository instructions and the exact release used for the book.

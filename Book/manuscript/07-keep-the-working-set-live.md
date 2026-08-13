@@ -32,6 +32,12 @@ A wrong repository root, a stopped editor server, and mismatched Deslop versions
 
 Open the Workshop group in the human view, change one occurrence through the agent, observe the live refresh, and compare the focused file report before and after.
 
+## Check your understanding
+
+1. Why should the editor and agent normally agree on a stable group ID?
+2. When is a forced `rescan` appropriate?
+3. How can you tell whether a group disappeared because code was removed rather than hidden?
+
 ## Instruction for coding agents
 
 ```text

@@ -32,6 +32,12 @@ When a verified cleanup reduces the duplication percentage, lower the configured
 
 Measure the Workshop repository, select a limit it currently meets, introduce a known duplicate in a disposable copy, observe the CI failure, remove the duplicate, and confirm that the check passes again.
 
+## Check your understanding
+
+1. Why must you measure the current repository before setting the duplication limit?
+2. What report remains available when Deslop fails the configured limit?
+3. Why is raising the limit different from removing duplication?
+
 ## Instruction for coding agents
 
 ```text

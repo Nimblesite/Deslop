@@ -30,9 +30,10 @@ Every chapter uses the same structure:
 3. **The decision** — the choice the developer or agent needs to make.
 4. **Before, evidence, action, and after** — steps another developer can repeat.
 5. **Workshop exercise** — one small change to the example repository.
-6. **Instruction for coding agents** — the exact rule an agent can follow next time.
-7. **Main points** — a short summary of the chapter.
-8. **Authoritative sources** — adjacent citations plus a short source list.
+6. **Check your understanding** — questions that test the idea and decision, not command memorisation.
+7. **Instruction for coding agents** — the exact rule an agent can follow next time.
+8. **Main points** — a short summary of the chapter.
+9. **Authoritative sources** — adjacent citations plus a short source list.
 
 No chapter introduces more than four new conceptual families. Visuals either provide real product evidence or explain a relationship that product evidence cannot show.
 

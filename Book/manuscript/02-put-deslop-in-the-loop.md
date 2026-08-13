@@ -217,6 +217,22 @@ CLI fallback: available for saved-code checks and CI
 
 The checkpoint passes only when you can trace one real finding from the editor to the agent response. Seeing a tool name in the agent is not enough; the tool must be connected to the repository you are actually changing.
 
+## Check your understanding
+
+Answer these questions without looking back at the chapter:
+
+1. Which Deslop connection lets an agent check proposed code before it exists in a repository file?
+2. What does `deslop-lsp` do that `deslop-mcp` does not do?
+3. Why can the CLI catch a new copy but not fully replace `find-similar`?
+4. Which four inputs should you compare when the editor and agent show different results?
+
+### Suggested answers
+
+1. The MCP connection provides `find-similar`, which accepts a proposed code snippet.
+2. `deslop-lsp` owns the live analysis session, receives file changes, and builds updated reports. `deslop-mcp` forwards agent requests to that running session.
+3. The CLI scans code that has been saved to the repository. It cannot compare code that the agent has not written yet.
+4. Compare the repository root, Deslop version, analysis configuration, and source state.
+
 ## Instruction for coding agents
 
 ```text

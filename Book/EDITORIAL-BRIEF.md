@@ -18,6 +18,23 @@ The primary reader can maintain a tested software repository and has used at lea
 
 Experienced maintainers should still find the chapters on cleanup decisions, report evidence, and CI duplication limits useful.
 
+## Educational priority
+
+The book exists to teach developers how repository maintenance changes when coding agents can create code quickly but may not read every relevant file. It is not product marketing and it is not a command reference with extra prose.
+
+Every completed chapter must:
+
+1. Start with a realistic developer or agent task.
+2. Explain why the problem is more common or more expensive when agents write code.
+3. Introduce one new idea at a time and define every product term before relying on it.
+4. Show real Deslop output or clearly mark a diagram as an explanation rather than product output.
+5. Explain a common mistake and why it fails.
+6. Give the reader a practical exercise using the Workshop repository.
+7. Include questions that check whether the reader understood the idea, not whether they memorised a command.
+8. End with an instruction that a coding agent can follow during real repository work.
+
+The reader should finish each chapter able to explain the idea to another developer and use it on a repository. A chapter is not complete merely because it lists tools, fields, or steps.
+
 ## Voice
 
 - Direct, urgent, and technically exact
@@ -50,7 +67,7 @@ Start from a decision a developer or agent actually faces:
 - Is this repetition deliberate, or is it drift waiting to happen?
 - Did the refactor preserve behavior and reduce the reported group?
 
-Then show the relevant Deslop result, explain the rule needed for this decision, take one small action, and check the result. When useful, ask readers to predict the result before showing the real capture so they can compare their expectation with the tool output.
+Then show the relevant Deslop result, explain the rule needed for this decision, take one small action, and check the result. Ask readers to predict the result before showing the real capture when this helps them test their understanding.
 
 ## Required check before writing code
 

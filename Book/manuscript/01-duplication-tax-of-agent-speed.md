@@ -169,6 +169,22 @@ Expected conclusion: an identical match blocks uninspected authoring. Read the e
 
 Chapter 3 turns this note into a live `find-similar` query. The important point is that Deslop can check the proposed code before the agent adds it to a file.
 
+## Check your understanding
+
+Answer these questions without looking back at the chapter:
+
+1. Why can a new function be correct and well tested but still be a maintenance problem?
+2. Does a large identical block always require a new shared helper?
+3. What is the difference between the question DRY asks and the question Deslop answers?
+4. Why does checking before writing usually require less work than cleaning up later?
+
+### Suggested answers
+
+1. Tests can prove that the new function behaves correctly without checking whether the same implementation already exists elsewhere.
+2. No. The group must be inspected and given a clear outcome, but that outcome may be reuse, moving code, deletion, generation, or deliberate retention with a recorded reason.
+3. DRY asks where knowledge should have one authoritative representation. Deslop reports where source code is already repeated.
+4. Before writing, there are no new callers, tests, or separate fixes to move. The agent can reuse existing code without first removing a committed copy.
+
 ## Instruction for coding agents
 
 ```text

@@ -55,6 +55,12 @@ This note records what Deslop found separately from the developer's decision abo
 
 Choose one Workshop group and explain it without using a numbered academic label, source-code enum, or vague synonym such as “basically the same.” Use the exact visible title, name every occurrence, and write one reason to consolidate and one reason to retain it.
 
+## Check your understanding
+
+1. Which Deslop label provides the strongest proof that source is repeated?
+2. Why does the reference occurrence not automatically determine where shared code should live?
+3. What does a group's rank tell you, and what does it not tell you?
+
 ## Instruction for coding agents
 
 ```text
