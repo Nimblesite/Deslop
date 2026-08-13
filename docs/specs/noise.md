@@ -108,11 +108,33 @@ visible as genuine duplication.
 Chained-subscript assertions of the form `assert X[k1][k2] == V` are a Python
 idiom for verifying nested response/payload shapes; after identifier and literal
 normalisation every such assertion collapses to
-`assert __var__[__str__][__str__] == __const__`, clustering unrelated tests. A
-cluster is suppressed when it spans at least two files and every member lives
-inside a `test_*` pytest function whose reported range contains only assertions
-whose left-hand side is a subscript chain two or more levels deep. Distinct tests
-verifying distinct contracts are not extractable duplication.
+`assert __var__[__str__][__str__] == __const__`, clustering unrelated tests.
+Fingerprinting offers the idiom at several granularities — the assert run, the
+enclosing `test_*` function, the whole module — so the filter matches every
+`test_*` function the reported range intersects. That reach obliges the proof to
+be closed over everything the range covers:
+
+- Every intersecting function is a pytest `test_*` whose in-range body holds
+  only payload bindings and the chained assertions that consume them. A payload
+  binding is a plain identifier bound to a dictionary that is **static data all
+  the way down** — a call, identifier, splat or comprehension in any key or
+  value position is program logic wearing a dict. Rebinding a payload name
+  fails the proof; when any payload is in range, every assertion root must
+  resolve to one and every payload must be consumed.
+- An assertion is a bare chain or a single `==`/`is` comparison whose right
+  operand is a scalar literal; a computed right operand is logic the idiom
+  never proves.
+- Module scope within the range may hold only the test functions, imports,
+  docstrings and comments. A decorated test qualifies only when every
+  decorator is a dotted name, or a call on a dotted name whose every argument
+  is static data — `@pytest.mark.parametrize("case", [...])` is test payload,
+  while a computed decorator argument is case-generation wiring outside every
+  body the proof walks.
+
+A cluster is suppressed when it spans at least two files, members' raw bytes
+differ (a verbatim copy stays visible), and every member's range passes the
+closed proof. Distinct tests verifying distinct contracts are not extractable
+duplication.
 
 ### [CLONE-NOISE-PY-DICT-FIXTURE] Dict-literal test fixtures
 Dict-literal fixtures inside pytest tests carry the same AST shape and a

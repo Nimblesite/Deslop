@@ -19,7 +19,7 @@
       "publication": "assets/diagrams/00-reading-journey.png",
       "width": 1600,
       "height": 1000,
-      "alt": "The book journey moves from preventing a proposed duplicate, through routine live checks, to evidence-led cleanup and a lower repository ceiling."
+      "alt": "The book explains how to check proposed code, reuse existing code, inspect the largest existing duplicate groups, and verify each cleanup."
     },
     {
       "id": "prevent-then-clean",
@@ -48,6 +48,36 @@
       "width": 1600,
       "height": 1000,
       "alt": "Three identical source slabs move through an evidence gate toward five legitimate outcomes: reuse, move ownership, delete, generate, or retain with a recorded reason."
+    },
+    {
+      "id": "three-jobs-one-analysis",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/02-three-jobs-one-analysis.svg",
+      "publication": "assets/diagrams/02-three-jobs-one-analysis.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "A coding agent, a developer's editor, and CI use different Deslop entry points for prevention, live feedback, and standalone scans."
+    },
+    {
+      "id": "live-update-loop",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/02-live-update-loop.svg",
+      "publication": "assets/diagrams/02-live-update-loop.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "A source edit is analysed once, producing a new report that updates the editor and the coding agent's next focused query."
+    },
+    {
+      "id": "root-and-version-check",
+      "kind": "concept-diagram",
+      "status": "ready",
+      "master": "assets/diagrams/02-root-and-version-check.svg",
+      "publication": "assets/diagrams/02-root-and-version-check.png",
+      "width": 1600,
+      "height": 1000,
+      "alt": "Matching the repository root and Deslop version keeps the editor, agent, and CLI on the same code and report format."
     }
   ]
 }

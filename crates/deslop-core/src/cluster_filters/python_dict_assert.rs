@@ -43,11 +43,25 @@
 //!   are present. A dict no assert reads was never part of the idiom
 //!   the filter proved. Pinned by `python_dict_assert_reach::
 //!   an_unconsumed_payload_dictionary_is_not_excused`.
+//! - A payload's **values** must be static data all the way down. The
+//!   outer node being a `dictionary` says nothing about what sits in
+//!   the value positions; `{"gross": reconcile_amount(...)}` is a
+//!   computed reconciliation wearing a dict around itself. Pinned by
+//!   `python_dict_assert_payload_proof::
+//!   a_call_inside_a_consumed_payload_value_is_not_excused`.
 //! - **Module scope** may contain only imports, docstrings and the test
 //!   functions themselves. Duplicated module-level wiring is executable
 //!   logic outside every function the proof walks. Pinned by
 //!   `python_dict_assert_reach::
 //!   module_level_logic_is_not_excused_by_qualifying_tests`.
+//! - A **decorator** is module-level wiring too. It qualifies only as a
+//!   dotted name or a call on a dotted name whose every argument is
+//!   static data: `@pytest.mark.parametrize("case", [...])` is test
+//!   payload, `@pytest.mark.parametrize("case", build_cases())` is
+//!   case-generation logic the `test_*` walk never reads. Pinned both
+//!   ways by `python_dict_assert_payload_proof::
+//!   executable_decorator_arguments_are_not_excused` and
+//!   `static_decorators_stay_within_the_idiom`.
 //!
 //! A range with no payload assignment at all — the assert-run window
 //! whose dict sits above it — still qualifies on assertion shape alone;
@@ -112,15 +126,83 @@ fn module_scope_is_idiom_only(root: Node<'_>, range: ByteRange) -> bool {
         .filter(|child| node_intersects_range(*child, range))
         .all(|child| match child.kind() {
             "function_definition"
-            | "decorated_definition"
             | "import_statement"
             | "import_from_statement"
             | "future_import_statement"
             | "comment" => true,
+            "decorated_definition" => decorators_are_static(child),
             "expression_statement" => is_docstring_statement(child),
             _ => false,
         });
     idiom_only
+}
+
+/// Returns true when every decorator on the definition is proven
+/// non-executable beyond decoration itself: a dotted name, or a call on
+/// a dotted name whose every argument is static data. A computed
+/// decorator argument is module-level logic the `test_*` walk never
+/// reads, so it must fail the suppression.
+fn decorators_are_static(definition: Node<'_>) -> bool {
+    let mut cursor = definition.walk();
+    let all_static = definition
+        .named_children(&mut cursor)
+        .filter(|child| child.kind() == "decorator")
+        .all(|decorator| {
+            let mut expressions = decorator.walk();
+            let decorator_static = decorator
+                .named_children(&mut expressions)
+                .all(decorator_expression_is_static);
+            decorator_static
+        });
+    all_static
+}
+
+/// A decorator expression: a dotted name, or a static-argument call.
+fn decorator_expression_is_static(expression: Node<'_>) -> bool {
+    match expression.kind() {
+        "identifier" | "attribute" => is_dotted_name(expression),
+        "call" => call_is_static_decorator(expression),
+        _ => false,
+    }
+}
+
+/// `a.b.c` — identifiers joined by attribute access, nothing else.
+fn is_dotted_name(node: Node<'_>) -> bool {
+    match node.kind() {
+        "identifier" => true,
+        "attribute" => {
+            let mut cursor = node.walk();
+            let dotted = node.named_children(&mut cursor).all(is_dotted_name);
+            dotted
+        }
+        _ => false,
+    }
+}
+
+/// A decorator call is static when its callee is a dotted name and
+/// every argument — positional or keyword — is static data.
+fn call_is_static_decorator(call: Node<'_>) -> bool {
+    let callee_is_dotted = call
+        .child_by_field_name("function")
+        .is_some_and(is_dotted_name);
+    let Some(arguments) = call.child_by_field_name("arguments") else {
+        return false;
+    };
+    let mut cursor = arguments.walk();
+    let arguments_static = arguments
+        .named_children(&mut cursor)
+        .all(decorator_argument_is_static);
+    callee_is_dotted && arguments_static
+}
+
+/// One decorator argument: a keyword's value, or the expression itself.
+fn decorator_argument_is_static(argument: Node<'_>) -> bool {
+    if argument.kind() == "keyword_argument" {
+        return argument
+            .child_by_field_name("value")
+            .is_some_and(is_static_data);
+    }
+    is_static_data(argument)
 }
 
 /// Returns true for an expression statement that is only a plain string
@@ -200,13 +282,11 @@ fn record_statement<'a>(
         payloads.push((binding, false));
         return true;
     }
-    match chained_dict_assert_root(statement, source) {
-        Some(root) => {
-            roots.push(root);
-            true
-        }
-        None => false,
-    }
+    let Some(root) = chained_dict_assert_root(statement, source) else {
+        return false;
+    };
+    roots.push(root);
+    true
 }
 
 /// Returns true when every assertion root resolves to a recorded
@@ -227,8 +307,10 @@ fn ledger_balances(payloads: &mut [(&[u8], bool)], roots: &[&[u8]]) -> bool {
 
 /// Returns the bound name of `<name> = { ... }` — the literal dict the
 /// chained assertions read. Only a plain identifier bound to a
-/// dictionary literal counts: a call, a fixture reference, an attribute
-/// target or a comprehension is program logic, not test payload.
+/// dictionary literal counts, and the dictionary must be static data
+/// all the way down: a call, identifier, splat or comprehension in any
+/// key or value position is program logic wearing a dict, not test
+/// payload.
 fn literal_payload_binding<'a>(statement: Node<'_>, source: &'a [u8]) -> Option<&'a [u8]> {
     if statement.kind() != "expression_statement" {
         return None;
@@ -240,10 +322,28 @@ fn literal_payload_binding<'a>(statement: Node<'_>, source: &'a [u8]) -> Option<
     let left = assignment
         .child_by_field_name("left")
         .filter(|left| left.kind() == "identifier")?;
-    let _right: Node<'_> = assignment
+    let _payload: Node<'_> = assignment
         .child_by_field_name("right")
-        .filter(|right| right.kind() == "dictionary")?;
+        .filter(|right| right.kind() == "dictionary" && is_static_data(*right))?;
     source.get(left.start_byte()..left.end_byte())
+}
+
+/// Returns true when the node is provably static data all the way down:
+/// scalar literals, and dictionaries, lists, tuples or sets whose every
+/// element is static. A call, identifier, splat, comprehension or
+/// f-string anywhere makes the value computed and fails the proof.
+fn is_static_data(node: Node<'_>) -> bool {
+    if is_literal_constant(node) {
+        return true;
+    }
+    match node.kind() {
+        "dictionary" | "list" | "tuple" | "set" | "pair" | "unary_operator" | "comment" => {
+            let mut cursor = node.walk();
+            let elements_static = node.named_children(&mut cursor).all(is_static_data);
+            elements_static
+        }
+        _ => false,
+    }
 }
 
 /// Returns the root identifier of a qualifying chained-dict assertion:

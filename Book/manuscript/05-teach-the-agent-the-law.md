@@ -1,40 +1,40 @@
-# Chapter 5 — Teach the agent the law
+# Chapter 5 — Add the check to agent instructions
 
 > **Scaffold status:** Editorial structure established. The final instruction block will be verified against the pinned MCP schema and installation guidance.
 
-## Reader outcome
+## What you will be able to do
 
-Install a prevention contract in repository instructions so every compatible coding agent checks before authoring and uses cleanup tools only for existing code.
+Add a clear rule to the repository instructions so every compatible coding agent checks for matching code before writing. The rule also tells the agent which Deslop tools to use when cleaning up existing duplication.
 
 ## Planned sections
 
 ### Name the covered authoring units
 
-The rule explicitly covers functions, methods, classes, helpers, fixtures, test setup, parser branches, error types, route handlers, view models, and other multi-line units. Ambiguous “check for duplication” prose is too easy to satisfy after writing.
+The rule explicitly covers functions, methods, classes, helpers, fixtures, test setup, parser branches, error types, route handlers, view models, and other multi-line units. An instruction that only says “check for duplication” is unclear because an agent can satisfy it after writing the code. State that the check must happen first.
 
-### Put `find-similar` before the edit
+### State the order explicitly
 
-The instruction makes timing enforceable: proposed snippet first, tool call second, source edit only after the response is understood.
+The instruction gives the exact order: prepare the proposed snippet, call `find-similar`, read the response, and only then edit the source file.
 
 ### Separate prevention from cleanup
 
 `find-similar` answers whether proposed or selected code already exists. `top-offenders` and `cluster-by-id` drive an audit of existing groups. The repository rule names both paths.
 
-### Define the failure ladder
+### Explain what to do when the connection fails
 
-The agent restores the live server when possible and uses the CLI immediate-detection loop when not. It never silently skips the evidence check.
+The agent first tries to restore the live editor server. If that is unavailable, it runs the CLI before and after the change and states that the proposed code could not be checked before writing. It never silently skips the check.
 
-### Ban cosmetic compliance
+### Do not hide the result
 
-Widening the ceiling, hiding hand-written findings, or splitting a duplicate into trivially different shapes is not cleanup.
+Raising the duplication limit, hiding hand-written findings, or making trivial edits to avoid a match does not remove duplicate code.
 
-## Workshop checkpoint
+## Workshop exercise
 
 Add the repository rule to both supported instruction files, begin a fresh agent session, propose a known duplicate, and capture whether the agent calls `find-similar` before editing.
 
-## Agent handoff
+## Instruction for coding agents
 
-The final chapter asset will be a paste-ready, version-verified rule derived from Deslop's repository recipe rather than a second independently maintained policy.
+The finished chapter will include a paste-ready rule checked against Deslop's official repository instructions and the exact release used for the book.
 
 ## Source keys
 

@@ -1,14 +1,14 @@
 # Appendices and next steps
 
-> **Scaffold status:** Appendix destinations and contracts established. Command details await the edition release pin.
+> **Scaffold status:** Appendix topics are selected. Commands will be checked against the exact Deslop release used for the finished edition.
 
 ## Appendix A — Agent instruction recipe
 
-A paste-ready `AGENTS.md` and `CLAUDE.md` rule derived from Deslop's canonical repository recipe, with the prevention timing, score bands, cleanup-tool routing, fallback ladder, and anti-gaming rules verified against the pinned release.
+A paste-ready `AGENTS.md` and `CLAUDE.md` rule based on Deslop's official repository instructions. It will state when to check, what each score range means, which tools handle existing duplication, what to do when the live connection fails, and which changes merely hide a finding.
 
 ## Appendix B — Tool-to-job quick reference
 
-| Job | Tool or surface |
+| Job | Tool or view |
 |---|---|
 | Ask whether proposed code already exists | `find-similar` |
 | Start cleanup at the highest-impact groups | `top-offenders` |
@@ -16,16 +16,16 @@ A paste-ready `AGENTS.md` and `CLAUDE.md` rule derived from Deslop's canonical r
 | Investigate one active file | `report-for-file` |
 | Investigate one selected source range | `report-for-range` |
 | Refresh after large external changes | `rescan` |
-| Read canonical field definitions | `schema-doc` once per session |
-| Run a cold-start audit or CI gate | Deslop CLI |
+| Read the current report-field definitions | `schema-doc` once per session |
+| Run a standalone audit or CI check | Deslop CLI |
 
 ## Appendix C — Audit evidence record
 
-The baseline, actionability verdict, bounded diff, before/after native gates, stable group comparison, retained duplication, and ceiling ratchet in one reusable template.
+A reusable template for the starting results, the decision to merge or retain code, the files changed, tests before and after, the stable group comparison, duplication left in place, and the updated duplication limit.
 
-## Appendix D — Capture and release provenance
+## Appendix D — How screenshots and results were captured
 
-The pinned Deslop artifacts, hashes, editor version, operating system, fixture state, command lines, and screenshot procedure for the edition.
+The exact Deslop files and hashes, editor version, operating system, example repository state, commands, and screenshot steps used for the edition.
 
 ## Where to go next
 

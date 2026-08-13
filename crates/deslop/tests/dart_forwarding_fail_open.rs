@@ -20,6 +20,19 @@
 //! distinctness check passes straight over the bug. Comparing the proven
 //! *bodies* is what sees it, and one shared body disqualifies the
 //! suppression for the whole family.
+//!
+//! **Business calls wearing the wrapper shape.**
+//! `dart-forwarding-business-pair` holds two sibling pairs that each
+//! make one allowlisted call and differ only in an integer literal —
+//! the exact surface of the meilisearch wrappers. But the calls go to a
+//! *sibling helper on the same class*, not to a collaborator the class
+//! holds, so parameterising the helper call lifts the pair. A proof
+//! that accepts any call, wherever it goes, hides both; forwarding must
+//! mean handing the data to collaborator state — a field or parameter
+//! receiver. The pairs vary an int rather than a string because
+//! same-callee *string*-literal variation is already suppressed by
+//! design ([CLONE-NOISE-LITERAL-VARIATION-CALLS]); what is pinned here
+//! is the reach the forwarding proof added beyond that filter.
 
 use anyhow::Result;
 use serde_json::Value;
@@ -72,6 +85,70 @@ fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
     assert!(
         duplicated_loc >= 4,
         "the duplicated bodies must count toward the metrics: \
+         duplicated_loc={duplicated_loc}, report={report:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn same_class_helper_calls_are_not_forwarding() -> Result<()> {
+    let scan_root = fixture("dart-forwarding-business-pair");
+    let report = run_report(&scan_root, 12)?;
+
+    let visible = clusters(&report);
+    assert_eq!(
+        visible.len(),
+        2,
+        "both business pairs call a sibling helper — parameterisable logic, \
+         not API scaffolding. The bound-result pair is the regression pin: \
+         the branch's forwarding proof hid it because it accepted any call \
+         without proving a collaborator receiver. The renamed arrow pair is \
+         the visibility boundary: content evidence keeps a consistent rename \
+         visible as nearly_identical on either side of the fix. \
+         report={report:#}"
+    );
+    for cluster in visible {
+        assert_eq!(
+            cluster_size(cluster),
+            2,
+            "each pair is one cluster of two occurrences: {cluster:#}"
+        );
+        assert_eq!(
+            occurrence_files(cluster),
+            vec!["Pricing.dart", "Pricing.dart"],
+            "single-file pairs by construction: {cluster:#}"
+        );
+    }
+    let texts: Vec<String> = visible
+        .iter()
+        .map(|cluster| occurrence_texts(&scan_root, cluster))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+    for name in [
+        "quarterlyFee",
+        "annualCharge",
+        "standardTotal",
+        "premiumTotal",
+    ] {
+        assert!(
+            texts.iter().any(|text| text.contains(name)),
+            "{name} is half of a liftable pair and must be reported: {texts:#?}"
+        );
+    }
+    assert_eq!(
+        clusters_hidden(&report),
+        0,
+        "no body here reaches collaborator state, so nothing may be hidden: {report:#}"
+    );
+    let duplicated_loc = report
+        .pointer("/metrics/duplicated_loc")
+        .and_then(Value::as_u64)
+        .unwrap_or_default();
+    assert!(
+        duplicated_loc >= 4,
+        "both visible pairs contribute duplicated lines: \
          duplicated_loc={duplicated_loc}, report={report:#}"
     );
     Ok(())

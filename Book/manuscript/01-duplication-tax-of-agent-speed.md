@@ -1,14 +1,14 @@
-# Chapter 1 — The duplication tax of agent speed
+# Chapter 1 — Why coding agents duplicate code
 
-An agent receives a bounded task: validate an incoming request, normalize two fields, and return a domain value. It reads the files named in the task, writes a clear implementation, adds tests, and finishes quickly.
+An agent receives a specific task: validate an incoming request, normalize two fields, and return a domain value. It reads the files named in the task, writes a clear implementation, adds tests, and finishes quickly.
 
 The implementation is correct. It is also the second copy of a validator already living in a neighbouring package.
 
-Nothing in the new function announces the mistake. The name is different. The surrounding types are different. The tests pass. The agent reasoned well about the code it could see. What it lacked was repository memory: evidence that the behavior already had an owner.
+Nothing in the new function announces the mistake. The name is different. The surrounding types are different. The tests pass. The agent reasoned well about the code it could see. It did not check whether the behavior already existed elsewhere in the repository.
 
-This is the duplication tax of agent speed. Generating a plausible local solution is cheap. Discovering that the repository already contains the solution still requires an explicit feedback loop.
+The problem is simple: agents can write code faster than they can check every relevant file. The workflow therefore needs an explicit repository-wide duplicate check.
 
-## Reader outcome
+## What you will be able to do
 
 By the end of this chapter, you should be able to:
 
@@ -38,17 +38,17 @@ That question can lead to excellent abstractions. Applied too early, however, it
 
 That is not an argument for careless copying. It is an argument for waiting until the shared concept is understood. The strongest version of DRY does not require every textual repetition to share an owner, and responsible critics of premature abstraction are not defending undisciplined repositories.
 
-Deslop enters at a different layer.
+Deslop asks a different question.
 
 ![DRY asks where knowledge belongs; Deslop asks what source already repeats and supplies evidence for a response.](assets/diagrams/01-dry-vs-deslop.png)
 
-*Figure 1.1 — DRY is a design principle. Deslop is an evidence system. One may inform the other, but they do not ask the same question.*
+*Figure 1.1 — DRY helps developers decide where knowledge should live. Deslop finds repeated source code. A team can use both without treating every match as a reason to create an abstraction.*
 
 ## Deslop is not a DRY enforcement engine
 
 Deslop does not decide whether two business concepts ought to share an abstraction. It analyses the repository and reports repeated source ranges using the labels readers see in the product: **identical code**, **nearly identical code**, **same shape, different content**, **loosely similar code**, and **same behavior, different code**.
 
-Its question is empirical:
+It answers a concrete question:
 
 > What source already repeats, where are the occurrences, and how strong is the evidence connecting them?
 
@@ -56,7 +56,7 @@ That distinction matters because Deslop often finds large slabs of identical cod
 
 You can reject DRY as a universal refactoring trigger and still take that evidence seriously. You can prefer a little duplication while a design emerges and still refuse to let an agent paste a hundred-line implementation beside an existing one. These are compatible positions.
 
-Deslop's current UX tells the reader that identical code is “Safe to extract — every copy is the same.” The underlying [taxonomy contract](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/taxonomy.md) makes that label depend on proof that the source ranges are equivalent, rather than on a structural score alone.
+Deslop's current UX tells the reader that identical code is “Safe to extract — every copy is the same.” The [taxonomy specification](https://github.com/Nimblesite/Deslop/blob/main/docs/specs/taxonomy.md) requires proof that the source ranges are equivalent. A structural score by itself is not enough for this label.
 
 “Safe to extract” describes the sameness of the copies. It does not choose the final owner, approve a dependency direction, or prove that a new helper is the best design. The evidence is strong; the architectural decision remains yours.
 
@@ -72,17 +72,13 @@ There are several legitimate outcomes:
 4. **Generate the repetition.** A schema, protocol, or platform boundary requires repeated output. Keep one source of generation and verify the products.
 5. **Retain it deliberately.** Isolation, performance, fixtures, or a boundary may justify separate copies. Record the reason and the duplicate group's stable ID so the next maintainer does not repeat the investigation.
 
-The fifth outcome is important. Hunt and Thomas themselves give an example in which identical validation code represents different knowledge. Kevin Moore's [Deslop Duplication Audit Protocol](https://github.com/kevmoo/kevmoo_skills/blob/main/skills/deslop-duplication-audit/SKILL.md) likewise separates actionable duplication from necessary duplication and requires a technical verdict before editing.
+The fifth outcome is important. Hunt and Thomas give an example in which identical validation code represents different knowledge. Kevin Moore's [Deslop Duplication Audit Protocol](https://github.com/kevmoo/kevmoo_skills/blob/main/skills/deslop-duplication-audit/SKILL.md) likewise separates duplication worth merging from duplication that should stay separate and requires a written technical reason before editing.
 
-The hard line is not “every copy becomes a helper.” The hard line is:
-
-> No large identical slab gets waved away as a philosophical disagreement about DRY.
-
-It receives an owner, a deletion, a generation path, or a recorded reason to remain. Ignoring it is not a design position; it is an unmade decision.
+This does not mean every copy becomes a helper. It means every large identical block is inspected. The developer then reuses an existing implementation, moves the code, deletes a redundant path, generates required repetition, or records why the copies must remain separate.
 
 ![Three identical source slabs enter an evidence review and leave with one explicit ownership decision.](assets/diagrams/01-identical-code-needs-a-verdict.png)
 
-*Figure 1.2 — Identical source is conclusive evidence of repetition, not conclusive evidence for one particular refactoring.*
+*Figure 1.2 — Identical code proves that the repository contains repeated source. The developer still chooses whether to reuse, move, delete, generate, or deliberately retain it.*
 
 ## Nearly identical code requires more judgment
 
@@ -95,21 +91,21 @@ Identical code is the cleanest case because the copied source is proven equivale
 
 Here the design argument returns. Two similar validators may encode separate policies that currently coincide. Two decoders may share a stable algorithm with one parameterized difference. Deslop supplies the locations and similarity evidence; DRY, coupling, ownership, performance, and domain boundaries influence the decision.
 
-The glossary keeps these concerns separate:
+The glossary separates the Deslop result from the developer's decision:
 
 - a **duplicate group** is evidence returned by Deslop;
-- **actionable duplication** is a maintainer's verdict that consolidation improves the design; and
-- **necessary or deliberate duplication** is a verdict to retain repetition for a recorded technical reason.
+- **duplication worth merging** is a developer's decision that the copies should share an implementation; and
+- **duplication that should stay separate** is a decision to keep repetition for a recorded technical reason.
 
-Confusing the finding with the verdict creates both failure modes. Teams either ignore real copied slabs because “duplication can be okay,” or extract weak similarities because “DRY says repetition is bad.” Deslop is most useful in the space between those slogans.
+If a team confuses the Deslop result with the decision, it can make either of two mistakes. It may ignore a large copied block because some duplication is intentional, or it may create a poor abstraction because two sections look similar. Read the result first, then decide what the code should share.
 
-## Why agents change the rate, not the principle
+## Why agents create copies more often
 
 Copying code predates coding agents. The foundational literature describes programmers reusing code by copying a fragment and adapting it to a new context. Agents change the production rate and the mechanics.
 
-An agent typically works from a selected context: a prompt, several open files, search results, repository instructions, and tool responses. The repository is larger than that working set. If the task is locally complete and the existing implementation sits outside the selected neighbourhood, generating another implementation is often the shortest path to a passing result.
+An agent typically works from a prompt, several open files, search results, repository instructions, and tool responses. The repository contains more code than the agent has read. If the existing implementation sits elsewhere, generating another implementation may be the shortest path to a passing result.
 
-This is not evidence that the agent is incompetent. It is evidence that local correctness and repository-wide novelty are different properties.
+This does not mean the agent is incompetent. Code can work correctly and still duplicate code elsewhere in the repository.
 
 Recent research makes the risk concrete. Liu and colleagues studied 19 code-generating models across three benchmarks and found that “repetition is pervasive” at character, statement, and block granularity. Their paper, [*Code Copycat Conundrum*](https://arxiv.org/abs/2504.12608), examines repetition inside generated outputs. Deslop addresses the adjacent repository problem: whether proposed or committed code repeats source that is already elsewhere in the codebase.
 
@@ -119,9 +115,9 @@ The practical response is to give the agent a repository-level question at the m
 Before writing this code unit, does an equivalent implementation already exist?
 ```
 
-That is the role of `find-similar`. The agent describes the proposed source before adding it, reads the strongest existing occurrence, and reuses or adapts the owner when the evidence supports doing so. Prevention does not require the agent to remember the whole repository. It requires the workflow to ask the repository.
+That is the role of `find-similar`. The agent describes the proposed source before adding it, reads the strongest existing occurrence, and reuses or adapts the owner when the evidence supports doing so. The agent does not need to read the whole repository. It needs to run a repository-wide check before writing the new code.
 
-## The research spine behind Deslop
+## Research methods used by Deslop
 
 Deslop is product engineering built on a long research lineage, not a visual search bolted onto an opinion about clean code. The current implementation maps its techniques to source files in Deslop's [Research Background](https://deslop.live/docs/research-background/). The primary papers establish the foundations:
 
@@ -131,15 +127,15 @@ Deslop is product engineering built on a long research lineage, not a visual sea
 4. **Estimate overlap without comparing everything to everything.** Deslop's compact signatures and indexing draw on Broder's [resemblance-and-containment work](https://doi.org/10.1109/SEQUEN.1997.666900) and Indyk and Motwani's [locality-sensitive hashing research](https://doi.org/10.1145/276698.276876). These methods make it practical to retrieve plausible neighbours without an exhaustive all-pairs comparison.
 5. **Add semantic recall without pretending it is proof.** Gul Aftab Ahmed and colleagues' [SSCD research](https://doi.org/10.1002/spe.3355) studies neural representations with approximate-neighbour search for large industrial codebases. Deslop's optional embedding pass contributes the **same behavior, different code** signal; the UX explicitly tells the reader to inspect both implementations before merging.
 
-The lineage explains why Deslop combines several forms of evidence. Exact structural fingerprints are strong but narrow. Indexed overlap retrieves edited copies. Optional semantic similarity reaches code that looks different. The product turns those signals into plain-language labels because a maintainer needs to know what to do next, not memorize an academic numbering scheme.
+These methods find different kinds of repetition. Exact structural fingerprints find equivalent parsed code. Indexed text overlap finds copies that have been edited. Optional behavior-based similarity can find code that looks different. Deslop combines the results and presents the five plain-language labels used in its editor and reports.
 
 Research supports the detection mechanisms. It does not absolve the maintainer from choosing ownership, preserving behavior, or running tests.
 
-## The cheapest intervention is before authoring
+## Checking before writing requires the least work
 
 There are three opportunities to deal with an agent-created copy:
 
-| Intervention point | Repository state | Required work |
+| When you check | Repository state | Required work |
 |---|---|---|
 | Before authoring | The duplicate is only a proposal | Query, inspect, reuse |
 | Immediately after the edit | The copy exists but has not accumulated history | Scan, compare, replace, retest |
@@ -147,9 +143,9 @@ There are three opportunities to deal with an agent-created copy:
 
 The first path has the fewest decisions. The agent can abandon a proposal without migrating callers or proving that two histories still agree. The second path is still cheap enough to make a good fallback. The third is the cleanup problem addressed in Part III: valuable, necessary, and much more demanding.
 
-This is why Deslop earns its keep through prevention. Cleanup reduces existing liability. Prevention stops the next unit of liability from entering the repository.
+This is why Deslop checks proposed code. Cleanup removes copies that already exist. The `find-similar` check can stop the next copy before it is added.
 
-## Workshop checkpoint
+## Workshop exercise
 
 The Workshop agent has been asked to add a request validator. Do not write it yet. Create a proposed-code note outside the repository:
 
@@ -171,9 +167,9 @@ Now answer these questions:
 
 Expected conclusion: an identical match blocks uninspected authoring. Read the existing occurrence and decide whether to reuse it, move ownership, delete a redundant path, generate the repeated output, or record why isolation is necessary. A weaker match requires investigation, not automatic extraction.
 
-Chapter 3 turns this note into a live `find-similar` query. The important move in this chapter is earlier: the proposed code became searchable before it became repository history.
+Chapter 3 turns this note into a live `find-similar` query. The important point is that Deslop can check the proposed code before the agent adds it to a file.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
 Deslop is not a DRY enforcement rule. Before authoring a new code unit,
@@ -183,13 +179,13 @@ technical reason. For every weaker label, inspect the occurrences and name the
 differences before deciding whether to consolidate.
 ```
 
-## What changed
+## Main points
 
 - DRY remains a principle about authoritative knowledge and intent.
 - Deslop remains an evidence system for repeated source already in the repository.
 - Premature abstraction is a design risk; an existing identical slab is an observed fact.
 - Addressing a duplicate does not always mean extracting a helper.
-- Agents need repository memory supplied as a tool call, not assumed as a model capability.
+- Agents need a repository-wide duplicate check; you cannot assume they have read every relevant file.
 - Prevention before authoring is cheaper than reconciliation after copies diverge.
 - Deslop's structural, overlap, indexing, and optional semantic techniques have a traceable scholarly lineage.
 

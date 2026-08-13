@@ -1,37 +1,37 @@
-# The Deslop Book — structural outline
+# The Deslop Book — chapter plan
 
-## Shape of the first edition
+## Planned length
 
 The first edition targets about **31,000 words**, **110 print-equivalent pages**, and **36 purposeful visuals**. EPUB pages reflow by device, so the word and visual budgets control scope; the page figure is a design target.
 
 | Material | Words | Print-equivalent pages | Visuals |
 |---|---:|---:|---:|
 | Front matter | 1,300 | 5 | 1 |
-| Part I — Prevent the next duplicate | 8,000 | 27 | 10 |
-| Part II — Make prevention routine | 8,400 | 29 | 10 |
-| Part III — Clean up the repository you have | 11,900 | 42 | 15 |
+| Part I — Stop duplicates before they are written | 8,000 | 27 | 10 |
+| Part II — Make the check part of every change | 8,400 | 29 | 10 |
+| Part III — Remove duplication that already exists | 11,900 | 42 | 15 |
 | Back matter and glossary | 1,400 | 7 | 0 |
 | **Total** | **31,000** | **110** | **36** |
 
-## Through-line: the Workshop repository
+## Example repository used throughout the book
 
-Readers follow an ordinary service repository after several coding agents have worked on it. The agents are competent, but each enters with limited working context. They independently create similar validators, request decoders, command wrappers, fixtures, and repository methods.
+Readers follow an ordinary service repository after several coding agents have worked on it. Each agent reads only part of the repository. As a result, they independently create similar validators, request decoders, command wrappers, fixtures, and repository methods.
 
-The Workshop begins at the moment an agent is about to add one more copy. Part I prevents that change. Part II turns the successful check into a team-wide authoring contract. Part III returns to the accumulated mess: readers take a baseline, investigate the highest-impact duplicate groups, reject unsafe abstractions, consolidate justified findings, and prove the repository still behaves correctly.
+The Workshop begins when an agent is about to add one more copy. Part I stops that copy. Part II adds the check to the repository instructions and CI setup. Part III measures the existing duplication, inspects the largest groups, merges the groups that should share code, leaves justified repetition alone, and reruns the repository's tests.
 
 The example is language-neutral at the conceptual level. Edition-specific captures use supported repositories and exact product output. No chapter depends on invented report data.
 
-## Recurring chapter contract
+## What each chapter contains
 
-Every chapter follows the same rhythm:
+Every chapter uses the same structure:
 
 1. **The repository state** — a concrete authoring or maintenance decision.
-2. **Deslop in view** — direct evidence from the pinned product surface when behavior is claimed.
-3. **The decision** — the smallest useful idea, expressed in the glossary vocabulary.
-4. **Before → evidence → action → after** — a short, reproducible workflow.
-5. **Workshop checkpoint** — one bounded change to the running repository.
-6. **Agent instruction** — the exact rule an agent can follow next time.
-7. **What changed** — a compact result and bridge to the next chapter.
+2. **What Deslop reports** — real output from the exact Deslop release used for the book.
+3. **The decision** — the choice the developer or agent needs to make.
+4. **Before, evidence, action, and after** — steps another developer can repeat.
+5. **Workshop exercise** — one small change to the example repository.
+6. **Instruction for coding agents** — the exact rule an agent can follow next time.
+7. **Main points** — a short summary of the chapter.
 8. **Authoritative sources** — adjacent citations plus a short source list.
 
 No chapter introduces more than four new conceptual families. Visuals either provide real product evidence or explain a relationship that product evidence cannot show.
@@ -42,34 +42,34 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 - The prevention-first promise
 - Who the book is for: developers, maintainers, and agent-workflow owners
-- Prerequisites: ordinary repository, tests, and a supported Deslop surface
+- Prerequisites: ordinary repository, tests, and a supported Deslop editor or agent integration
 - How the Workshop checkpoints work
 - What Deslop reveals and what it never decides for you
 - How to distinguish a report, an interpretation, and a refactoring decision
-- Edition, release, platform, and capture provenance
-- Visual: prevention-to-cleanup reading journey
+- How the edition records its Deslop release, platform, and screenshot process
+- Visual: the order of the book
 
-## Part I — Prevent the next duplicate
+## Part I — Stop duplicates before they are written
 
-### Chapter 1 — The duplication tax of agent speed
+### Chapter 1 — Why coding agents duplicate code
 
 **Target:** 1,900 words · 6 pages · 2 visuals
 
 **Reader outcome:** Explain why capable agents still create duplication and why prevention belongs inside authoring rather than at the end of CI.
 
-- Local context versus repository memory
+- Files the agent has read versus the rest of the repository
 - Why plausible generation reproduces existing behavior under a new name
 - DRY as authoritative knowledge; Deslop as evidence of source already repeated
 - Why the risk of premature abstraction does not excuse ignoring large identical slabs
 - Explicit outcomes: reuse, move ownership, delete, generate, or retain with reason
 - Maintenance cost: fixes, tests, policy, and behavior drift multiply per copy
 - Prevention, immediate detection, and later cleanup as different costs
-- The moment of leverage: before a new code unit is written
-- Scholarly lineage: syntax-tree comparison, fingerprinting, indexed overlap, and optional semantic retrieval
+- Why the check must happen before a new code unit is written
+- Research foundations: syntax-tree comparison, fingerprinting, indexed overlap, and optional semantic search
 - Workshop checkpoint: identify the proposed helper and its likely search neighbourhood
-- Visuals: DRY versus Deslop; identical code needs a verdict
+- Visuals: DRY versus Deslop; identical code requires a recorded decision
 
-### Chapter 2 — Put Deslop in the loop
+### Chapter 2 — Connect Deslop to agents, editors, and CI
 
 **Target:** 2,000 words · 7 pages · 3 visuals
 
@@ -77,13 +77,13 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 - The live server as the product
 - MCP for the coding agent; LSP for the editor; CLI for cold starts and CI
-- One analysis engine and one report shape across surfaces
+- One analysis implementation and one report format across the editor, agent tools, and CLI
 - File changes, live refresh, and focused queries
-- Installation and version provenance for the edition
+- How to record the installed version used by the edition
 - Workshop checkpoint: verify the agent and editor point at the same workspace
-- Visuals: system map; live update loop; real surface capture
+- Visuals: which tool to use; how live updates work; real editor capture
 
-### Chapter 3 — Ask before you author
+### Chapter 3 — Check for matching code before writing
 
 **Target:** 2,200 words · 7 pages · 3 visuals
 
@@ -93,12 +93,12 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Snippet queries versus byte-range queries
 - Strong evidence: reuse the canonical occurrence or extract a shared implementation
 - Borderline evidence: read the nearest occurrence and bias toward reuse
-- Weak or empty evidence: proceed, then recheck the working set
+- Weak or empty evidence: proceed, then recheck the files that changed
 - What to do when the live path is unavailable
 - Workshop checkpoint: prevent the proposed duplicate and adapt the call site
 - Visuals: prevention gate; similarity decision ladder; direct `find-similar` evidence
 
-### Chapter 4 — Read what Deslop found
+### Chapter 4 — Understand a Deslop result
 
 **Target:** 1,900 words · 7 pages · 2 visuals
 
@@ -114,13 +114,13 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Workshop checkpoint: explain one group in plain language before touching code
 - Visuals: vocabulary map; annotated real group
 
-## Part II — Make prevention routine
+## Part II — Make the check part of every change
 
-### Chapter 5 — Teach the agent the law
+### Chapter 5 — Add the check to agent instructions
 
 **Target:** 2,100 words · 7 pages · 2 visuals
 
-**Reader outcome:** Encode the prevention loop in repository instructions so every compatible agent checks before authoring.
+**Reader outcome:** Add clear repository instructions so every compatible agent checks before writing code.
 
 - Put the rule in `AGENTS.md` and `CLAUDE.md`
 - Name the code units covered by the rule
@@ -131,7 +131,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Workshop checkpoint: add and exercise the repository rule
 - Visuals: instruction-to-tool flow; authoring decision card
 
-### Chapter 6 — Use evidence, not hunches
+### Chapter 6 — Use Deslop evidence to decide what to do
 
 **Target:** 2,100 words · 7 pages · 3 visuals
 
@@ -145,7 +145,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Workshop checkpoint: build an evidence note for one proposed change
 - Visuals: evidence stack; score bands; byte-range anatomy
 
-### Chapter 7 — Keep the working set live
+### Chapter 7 — Check the result after every code change
 
 **Target:** 2,000 words · 7 pages · 2 visuals
 
@@ -159,24 +159,24 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Workshop checkpoint: edit, observe, query, and verify one live change
 - Visuals: reactive loop; focused-query map
 
-### Chapter 8 — Turn the ceiling into a quality gate
+### Chapter 8 — Set a duplication limit in CI
 
 **Target:** 2,200 words · 8 pages · 3 visuals
 
-**Reader outcome:** Establish a reviewable duplication ceiling in local development and CI, then ratchet it downward without hiding legitimate evidence.
+**Reader outcome:** Set a duplication limit for local development and CI, then lower it after verified cleanup without hiding findings.
 
 - Baseline before threshold
-- Repository configuration as a shared contract
+- Repository configuration used by developers, agents, and CI
 - Exclusion versus report hiding
 - Built-in generated and vendor rules
 - Exit status and CI behavior
-- Ratchet downward after real cleanup; never widen to pass
-- Workshop checkpoint: set a ceiling that current evidence can meet
-- Visuals: local-to-CI contract; threshold ratchet; generated-code decision
+- Lower the limit after real cleanup; never raise it just to pass
+- Workshop checkpoint: set a limit that the current repository can meet
+- Visuals: matching local and CI configuration; lowering the limit; deciding how to treat generated code
 
-## Part III — Clean up the repository you have
+## Part III — Remove duplication that already exists
 
-### Chapter 9 — Establish a read-only baseline
+### Chapter 9 — Measure existing duplication without changing code
 
 **Target:** 2,600 words · 9 pages · 3 visuals
 
@@ -185,30 +185,30 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Verify toolchain and repository test commands
 - Send report artifacts to a dedicated scratch location
 - Disable incremental writes for a read-only discovery run
-- Read canonical JSON and the human renderer for different audiences
+- Read the main JSON report and the HTML report for different readers
 - Summarize worst groups, affected files, and potential consolidation
 - Align on scope before changing repository architecture
 - Workshop checkpoint: produce a baseline evidence sheet
 - Practitioner source: Kevin Moore's Deslop duplication audit protocol
-- Visuals: read-only audit flow; baseline scorecard; report provenance
+- Visuals: read-only scan; recorded starting state; where the report came from
 
-### Chapter 10 — Work worst-first, then decide
+### Chapter 10 — Inspect the largest duplicate groups first
 
 **Target:** 3,000 words · 10 pages · 4 visuals
 
-**Reader outcome:** Start with `top-offenders`, inspect the full group with `cluster-by-id`, and record a justified actionability verdict.
+**Reader outcome:** Start with `top-offenders`, inspect the full group with `cluster-by-id`, and record whether the group should be merged or left separate.
 
 - Ranking is triage, not truth
 - Pull every occurrence before proposing an abstraction
-- Actionable duplication: one concept repeated with drift risk
-- Necessary or deliberate duplication: similar shape whose unification damages types, performance, clarity, or test intent
+- Duplication worth merging: one concept repeated in several places that can change differently over time
+- Duplication that should remain separate: similar code that cannot share an implementation without damaging types, performance, clarity, or test intent
 - Accepting a finding explicitly instead of hiding it
 - Choose the canonical implementation based on ownership and behavior, not first position
 - Workshop checkpoint: accept one group and reject another, with reasons
-- Practitioner source: Kevin Moore's actionable-versus-necessary gate
-- Visuals: worst-first funnel; group inspection; verdict matrix; canonical-choice record
+- Practitioner source: Kevin Moore's decision between duplication worth merging and duplication that should remain separate
+- Visuals: largest groups first; group inspection; decision table; retained implementation record
 
-### Chapter 11 — Consolidate surgically
+### Chapter 11 — Merge one duplicate group safely
 
 **Target:** 3,200 words · 11 pages · 4 visuals
 
@@ -221,10 +221,10 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Avoid broad formatting and adjacent rearchitecture
 - Test fixtures, generated code, and boundary adapters as special cases
 - Workshop checkpoint: consolidate one identical or nearly identical group
-- Practitioner source: Kevin Moore's surgical modification rule
-- Visuals: canonical extraction; parameterization boundary; unsafe abstraction warning; bounded diff
+- Practitioner source: Kevin Moore's rule to change only the code required for the cleanup
+- Visuals: choosing the shared implementation; named differences; unsafe abstraction warning; small diff
 
-### Chapter 12 — Prove the cleanup and hold the line
+### Chapter 12 — Verify the cleanup and prevent new copies
 
 **Target:** 3,100 words · 12 pages · 4 visuals
 
@@ -235,11 +235,11 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Confirm the group disappeared or shrank for the intended reason
 - Record retained duplication and its rationale
 - Measure code delta without treating line count as the goal
-- Ratchet the ceiling downward after measured improvement
+- Lower the duplication limit after measured improvement
 - Feed the canonical implementation back into agent instructions
 - Workshop checkpoint: close the audit with a before/after evidence record
 - Practitioner source: Kevin Moore's baseline and post-refactor verification gate
-- Visuals: proof loop; before/after group; ratchet; prevention handoff
+- Visuals: verification steps; before and after group; lower limit; updated agent instruction
 
 ## Back matter
 
@@ -250,7 +250,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Appendix A — Agent instruction recipe
 - Appendix B — Tool-to-job quick reference
 - Appendix C — Audit evidence record
-- Appendix D — Screenshot and release provenance
+- Appendix D — How screenshots and results were captured
 - Where to go next: live documentation, releases, repository, and corrections
 
 ### Glossary

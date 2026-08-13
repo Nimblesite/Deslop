@@ -1,22 +1,22 @@
-# Chapter 9 — Establish a read-only baseline
+# Chapter 9 — Measure existing duplication without changing code
 
-Cleanup starts with evidence, not an extraction.
+Before changing code, record what Deslop and the repository's tests currently report.
 
-Kevin Moore's Deslop duplication audit protocol makes the separation explicit: discover in read-only mode, present the highest-impact findings, and only then choose whether remediation belongs in scope. That sequencing prevents a scanner result from quietly becoming an architectural rewrite.
+Kevin Moore's Deslop duplication audit protocol uses this order: run a read-only scan, present the largest findings, and then choose which groups to investigate. This prevents an initial report from turning into an unplanned repository-wide refactor.
 
 ![A proposed duplicate is intercepted before entering a layered repository while existing repeated manuscripts converge into one retained implementation.](assets/illustrations/prevent-then-clean.png)
 
-*Prevention stops the next copy; a read-only audit gives existing copies a safe path toward consolidation.*
+*The agent check can stop a new copy. A read-only scan records existing copies before cleanup begins.*
 
-## Reader outcome
+## What you will be able to do
 
-Produce a duplication baseline without modifying the target repository, then present enough evidence for a bounded cleanup decision.
+Record the current duplication results without modifying the target repository, then present enough information to choose one focused cleanup task.
 
 ## Verify the environment first
 
-Record the Deslop artifact, repository root, language toolchain, dependency command, static-analysis command, and native test command. The goal is not ceremony. A cleanup claim needs to say which repository and tool state produced both the before and after evidence.
+Record the Deslop version and installation, repository root, language tools, dependency command, static-analysis command, and test command. These details show exactly which repository and tools produced the results before and after cleanup.
 
-The long-form edition will use current Deslop installation guidance. The practitioner's protocol contributes the process gates, not a frozen distribution command.
+The finished chapter will use Deslop's current installation instructions. Kevin Moore's protocol provides the order of work, while Deslop's own documentation provides the commands.
 
 ## Keep audit artifacts outside the target
 
@@ -35,11 +35,11 @@ deslop /path/to/repository \
 
 The exact flags are verified against the edition binary before publication. The important properties are durable: external report destination, no repository cache, and no threshold failure interrupting discovery.
 
-## Use each renderer for its reader
+## Save both the JSON and human-readable reports
 
-The canonical JSON carries complete fields for agents and reproducible analysis. The human report makes the highest-impact duplicate groups easier to inspect. A good audit preserves the canonical artifact and links every summary claim back to a stable group ID.
+The JSON report contains the complete fields used by agents. The HTML or text report makes the largest duplicate groups easier for developers to read. Save the JSON report and use stable group IDs when summarising findings.
 
-## Present a dense baseline
+## Record the starting results
 
 The discovery note should include:
 
@@ -56,25 +56,25 @@ test and static-analysis commands:
 report artifact paths and hashes:
 ```
 
-Potential code savings can help prioritize, but line count never proves an abstraction is good.
+The number of repeated lines can help choose which group to inspect first. It does not prove that the code should share an abstraction.
 
-## Stop before architecture
+## Review the results before choosing a refactor
 
-The audit now knows where the largest groups are. It does not yet know which are actionable. Present the baseline and agree on the bounded investigation scope before editing. In an autonomous repository workflow, that scope may already come from the task and repository instructions; the gate still exists as a written boundary.
+The report now shows where the largest duplicate groups are. It does not show which ones should be merged. Present the starting results and choose the specific groups to inspect before editing. If the task or repository instructions already name the groups, record that scope in the cleanup note.
 
-## Workshop checkpoint
+## Workshop exercise
 
 Create a temporary scratch directory, run the Workshop discovery audit without repository writes, and fill the baseline record. Confirm the target source and configuration remain unchanged.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
-For cleanup discovery, write reports outside the target repository and make no source changes. Present the baseline and selected group scope before proposing an abstraction.
+For the first cleanup scan, write reports outside the target repository and do not change source files. Present the starting results and the selected duplicate groups before proposing shared code.
 ```
 
 ## What came from the practitioner protocol
 
-This chapter adapts Kevin Moore's read-only discovery and alignment phases. Deslop's current documentation remains authoritative for supported installation and command behavior; the protocol supplies the empirical sequencing.
+This chapter uses Kevin Moore's read-only discovery and review steps. Deslop's current documentation remains the source for supported installation and command behavior. Moore's protocol provides the order: measure first, review the findings, then change code.
 
 ## Source keys
 

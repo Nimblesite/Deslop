@@ -1,16 +1,16 @@
-# Chapter 10 — Work worst-first, then decide
+# Chapter 10 — Inspect the largest duplicate groups first
 
-The top of the report is where investigation begins. It is not where judgment ends.
+Start with the duplicate groups at the top of the report, then inspect the code before deciding whether to merge it.
 
-## Reader outcome
+## What you will be able to do
 
-Use `top-offenders` to select a high-impact duplicate group, inspect every occurrence with `cluster-by-id`, and record whether consolidation is actionable, rejected, or deferred.
+Use `top-offenders` to select a large duplicate group, inspect every occurrence with `cluster-by-id`, and record whether to merge the group, leave it separate, or wait for more information.
 
-## Start with impact
+## Start at the top of the report
 
-Deslop ranks groups worst-first so cleanup effort begins where repeated source has the largest measured footprint. Pull a short top-offenders view, choose one stable group ID, then request its complete member list and evidence.
+Deslop puts the groups with the largest reported impact first. Request a short `top-offenders` list, choose one stable group ID, then call `cluster-by-id` to get every occurrence and the supporting scores.
 
-Do not start in the middle because one file happens to be familiar. Familiarity is not repository impact.
+Do not choose a smaller group only because you recognise one of its files. Use the report order unless the task already names a specific group.
 
 ## Read every occurrence
 
@@ -24,25 +24,21 @@ The same helper name can hide different behavior, and different names can hide o
 - tests that pin the behavior; and
 - the differences Deslop's label asks you to inspect.
 
-The canonical occurrence is a comparison anchor. Choose the retained owner based on dependency direction and domain responsibility, not whichever range the report lists first.
+Deslop selects one occurrence as the reference copy. Choose the final shared implementation based on which module owns the behavior and which dependencies are allowed, not on which occurrence Deslop lists first.
 
-## Actionable duplication
+## Duplication worth merging
 
-Kevin Moore's protocol identifies common positive cases: copied helpers or decoders, shared contracts, redundant iterations, repeated process orchestration, and generator scaffolding that can be parameterized without changing output.
+Kevin Moore's protocol lists common candidates: copied helpers or decoders, repeated interfaces, repeated iterations over the same data, repeated sequences of commands, and generator code that can take inputs instead of being copied.
 
-The general test is:
+Ask whether the occurrences implement one concept and whether separate copies could receive different fixes over time. If one shared implementation can preserve types, behavior, performance, and clarity, the group is worth merging.
 
-> Do these occurrences represent one concept whose independent maintenance creates drift risk?
-
-If yes, and one shared owner can preserve types, behavior, performance, and clarity, consolidation is actionable.
-
-## Necessary or deliberate duplication
+## Duplication that should stay separate
 
 Similar code can be correct to retain. Examples include specialized hot loops whose unification introduces overhead, unrelated entry points where an abstraction hides more than it clarifies, statically distinct structures that would require unsafe casting, and test fixtures whose repetition is the subject of the test.
 
-The correct outcome is not to hide the group. Record a rejected verdict with the technical reason and leave the source untouched.
+Record the decision and technical reason, then leave the source unchanged. Do not hide the group merely because it should remain separate.
 
-## Verdict record
+## Decision record
 
 ```text
 group id:
@@ -53,26 +49,26 @@ canonical comparison anchor:
 candidate shared owner:
 drift risk if retained:
 type, behavior, performance, clarity, and test risks if merged:
-verdict: consolidate / reject / defer
+decision: merge / keep separate / wait for more information
 rationale:
 verification plan:
 ```
 
-“Defer” means evidence or coverage is missing. It is not a euphemism for an unrecorded decision.
+Choose “wait for more information” only when a specific fact or missing test blocks the decision. Record what is missing.
 
-## Workshop checkpoint
+## Workshop exercise
 
-Inspect two Workshop groups. Consolidate one copied decoder whose differences are explicit parameters. Reject one group whose unification would force unrelated static contracts behind a weaker interface. Record both verdicts with stable IDs.
+Inspect two Workshop groups. Merge one copied decoder whose differences can be expressed as named inputs. Keep another group separate when merging it would weaken unrelated static types. Record both decisions with stable IDs.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
-Work from top-offenders, inspect the complete group, and record an actionability verdict. Never recommend consolidation from rank, score, or one occurrence alone.
+Start with `top-offenders`, inspect every occurrence in the selected group, and record whether to merge it. Do not recommend a merge from rank, score, or one occurrence alone.
 ```
 
 ## What came from the practitioner protocol
 
-This chapter generalizes Kevin Moore's actionable-versus-necessary architectural gate. The book adds Deslop's current worst-first MCP workflow and UX labels while preserving the protocol's core restraint: a finding is not automatically a bug.
+This chapter uses Kevin Moore's distinction between duplication worth merging and duplication that should remain separate. It combines that decision with Deslop's `top-offenders` tool and visible duplicate labels. A Deslop finding does not automatically mean the code is wrong.
 
 ## Source keys
 

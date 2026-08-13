@@ -1,8 +1,8 @@
 # Glossary
 
-This glossary is the vocabulary authority for *The Deslop Book*. Clone labels reproduce the current human-facing titles and guidance in the Deslop UX. The canonical product sources are `clients/vscode/src/types/report.ts` and `docs/specs/taxonomy.md`.
+This glossary defines the terms used in *The Deslop Book*. The five duplicate labels use the exact titles and guidance shown in Deslop. The product sources are `clients/vscode/src/types/report.ts` and `docs/specs/taxonomy.md`.
 
-The manuscript uses plain-language labels. It does not substitute numbered academic taxonomy for the names readers see in Deslop.
+The book uses the labels developers see in Deslop. It does not replace them with numbered academic jargon.
 
 ## Clone labels
 
@@ -40,7 +40,7 @@ Wire value: `same_behavior`.
 
 ### Canonical occurrence
 
-The occurrence Deslop returns as the stable reuse or comparison anchor for a group. “Canonical” means the tool selected an anchor; it does not mean the implementation is automatically the best architectural owner.
+The occurrence Deslop selects as the reference copy for a duplicate group. Tool responses call it the `canonical` occurrence. It is a useful place to start comparing code, but the developer may choose a different occurrence as the final shared implementation.
 
 ### Duplicate code
 
@@ -60,31 +60,31 @@ One source range that belongs to a duplicate group. A group contains two or more
 
 ### Stable group ID
 
-The deterministic identifier used to refer to one group across repeated runs. Use it in audit notes; do not use the group's rank as an identity because ranks move when the repository changes.
+An ID that Deslop uses to refer to the same duplicate group across repeated runs. Put this ID in cleanup notes. Do not use the group's position in the report as its ID because that position can change.
 
 ### Similarity evidence
 
-The structural, textual, and optional semantic measurements Deslop combines when relating source fragments. Evidence supports a decision; it does not make the refactoring decision.
+The structure, text overlap, and optional behavior-based scores Deslop uses to compare sections of code. These scores explain why code was grouped together. The developer still decides whether to change it.
 
 ### Fused score
 
-The combined similarity value exposed as `signals.fused`. Agent workflows use it as a decision aid: strong values block an uninspected copy, borderline values require reading the nearest occurrence, and weak values permit authoring followed by a recheck.
+The combined similarity score in the `signals.fused` report field. Agent instructions use this score to choose the next step: stop and inspect a strong match, read the closest result for a borderline match, or write the new code and check again for a weak or empty result.
 
 ### Weight
 
-The impact score used to order duplicate groups worst-first. Weight helps choose where investigation begins. It does not prove that a refactor is safe.
+The score Deslop uses to put larger or more important duplicate groups near the top of the report. Weight helps you choose which group to inspect first. It does not prove that merging the code is safe.
 
 ### Worst offender
 
-The highest-weight duplicate group in the current report or filtered view.
+The highest-ranked duplicate group in the current report or filtered view. Deslop's agent tool for this ranked list is called `top-offenders`.
 
 ### Duplication percentage
 
-The repository-level duplicated-line measure compared with an optional configured ceiling. It is a gate metric, not a target to manipulate by hiding evidence.
+The percentage of analysed source lines that Deslop counts as duplicated. A repository can set a maximum allowed percentage and fail CI when the result is higher.
 
 ### Hidden occurrence
 
-An analysed occurrence excluded from the headline metric by a `report_hide` rule. Hidden does not mean unanalysed; it preserves evidence such as hand-written code matching generated code.
+An occurrence that Deslop still analyses but leaves out of the main duplication percentage because it matches a `report_hide` rule. The occurrence remains in the report, which is useful when hand-written code matches generated code.
 
 ## Workflow terms
 
@@ -96,34 +96,34 @@ Investigate a duplicate group and give it an explicit outcome: reuse an existing
 
 Don't Repeat Yourself is a design principle about giving knowledge or intent one authoritative representation. The book does not use DRY as a synonym for textual deduplication and does not describe Deslop as a DRY enforcement engine.
 
-### Prevention loop
+### Check before writing
 
-The authoring sequence: describe the proposed code, call `find-similar`, inspect the nearest occurrence, reuse or proceed, and recheck the changed working set.
+The steps an agent follows before adding code: describe the proposed code, call `find-similar`, inspect the closest existing occurrence, reuse it or write new code, and then check the changed files.
 
-### Cleanup loop
+### Cleanup steps
 
-The remediation sequence: establish a baseline, start with `top-offenders`, inspect a group with `cluster-by-id`, record an actionability verdict, make a bounded change, run tests and analysis, and rescan.
+The steps for existing duplication: record the current test and Deslop results, start with `top-offenders`, inspect one group with `cluster-by-id`, decide whether to merge it, make one focused change, run the tests, and run Deslop again.
 
-### Actionable duplication
+### Duplication worth merging
 
-An editorial audit verdict: the repeated code represents one maintainable concept, carries drift risk, and can be consolidated without degrading types, behavior, performance, or clarity. This is a human decision, not a Deslop clone label.
+A developer's decision that several copies represent one concept and can share an implementation without damaging types, behavior, performance, or clarity. This is a book term, not a Deslop label.
 
-### Necessary or deliberate duplication
+### Duplication that should stay separate
 
-An editorial audit verdict: repetition is retained because unifying it would damage a more important property or because the repetition is intentionally part of a fixture or boundary. The decision is recorded with a reason rather than hidden silently.
+A developer's decision to keep repeated code because sharing an implementation would damage a more important property, or because a test or external boundary requires the repetition. Record the reason instead of silently hiding the finding.
 
 ### Baseline
 
-The test, static-analysis, and Deslop state recorded before remediation. A passing baseline makes a meaningful before/after claim possible.
+The test, static-analysis, and Deslop results recorded before cleanup. These results let you compare the repository before and after the change.
 
-### Duplication ceiling
+### Duplication limit
 
-The configured maximum duplication percentage allowed by the repository gate. After verified cleanup, the ceiling can ratchet downward; it is never widened merely to make a failing run pass.
+The maximum duplication percentage allowed by the repository configuration. After verified cleanup, lower the limit to the new result. Do not raise it just to make CI pass.
 
-### Read-only discovery
+### Read-only scan
 
-An audit run that writes reports to dedicated scratch storage, disables repository cache writes, and makes no source changes.
+A Deslop run that writes reports to a temporary directory, disables cache writes inside the target repository, and does not change source files.
 
-### Surgical consolidation
+### Minimal consolidation
 
-A bounded refactor that touches only the ownership, parameterization, call sites, and tests required to remove one justified duplicate group.
+A refactor that changes only the shared implementation, required inputs, call sites, and tests needed to remove one duplicate group.

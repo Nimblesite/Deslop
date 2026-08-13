@@ -15,6 +15,10 @@
 // check silently passes here and hides the bug
 // ([RANK-STRUCTURAL-ONLY-FORWARDING]).
 class Api {
+  final HttpClient http;
+
+  Api(this.http);
+
   Future<Task> resetAlpha() async {
     return await _getTask(http.deleteMethod('/indexes/alpha/settings'));
   }

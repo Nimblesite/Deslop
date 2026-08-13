@@ -1,46 +1,46 @@
-# Chapter 11 — Consolidate surgically
+# Chapter 11 — Merge one duplicate group safely
 
 > **Scaffold status:** Editorial structure established. Executable examples await the Workshop fixture and edition release pin.
 
-## Reader outcome
+## What you will be able to do
 
-Make the smallest consolidation that removes one justified duplicate group without weakening contracts, behavior, performance, or clarity.
+Merge one duplicate group with the smallest practical code change. Preserve public interfaces, behavior, performance, and readability.
 
 ## Planned sections
 
-### Prove the baseline first
+### Run the repository's tests before editing
 
-Run the repository's real dependency, static-analysis, and test commands before editing. A broken baseline changes what the cleanup can claim and may block safe remediation.
+Run the repository's normal dependency, static-analysis, and test commands before editing. If they already fail, record the failures. You cannot claim that the cleanup caused or fixed a result without a before-and-after comparison.
 
-### Choose one owner
+### Choose where the shared code should live
 
-Place the shared implementation in the module that owns the behavior or in a neutral dependency that both callers can legitimately use. Avoid a generic “utils” destination chosen only because it accepts imports from everywhere.
+Place the shared implementation in the module responsible for the behavior. If neither current module is suitable, use the smallest shared module that both callers are allowed to depend on. Do not move the code to a general `utils` file merely because every module can import it.
 
-### Parameterize meaningful variation
+### Give real differences clear inputs
 
-Nearly identical code often differs in policy. Turn a real variation into a named input or strategy only when callers can state it clearly. Avoid boolean flags that reconstruct two opaque copies inside one function.
+Nearly identical code often contains small but important policy differences. Represent a real difference with a clearly named input or separate strategy only when each caller can describe it. Avoid boolean flags that hide two unrelated implementations inside one function.
 
-### Preserve necessary specialization
+### Keep separate code when sharing would cause harm
 
-Do not trade static contracts or hot-path behavior for a smaller line count. A rejected consolidation remains a successful audit outcome when the rationale is explicit.
+Do not weaken static types or slow performance-sensitive code merely to remove lines. Keeping the code separate is a valid result when the cleanup note explains why.
 
-### Keep the diff bounded
+### Change only what the merge requires
 
-Touch the shared owner, call sites, and tests required by the verdict. Do not combine the cleanup with broad formatting or adjacent rearchitecture.
+Change the shared implementation, its callers, and the tests required by the decision. Do not combine the cleanup with broad formatting or unrelated design changes.
 
-## Workshop checkpoint
+## Workshop exercise
 
 Run the passing baseline, extract the chosen decoder into its correct owner, adapt both callers, and add assertions that preserve each meaningful policy difference.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
-Consolidate one accepted group at a time. Preserve every contract and test-pinned difference; keep unrelated cleanup outside the diff.
+Merge one accepted duplicate group at a time. Preserve every public interface and every difference required by tests. Leave unrelated cleanup for a separate change.
 ```
 
-## Practitioner source
+## How Kevin Moore's protocol is used
 
-Kevin Moore's protocol supplies the empirical baseline and surgical-modification gates. The final examples will use the Workshop repository's native toolchain rather than assuming Dart- or Flutter-specific commands.
+Kevin Moore's protocol requires real test results before editing and limits the change to the selected duplicate group. The finished examples will use the Workshop repository's own tools instead of assuming Dart- or Flutter-specific commands.
 
 ## Source keys
 

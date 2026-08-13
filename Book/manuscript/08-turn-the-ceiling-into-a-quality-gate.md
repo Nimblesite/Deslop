@@ -1,41 +1,41 @@
-# Chapter 8 — Turn the ceiling into a quality gate
+# Chapter 8 — Set a duplication limit in CI
 
 > **Scaffold status:** Editorial structure established. Configuration and Action captures await the edition release pin.
 
-## Reader outcome
+## What you will be able to do
 
-Set a repository-wide duplication ceiling that local runs, agents, and CI share, then ratchet it downward after verified cleanup.
+Set a maximum duplication percentage that local runs, agents, and CI share. Lower that limit after verified cleanup.
 
 ## Planned sections
 
-### Baseline before policy
+### Measure the current percentage first
 
-A ceiling begins with the current measured repository state. Setting an aspirational value below the baseline without a cleanup plan creates a permanently red gate.
+Run Deslop before setting the limit. If you set the limit below the repository's current result without first cleaning up, every CI run will fail.
 
-### Configuration is a reviewed contract
+### Commit the limit with the repository
 
-The ceiling lives with the repository so humans, agents, and CI use the same number and failure meaning.
+Store the limit in the repository configuration so developers, agents, and CI use the same number and receive the same failure.
 
 ### Exclude and report hiding answer different questions
 
 Excluded files never enter analysis. Report-hidden occurrences remain available as evidence but do not contribute to the headline. The chapter uses generated code to make the distinction concrete.
 
-### A breach still produces evidence
+### A failed limit still writes the report
 
-The gate fails while preserving the canonical report. An agent can explain what crossed the ceiling instead of treating a non-zero exit as an opaque build error.
+When the duplication percentage is too high, Deslop returns a failing exit code and still writes the JSON report. The agent can read the report and explain which groups contributed to the failure.
 
-### Ratchet only after measured improvement
+### Lower the limit only after cleanup
 
-When a verified consolidation reduces the baseline, lower the ceiling in the same bounded change. Never widen it to make a failing run pass.
+When a verified cleanup reduces the duplication percentage, lower the configured limit in the same change. Do not raise the limit just to make a failing run pass.
 
-## Workshop checkpoint
+## Workshop exercise
 
-Measure the Workshop baseline, select a ceiling it currently meets, introduce a known duplicate in a disposable checkpoint, observe the breach, remove the copy, and restore a passing gate.
+Measure the Workshop repository, select a limit it currently meets, introduce a known duplicate in a disposable copy, observe the CI failure, remove the duplicate, and confirm that the check passes again.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
-Treat the configured ceiling as a monotonic quality contract. Reduce it after real cleanup; never change evidence handling merely to restore a green build.
+Use the configured duplication limit in local runs and CI. Lower it after real cleanup. Do not hide findings or raise the limit just to make the build pass.
 ```
 
 ## Source keys

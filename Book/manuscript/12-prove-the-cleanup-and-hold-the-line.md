@@ -1,38 +1,38 @@
-# Chapter 12 — Prove the cleanup and hold the line
+# Chapter 12 — Verify the cleanup and prevent new copies
 
 > **Scaffold status:** Editorial structure established. Before/after artifacts await the Workshop fixture and edition release pin.
 
-## Reader outcome
+## What you will be able to do
 
-Prove that a consolidation preserved repository health, changed the intended duplicate group, and lowered the ceiling without hiding evidence.
+Show that the repository's normal checks still pass, the intended duplicate group changed, and the configured duplication limit was lowered without hiding findings.
 
 ## Planned sections
 
-### Run the repository's real gates
+### Run the repository's normal checks
 
-Repeat static analysis and tests after the refactor. Include generator or golden-output checks when the changed code owns generated artifacts. Compare against the recorded baseline rather than a remembered green state.
+Repeat static analysis and tests after the refactor. Include code-generation or expected-output checks when the changed code produces generated files. Compare the result with the commands recorded before editing instead of relying on memory.
 
-### Ask Deslop the same question again
+### Run Deslop again
 
 Rescan, then locate the original stable group ID and affected files. The group should disappear or shrink because the shared implementation now has one owner.
 
-### Investigate unexpected movement
+### Investigate an unexpected result
 
-If the group persists, moved into a weaker label, or disappeared because configuration changed, the cleanup is not proved. Read the new report before changing anything else.
+If the group remains, receives a different label, or disappears because configuration changed, the cleanup has not been verified. Read the new report before changing anything else.
 
-### Report evidence, not victory language
+### Record the exact results
 
-Record the before/after group, native gates, affected files, and code delta. Lines removed are a consequence, not the objective.
+Record the group before and after, the repository's test and static-analysis results, the affected files, and the number of lines changed. Removing lines is not enough; the code must still behave correctly.
 
-### Ratchet the ceiling
+### Lower the duplication limit
 
-When the measured repository baseline falls, lower the configured ceiling to keep that gain. Do not change exclusions or report hiding to manufacture the number.
+When the measured duplication percentage falls, lower the configured limit to the new accepted level. Do not change exclusions or report hiding just to produce a smaller number.
 
-### Feed prevention with the new owner
+### Tell future agents which implementation to reuse
 
-The retained implementation becomes the canonical repository context future agents should reuse. Confirm the authoring instructions still require `find-similar` before another copy is proposed.
+Record the shared implementation and its owning module. Confirm that the repository instructions still require `find-similar` before an agent proposes another copy.
 
-## Workshop checkpoint
+## Workshop exercise
 
 Complete the audit record:
 
@@ -45,18 +45,18 @@ tests before and after:
 Deslop baseline before and after:
 retained implementation and owner:
 deliberate duplication retained:
-ceiling before and after:
+duplication limit before and after:
 ```
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
-Cleanup is complete only when repository gates pass, Deslop shows the intended group change, retained duplication is explained, and the ceiling preserves the measured gain.
+Finish the cleanup only after the repository's normal checks pass, Deslop shows the expected group change, any remaining duplication is explained, and the configured limit is lowered to the accepted result.
 ```
 
-## Practitioner source
+## How Kevin Moore's protocol is used
 
-Kevin Moore's protocol contributes the requirement for empirical before/after testing and a high-density final report. The book extends the finish line with stable-group comparison, live rescan, retained-duplication records, and the prevention handoff.
+Kevin Moore's protocol requires actual test results before and after the change and a detailed final report. This book also compares the stable group ID, runs Deslop again, records any duplication that remains, and updates the agent instructions.
 
 ## Source keys
 

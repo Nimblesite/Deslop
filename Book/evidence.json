@@ -4,7 +4,7 @@
   "releasePinned": false,
   "chapters": [
     { "number": 1, "editorial": "complete", "spec": "mapped", "implementation": "ux-copy-cross-checked", "research": "primary-sources-cited", "capture": "concept-diagrams-ready" },
-    { "number": 2, "spec": "mapped", "implementation": "pending-release-pin", "capture": "planned" },
+    { "number": 2, "editorial": "complete", "spec": "mapped", "implementation": "source-and-tests-cross-checked", "research": "protocol-sources-cited", "capture": "concept-diagrams-ready" },
     { "number": 3, "spec": "mapped", "implementation": "pending-release-pin", "capture": "planned" },
     { "number": 4, "spec": "mapped", "implementation": "ux-copy-cross-checked", "capture": "planned" },
     { "number": 5, "spec": "mapped", "implementation": "pending-release-pin", "capture": "planned" },

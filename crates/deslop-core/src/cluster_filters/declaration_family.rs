@@ -16,9 +16,12 @@
 //!
 //! - a run of **two or more sibling declarations** — the plural
 //!   settings/CRUD window; or
-//! - **one declaration that forwards** — a body with a single client
-//!   call, optionally bound and returned, and nothing computed on the
-//!   way through ([RANK-STRUCTURAL-ONLY-FORWARDING], `forwarding.rs`).
+//! - **one declaration that forwards** — a body that hands its data to
+//!   a collaborator the class holds, optionally bound and returned,
+//!   and nothing computed on the way through
+//!   ([RANK-STRUCTURAL-ONLY-FORWARDING], `forwarding.rs`). A body
+//!   whose only call goes back into the class's own logic is not
+//!   forwarding, however short it is — that pair is parameterisable.
 //!
 //! The second shape is what the meilisearch surface actually is. Its
 //! `resetSettings` / `resetStopWords` wrappers are one statement each,
@@ -173,9 +176,8 @@ fn family_window<'a>(snippet: &Snippet<'a>) -> Option<FamilyWindow<'a>> {
     .filter(|container| is_declaration_container(*container))?;
     match covered_members(container, snippet).as_slice() {
         [] => None,
-        [member] => {
-            forwarding_body(*member, snippet.language, snippet.source).map(FamilyWindow::Wrapper)
-        }
+        [member] => forwarding_body(*member, container, snippet.language, snippet.source)
+            .map(FamilyWindow::Wrapper),
         _ => Some(FamilyWindow::SiblingRun),
     }
 }

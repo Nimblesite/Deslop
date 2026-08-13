@@ -21,7 +21,10 @@ check:
 render-assets: assets/cover/cover.png \
 	assets/diagrams/00-reading-journey.png \
 	assets/diagrams/01-dry-vs-deslop.png \
-	assets/diagrams/01-identical-code-needs-a-verdict.png
+	assets/diagrams/01-identical-code-needs-a-verdict.png \
+	assets/diagrams/02-three-jobs-one-analysis.png \
+	assets/diagrams/02-live-update-loop.png \
+	assets/diagrams/02-root-and-version-check.png
 
 assets/cover/cover.png: assets/cover/cover.svg
 	@$(RSVG_CONVERT) --width 1600 --height 2560 --output $@.base.png $<
@@ -35,6 +38,15 @@ assets/diagrams/01-dry-vs-deslop.png: assets/diagrams/01-dry-vs-deslop.svg
 	@$(RSVG_CONVERT) --width 1600 --height 1000 --output $@ $<
 
 assets/diagrams/01-identical-code-needs-a-verdict.png: assets/diagrams/01-identical-code-needs-a-verdict.svg
+	@$(RSVG_CONVERT) --width 1600 --height 1000 --output $@ $<
+
+assets/diagrams/02-three-jobs-one-analysis.png: assets/diagrams/02-three-jobs-one-analysis.svg
+	@$(RSVG_CONVERT) --width 1600 --height 1000 --output $@ $<
+
+assets/diagrams/02-live-update-loop.png: assets/diagrams/02-live-update-loop.svg
+	@$(RSVG_CONVERT) --width 1600 --height 1000 --output $@ $<
+
+assets/diagrams/02-root-and-version-check.png: assets/diagrams/02-root-and-version-check.svg
 	@$(RSVG_CONVERT) --width 1600 --height 1000 --output $@ $<
 
 epub: check render-assets

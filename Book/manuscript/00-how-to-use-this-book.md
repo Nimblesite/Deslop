@@ -1,34 +1,34 @@
 # How to use this book
 
-Coding agents can produce working code faster than a maintainer can build a mental index of the repository. That asymmetry creates a predictable failure: the next helper, decoder, fixture, or repository method is locally reasonable and globally redundant.
+Coding agents can produce working code without reading every relevant file in a repository. That creates a predictable problem: an agent can write a good helper, decoder, fixture, or repository method that already exists somewhere else.
 
-This book gives that decision back its missing repository context.
+This book shows you how to check the whole repository before the agent writes another copy.
 
-![The reading journey moves from prevention through a live authoring routine to evidence-led cleanup and a lower repository ceiling.](assets/diagrams/00-reading-journey.png)
+![The book first explains how to check proposed code, then how to remove existing duplication and lower the allowed duplication limit.](assets/diagrams/00-reading-journey.png)
 
-*The book begins before a duplicate is written and ends with a lower ceiling that keeps the cleanup from unravelling.*
+*The book begins with a check before writing code. It ends by lowering the configured duplication limit so CI rejects future increases.*
 
-## Two jobs, in the right order
+## The book covers prevention first, then cleanup
 
-The cheapest duplicate is the one an agent never writes. Part I shows how Deslop answers the authoring question: **does an equivalent already exist?** The answer arrives before the new code unit enters the repository, while reuse is still a small decision.
+Checking before code is written takes less work than removing a copy later. Part I shows how an agent asks Deslop whether matching code already exists. When it does, the agent can reuse that code before adding another implementation and more tests.
 
-Part II turns that successful check into a routine. Repository instructions tell every agent when to call `find-similar`, which evidence to inspect, how to recover when the live path is unavailable, and how to confirm the working set after an edit.
+Part II makes the check part of every change. Repository instructions tell every agent when to call `find-similar`, what to read in the response, what to do when the live agent connection is unavailable, and how to check the files it changed.
 
-Part III deals with the repository you already have. Cleanup starts with a read-only baseline, not a refactor. You work from the highest-impact duplicate group, inspect every occurrence, decide whether consolidation is justified, establish a passing test baseline, make the smallest change, and prove both behavior and duplication moved in the intended direction.
+Part III deals with duplication that is already in the repository. First, save a Deslop report and run the repository's tests without changing code. Then inspect the largest duplicate groups, decide which ones should share an implementation, make one small change, and rerun the tests and Deslop.
 
-## What Deslop decides
+## What Deslop reports and what you decide
 
-Deslop finds and ranks related source ranges. It tells you whether the code is identical, nearly identical, the same shape with different content, loosely similar, or the same behavior written differently. It provides source locations, stable group identities, similarity evidence, and recommendations appropriate to the label.
+Deslop finds related sections of source code and orders the groups by size and impact. It labels the code as identical, nearly identical, the same shape with different content, loosely similar, or the same behavior written differently. It also reports file locations, a stable ID for each group, similarity scores, and guidance for that label.
 
-Deslop does not decide that a shared abstraction is good. It cannot own the domain boundary, choose the clearest module, prove that performance does not matter, or know that a fixture intentionally repeats production structure. Those remain engineering decisions.
+Deslop does not decide that the code should share a helper or class. It cannot choose the correct module, decide whether an extra function call affects performance, or know that a test fixture repeats code on purpose. The developer still makes those decisions.
 
-The distinction is central:
+The distinction is simple:
 
-> A finding restores context. A refactor spends judgment.
+> Deslop shows you the matching code. You decide whether and how to change it.
 
 ## The Workshop repository
 
-Each chapter returns to a small service repository shaped by several agent sessions. The repository contains ordinary forms of drift: validators with different names, request decoders with slightly different defaults, command wrappers copied into multiple entry points, and fixtures whose repetition may be intentional.
+Each chapter returns to a small service repository after several agents have changed it. It contains validators with different names, request decoders with slightly different defaults, command wrappers copied into several programs, and test fixtures that may repeat code on purpose.
 
 The examples are not committed as unverified duplicate code in this structural edition. They will be added chapter by chapter after the Deslop release is pinned. Every checkpoint will include:
 
@@ -44,16 +44,16 @@ The book uses the same human-facing clone names as the Deslop UX. It does not te
 
 The [Glossary](#glossary) is the vocabulary authority. When a tool field uses a machine value such as `nearly_identical`, the glossary connects it to the visible title “Nearly identical code” and its current UX guidance.
 
-## Evidence has provenance
+## Show where the evidence came from
 
 A screenshot shows what the pinned Deslop build actually displayed. A diagram explains a workflow or relationship. An editorial illustration can establish a non-factual concept, but it cannot invent product output.
 
-Before this scaffold becomes a publishable edition, `book.json` will pin the release and artifact hashes. `figures.json` will record the environment behind every capture, and `evidence.json` will record where specification, implementation, UX, and tests agree.
+Before this scaffold becomes a publishable edition, `book.json` will record the exact Deslop release and file hashes. `figures.json` will record how every screenshot was captured, and `evidence.json` will record where the specification, implementation, UX, and tests agree.
 
 ## How to use a chapter
 
 Start with the repository state and predict what you would do. Read the Deslop evidence before the explanation. Complete the Workshop checkpoint, then copy the chapter's agent instruction or audit record into your own workflow.
 
-If you are starting a new agent-enabled repository, read Parts I and II first. If you have inherited an existing mess, resist the urge to jump directly into extraction: read Chapters 4 and 6 for the evidence vocabulary, then begin Part III at the baseline.
+If you are starting a new repository that uses coding agents, read Parts I and II first. If the repository already contains duplication, read Chapters 4 and 6 to understand Deslop's report, then start Part III by recording the current report and test result.
 
-The order is intentional. Prevention without cleanup leaves old risk in place. Cleanup without prevention guarantees another cleanup.
+You need both parts. Prevention does not remove copies that already exist. Cleanup does not stop an agent from adding new copies later.

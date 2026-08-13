@@ -126,6 +126,20 @@
       "author": "Mingwei Liu et al.",
       "url": "https://arxiv.org/abs/2504.12608",
       "role": "empirical evidence of repetition across code-generating language models"
+    },
+    {
+      "key": "mcp-architecture",
+      "title": "Model Context Protocol Architecture",
+      "author": "Model Context Protocol",
+      "url": "https://modelcontextprotocol.io/specification/2025-06-18/architecture",
+      "role": "authoritative definition of MCP hosts, clients, servers, and tools"
+    },
+    {
+      "key": "lsp-overview",
+      "title": "Language Server Protocol",
+      "author": "Microsoft",
+      "url": "https://microsoft.github.io/language-server-protocol/",
+      "role": "authoritative definition of the editor-to-language-server protocol"
     }
   ]
 }

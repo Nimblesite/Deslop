@@ -1,8 +1,8 @@
-# Chapter 4 — Read what Deslop found
+# Chapter 4 — Understand a Deslop result
 
 Deslop reports evidence in five plain-language labels. Each label tells you what kind of relationship was observed and how cautiously to act.
 
-## Reader outcome
+## What you will be able to do
 
 Explain a duplicate group using the current UX title, its occurrences, evidence, and rank before proposing any code change.
 
@@ -10,7 +10,7 @@ Explain a duplicate group using the current UX title, its occurrences, evidence,
 
 ### Identical code
 
-Every copy is the same under Deslop's source-equivalence proof. This is the clearest extraction candidate, although ownership still requires a human or repository-aware agent decision.
+Deslop has proved that every copy contains equivalent source. This is the clearest candidate for sharing one implementation, although the developer still chooses where that implementation should live.
 
 ### Nearly identical code
 
@@ -28,11 +28,11 @@ The text overlaps weakly. Treat the group as a hint that can guide search, not a
 
 Semantic analysis suggests two different-looking implementations perform the same job. Read both. Different code often encodes a reason the model cannot infer from similarity alone.
 
-## A group is a collection, not a verdict
+## What a duplicate group contains
 
-The human report calls related ranges a duplicate group. Tool responses and JSON commonly call it a cluster. Each range is an occurrence. The canonical occurrence is the tool's comparison and reuse anchor, not an architectural endorsement.
+The human report calls related sections of code a duplicate group. Tool responses and JSON commonly call the same thing a `cluster`. Each section is an occurrence. Deslop selects one occurrence as the reference copy, called the canonical occurrence. The developer may choose a different occurrence as the final shared implementation.
 
-Rank answers **where should investigation begin?** It does not answer **is this refactor safe?** The highest-weight group is the worst offender because it offers the largest potential impact, not because every occurrence is automatically wrong.
+Rank helps you choose which group to inspect first. It does not say that a refactor is safe. The group at the top has the highest reported impact, but its occurrences may still need to remain separate.
 
 ## A useful evidence note
 
@@ -49,16 +49,16 @@ why consolidation might damage the design:
 decision: investigate / consolidate / retain
 ```
 
-This note forces the label and the engineering decision to remain separate.
+This note records what Deslop found separately from the developer's decision about the code.
 
-## Workshop checkpoint
+## Workshop exercise
 
 Choose one Workshop group and explain it without using a numbered academic label, source-code enum, or vague synonym such as “basically the same.” Use the exact visible title, name every occurrence, and write one reason to consolidate and one reason to retain it.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
-Report the product's plain-language clone label first. Treat rank as triage and the canonical occurrence as an anchor. Read every occurrence before recommending a refactor.
+Report Deslop's visible duplicate label first. Use rank only to choose what to inspect first. Treat the canonical occurrence as the reference copy, and read every occurrence before recommending a refactor.
 ```
 
 ## Source keys

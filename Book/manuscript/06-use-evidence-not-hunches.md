@@ -1,38 +1,38 @@
-# Chapter 6 — Use evidence, not hunches
+# Chapter 6 — Use Deslop evidence to decide what to do
 
 > **Scaffold status:** Editorial structure established. Numeric captures await the edition release pin.
 
-## Reader outcome
+## What you will be able to do
 
-Read similarity evidence, source ranges, stable group IDs, and recommendations without turning any single number into an automatic refactoring rule.
+Use Deslop's scores, source locations, stable group IDs, and guidance to decide what to inspect. Do not let one score automatically trigger a refactor.
 
 ## Planned sections
 
-### Combined evidence
+### How Deslop builds the score
 
-Deslop combines structural, textual, and optional semantic measurements. The fused score gives agent workflows one bounded decision aid, while the visible label explains the relationship in human terms.
+Deslop compares parsed code structure, text overlap, and optional behavior-based similarity. It combines those results in the `signals.fused` score. The visible duplicate label explains the kind of match in the same words used by the editor.
 
-### Strong, borderline, and weak are actions
+### What the score ranges mean
 
-Score bands determine whether an agent stops, reads the nearest occurrence, or proceeds and rechecks. They do not replace ownership, type, behavior, or performance reasoning.
+The score ranges tell an agent whether to stop, read the closest occurrence, or proceed and check again. The developer must still decide code ownership and check types, behavior, and performance.
 
-### Byte ranges are the edit authority
+### Byte ranges identify the exact code
 
-Line numbers help humans navigate. Byte ranges identify the exact source slice across machine responses and avoid drift as surrounding lines change.
+Line numbers help developers find code in an editor. Byte ranges identify the exact section in Deslop's machine-readable responses, even when edits above it change the line number.
 
-### Stable identity, moving priority
+### Group IDs stay stable while report order changes
 
-Use a stable group ID in notes and comparisons. Rank can move after any cleanup because the report is sorted worst-first again.
+Use the stable group ID in notes and before-and-after comparisons. A group's position can move after cleanup because Deslop sorts the updated report again.
 
-### Recommendations are scoped to labels
+### Each label requires a different check
 
-Identical code supports direct extraction. Nearly identical code demands difference analysis. Same-shape, loosely-similar, and same-behavior findings progressively require more human inspection.
+Identical code is the clearest candidate for sharing one implementation. Nearly identical code requires the developer to list every difference. Same-shape, loosely-similar, and same-behavior findings require more inspection before any merge.
 
-## Workshop checkpoint
+## Workshop exercise
 
-Create an evidence sheet for one group with its visible label, stable ID, source ranges, current rank, canonical occurrence, and the specific facts still unknown.
+Create a note for one group. Record its visible label, stable ID, source ranges, current rank, reference occurrence, and the facts you still need before deciding whether to merge it.
 
-## Agent handoff
+## Instruction for coding agents
 
 ```text
 Use the fused score to choose the next inspection step. Use source evidence and repository ownership to choose the code change.

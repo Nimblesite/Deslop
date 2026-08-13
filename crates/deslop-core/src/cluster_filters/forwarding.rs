@@ -13,15 +13,34 @@
 //!
 //! A member forwards when its body is one of three shapes — `return
 //! <expr>;`, `<binding> = <expr>; return <reads binding>;`, or a bare
-//! expression (arrow) body — the body contains at least one call, and
-//! every named node in those expressions comes from a closed
-//! *declarative* allowlist: calls, member access, awaits, literals,
-//! payload collections, casts and adapter lambdas. Branches, loops,
+//! expression (arrow) body — every named node in those expressions
+//! comes from a closed *declarative* allowlist, and at least one call
+//! **delegates to a collaborator**: its callee is a member access whose
+//! receiver identifier names an instance field of the enclosing
+//! container (a declared field or a `this.x` constructor parameter) or
+//! one of the member's own formal parameters. Branches, loops,
 //! arithmetic, comparisons, mutation and every unknown node kind are
-//! absent from the list, so any body that computes anything — including
-//! a parse `ERROR` — fails the proof and the cluster stays visible.
-//! Failing open is the point: this predicate hides findings, so it may
-//! only speak when the AST proves the member has nothing to lift.
+//! absent from the allowlist, so any body that computes anything —
+//! including a parse `ERROR` — fails the proof and the cluster stays
+//! visible. Failing open is the point: this predicate hides findings,
+//! so it may only speak when the AST proves the member has nothing to
+//! lift.
+//!
+//! # Why the call must reach collaborator state
+//!
+//! "Contains a call" is not forwarding. `standardPrice(order) =>
+//! computePrice(order, "standard", 100)` beside `premiumPrice(order) =>
+//! computePrice(order, "premium", 250)` is one allowlisted call per
+//! body and differs only in literals — and it is exactly the
+//! parameterisable duplication this tool exists to report, because the
+//! call goes back into the class's own logic. What separates the
+//! meilisearch wrappers is *where their data goes*: `http.getMethod(
+//! '/indexes/$uid/settings')` hands the request to the injected client
+//! the class holds. Receiver resolution is the AST fact that tells the
+//! two apart; a bare identifier callee, a `this.method(...)` self-call
+//! and a static `Type.factory(...)` all fail it, and each of those
+//! failures keeps a liftable pair on the report. Pinned by
+//! `dart_forwarding_fail_open::same_class_helper_calls_are_not_forwarding`.
 //!
 //! # Why a statement count cannot stand in for this
 //!
@@ -58,10 +77,19 @@ struct ForwardingGrammar {
     ret: &'static str,
     /// Expression statement (a bare forwarded call, no return value).
     statement: &'static str,
-    /// Call node — at least one must appear in a forwarding body.
+    /// Call node — at least one must delegate in a forwarding body.
     call: &'static str,
     /// Identifier node, for matching the binding against the return.
     identifier: &'static str,
+    /// Member-access callee kinds that carry a receiver.
+    member_access: &'static [&'static str],
+    /// Node kinds whose first identifier declares instance state: plain
+    /// field declarations and `this.x` constructor parameters.
+    field_names: &'static [&'static str],
+    /// Formal-parameter list node of a member signature.
+    parameters: &'static str,
+    /// One formal parameter; its first identifier is the name.
+    parameter: &'static str,
     /// Every named node kind a declarative body may contain.
     declarative: &'static [&'static str],
 }
@@ -77,6 +105,10 @@ const DART: ForwardingGrammar = ForwardingGrammar {
     statement: "expression_statement",
     call: "call_expression",
     identifier: "identifier",
+    member_access: &["member_expression", "null_aware_member_expression"],
+    field_names: &["initialized_identifier", "constructor_param"],
+    parameters: "formal_parameter_list",
+    parameter: "formal_parameter",
     declarative: &[
         "return_statement",
         "expression_statement",
@@ -137,9 +169,11 @@ const fn forwarding_grammar(language: &str) -> Option<&'static ForwardingGrammar
 }
 
 /// Returns the member's **body bytes** when its body proves the
-/// forwarding shape: declarative nodes only, at least one call, and one
-/// of the three body forms ([RANK-STRUCTURAL-ONLY-FORWARDING]). `None`
-/// when the member is not proven to forward.
+/// forwarding shape: declarative nodes only, one of the three body
+/// forms, and at least one call delegating to a collaborator —
+/// `container` supplies the instance-field names that delegation must
+/// resolve against ([RANK-STRUCTURAL-ONLY-FORWARDING]). `None` when
+/// the member is not proven to forward.
 ///
 /// The bytes are returned rather than a bare `bool` because the caller
 /// must still compare wrappers against each other. Two wrappers in one
@@ -149,15 +183,123 @@ const fn forwarding_grammar(language: &str) -> Option<&'static ForwardingGrammar
 /// the duplication is exact. Only the bodies can show it.
 pub(super) fn forwarding_body<'a>(
     member: Node<'_>,
+    container: Node<'_>,
     language: &str,
     source: &'a [u8],
 ) -> Option<&'a [u8]> {
     let grammar = forwarding_grammar(language)?;
     let body = outermost_kind(member, grammar.body)?;
-    if !node_contains_kind(body, grammar.call) || !body_shape_forwards(body, grammar, source) {
+    if !body_shape_forwards(body, grammar, source) {
+        return None;
+    }
+    let collaborators = collaborator_names(container, member, grammar, source);
+    if !subtree_has_delegating_call(body, grammar, source, &collaborators) {
         return None;
     }
     source.get(body.start_byte()..body.end_byte())
+}
+
+/// Names the member may legitimately hand data to: the container's
+/// instance fields — declarations without a body, so locals inside
+/// sibling methods never count — and the member's own parameters.
+fn collaborator_names<'a>(
+    container: Node<'_>,
+    member: Node<'_>,
+    grammar: &ForwardingGrammar,
+    source: &'a [u8],
+) -> Vec<&'a [u8]> {
+    let mut declarations = Vec::new();
+    collect_field_declarations(container, grammar, &mut declarations);
+    if let Some(parameters) = outermost_kind(member, grammar.parameters) {
+        collect_kinds(parameters, &[grammar.parameter], &mut declarations);
+    }
+    declarations
+        .into_iter()
+        .filter_map(|declaration| first_identifier_bytes(declaration, grammar, source))
+        .collect()
+}
+
+/// Collects field-declaring nodes: container children with no body of
+/// their own, so locals inside sibling methods never count.
+fn collect_field_declarations<'tree>(
+    container: Node<'tree>,
+    grammar: &ForwardingGrammar,
+    out: &mut Vec<Node<'tree>>,
+) {
+    let mut cursor = container.walk();
+    for sibling in container.named_children(&mut cursor) {
+        if !node_contains_kind(sibling, grammar.body) {
+            collect_kinds(sibling, grammar.field_names, out);
+        }
+    }
+}
+
+/// Depth-first collection of every named node whose kind is in `kinds`.
+fn collect_kinds<'tree>(node: Node<'tree>, kinds: &[&str], out: &mut Vec<Node<'tree>>) {
+    if kinds.contains(&node.kind()) {
+        out.push(node);
+    }
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        collect_kinds(child, kinds, out);
+    }
+}
+
+/// True when any call in the subtree delegates: its callee is a member
+/// access whose receiver identifier names a collaborator. A bare
+/// helper call, a `this.method(...)` self-call and a static
+/// `Type.factory(...)` all fail — their data never leaves the class.
+fn subtree_has_delegating_call(
+    node: Node<'_>,
+    grammar: &ForwardingGrammar,
+    source: &[u8],
+    collaborators: &[&[u8]],
+) -> bool {
+    if is_delegating_call(node, grammar, source, collaborators) {
+        return true;
+    }
+    let mut cursor = node.walk();
+    let delegates = node
+        .named_children(&mut cursor)
+        .any(|child| subtree_has_delegating_call(child, grammar, source, collaborators));
+    delegates
+}
+
+/// One call delegates when its receiver resolves to a collaborator.
+fn is_delegating_call(
+    node: Node<'_>,
+    grammar: &ForwardingGrammar,
+    source: &[u8],
+    collaborators: &[&[u8]],
+) -> bool {
+    node.kind() == grammar.call
+        && member_access_receiver(node, grammar).is_some_and(|receiver| {
+            source
+                .get(receiver.start_byte()..receiver.end_byte())
+                .is_some_and(|name| collaborators.contains(&name))
+        })
+}
+
+/// The receiver of a member-access call: the callee must be a
+/// member-access node of exactly two named children — receiver and
+/// member — with an identifier in the receiver position. `this.x(...)`
+/// carries one named child (`this` is anonymous) and a chained
+/// `a.b.c(...)` nests a member access there, so both return `None`.
+fn member_access_receiver<'tree>(
+    call: Node<'tree>,
+    grammar: &ForwardingGrammar,
+) -> Option<Node<'tree>> {
+    let mut cursor = call.walk();
+    let callee = call
+        .named_children(&mut cursor)
+        .next()
+        .filter(|callee| grammar.member_access.contains(&callee.kind()))?;
+    let mut callee_cursor = callee.walk();
+    let children: Vec<Node<'tree>> = callee.named_children(&mut callee_cursor).collect();
+    match children.as_slice() {
+        [receiver, _member] if receiver.kind() == grammar.identifier => Some(*receiver),
+        _ => None,
+    }
 }
 
 /// Finds the outermost descendant of `kind` — the member's own body,

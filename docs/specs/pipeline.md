@@ -119,9 +119,17 @@ of statements:
    generic node identified by the `function_body` it carries.
 2. **One forwarding declaration.** The window covers exactly one member whose
    body is `return <expr>;`, `<binding> = <expr>; return <reads binding>;`, or a
-   bare arrow expression; contains at least one call; and consists **only** of
-   nodes from a closed declarative allowlist — calls, member access, awaits,
-   literals, payload collections, casts and adapter lambdas.
+   bare arrow expression; consists **only** of nodes from a closed declarative
+   allowlist — calls, member access, awaits, literals, payload collections,
+   casts and adapter lambdas; and contains at least one call that **delegates to
+   a collaborator**: a member-access call whose receiver identifier names an
+   instance field of the enclosing container (a declared field or a `this.x`
+   constructor parameter) or one of the member's own formal parameters.
+   Containing a call is not forwarding by itself — a pair of one-line siblings
+   that hand different literals to a *sibling helper on the same class* is
+   parameterisable business logic, and a bare identifier callee, a
+   `this.method(...)` self-call and a static `Type.factory(...)` all fail the
+   receiver resolution, keeping such pairs on the report.
 
 Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement
 each, so every window covers one declaration and shape 1 can never reach them.
