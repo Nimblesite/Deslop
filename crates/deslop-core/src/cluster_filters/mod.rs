@@ -111,6 +111,7 @@ mod dart;
 mod dart_data_table;
 mod declaration_family;
 mod ecmascript;
+mod forwarding;
 mod python;
 mod python_class_shapes;
 mod python_constants;

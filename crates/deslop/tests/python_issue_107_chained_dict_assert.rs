@@ -6,6 +6,8 @@
 //! they all collapse to `assert __var__[__str__][__str__] == __const__`,
 //! producing cross-file clusters that are not actionable.
 
+use serde_json::Value;
+
 mod common;
 
 use crate::common::*;
@@ -21,6 +23,26 @@ fn chained_dict_assertions_across_test_files_do_not_cluster() -> Result<()> {
         offenders.is_empty(),
         "chained `assert X[k1][k2]` assertions across unrelated test files \
          must not surface as duplicates: {offenders:#?}"
+    );
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(3),
+        "all three pytest modules were analysed, so the suppression was \
+         exercised rather than the files skipped: {report:#}"
+    );
+    assert_eq!(
+        clusters(&report).len(),
+        0,
+        "the three modules share nothing beyond the idiom, so no cluster of \
+         any bucket may survive: {report:#}"
+    );
+    let duplicated_loc = report
+        .pointer("/metrics/duplicated_loc")
+        .and_then(Value::as_u64)
+        .unwrap_or(u64::MAX);
+    assert_eq!(
+        duplicated_loc, 0,
+        "suppressed idiom matches must not count as duplicated lines: {report:#}"
     );
     Ok(())
 }

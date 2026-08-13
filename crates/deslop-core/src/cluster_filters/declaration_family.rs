@@ -55,15 +55,19 @@
 //! `code_action` / `code_action_refusal` pair. No one of them passes
 //! alone — only together do they state the contract.
 
-use std::{collections::HashMap, hash::BuildHasher};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasher,
+};
 
 use tree_sitter::Node;
 
 use crate::{clone_category::CloneCategory, cluster::Cluster, state::FileId};
 
 use super::{
-    collect_snippets, enclosing_kind, node_intersects_range, parse_for, spans_multiple_files,
-    uniform_language, ParseCache, Snippet,
+    collect_snippets, enclosing_kind, forwarding::is_forwarding_declaration,
+    node_intersects_range, parse_for, snippet_range_text, spans_multiple_files, uniform_language,
+    ParseCache, Snippet,
 };
 
 /// Returns true when `cluster` is a single-file family of sibling
@@ -92,14 +96,30 @@ pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
     let Some(language) = uniform_language(&cluster.members, file_languages) else {
         return false;
     };
-    collect_snippets(&cluster.members, sources, language, cache)
-        .is_some_and(|snippets| snippets.iter().all(covers_sibling_declarations))
+    collect_snippets(&cluster.members, sources, language, cache).is_some_and(|snippets| {
+        snippets_pairwise_distinct(&snippets)
+            && snippets.iter().all(covers_declaration_family_window)
+    })
 }
 
-/// Returns true when the snippet's range covers two or more members of
-/// one declaration container — the plural half of "sibling-declaration
-/// family". A window over a single member, or over statements inside
-/// one, is a unit of logic and never reaches this filter's suppression.
+/// Returns true when no two members' reported bytes are identical. A
+/// byte-identical pair is real duplication whatever the members are —
+/// even two forwarding wrappers, copied verbatim, are a copy to report —
+/// so it disqualifies the whole suppression. An unreadable member also
+/// fails open here.
+fn snippets_pairwise_distinct(snippets: &[Snippet<'_>]) -> bool {
+    let mut seen = HashSet::new();
+    snippets.iter().all(|snippet| {
+        snippet_range_text(snippet).is_some_and(|text| seen.insert(text))
+    })
+}
+
+/// Returns true when the snippet's window is a declaration-family view:
+/// either it covers two or more members of one declaration container —
+/// the plural REST/settings run — or it covers exactly one member whose
+/// body proves the forwarding shape
+/// ([RANK-STRUCTURAL-ONLY-FORWARDING]). A window over statements inside
+/// a logic-bearing member matches neither and stays visible.
 ///
 /// Counts container *members* rather than matching per-language
 /// declaration node kinds. tree-sitter-dart has no `method_declaration`
@@ -107,7 +127,7 @@ pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
 /// `function_body` it carries — so a kind list is both grammar-specific
 /// and wrong on the very language this filter exists for. The children
 /// of one class body are siblings by construction.
-fn covers_sibling_declarations(snippet: &Snippet<'_>) -> bool {
+fn covers_declaration_family_window(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
     };
@@ -122,11 +142,15 @@ fn covers_sibling_declarations(snippet: &Snippet<'_>) -> bool {
         return false;
     }
     let mut cursor = container.walk();
-    container
+    let members: Vec<Node<'_>> = container
         .named_children(&mut cursor)
         .filter(|member| node_intersects_range(*member, snippet.range))
-        .count()
-        >= 2
+        .collect();
+    match members.as_slice() {
+        [] => false,
+        [member] => is_forwarding_declaration(*member, snippet.language, snippet.source),
+        _ => true,
+    }
 }
 
 /// Python reuses `block` for class *and* function bodies, so the parent

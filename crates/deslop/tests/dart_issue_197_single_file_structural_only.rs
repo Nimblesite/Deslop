@@ -37,15 +37,6 @@ fn run_report(scan_root: &Path) -> Result<Value> {
 }
 
 #[test]
-#[ignore = "GH #355: branch-introduced regression. The deleted filter suppressed this \
-            family with a `members.len() < 3` cluster-size shortcut and a declaration-kind \
-            match that also erased the real `csharp-merge-rename` pair. The replacement \
-            keeps that pair; this eight-member family of one-statement delegating methods \
-            is structurally indistinguishable from `csharp-merge-drift` (single file, \
-            sibling members, identical call targets, only literals differ), so every \
-            discriminator that hides it also erases the LSP merge target. Separating them \
-            needs a reportable-floor product decision, not a new constant. Assertions are \
-            intact — run with `-- --ignored`."]
 fn single_file_structural_only_method_families_do_not_top_the_report() -> Result<()> {
     let scan_root = fixture("dart-issue-197-settings-getters");
     let report = run_report(&scan_root)?;

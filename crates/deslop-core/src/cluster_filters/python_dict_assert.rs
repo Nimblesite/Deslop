@@ -27,16 +27,31 @@
 //! depth. Pinned by
 //! `python_issue_107::chained_dict_assertions_across_test_files_do_not_cluster`.
 //!
-//! # Why that reach obliges the predicate to be exact
+//! # Why that reach obliges the proof to be closed
 //!
 //! Matching at every depth means one misjudged statement erases the
-//! assert run, its test function and its whole module together. The
-//! predicate therefore reads *both* operands: a chained subscript on the
-//! left and a literal on the right. `assert x["a"]["b"] ==
-//! reconcile_amount(...)` compares against computed logic, and logic
-//! duplicated across two modules is the thing this tool exists to
-//! report. Pinned by
-//! `python_dict_assert_rhs_logic::a_computed_right_operand_is_not_payload_noise`.
+//! assert run, its test function and its whole module together, so
+//! nothing inside the range may ride along unproven:
+//!
+//! - The **right operand** must be a literal. `assert x["a"]["b"] ==
+//!   reconcile_amount(...)` compares against computed logic, and logic
+//!   duplicated across two modules is the thing this tool exists to
+//!   report. Pinned by `python_dict_assert_rhs_logic::
+//!   a_computed_right_operand_is_not_payload_noise`.
+//! - Every **payload dictionary** in the range must be consumed by an
+//!   assertion, and every assertion root must resolve to one when any
+//!   are present. A dict no assert reads was never part of the idiom
+//!   the filter proved. Pinned by `python_dict_assert_reach::
+//!   an_unconsumed_payload_dictionary_is_not_excused`.
+//! - **Module scope** may contain only imports, docstrings and the test
+//!   functions themselves. Duplicated module-level wiring is executable
+//!   logic outside every function the proof walks. Pinned by
+//!   `python_dict_assert_reach::
+//!   module_level_logic_is_not_excused_by_qualifying_tests`.
+//!
+//! A range with no payload assignment at all — the assert-run window
+//! whose dict sits above it — still qualifies on assertion shape alone;
+//! that statement-level behaviour is the original idiom match.
 
 use tree_sitter::Node;
 
@@ -64,8 +79,9 @@ pub(super) fn is_chained_dict_assert_cluster(snippets: &[Snippet<'_>]) -> bool {
 }
 
 /// Returns true when every `test_*` function the reported range touches
-/// asserts only chained-subscript lookups over literal payloads, and the
-/// range touches at least one.
+/// asserts only chained-subscript lookups over literal payloads, the
+/// range touches at least one, and nothing else code-bearing shares the
+/// module scope the range covers.
 fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
     let Some(tree) = parse_for(snippet) else {
         return false;
@@ -73,12 +89,43 @@ fn is_chained_dict_assert_snippet(snippet: &Snippet<'_>) -> bool {
     let Some(range) = trimmed_snippet_range(snippet) else {
         return false;
     };
+    if !module_scope_is_idiom_only(tree.root_node(), range) {
+        return false;
+    }
     let mut functions = Vec::new();
     collect_intersecting_functions(tree.root_node(), range, &mut functions);
     !functions.is_empty()
         && functions
             .iter()
             .all(|function| function_is_chained_dict_test(*function, range, snippet.source))
+}
+
+/// Returns true when every module-level statement the range covers
+/// belongs to the idiom's scope: the test functions themselves,
+/// imports, and docstrings. Anything else at module level — an
+/// assignment, a call, a class — is executable logic no `test_*` walk
+/// ever proves, so the range must fail open and stay visible.
+fn module_scope_is_idiom_only(root: Node<'_>, range: ByteRange) -> bool {
+    let mut cursor = root.walk();
+    let idiom_only = root
+        .named_children(&mut cursor)
+        .filter(|child| node_intersects_range(*child, range))
+        .all(|child| match child.kind() {
+            "function_definition" | "decorated_definition" | "import_statement"
+            | "import_from_statement" | "future_import_statement" | "comment" => true,
+            "expression_statement" => is_docstring_statement(child),
+            _ => false,
+        });
+    idiom_only
+}
+
+/// Returns true for an expression statement that is only a plain string
+/// — a docstring. An f-string is executable and does not count.
+fn is_docstring_statement(statement: Node<'_>) -> bool {
+    let mut cursor = statement.walk();
+    let mut children = statement.named_children(&mut cursor);
+    let only = children.next().filter(|_| children.next().is_none());
+    only.is_some_and(|child| child.kind() == "string" && !contains_interpolation(child))
 }
 
 /// Collects every `function_definition` whose bytes overlap `range` —
@@ -102,119 +149,161 @@ fn collect_intersecting_functions<'tree>(
 }
 
 /// Returns true for a pytest `test_*` function whose body, within
-/// `range`, is only chained-dict assertions and the literal payloads
-/// they read.
+/// `range`, is a closed chained-dict idiom: payload dictionaries, the
+/// assertions that consume them, and nothing else.
 fn function_is_chained_dict_test(function: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
     python_function_name_starts_with(function, source, b"test_")
         && function
             .child_by_field_name("body")
-            .is_some_and(|body| body_has_only_chained_dict_asserts(body, range, source))
+            .is_some_and(|body| body_is_closed_idiom(body, range, source))
 }
 
-/// Returns true when every named child of `body` overlapping `range` is
-/// either a chained-dict `assert_statement` or the literal-payload
-/// assignment such an assert reads — and at least one assert is present.
-///
-/// The payload assignment belongs to the idiom. `data = {...}` followed
-/// by asserts into `data` is one construct; excluding the assignment
-/// recognised the idiom only when the reported range happened to start
-/// after it.
-fn body_has_only_chained_dict_asserts(body: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
+/// The payload-and-assertion ledger for one function body. Every
+/// in-range statement must be accounted for: a payload dictionary is
+/// recorded, an assertion records the root it reads, and anything else
+/// fails the proof. When any payload was recorded, every assertion must
+/// resolve to one and every payload must be consumed — a dictionary no
+/// assertion reads was never proven to be part of the idiom.
+fn body_is_closed_idiom(body: Node<'_>, range: ByteRange, source: &[u8]) -> bool {
+    let mut payloads: Vec<(&[u8], bool)> = Vec::new();
+    let mut roots: Vec<&[u8]> = Vec::new();
     let mut cursor = body.walk();
-    let mut saw = false;
     for child in body.named_children(&mut cursor) {
-        if !node_intersects_range(child, range) {
+        if !node_intersects_range(child, range) || is_docstring_statement(child) {
             continue;
         }
-        if is_literal_payload_assignment(child) {
+        if let Some(binding) = literal_payload_binding(child, source) {
+            if payloads.iter().any(|(name, _)| *name == binding) {
+                return false;
+            }
+            payloads.push((binding, false));
             continue;
         }
-        if child.kind() != "assert_statement" || !assert_statement_is_chained_dict(child, source) {
-            return false;
+        match chained_dict_assert_root(child, source) {
+            Some(root) => roots.push(root),
+            None => return false,
         }
-        saw = true;
     }
-    saw
+    !roots.is_empty() && ledger_balances(&mut payloads, &roots)
 }
 
-/// Returns true for `<name> = { ... }` — the literal dict the chained
-/// assertions read. Only a dictionary literal counts: a call, a fixture
-/// reference or a comprehension is program logic, not test payload.
-fn is_literal_payload_assignment(statement: Node<'_>) -> bool {
+/// Returns true when every assertion root resolves to a recorded
+/// payload and every payload was consumed — or no payload was in range
+/// at all, the assert-run window whose dictionary sits above it.
+fn ledger_balances(payloads: &mut [(&[u8], bool)], roots: &[&[u8]]) -> bool {
+    if payloads.is_empty() {
+        return true;
+    }
+    for root in roots {
+        match payloads.iter_mut().find(|(name, _)| name == root) {
+            Some(payload) => payload.1 = true,
+            None => return false,
+        }
+    }
+    payloads.iter().all(|(_, consumed)| *consumed)
+}
+
+/// Returns the bound name of `<name> = { ... }` — the literal dict the
+/// chained assertions read. Only a plain identifier bound to a
+/// dictionary literal counts: a call, a fixture reference, an attribute
+/// target or a comprehension is program logic, not test payload.
+fn literal_payload_binding<'a>(statement: Node<'_>, source: &'a [u8]) -> Option<&'a [u8]> {
+    if statement.kind() != "expression_statement" {
+        return None;
+    }
     let mut cursor = statement.walk();
-    statement.kind() == "expression_statement"
-        && statement.named_children(&mut cursor).any(|child| {
-            child.kind() == "assignment"
-                && child
-                    .child_by_field_name("right")
-                    .is_some_and(|right| right.kind() == "dictionary")
-        })
+    let assignment = statement
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == "assignment")?;
+    let left = assignment
+        .child_by_field_name("left")
+        .filter(|left| left.kind() == "identifier")?;
+    let _right: Node<'_> = assignment
+        .child_by_field_name("right")
+        .filter(|right| right.kind() == "dictionary")?;
+    source.get(left.start_byte()..left.end_byte())
 }
 
-/// Returns true for `assert <chain>` or `assert <chain> <op> <const>`,
-/// where `<chain>` is two or more nested subscript accesses against an
-/// identifier.
-///
-/// A bare chain is a truthiness check on a lookup and carries no other
-/// operand to judge. Anything compared needs both sides read.
-fn assert_statement_is_chained_dict(assert_node: Node<'_>, source: &[u8]) -> bool {
-    let mut cursor = assert_node.walk();
-    let mut named = assert_node.named_children(&mut cursor);
-    let Some(first) = named.next() else {
-        return false;
-    };
-    match first.kind() {
-        "comparison_operator" => comparison_is_chain_against_constant(first, source),
-        _ => subscript_chain_depth(first, source) >= 2,
+/// Returns the root identifier of a qualifying chained-dict assertion:
+/// `assert <root>[k1][k2]` bare, or compared to a literal with a single
+/// `==` / `is`. Anything else — a computed right operand, a chained
+/// comparison, a non-literal key — is not the idiom.
+fn chained_dict_assert_root<'a>(statement: Node<'_>, source: &'a [u8]) -> Option<&'a [u8]> {
+    if statement.kind() != "assert_statement" {
+        return None;
     }
-}
-
-/// Returns true when a comparison reads `<chain> <op> <constant>`: a
-/// two-hop subscript chain on the left, and nothing but literals after
-/// it.
-///
-/// The right operand is what separates test payload from program logic.
-/// `assert ledger["period"]["gross"] == reconcile_amount(...)` asserts a
-/// computed value, and two modules carrying that call with the same
-/// arguments have copy-pasted it. Judging the statement on its left side
-/// alone reads the copy as payload noise — and because the filter
-/// matches every `test_*` function the reported range intersects, that
-/// one misread erases the duplication from the assert-run, function and
-/// module views at once. Pinned by
-/// `python_dict_assert_rhs_logic::a_computed_right_operand_is_not_payload_noise`.
-fn comparison_is_chain_against_constant(comparison: Node<'_>, source: &[u8]) -> bool {
-    let mut cursor = comparison.walk();
-    let mut operands = comparison.named_children(&mut cursor);
-    let Some(left) = operands.next() else {
-        return false;
+    let mut cursor = statement.walk();
+    let first = statement.named_children(&mut cursor).next()?;
+    let chain = match first.kind() {
+        "comparison_operator" => comparison_against_literal(first)?,
+        _ => first,
     };
-    subscript_chain_depth(left, source) >= 2 && operands.all(is_literal_constant)
+    subscript_chain_root(chain, 0, source)
 }
 
-/// Returns true for a scalar literal — the only right-hand side a
+/// Returns the left-hand chain of `<chain> <op> <literal>` when the
+/// comparison has exactly one operator, that operator is `==` or `is`,
+/// and the right operand is a literal. The right operand is what
+/// separates payload from logic: a call or an attribute there is
+/// executable code the idiom never proves.
+fn comparison_against_literal<'tree>(comparison: Node<'tree>) -> Option<Node<'tree>> {
+    let mut operand_cursor = comparison.walk();
+    let operands: Vec<Node<'tree>> = comparison.named_children(&mut operand_cursor).collect();
+    let mut operator_cursor = comparison.walk();
+    let operators: Vec<Node<'tree>> = comparison
+        .children_by_field_name("operators", &mut operator_cursor)
+        .collect();
+    let [operator] = operators.as_slice() else {
+        return None;
+    };
+    if !matches!(operator.kind(), "==" | "is")
+        || operands.len() != 2
+        || !is_literal_constant(operands[1])
+    {
+        return None;
+    }
+    operands.first().copied()
+}
+
+/// Returns true for a scalar literal — the only expected value a
 /// nested-shape assertion may carry. Calls, identifiers, subscripts and
-/// comprehensions are excluded by construction: each is executable
-/// logic, and executable logic is what this filter must never delete.
+/// comprehensions are excluded by construction, and an f-string is
+/// executable rather than literal.
 fn is_literal_constant(node: Node<'_>) -> bool {
-    matches!(
-        node.kind(),
-        "string" | "concatenated_string" | "integer" | "float" | "true" | "false" | "none"
-    )
+    match node.kind() {
+        "string" | "concatenated_string" => !contains_interpolation(node),
+        "integer" | "float" | "true" | "false" | "none" => true,
+        _ => false,
+    }
 }
 
-/// Counts subscript hops down a `subscript(subscript(identifier))` tower.
-fn subscript_chain_depth(node: Node<'_>, source: &[u8]) -> usize {
-    if node.kind() != "subscript" {
-        return 0;
+/// Returns true when a string carries an f-string interpolation hole.
+fn contains_interpolation(node: Node<'_>) -> bool {
+    let mut cursor = node.walk();
+    let interpolated = node
+        .named_children(&mut cursor)
+        .any(|child| child.kind() == "interpolation" || contains_interpolation(child));
+    interpolated
+}
+
+/// Walks a `subscript(subscript(identifier))` tower of literal keys and
+/// returns the root identifier's bytes once the tower is at least two
+/// hops deep. A computed key is not a shape check and fails the walk.
+fn subscript_chain_root<'a>(node: Node<'_>, depth: usize, source: &'a [u8]) -> Option<&'a [u8]> {
+    if node.kind() != "subscript" || !subscript_key_is_literal(node) {
+        return None;
     }
-    let Some(value) = node.child_by_field_name("value") else {
-        return 0;
-    };
-    if value.kind() == "subscript" {
-        return subscript_chain_depth(value, source).saturating_add(1);
+    let value = node.child_by_field_name("value")?;
+    match value.kind() {
+        "subscript" => subscript_chain_root(value, depth.saturating_add(1), source),
+        "identifier" if depth >= 1 => source.get(value.start_byte()..value.end_byte()),
+        _ => None,
     }
-    if value.kind() == "identifier" && source.get(value.start_byte()..value.end_byte()).is_some() {
-        return 1;
-    }
-    0
+}
+
+/// Returns true when a subscript's index is a scalar literal key.
+fn subscript_key_is_literal(subscript: Node<'_>) -> bool {
+    subscript
+        .child_by_field_name("subscript")
+        .is_some_and(is_literal_constant)
 }
