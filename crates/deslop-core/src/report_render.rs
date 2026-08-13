@@ -301,21 +301,22 @@ pub(crate) fn report_bucket_kind(
         }
         _ => kind,
     };
-    // Structural-only routing ([RANK-STRUCTURAL-ONLY], one shared
-    // predicate with the ranking demotion — inconsistency
-    // #1). Source-bytes equivalent clusters (Identical) keep their
-    // bucket because byte-level proof is independent of the signal
-    // triple. Two destinations:
+    // Structural-only routing ([RANK-STRUCTURAL-ONLY]) shares one
+    // predicate with the ranking demotion, so a cluster labelled
+    // `structural_only` is always the cluster the policy demotes.
+    // Source-bytes equivalent clusters (Identical) keep their bucket
+    // because byte-level proof is independent of the signal triple.
+    // Two destinations:
     //
-    // -: a *cross-file multi-copy* structural-only match
-    //   (3+ occurrences spread across 3+ files) is test scaffolding /
-    //   generated boilerplate — demoted to `LooselySimilar`, which the
-    //   renderer hides.
+    // - A *cross-file multi-copy* structural-only match (3+ occurrences
+    //   spread across 3+ files) is test scaffolding / generated
+    //   boilerplate — demoted to `LooselySimilar`, which the renderer
+    //   hides.
     // - Everything else with shape-only evidence becomes
     //   [`ClusterKind::StructuralOnly`]: surfaced and labelled
     //   honestly, demoted in ranking by the `[ranking]`
-    //   `structural_only` policy. The *single-file* sibling-method
-    // family is additionally hidden by the renderer's
+    //   `structural_only` policy. The *single-file* sibling-declaration
+    //   family is additionally hidden by the renderer's
     //   `cluster_is_hidden` AST pass, which needs the CST this
     //   signal-only routing does not have.
     route_shape_identical(kind, signals, content, members)
@@ -463,7 +464,7 @@ fn source_slices_are_equivalent_for_language(
 /// Member CSTs come from the shared per-render `parse_cache` so a file is
 /// parsed at most once per report regardless of cluster or member count —
 /// re-parsing per member pinned the LSP for minutes on large C# corpora
-/// (, [CLONE-NOISE-REPARSE-CACHE]).
+/// ([CLONE-NOISE-REPARSE-CACHE]).
 fn csharp_method_declarations_are_equivalent(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,

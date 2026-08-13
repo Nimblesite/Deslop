@@ -111,8 +111,12 @@ fn module_scope_is_idiom_only(root: Node<'_>, range: ByteRange) -> bool {
         .named_children(&mut cursor)
         .filter(|child| node_intersects_range(*child, range))
         .all(|child| match child.kind() {
-            "function_definition" | "decorated_definition" | "import_statement"
-            | "import_from_statement" | "future_import_statement" | "comment" => true,
+            "function_definition"
+            | "decorated_definition"
+            | "import_statement"
+            | "import_from_statement"
+            | "future_import_statement"
+            | "comment" => true,
             "expression_statement" => is_docstring_statement(child),
             _ => false,
         });
@@ -172,19 +176,37 @@ fn body_is_closed_idiom(body: Node<'_>, range: ByteRange, source: &[u8]) -> bool
         if !node_intersects_range(child, range) || is_docstring_statement(child) {
             continue;
         }
-        if let Some(binding) = literal_payload_binding(child, source) {
-            if payloads.iter().any(|(name, _)| *name == binding) {
-                return false;
-            }
-            payloads.push((binding, false));
-            continue;
-        }
-        match chained_dict_assert_root(child, source) {
-            Some(root) => roots.push(root),
-            None => return false,
+        if !record_statement(child, source, &mut payloads, &mut roots) {
+            return false;
         }
     }
     !roots.is_empty() && ledger_balances(&mut payloads, &roots)
+}
+
+/// Files one in-range statement into the ledger. Returns false when the
+/// statement is neither a fresh payload binding nor a qualifying
+/// assertion — a rebound payload name is rejected too, because the
+/// key-path resolution below could no longer name one dictionary.
+fn record_statement<'a>(
+    statement: Node<'_>,
+    source: &'a [u8],
+    payloads: &mut Vec<(&'a [u8], bool)>,
+    roots: &mut Vec<&'a [u8]>,
+) -> bool {
+    if let Some(binding) = literal_payload_binding(statement, source) {
+        if payloads.iter().any(|(name, _)| *name == binding) {
+            return false;
+        }
+        payloads.push((binding, false));
+        return true;
+    }
+    match chained_dict_assert_root(statement, source) {
+        Some(root) => {
+            roots.push(root);
+            true
+        }
+        None => false,
+    }
 }
 
 /// Returns true when every assertion root resolves to a recorded
@@ -256,13 +278,13 @@ fn comparison_against_literal<'tree>(comparison: Node<'tree>) -> Option<Node<'tr
     let [operator] = operators.as_slice() else {
         return None;
     };
-    if !matches!(operator.kind(), "==" | "is")
-        || operands.len() != 2
-        || !is_literal_constant(operands[1])
-    {
+    let [left, right] = operands.as_slice() else {
+        return None;
+    };
+    if !matches!(operator.kind(), "==" | "is") || !is_literal_constant(*right) {
         return None;
     }
-    operands.first().copied()
+    Some(*left)
 }
 
 /// Returns true for a scalar literal — the only expected value a

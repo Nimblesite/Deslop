@@ -43,7 +43,9 @@ fn a_non_bijective_single_method_pair_is_not_a_declaration_family() -> Result<()
          predicate was never proven. report={report:#}"
     );
 
-    let cluster = &visible[0];
+    let cluster = visible
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("the visible cluster asserted above is missing"))?;
     assert_eq!(
         cluster_size(cluster),
         2,

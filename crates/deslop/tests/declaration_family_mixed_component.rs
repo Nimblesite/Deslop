@@ -37,7 +37,9 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
          reported: hiding it erases the liftable AccrueDomestic/AccrueRegional \
          pair on evidence measured against AccrueExport. report={report:#}"
     );
-    let cluster = &visible[0];
+    let cluster = visible
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("the visible cluster asserted above is missing"))?;
     assert_eq!(
         cluster_size(cluster),
         3,

@@ -8,7 +8,8 @@ use std::{fs, path::Path, time::Duration};
 
 use anyhow::Result;
 use common::{
-    at, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching,
+    at, fixture, handshake, path as json_path, reports::dependency_workspace, spawn_lsp_guarded,
+    wait_for_report_matching,
 };
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -19,12 +20,7 @@ const FILES: [&str; 2] = ["Alpha.cs", "Beta.cs"];
 /// watcher is running before a new dependency source file is exercised.
 #[test]
 fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
-    // Keep the watcher root and notify event paths in the same canonical
-    // namespace. macOS aliases `/var` to `/private/var`, which would make a
-    // default tempdir test path canonicalisation instead of this rule.
-    let canonical_temp = fs::canonicalize(std::env::temp_dir())?;
-    let workspace = tempfile::tempdir_in(canonical_temp)?;
-    let root = workspace.path().join("node_modules/workspace");
+    let (_workspace, root) = dependency_workspace()?;
     seed_workspace(&root)?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
     let _initialize = handshake(&mut stdin, &mut stdout)?;
@@ -75,9 +71,7 @@ fn opted_in_dependency_creation_refreshes_the_live_lsp_report() -> Result<()> {
 /// watcher → scheduler → report transition as editing a first-party file.
 #[test]
 fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Result<()> {
-    let canonical_temp = fs::canonicalize(std::env::temp_dir())?;
-    let workspace = tempfile::tempdir_in(canonical_temp)?;
-    let root = workspace.path().join("node_modules/workspace");
+    let (_workspace, root) = dependency_workspace()?;
     seed_workspace(&root)?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
     let initialize = handshake(&mut stdin, &mut stdout)?;

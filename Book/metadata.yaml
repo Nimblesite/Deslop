@@ -1,0 +1,17 @@
+---
+title: "The Deslop Book"
+subtitle: "Prevent duplicate code before agents write it. Clean up what is already there."
+author:
+  - "Christian Findlay"
+publisher: "NIMBLESITE PTY LTD"
+date: "2026-08-13"
+language: "en-AU"
+rights: "Copyright © 2026 Christian Findlay"
+description: >-
+  A prevention-first field guide to putting Deslop in coding-agent workflows,
+  auditing existing duplicate code, making justified consolidations, and
+  proving the repository remains healthy.
+edition: "Structural scaffold"
+deslop-version: "0.0.0-dev"
+website: "https://deslop.live/"
+...

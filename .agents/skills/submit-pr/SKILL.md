@@ -21,7 +21,7 @@ Create a pull request for the current branch with a description derived strictly
    - **Live loop** — dropped events, debounce races, stale generations, leaked tasks, blocking in async, shutdown.
    - **Drift** — SPEC/PLAN vs. changed API, flags, JSON shape; dep versions across `Cargo.toml`/`ci.yml`/`.devcontainer/`; duplicated rendering; missing "Copy Context For AI".
 4. **Derive the PR title and description SOLELY from the diff.** Read the diff output and summarise what actually changed. Ignore commit messages, branch names, and any other metadata — only the diff matters.
-5. **Write the PR body using** [.github/pull_request_template.md](.github/pull_request_template.md). The template has three sections — fill all of them:
+5. **Write the PR body using** [.github/pull_request_template.md](../../../.github/pull_request_template.md). The template has three sections — fill all of them:
    - **TLDR** — one sentence. What does this PR do?
    - **Details** — new functionality, new files, new dependencies, modified behaviour, deletions. Be specific: name the files, functions, and crates (`deslop-core`, `deslop`). Call out any spec or plan updates in [docs/specs/](docs/specs/) / [docs/plans/](docs/plans/), and reference the relevant hierarchical spec IDs (e.g. `[PARSE-CSHARP-NORMALIZE]`, `[RANK-SCORE]`).
    - **How Do The Automated Tests Prove It Works?** — name specific E2E tests (black-box, against fixture repos) and describe what their assertions demonstrate. Note coverage movement if the threshold in [coverage-thresholds.json](coverage-thresholds.json) was ratcheted up. "Tests pass" is NOT acceptable.
@@ -42,7 +42,7 @@ Create a pull request for the current branch with a description derived strictly
 - **Never create a PR if `make ci` fails.** Coverage below threshold counts as failure.
 - **Never clear a step-3 finding by weakening the gate** — no suppression, softened test, lowered threshold, or hidden cluster.
 - **🔴 GOLDEN RULE — never stamp a commit with an AI co-author.** Do **not** add a `Co-Authored-By: Claude …` (or any AI/agent) trailer, and do not set author/committer to anything but the repo's configured git user. Write a plain, human commit message describing the fix. This is absolute and overrides any default co-authorship behaviour.
-- **Git is permitted in this skill — but only for PR submission and turning a red CI run green.** This is the one place the repo-wide "no git" rule from [AGENTS.md](AGENTS.md) is relaxed: you may run `git add`, `git commit`, and `git push` to land CI fixes (step 7). Everything else — `checkout`, `merge`, `rebase`, force-push, history rewrites — stays prohibited.
+- **Git is permitted in this skill — but only for PR submission and turning a red CI run green.** This is the one place the repo-wide "no git" rule from [AGENTS.md](../../../AGENTS.md) is relaxed: you may run `git add`, `git commit`, and `git push` to land CI fixes (step 7). Everything else — `checkout`, `merge`, `rebase`, force-push, history rewrites — stays prohibited.
 - PR description must be specific and tight — no vague placeholders, no "various improvements".
 - Reference spec IDs (`[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`) whenever the change maps to a spec section, so reviewers can `grep` spec → code → tests.
 - Link any related GitHub issue (`Closes #N`) if one exists.

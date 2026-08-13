@@ -16,6 +16,15 @@
 //! must instead be counted in `clusters_hidden`. The fixture vendors the real
 //! meilisearch-dart settings region, so the cluster ids `be951a686525` and
 //! `7f363063109f` from the issue reproduce verbatim.
+//!
+//! Suppression is earned by [RANK-STRUCTURAL-ONLY-FORWARDING], not by any
+//! count. These wrappers are one statement each, so every fingerprint window
+//! covers exactly one declaration and a plurality-only test can never reach
+//! them; what convicts them is that each body makes one client call and
+//! returns it, with nothing computed on the way through. The same proof
+//! acquits `csharp-merge-drift` and `csharp-merge-rename`, whose bodies bind
+//! locals, loop, and branch — see the `code_action` and `refactor_merge`
+//! suites, which must stay green alongside this one.
 
 use std::{fs, path::Path};
 

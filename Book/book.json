@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "title": "The Deslop Book",
+  "status": "structural-scaffold",
+  "editionModel": "living-release-aligned",
+  "deslopRelease": "0.0.0-dev",
+  "releasePinStatus": "pin-before-long-form-drafting",
+  "terminologyAuthority": "GLOSSARY.md",
+  "targets": {
+    "words": 31000,
+    "printEquivalentPages": 110,
+    "figures": 36
+  },
+  "sections": [
+    {
+      "kind": "front-matter",
+      "part": "Front matter",
+      "title": "How to use this book",
+      "file": "manuscript/00-how-to-use-this-book.md",
+      "status": "representative-draft",
+      "targetWords": 1300,
+      "targetPages": 5,
+      "targetFigures": 1
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — Prevent the next duplicate",
+      "number": 1,
+      "title": "The duplication tax of agent speed",
+      "file": "manuscript/01-duplication-tax-of-agent-speed.md",
+      "status": "complete",
+      "targetWords": 1900,
+      "targetPages": 6,
+      "targetFigures": 2
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — Prevent the next duplicate",
+      "number": 2,
+      "title": "Put Deslop in the loop",
+      "file": "manuscript/02-put-deslop-in-the-loop.md",
+      "status": "editorial-scaffold",
+      "targetWords": 2000,
+      "targetPages": 7,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — Prevent the next duplicate",
+      "number": 3,
+      "title": "Ask before you author",
+      "file": "manuscript/03-ask-before-you-author.md",
+      "status": "representative-draft",
+      "targetWords": 2200,
+      "targetPages": 7,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part I — Prevent the next duplicate",
+      "number": 4,
+      "title": "Read what Deslop found",
+      "file": "manuscript/04-read-what-deslop-found.md",
+      "status": "representative-draft",
+      "targetWords": 1900,
+      "targetPages": 7,
+      "targetFigures": 2
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Make prevention routine",
+      "number": 5,
+      "title": "Teach the agent the law",
+      "file": "manuscript/05-teach-the-agent-the-law.md",
+      "status": "editorial-scaffold",
+      "targetWords": 2100,
+      "targetPages": 7,
+      "targetFigures": 2
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Make prevention routine",
+      "number": 6,
+      "title": "Use evidence, not hunches",
+      "file": "manuscript/06-use-evidence-not-hunches.md",
+      "status": "editorial-scaffold",
+      "targetWords": 2100,
+      "targetPages": 7,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Make prevention routine",
+      "number": 7,
+      "title": "Keep the working set live",
+      "file": "manuscript/07-keep-the-working-set-live.md",
+      "status": "editorial-scaffold",
+      "targetWords": 2000,
+      "targetPages": 7,
+      "targetFigures": 2
+    },
+    {
+      "kind": "chapter",
+      "part": "Part II — Make prevention routine",
+      "number": 8,
+      "title": "Turn the ceiling into a quality gate",
+      "file": "manuscript/08-turn-the-ceiling-into-a-quality-gate.md",
+      "status": "editorial-scaffold",
+      "targetWords": 2200,
+      "targetPages": 8,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Clean up the repository you have",
+      "number": 9,
+      "title": "Establish a read-only baseline",
+      "file": "manuscript/09-establish-a-read-only-baseline.md",
+      "status": "representative-draft",
+      "targetWords": 2600,
+      "targetPages": 9,
+      "targetFigures": 3
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Clean up the repository you have",
+      "number": 10,
+      "title": "Work worst-first, then decide",
+      "file": "manuscript/10-work-worst-first-then-decide.md",
+      "status": "representative-draft",
+      "targetWords": 3000,
+      "targetPages": 10,
+      "targetFigures": 4
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Clean up the repository you have",
+      "number": 11,
+      "title": "Consolidate surgically",
+      "file": "manuscript/11-consolidate-surgically.md",
+      "status": "editorial-scaffold",
+      "targetWords": 3200,
+      "targetPages": 11,
+      "targetFigures": 4
+    },
+    {
+      "kind": "chapter",
+      "part": "Part III — Clean up the repository you have",
+      "number": 12,
+      "title": "Prove the cleanup and hold the line",
+      "file": "manuscript/12-prove-the-cleanup-and-hold-the-line.md",
+      "status": "editorial-scaffold",
+      "targetWords": 3100,
+      "targetPages": 12,
+      "targetFigures": 4
+    },
+    {
+      "kind": "back-matter",
+      "part": "Back matter",
+      "title": "Appendices and next steps",
+      "file": "manuscript/90-appendices-and-next-steps.md",
+      "status": "editorial-scaffold",
+      "targetWords": 700,
+      "targetPages": 3,
+      "targetFigures": 0
+    },
+    {
+      "kind": "glossary",
+      "part": "Back matter",
+      "title": "Glossary",
+      "file": "GLOSSARY.md",
+      "status": "representative-draft",
+      "targetWords": 700,
+      "targetPages": 4,
+      "targetFigures": 0
+    }
+  ]
+}

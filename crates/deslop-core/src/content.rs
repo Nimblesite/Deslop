@@ -78,15 +78,6 @@ pub struct ContentEvidence {
     /// measured — a finding of scaffolding is positive evidence, never an
     /// absent measurement.
     pub substance_varies: bool,
-    /// The stricter half of [`Self::substance_varies`]: the identifier
-    /// substitution itself needs more than one consistent 1:1 mapping
-    /// ([RANK-STRUCTURAL-ONLY]). Differing *literals* alone are excluded
-    /// deliberately — they are exactly what a parameterised merge lifts,
-    /// so they are never proof of scaffolding on their own. Differing
-    /// *names* are: sibling REST methods reach different call targets
-    /// (`getMethod` / `deleteMethod` / `putMethod`), and no single
-    /// substitution explains that.
-    pub identifiers_vary: bool,
 }
 
 impl ContentEvidence {
@@ -109,7 +100,6 @@ impl ContentEvidence {
             rename_consistency: 0.0,
             literal_fraction: 0.0,
             substance_varies: false,
-            identifiers_vary: false,
         }
     }
 }
@@ -157,35 +147,7 @@ fn measure_cluster<S: BuildHasher>(
         rename_consistency: cluster_rename_consistency(canonical, &member_keys),
         literal_fraction: canonical_literal_fraction(canonical),
         substance_varies: cluster_substance_varies(canonical, &member_keys),
-        identifiers_vary: cluster_identifiers_vary(canonical, &member_keys),
     }
-}
-
-/// Proof that a cluster's members need more than one identifier
-/// substitution to explain each other ([RANK-STRUCTURAL-ONLY]).
-/// Degenerate and unresolvable clusters return `false` — nothing was
-/// measured, so nothing is proven.
-fn cluster_identifiers_vary(
-    canonical: Option<&[LeafKey]>,
-    member_keys: &[Option<Vec<LeafKey>>],
-) -> bool {
-    member_keys
-        .iter()
-        .skip(1)
-        .any(|keys| pair_identifiers_vary(canonical, keys.as_deref()))
-}
-
-/// Proof that two members' identifiers resist one consistent 1:1
-/// mapping. Length disagreement counts: members that do not align
-/// position-for-position cannot be a renaming of each other.
-fn pair_identifiers_vary(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> bool {
-    let (Some(canonical), Some(member)) = (canonical, member) else {
-        return false;
-    };
-    if canonical.len() != member.len() {
-        return true;
-    }
-    mapping_consistency(&population(canonical, member, false)) < 1.0
 }
 
 /// Proof that a cluster's members differ in substance rather than in
@@ -369,8 +331,9 @@ fn modal_partners(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<u64, u64>
 }
 
 /// Share of members whose non-empty content-key vector also appears on
-/// another member — verbatim copies hiding among same-shape lookalikes
-/// ('s body-equivalence guard). Transitive closure can merge a
+/// another member — verbatim copies hiding among same-shape lookalikes,
+/// the population the renderer's body-equivalence guard relies on.
+/// Transitive closure can merge a
 /// genuine byte-identical pair into a cluster of same-shape neighbours;
 /// the mean against one canonical member would average the proven copy
 /// below the support floor, so a cluster *dominated* by verbatim copies

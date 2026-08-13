@@ -44,25 +44,35 @@ pub(crate) const ACT_NOW_BUCKETS: [&str; 3] = ["identical", "nearly_identical", 
 /// - **evidence-free** — token and embedding support below
 ///   `STRUCTURAL_ONLY_MAX_SUPPORT`. Shape is the only signal, which is
 ///   the #197 REST-family shape.
-/// - **content-gated** — the deterministic signals saturate *by
-///   construction*: the token LSH pass hashes the same normalised
-///   representation the structural pass does, so an anchor-poor Type-2
-///   rename reads `token_jaccard ≈ 1.00` while its raw collapsed leaves
-///   disagree and no literal-anchored substitution explains them.
+/// - **content-gated** — shape evidence saturates while the measured
+///   content evidence refuses to vouch for it. The token layer may read
+///   anywhere in that case: it saturates when it echoes the structural
+///   pass's own normalised representation, and it can sit mid-band when
+///   the fingerprint-scoped fallback cost it part of its signature.
 ///
-/// Asserting `token_jaccard < 0.05` alone therefore fails every
-/// content-gated cluster — including the renamed-loop clones whose own
-/// test comments describe them as anchor-poor. The band *between* the
-/// two routes is produced by neither, so it is asserted against, and the
-/// demotion itself is asserted rather than assumed: whichever route it
-/// took, a `structural_only` cluster carries no act-now confidence.
+/// So `token_jaccard` alone identifies neither route. What both routes
+/// *do* share is the precondition that admits them:
+/// `has_saturating_shape_evidence` — a saturated structural fingerprint
+/// or a saturated token echo. The evidence-free route additionally
+/// requires `structural >= 0.99`, and the content-gated route is only
+/// reachable through that same predicate, so it holds universally and
+/// catches a mislabelled low-shape cluster the old band admitted.
+///
+/// An earlier revision asserted that `token_jaccard` could not land
+/// between the two constants. Production emits exactly that: a
+/// `structural = 1.00`, mid-token, low-content cluster satisfies
+/// `lacks_content_support` and routes here. Content evidence is not on
+/// the report wire, so no helper reading three signals can reconstruct
+/// which route ran — scenario tests pin the bucket and metrics instead.
 pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
+    let structural = signal(cluster, "structural");
     let token = signal(cluster, "token_jaccard");
     assert!(
-        !(STRUCTURAL_ONLY_MAX_SUPPORT..SATURATING_TOKEN_FLOOR).contains(&token),
-        "{label}: structural_only is reached evidence-free (token < \
-         {STRUCTURAL_ONLY_MAX_SUPPORT}) or content-gated (token >= \
-         {SATURATING_TOKEN_FLOOR}); a partial overlap is neither route: {dump}",
+        structural >= 0.99 || token >= SATURATING_TOKEN_FLOOR,
+        "{label}: both routes into structural_only require saturating shape \
+         evidence — structural >= 0.99, or a token echo >= \
+         {SATURATING_TOKEN_FLOOR}. Without it the bucket claims a shape match \
+         the signals do not show: {dump}",
         dump = signal_dump(cluster)
     );
     assert!(

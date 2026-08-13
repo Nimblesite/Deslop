@@ -66,6 +66,9 @@ struct ForwardingGrammar {
     declarative: &'static [&'static str],
 }
 
+/// tree-sitter-dart grammar facts. Dart names class members generically
+/// — there is no `method_declaration` — so the body node is the anchor
+/// and the allowlist is what separates a wrapper from a computation.
 const DART: ForwardingGrammar = ForwardingGrammar {
     body: "function_body",
     block: "block",
@@ -133,17 +136,28 @@ const fn forwarding_grammar(language: &str) -> Option<&'static ForwardingGrammar
     }
 }
 
-/// Returns true when `member`'s body proves the forwarding shape:
-/// declarative nodes only, at least one call, and one of the three
-/// body forms ([RANK-STRUCTURAL-ONLY-FORWARDING]).
-pub(super) fn is_forwarding_declaration(member: Node<'_>, language: &str, source: &[u8]) -> bool {
-    let Some(grammar) = forwarding_grammar(language) else {
-        return false;
-    };
-    let Some(body) = outermost_kind(member, grammar.body) else {
-        return false;
-    };
-    node_contains_kind(body, grammar.call) && body_shape_forwards(body, grammar, source)
+/// Returns the member's **body bytes** when its body proves the
+/// forwarding shape: declarative nodes only, at least one call, and one
+/// of the three body forms ([RANK-STRUCTURAL-ONLY-FORWARDING]). `None`
+/// when the member is not proven to forward.
+///
+/// The bytes are returned rather than a bare `bool` because the caller
+/// must still compare wrappers against each other. Two wrappers in one
+/// class that forward to the *same* route are a copy-paste bug — one of
+/// the two calls is dead — and their declarations differ only in the
+/// method name, so the reported windows are never byte-equal even when
+/// the duplication is exact. Only the bodies can show it.
+pub(super) fn forwarding_body<'a>(
+    member: Node<'_>,
+    language: &str,
+    source: &'a [u8],
+) -> Option<&'a [u8]> {
+    let grammar = forwarding_grammar(language)?;
+    let body = outermost_kind(member, grammar.body)?;
+    if !node_contains_kind(body, grammar.call) || !body_shape_forwards(body, grammar, source) {
+        return None;
+    }
+    source.get(body.start_byte()..body.end_byte())
 }
 
 /// Finds the outermost descendant of `kind` — the member's own body,
@@ -246,7 +260,7 @@ fn subtree_is_declarative(node: Node<'_>, grammar: &ForwardingGrammar) -> bool {
 }
 
 /// Named children with comments removed — comments never carry logic.
-fn named_non_comment_children<'tree>(node: Node<'tree>) -> Vec<Node<'tree>> {
+fn named_non_comment_children(node: Node<'_>) -> Vec<Node<'_>> {
     let mut cursor = node.walk();
     let children = node
         .named_children(&mut cursor)

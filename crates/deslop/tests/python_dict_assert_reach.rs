@@ -31,10 +31,8 @@ fn module_level_logic_is_not_excused_by_qualifying_tests() -> Result<()> {
     let scan_root = fixture("python-dict-assert-module-logic");
     let report = run_report(&scan_root, 8)?;
 
-    let cluster = expect_cluster_spanning(
-        &report,
-        &["test_billing_flow.py", "test_invoice_flow.py"],
-    )?;
+    let cluster =
+        expect_cluster_spanning(&report, &["test_billing_flow.py", "test_invoice_flow.py"])?;
     let texts = occurrence_texts(&scan_root, cluster)?;
     assert!(
         texts.iter().all(|text| text.contains("build_session")),
@@ -68,8 +66,7 @@ fn an_unconsumed_payload_dictionary_is_not_excused() -> Result<()> {
     let scan_root = fixture("python-dict-assert-unconsumed");
     let report = run_report(&scan_root, 8)?;
 
-    let cluster =
-        expect_cluster_spanning(&report, &["test_quota_patch.py", "test_quota_put.py"])?;
+    let cluster = expect_cluster_spanning(&report, &["test_quota_patch.py", "test_quota_put.py"])?;
     let texts = occurrence_texts(&scan_root, cluster)?;
     assert!(
         texts.iter().any(|text| text.contains("audit"))

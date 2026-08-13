@@ -105,6 +105,50 @@ This section closes the hole structurally:
 4. **Editor override.** The VS Code setting `deslop.ranking.structuralOnly` (`default` | `demote` | `ignore` | `keep`, [VSIX-SETTINGS-RANKING]) feeds `deslop-lsp --ranking-structural-only`, recorded once at startup in the central state module (`deslop-core::state`) and consulted by every config load — the editor channel wins over `.deslop.toml`; `default` defers to it.
 5. **Filterable.** The MCP `duplicates` filter block ([MCP-TOOL-FILTERS]) derives its `buckets` enum from `ClusterKind::all()`, so `structural_only` is filterable by agents (#195/#197).
 
+### [RANK-STRUCTURAL-ONLY-FORWARDING] Proving a declaration is family noise
+
+The single-file hide in [RANK-STRUCTURAL-ONLY] needs a proof that a member is
+scaffolding. Two window shapes qualify, and both are AST facts about what the
+fingerprint window *covers* — never a count of cluster members and never a count
+of statements:
+
+1. **Plural siblings.** The window intersects two or more named members of one
+   declaration container (`class_body`, `declaration_list`, …). Container members
+   are counted rather than per-language declaration node kinds, because
+   tree-sitter-dart has no `method_declaration` at all: a Dart class member is a
+   generic node identified by the `function_body` it carries.
+2. **One forwarding declaration.** The window covers exactly one member whose
+   body is `return <expr>;`, `<binding> = <expr>; return <reads binding>;`, or a
+   bare arrow expression; contains at least one call; and consists **only** of
+   nodes from a closed declarative allowlist — calls, member access, awaits,
+   literals, payload collections, casts and adapter lambdas.
+
+Shape 2 is what the real #197 surface is. Its `resetX` wrappers are one statement
+each, so every window covers one declaration and shape 1 can never reach them.
+
+Branches, loops, arithmetic, comparisons, mutation and every node kind outside the
+allowlist — including a parse `ERROR` — disprove forwarding. The predicate
+therefore fails open: a body the walk does not fully understand keeps its cluster
+visible. That direction is mandatory for a filter that deletes output.
+
+**A statement count may not stand in for this.** "One or two statements means
+scaffolding" convicts a short body carrying a loop and an accumulator, and acquits
+a wrapper that spends two statements on a temporary response. The proof matches
+the data-flow shape instead, which is what separates a REST wrapper from a
+parameterisable method whose body binds locals, calls several collaborators and
+branches.
+
+Two further guards bound the hide. Content evidence must show the members differ
+in substance ([FUSION-CONTENT-GATE]). And **no two proven wrappers may share a
+body**: two sibling wrappers forwarding to the same route are a copy-paste bug —
+one of those calls is dead or misaimed — and one shared body disqualifies the
+suppression for the whole family. The comparison is on bodies, not on reported
+windows: sibling declarations differ in their method names, so their windows
+never compare equal even when the duplication is exact.
+
+Languages without a wired grammar table return false for shape 2, so their
+single-declaration windows are never hidden.
+
 ### [RANK-LITERAL-FAMILY] Literal-family weight formula and policy
 
 Literal-family clusters ([CLONE-CATEGORY-REGISTRY] categories `magic_literal`,

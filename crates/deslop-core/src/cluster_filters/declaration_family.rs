@@ -8,48 +8,74 @@
 //! the family fuses at `structural = 1.00` with no token or embedding
 //! support and dominates `top-offenders` purely on size.
 //!
-//! # Three questions, and why each one is needed
+//! # What every suppression must prove
 //!
-//! **Is it a family at all?** A family is *plural* — a window covering
-//! one declaration is a unit of logic, however much it resembles its
-//! neighbour. This is the question the filter is named for and the one
-//! the deleted implementation never asked. It asked instead where a
-//! member *sat* (`descendant_for_byte_range` returning
-//! `method_declaration`), which is true of a genuine two-method clone as
-//! well, and erased `csharp-merge-rename` outright.
+//! **Is this window a family view?** Two shapes qualify, and both are
+//! AST facts about what the window *covers*, never about how many
+//! members the cluster has:
+//!
+//! - a run of **two or more sibling declarations** — the plural
+//!   settings/CRUD window; or
+//! - **one declaration that forwards** — a body with a single client
+//!   call, optionally bound and returned, and nothing computed on the
+//!   way through ([RANK-STRUCTURAL-ONLY-FORWARDING], `forwarding.rs`).
+//!
+//! The second shape is what the meilisearch surface actually is. Its
+//! `resetSettings` / `resetStopWords` wrappers are one statement each,
+//! so every fingerprint window covers exactly one declaration and a
+//! plurality-only test could never reach them. Counting declarations
+//! alone therefore left the real #197 family on the report; asking what
+//! the declaration *does* hides it without touching anything liftable.
 //!
 //! **Do the members differ in substance?** `ContentEvidence::
 //! substance_varies` — a literal disagrees, or the identifier
 //! substitution needs more than one consistent mapping. Two windows that
 //! duplicate their substance are a clone, not scaffolding.
 //!
+//! **Do any two proven wrappers share a body?** Two siblings forwarding
+//! to the same route are a copy-paste bug — one of those calls is dead
+//! or misaimed — so one shared body disqualifies the suppression for the
+//! whole family. The comparison is on bodies, not reported windows:
+//! sibling declarations differ in their method names, so their windows
+//! never compare equal even when the duplication is exact.
+//!
 //! **Is it a data table?** A table varies its literals by construction,
 //! so the substance test convicts every one of them. Its payload *is*
 //! its substance, and the `data_clones` policy already lets the user
 //! demote, drop or keep it ([RANK-CATEGORY]).
 //!
-//! # What the member count may never do
+//! # What a count may never do
 //!
 //! `if members.len() < 3 { return false }` — a *cluster*-size threshold
 //! standing in for a structural question, the same defect class as the
 //! literal-variation shortcut in `calls.rs`. It let a two-window
-//! settings family top the report. The plurality test below is not that
-//! threshold wearing a new constant: it does not count cluster members,
-//! it asks what a single member *is*, and "two or more siblings" is the
-//! definition of a family rather than a tuning knob.
+//! settings family top the report. Neither test below is that threshold
+//! wearing a new constant: they do not count cluster members, they ask
+//! what a member *is*.
+//!
+//! A statement count is the same mistake one level down. "One or two
+//! statements means scaffolding" convicts `csharp-merge-rename`'s
+//! `TotalWithTax` — a loop, arithmetic and an accumulator in a short
+//! body — and acquits a `getX()` wrapper that spends two statements on
+//! a temporary. The forwarding proof matches the data-flow shape
+//! instead, which is why it separates the meilisearch wrappers from
+//! `csharp-merge-drift`'s `ApplyStandard` / `ApplyPremium`: those bind
+//! two locals, call five collaborators and branch on a ceiling.
 //!
 //! # Why the substance test cannot decide alone
 //!
 //! Differing literals are exactly what a parameterised merge *fixes*.
-//! `csharp-merge-drift`'s `ApplyStandard`/`ApplyPremium` differ only in
-//! `"standard"`/`100` versus `"premium"`/`250`; suppressing on literal
-//! variation alone erased them and took the LSP merge offer and its
-//! refusal reason with it. The plurality test is what keeps a
-//! parameterisable pair visible while still suppressing the REST family
-//! whose windows each span three methods.
+//! `ApplyStandard`/`ApplyPremium` differ only in `"standard"`/`100`
+//! versus `"premium"`/`250`; suppressing on literal variation alone
+//! erased them and took the LSP merge offer and its refusal reason with
+//! it. Content evidence is also *cluster-wide* — one divergent sibling
+//! sets it for every member — so it can say "something here varies" and
+//! never "all of this is scaffolding". Only the window tests can.
 //!
 //! Every one of those errors stays pinned:
 //! `single_file_structural_only_method_families_do_not_top_the_report`,
+//! `declaration_family_plurality`,
+//! `declaration_family_mixed_component`,
 //! `refactor_merge::consistent_renames_lift_without_parameters`,
 //! `issue_190_data_table_demote`, and the `csharp-merge-drift` LSP
 //! `code_action` / `code_action_refusal` pair. No one of them passes
@@ -65,9 +91,8 @@ use tree_sitter::Node;
 use crate::{clone_category::CloneCategory, cluster::Cluster, state::FileId};
 
 use super::{
-    collect_snippets, enclosing_kind, forwarding::is_forwarding_declaration,
-    node_intersects_range, parse_for, snippet_range_text, spans_multiple_files, uniform_language,
-    ParseCache, Snippet,
+    collect_snippets, enclosing_kind, forwarding::forwarding_body, node_intersects_range,
+    parse_for, spans_multiple_files, uniform_language, ParseCache, Snippet,
 };
 
 /// Returns true when `cluster` is a single-file family of sibling
@@ -75,10 +100,11 @@ use super::{
 ///
 /// Suppression requires positive proof on every count: the members live
 /// in one file, they are not a data table, their collapsed leaves prove
-/// they differ in substance, and each window covers two or more sibling
-/// declarations. A cluster that fails any of them is not proven to be
-/// scaffolding and stays visible, demoted by the `structural_only`
-/// policy.
+/// they differ in substance, and every window is a family view — two or
+/// more sibling declarations, or one declaration proven to forward, no
+/// two wrappers sharing a body. A cluster that fails any of them
+/// is not proven to be scaffolding and stays visible, demoted by the
+/// `structural_only` policy.
 pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
     cluster: &Cluster,
     category: CloneCategory,
@@ -96,30 +122,40 @@ pub(crate) fn is_single_file_declaration_family<S: BuildHasher>(
     let Some(language) = uniform_language(&cluster.members, file_languages) else {
         return false;
     };
-    collect_snippets(&cluster.members, sources, language, cache).is_some_and(|snippets| {
-        snippets_pairwise_distinct(&snippets)
-            && snippets.iter().all(covers_declaration_family_window)
+    collect_snippets(&cluster.members, sources, language, cache)
+        .is_some_and(|snippets| every_window_is_family_noise(&snippets))
+}
+
+/// Returns true when every window is a family view and no two proven
+/// wrappers share a body.
+///
+/// The distinctness check is what keeps a copy-paste bug visible. Two
+/// sibling wrappers that forward to the *same* route are real
+/// duplication — one of the two calls is dead — but their declarations
+/// differ in the method name, so their reported windows never compare
+/// equal. Comparing the proven bodies is the only view that sees it.
+fn every_window_is_family_noise(snippets: &[Snippet<'_>]) -> bool {
+    let mut wrapper_bodies = HashSet::new();
+    snippets.iter().all(|snippet| match family_window(snippet) {
+        None => false,
+        Some(FamilyWindow::SiblingRun) => true,
+        Some(FamilyWindow::Wrapper(body)) => wrapper_bodies.insert(body),
     })
 }
 
-/// Returns true when no two members' reported bytes are identical. A
-/// byte-identical pair is real duplication whatever the members are —
-/// even two forwarding wrappers, copied verbatim, are a copy to report —
-/// so it disqualifies the whole suppression. An unreadable member also
-/// fails open here.
-fn snippets_pairwise_distinct(snippets: &[Snippet<'_>]) -> bool {
-    let mut seen = HashSet::new();
-    snippets.iter().all(|snippet| {
-        snippet_range_text(snippet).is_some_and(|text| seen.insert(text))
-    })
+/// What a fingerprint window covers, when it covers family noise at all.
+enum FamilyWindow<'a> {
+    /// Two or more sibling declarations of one container.
+    SiblingRun,
+    /// Exactly one declaration proven to forward, with its body bytes.
+    Wrapper(&'a [u8]),
 }
 
-/// Returns true when the snippet's window is a declaration-family view:
-/// either it covers two or more members of one declaration container —
-/// the plural REST/settings run — or it covers exactly one member whose
-/// body proves the forwarding shape
+/// Classifies the snippet's window: two or more members of one
+/// declaration container — the plural REST/settings run — or exactly one
+/// member whose body proves the forwarding shape
 /// ([RANK-STRUCTURAL-ONLY-FORWARDING]). A window over statements inside
-/// a logic-bearing member matches neither and stays visible.
+/// a logic-bearing member is neither and returns `None`.
 ///
 /// Counts container *members* rather than matching per-language
 /// declaration node kinds. tree-sitter-dart has no `method_declaration`
@@ -127,30 +163,31 @@ fn snippets_pairwise_distinct(snippets: &[Snippet<'_>]) -> bool {
 /// `function_body` it carries — so a kind list is both grammar-specific
 /// and wrong on the very language this filter exists for. The children
 /// of one class body are siblings by construction.
-fn covers_declaration_family_window(snippet: &Snippet<'_>) -> bool {
-    let Some(tree) = parse_for(snippet) else {
-        return false;
-    };
-    let Some(container) = enclosing_kind(
+fn family_window<'a>(snippet: &Snippet<'a>) -> Option<FamilyWindow<'a>> {
+    let tree = parse_for(snippet)?;
+    let container = enclosing_kind(
         tree.root_node(),
         snippet.range,
         container_kinds(snippet.language),
-    ) else {
-        return false;
-    };
-    if !is_declaration_container(container) {
-        return false;
+    )
+    .filter(|container| is_declaration_container(*container))?;
+    match covered_members(container, snippet).as_slice() {
+        [] => None,
+        [member] => {
+            forwarding_body(*member, snippet.language, snippet.source).map(FamilyWindow::Wrapper)
+        }
+        _ => Some(FamilyWindow::SiblingRun),
     }
+}
+
+/// The container's named children that the snippet's window touches.
+fn covered_members<'tree>(container: Node<'tree>, snippet: &Snippet<'_>) -> Vec<Node<'tree>> {
     let mut cursor = container.walk();
-    let members: Vec<Node<'_>> = container
+    let members = container
         .named_children(&mut cursor)
         .filter(|member| node_intersects_range(*member, snippet.range))
         .collect();
-    match members.as_slice() {
-        [] => false,
-        [member] => is_forwarding_declaration(*member, snippet.language, snippet.source),
-        _ => true,
-    }
+    members
 }
 
 /// Python reuses `block` for class *and* function bodies, so the parent

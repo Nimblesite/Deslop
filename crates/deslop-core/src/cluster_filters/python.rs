@@ -24,10 +24,10 @@ use super::{
 };
 use crate::{ast::ByteRange, state::FileId};
 
-/// Detects ****: pytest fixture functions that create ORM rows
-/// all repeat the same session setup shape. The fixture is already the
-/// test abstraction, so surfacing those bodies as refactor targets adds
-/// noise instead of useful duplication.
+/// Detects [CLONE-NOISE-PY-PYTEST-FIXTURE]: pytest fixture functions
+/// that create ORM rows all repeat the same session setup shape. The
+/// fixture is already the test abstraction, so surfacing those bodies as
+/// refactor targets adds noise instead of useful duplication.
 pub(super) fn is_pytest_fixture_boilerplate_cluster(snippets: &[Snippet<'_>]) -> bool {
     if !is_multi_member_language_cluster(snippets, "python") {
         return false;
@@ -99,9 +99,10 @@ fn decorator_line_has_fixture_callee(line: &str) -> bool {
     callee.rsplit('.').next() == Some("fixture")
 }
 
-/// Detects ****: blocks consisting only of Python `assert`
-/// statements across test files. Their AST/token shape is intentionally
-/// repetitive, but the concrete asserted paths and values differ.
+/// Detects [CLONE-NOISE-PY-ASSERT-ONLY]: blocks consisting only of
+/// Python `assert` statements across test files. Their AST/token shape
+/// is intentionally repetitive, but the concrete asserted paths and
+/// values differ.
 pub(super) fn is_python_assertion_only_cluster(snippets: &[Snippet<'_>]) -> bool {
     if !is_multi_member_language_cluster(snippets, "python") {
         return false;

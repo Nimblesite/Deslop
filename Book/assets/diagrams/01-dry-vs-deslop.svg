@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">DRY and Deslop ask different questions</title>
+  <desc id="description">DRY is a design principle about the authoritative representation of knowledge. Deslop is an evidence system that finds source already repeated and prompts an explicit response.</desc>
+  <rect width="1600" height="1000" fill="#0b0d10"/>
+
+  <text x="86" y="96" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="5">TWO DIFFERENT QUESTIONS</text>
+  <text x="86" y="172" fill="#e8eaed" font-family="Inter, sans-serif" font-size="62" font-weight="780" letter-spacing="-2">A principle is not a detector.</text>
+
+  <g transform="translate(86 246)">
+    <rect width="676" height="568" fill="#fafaf7"/>
+    <rect width="18" height="568" fill="#0b5fff"/>
+    <text x="58" y="62" fill="#0b5fff" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700" letter-spacing="3">DESIGN PRINCIPLE</text>
+    <text x="58" y="146" fill="#14161a" font-family="Inter, sans-serif" font-size="72" font-weight="800" letter-spacing="-3">DRY</text>
+    <text x="58" y="218" fill="#14161a" font-family="Inter, sans-serif" font-size="31" font-weight="700">Where does this knowledge belong?</text>
+
+    <text x="58" y="294" fill="#55606b" font-family="Inter, sans-serif" font-size="24">Looks for repeated knowledge or intent</text>
+    <text x="58" y="338" fill="#55606b" font-family="Inter, sans-serif" font-size="24">Chooses an authoritative representation</text>
+    <text x="58" y="382" fill="#55606b" font-family="Inter, sans-serif" font-size="24">May cross code, schema, tests, and docs</text>
+
+    <rect x="58" y="438" width="560" height="82" fill="#f1efe8"/>
+    <text x="82" y="471" fill="#9a6700" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">DESIGN RISK</text>
+    <text x="82" y="502" fill="#14161a" font-family="Inter, sans-serif" font-size="21">Abstracting before the shared concept is known</text>
+  </g>
+
+  <g transform="translate(838 246)">
+    <rect width="676" height="568" fill="#13171c"/>
+    <rect width="18" height="568" fill="#b3261e"/>
+    <text x="58" y="62" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700" letter-spacing="3">EVIDENCE SYSTEM</text>
+    <text x="58" y="146" fill="#e8eaed" font-family="Inter, sans-serif" font-size="72" font-weight="800" letter-spacing="-3">DESLOP</text>
+    <text x="58" y="218" fill="#e8eaed" font-family="Inter, sans-serif" font-size="31" font-weight="700">What source already repeats?</text>
+
+    <text x="58" y="294" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="24">Finds exact and nearby source ranges</text>
+    <text x="58" y="338" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="24">Supplies labels, locations, and evidence</text>
+    <text x="58" y="382" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="24">Requires an explicit ownership verdict</text>
+
+    <rect x="58" y="438" width="560" height="82" fill="#242a31"/>
+    <text x="82" y="471" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">OBSERVED FACT</text>
+    <text x="82" y="502" fill="#e8eaed" font-family="Inter, sans-serif" font-size="21">The repeated source is already in the repository</text>
+  </g>
+
+  <path d="M280 866H1320" stroke="#55606b" stroke-width="3"/>
+  <rect x="722" y="851" width="156" height="30" fill="#0b0d10"/>
+  <text x="747" y="876" fill="#6aa8ff" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">CAN INFORM</text>
+  <text x="310" y="938" fill="#e8eaed" font-family="Inter, sans-serif" font-size="29" font-weight="700">DRY may shape the design. Deslop proves the repetition exists.</text>
+</svg>

@@ -8,6 +8,8 @@
 
 #![allow(dead_code)]
 
+pub mod reports;
+
 use std::{
     fs,
     io::BufReader,

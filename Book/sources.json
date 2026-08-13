@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "key": "deslop-for-ai",
+      "title": "For AI — how coding agents use Deslop to stop duplicate code",
+      "url": "https://deslop.live/docs/for-ai/",
+      "repositoryPath": "site/src/docs/for-ai.md",
+      "role": "authoring loop, similarity decisions, CLI fallback, report fields"
+    },
+    {
+      "key": "deslop-ai-integration",
+      "title": "AI Agents — MCP setup",
+      "url": "https://deslop.live/docs/ai-integration/",
+      "repositoryPath": "site/src/docs/ai-integration.md",
+      "role": "surface responsibilities and live agent workflow"
+    },
+    {
+      "key": "deslop-taxonomy",
+      "title": "Canonical clone labels",
+      "url": "https://github.com/Nimblesite/Deslop/blob/main/docs/specs/taxonomy.md",
+      "repositoryPath": "docs/specs/taxonomy.md",
+      "role": "canonical UX label definitions and routing contract"
+    },
+    {
+      "key": "deslop-vscode-labels",
+      "title": "VS Code report labels",
+      "url": "https://github.com/Nimblesite/Deslop/blob/main/clients/vscode/src/types/report.ts",
+      "repositoryPath": "clients/vscode/src/types/report.ts",
+      "role": "exact human-facing titles and action sentences"
+    },
+    {
+      "key": "deslop-configuration",
+      "title": "Configuration reference",
+      "url": "https://deslop.live/docs/configuration/",
+      "repositoryPath": "site/src/docs/configuration.md",
+      "role": "exclusion, report hiding, thresholds, and exit behavior"
+    },
+    {
+      "key": "deslop-github-action",
+      "title": "GitHub Action",
+      "url": "https://deslop.live/docs/github-action/",
+      "repositoryPath": "site/src/docs/github-action.md",
+      "role": "CI quality gate"
+    },
+    {
+      "key": "deslop-agent-recipe",
+      "title": "AGENTS.md and CLAUDE.md prevention recipe",
+      "url": "https://github.com/Nimblesite/Deslop/blob/main/docs/snippets/agents-md-recipe.md",
+      "repositoryPath": "docs/snippets/agents-md-recipe.md",
+      "role": "paste-ready repository instruction contract"
+    },
+    {
+      "key": "kevmoo-duplication-audit",
+      "title": "Deslop Duplication Audit Protocol",
+      "author": "Kevin Moore",
+      "url": "https://github.com/kevmoo/kevmoo_skills/blob/main/skills/deslop-duplication-audit/SKILL.md",
+      "role": "practitioner workflow for read-only discovery, actionability, test baselines, surgical remediation, and proof"
+    },
+    {
+      "key": "pragmatic-programmer-dry",
+      "title": "The Pragmatic Programmer — The Evils of Duplication",
+      "author": "Andy Hunt and Dave Thomas",
+      "url": "https://media.pragprog.com/titles/tpp20/dry.pdf",
+      "role": "authoritative definition of the DRY principle"
+    },
+    {
+      "key": "wrong-abstraction",
+      "title": "The Wrong Abstraction",
+      "author": "Sandi Metz",
+      "url": "https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction",
+      "role": "primary practitioner argument about premature abstraction"
+    },
+    {
+      "key": "deslop-research-background",
+      "title": "Deslop Research Background",
+      "url": "https://deslop.live/docs/research-background/",
+      "repositoryPath": "site/src/docs/research-background.md",
+      "role": "mapping from research lines to current implementation files"
+    },
+    {
+      "key": "baxter-ast-clones",
+      "title": "Clone Detection Using Abstract Syntax Trees",
+      "author": "Ira D. Baxter et al.",
+      "url": "https://doi.org/10.1109/ICSM.1998.738528",
+      "role": "scholarly foundation for syntax-tree-based duplicate detection"
+    },
+    {
+      "key": "chilowicz-ast-fingerprinting",
+      "title": "Syntax Tree Fingerprinting for Source Code Similarity Detection",
+      "author": "Michel Chilowicz, Étienne Duris, and Gilles Roussel",
+      "url": "https://doi.org/10.1109/ICPC.2009.5090050",
+      "role": "scholarly foundation for scalable syntax-tree fingerprinting"
+    },
+    {
+      "key": "sourcerercc",
+      "title": "SourcererCC: Scaling Code Clone Detection to Big Code",
+      "author": "Hitesh Sajnani et al.",
+      "url": "https://arxiv.org/abs/1512.06448",
+      "role": "scholarly foundation for scalable indexed detection of edited copies"
+    },
+    {
+      "key": "broder-minhash",
+      "title": "On the Resemblance and Containment of Documents",
+      "author": "Andrei Z. Broder",
+      "url": "https://doi.org/10.1109/SEQUEN.1997.666900",
+      "role": "scholarly foundation for compact resemblance estimation"
+    },
+    {
+      "key": "indyk-motwani-lsh",
+      "title": "Approximate Nearest Neighbors: Towards Removing the Curse of Dimensionality",
+      "author": "Piotr Indyk and Rajeev Motwani",
+      "url": "https://doi.org/10.1145/276698.276876",
+      "role": "scholarly foundation for locality-sensitive candidate retrieval"
+    },
+    {
+      "key": "sscd-nearest-neighbor",
+      "title": "Nearest-neighbor, BERT-based, Scalable Clone Detection",
+      "author": "Gul Aftab Ahmed et al.",
+      "url": "https://doi.org/10.1002/spe.3355",
+      "role": "scholarly foundation for embedding and approximate-neighbour semantic recall"
+    },
+    {
+      "key": "code-copycat-conundrum",
+      "title": "Code Copycat Conundrum: Demystifying Repetition in LLM-based Code Generation",
+      "author": "Mingwei Liu et al.",
+      "url": "https://arxiv.org/abs/2504.12608",
+      "role": "empirical evidence of repetition across code-generating language models"
+    }
+  ]
+}
