@@ -1,10 +1,10 @@
 # Chapter 6 — Use Deslop evidence to decide what to do
 
-> **Scaffold status:** Editorial structure established. Numeric captures await the edition release pin.
+> **Current status:** This chapter is an outline. I will use scores captured from the exact Deslop release used for the book.
 
 ## What you will be able to do
 
-Use Deslop's scores, source locations, stable group IDs, and guidance to decide what to inspect. Do not let one score automatically trigger a refactor.
+I will show you how to use Deslop's scores, source locations, stable group IDs, and guidance to decide what to inspect. I will not treat one score as an automatic instruction to refactor.
 
 ## Planned sections
 
@@ -44,7 +44,7 @@ Create a note for one group. Record its visible label, stable ID, source ranges,
 Use the fused score to choose the next inspection step. Use source evidence and repository ownership to choose the code change.
 ```
 
-## Source keys
+## Sources used for this chapter
 
 - `deslop-for-ai`
 - `deslop-taxonomy`

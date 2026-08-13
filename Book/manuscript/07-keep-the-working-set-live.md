@@ -1,10 +1,10 @@
 # Chapter 7 — Check the result after every code change
 
-> **Scaffold status:** Editorial structure established. Live captures await the edition release pin.
+> **Current status:** This chapter is an outline. I will include real editor and agent results from the exact Deslop release used for the book.
 
 ## What you will be able to do
 
-Use the editor and focused agent reports to check the same repository, then confirm that an edit removed or reduced the expected duplicate group.
+I will show you how to use the editor and focused agent reports to check the same repository. You will then confirm that an edit removed or reduced the expected duplicate group.
 
 ## Planned sections
 
@@ -44,7 +44,7 @@ Open the Workshop group in the human view, change one occurrence through the age
 After a change that should affect duplication, query the changed file and stable group. Check the result before handing the change to CI.
 ```
 
-## Source keys
+## Sources used for this chapter
 
 - `deslop-ai-integration`
 - `deslop-for-ai`

@@ -113,58 +113,72 @@ fn two_crossed_views_of_one_whole_file_duplicate_collapse() {
     );
 }
 
-/// [PIPELINE-CLUSTER-SUBSUME] Partial overlap is two findings. Neither
-/// view contains the other in either file, so neither re-describes the
-/// other: they are two duplicated regions that happen to share bytes,
-/// and deleting one erases a duplicate the report never mentions again.
-#[test]
-fn two_partially_overlapping_regions_are_both_published() {
-    let clusters = published([(0, 100), (0, 100)], [(50, 150), (50, 150)]);
-    assert_eq!(
-        spans(&clusters),
-        vec![vec![(0, 100), (0, 100)], vec![(50, 150), (50, 150)]],
-        "half-overlapping regions are two duplicates, not one described twice"
-    );
+/// [PIPELINE-CLUSTER-SUBSUME] Every shape that must NOT collapse.
+///
+/// Each row is a distinct way two clusters can touch without either
+/// re-describing the other, and each was a separate way to lose a
+/// finding:
+///
+/// - **Partial overlap** — neither view contains the other in either
+///   file; two duplicated regions that happen to share bytes.
+/// - **A single shared byte** — where one region ends and the next
+///   begins. The cheapest way to lose a finding, because one
+///   intersecting byte is indistinguishable from a full re-description
+///   to a predicate built on intersection.
+/// - **A one-sided overhang** — the small region reaches into the wide
+///   one but starts before it and the wide one extends far past it, so
+///   the overlap is one-sided and neither is contained.
+/// - **Disjoint regions** — the control. Without it, a subsumption rule
+///   that deleted everything would still satisfy the collapse
+///   assertions above.
+///
+/// Table-driven because the assertion is identical for every row: only
+/// the spans and the expected publication order differ, and a row that
+/// regressed would otherwise be a copy of its siblings.
+/// One non-collapse row: why it must publish, the two spans, and the
+/// order the pair must appear in.
+struct TouchingCase {
+    why: &'static str,
+    first: (usize, usize),
+    second: (usize, usize),
+    expected: [(usize, usize); 2],
 }
 
-/// [PIPELINE-CLUSTER-SUBSUME] One shared byte is not region equivalence.
-/// Adjacent duplicated regions that touch where one ends and the next
-/// begins are the cheapest way to lose a finding, because a single
-/// intersecting byte is indistinguishable from a full re-description to
-/// a predicate built on intersection.
 #[test]
-fn regions_sharing_a_single_byte_are_both_published() {
-    let clusters = published([(0, 100), (0, 100)], [(99, 200), (99, 200)]);
-    assert_eq!(
-        spans(&clusters),
-        vec![vec![(99, 200), (99, 200)], vec![(0, 100), (0, 100)]],
-        "one shared byte does not make two regions one duplication"
-    );
-}
-
-/// [PIPELINE-CLUSTER-SUBSUME] A small region that merely reaches into a
-/// wider one is still its own finding. The overlap is one-sided — the
-/// wide view extends far past the small one and the small one starts
-/// before the wide one — so neither is a re-description of the other.
-#[test]
-fn a_region_overhanging_a_wider_one_survives_it() {
-    let clusters = published([(0, 100), (0, 100)], [(95, 500), (95, 500)]);
-    assert_eq!(
-        spans(&clusters),
-        vec![vec![(95, 500), (95, 500)], vec![(0, 100), (0, 100)]],
-        "an overhanging region is not contained, so it is not re-described"
-    );
-}
-
-/// Control: disjoint regions were never at risk, and stay published.
-/// Without this, a subsumption rule that deleted everything would still
-/// satisfy the collapse assertions above.
-#[test]
-fn disjoint_regions_are_both_published() {
-    let clusters = published([(0, 100), (0, 100)], [(200, 300), (200, 300)]);
-    assert_eq!(
-        spans(&clusters),
-        vec![vec![(0, 100), (0, 100)], vec![(200, 300), (200, 300)]],
-        "regions that share no bytes are unrelated findings"
-    );
+fn regions_that_merely_touch_are_all_published() {
+    let cases = [
+        TouchingCase {
+            why: "half-overlapping regions are two duplicates, not one described twice",
+            first: (0, 100),
+            second: (50, 150),
+            expected: [(0, 100), (50, 150)],
+        },
+        TouchingCase {
+            why: "one shared byte does not make two regions one duplication",
+            first: (0, 100),
+            second: (99, 200),
+            expected: [(99, 200), (0, 100)],
+        },
+        TouchingCase {
+            why: "an overhanging region is not contained, so it is not re-described",
+            first: (0, 100),
+            second: (95, 500),
+            expected: [(95, 500), (0, 100)],
+        },
+        TouchingCase {
+            why: "regions that share no bytes are unrelated findings",
+            first: (0, 100),
+            second: (200, 300),
+            expected: [(0, 100), (200, 300)],
+        },
+    ];
+    for case in cases {
+        let clusters = published([case.first, case.first], [case.second, case.second]);
+        let expected: Vec<Vec<(usize, usize)>> = case
+            .expected
+            .iter()
+            .map(|span| vec![*span, *span])
+            .collect();
+        assert_eq!(spans(&clusters), expected, "{}", case.why);
+    }
 }

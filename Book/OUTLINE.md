@@ -2,7 +2,7 @@
 
 ## Planned length
 
-The first edition targets about **31,000 words**, **110 print-equivalent pages**, and **36 purposeful visuals**. EPUB pages reflow by device, so the word and visual budgets control scope; the page figure is a design target.
+I have planned the first edition at about **31,000 words**, **110 print-equivalent pages**, and **36 useful visuals**. EPUB pages reflow by device, so I use the word and visual counts to control scope. The page count is only a design target.
 
 | Material | Words | Print-equivalent pages | Visuals |
 |---|---:|---:|---:|
@@ -41,7 +41,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 **Target:** 1,300 words · 5 pages · 1 visual
 
-- The prevention-first promise
+- Why the book starts with a check before writing
 - Who the book is for: developers, maintainers, and agent-workflow owners
 - Prerequisites: ordinary repository, tests, and a supported Deslop editor or agent integration
 - How the Workshop checkpoints work
@@ -74,13 +74,13 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 **Target:** 2,000 words · 7 pages · 3 visuals
 
-**Reader outcome:** Explain how the live analysis engine connects the repository, editor, agent, command line, and CI without treating them as separate scanners.
+**Reader outcome:** Explain how the repository, editor, agent, command line, and CI use the same Deslop analysis without running competing background scans.
 
-- The live server as the product
-- MCP for the coding agent; LSP for the editor; CLI for cold starts and CI
+- What the live Deslop server does
+- MCP for the coding agent; LSP for the editor; CLI for terminal runs and CI
 - One analysis implementation and one report format across the editor, agent tools, and CLI
 - File changes, live refresh, and focused queries
-- How to record the installed version used by the edition
+- How to record the Deslop version used by the book examples
 - Workshop checkpoint: verify the agent and editor point at the same workspace
 - Visuals: which tool to use; how live updates work; real editor capture
 
@@ -96,14 +96,14 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Borderline evidence: read the nearest occurrence and bias toward reuse
 - Weak or empty evidence: proceed, then recheck the files that changed
 - What to do when the live path is unavailable
-- Workshop checkpoint: prevent the proposed duplicate and adapt the call site
+- Workshop checkpoint: prevent the proposed duplicate and update the caller to use existing code
 - Visuals: prevention gate; similarity decision ladder; direct `find-similar` evidence
 
 ### Chapter 4 — Understand a Deslop result
 
 **Target:** 1,900 words · 7 pages · 2 visuals
 
-**Reader outcome:** Read Deslop's five human-facing clone labels, duplicate groups, occurrences, ranking, and recommendations without confusing a finding with an instruction to refactor.
+**Reader outcome:** Read Deslop's five duplicate labels, groups, occurrences, ranking, and recommendations without confusing a result with an instruction to refactor.
 
 - Identical code
 - Nearly identical code
@@ -136,11 +136,11 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 **Target:** 2,100 words · 7 pages · 3 visuals
 
-**Reader outcome:** Interpret similarity evidence, report recommendations, source ranges, and stable group identities with the restraint appropriate to each UX label.
+**Reader outcome:** Use similarity evidence, report recommendations, source ranges, and stable group IDs to decide what to inspect and how carefully to proceed.
 
 - The fused similarity score as a decision aid
 - Structural, textual, and semantic support in plain language
-- Byte ranges as the edit authority; line numbers as navigation
+- Byte ranges identify the exact section; line numbers help you find it in the editor
 - Stable group IDs versus moving rank positions
 - Why same-shape and same-behavior findings demand inspection
 - Workshop checkpoint: build an evidence note for one proposed change
@@ -150,12 +150,12 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 **Target:** 2,000 words · 7 pages · 2 visuals
 
-**Reader outcome:** Use the editor bubble, file and range reports, and post-edit rescans to keep prevention active while code changes.
+**Reader outcome:** Use the editor message, file and range reports, and post-edit checks to find duplication while code changes.
 
 - Human and agent feedback from the same changing repository
 - Focused file and selection queries
 - Recheck after a large external change
-- Confirm that a prevented or consolidated group is gone or smaller
+- Confirm that a duplicate group is gone or smaller after the change
 - Avoid stale roots, stale servers, and mismatched binaries
 - Workshop checkpoint: edit, observe, query, and verify one live change
 - Visuals: reactive loop; focused-query map
@@ -181,14 +181,14 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 **Target:** 2,600 words · 9 pages · 3 visuals
 
-**Reader outcome:** Run a discovery audit that leaves the target repository untouched and present a high-density baseline before choosing any refactor.
+**Reader outcome:** Run a scan that leaves the target repository untouched and present a concise starting report before choosing a refactor.
 
 - Verify toolchain and repository test commands
-- Send report artifacts to a dedicated scratch location
+- Save report files in a dedicated temporary location
 - Disable incremental writes for a read-only discovery run
 - Read the main JSON report and the HTML report for different readers
 - Summarize worst groups, affected files, and potential consolidation
-- Align on scope before changing repository architecture
+- Agree on which group to investigate before changing the repository design
 - Workshop checkpoint: produce a baseline evidence sheet
 - Practitioner source: Kevin Moore's Deslop duplication audit protocol
 - Visuals: read-only scan; recorded starting state; where the report came from
@@ -199,8 +199,8 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 
 **Reader outcome:** Start with `top-offenders`, inspect the full group with `cluster-by-id`, and record whether the group should be merged or left separate.
 
-- Ranking is triage, not truth
-- Pull every occurrence before proposing an abstraction
+- Ranking tells you where to start; it does not tell you what action to take
+- Inspect every occurrence before proposing shared code
 - Duplication worth merging: one concept repeated in several places that can change differently over time
 - Duplication that should remain separate: similar code that cannot share an implementation without damaging types, performance, clarity, or test intent
 - Accepting a finding explicitly instead of hiding it
@@ -238,7 +238,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Measure code delta without treating line count as the goal
 - Lower the duplication limit after measured improvement
 - Feed the canonical implementation back into agent instructions
-- Workshop checkpoint: close the audit with a before/after evidence record
+- Workshop checkpoint: finish the cleanup with a before-and-after evidence record
 - Practitioner source: Kevin Moore's baseline and post-refactor verification gate
 - Visuals: verification steps; before and after group; lower limit; updated agent instruction
 
@@ -261,7 +261,7 @@ No chapter introduces more than four new conceptual families. Visuals either pro
 - Exact human-facing clone labels from the current UX
 - Report and workflow terms used throughout the book
 - Distinction between product labels and editorial decision terms
-- Stable links back to the product vocabulary authorities
+- Stable links to the product sources that define each term
 
 ## Explicitly out of scope for the first edition
 

@@ -17,6 +17,16 @@
 /// unused import in every binary that never touches the vocabulary.
 pub(crate) mod signals;
 
+/// The deterministic mock-embedder runner. Imported explicitly with
+/// `use crate::common::embeddings::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod embeddings;
+
+/// Report-verdict assertions: metric totals ([METRICS-REPO]) and the
+/// shape of an expected cluster. Imported explicitly with
+/// `use crate::common::verdict::*;`, for the same reason as `signals`.
+pub(crate) mod verdict;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

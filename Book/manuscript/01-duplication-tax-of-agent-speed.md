@@ -1,16 +1,16 @@
 # Chapter 1 — Why coding agents duplicate code
 
-An agent receives a specific task: validate an incoming request, normalize two fields, and return a domain value. It reads the files named in the task, writes a clear implementation, adds tests, and finishes quickly.
+I have watched coding agents make the same mistake many times. An agent receives a specific task: validate an incoming request, normalize two fields, and return a domain value. It reads the files named in the task, writes a clear implementation, adds tests, and finishes quickly.
 
 The implementation is correct. It is also the second copy of a validator already living in a neighbouring package.
 
 Nothing in the new function announces the mistake. The name is different. The surrounding types are different. The tests pass. The agent reasoned well about the code it could see. It did not check whether the behavior already existed elsewhere in the repository.
 
-The problem is simple: agents can write code faster than they can check every relevant file. The workflow therefore needs an explicit repository-wide duplicate check.
+The problem is simple: agents can write code faster than they can check every relevant file. I built Deslop to put an explicit repository-wide duplicate check into that workflow.
 
 ## What you will be able to do
 
-By the end of this chapter, you should be able to:
+By the end of this chapter, I want you to be able to:
 
 - distinguish the DRY principle from Deslop's job;
 - explain why large regions of identical code always deserve a response;
@@ -18,9 +18,9 @@ By the end of this chapter, you should be able to:
 - identify the cheapest point to stop an agent-created duplicate; and
 - trace Deslop's approach to the primary research that underpins it.
 
-## DRY deserves an accurate reading
+## What DRY actually means
 
-Don't Repeat Yourself has earned a devoted following. In some teams that devotion becomes a reflex: two similar-looking pieces of code appear, so an abstraction must appear immediately. That reflex is understandable, but it is not the full principle.
+I want to treat Don't Repeat Yourself fairly. DRY has earned a devoted following. In some teams that devotion becomes a reflex: two similar-looking pieces of code appear, so somebody creates an abstraction immediately. I understand that reflex, but it does not capture the full principle.
 
 Andy Hunt and Dave Thomas define DRY in *The Pragmatic Programmer* as follows:
 
@@ -28,7 +28,7 @@ Andy Hunt and Dave Thomas define DRY in *The Pragmatic Programmer* as follows:
 
 Their [official excerpt](https://media.pragprog.com/titles/tpp20/dry.pdf) explicitly says that avoiding copied source lines is only a small part of DRY. Two pieces of code can look the same while representing independent knowledge. Conversely, one rule can be duplicated across code, documentation, a schema, and a test even though none of those representations looks alike.
 
-DRY is therefore a design principle. It asks:
+I treat DRY as a design principle. It asks:
 
 > Where is the single authoritative representation of this knowledge?
 
@@ -38,7 +38,7 @@ That question can lead to excellent abstractions. Applied too early, however, it
 
 That is not an argument for careless copying. It is an argument for waiting until the shared concept is understood. The strongest version of DRY does not require every textual repetition to share an owner, and responsible critics of premature abstraction are not defending undisciplined repositories.
 
-Deslop asks a different question.
+I built Deslop to ask a different question.
 
 ![DRY asks where knowledge belongs; Deslop asks what source already repeats and supplies evidence for a response.](assets/diagrams/01-dry-vs-deslop.png)
 
@@ -60,9 +60,9 @@ Deslop's current UX tells the reader that identical code is “Safe to extract �
 
 “Safe to extract” describes the sameness of the copies. It does not choose the final owner, approve a dependency direction, or prove that a new helper is the best design. The evidence is strong; the architectural decision remains yours.
 
-## Identical slabs must be addressed
+## What to do when Deslop finds identical code
 
-A large identical slab is always worth addressing, regardless of your position on DRY. In this book, **address** means investigate the group and give it an explicit outcome. It does not mean mechanically extract every match.
+A large identical slab is always worth addressing, regardless of your position on DRY. In this book, I use **address** to mean: investigate the group and give it an explicit outcome. I do not mean that you should mechanically extract every match.
 
 There are several legitimate outcomes:
 
@@ -72,7 +72,7 @@ There are several legitimate outcomes:
 4. **Generate the repetition.** A schema, protocol, or platform boundary requires repeated output. Keep one source of generation and verify the products.
 5. **Retain it deliberately.** Isolation, performance, fixtures, or a boundary may justify separate copies. Record the reason and the duplicate group's stable ID so the next maintainer does not repeat the investigation.
 
-The fifth outcome is important. Hunt and Thomas give an example in which identical validation code represents different knowledge. Kevin Moore's [Deslop Duplication Audit Protocol](https://github.com/kevmoo/kevmoo_skills/blob/main/skills/deslop-duplication-audit/SKILL.md) likewise separates duplication worth merging from duplication that should stay separate and requires a written technical reason before editing.
+I include the fifth outcome for an important reason. Hunt and Thomas give an example in which identical validation code represents different knowledge. Kevin Moore's [Deslop Duplication Audit Protocol](https://github.com/kevmoo/kevmoo_skills/blob/main/skills/deslop-duplication-audit/SKILL.md) also separates duplication worth merging from duplication that should stay separate. His protocol requires a written technical reason before editing.
 
 This does not mean every copy becomes a helper. It means every large identical block is inspected. The developer then reuses an existing implementation, moves the code, deletes a redundant path, generates required repetition, or records why the copies must remain separate.
 
@@ -82,14 +82,14 @@ This does not mean every copy becomes a helper. It means every large identical b
 
 ## Nearly identical code requires more judgment
 
-Identical code is the cleanest case because the copied source is proven equivalent. Other Deslop labels deliberately slow the reader down.
+Identical code is the cleanest case because Deslop has proved that the copied source is equivalent. Other Deslop labels deliberately slow the reader down.
 
 - **Nearly identical code** means the locations are strongly alike, but small differences may matter. Name every difference before consolidating.
 - **Same shape, different content** means the structure lines up without enough content support. It is often sibling boilerplate. Inspect before extracting.
 - **Loosely similar code** is a hint, not a refactoring instruction.
 - **Same behavior, different code** is an optional semantic signal. Read both implementations and their tests before merging them.
 
-Here the design argument returns. Two similar validators may encode separate policies that currently coincide. Two decoders may share a stable algorithm with one parameterized difference. Deslop supplies the locations and similarity evidence; DRY, coupling, ownership, performance, and domain boundaries influence the decision.
+At this point, you need to think about the design. Two similar validators may encode separate policies that currently coincide. Two decoders may share a stable algorithm with one parameterized difference. Deslop supplies the locations and similarity evidence. You decide what to do by considering DRY, coupling, ownership, performance, and domain boundaries.
 
 The glossary separates the Deslop result from the developer's decision:
 
@@ -97,13 +97,13 @@ The glossary separates the Deslop result from the developer's decision:
 - **duplication worth merging** is a developer's decision that the copies should share an implementation; and
 - **duplication that should stay separate** is a decision to keep repetition for a recorded technical reason.
 
-If a team confuses the Deslop result with the decision, it can make either of two mistakes. It may ignore a large copied block because some duplication is intentional, or it may create a poor abstraction because two sections look similar. Read the result first, then decide what the code should share.
+I have seen teams make two mistakes when they confuse the Deslop result with the design decision. They ignore a large copied block because some duplication is intentional, or they create a poor abstraction because two sections look similar. Read the result first. Then decide what the code should share.
 
 ## Why agents create copies more often
 
 Copying code predates coding agents. The foundational literature describes programmers reusing code by copying a fragment and adapting it to a new context. Agents change the production rate and the mechanics.
 
-An agent typically works from a prompt, several open files, search results, repository instructions, and tool responses. The repository contains more code than the agent has read. If the existing implementation sits elsewhere, generating another implementation may be the shortest path to a passing result.
+An agent typically works from a prompt, several open files, search results, repository instructions, and tool responses. Your repository contains more code than the agent has read. If the existing implementation sits elsewhere, the agent may take the shortest path to a passing result and generate another implementation.
 
 This does not mean the agent is incompetent. Code can work correctly and still duplicate code elsewhere in the repository.
 
@@ -119,7 +119,7 @@ That is the role of `find-similar`. The agent describes the proposed source befo
 
 ## Research methods used by Deslop
 
-Deslop is product engineering built on a long research lineage, not a visual search bolted onto an opinion about clean code. The current implementation maps its techniques to source files in Deslop's [Research Background](https://deslop.live/docs/research-background/). The primary papers establish the foundations:
+I built Deslop on established clone-detection research. I did not start with an opinion about clean code and bolt on a visual search. Deslop's [Research Background](https://deslop.live/docs/research-background/) maps each technique to the relevant source files. The primary papers establish these foundations:
 
 1. **Compare parsed program structure.** Baxter and colleagues' 1998 paper, [*Clone Detection Using Abstract Syntax Trees*](https://doi.org/10.1109/ICSM.1998.738528), presented methods for detecting identical and edited repetitions over arbitrary program fragments using abstract syntax trees. Deslop similarly parses supported languages and normalizes syntax before structural comparison.
 2. **Fingerprint syntax trees for efficient exact matching.** Chilowicz, Duris, and Roussel proposed [“a simple and scalable architecture based on AST fingerprinting”](https://doi.org/10.1109/ICPC.2009.5090050). Deslop computes bottom-up fingerprints for normalized subtrees and extends coverage across neighbouring statements.
@@ -129,7 +129,7 @@ Deslop is product engineering built on a long research lineage, not a visual sea
 
 These methods find different kinds of repetition. Exact structural fingerprints find equivalent parsed code. Indexed text overlap finds copies that have been edited. Optional behavior-based similarity can find code that looks different. Deslop combines the results and presents the five plain-language labels used in its editor and reports.
 
-Research supports the detection mechanisms. It does not absolve the maintainer from choosing ownership, preserving behavior, or running tests.
+Research supports the detection methods. It does not choose code ownership for you, preserve behavior, or run your tests.
 
 ## Checking before writing requires the least work
 
@@ -143,11 +143,11 @@ There are three opportunities to deal with an agent-created copy:
 
 The first path has the fewest decisions. The agent can abandon a proposal without migrating callers or proving that two histories still agree. The second path is still cheap enough to make a good fallback. The third is the cleanup problem addressed in Part III: valuable, necessary, and much more demanding.
 
-This is why Deslop checks proposed code. Cleanup removes copies that already exist. The `find-similar` check can stop the next copy before it is added.
+This is why I want you to check proposed code. Cleanup removes copies that already exist. The `find-similar` check can stop the next copy before the agent adds it.
 
 ## Workshop exercise
 
-The Workshop agent has been asked to add a request validator. Do not write it yet. Create a proposed-code note outside the repository:
+Ask the Workshop agent to add a request validator, but do not let it write the validator yet. Create a proposed-code note outside the repository:
 
 ```text
 Behavior: validate an incoming request and normalize two fields

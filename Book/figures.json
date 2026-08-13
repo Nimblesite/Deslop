@@ -47,7 +47,7 @@
       "publication": "assets/diagrams/01-identical-code-needs-a-verdict.png",
       "width": 1600,
       "height": 1000,
-      "alt": "Three identical source slabs move through an evidence gate toward five legitimate outcomes: reuse, move ownership, delete, generate, or retain with a recorded reason."
+      "alt": "Three identical sections of source code lead to five possible decisions: reuse an existing implementation, move the code, delete redundant code, generate required output, or retain the copies with a recorded reason."
     },
     {
       "id": "three-jobs-one-analysis",

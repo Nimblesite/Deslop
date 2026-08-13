@@ -1,10 +1,10 @@
 # Chapter 8 — Set a duplication limit in CI
 
-> **Scaffold status:** Editorial structure established. Configuration and Action captures await the edition release pin.
+> **Current status:** This chapter is an outline. I will include real configuration and CI output from the exact Deslop release used for the book.
 
 ## What you will be able to do
 
-Set a maximum duplication percentage that local runs, agents, and CI share. Lower that limit after verified cleanup.
+I will show you how to set a maximum duplication percentage that local runs, agents, and CI share. You will lower that limit after you verify a cleanup.
 
 ## Planned sections
 
@@ -16,7 +16,7 @@ Run Deslop before setting the limit. If you set the limit below the repository's
 
 Store the limit in the repository configuration so developers, agents, and CI use the same number and receive the same failure.
 
-### Exclude and report hiding answer different questions
+### Know the difference between excluding and hiding
 
 Excluded files never enter analysis. Report-hidden occurrences remain available as evidence but do not contribute to the headline. The chapter uses generated code to make the distinction concrete.
 
@@ -44,7 +44,7 @@ Measure the Workshop repository, select a limit it currently meets, introduce a 
 Use the configured duplication limit in local runs and CI. Lower it after real cleanup. Do not hide findings or raise the limit just to make the build pass.
 ```
 
-## Source keys
+## Sources used for this chapter
 
 - `deslop-configuration`
 - `deslop-github-action`

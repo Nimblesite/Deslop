@@ -7,8 +7,8 @@ use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
 use common::{
-    at, fixture, handshake, path as json_path, spawn_lsp_guarded, wait_for_report_matching,
-    watched_file_changed, write_frame,
+    at, fixture, handshake, path as json_path, reports::assert_initialize_contract,
+    spawn_lsp_guarded, wait_for_report_matching, watched_file_changed, write_frame,
 };
 use serde_json::Value;
 
@@ -42,12 +42,7 @@ fn run_exclusion_cycle(excluded: &str) -> Result<()> {
     let before_bytes = workspace_bytes(workspace.path())?;
 
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
-    let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(
-        json_path(&initialize, &["result", "serverInfo", "name"]),
-        "deslop-lsp"
-    );
-    assert!(initialize.get("error").is_none(), "{initialize:#}");
+    assert_initialize_contract(&handshake(&mut stdin, &mut stdout)?);
 
     let clean = wait_for_files(&mut stdin, &mut stdout, 4)?;
     assert_clean_control(&clean)?;

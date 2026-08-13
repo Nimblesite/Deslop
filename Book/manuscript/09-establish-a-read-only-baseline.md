@@ -10,7 +10,7 @@ Kevin Moore's Deslop duplication audit protocol uses this order: run a read-only
 
 ## What you will be able to do
 
-Record the current duplication results without modifying the target repository, then present enough information to choose one focused cleanup task.
+I will show you how to record the current duplication results without modifying the target repository. You will then present enough information to choose one focused cleanup task.
 
 ## Verify the environment first
 
@@ -18,7 +18,7 @@ Record the Deslop version and installation, repository root, language tools, dep
 
 The finished chapter will use Deslop's current installation instructions. Kevin Moore's protocol provides the order of work, while Deslop's own documentation provides the commands.
 
-## Keep audit artifacts outside the target
+## Save reports outside the repository
 
 A read-only discovery run sends report output to a dedicated scratch directory and disables incremental cache writes. The target checkout receives no `.deslop` cache and no source edit.
 
@@ -33,7 +33,7 @@ deslop /path/to/repository \
   --log-level warn
 ```
 
-The exact flags are verified against the edition binary before publication. The important properties are durable: external report destination, no repository cache, and no threshold failure interrupting discovery.
+I will verify the exact flags against the Deslop executable used for the book before publication. The command must keep reports outside the repository, avoid a repository cache, and let the discovery run finish even when the repository exceeds its configured duplication limit.
 
 ## Save both the JSON and human-readable reports
 
@@ -45,7 +45,7 @@ The discovery note should include:
 
 ```text
 repository and revision:
-Deslop version and artifact:
+Deslop version and executable:
 analysis configuration:
 analysed source size:
 duplication percentage:
@@ -53,7 +53,7 @@ duplicate groups:
 duplicated files:
 highest-impact group IDs and visible labels:
 test and static-analysis commands:
-report artifact paths and hashes:
+report file paths and hashes:
 ```
 
 The number of repeated lines can help choose which group to inspect first. It does not prove that the code should share an abstraction.
@@ -78,11 +78,11 @@ Create a temporary scratch directory, run the Workshop discovery audit without r
 For the first cleanup scan, write reports outside the target repository and do not change source files. Present the starting results and the selected duplicate groups before proposing shared code.
 ```
 
-## What came from the practitioner protocol
+## How Kevin Moore's protocol is used
 
 This chapter uses Kevin Moore's read-only discovery and review steps. Deslop's current documentation remains the source for supported installation and command behavior. Moore's protocol provides the order: measure first, review the findings, then change code.
 
-## Source keys
+## Sources used for this chapter
 
 - `kevmoo-duplication-audit`
 - `deslop-for-ai`

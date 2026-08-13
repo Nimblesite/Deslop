@@ -34,7 +34,7 @@ use mock_ollama::MockOllama;
 use serde_json::Value;
 
 mod common;
-use crate::common::{signals::*, *};
+use crate::common::{embeddings::run_mock_embedding_report, signals::*, *};
 
 /// Scans a private copy of just the LSH-plus-embedding pair from
 /// `ts-mixed-band` with the deterministic mock embedder wired in, so the
@@ -45,23 +45,7 @@ fn run_two_file_report(server: &MockOllama, scan_root: &Path) -> Result<Value> {
         let _bytes = std::fs::copy(fixtures.join(name), scan_root.join(name))?;
     }
     let output = scan_root.join("report");
-    let mut cmd = deslop_cmd(scan_root, &output)?;
-    let _assertion = cmd
-        .args([
-            "--min-nodes",
-            "12",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    load_json(&output.with_extension("json"))
+    run_mock_embedding_report(scan_root, &output, "12", server.endpoint())
 }
 
 /// The strongest single axis of the rendered signal triple — the ceiling
@@ -188,23 +172,7 @@ fn byte_identical_pair_still_earns_full_confidence_under_the_bound() -> Result<(
         let _bytes = std::fs::copy(&source, tmp.path().join(name))?;
     }
     let output = tmp.path().join("report");
-    let mut cmd = deslop_cmd(tmp.path(), &output)?;
-    let _assertion = cmd
-        .args([
-            "--min-nodes",
-            "12",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    let report = load_json(&output.with_extension("json"))?;
+    let report = run_mock_embedding_report(tmp.path(), &output, "12", server.endpoint())?;
 
     assert_eq!(cluster_count(&report), 1, "one visible cluster");
     let cluster = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_a_copy.ts"])?;

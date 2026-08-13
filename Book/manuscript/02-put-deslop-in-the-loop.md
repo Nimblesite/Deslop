@@ -1,16 +1,16 @@
 # Chapter 2 — Connect Deslop to agents, editors, and CI
 
-The Workshop repository is open in an editor. A coding agent has been asked to add another request validator. Deslop already runs in CI, but the agent cannot query it while working.
+Open the Workshop repository in your editor and ask a coding agent to add another request validator. Deslop already runs in CI, but the agent cannot query it while working.
 
 If the agent writes a copy, CI may catch it. By then the new code exists. The agent has named it, connected it to callers, written tests, and handed the change over for review. Removing the copy now costs more than avoiding it.
 
-The fix is to make Deslop available while the code is being written. The agent needs a way to ask about proposed code. The developer needs the editor to update as files change. CI needs a reliable command that starts, scans, reports, and exits.
+I want to make Deslop available while the agent writes the code. The agent needs a way to ask about proposed code. You need the editor to update as files change. CI needs a reliable command that starts, scans, reports, and exits.
 
-These are three different jobs. Deslop provides a different tool or connection for each one.
+These are three different jobs. In this chapter, I will show you which Deslop tool or connection handles each one.
 
 ## What you will learn
 
-By the end of this chapter, you should be able to:
+By the end of this chapter, I want you to be able to:
 
 - explain what the agent connection, editor connection, and command-line tool each do;
 - connect an agent to the same live analysis used by the editor;
@@ -32,7 +32,7 @@ The official [MCP architecture](https://modelcontextprotocol.io/specification/20
 
 Microsoft's [Language Server Protocol documentation](https://microsoft.github.io/language-server-protocol/) says its goal is to “standardize the protocol for how such servers and development tools communicate.” Deslop uses that connection to keep its editor features current.
 
-You do not need to understand either protocol in detail to use Deslop. MCP carries questions from the agent to Deslop. LSP carries file changes and updated results between the editor and Deslop. The CLI scans saved files without an editor.
+I do not expect you to learn either protocol in detail before you use Deslop. MCP carries questions from the agent to Deslop. LSP carries file changes and updated results between the editor and Deslop. The CLI scans saved files without an editor.
 
 ![A coding agent, a developer's editor, and CI use different Deslop entry points for different jobs.](assets/diagrams/02-three-jobs-one-analysis.png)
 
@@ -48,7 +48,7 @@ The three entry points use that engine in different ways:
 - `deslop-mcp` accepts tool calls from the coding agent. It does not run a second live scan. It forwards the agent's requests to the running editor server and returns the result.
 - `deslop` runs the core analysis as a one-shot command. It is appropriate for CI, terminal audits, and fallback checks.
 
-The phrase “one engine” does not mean that one process does every job. It means the matching rules, duplicate labels, ranking, and report fields come from the same implementation. The agent and editor can therefore refer to the same duplicate group by its stable group ID.
+When I say “one engine,” I do not mean that one process does every job. I mean that the matching rules, duplicate labels, ranking, and report fields come from the same implementation. The agent and editor can therefore refer to the same duplicate group by its stable group ID.
 
 They will only get the same answer when they use the same inputs. Check these four things before treating different results as a detection bug:
 
@@ -75,13 +75,13 @@ The steps are short:
 
 The [official Deslop instructions for agents](https://deslop.live/docs/for-ai/) make `find-similar` the authoring check. Other tools answer different questions. `report-for-file` narrows the report to one file. `report-for-range` checks a selection. `top-offenders` starts a cleanup from the highest-impact duplicate group. `cluster-by-id` returns the full evidence for one group.
 
-Do not load the full repository report into every agent prompt. Ask the smallest question that supports the current decision. A proposed helper needs `find-similar`, not hundreds of unrelated duplicate groups.
+I do not recommend loading the full repository report into every agent prompt. Ask the smallest question that supports the current decision. A proposed helper needs `find-similar`, not hundreds of unrelated duplicate groups.
 
 Chapter 3 covers the decision thresholds and the exact response to each result. The important setup point here is that `find-similar` needs the live agent connection. A CLI scan after writing is a useful fallback, but it is detection after the copy exists, not prevention.
 
 ## Use matching Deslop versions and repository paths
 
-Most setup problems are caused by a wrong executable path, a wrong repository root, or mixed Deslop versions.
+In my experience, most setup problems come from a wrong executable path, a wrong repository root, or mixed Deslop versions.
 
 If you use the VS Code extension, it starts the bundled `deslop-lsp` for the open workspace. Configure your external agent to use the `deslop-mcp` binary from the same installed extension. On macOS and Linux, the path has this form:
 
@@ -133,7 +133,7 @@ The editor receives that report and updates its Deslop views. The next agent too
 
 *Figure 2.2 — After Deslop analyses a change, the editor updates and the agent's next query reads the new report.*
 
-In normal work, wait for the live analysis to finish and query the file or range you changed. Use `rescan` only when a large external change has occurred or you have evidence that the live state missed something. Repeatedly forcing full rescans makes the live setup harder to reason about and throws away the benefit of focused updates.
+In normal work, I wait for the live analysis to finish and query the file or range I changed. You should use `rescan` only when a large external change has occurred or you have evidence that the live state missed something. Repeatedly forcing full rescans makes the live setup harder to reason about and throws away the benefit of focused updates.
 
 ## The developer and agent should name the same finding
 
@@ -141,7 +141,7 @@ The editor is for quick human inspection. It can show the live bubble near edite
 
 The agent receives structured fields: the duplicate-group ID, label, score evidence, and occurrence ranges. That response is easier for software to consume, but it describes the same report.
 
-This gives you a simple end-to-end check:
+I use this simple end-to-end check:
 
 1. Pick a real duplicate group in the editor's Top Offenders view.
 2. Copy its stable group ID.
@@ -162,7 +162,7 @@ deslop . --notext --nohtml --no-color
 
 The command scans the current directory and writes the main JSON report to `.deslop/deslop-report.json`. CI can inspect that report and apply the repository's configured duplication limit.
 
-The CLI is also the fallback when the agent connection is unavailable. Run a baseline before editing, make the change, run Deslop again, and inspect duplicate groups that include the changed file. If the new code appears in a strong group, remove or reuse it immediately.
+I also use the CLI as a fallback when the agent connection is unavailable. Run a baseline before editing, make the change, run Deslop again, and inspect duplicate groups that include the changed file. If the new code appears in a strong group, remove or reuse it immediately.
 
 That fallback is still valuable, but the timing is different:
 
@@ -215,7 +215,7 @@ Cross-check: group <stable ID> matches in editor and agent response
 CLI fallback: available for saved-code checks and CI
 ```
 
-The checkpoint passes only when you can trace one real finding from the editor to the agent response. Seeing a tool name in the agent is not enough; the tool must be connected to the repository you are actually changing.
+You pass the checkpoint only when you can trace one real finding from the editor to the agent response. Seeing a tool name in the agent is not enough; its connection must point to the repository you are actually changing.
 
 ## Check your understanding
 
@@ -230,7 +230,7 @@ Answer these questions without looking back at the chapter:
 
 1. The MCP connection provides `find-similar`, which accepts a proposed code snippet.
 2. `deslop-lsp` owns the live analysis session, receives file changes, and builds updated reports. `deslop-mcp` forwards agent requests to that running session.
-3. The CLI scans code that has been saved to the repository. It cannot compare code that the agent has not written yet.
+3. The CLI scans code after the agent saves it in the repository. It cannot compare code that the agent has not written yet.
 4. Compare the repository root, Deslop version, analysis configuration, and source state.
 
 ## Instruction for coding agents
@@ -250,7 +250,7 @@ unavailable. Never skip the duplicate check silently.
 - The editor and agent read results from the same live analysis session.
 - The CLI remains the correct tool for CI and standalone audits.
 - MCP and LSP are communication methods, not separate detection engines.
-- Matching roots, versions, configuration, and source state are required for matching results.
+- You need matching roots, versions, configuration, and source state to get matching results.
 - A CLI fallback catches a new copy after writing; it cannot fully replace the live prevention check.
 
 ## Authoritative sources

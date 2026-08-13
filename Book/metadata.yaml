@@ -8,10 +8,10 @@ date: "2026-08-13"
 language: "en-AU"
 rights: "Copyright © 2026 Christian Findlay"
 description: >-
-  A prevention-first field guide to putting Deslop in coding-agent workflows,
-  auditing existing duplicate code, making justified consolidations, and
-  proving the repository remains healthy.
-edition: "Structural scaffold"
+  A practical book for developers who use coding agents. I explain how to
+  check for existing code before an agent writes a copy, remove duplication
+  that is already in a repository, and verify every change with tests and Deslop.
+edition: "Chapters 1–2 complete; remaining chapters outlined"
 deslop-version: "0.0.0-dev"
 website: "https://deslop.live/"
 ...

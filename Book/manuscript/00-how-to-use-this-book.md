@@ -1,14 +1,22 @@
 # How to use this book
 
-Coding agents can produce working code without reading every relevant file in a repository. That creates a predictable problem: an agent can write a good helper, decoder, fixture, or repository method that already exists somewhere else.
+I wrote this book because coding agents can produce working code without reading every relevant file in a repository. That creates a predictable problem: an agent can write a good helper, decoder, fixture, or repository method that already exists somewhere else.
 
-This book shows you how to check the whole repository before the agent writes another copy.
+I will show you how to check the whole repository before the agent writes another copy. I will also show you how to remove copies that have already accumulated without forcing unrelated code into a bad abstraction.
+
+## Why this matters when agents write code
+
+A developer who has worked in one repository for years remembers many existing helpers and past design decisions. A coding agent usually starts with a prompt, a few selected files, search results, and repository instructions. It may not see a matching implementation in another package.
+
+Agents also produce complete changes quickly. A new helper can gain callers and tests before a reviewer notices that the repository already contains the same code. The practical response is not to ask the agent to remember everything. Give it a repository-wide check at the point where it decides whether to write new code.
+
+I built Deslop to provide that check. It also gives you a structured way to inspect and remove copies that previous changes have already introduced.
 
 ![The book first explains how to check proposed code, then how to remove existing duplication and lower the allowed duplication limit.](assets/diagrams/00-reading-journey.png)
 
 *The book begins with a check before writing code. It ends by lowering the configured duplication limit so CI rejects future increases.*
 
-## The book covers prevention first, then cleanup
+## The book starts by stopping new copies
 
 Checking before code is written takes less work than removing a copy later. Part I shows how an agent asks Deslop whether matching code already exists. When it does, the agent can reuse that code before adding another implementation and more tests.
 
@@ -22,15 +30,13 @@ Deslop finds related sections of source code and orders the groups by size and i
 
 Deslop does not decide that the code should share a helper or class. It cannot choose the correct module, decide whether an extra function call affects performance, or know that a test fixture repeats code on purpose. The developer still makes those decisions.
 
-The distinction is simple:
-
-> Deslop shows you the matching code. You decide whether and how to change it.
+Deslop shows you the matching code and related scores. You decide whether to change it, which code should remain, and where shared code should live.
 
 ## The Workshop repository
 
 Each chapter returns to a small service repository after several agents have changed it. It contains validators with different names, request decoders with slightly different defaults, command wrappers copied into several programs, and test fixtures that may repeat code on purpose.
 
-The examples are not committed as unverified duplicate code in this structural edition. They will be added chapter by chapter after the Deslop release is pinned. Every checkpoint will include:
+I have not committed unverified duplicate examples in this structural edition. I will add them chapter by chapter after I pin the Deslop release. Every checkpoint will include:
 
 - the source state before the action;
 - the exact product evidence;
@@ -42,13 +48,13 @@ The examples are not committed as unverified duplicate code in this structural e
 
 The book uses the same human-facing clone names as the Deslop UX. It does not teach a parallel academic shorthand and ask you to translate while making a maintenance decision.
 
-The [Glossary](#glossary) is the vocabulary authority. When a tool field uses a machine value such as `nearly_identical`, the glossary connects it to the visible title “Nearly identical code” and its current UX guidance.
+The [Glossary](#glossary) defines the terms used throughout the book. When a tool field uses a machine value such as `nearly_identical`, the glossary connects it to the visible title “Nearly identical code” and its current UX guidance.
 
 ## Show where the evidence came from
 
-A screenshot shows what the pinned Deslop build actually displayed. A diagram explains a workflow or relationship. An editorial illustration can establish a non-factual concept, but it cannot invent product output.
+A screenshot shows what the exact Deslop version used for the book actually displayed. A diagram explains a workflow or relationship. An editorial illustration can establish a non-factual concept, but it cannot invent product output.
 
-Before this scaffold becomes a publishable edition, `book.json` will record the exact Deslop release and file hashes. `figures.json` will record how every screenshot was captured, and `evidence.json` will record where the specification, implementation, UX, and tests agree.
+Before I publish this edition, I will record the exact Deslop release and file hashes in `book.json`. I will record how I captured every screenshot in `figures.json`. I will use `evidence.json` to record where the specification, implementation, UX, and tests agree.
 
 ## How to use a chapter
 

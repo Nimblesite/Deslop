@@ -4,7 +4,7 @@ Start with the duplicate groups at the top of the report, then inspect the code 
 
 ## What you will be able to do
 
-Use `top-offenders` to select a large duplicate group, inspect every occurrence with `cluster-by-id`, and record whether to merge the group, leave it separate, or wait for more information.
+I will show you how to use `top-offenders` to select a large duplicate group and inspect every occurrence with `cluster-by-id`. You will then record whether to merge the group, leave it separate, or wait for more information.
 
 ## Start at the top of the report
 
@@ -38,7 +38,7 @@ Similar code can be correct to retain. Examples include specialized hot loops wh
 
 Record the decision and technical reason, then leave the source unchanged. Do not hide the group merely because it should remain separate.
 
-## Decision record
+## Record the decision and reason
 
 ```text
 group id:
@@ -72,11 +72,11 @@ Inspect two Workshop groups. Merge one copied decoder whose differences can be e
 Start with `top-offenders`, inspect every occurrence in the selected group, and record whether to merge it. Do not recommend a merge from rank, score, or one occurrence alone.
 ```
 
-## What came from the practitioner protocol
+## How Kevin Moore's protocol is used
 
 This chapter uses Kevin Moore's distinction between duplication worth merging and duplication that should remain separate. It combines that decision with Deslop's `top-offenders` tool and visible duplicate labels. A Deslop finding does not automatically mean the code is wrong.
 
-## Source keys
+## Sources used for this chapter
 
 - `kevmoo-duplication-audit`
 - `deslop-for-ai`

@@ -18,8 +18,8 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use common::{
-    at, call, call_capturing, handshake, path as json_path, spawn_lsp_guarded,
-    wait_for_report_matching, POLL_INTERVAL,
+    at, call, call_capturing, handshake, path as json_path, reports::assert_initialize_contract,
+    spawn_lsp_guarded, wait_for_report_matching, POLL_INTERVAL,
 };
 use mock_ollama::{MockBehavior, MockOllama};
 use serde_json::{json, Value};
@@ -33,12 +33,7 @@ fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -
     let server = MockOllama::spawn_with(MockBehavior::RejectAllEmbeds)?;
     let workspace = common::copy_fixture("ts-mixed-band")?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(workspace.path())?;
-    let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(
-        json_path(&initialize, &["result", "serverInfo", "name"]),
-        "deslop-lsp"
-    );
-    assert!(initialize.get("error").is_none(), "{initialize:#}");
+    assert_initialize_contract(&handshake(&mut stdin, &mut stdout)?);
 
     let before = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
         at(report, "files_analysed").as_u64() == Some(5)

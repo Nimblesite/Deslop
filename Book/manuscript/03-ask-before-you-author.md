@@ -4,7 +4,7 @@ Run the duplicate check before the agent adds the proposed code to a file. At th
 
 ## What you will be able to do
 
-Call `find-similar` before writing a function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model, or other code unit larger than a few lines. Use the response to reuse, inspect, or proceed.
+I will show you how to call `find-similar` before writing a function, method, class, helper, fixture, test setup, parser branch, error type, route handler, view model, or other code unit larger than a few lines. You will use the response to reuse existing code, inspect a possible match, or proceed with new code.
 
 ## Describe behavior before names
 
@@ -31,7 +31,7 @@ The label modifies the response. “Same shape, different content” requires in
 
 The score tells the agent what to inspect next. It does not decide where shared code should live or whether two business rules should use one implementation.
 
-## Reuse is broader than calling a helper
+## Ways to reuse existing code
 
 When Deslop finds an existing implementation, the new call site may be able to import and call it directly. If ownership is wrong for both locations, the correct move may be to extract a shared implementation into a neutral module. If the proposed behavior is genuinely different, make that difference explicit before authoring.
 
@@ -57,7 +57,7 @@ The agent proposes a payload decoder for the Workshop repository.
 6. If the difference is real policy, name it in the interface or parameter rather than copying the implementation.
 7. Recheck the affected file after the edit.
 
-The finished edition will include the exact request, response, source ranges, and product capture from the pinned release.
+The finished edition will include the exact request, response, source ranges, and product capture from the Deslop version used for the book.
 
 ## Check your understanding
 
@@ -75,7 +75,7 @@ Before authoring a new code unit, call find-similar with the proposed snippet. S
 
 The agent found an existing implementation and used it. No second copy was added.
 
-## Source keys
+## Sources used for this chapter
 
 - `deslop-for-ai`
 - `deslop-agent-recipe`

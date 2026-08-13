@@ -1,10 +1,10 @@
 # Chapter 12 — Verify the cleanup and prevent new copies
 
-> **Scaffold status:** Editorial structure established. Before/after artifacts await the Workshop fixture and edition release pin.
+> **Current status:** This chapter is an outline. I will include real Deslop reports and test results from before and after cleanup.
 
 ## What you will be able to do
 
-Show that the repository's normal checks still pass, the intended duplicate group changed, and the configured duplication limit was lowered without hiding findings.
+I will show you how to prove that the repository's normal checks still pass, the intended duplicate group changed, and you lowered the configured duplication limit without hiding findings.
 
 ## Planned sections
 
@@ -18,7 +18,7 @@ Rescan, then locate the original stable group ID and affected files. The group s
 
 ### Investigate an unexpected result
 
-If the group remains, receives a different label, or disappears because configuration changed, the cleanup has not been verified. Read the new report before changing anything else.
+If the group remains, receives a different label, or disappears because configuration changed, you have not verified the cleanup. Read the new report before changing anything else.
 
 ### Record the exact results
 
@@ -64,7 +64,7 @@ Finish the cleanup only after the repository's normal checks pass, Deslop shows 
 
 Kevin Moore's protocol requires actual test results before and after the change and a detailed final report. This book also compares the stable group ID, runs Deslop again, records any duplication that remains, and updates the agent instructions.
 
-## Source keys
+## Sources used for this chapter
 
 - `kevmoo-duplication-audit`
 - `deslop-for-ai`

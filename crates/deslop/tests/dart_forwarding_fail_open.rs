@@ -35,58 +35,25 @@
 //! is the reach the forwarding proof added beyond that filter.
 
 use anyhow::Result;
-use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 #[test]
 fn one_statement_bodies_that_compute_are_not_forwarding() -> Result<()> {
     let scan_root = fixture("dart-forwarding-fail-open");
     let report = run_report(&scan_root, 12)?;
 
-    let visible = clusters(&report);
-    assert_eq!(
-        visible.len(),
-        1,
+    let cluster = expect_sole_cluster(
+        &report,
         "two one-statement Dart methods that multiply and add are liftable \
          logic, not API scaffolding. Hiding them proves the forwarding \
          allowlist leaked arithmetic — or that a statement count stood in for \
-         the proof. report={report:#}"
-    );
-    let cluster = visible
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("the visible cluster asserted above is missing"))?;
-    assert_eq!(
-        cluster_size(cluster),
-        2,
-        "both methods are occurrences of the one cluster: {cluster:#}"
-    );
-    assert_eq!(
-        occurrence_files(cluster),
-        vec!["Calc.dart", "Calc.dart"],
-        "single-file pair by construction: {cluster:#}"
-    );
-    let texts = occurrence_texts(&scan_root, cluster)?;
-    assert!(
-        texts.iter().any(|text| text.contains("scaledDomestic"))
-            && texts.iter().any(|text| text.contains("scaledExport")),
-        "both computing methods must be reported: {texts:#?}"
-    );
-    assert_eq!(
-        clusters_hidden(&report),
-        0,
-        "nothing here proves forwarding, so nothing may be hidden: {report:#}"
-    );
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert!(
-        duplicated_loc >= 4,
-        "the duplicated bodies must count toward the metrics: \
-         duplicated_loc={duplicated_loc}, report={report:#}"
-    );
+         the proof.",
+    )?;
+    assert_single_file_cluster(cluster, 2, "Calc.dart");
+    let _texts = assert_cluster_mentions(&scan_root, cluster, &["scaledDomestic", "scaledExport"])?;
+    assert_duplicated_loc_at_least(&report, 4);
     Ok(())
 }
 
@@ -95,37 +62,21 @@ fn same_class_helper_calls_are_not_forwarding() -> Result<()> {
     let scan_root = fixture("dart-forwarding-business-pair");
     let report = run_report(&scan_root, 12)?;
 
-    let visible = clusters(&report);
-    assert_eq!(
-        visible.len(),
+    let visible = expect_visible_only(
+        &report,
         2,
         "both business pairs call a sibling helper — parameterisable logic, \
          not API scaffolding. The bound-result pair is the regression pin: \
          the branch's forwarding proof hid it because it accepted any call \
          without proving a collaborator receiver. The renamed arrow pair is \
          the visibility boundary: content evidence keeps a consistent rename \
-         visible as nearly_identical on either side of the fix. \
-         report={report:#}"
+         visible as nearly_identical on either side of the fix.",
     );
+    let mut texts = Vec::new();
     for cluster in visible {
-        assert_eq!(
-            cluster_size(cluster),
-            2,
-            "each pair is one cluster of two occurrences: {cluster:#}"
-        );
-        assert_eq!(
-            occurrence_files(cluster),
-            vec!["Pricing.dart", "Pricing.dart"],
-            "single-file pairs by construction: {cluster:#}"
-        );
+        assert_single_file_cluster(cluster, 2, "Pricing.dart");
+        texts.extend(occurrence_texts(&scan_root, cluster)?);
     }
-    let texts: Vec<String> = visible
-        .iter()
-        .map(|cluster| occurrence_texts(&scan_root, cluster))
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
     for name in [
         "quarterlyFee",
         "annualCharge",
@@ -137,20 +88,7 @@ fn same_class_helper_calls_are_not_forwarding() -> Result<()> {
             "{name} is half of a liftable pair and must be reported: {texts:#?}"
         );
     }
-    assert_eq!(
-        clusters_hidden(&report),
-        0,
-        "no body here reaches collaborator state, so nothing may be hidden: {report:#}"
-    );
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert!(
-        duplicated_loc >= 4,
-        "both visible pairs contribute duplicated lines: \
-         duplicated_loc={duplicated_loc}, report={report:#}"
-    );
+    assert_duplicated_loc_at_least(&report, 4);
     Ok(())
 }
 
@@ -159,30 +97,24 @@ fn wrappers_sharing_a_body_keep_the_family_visible() -> Result<()> {
     let scan_root = fixture("dart-forwarding-duplicate-route");
     let report = run_report(&scan_root, 12)?;
 
-    let visible = clusters(&report);
-    assert_eq!(
-        visible.len(),
-        1,
+    let cluster = expect_sole_cluster(
+        &report,
         "two of these five wrappers DELETE the same route — one call is dead \
          or misaimed. Hiding the family erases a real finding, and the \
-         reported windows cannot show it because the method names differ. \
-         report={report:#}"
-    );
-    let cluster = visible
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("the visible cluster asserted above is missing"))?;
-    assert_eq!(
-        cluster_size(cluster),
-        5,
-        "the whole family stays visible, not just the offending pair: {cluster:#}"
-    );
-    assert_eq!(
-        occurrence_files(cluster),
-        vec!["Api.dart"; 5],
-        "single-file family by construction: {cluster:#}"
-    );
-
-    let texts = occurrence_texts(&scan_root, cluster)?;
+         reported windows cannot show it because the method names differ.",
+    )?;
+    assert_single_file_cluster(cluster, 5, "Api.dart");
+    let texts = assert_cluster_mentions(
+        &scan_root,
+        cluster,
+        &[
+            "resetAlpha",
+            "resetBeta",
+            "resetGamma",
+            "resetDelta",
+            "resetEpsilon",
+        ],
+    )?;
     let duplicate_route = texts
         .iter()
         .filter(|text| text.contains("/indexes/dup/settings"))
@@ -192,32 +124,6 @@ fn wrappers_sharing_a_body_keep_the_family_visible() -> Result<()> {
         "both same-route wrappers must be among the reported occurrences — \
          they are the reason this family is not noise: {texts:#?}"
     );
-    for name in [
-        "resetAlpha",
-        "resetBeta",
-        "resetGamma",
-        "resetDelta",
-        "resetEpsilon",
-    ] {
-        assert!(
-            texts.iter().any(|text| text.contains(name)),
-            "{name} must be reported: {texts:#?}"
-        );
-    }
-
-    assert_eq!(
-        clusters_hidden(&report),
-        0,
-        "one shared body disqualifies the suppression for the family: {report:#}"
-    );
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert!(
-        duplicated_loc >= 10,
-        "the visible family contributes duplicated lines: \
-         duplicated_loc={duplicated_loc}, report={report:#}"
-    );
+    assert_duplicated_loc_at_least(&report, 10);
     Ok(())
 }

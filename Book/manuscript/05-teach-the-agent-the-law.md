@@ -1,10 +1,10 @@
 # Chapter 5 — Add the check to agent instructions
 
-> **Scaffold status:** Editorial structure established. The final instruction block will be verified against the pinned MCP schema and installation guidance.
+> **Current status:** This chapter is an outline. I will check the finished agent instruction against the exact Deslop release used for the book.
 
 ## What you will be able to do
 
-Add a clear rule to the repository instructions so every compatible coding agent checks for matching code before writing. The rule also tells the agent which Deslop tools to use when cleaning up existing duplication.
+I will show you how to add a clear rule to the repository instructions so every compatible coding agent checks for matching code before writing. The rule will also tell the agent which Deslop tools to use when cleaning up existing duplication.
 
 ## Planned sections
 
@@ -42,7 +42,7 @@ Add the repository rule to both supported instruction files, begin a fresh agent
 
 The finished chapter will include a paste-ready rule checked against Deslop's official repository instructions and the exact release used for the book.
 
-## Source keys
+## Sources used for this chapter
 
 - `deslop-agent-recipe`
 - `deslop-for-ai`

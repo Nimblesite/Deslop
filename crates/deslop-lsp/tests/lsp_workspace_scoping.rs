@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::{fs, path::Path};
+use std::{collections::BTreeSet, fs, path::Path};
 
 use anyhow::Result;
 use common::{
@@ -71,23 +71,31 @@ fn seed_dependency_workspace(root: &Path, include_dependencies: bool) -> Result<
     Ok(())
 }
 
-fn assert_default_dependency_paths(report: &Value) -> Result<()> {
-    let paths = occurrence_paths(report)?;
+/// The two first-party files and the build-output exclusion hold under
+/// every dependency setting — only whether `node_modules` is *also*
+/// scanned changes. Asserted once so a scoping regression cannot be
+/// masked by one of the two callers drifting.
+fn assert_first_party_scope(paths: &BTreeSet<String>) {
     assert!(
-        has_suffix(&paths, "Alpha.cs"),
+        has_suffix(paths, "Alpha.cs"),
         "first-party Alpha missing: {paths:?}"
     );
     assert!(
-        has_suffix(&paths, "Beta.cs"),
+        has_suffix(paths, "Beta.cs"),
         "first-party Beta missing: {paths:?}"
     );
     assert!(
+        !has_fragment(paths, "target/gen"),
+        "build output leaked: {paths:?}"
+    );
+}
+
+fn assert_default_dependency_paths(report: &Value) -> Result<()> {
+    let paths = occurrence_paths(report)?;
+    assert_first_party_scope(&paths);
+    assert!(
         !has_fragment(&paths, "node_modules/pkg"),
         "dependency leaked: {paths:?}"
-    );
-    assert!(
-        !has_fragment(&paths, "target/gen"),
-        "build output leaked: {paths:?}"
     );
     assert_all_occurrences_visible(report)?;
     Ok(())
@@ -95,14 +103,7 @@ fn assert_default_dependency_paths(report: &Value) -> Result<()> {
 
 fn assert_included_dependency_paths(report: &Value) -> Result<()> {
     let paths = occurrence_paths(report)?;
-    assert!(
-        has_suffix(&paths, "Alpha.cs"),
-        "first-party Alpha missing: {paths:?}"
-    );
-    assert!(
-        has_suffix(&paths, "Beta.cs"),
-        "first-party Beta missing: {paths:?}"
-    );
+    assert_first_party_scope(&paths);
     assert!(
         has_fragment(&paths, "node_modules/pkg/Alpha.cs"),
         "dependency Alpha missing: {paths:?}"
@@ -110,10 +111,6 @@ fn assert_included_dependency_paths(report: &Value) -> Result<()> {
     assert!(
         has_fragment(&paths, "node_modules/pkg/Beta.cs"),
         "dependency Beta missing: {paths:?}"
-    );
-    assert!(
-        !has_fragment(&paths, "target/gen"),
-        "build output leaked: {paths:?}"
     );
     assert_all_occurrences_visible(report)?;
     Ok(())

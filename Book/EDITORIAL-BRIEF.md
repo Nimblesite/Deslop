@@ -37,7 +37,12 @@ The reader should finish each chapter able to explain the idea to another develo
 
 ## Voice
 
-- Direct, urgent, and technically exact
+- Use Christian Findlay's published articles as the broad voice reference: one developer explaining a real problem to another developer. Keep every sentence original.
+- Use first person when I explain why I built Deslop, what I recommend, what I observed, or how I will teach the topic.
+- Use second person for work the reader can perform. Prefer “you can run” to “the command can be run.”
+- Write in active voice. Name the developer, agent, editor, CI job, or Deslop as the actor.
+- Start with the problem or example. Explain the theory after the reader can see why it matters.
+- Direct, conversational, and technically exact
 - Human first, with instructions precise enough for an agent to follow
 - Define a term at first use, then use the glossary form consistently
 - Prefer an observed repository state over an analogy
@@ -116,9 +121,9 @@ If they disagree, omit the claim and screenshot until the product resolves the d
 
 ## Evidence standards
 
-- Every command result comes from the pinned edition binary.
+- Every command result comes from the exact Deslop version used for the book.
 - Every product visual is a direct capture; conceptual diagrams never imitate product UI.
-- Every numeric report example records its source artifact.
+- Every numeric report example records the report file it came from.
 - Every chapter that merges code shows the test state before and after.
 - Every accepted duplicate names the group and rationale rather than silently hiding it.
 - Every UX label agrees with `GLOSSARY.md`.

@@ -1,15 +1,15 @@
-# Visual design system — The Kinetic Audit
+# Visual design system for The Deslop Book
 
-## Creative north star
+## Design goal
 
-The book adapts Deslop's **Kinetic Manuscript** into **The Kinetic Audit**: a technical field guide whose pages feel like evidence sheets moving through an exact review process.
+The book uses Deslop's colours, typography, and high-contrast report style. Diagrams must make a technical relationship easier to understand. They must not add marketing language or decorate a page without teaching something.
 
-The visual narrative has two verbs:
+Most diagrams explain one of two actions:
 
-- **Intercept** — a proposed duplicate stops before entering the repository.
-- **Consolidate** — several verified copies resolve into one canonical implementation.
+- **Check before writing** — compare proposed code with the repository before adding it.
+- **Merge verified copies** — replace several copies with one shared implementation when the developer decides that sharing is safe.
 
-The result should feel academic, urgent, and operational. It must not resemble a soft consumer app, a generic cyberpunk dashboard, or a stack of marketing cards.
+The result should look like a technical book and a code-analysis report. It must not resemble a consumer app, a generic dashboard, or marketing cards.
 
 ## Evidence hierarchy
 
@@ -21,7 +21,7 @@ Illustration never substitutes for evidence. Exact code, labels, commands, repor
 
 ## Palette
 
-The EPUB defaults to warm paper for long-form reading while retaining Deslop's obsidian evidence surfaces.
+The EPUB defaults to warm paper for long-form reading while retaining Deslop's obsidian report panels.
 
 | Role | Hex | Use |
 |---|---|---|
@@ -32,12 +32,12 @@ The EPUB defaults to warm paper for long-form reading while retaining Deslop's o
 | Raised obsidian | `#13171c` | Dark tonal layer |
 | Primary ink | `#14161a` | Body text |
 | Muted ink | `#55606b` | Metadata and captions |
-| Verdict crimson | `#b3261e` | Prevention stop, worst offender, deletion consequence |
+| Alert crimson | `#b3261e` | Stop indicator, worst offender, deletion consequence |
 | Link blue | `#0b5fff` | Navigation and neutral interaction |
 | Verified green | `#1a7f37` | Rare proved-clean state |
 | Review amber | `#9a6700` | Evidence requiring inspection |
 
-Crimson is surgical. It marks the one thing that should stop or the one worst finding that should command attention. Blue means navigation or neutral flow, never success.
+Use crimson only for a proposed copy that should stop or the highest-priority finding. Blue means navigation or a neutral connection, never success.
 
 ## Typography
 
@@ -78,12 +78,12 @@ Keep at least 72 px of safe margin around diagram content. Publication images ar
 | Repository | Obsidian layered corpus |
 | Prevention check | Crimson gate before the corpus |
 | Canonical occurrence | One raised sheet with a blue anchor |
-| Duplicate group | Offset sheets sharing one vertical spine |
+| Duplicate group | Offset sheets aligned to show that they belong together |
 | Strong evidence | Solid connector with an explicit numeric label |
 | Borderline evidence | Dashed connector plus “read both” instruction |
 | Cleanup | Several layers converging into one retained layer |
 | Verification | Return loop through analysis, static checks, and tests |
-| Quality ceiling | Horizontal audit plane that ratchets downward |
+| Duplication limit | A labelled horizontal line that moves down after cleanup |
 
 Every node contains evidence or an action. A box that says only “quality” teaches nothing.
 
@@ -94,11 +94,11 @@ Every node contains evidence or an action. A box that says only “quality” te
 - Keep untouched masters under `assets/screenshots/masters/`.
 - Crop and uniformly resize; never repaint product pixels or text.
 - Put explanatory callouts outside the captured product area.
-- Re-capture when wording, ranking, field shape, or surface behavior changes.
+- Re-capture when wording, ranking, report fields, or editor behavior changes.
 
 ## Cover direction
 
-The cover is a tall audit field: obsidian ground, a vertical evidence spine, repeated manuscript fragments above the midpoint, and one canonical fragment below it. A crimson interception plane separates prevention from cleanup. The real Deslop mark is referenced from the canonical design asset rather than redrawn.
+The cover uses a dark background. Several repeated source sheets appear above a red “check first” line, and one shared implementation appears below it. Use the existing Deslop logo asset rather than redrawing it.
 
 Required text:
 

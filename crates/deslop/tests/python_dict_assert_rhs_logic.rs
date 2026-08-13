@@ -20,10 +20,9 @@
 //! control asserts visibility rather than a particular range.
 
 use anyhow::Result;
-use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 #[test]
 fn a_computed_right_operand_is_not_payload_noise() -> Result<()> {
@@ -67,10 +66,7 @@ fn a_computed_right_operand_is_not_payload_noise() -> Result<()> {
         "both sides of the duplication are reported, not one: {texts:#?}"
     );
 
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
+    let duplicated_loc = duplicated_loc(&report);
     assert!(
         duplicated_loc >= 4,
         "the duplicated call spans multiple lines in both files and must be \

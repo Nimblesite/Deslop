@@ -1,6 +1,6 @@
 # The Deslop Book
 
-*The Deslop Book* is a practical field guide to keeping coding agents from duplicating code and repairing repositories where duplication has already accumulated.
+*The Deslop Book* is a practical book about keeping coding agents from duplicating code and repairing repositories where duplication has already accumulated.
 
 Chapters 1 and 2 are complete. The remaining chapters have titles, learning goals, planned sections, exercises, and source lists, but they are not yet full chapters. The EPUB and HTML build already works.
 
@@ -71,6 +71,6 @@ make release        # run checks and produce both formats
 5. Cite claims beside the sentence they support and use entries from `sources.json`.
 6. Distinguish product evidence from explanation: real captures show what Deslop did; diagrams explain the workflow.
 7. Never invent a Deslop report, editor view, command result, benchmark, or score in an image.
-8. Run `make release` before publishing an edition artifact.
+8. Run `make release` before publishing the EPUB and HTML files.
 
 See [OUTLINE.md](OUTLINE.md) for the chapter plan and [GLOSSARY.md](GLOSSARY.md) for the terms used by Deslop and this book.

@@ -4,7 +4,7 @@ This glossary defines the terms used in *The Deslop Book*. The five duplicate la
 
 The book uses the labels developers see in Deslop. It does not replace them with numbered academic jargon.
 
-## Clone labels
+## Deslop duplicate labels
 
 ### Identical code
 

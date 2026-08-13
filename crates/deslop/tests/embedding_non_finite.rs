@@ -12,7 +12,7 @@ mod common;
 use anyhow::Result;
 use mock_ollama::{MockBehavior, MockOllama};
 
-use crate::common::{clusters, deslop_cmd, field, fixture, load_json, seed};
+use crate::common::{clusters, embeddings::run_mock_embedding_report, field, fixture, seed};
 
 /// [FUSION-EMBED-PROVIDER] Every overflowing vector is accounted as failed,
 /// while the deterministic pipeline still returns a valid finite report.
@@ -22,24 +22,7 @@ fn overflowing_json_vectors_are_rejected_before_cache_index_and_report() -> Resu
     let workspace = tempfile::tempdir()?;
     seed(&fixture("csharp-small"), workspace.path())?;
     let output = workspace.path().join("report");
-    let mut command = deslop_cmd(workspace.path(), &output)?;
-    let _assertion = command
-        .args([
-            "--min-nodes",
-            "8",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-
-    let report = load_json(&output.with_extension("json"))?;
+    let report = run_mock_embedding_report(workspace.path(), &output, "8", server.endpoint())?;
     assert_eq!(
         field(&report, "files_analysed").as_u64(),
         Some(2),

@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
-  <title id="title">Identical code needs an explicit verdict</title>
-  <desc id="description">Three identical source slabs move through an evidence gate toward five legitimate outcomes: reuse, move ownership, delete, generate, or retain with a recorded reason. Ignoring the evidence is excluded.</desc>
+  <title id="title">What to do with a large identical duplicate group</title>
+  <desc id="description">Three identical sections of source code lead to five possible decisions: reuse an existing implementation, move the code, delete redundant code, generate required output, or retain the copies with a recorded reason.</desc>
   <rect width="1600" height="1000" fill="#0b0d10"/>
 
   <text x="86" y="96" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="5">IDENTICAL CODE</text>
-  <text x="86" y="172" fill="#e8eaed" font-family="Inter, sans-serif" font-size="60" font-weight="780" letter-spacing="-2">The evidence is settled.</text>
-  <text x="86" y="226" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="27">The ownership decision is not.</text>
+  <text x="86" y="172" fill="#e8eaed" font-family="Inter, sans-serif" font-size="52" font-weight="780" letter-spacing="-2">Deslop has proved that the source is repeated.</text>
+  <text x="86" y="226" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="27">The developer must still choose what happens to the copies.</text>
 
   <g transform="translate(86 310)">
     <g transform="translate(0 0)">
@@ -48,22 +48,22 @@
 
   <path d="M548 540H700" stroke="#b3261e" stroke-width="8"/>
   <path d="M676 516L704 540L676 564" fill="none" stroke="#b3261e" stroke-width="8"/>
-  <text x="570" y="500" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">ADDRESS</text>
+  <text x="562" y="500" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700">CHOOSE ACTION</text>
 
   <g transform="translate(726 310)">
-    <text x="0" y="34" fill="#6aa8ff" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">EXPLICIT OUTCOME</text>
+    <text x="0" y="34" fill="#6aa8ff" font-family="JetBrains Mono, monospace" font-size="20" font-weight="700" letter-spacing="3">POSSIBLE DECISIONS</text>
 
     <rect y="68" width="788" height="68" fill="#191e25"/>
     <rect y="68" width="12" height="68" fill="#0b5fff"/>
-    <text x="38" y="112" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Reuse the existing owner</text>
+    <text x="38" y="112" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Reuse the existing implementation</text>
 
     <rect y="152" width="788" height="68" fill="#13171c"/>
     <rect y="152" width="12" height="68" fill="#0b5fff"/>
-    <text x="38" y="196" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Move ownership to a shared boundary</text>
+    <text x="38" y="196" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Move the code to a shared module</text>
 
     <rect y="236" width="788" height="68" fill="#191e25"/>
     <rect y="236" width="12" height="68" fill="#b3261e"/>
-    <text x="38" y="280" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Delete the redundant path</text>
+    <text x="38" y="280" fill="#e8eaed" font-family="Inter, sans-serif" font-size="25" font-weight="700">Delete the redundant code</text>
 
     <rect y="320" width="788" height="68" fill="#13171c"/>
     <rect y="320" width="12" height="68" fill="#4ac26b"/>
@@ -75,6 +75,5 @@
   </g>
 
   <path d="M86 846H1514" stroke="#55606b" stroke-width="3"/>
-  <text x="86" y="914" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="3">NOT AN OUTCOME</text>
-  <text x="342" y="914" fill="#e8eaed" font-family="Inter, sans-serif" font-size="28" font-weight="700">Ignore a large identical slab as “just a DRY debate.”</text>
+  <text x="86" y="914" fill="#e8eaed" font-family="Inter, sans-serif" font-size="27" font-weight="700">Review the group even if the team disagrees about DRY.</text>
 </svg>

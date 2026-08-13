@@ -6,11 +6,9 @@
 //! they all collapse to `assert __var__[__str__][__str__] == __const__`,
 //! producing cross-file clusters that are not actionable.
 
-use serde_json::Value;
-
 mod common;
 
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 #[test]
 fn chained_dict_assertions_across_test_files_do_not_cluster() -> Result<()> {
@@ -36,12 +34,9 @@ fn chained_dict_assertions_across_test_files_do_not_cluster() -> Result<()> {
         "the three modules share nothing beyond the idiom, so no cluster of \
          any bucket may survive: {report:#}"
     );
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or(u64::MAX);
     assert_eq!(
-        duplicated_loc, 0,
+        duplicated_loc(&report),
+        0,
         "suppressed idiom matches must not count as duplicated lines: {report:#}"
     );
     Ok(())

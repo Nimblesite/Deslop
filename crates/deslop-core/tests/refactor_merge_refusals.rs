@@ -9,17 +9,11 @@
 mod common;
 
 use anyhow::{anyhow, ensure, Context, Result};
-use deslop_core::{
-    ast::ByteRange,
-    refactor::{self, merge},
-    wire_generated::MergeVerdict,
-};
+use deslop_core::wire_generated::MergeVerdict;
 
 use crate::common::{
-    clusters::{report_occurrence, synthetic_report_cluster},
     fixture,
-    merge::{assert_all_refused_with, merge_plans},
-    refactor_pipeline_session as session,
+    merge::{assert_all_refused_with, merge_plans, synthetic_merge_plan},
 };
 
 /// Control-flow drift routes to `ai_or_human` with a structural reason
@@ -139,35 +133,7 @@ fn operator_drift_refuses_via_residual_proof() -> Result<()> {
 #[test]
 fn too_many_holes_refuse() -> Result<()> {
     let root = fixture("csharp-merge-manyholes");
-    let (session, _report) = session(&root)?;
-    let absolute = root.join("Sprawl.cs");
-    let file_id = session.file_id_for(&absolute).context("file id")?;
-    let source = session
-        .source_bytes_for(file_id)
-        .context("source")?
-        .to_vec();
-    let text = String::from_utf8(source.clone())?;
-    let spans: Vec<(usize, usize)> = ["\"a1\"", "\"a2\""]
-        .iter()
-        .map(|anchor| sprawl_body_span(&text, anchor))
-        .collect::<Result<_>>()?;
-    let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
-        .iter()
-        .map(|span| report_occurrence("Sprawl.cs", *span, false))
-        .collect();
-    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
-    let file_root = session
-        .subtree_at_range(
-            file_id,
-            ByteRange {
-                start: 0,
-                end: source.len(),
-            },
-        )
-        .context("file root")?;
-    let parser = refactor::parser_for_path(&absolute).context("parser")?;
-    let plan = merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
-        .map_err(|error| anyhow!("merge failed: {error}"))?;
+    let plan = synthetic_merge_plan(&root, "Sprawl.cs", &["\"a1\"", "\"a2\""], sprawl_body_span)?;
     let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
         return Err(anyhow!("twelve distinct substitutions must refuse"));
     };

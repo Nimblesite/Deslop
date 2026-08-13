@@ -12,19 +12,15 @@ mod common;
 
 use std::fs;
 
-use anyhow::{anyhow, ensure, Context, Result};
-use deslop_core::{
-    ast::ByteRange,
-    refactor::{self, merge},
-    wire_generated::{MergePlan, MergeVerdict},
-};
+use anyhow::{ensure, Context, Result};
+use deslop_core::wire_generated::{MergePlan, MergeVerdict};
 use serde_json::Value;
 
 use crate::common::{
-    clusters::{report_occurrence, synthetic_report_cluster},
     fixture,
-    merge::{assert_merge_golden, first_mechanical, merge_plans, merge_plans_under},
-    refactor_pipeline_session as session,
+    merge::{
+        assert_merge_golden, first_mechanical, merge_plans, merge_plans_under, synthetic_merge_plan,
+    },
 };
 
 /// [AUTOFIX-MERGE]: the leaf-gap fixture merges mechanically — typed
@@ -351,35 +347,12 @@ fn free_identifier_hole_becomes_typed_parameter() -> Result<()> {
 #[test]
 fn three_site_merge_defaults_trailing_parameter() -> Result<()> {
     let root = fixture("csharp-merge-defaults");
-    let (session, _report) = session(&root)?;
-    let absolute = root.join("Tiers.cs");
-    let file_id = session.file_id_for(&absolute).context("file id")?;
-    let source = session
-        .source_bytes_for(file_id)
-        .context("source")?
-        .to_vec();
-    let text = String::from_utf8(source.clone())?;
-    let spans: Vec<(usize, usize)> = ["\"bronze\"", "\"silver\"", "\"gold\""]
-        .iter()
-        .map(|label| span_for_body(&text, label))
-        .collect::<Result<_>>()?;
-    let occurrences: Vec<deslop_core::report::ReportOccurrence> = spans
-        .iter()
-        .map(|span| report_occurrence("Tiers.cs", *span, false))
-        .collect();
-    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
-    let file_root = session
-        .subtree_at_range(
-            file_id,
-            ByteRange {
-                start: 0,
-                end: source.len(),
-            },
-        )
-        .context("file root")?;
-    let parser = refactor::parser_for_path(&absolute).context("parser")?;
-    let plan = merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
-        .map_err(|error| anyhow!("merge failed: {error}"))?;
+    let plan = synthetic_merge_plan(
+        &root,
+        "Tiers.cs",
+        &["\"bronze\"", "\"silver\"", "\"gold\""],
+        span_for_body,
+    )?;
     ensure!(
         matches!(plan.verdict, MergeVerdict::Mechanical),
         "the three-site fixture merges mechanically, got {:?}",

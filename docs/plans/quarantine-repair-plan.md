@@ -214,7 +214,8 @@ Extracted from `python.rs` rather than added to it: that file was at 490 lines a
 | `deslop --test dart_issue_197` · `single_file_structural_only_method_families_do_not_top_the_report` | green (R9 + `[RANK-STRUCTURAL-ONLY-FORWARDING]`) — six families hidden, zero duplicated lines |
 | `deslop --test declaration_family_plurality` | green (R9) — a non-bijective single-method pair stays visible |
 | `deslop --test declaration_family_mixed_component` | green (R9) — a divergent third sibling cannot erase the real pair |
-| `deslop --test dart_forwarding_fail_open` | green (R9) — arithmetic in a one-statement body fails the proof; two wrappers sharing a body keep the family visible |
+| `deslop --test dart_forwarding_fail_open` | 3/3 green (R9, R11) — arithmetic in a one-statement body fails the proof; two wrappers sharing a body keep the family visible; a sibling-helper call is not forwarding |
+| `deslop --test python_dict_assert_payload_proof` | 3/3 green (R11) — a call inside a consumed payload value and an executable decorator argument are both unexcused, while a literal parametrize table stays inside the idiom |
 | `deslop-core --test refactor_merge` | 9/9 green (R9) — `csharp-merge-rename` must produce clusters |
 | `deslop --test issue_190_data_table_demote` | 5/5 green (R9) — a data table is demoted or restored by policy, never hidden |
 | `deslop --test python_issue_107_chained_dict_assert` | green (R10) — no whole-module view of the idiom reaches the report |
@@ -222,7 +223,7 @@ Extracted from `python.rs` rather than added to it: that file was at 490 lines a
 | `deslop --test python_dict_assert_reach` | green (R10) — module wiring and unconsumed payloads are never excused |
 | `deslop-lsp --test lsp_workspace_scoping` · `lsp_embedding_determinism` | green — `branch_accuracy.rs` (502 lines) split by contract, assertions byte-for-byte intact |
 | `make build` · `make deployment-verify` | green — release build clean, action contract 27/27 |
-| `./target/release/deslop . --no-color` | green — 849 groups, no threshold breach, zero `identical` clusters in branch-authored code |
+| `./target/release/deslop . --no-color` | **RED — exit 3, duplication 12.55% over the 12.2% budget.** Branch-introduced; reduced from 13.15% by removing 612 LOC of real duplication (R11). The residual gap (~341 LOC) is smaller than the single 344-LOC false positive filed as [#362](https://github.com/Nimblesite/Deslop/issues/362) |
 | `make test` | **RED on `deslop-core --test live`** — pre-existing, [#361](https://github.com/Nimblesite/Deslop/issues/361) |
 | `grep -rn QUARANTINED crates/` | **zero hits** (R0 + R1 + R9) |
 | `grep -rn "allow(" crates/ \| grep panic` | **zero hits** (R0 + R1 + R9) |

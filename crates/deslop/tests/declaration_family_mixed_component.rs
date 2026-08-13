@@ -19,10 +19,9 @@
 //! verdict below the act-now line, not silence.
 
 use anyhow::Result;
-use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 #[test]
 fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
@@ -91,12 +90,9 @@ fn a_divergent_sibling_does_not_erase_the_real_pair() -> Result<()> {
          siblings and every body is logic-bearing — so nothing may be hidden: \
          {report:#}"
     );
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
     assert_eq!(
-        duplicated_loc, 39,
+        duplicated_loc(&report),
+        39,
         "the visible component's lines are duplicated lines; a hidden component \
          would zero this metric and understate the file: {report:#}"
     );

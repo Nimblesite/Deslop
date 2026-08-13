@@ -22,14 +22,14 @@
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
 
-use std::{fs, path::Path};
+use std::path::Path;
 
 use anyhow::Result;
 use mock_ollama::MockOllama;
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{embeddings::run_mock_embedding_report, *};
 
 /// Runs the CLI against a private copy of `fixture_root` with the
 /// deterministic mock Ollama
@@ -43,23 +43,7 @@ fn run_report(fixture_root: &Path) -> Result<Value> {
     // fingerprint layer. Scan a copy so the fixture stays pristine.
     let scan_root = &tmp.path().join("src");
     seed(fixture_root, scan_root)?;
-    let _assertion = deslop_cmd(scan_root, &output)?
-        .args([
-            "--min-nodes",
-            "5",
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    let body = fs::read_to_string(output.with_extension("json"))?;
-    Ok(serde_json::from_str(&body)?)
+    run_mock_embedding_report(scan_root, &output, "5", server.endpoint())
 }
 
 fn bucket(cluster: &Value) -> &str {

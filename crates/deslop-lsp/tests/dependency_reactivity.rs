@@ -8,8 +8,9 @@ use std::{fs, path::Path, time::Duration};
 
 use anyhow::Result;
 use common::{
-    at, fixture, handshake, path as json_path, reports::dependency_workspace, spawn_lsp_guarded,
-    wait_for_report_matching,
+    at, fixture, handshake, path as json_path,
+    reports::{assert_initialize_contract, assert_report_shell, dependency_workspace},
+    spawn_lsp_guarded, wait_for_report_matching,
 };
 
 const REPORT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -74,12 +75,7 @@ fn opted_in_dependency_edit_refreshes_clusters_metrics_and_occurrences() -> Resu
     let (_workspace, root) = dependency_workspace()?;
     seed_workspace(&root)?;
     let (_guard, mut stdin, mut stdout) = spawn_lsp_guarded(&root)?;
-    let initialize = handshake(&mut stdin, &mut stdout)?;
-    assert_eq!(
-        json_path(&initialize, &["result", "serverInfo", "name"]),
-        "deslop-lsp"
-    );
-    assert!(initialize.get("error").is_none(), "{initialize:#}");
+    assert_initialize_contract(&handshake(&mut stdin, &mut stdout)?);
 
     let initial = wait_for_report_matching(&mut stdin, &mut stdout, REPORT_TIMEOUT, |report| {
         at(report, "files_analysed").as_u64() == Some(4)
@@ -148,29 +144,13 @@ fn copy_pair(destination: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The cold-scan report: the full published shell over the four
+/// first-party files. Uses the shared shell assertion rather than a
+/// local subset of it, so this suite also pins the wire contract —
+/// `min_nodes`, `tool_version`, the slim `schema_doc`, and the hint
+/// arrays — that a local copy silently stopped checking.
 fn assert_initial_report(report: &serde_json::Value) {
-    assert_eq!(at(report, "files_analysed"), 4, "{report:#}");
-    assert!(at(report, "clusters")
-        .as_array()
-        .is_some_and(|value| !value.is_empty()));
-    assert!(
-        json_path(report, &["metrics", "analysed_loc"])
-            .as_u64()
-            .unwrap_or_default()
-            > 0
-    );
-    assert!(
-        json_path(report, &["metrics", "duplicated_loc"])
-            .as_u64()
-            .unwrap_or_default()
-            > 0
-    );
-    assert!(
-        json_path(report, &["metrics", "duplication_percent"])
-            .as_f64()
-            .unwrap_or_default()
-            > 0.0
-    );
+    assert_report_shell(report, 4);
 }
 
 fn assert_changed_report(changed: &serde_json::Value, previous: &serde_json::Value) {

@@ -16,9 +16,67 @@ use deslop_core::{
 use serde_json::Value;
 
 use crate::common::{
-    census::assert_body_deduplicated, fixture, refactor_golden as golden,
-    refactor_pipeline_session as session,
+    census::assert_body_deduplicated,
+    clusters::{report_occurrence, synthetic_report_cluster},
+    fixture, refactor_golden as golden, refactor_pipeline_session as session,
 };
+
+/// Computes one merge plan over a *synthetic* cluster built from the
+/// method bodies `anchors` locate through `span_of`.
+///
+/// Some gate cases cannot be reached through the ranked report — a
+/// three-site default-parameter merge, or a body sprawl that the ranker
+/// never groups — so those suites hand-build the cluster instead. The
+/// route from "spans in a file" to "a `MergePlan`" is identical every
+/// time: resolve the file, synthesise a `nearly_identical` cluster over
+/// the spans, and hand the whole-file root to the planner. Restating it
+/// per case is how one site could silently drift onto a different
+/// parser or a different cluster bucket than its siblings.
+pub(crate) fn synthetic_merge_plan(
+    root: &Path,
+    file_name: &str,
+    anchors: &[&str],
+    span_of: impl Fn(&str, &str) -> Result<(usize, usize)>,
+) -> Result<MergePlan> {
+    let (session, _report) = session(root)?;
+    let absolute = root.join(file_name);
+    let file_id = session.file_id_for(&absolute).context("file id")?;
+    let source = session
+        .source_bytes_for(file_id)
+        .context("source")?
+        .to_vec();
+    let text = String::from_utf8(source.clone())?;
+    let occurrences = synthetic_occurrences(&text, file_name, anchors, span_of)?;
+    let cluster = synthetic_report_cluster(occurrences, "nearly_identical");
+    let file_root = session
+        .subtree_at_range(
+            file_id,
+            ByteRange {
+                start: 0,
+                end: source.len(),
+            },
+        )
+        .context("file root")?;
+    let parser = refactor::parser_for_path(&absolute).context("parser")?;
+    merge::compute_merge_plan(&cluster, &source, file_root, &absolute, parser.as_ref())
+        .map_err(|error| anyhow!("merge failed: {error}"))
+}
+
+/// One report occurrence per anchor, located by the caller's span rule.
+fn synthetic_occurrences(
+    text: &str,
+    file_name: &str,
+    anchors: &[&str],
+    span_of: impl Fn(&str, &str) -> Result<(usize, usize)>,
+) -> Result<Vec<deslop_core::report::ReportOccurrence>> {
+    anchors
+        .iter()
+        .map(|anchor| {
+            let span = span_of(text, anchor)?;
+            Ok(report_occurrence(file_name, span, false))
+        })
+        .collect()
+}
 
 /// Computes merge plans for every cluster of a single-file fixture and
 /// returns them in rank order.

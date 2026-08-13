@@ -27,7 +27,7 @@ use anyhow::Result;
 use mock_ollama::MockOllama;
 use serde_json::Value;
 
-use crate::common::*;
+use crate::common::{embeddings::run_mock_embedding_report, *};
 
 /// Scans `csharp-small` with the deterministic mock embedder wired in at
 /// the given `min_nodes`, so the same corpus can be reached through
@@ -36,23 +36,7 @@ fn run_with_embeddings(server: &MockOllama, min_nodes: &str) -> Result<Value> {
     let workspace = tempfile::tempdir()?;
     seed(&fixture("csharp-small"), workspace.path())?;
     let output = workspace.path().join("report");
-    let mut command = deslop_cmd(workspace.path(), &output)?;
-    let _assertion = command
-        .args([
-            "--min-nodes",
-            min_nodes,
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    load_json(&output.with_extension("json"))
+    run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())
 }
 
 /// Highest cosine rendered on any visible cluster.

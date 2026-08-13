@@ -33,8 +33,8 @@ use anyhow::{Context, Result};
 use mock_ollama::MockOllama;
 
 use crate::common::{
-    cluster_bucket, cluster_file_set, clusters, deslop_cmd, field, fixture, load_json, run_report,
-    seed,
+    cluster_bucket, cluster_file_set, clusters, embeddings::run_mock_embedding_report, field,
+    fixture, run_report, seed,
 };
 
 /// Corpora swept, with the node floor each is sized for. C# leads
@@ -61,23 +61,8 @@ fn with_embeddings(corpus: &str, min_nodes: &str) -> Result<Published> {
     let workspace = tempfile::tempdir()?;
     seed(&fixture(corpus), workspace.path())?;
     let output = workspace.path().join("report");
-    let mut command = deslop_cmd(workspace.path(), &output)?;
-    let _assertion = command
-        .args([
-            "--min-nodes",
-            min_nodes,
-            "--embeddings",
-            "required",
-            "--embedding-provider",
-            "ollama",
-            "--embedding-model",
-            "nomic-embed-text",
-            "--embedding-endpoint",
-            server.endpoint(),
-        ])
-        .assert()
-        .success();
-    let report = load_json(&output.with_extension("json"))?;
+    let report =
+        run_mock_embedding_report(workspace.path(), &output, min_nodes, server.endpoint())?;
     let provenance = field(&report, "embedding_provenance");
     let indexed = field(provenance, "indexed_subtrees")
         .as_u64()

@@ -1,10 +1,10 @@
 # Chapter 11 — Merge one duplicate group safely
 
-> **Scaffold status:** Editorial structure established. Executable examples await the Workshop fixture and edition release pin.
+> **Current status:** This chapter is an outline. I will include tested code changes from the Workshop repository.
 
 ## What you will be able to do
 
-Merge one duplicate group with the smallest practical code change. Preserve public interfaces, behavior, performance, and readability.
+I will show you how to merge one duplicate group with the smallest practical code change. You will preserve public interfaces, behavior, performance, and readability.
 
 ## Planned sections
 
@@ -48,7 +48,7 @@ Merge one accepted duplicate group at a time. Preserve every public interface an
 
 Kevin Moore's protocol requires real test results before editing and limits the change to the selected duplicate group. The finished examples will use the Workshop repository's own tools instead of assuming Dart- or Flutter-specific commands.
 
-## Source keys
+## Sources used for this chapter
 
 - `kevmoo-duplication-audit`
 - `deslop-for-ai`

@@ -23,67 +23,29 @@
 //! pins for the merge planner.
 
 use anyhow::Result;
-use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 #[test]
 fn a_non_bijective_single_method_pair_is_not_a_declaration_family() -> Result<()> {
     let scan_root = fixture("csharp-nonbijective-pair");
     let report = run_report(&scan_root, 20)?;
 
-    let visible = clusters(&report);
-    assert_eq!(
-        visible.len(),
-        1,
+    let cluster = expect_sole_cluster(
+        &report,
         "two liftable single-method duplicates in one file must publish exactly one \
          cluster. Suppressing them as a sibling-declaration family is a false \
          negative: neither window covers more than one declaration, so the family \
-         predicate was never proven. report={report:#}"
-    );
-
-    let cluster = visible
-        .first()
-        .ok_or_else(|| anyhow::anyhow!("the visible cluster asserted above is missing"))?;
-    assert_eq!(
-        cluster_size(cluster),
-        2,
-        "both methods must be occurrences of the one cluster: {cluster:#}"
-    );
-    assert_eq!(
-        occurrence_files(cluster),
-        vec!["InvoiceTotals.cs", "InvoiceTotals.cs"],
-        "both occurrences live in the single fixture file: {cluster:#}"
-    );
-
-    let texts = occurrence_texts(&scan_root, cluster)?;
-    assert!(
-        texts.iter().any(|text| text.contains("SummariseDomestic"))
-            || texts.iter().any(|text| text.contains("running")),
-        "the domestic method must be one of the reported occurrences: {texts:#?}"
-    );
-    assert!(
-        texts.iter().any(|text| text.contains("SummariseExport"))
-            || texts.iter().any(|text| text.contains("accrued")),
-        "the export method must be one of the reported occurrences: {texts:#?}"
-    );
-
-    assert_eq!(
-        clusters_hidden(&report),
-        0,
-        "nothing here is scaffolding, so no cluster may be hidden: {report:#}"
-    );
-
-    let duplicated_loc = report
-        .pointer("/metrics/duplicated_loc")
-        .and_then(Value::as_u64)
-        .unwrap_or_default();
-    assert!(
-        duplicated_loc >= 10,
-        "both method bodies are duplicated lines and must be counted: \
-         duplicated_loc={duplicated_loc}, report={report:#}"
-    );
+         predicate was never proven.",
+    )?;
+    assert_single_file_cluster(cluster, 2, "InvoiceTotals.cs");
+    let _texts = assert_cluster_mentions(
+        &scan_root,
+        cluster,
+        &["SummariseDomestic", "SummariseExport"],
+    )?;
+    assert_duplicated_loc_at_least(&report, 10);
 
     assert!(
         signal(cluster, "structural") >= 0.99,

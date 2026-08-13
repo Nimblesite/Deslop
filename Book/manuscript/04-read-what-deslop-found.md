@@ -4,7 +4,7 @@ Deslop reports evidence in five plain-language labels. Each label tells you what
 
 ## What you will be able to do
 
-Explain a duplicate group using the current UX title, its occurrences, evidence, and rank before proposing any code change.
+I will show you how to explain a duplicate group using the current UX title, its occurrences, evidence, and rank before you propose a code change.
 
 ## The five labels
 
@@ -18,7 +18,7 @@ The copies are strongly alike, but small differences may matter. Inspect those d
 
 ### Same shape, different content
 
-Only the code shape is supported strongly enough. Sibling boilerplate can look like a reusable implementation while carrying unrelated content. Read the occurrences before extracting.
+Deslop strongly supports only the code shape in this result. Sibling boilerplate can look like a reusable implementation while carrying unrelated content. Read the occurrences before extracting.
 
 ### Loosely similar code
 
@@ -34,7 +34,7 @@ The human report calls related sections of code a duplicate group. Tool response
 
 Rank helps you choose which group to inspect first. It does not say that a refactor is safe. The group at the top has the highest reported impact, but its occurrences may still need to remain separate.
 
-## A useful evidence note
+## Record the result before changing code
 
 Before editing, capture:
 
@@ -67,7 +67,7 @@ Choose one Workshop group and explain it without using a numbered academic label
 Report Deslop's visible duplicate label first. Use rank only to choose what to inspect first. Treat the canonical occurrence as the reference copy, and read every occurrence before recommending a refactor.
 ```
 
-## Source keys
+## Sources used for this chapter
 
 - `deslop-taxonomy`
 - `deslop-vscode-labels`

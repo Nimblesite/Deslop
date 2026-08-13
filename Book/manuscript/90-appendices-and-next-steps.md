@@ -1,6 +1,6 @@
 # Appendices and next steps
 
-> **Scaffold status:** Appendix topics are selected. Commands will be checked against the exact Deslop release used for the finished edition.
+> **Current status:** I have selected the appendix topics. I will check every command against the exact Deslop release used for the finished edition.
 
 ## Appendix A — Agent instruction recipe
 
