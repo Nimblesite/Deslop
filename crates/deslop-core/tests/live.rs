@@ -82,7 +82,7 @@ async fn start_live_loop(
     Ok((session_lock, watcher, scheduler, report_rx))
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_session_first_report_matches_batch_run() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
@@ -113,7 +113,7 @@ async fn live_session_first_report_matches_batch_run() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Result<()> {
     // Exercises the error-propagation arm of `AnalysisSession::new`
     // ([LIVE-STATE]): the `?` after `initialise_pipeline(...)` must
@@ -144,7 +144,7 @@ async fn analysis_session_new_surfaces_error_for_unreadable_config_path() -> Res
 // after a `report_hide` edit reaches disk. Deslop.Live MUST react to
 // config edits the same way it reacts to source edits. No
 // developer-window reload, no manual rescan.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     // Canonicalise so notify-reported paths and our paths share a prefix.
@@ -210,7 +210,7 @@ async fn live_loop_hides_cluster_after_deslop_toml_report_hide_edit() -> Result<
 // Drives the full live loop — [`LiveWatcher`] → [`Scheduler`] →
 // [`AnalysisSession`] → `report_changed` broadcast — and asserts the
 // newly-ignored tree is evicted from the corpus without a rescan.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     // Canonicalise so notify-reported paths and our paths share a prefix.
@@ -278,7 +278,7 @@ async fn live_loop_evicts_newly_gitignored_tree_after_gitignore_edit() -> Result
 // a scan-root-relative `report_hide = ["benchmarks/fixtures/**"]`,
 // the live report must drop the all-hidden cluster from
 // `report.clusters` and count it in `clusters_hidden`.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     let scan_root = tmp.path();
@@ -306,7 +306,7 @@ async fn live_analysis_session_honors_scan_root_relative_report_hide() -> Result
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<()> {
     let (tmp, mut session) = csharp_small_session()?;
     let target = tmp.path().join("Beta.cs");
@@ -333,7 +333,7 @@ async fn update_files_produces_non_empty_delta_when_a_file_changes() -> Result<(
 // file was reported as an N-copy "identical" cluster and dominated Top
 // Offenders. This drives the incremental path (`apply_changes`) exactly as
 // the watcher does after the agent writes the files.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()> {
     let (tmp, mut session) = csharp_small_session()?;
 
@@ -379,7 +379,7 @@ async fn issue_222_agent_worktree_copies_never_enter_live_report() -> Result<()>
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
     let (tmp, session) = csharp_small_session()?;
     let report = session.report();
@@ -407,7 +407,7 @@ async fn find_similar_on_known_range_returns_expected_cluster() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Result<()> {
     let (_tmp, session) = csharp_small_session()?;
     let request = FindSimilarRequest {
@@ -434,7 +434,7 @@ async fn find_similar_on_unparseable_snippet_returns_unparseable_error() -> Resu
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
@@ -456,7 +456,7 @@ async fn find_similar_on_below_min_nodes_snippet_returns_below_min_nodes_flag() 
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
     let clock = Arc::new(MockClock::new(0));
     let mut debouncer = Debouncer::new(clock.clone());
@@ -494,7 +494,7 @@ async fn debouncer_coalesces_burst_and_flushes_at_cap() -> Result<()> {
 /// as a watcher event so the scheduler keeps re-analysing on every
 /// save, not just the first one. Without this guarantee the VSIX tree
 /// freezes after the first save in a session ([VSIX-REACTIVITY-TREE]).
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     // FSEvents on macOS reports paths under the canonicalised root
@@ -546,7 +546,7 @@ async fn watcher_emits_event_for_every_modification_of_the_same_path() -> Result
 /// extension filter dropped the directory path and the channel stayed
 /// silent — leaving the contained files as phantom occurrences until a
 /// full restart. Drives the real watcher end to end.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn watcher_forwards_directory_removal_without_a_source_extension() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     // macOS FSEvents reports under the canonicalised root; match the
@@ -609,7 +609,7 @@ async fn wait_for_event(
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_service_round_trip_covers_the_query_surface() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     // PipelineSession canonicalises root at init ([#141 MCP-SAFETY])
@@ -789,7 +789,7 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
@@ -868,7 +868,7 @@ async fn exercise_embedding_swap(service: &LiveService) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocked() -> Result<()> {
     // [LIVE-EMBEDDING-CONSENT] Selecting a model queues low-priority
     // embedding work. Query surfaces must keep serving the last
@@ -888,7 +888,7 @@ async fn embedding_refresh_keeps_latest_report_readable_while_provider_is_blocke
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
@@ -956,7 +956,7 @@ async fn exercise_path_resolution(service: &LiveService) -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_list_models_returns_empty_when_ollama_unreachable() -> Result<()> {
     // [REMOVE-STUB] Production model listing must not include the stub
     // fallback. When Ollama is unreachable the list is empty and the
@@ -1109,7 +1109,7 @@ impl EmbeddingProvider for CountingProvider {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     // [LIVE-EMBEDDING-CONSENT] Live startup must be deterministic-only
     // until a user-selected model crosses `embedding/setModel`.
@@ -1128,7 +1128,7 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
     });
     {
@@ -1183,7 +1183,7 @@ async fn live_session_initial_report_does_not_run_embeddings() -> Result<()> {
 /// dedup logic counted unique vectors plus failed occurrences, so
 /// progress capped well below `total` and the editor's session panel
 /// froze at less than 100% even though the pass was finished.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> Result<()> {
     let tmp = tempfile::tempdir().context("tempdir")?;
     let body = b"namespace Demo { public class Tally { public int Sum(int b) { \
@@ -1203,7 +1203,7 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
     let completed_clone = Arc::clone(&completed);
     let reporter: deslop_core::live::EmbeddingProgressReporter = Arc::new(move |event| {
         if event.phase == deslop_core::live::EmbeddingPhase::Complete {
-            completed_clone.notify_waiters();
+            completed_clone.notify_one();
         }
         if let Ok(mut lock) = events_clone.lock() {
             lock.push(event);
@@ -1247,7 +1247,7 @@ async fn embedding_running_progress_reaches_total_with_duplicate_snippets() -> R
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> Result<()> {
     // #168: a pathologically deep file applied as a live change must be
     // dropped, never crash the long-lived server. Exercises the session's
@@ -1295,7 +1295,7 @@ async fn deeply_nested_dart_change_is_skipped_without_crashing_the_session() -> 
 /// deletion. A directory `Remove` event carries the directory path
 /// (which has no source extension and matches no live leaf), so the
 /// session must evict by ancestor prefix — not by exact-leaf match.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
@@ -1344,7 +1344,7 @@ async fn removing_a_directory_evicts_every_occurrence_under_it() -> Result<()> {
 /// #223 regression: a single-file deletion must still evict its
 /// occurrence (the leaf path matches a live entry directly). Guards the
 /// prefix-eviction change from regressing the exact-leaf path.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
     let (tmp, mut session) = csharp_small_session()?;
 
@@ -1375,7 +1375,7 @@ async fn removing_a_single_file_evicts_its_occurrence() -> Result<()> {
 /// sibling whose name shares a string prefix with the removed path
 /// (`pkg` vs `pkg_twin`). A naive `str::starts_with` would wrongly drop
 /// the sibling; component-wise `Path::starts_with` must not.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn removing_a_directory_spares_a_sibling_with_a_shared_name_prefix() -> Result<()> {
     let tmp = copy_fixture("csharp-small")?;
     let provider = Arc::new(StubProvider::new());
