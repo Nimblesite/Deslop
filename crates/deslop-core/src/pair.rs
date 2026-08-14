@@ -41,6 +41,24 @@ pub const LSH_ONLY_MIN_JACCARD: f64 = 0.90;
 /// subtrees reach Jaccard ≈ 1.0 purely by accident. Requiring a
 /// substantive node count forces LSH-only matches to carry real signal.
 pub const LSH_ONLY_MIN_NODE_COUNT: usize = 40;
+/// Largest ratio between the two endpoint node counts of a pair carrying
+/// no structural anchor ([PAIR-SIZE-COHERENCE]).
+///
+/// Structural evidence already constrains size: a shared Merkle bucket
+/// means the trees match, so a structurally anchored pair is size coherent
+/// by construction and this guard leaves it alone. A pair discovered by
+/// embedding alone has no such constraint, and an embedding model will
+/// happily score a parameter list and a ninety-term arithmetic chain in
+/// the same file, over the same identifiers, at cosine 1.00. Admitting
+/// that pair grows a cluster a member that duplicates nothing, and the
+/// rendered summary then contradicts its own `canonical_node_count` —
+/// "3 copies of a 19-node subtree" over an 865-byte, 274-node expression.
+///
+/// Four is deliberately loose. Type-3 and Type-4 clones do change size as
+/// they drift, so the guard fires only where the pair is self
+/// contradictory rather than merely uneven. Pinned by
+/// `deslop::pair_size_coherence`.
+pub const MAX_ENDPOINT_NODE_RATIO: usize = 4;
 /// Jaccard floor for explicit cross-language audit candidates. This is
 /// lower than the default LSH-only floor because cross-language AST
 /// vocabularies differ, and the mode is opt-in for ports/generated
@@ -121,9 +139,14 @@ pub struct CandidatePair {
     pub left: usize,
     /// Higher fingerprint index.
     pub right: usize,
-    /// Node count of the smaller endpoint — used as the LSH-only
-    /// information-content floor.
-    pub min_node_count: usize,
+    /// Both endpoint node counts as `(smaller, larger)`. The honest
+    /// measured sizes, used by the [PAIR-SIZE-COHERENCE] guard.
+    pub endpoint_node_counts: (usize, usize),
+    /// Node count compared against [`LSH_ONLY_MIN_NODE_COUNT`]. Normally
+    /// the smaller endpoint, but explicit cross-language opt-in raises it
+    /// to the floor so the information-content guard does not reject a
+    /// port audit — which is why it cannot stand in for a measured size.
+    pub lsh_only_node_floor: usize,
     /// Token-Jaccard floor for LSH-only candidates. Defaults to the
     /// conservative same-language floor; explicit cross-language opt-in
     /// lowers it to [`CROSS_LANGUAGE_MIN_JACCARD`] so port-audit
@@ -160,6 +183,9 @@ enum PairSurvival {
     DroppedLshOnlyJaccard,
     /// LSH-only pair failed the endpoint node-count floor.
     DroppedLshOnlyNodeCount,
+    /// Pair had no structural anchor and endpoints too different in size
+    /// to describe the same code ([PAIR-SIZE-COHERENCE]).
+    DroppedSizeMismatch,
 }
 
 /// Counts GH#45 pair survival outcomes for structured observability.
@@ -173,6 +199,8 @@ struct SurvivalStats {
     dropped_lsh_only_jaccard: usize,
     /// LSH-only pairs dropped below [`LSH_ONLY_MIN_NODE_COUNT`].
     dropped_lsh_only_node_count: usize,
+    /// Pairs dropped past [`MAX_ENDPOINT_NODE_RATIO`].
+    dropped_size_mismatch: usize,
 }
 
 impl SurvivalStats {
@@ -203,6 +231,9 @@ impl SurvivalStats {
                 self.dropped_lsh_only_node_count =
                     self.dropped_lsh_only_node_count.saturating_add(1);
             }
+            PairSurvival::DroppedSizeMismatch => {
+                self.dropped_size_mismatch = self.dropped_size_mismatch.saturating_add(1);
+            }
         }
     }
 
@@ -214,6 +245,7 @@ impl SurvivalStats {
             dropped_below_fused = self.dropped_below_fused,
             dropped_lsh_only_jaccard = self.dropped_lsh_only_jaccard,
             dropped_lsh_only_node_count = self.dropped_lsh_only_node_count,
+            dropped_size_mismatch = self.dropped_size_mismatch,
             "pair survival outcome",
         );
     }
@@ -225,14 +257,23 @@ fn survival_decision(pair: &CandidatePair) -> PairSurvival {
     if score.bounded_fused() < pair.fused_min_score {
         return PairSurvival::DroppedBelowFused;
     }
+    if score.structural <= 0.0 && !endpoints_are_size_coherent(pair.endpoint_node_counts) {
+        return PairSurvival::DroppedSizeMismatch;
+    }
     let lsh_only = score.structural <= 0.0 && score.embedding_cos <= 0.0;
     if lsh_only && score.token_jaccard < pair.lsh_only_min_jaccard {
         return PairSurvival::DroppedLshOnlyJaccard;
     }
-    if lsh_only && pair.min_node_count < LSH_ONLY_MIN_NODE_COUNT {
+    if lsh_only && pair.lsh_only_node_floor < LSH_ONLY_MIN_NODE_COUNT {
         return PairSurvival::DroppedLshOnlyNodeCount;
     }
     PairSurvival::Survived
+}
+
+/// True when two endpoints are close enough in size to describe the same
+/// code ([PAIR-SIZE-COHERENCE]). See [`MAX_ENDPOINT_NODE_RATIO`].
+fn endpoints_are_size_coherent((smaller, larger): (usize, usize)) -> bool {
+    larger <= smaller.saturating_mul(MAX_ENDPOINT_NODE_RATIO)
 }
 
 /// Filters `pairs` by the fused threshold and returns the connected

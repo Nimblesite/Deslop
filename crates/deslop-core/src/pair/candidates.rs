@@ -81,7 +81,7 @@ fn cross_language_opt_in_pair<S: BuildHasher>(
     file_languages: &HashMap<FileId, &'static str, S>,
 ) -> CandidatePair {
     if pair.score.structural <= 0.0 && !same_language_pair(&pair, fingerprints, file_languages) {
-        pair.min_node_count = pair.min_node_count.max(LSH_ONLY_MIN_NODE_COUNT);
+        pair.lsh_only_node_floor = pair.lsh_only_node_floor.max(LSH_ONLY_MIN_NODE_COUNT);
         pair.lsh_only_min_jaccard = CROSS_LANGUAGE_MIN_JACCARD;
         pair.fused_min_score = CROSS_LANGUAGE_MIN_JACCARD;
     }
@@ -173,10 +173,12 @@ fn cross_language_signature_pair(
     right: usize,
     token_jaccard: f64,
 ) -> CandidatePair {
+    let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
     CandidatePair {
         left,
         right,
-        min_node_count: min_node_count(fingerprints, left, right).max(LSH_ONLY_MIN_NODE_COUNT),
+        endpoint_node_counts,
+        lsh_only_node_floor: endpoint_node_counts.0.max(LSH_ONLY_MIN_NODE_COUNT),
         lsh_only_min_jaccard: CROSS_LANGUAGE_MIN_JACCARD,
         fused_min_score: CROSS_LANGUAGE_MIN_JACCARD,
         score: PairScore {
@@ -313,17 +315,21 @@ fn finalise_pairs(
 ) -> Vec<CandidatePair> {
     let mut pairs: Vec<CandidatePair> = scores
         .into_iter()
-        .map(|((left, right), structural)| CandidatePair {
-            left,
-            right,
-            min_node_count: min_node_count(fingerprints, left, right),
-            lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
-            fused_min_score: FUSED_THRESHOLD,
-            score: PairScore {
-                structural,
-                token_jaccard: jaccard_for(signatures, left, right),
-                embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
-            },
+        .map(|((left, right), structural)| {
+            let endpoint_node_counts = endpoint_node_counts(fingerprints, left, right);
+            CandidatePair {
+                left,
+                right,
+                endpoint_node_counts,
+                lsh_only_node_floor: endpoint_node_counts.0,
+                lsh_only_min_jaccard: LSH_ONLY_MIN_JACCARD,
+                fused_min_score: FUSED_THRESHOLD,
+                score: PairScore {
+                    structural,
+                    token_jaccard: jaccard_for(signatures, left, right),
+                    embedding_cos: cosines.get(&(left, right)).copied().unwrap_or(0.0),
+                },
+            }
         })
         .filter(|pair| candidate_ranges_are_valid(pair, fingerprints))
         .collect();
@@ -345,17 +351,24 @@ fn candidate_ranges_are_valid(pair: &CandidatePair, fingerprints: &[Fingerprint]
     left.file_id != right.file_id || !ranges_overlap(left, right)
 }
 
-/// Returns the smaller endpoint node count. Defaults to 0 when either
-/// index is out of bounds — an impossible state in the current pipeline,
+/// Returns both endpoint node counts as `(smaller, larger)`. Defaults a
+/// missing endpoint to 0 — an impossible state in the current pipeline,
 /// but keeps the helper total.
-fn min_node_count(fingerprints: &[Fingerprint], left: usize, right: usize) -> usize {
+fn endpoint_node_counts(
+    fingerprints: &[Fingerprint],
+    left: usize,
+    right: usize,
+) -> (usize, usize) {
     let left_count = fingerprints
         .get(left)
         .map_or(0, |fingerprint| fingerprint.node_count);
     let right_count = fingerprints
         .get(right)
         .map_or(0, |fingerprint| fingerprint.node_count);
-    left_count.min(right_count)
+    (
+        left_count.min(right_count),
+        left_count.max(right_count),
+    )
 }
 
 /// Looks up both signatures and returns their estimated Jaccard. Returns
