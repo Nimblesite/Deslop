@@ -261,20 +261,37 @@ fn materialise_cluster<S: BuildHasher>(
         || dropped_as_structural_only
         || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache, category);
     if hidden {
-        log_hidden_cluster(&report_cluster, dropped_as_data, dropped_as_structural_only);
+        log_hidden_cluster(
+            &report_cluster,
+            cluster.content,
+            dropped_as_data,
+            dropped_as_structural_only,
+        );
     }
     (report_cluster, hidden)
 }
 
 /// Records why a cluster left the visible report. A duplicate that
 /// silently disappears is the hardest defect class to notice, so the
-/// routing decision is traceable without re-running the pipeline.
-fn log_hidden_cluster(cluster: &ReportCluster, as_data: bool, as_structural_only: bool) {
+/// routing decision — signals and measured content evidence included —
+/// is traceable without re-running the pipeline.
+fn log_hidden_cluster(
+    cluster: &ReportCluster,
+    content: crate::content::ContentEvidence,
+    as_data: bool,
+    as_structural_only: bool,
+) {
     tracing::debug!(
         cluster = cluster.id.as_str(),
         bucket = cluster.bucket.as_str(),
         category = cluster.category.as_str(),
         occurrences = cluster.occurrences.len(),
+        structural = cluster.signals.structural,
+        token_jaccard = cluster.signals.token_jaccard,
+        embedding_cos = cluster.signals.embedding_cos,
+        content_agreement = content.agreement,
+        content_rename_consistency = content.rename_consistency,
+        content_substance_varies = content.substance_varies,
         dropped_as_data = as_data,
         dropped_as_structural_only = as_structural_only,
         "cluster hidden from report",
