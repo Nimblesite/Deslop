@@ -354,21 +354,14 @@ fn candidate_ranges_are_valid(pair: &CandidatePair, fingerprints: &[Fingerprint]
 /// Returns both endpoint node counts as `(smaller, larger)`. Defaults a
 /// missing endpoint to 0 — an impossible state in the current pipeline,
 /// but keeps the helper total.
-fn endpoint_node_counts(
-    fingerprints: &[Fingerprint],
-    left: usize,
-    right: usize,
-) -> (usize, usize) {
+fn endpoint_node_counts(fingerprints: &[Fingerprint], left: usize, right: usize) -> (usize, usize) {
     let left_count = fingerprints
         .get(left)
         .map_or(0, |fingerprint| fingerprint.node_count);
     let right_count = fingerprints
         .get(right)
         .map_or(0, |fingerprint| fingerprint.node_count);
-    (
-        left_count.min(right_count),
-        left_count.max(right_count),
-    )
+    (left_count.min(right_count), left_count.max(right_count))
 }
 
 /// Looks up both signatures and returns their estimated Jaccard. Returns
