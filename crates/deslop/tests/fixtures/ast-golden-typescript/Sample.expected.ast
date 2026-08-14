@@ -1,4 +1,4 @@
-__file__ [0..260]
+__file__ [0..259]
   export_statement [0..78]
     type_alias_declaration [7..78]
       __ident__ [12..18]

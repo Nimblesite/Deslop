@@ -1,4 +1,4 @@
-__file__ [0..408]
+__file__ [0..407]
   import_from_statement [0..23]
     dotted_name [5..11]
       __ident__ [5..11]
