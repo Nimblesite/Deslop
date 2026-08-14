@@ -125,7 +125,7 @@ fn assert_embedding_provenance(report: &Value) {
     let provenance = at(report, "embedding_provenance");
     assert_eq!(at(provenance, "provider_id"), "ollama", "{report:#}");
     assert_eq!(at(provenance, "model_id"), "nomic-embed-text", "{report:#}");
-    assert_eq!(at(provenance, "dimensions"), 4, "{report:#}");
+    assert_eq!(at(provenance, "dimensions"), 4096, "{report:#}");
     assert_eq!(at(provenance, "failed_subtrees"), 0, "{report:#}");
     assert!(
         at(provenance, "attempted_subtrees")

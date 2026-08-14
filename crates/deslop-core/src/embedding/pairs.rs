@@ -84,27 +84,23 @@ fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
 /// Scores every pair exactly for small corpora where ANN top-k recall is
 /// more fragile than the quadratic work is expensive.
 fn exact_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
-    let points: Vec<CosinePoint> = embeddings
-        .iter()
-        .map(|vector| CosinePoint::new(vector))
-        .collect();
     let mut pairs = Vec::new();
-    for left in 0..points.len() {
-        collect_exact_pairs_from(left, &points, &mut pairs);
+    for left in 0..embeddings.len() {
+        collect_exact_pairs_from(left, embeddings, &mut pairs);
     }
     pairs
 }
 
 /// Appends exact embedding candidates for one left endpoint.
-fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec<EmbeddingPair>) {
-    let Some(left_point) = points.get(left) else {
+fn collect_exact_pairs_from(left: usize, embeddings: &[Vec<f32>], pairs: &mut Vec<EmbeddingPair>) {
+    let Some(left_vector) = embeddings.get(left) else {
         return;
     };
-    for right in left.saturating_add(1)..points.len() {
-        let Some(right_point) = points.get(right) else {
+    for right in left.saturating_add(1)..embeddings.len() {
+        let Some(right_vector) = embeddings.get(right) else {
             continue;
         };
-        let cosine = cosine_between(left_point, right_point);
+        let cosine = cosine_similarity(left_vector, right_vector);
         if admits_cosine(cosine) {
             pairs.push(EmbeddingPair {
                 left,
@@ -115,23 +111,42 @@ fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec
     }
 }
 
-/// Returns cosine similarity for two already-normalised points.
-fn cosine_between(left: &CosinePoint, right: &CosinePoint) -> f64 {
-    cosine_from_distance(f64::from(left.distance(right)))
-}
-
-/// Returns the cosine similarity of two raw vectors in `[0, 1]`.
+/// Returns the cosine similarity of two raw vectors in `[0, 1]`,
+/// clamping negative cosines to zero so the value composes with
+/// `token_jaccard` and `structural`.
 ///
-/// This is the crate's single definition of cosine similarity: the same
-/// L2 normalisation, dot product, and negative-cosine clamp the ANN pass
-/// applies to every [`EmbeddingPair`]. Cluster-level signal measurement
-/// calls this so a rendered `embedding_cos` is always computed by the
-/// identical arithmetic that admitted the pair evidence — a second,
-/// subtly different cosine would let the report disagree with the
-/// pipeline about the same two vectors.
+/// This is the crate's single definition of cosine similarity: the exact
+/// path admits every [`EmbeddingPair`] on this function and cluster-level
+/// signal measurement renders `embedding_cos` from it, so the report can
+/// never disagree with the pipeline about the same two vectors. The ANN
+/// pass is approximate by construction and admits on the `f32` HNSW
+/// distance instead; the two agree to `f32` precision.
+///
+/// The dot product and both norms accumulate in `f64` over the raw
+/// components. Dotting `f32` components that were pre-divided by an
+/// `f32` norm drifts about `2e-6` at four thousand lanes — the
+/// difference between reporting `1.000000` and `0.999998` for two
+/// byte-identical snippets that share one vector.
 #[must_use]
 pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
-    cosine_between(&CosinePoint::new(left), &CosinePoint::new(right))
+    let scale = norm(left) * norm(right);
+    if scale <= 0.0 {
+        return 0.0;
+    }
+    (dot(left, right) / scale).clamp(0.0, 1.0)
+}
+
+/// `f64` dot product of two `f32` vectors over their common prefix.
+fn dot(left: &[f32], right: &[f32]) -> f64 {
+    left.iter()
+        .zip(right.iter())
+        .map(|(left, right)| f64::from(*left) * f64::from(*right))
+        .sum()
+}
+
+/// `f64` L2 norm of an `f32` vector.
+fn norm(vector: &[f32]) -> f64 {
+    dot(vector, vector).sqrt()
 }
 
 /// Runs a single HNSW query and appends any surviving pairs to `out`.
