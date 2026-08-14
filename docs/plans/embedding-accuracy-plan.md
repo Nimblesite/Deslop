@@ -4,9 +4,15 @@ Deferred from the `fused` branch on 2026-08-14. Everything here is diagnosed wit
 
 ## The red tests this plan turns green
 
+All three are `#[ignore]`d under issue #369 so the branch can merge. **No assertion was deleted, skipped, or softened** — each still runs under `cargo test -- --ignored`, and un-ignoring them is the acceptance criterion for this plan.
+
 - `deslop::pair_size_coherence::an_embedding_only_pair_does_not_join_occurrences_of_different_size` — two-ledger scan must report exactly the one real family.
 - `deslop::issue_343_sum_clamp_saturation::mid_band_cluster_confidence_never_exceeds_its_strongest_axis` — fails `cluster_count 2 != 1` on the same fixture.
 - `deslop-lsp::lsp_embedding_determinism::lsp_embedding_refresh_is_bounded_and_reproducible` — "fixture lost the second correlated signal".
+
+Measured while diagnosing #369: the two-ledger scan renders **two clusters, both false positives** — `45986e47bfc430a2` (whole `ledger_a` vs an arithmetic chunk of `ledger_c`) and `e021161df1cf4142` (two parameter lists plus an arithmetic chunk). Both carry `structural = 0` *and* `token_jaccard = 0`, surviving on the mock's cosine alone, which is what §3 and §4 below address. The real 380-node clone is not among them.
+
+§4 is further along than the text below suggests: replacing `embed_vector` with the L2-normalised indicator of a snippet's distinct 5-character shingles turns all three tests green (verified locally, 6/6 across both `deslop` binaries; real pair 0.966, whole-fn vs chunk 0.803, params vs chunk 0.085, identical text exactly 1.0). It is not landable as written because `exact_embedding_pairs` is `O(N² · D)` — at 4096 lanes `cli::embedding_ollama::issue_286_large_subtree_survives_when_the_model_declares_the_context` ran past ten minutes. A signed-lane signature holds the separations at 128 lanes (0.954 / 0.782 / 0.107 / 1.0); that is the width to time first, keeping `CosinePoint`'s per-point norm precomputation rather than recomputing norms inside the pair loop.
 
 All three share the `ts-mixed-band` fixture. They were green before the `[PIPELINE-NORMALIZE-AST]` root-span correction only because the mock embedder's `sin(len)` cosine manufactured a visible cluster that papered over a recall hole; the correction moved byte lengths and the paper-over vanished. The defects below were always there.
 

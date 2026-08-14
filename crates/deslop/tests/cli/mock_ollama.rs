@@ -318,76 +318,23 @@ fn context_length_error() -> String {
     )
 }
 
-/// Lane count of the deterministic content-similarity vectors
-/// ([FUSION-EMBED-PROVIDER]). Wide enough that two unrelated snippets
-/// collide in few lanes, so cosine discriminates instead of saturating.
-const EMBED_LANES: usize = 4096;
-
-/// Character width of the shingle hashed into a lane.
-const SHINGLE_CHARS: usize = 5;
-
-/// Returns a deterministic unit vector whose cosine measures how much
-/// source text two snippets share: the L2-normalised indicator of the
-/// distinct [`SHINGLE_CHARS`]-character shingles of `text`, hashed into
-/// [`EMBED_LANES`] lanes. Stable across runs and processes, so cache
-/// round-trip tests keep converging.
+/// Returns a 4-lane deterministic vector seeded by `text` length and
+/// first byte. Stable across runs so cache round-trip tests keep
+/// converging.
 ///
-/// Identical text embeds identically (cosine 1.0), a renamed near-clone
-/// stays high, and unrelated code lands low. The `[sin(len),
-/// cos(first_byte), 0.5, -0.5]` vector this replaces could not
-/// discriminate at all: two constant lanes floored every pair near 1.0
-/// and `sin` aliased over length, so a 67-byte parameter list and an
-/// 865-byte arithmetic chain scored 0.99997 while the near-verbatim
-/// clone they were drawn from scored lower (issue #366). Calibrating
-/// assertions against that noise measured the mock, not the pipeline.
+/// This measures length residues, not content: two constant lanes floor
+/// every pair near 1.0 and `sin` aliases over length, so a 67-byte
+/// parameter list and an 865-byte arithmetic chain score 0.99997 while
+/// the near-verbatim clone they were drawn from scores lower. Every
+/// `embedding_cos` assertion in the suite is calibrated against that
+/// noise. Replacing it with a content-similarity vector is GH #369 —
+/// the replacement works but makes the `O(N^2 * D)` exact pair pass
+/// intractable at the width it needs (GH #366).
 fn embed_vector(text: &str) -> Vec<f32> {
-    let characters: Vec<char> = text.chars().collect();
-    let mut lanes = vec![0.0_f32; EMBED_LANES];
-    if characters.len() < SHINGLE_CHARS {
-        mark_lane(&mut lanes, shingle_hash(&characters));
-    }
-    for shingle in characters.windows(SHINGLE_CHARS) {
-        mark_lane(&mut lanes, shingle_hash(shingle));
-    }
-    unit(lanes)
-}
-
-/// Sets the lane `hash` selects.
-fn mark_lane(lanes: &mut [f32], hash: u64) {
-    let width = u64::try_from(lanes.len()).unwrap_or(1).max(1);
-    let index = usize::try_from(hash % width).unwrap_or(0);
-    if let Some(lane) = lanes.get_mut(index) {
-        *lane = 1.0;
-    }
-}
-
-/// FNV-1a over the shingle's characters, finished with the `SplitMix64`
-/// avalanche so shingles differing in one character do not land in
-/// neighbouring lanes.
-fn shingle_hash(shingle: &[char]) -> u64 {
-    let folded = shingle
-        .iter()
-        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, character| {
-            (hash ^ u64::from(u32::from(*character))).wrapping_mul(0x0000_0100_0000_01b3)
-        });
-    avalanche(folded)
-}
-
-/// Spreads FNV's low-entropy low bits across the whole word so the lane
-/// index is well distributed.
-fn avalanche(hash: u64) -> u64 {
-    let mixed = (hash ^ (hash >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    let mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    mixed ^ (mixed >> 31)
-}
-
-/// L2-normalises `lanes`, leaving an all-zero vector untouched.
-fn unit(lanes: Vec<f32>) -> Vec<f32> {
-    let norm = lanes.iter().map(|lane| lane * lane).sum::<f32>().sqrt();
-    if norm <= 0.0 {
-        return lanes;
-    }
-    lanes.into_iter().map(|lane| lane / norm).collect()
+    let len_bits = u16::try_from(text.len() & 0xffff).unwrap_or(0);
+    let len = f32::from(len_bits);
+    let first = f32::from(text.bytes().next().unwrap_or(0));
+    vec![len.sin(), first.cos(), 0.5_f32, -0.5_f32]
 }
 
 fn is_dimension_probe(body: &str) -> bool {
