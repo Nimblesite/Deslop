@@ -25,6 +25,12 @@ If you encounter code that could cause a false negative or a false positive — 
 
 **Panics are NOT ALLOWED for control flow or error handling — but are MANDATED where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
 
+## BUG FIXING PROCESS
+
+CRITICAL: YOU ARE NOT ALLOWED TO BACK OFF ANY TESTS OR ASSERTIONS
+YOU MUST FIX THE ROOT CAUSE OF BUGS; NOT WORK AROUND THEM
+REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
+
 ## Standing prohibitions
 
 - ⚠️ **Never kill a VS Code process**, including browser-hosted instances. The user cannot recover from this.

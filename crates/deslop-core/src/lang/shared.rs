@@ -96,13 +96,34 @@ pub fn build_normalised_root(
     }
     Ok(NormalizedNode {
         kind: FILE_KIND,
-        children,
-        byte_range: ByteRange {
+        byte_range: retained_span(&children).unwrap_or(ByteRange {
             start: root.start_byte(),
             end: root.end_byte(),
-        },
+        }),
+        children,
         file_id,
     })
+}
+
+/// The extent of the nodes normalisation actually kept
+/// ([PIPELINE-NORMALIZE-AST]).
+///
+/// `__file__` is a synthetic root, not real syntax, so its span must be
+/// what it contains. Tree-sitter's parse root spans leading and trailing
+/// trivia — a licence header, a padding comment block — that
+/// [`normalise_node`] has already dropped, so inheriting it reports
+/// bytes contributing zero nodes to the match: a whole-file occurrence
+/// then opens on comments instead of the code it duplicates, and its
+/// range no longer tracks the edit that moved that code.
+///
+/// Real nodes keep their own span. A class's braces belong to the
+/// duplication even when a comment sits between them, so this narrowing
+/// applies to the synthetic root alone. `None` when the file normalised
+/// to nothing.
+fn retained_span(children: &[NormalizedNode]) -> Option<ByteRange> {
+    let start = children.iter().map(|child| child.byte_range.start).min()?;
+    let end = children.iter().map(|child| child.byte_range.end).max()?;
+    Some(ByteRange { start, end })
 }
 
 /// Recursively normalises one tree-sitter [`Node`] at nesting `depth`.

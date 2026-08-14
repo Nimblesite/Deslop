@@ -396,17 +396,32 @@ fn bug_fixture_walks_trivial_class_body_without_panicking() -> Result<()> {
     Ok(())
 }
 
-// Implements [PIPELINE-NORMALIZE-AST] golden guard: `--debug-ast`
-// on a hand-picked per-language fixture must match the committed
-// expected dump byte-for-byte. Any drift in the grammar version,
-// the `normalise_kind` match arms, or the child-ordering policy
-// will trip this test — which is exactly what we want, because
-// any of those changes silently alters the fingerprint and
+// Implements [PIPELINE-NORMALIZE-AST] golden guard, in two halves.
+//
+// **Unchanged**: `--debug-ast` on a hand-picked per-language fixture
+// must match the committed expected dump byte-for-byte. Any drift in
+// the grammar version, the `normalise_kind` match arms, or the
+// child-ordering policy trips this — which is exactly what we want,
+// because any of those changes silently alters the fingerprint and
 // invalidates every user's cache.
+//
+// **Correct**: the committed dump must also satisfy the normalisation
+// contract on its own terms (`assert_dump_is_correct`). Equality alone
+// only proves the tool still agrees with a file the tool wrote, so a
+// wrong expectation is self-certifying: every one of these goldens
+// recorded `__file__` spanning trivia the normaliser had already
+// dropped — 759 bytes of comments in Go, 52 in F#, the trailing
+// newline in all eleven — and the byte-for-byte check called it
+// expected for as long as the fixtures existed. Regenerating a golden
+// is therefore never the remedy on its own; the new dump has to be
+// shown correct, and these invariants are what show it.
 //
 // Each fixture exercises identifier collapse, literal collapse,
 // comment drop, and the language-specific structural forms most
 // likely to shift between grammar patch releases.
+//
+// See `crates/deslop/tests/fixtures/AST-GOLDEN-README.md` before
+// regenerating any of these files.
 fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
     let source = fixture(fixture_dir).join(sample_name);
     let expected_path = fixture(fixture_dir).join("Sample.expected.ast");
@@ -424,12 +439,118 @@ fn assert_ast_golden(fixture_dir: &str, sample_name: &str) -> Result<()> {
     assert_eq!(
         actual,
         expected,
-        "AST dump drifted from {}. If this is intentional, regenerate with \
-         `cargo run -q -- --debug-ast {}` and commit the updated .expected.ast.",
+        "AST dump drifted from {}. Regenerating is NOT the default remedy — \
+         prove the new dump satisfies the contract first; the committed file \
+         is only a golden while it is correct.",
         expected_path.display(),
-        source.display(),
     );
+    assert_dump_is_correct(&expected, fs::metadata(&source)?.len(), fixture_dir);
     Ok(())
+}
+
+/// One line of a `--debug-ast` dump: `<indent><kind> [start..end]`.
+struct DumpNode {
+    depth: usize,
+    kind: String,
+    start: u64,
+    end: u64,
+}
+
+/// [PIPELINE-NORMALIZE-AST] Asserts the committed dump is *correct*, not
+/// merely unchanged.
+///
+/// Byte-for-byte equality alone cannot say a golden is right: regenerating
+/// the file promotes whatever the current build emits to "expected". That
+/// is precisely how `__file__` came to claim 759 bytes of dropped Go
+/// comments and 52 of F# — wrong in the tree for as long as the fixtures
+/// existed, and invisible because the only check compared the tool against
+/// a file the tool wrote. These invariants come from the contract instead,
+/// so a regenerated dump that re-admits trivia fails here even though it
+/// matches the committed bytes exactly.
+fn assert_dump_is_correct(dump: &str, source_len: u64, label: &str) {
+    let nodes: Vec<DumpNode> = dump.lines().filter_map(parse_dump_line).collect();
+    assert!(!nodes.is_empty(), "{label}: dump has no nodes");
+    for node in &nodes {
+        assert!(
+            node.start < node.end && node.end <= source_len,
+            "{label}: {} [{}..{}] is not a valid range over {source_len} bytes",
+            node.kind,
+            node.start,
+            node.end,
+        );
+        assert!(
+            !node.kind.contains("comment"),
+            "{label}: comment node {} survived normalisation",
+            node.kind,
+        );
+    }
+    assert_root_spans_retained_children(&nodes, label);
+    assert_ranges_nest(&nodes, label);
+}
+
+/// Splits `<indent><kind> [start..end]`; indent is two spaces per level.
+/// Returns `None` for a blank or malformed line so the caller's other
+/// invariants still run over the lines that did parse.
+fn parse_dump_line(line: &str) -> Option<DumpNode> {
+    let body = line.trim_start_matches(' ');
+    let open = body.rfind(" [")?;
+    let span = body.get(open.saturating_add(2)..)?;
+    let (start, end) = span.trim_end_matches(']').split_once("..")?;
+    Some(DumpNode {
+        depth: line.len().saturating_sub(body.len()) / 2,
+        kind: body[..open].to_owned(),
+        start: start.parse().ok()?,
+        end: end.parse().ok()?,
+    })
+}
+
+/// The synthetic root must span exactly what normalisation kept. Tree-sitter's
+/// parse root also covers leading and trailing trivia the normaliser dropped,
+/// so inheriting it reports bytes contributing zero nodes to any match.
+fn assert_root_spans_retained_children(nodes: &[DumpNode], label: &str) {
+    let Some(root) = nodes.first() else { return };
+    assert_eq!(root.kind, "__file__", "{label}: root must be __file__");
+    let child_depth = root.depth.saturating_add(1);
+    let children = nodes.iter().filter(|node| node.depth == child_depth);
+    let spans: Vec<(u64, u64)> = children.map(|node| (node.start, node.end)).collect();
+    let (Some(start), Some(end)) = (
+        spans.iter().map(|span| span.0).min(),
+        spans.iter().map(|span| span.1).max(),
+    ) else {
+        return;
+    };
+    assert_eq!(
+        (root.start, root.end),
+        (start, end),
+        "{label}: __file__ [{}..{}] must span exactly the retained children \
+         [{start}..{end}] — the difference is dropped trivia being reported \
+         as duplicated code",
+        root.start,
+        root.end,
+    );
+}
+
+/// Every node sits inside its nearest shallower ancestor.
+fn assert_ranges_nest(nodes: &[DumpNode], label: &str) {
+    let mut ancestors: Vec<&DumpNode> = Vec::new();
+    for node in nodes {
+        while ancestors.last().is_some_and(|top| top.depth >= node.depth) {
+            let _popped = ancestors.pop();
+        }
+        if let Some(parent) = ancestors.last() {
+            assert!(
+                node.start >= parent.start && node.end <= parent.end,
+                "{label}: {} [{}..{}] escapes parent {} [{}..{}]",
+                node.kind,
+                node.start,
+                node.end,
+                parent.kind,
+                parent.start,
+                parent.end,
+            );
+        }
+        ancestors.push(node);
+    }
 }
 
 #[test]
