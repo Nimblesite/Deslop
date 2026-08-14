@@ -84,7 +84,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Covers a release clippy build, an instrumented coverage build, the
+    # full workspace suite, the self-scan duplication gate and the
+    # deployment gates. The previous 10 was sized against runs that
+    # aborted at the first test failure and never reached the rest.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
