@@ -12,17 +12,31 @@ All three share the `ts-mixed-band` fixture. They were green before the `[PIPELI
 
 ## Fixes, in dependency order
 
-### 1. [PIPELINE-CLUSTER-SUBSUME] Enclosure must decide against a nested view (issue #367)
+### 1. [FUSION-SIGNALS-THREE-LAYER] Token similarity understates Type-3 clones (issue #367) — the root cause
 
-`crates/deslop-core/src/cluster/subsume.rs`. A nested sibling window scores `structural = 1.0` by construction (normalisation collapsed the very leaves that differ), while the enclosing near-verbatim clone scores `structural = 0.0` because it is a real Type-3. `evaluate_pair` routes the strictly-enclosed case through `precision_preference`, so the 19-node name+params window discards the 380-node whole-function clone (`drop_inner survivor=7471d78aa8529cc6`).
+Measured 2026-08-14 by instrumenting `survival_decision`. Minimal repro, **no fixture and no embedder required**: two 1235-byte TypeScript files, identical except a consistent rename and **one added pair of parentheses** (one node in ~380), scan to `Found 0 groups of duplicated code`. Remove the parentheses and the same pair is found correctly (`nearly_identical`, 266/268 pairs survive). The dropped whole-function pair measures:
 
-Fix: when one view strictly encloses the other, enclosure decides — precision applies only to crossed and identical occurrence sets. Keep the file-coverage guard and the embedding-dominant nomination for the no-nesting case.
+```
+structural=0.0  token_jaccard=0.6640625  embedding_cos=0.0  nodes=(380, 381)
+```
+
+Two functions 99.7% identical by node count score `token_jaccard = 0.664`. `structural` is 0 because the added `parenthesized_expression` changes the Merkle hash of every ancestor to the root; with embeddings off — the default — `bounded_fused = 0.664 < FUSED_THRESHOLD` and the pair dies before any cluster exists. Nothing downstream can recover it.
+
+Mechanism: MinHash estimates Jaccard over the *set* of distinct k-grams. Repetitive bodies have a small distinct-shingle set, so one added node displaces a large fraction of it. This is a property of the token signature, not of `ts-mixed-band`, and it makes every shape-changing Type-3 clone invisible on the default path.
+
+**This is not a branch regression** — verified, not assumed: only one axis is non-zero, so the `fused() = Σ axes` → `bounded_fused() = max axes` change ([FUSION-STRATEGY-BOUNDED-MAX]) is irrelevant here (`sum == max == 0.664`) and `main` drops the pair identically.
+
+Fix direction (needs design, not a threshold bump): the signature should be robust to small local insertions — e.g. multiset/weighted-Jaccard rather than set-Jaccard, or shingling that does not let one node displace a large share of a small distinct set. Any candidate must be validated against the corpus for *both* directions: recall on shape-changing Type-3 clones, and no new false positives on repetitive scaffolding. **Do not raise recall by lowering `FUSED_THRESHOLD`** — that admits every weak pair in the corpus.
+
+New E2E to write first (red), independent of embeddings: seed the two-file paren pair above, scan with `--min-nodes 100`, assert 1 visible cluster spanning both files with 2 occurrences each covering the whole function (`start_byte ≤ 9`, `end_byte ≥ 1200`), bucket in the act-now set, and `clusters_hidden == 0`.
+
+*Superseded:* an earlier revision of this plan blamed `cluster/subsume.rs` precision inversion. The trace disproves it — all four clusters that form are `structural = 1.0` sibling windows and the enclosing clone is never a cluster at all. Subsumption among equal-structural windows may still deserve review, but it is not this defect.
 
 ### 2. [RANK-CATEGORY] Un-gate the LSH Type-3 promotion from C# (issue #359, "ts-mixed-band recall")
 
 `crates/deslop-core/src/report_render.rs::is_csharp_lsh_type3_near_miss`. The evidence profile it promotes (structural ≈ 0, cos ≈ 0, `token_jaccard ≥ LSH_ONLY_MIN_JACCARD`, every member ≥ `LSH_ONLY_MIN_NODE_COUNT`, cross-file) is language-agnostic, but the predicate requires `language == "csharp"`, so an identical TypeScript pair routes `LooselySimilar` → hidden. Remove the language test, rename accordingly, and sweep the corpus fixtures for unhidden noise — any new visible cluster must be adjudicated as genuine or get its own filter with its own fixture, never a threshold bump.
 
-New E2E to write first (red): scan `ts-mixed-band/ledger_a.ts` + `ledger_c.ts`, embeddings off, `--min-nodes 12` — assert 1 visible cluster spanning both files, 2 occurrences, each occurrence `start_byte ≤ 9` and `end_byte ≥ 1200` (the whole function, not the 71-byte signature window), bucket `nearly_identical`, `token_jaccard ≥ 0.9`, `clusters_hidden == 0`. Today this scans to `clusters: []`.
+Note this cannot fix §1 on its own: that path also requires `token_jaccard ≥ LSH_ONLY_MIN_JACCARD` (0.90), and the measured value is 0.664. §1 must land first for §2 to reach anything.
 
 ### 3. [PAIR-SIZE-COHERENCE] adjacent: corroboration floors for unanchored pairs (issue #365)
 
@@ -36,7 +50,7 @@ Fix: replace with a deterministic content-similarity vector (e.g. hashed byte-n-
 
 ### 5. Re-verify the chain
 
-Order matters: 1–2 make the true family visible without embeddings; 3 stops the mock garbage surviving on ε-cosine; 4 stops the garbage existing at all. After each step: the three red tests, then the full workspace sweep (`cargo test --workspace --all-targets --features deslop-core/live`), then the self-scan duplication gate.
+Order matters: 1 is the root cause and must land first — without it §2 has nothing to promote; 2 then lets the recovered pair reach a real bucket in every language; 3 stops the mock garbage surviving on ε-cosine; 4 stops the garbage existing at all. After each step: the three red tests, then the full workspace sweep (`cargo test --workspace --all-targets --features deslop-core/live`), then the self-scan duplication gate.
 
 ## Also carried
 
