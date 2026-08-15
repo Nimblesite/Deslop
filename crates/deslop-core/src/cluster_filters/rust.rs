@@ -4,11 +4,11 @@
 //! language itself rather than by the program under analysis.
 //!
 //! Issues addressed (see parent `mod.rs` header):
-//! - **#75**  [CLONE-NOISE-RUST-LANGPARSER] — every first-party Rust
+//! - [CLONE-NOISE-RUST-LANGPARSER] — every first-party Rust
 //!   language plug-in implements the same `LanguageParser` trait surface.
-//! - **#150** [CLONE-NOISE-RUST-DECL] — every member is a single `mod
+//! - [CLONE-NOISE-RUST-DECL] — every member is a single `mod
 //!   NAME;` or `use ...;` statement.
-//! - **#147** [CLONE-NOISE-RUST-ITER-COLLECT] — every member is the
+//! - [CLONE-NOISE-RUST-ITER-COLLECT] — every member is the
 //!   `<expr>.iter().map(|x| x.<field>.<method>(...)).collect()` chain.
 
 use std::collections::BTreeSet;
@@ -21,7 +21,7 @@ use super::{
 };
 use crate::ast::ByteRange;
 
-/// Detects **issue #75**: the Rust source files that implement the
+/// Detects ****: the Rust source files that implement the
 /// first-party language plug-ins all carry the same `LanguageParser`
 /// adapter surface. Each implementation has language-specific constants
 /// and grammar functions, but the trait contract forces the same method
@@ -143,7 +143,7 @@ fn language_parser_method_names() -> BTreeSet<Vec<u8>> {
     ])
 }
 
-/// Detects **issue #150**: clusters whose every member is a single Rust
+/// Detects ****: clusters whose every member is a single Rust
 /// top-level declaration that has no body (`mod NAME;`, `use ...;`,
 /// `pub use ...;`). Module declarations cannot be macro-generated in
 /// Rust, so the cluster is not actionable.
@@ -158,7 +158,7 @@ pub(super) fn is_rust_top_level_decl_cluster(snippets: &[Snippet<'_>]) -> bool {
     decl_identifiers_differ(&signatures)
 }
 
-/// Detects **issue #147**: every cluster member contains the
+/// Detects ****: every cluster member contains the
 /// `.iter().map(|x| x.field.method()).collect()` idiom and the cluster
 /// spans at least two distinct source files.
 pub(super) fn is_rust_iter_collect_idiom_cluster(snippets: &[Snippet<'_>]) -> bool {
@@ -396,7 +396,7 @@ fn closure_body_matches_field_method(body: Node<'_>, source: &[u8], closure_arg:
     field_expression_projects_closure_arg(field_value, source, closure_arg)
 }
 
-/// Detects **issue #176** [CLONE-NOISE-RUST-MATCH-DISPATCH]: clusters
+/// Detects **** [CLONE-NOISE-RUST-MATCH-DISPATCH]: clusters
 /// whose every member is a run of `match` arms inside one dispatch
 /// `match`. Each arm routes a distinct pattern (command key) to a
 /// distinct handler, so after identifier and literal normalisation every
@@ -498,7 +498,7 @@ fn field_expression_projects_closure_arg(
         .is_some_and(|field| field.kind() == "field_identifier")
 }
 
-/// Detects **issue #224** [CLONE-NOISE-RUST-STRUCT-FIELDS]: clusters whose
+/// Detects **** [CLONE-NOISE-RUST-STRUCT-FIELDS]: clusters whose
 /// every member covers only Rust struct field declarations. A field list
 /// encodes a data model's *shape*, not extractable duplicate logic — after
 /// identifier, type, and literal normalisation `pub a: Option<String>`
@@ -506,7 +506,7 @@ fn field_expression_projects_closure_arg(
 /// field runs (and whole structs that are nothing but such fields) cluster as
 /// `structural_only`. No refactor removes them, yet they dominate the
 /// duplication metric on serde-heavy repos. This is the Rust counterpart of
-/// the Dart class-field filter (#169).
+/// the Dart class-field filter.
 ///
 /// Guarded by `raw_snippet_texts_differ` exactly like the Dart filter: a
 /// byte-identical copy-pasted struct still surfaces as genuine duplication

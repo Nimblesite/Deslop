@@ -1,7 +1,7 @@
 //! Role-compatibility gate for embedding-dominant `same_behavior`
 //! clusters.
 //!
-//! Issue **#119** [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]: the embedding
+//! Issue [CLONE-NOISE-EMBEDDING-ROLE-MISMATCH]: the embedding
 //! pass can pair two snippets that share a topic vocabulary but live in
 //! structurally incompatible constructs — e.g. a reusable transport
 //! helper *class* and a constructor-storage *test method*. Such a pair

@@ -10,7 +10,7 @@ use blake3::Hasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     boilerplate::is_boilerplate,
-    lang::shared::LITERAL_KIND,
+    lang::shared::{FILE_KIND, LITERAL_KIND},
     state::FileId,
 };
 
@@ -71,7 +71,7 @@ fn hash_and_collect(
         subtree_node_count = subtree_node_count.saturating_add(child_size);
     }
     let hash: [u8; 32] = hasher.finalize().into();
-    if subtree_node_count >= min_nodes && !current_boilerplate {
+    if subtree_node_count >= min_nodes && !current_boilerplate && !re_describes_only_child(node) {
         out.push(Fingerprint {
             hash,
             file_id: node.file_id,
@@ -80,6 +80,26 @@ fn hash_and_collect(
         });
     }
     (hash, subtree_node_count)
+}
+
+/// True when the synthetic `__file__` root adds nothing to its only child.
+///
+/// [PIPELINE-NORMALIZE-AST] gives the root the extent of the nodes
+/// normalisation kept, so a file holding a single declaration yields a root
+/// whose byte range — and therefore whose source text — is identical to that
+/// declaration's. Fingerprinting both reports one region twice: it
+/// double-counts in `clusters_total` and the duplication metric, and because
+/// the two spans carry byte-identical text the embedding pass scores them a
+/// perfect match *inside a single file*, seeding clusters through transitive
+/// closure that describe no duplication at all.
+///
+/// Only the synthetic root is suppressed, and only when a single child covers
+/// it exactly. That child is always fingerprinted in its place, and any
+/// cluster the root could have joined the child joins on the same bytes, so
+/// no finding is lost. Pinned by `deslop::issue_343_sum_clamp_saturation`.
+fn re_describes_only_child(node: &NormalizedNode) -> bool {
+    node.kind == FILE_KIND
+        && matches!(node.children.as_slice(), [only] if only.byte_range == node.byte_range)
 }
 
 /// Half-open overlap test on two fingerprints' byte ranges.

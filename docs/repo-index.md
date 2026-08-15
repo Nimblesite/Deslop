@@ -13,7 +13,7 @@ Reference material for agents. Read it when you need to locate something — it 
 | `clients/vscode` | VSIX; bundles the LSP + MCP binaries. |
 | `site/` | Eleventy static site. Zero duplicate CSS, hard budget 1.8k LOC. |
 | `docs/specs/SPEC.md` | Full research + design spec. |
-| `docs/plans/PLAN.md` | Phased execution plan, live TODO at the bottom. |
+| `docs/plans/` | Remaining work, one file per work stream. Restoring the skipped VSIX tests ([fused-score-followups.md](plans/fused-score-followups.md)) outranks everything else. |
 | `docs/snippets/agents-md-recipe.md` | Paste-ready Rule-zero recipe for other repos. |
 | `.claude/skills/` | ci-prep, code-dedup, fix-bug, submit-pr. |
 | `coverage-thresholds.json` | Single source of truth for coverage. |

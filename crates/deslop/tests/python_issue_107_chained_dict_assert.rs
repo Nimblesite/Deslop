@@ -8,7 +8,7 @@
 
 mod common;
 
-use crate::common::*;
+use crate::common::{verdict::*, *};
 
 #[test]
 fn chained_dict_assertions_across_test_files_do_not_cluster() -> Result<()> {
@@ -21,6 +21,23 @@ fn chained_dict_assertions_across_test_files_do_not_cluster() -> Result<()> {
         offenders.is_empty(),
         "chained `assert X[k1][k2]` assertions across unrelated test files \
          must not surface as duplicates: {offenders:#?}"
+    );
+    assert_eq!(
+        field(&report, "files_analysed").as_u64(),
+        Some(3),
+        "all three pytest modules were analysed, so the suppression was \
+         exercised rather than the files skipped: {report:#}"
+    );
+    assert_eq!(
+        clusters(&report).len(),
+        0,
+        "the three modules share nothing beyond the idiom, so no cluster of \
+         any bucket may survive: {report:#}"
+    );
+    assert_eq!(
+        duplicated_loc(&report),
+        0,
+        "suppressed idiom matches must not count as duplicated lines: {report:#}"
     );
     Ok(())
 }

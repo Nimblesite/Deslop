@@ -1,5 +1,5 @@
 //! Cluster-id resolution shared by the LSP and MCP transports
-//! ([Deslop#149], [VSIX-CLUSTER-ID-CONSISTENCY]).
+//! (, [VSIX-CLUSTER-ID-CONSISTENCY]).
 //!
 //! The VSIX surfaces a 7-hex slug (`clusterSlug()` in
 //! `clients/vscode/src/types/report.ts`) across every cluster panel —
@@ -18,10 +18,10 @@ use super::errors::LiveError;
 /// every UI panel via `clusterSlug()` ([VSIX-CLUSTER-ID-CONSISTENCY])
 /// so an agent that copied the slug from a hover bubble can hand it
 /// straight to `cluster-by-id` without expanding to the full 16-hex
-/// canonical id ([Deslop#149]).
+/// canonical id.
 pub const MIN_CLUSTER_ID_PREFIX_LEN: usize = 7;
 
-/// Resolves a cluster from a possibly-truncated id ([Deslop#149]).
+/// Resolves a cluster from a possibly-truncated id.
 ///
 /// Accepts either the full 16-hex canonical id or any prefix at least
 /// [`MIN_CLUSTER_ID_PREFIX_LEN`] characters long (matches the 7-hex
@@ -96,7 +96,7 @@ mod tests {
         }
     }
 
-    /// [Deslop#149] The 7-hex slug from the VSIX hover bubble must
+    /// The 7-hex slug from the VSIX hover bubble must
     /// resolve to the same cluster as the 16-hex canonical id. Asserts
     /// against an explicit human-readable cluster id so a regression
     /// shows up as a string mismatch in the failure output.

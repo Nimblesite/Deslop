@@ -1,7 +1,7 @@
 //! Clone cluster materialisation and ranking.
 //!
 //! Implements [PIPELINE-CLUSTER-EXACT], the fused-clustering output of
-//! [FUSION-STRATEGY-MAX-SUM], and the "worst offenders first" scoring of
+//! [FUSION-STRATEGY-BOUNDED-MAX], and the "worst offenders first" scoring of
 //! [PIPELINE-RANK-WORST-FIRST]. Consumes [`FusedCluster`]s from
 //! [`crate::pair::cluster_by_transitive_closure`] — the two inputs
 //! contributing to those clusters are (a) exact structural buckets per
@@ -9,14 +9,25 @@
 //! (b) token LSH bucket collisions per `SourcererCC`
 //! ([TECH-TOKEN-SOURCERERCC]).
 
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, HashMap},
+    hash::BuildHasher,
+};
 
 use crate::{
     content::ContentEvidence,
-    fingerprint::{ranges_overlap, Fingerprint},
+    fingerprint::Fingerprint,
+    lsh::Signature,
     pair::{FusedCluster, PairScore},
     state::FileId,
 };
+
+/// Rendered-truth signal measurement ([FUSION-CLUSTER-SIGNALS]).
+mod signals;
+/// Cross-cluster subsumption ([PIPELINE-CLUSTER-SUBSUME]).
+mod subsume;
+use signals::measured_signals;
+use subsume::collapse_cross_cluster_overlap;
 
 /// A set of fingerprints that share the same hash, i.e. a detected
 /// (structural) clone cluster.
@@ -30,13 +41,15 @@ pub struct Cluster {
     pub members: Vec<Fingerprint>,
     /// Weight from [PIPELINE-RANK-WORST-FIRST]. Higher = worse offender.
     pub weight: f64,
-    /// Per-cluster signal breakdown, when available. Structural-only
-    /// exact clusters report `structural = 1.0`, `token_jaccard = 1.0`
-    /// because every member shares a Merkle hash and therefore a k-gram
-    /// set. Fused clusters carry the mean of pair scores.
+    /// Measured signal breakdown ([FUSION-CLUSTER-SIGNALS]): the
+    /// per-signal mean over every unordered pair of the rendered
+    /// members — Merkle-hash equality for `structural`, `MinHash`
+    /// Jaccard for `token_jaccard`, vector cosine for `embedding_cos`.
+    /// Never aggregated from the discovery edges that glued the
+    /// transitive-closure component together.
     pub signals: PairScore,
     /// Measured raw-content evidence across the members'
-    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE], #331/#336):
+    /// normalisation-collapsed leaves ([FUSION-CONTENT-GATE]):
     /// pooled byte agreement, Type-2 rename consistency, and literal
     /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
@@ -55,15 +68,20 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 /// [`Cluster`] so the ranking and rendering stages do not have to know
 /// how the cluster was discovered.
 ///
-/// Signal breakdown comes from `cluster.mean_score`. Cluster ids are
-/// derived from the smallest member's hash so identical fused clusters
-/// across runs always report the same id.
+/// The signal breakdown is measured between each cluster's rendered
+/// occurrences ([FUSION-CLUSTER-SIGNALS]) from `signatures` and
+/// `embedding_vectors`. Cluster ids are derived from the smallest
+/// member's hash so identical fused clusters across runs always report
+/// the same id.
 #[must_use]
-pub fn build_ranked_fused_clusters(
+pub fn build_ranked_fused_clusters<S: BuildHasher>(
     fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
-    let mut clusters = reportable_clusters(fingerprints, fused_clusters);
+    let mut clusters =
+        reportable_clusters(fingerprints, signatures, embedding_vectors, fused_clusters);
     let dropped_below_min_members = fused_clusters.len().saturating_sub(clusters.len());
     clusters.sort_by(|left, right| {
         right
@@ -78,13 +96,15 @@ pub fn build_ranked_fused_clusters(
 }
 
 /// Materialises every fused cluster that remains reportable.
-fn reportable_clusters(
+fn reportable_clusters<S: BuildHasher>(
     fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
 ) -> Vec<Cluster> {
     fused_clusters
         .iter()
-        .filter_map(|fused| build_fused_cluster(fingerprints, fused))
+        .filter_map(|fused| build_fused_cluster(fingerprints, signatures, embedding_vectors, fused))
         .collect()
 }
 
@@ -117,24 +137,43 @@ fn weight_summary(clusters: &[Cluster]) -> (f64, f64) {
 /// Rehydrates a single `FusedCluster` into a reportable [`Cluster`].
 /// Same-file overlap collapse can reduce a fused group to one logical
 /// location; those groups are artifacts, not duplicates, and are
-/// dropped before ranking.
-fn build_fused_cluster(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Option<Cluster> {
-    let members = collapsed_members(fingerprints, fused);
-    if members.len() < MIN_REPORTABLE_MEMBERS {
+/// dropped before ranking. Signals are measured **after** the collapse
+/// so they describe exactly the occurrences the report shows.
+fn build_fused_cluster<S: BuildHasher>(
+    fingerprints: &[Fingerprint],
+    signatures: &[Signature],
+    embedding_vectors: &HashMap<usize, Vec<f32>, S>,
+    fused: &FusedCluster,
+) -> Option<Cluster> {
+    let occurrence_indices = collapsed_member_indices(fingerprints, fused);
+    if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
     }
-    Some(materialize_cluster(members, fused.mean_score))
-}
-
-/// Collects valid fingerprints for one fused cluster and collapses
-/// overlapping same-file artifacts.
-fn collapsed_members(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<Fingerprint> {
-    let raw_members = fused
-        .members
+    let measured = measured_signals(
+        &occurrence_indices,
+        fingerprints,
+        signatures,
+        embedding_vectors,
+    );
+    let members: Vec<Fingerprint> = occurrence_indices
         .iter()
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
-    collapse_overlapping_per_file(raw_members)
+    Some(materialize_cluster(members, measured))
+}
+
+/// Collects valid fingerprint indices for one fused cluster and
+/// collapses overlapping same-file artifacts. Indices (not cloned
+/// fingerprints) survive the collapse so signal measurement can reach
+/// each rendered occurrence's signature and embedding vector.
+fn collapsed_member_indices(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<usize> {
+    let raw_members: Vec<usize> = fused
+        .members
+        .iter()
+        .copied()
+        .filter(|index| *index < fingerprints.len())
+        .collect();
+    collapse_overlapping_per_file(raw_members, fingerprints)
 }
 
 /// Builds the final reportable cluster from already-filtered members.
@@ -202,7 +241,7 @@ fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
 /// Collapses overlapping sibling-window occurrences that live in the
 /// same file into a single canonical member per overlapping region.
 ///
-/// Fixes issue #2 ([PIPELINE-CLUSTER-EXACT] sibling-extension runaway):
+/// Fixes ([PIPELINE-CLUSTER-EXACT] sibling-extension runaway):
 /// the sibling pass at [`crate::sibling`] emits one fingerprint per
 /// contiguous window of widths 2..=8. When a physical clone spans many
 /// siblings, several windows cover overlapping byte ranges in the same
@@ -217,15 +256,27 @@ fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
 /// only a transitively overlapping chain collapses to one canonical
 /// member (the widest window, i.e. the largest byte span).
 #[must_use]
-fn collapse_overlapping_per_file(members: Vec<Fingerprint>) -> Vec<Fingerprint> {
-    let mut by_file: BTreeMap<FileId, Vec<Fingerprint>> = BTreeMap::new();
-    for member in members {
-        by_file.entry(member.file_id).or_default().push(member);
+fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprint]) -> Vec<usize> {
+    let mut by_file: BTreeMap<FileId, Vec<(usize, Fingerprint)>> = BTreeMap::new();
+    for index in members {
+        let Some(member) = fingerprints.get(index) else {
+            continue;
+        };
+        by_file
+            .entry(member.file_id)
+            .or_default()
+            .push((index, member.clone()));
     }
-    let mut out: Vec<Fingerprint> = Vec::new();
+    let mut out: Vec<usize> = Vec::new();
     for bucket in by_file.into_values() {
         out.extend(collapse_overlapping_single_file(bucket));
     }
+    // Corpus-index order, not `FileId` order: ids encode registration
+    // history (a removed-and-restored file gets a fresh id), while the
+    // corpus index follows the path-ordered snapshot, so rendered
+    // occurrence order stays byte-identical across edit history
+    // ([PIPELINE-DETERMINISM]).
+    out.sort_unstable();
     out
 }
 
@@ -234,172 +285,72 @@ fn collapse_overlapping_per_file(members: Vec<Fingerprint>) -> Vec<Fingerprint> 
 /// member with the widest byte range (largest physical clone) as the
 /// representative. Equal-width ties keep the first-encountered member
 /// so the result stays deterministic across runs.
-fn collapse_overlapping_single_file(mut bucket: Vec<Fingerprint>) -> Vec<Fingerprint> {
-    bucket.sort_by_key(|member| {
+///
+/// The run's frontier is tracked separately from its representative
+/// ([PIPELINE-CLUSTER-EXACT]). Overlap is transitive, and the window
+/// that bridges two others is often narrower than both: for `[0,100]`,
+/// `[90,110]`, `[105,200]` the bridge loses the width contest, so a
+/// sweep that tests the next window against the representative alone
+/// finds `[105,200]` disjoint and publishes one physical region as two
+/// occurrences — inflating the cluster size, the occurrence list and the
+/// duplication percentage.
+fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Vec<usize> {
+    bucket.sort_by_key(|(_, member)| {
         (
             member.byte_range.start,
             usize::MAX.saturating_sub(member.byte_range.end),
         )
     });
-    let mut kept: Vec<Fingerprint> = Vec::with_capacity(bucket.len());
+    let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
     for candidate in bucket {
-        match kept.last_mut() {
-            Some(current) if ranges_overlap(current, &candidate) => {
-                if candidate.byte_range.len() > current.byte_range.len() {
-                    *current = candidate;
-                }
-            }
-            _ => kept.push(candidate),
+        match runs.last_mut() {
+            Some(run) if run.reaches(&candidate.1) => run.absorb(candidate),
+            _ => runs.push(OverlapRun::start(candidate)),
         }
     }
-    kept
+    runs.into_iter().map(|run| run.representative).collect()
 }
 
-/// Returns `true` when `inner` lies fully inside `outer` in the same file.
-fn fingerprint_contains(outer: &Fingerprint, inner: &Fingerprint) -> bool {
-    outer.file_id == inner.file_id
-        && outer.byte_range.start <= inner.byte_range.start
-        && inner.byte_range.end <= outer.byte_range.end
+/// One transitively-overlapping run of same-file occurrences, reduced to
+/// the reported location plus the frontier the next window is tested
+/// against.
+struct OverlapRun {
+    /// Fingerprint index of the widest member so far — the occurrence
+    /// the report publishes for this run.
+    representative: usize,
+    /// Byte width of the representative, for the width contest.
+    width: usize,
+    /// Highest end byte anywhere in the run, which is not always the
+    /// representative's end.
+    end: usize,
 }
 
-/// Returns `true` when every occurrence in `inner_set` is strictly
-/// contained within at least one occurrence in `outer_set`.
-fn all_occurrences_contained_in_some(inner_set: &[Fingerprint], outer_set: &[Fingerprint]) -> bool {
-    !inner_set.is_empty()
-        && inner_set.iter().all(|candidate| {
-            outer_set
-                .iter()
-                .any(|other| fingerprint_contains(other, candidate))
-        })
-}
-
-/// Returns `true` when every file mentioned in `outer_set` is also
-/// mentioned in `inner_set`. When this is false the outer cluster
-/// covers additional files (e.g. cross-language) that the inner does
-/// not, so the outer must not be dropped.
-fn outer_files_covered_by_inner(inner_set: &[Fingerprint], outer_set: &[Fingerprint]) -> bool {
-    outer_set.iter().all(|outer_fp| {
-        inner_set
-            .iter()
-            .any(|inner_fp| inner_fp.file_id == outer_fp.file_id)
-    })
-}
-
-/// Returns `true` when `index` is already marked for removal.
-fn cluster_dropped(dropped: &[bool], index: usize) -> bool {
-    dropped.get(index).copied().unwrap_or(true)
-}
-
-/// Marks `index` for removal when the slot exists.
-fn drop_cluster(dropped: &mut [bool], index: usize) {
-    if let Some(slot) = dropped.get_mut(index) {
-        *slot = true;
-    }
-}
-
-/// Decision produced by [`evaluate_pair`] for one `(outer, inner)` cluster pair.
-enum PairDecision {
-    /// Discard the inner cluster; the outer subsumes it.
-    DropInner,
-    /// Discard the outer cluster; the inner subsumes it.
-    DropOuter,
-    /// Retain both clusters.
-    Keep,
-}
-
-/// Collapses redundant nested clusters produced by the same physical
-/// code being fingerprinted at multiple AST subtree depths.
-///
-/// Fixes issue #50 ([PIPELINE-CLUSTER-EXACT] cross-cluster overlap):
-/// nested AST subtrees over the same physical code (e.g.
-/// `attribute_list + method_declaration` vs. bare `method_declaration`)
-/// form separate fused clusters whose occurrence byte ranges nest inside
-/// one another. When every occurrence of an inner cluster is contained
-/// within some occurrence of an outer cluster they are logically the
-/// same duplicated region. Only one should survive.
-///
-/// Survivor selection:
-/// - Equal or better structural on the outer → drop inner (outer is
-///   heavier and at least as precise).
-/// - Inner has strictly better structural AND outer covers no files that
-///   inner does not → drop outer (inner is a higher-quality view of the
-///   same scope). The file-set guard preserves cross-language clusters:
-///   a cross-language outer cluster (cs + rs + py) must not be dropped
-///   when only a same-language inner cluster (cs only) has higher
-///   structural, because the outer conveys unique cross-file information.
-///
-/// Runs after sorting so the weight order is available for tiebreaking.
-fn collapse_cross_cluster_overlap(clusters: Vec<Cluster>) -> Vec<Cluster> {
-    let len = clusters.len();
-    let mut dropped = vec![false; len];
-    for outer in 0..len {
-        if !cluster_dropped(&dropped, outer) {
-            scan_inner_pairs(&clusters, &mut dropped, outer, len);
+impl OverlapRun {
+    /// Opens a run at `member`.
+    fn start((index, member): (usize, Fingerprint)) -> Self {
+        Self {
+            representative: index,
+            width: member.byte_range.len(),
+            end: member.byte_range.end,
         }
     }
-    clusters
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, cluster)| (!cluster_dropped(&dropped, index)).then_some(cluster))
-        .collect()
-}
 
-/// Evaluates every `(outer, inner)` pair for the given `outer` index and
-/// updates `dropped` accordingly. Breaks early when `outer` itself is dropped.
-fn scan_inner_pairs(clusters: &[Cluster], dropped: &mut [bool], outer: usize, len: usize) {
-    for inner in (outer.saturating_add(1))..len {
-        if cluster_dropped(dropped, inner) {
-            continue;
-        }
-        let Some(outer_cluster) = clusters.get(outer) else {
-            continue;
-        };
-        let Some(inner_cluster) = clusters.get(inner) else {
-            continue;
-        };
-        match evaluate_pair(outer_cluster, inner_cluster) {
-            PairDecision::DropInner => drop_cluster(dropped, inner),
-            PairDecision::DropOuter => {
-                drop_cluster(dropped, outer);
-                break;
-            }
-            PairDecision::Keep => {}
+    /// Returns `true` when `candidate` overlaps the run. Members arrive
+    /// in ascending start order, so reaching past the frontier is the
+    /// whole half-open overlap test.
+    fn reaches(&self, candidate: &Fingerprint) -> bool {
+        candidate.byte_range.start < self.end
+    }
+
+    /// Extends the run, promoting `member` to representative when it is
+    /// strictly wider than the incumbent.
+    fn absorb(&mut self, (index, member): (usize, Fingerprint)) {
+        self.end = self.end.max(member.byte_range.end);
+        if member.byte_range.len() > self.width {
+            self.representative = index;
+            self.width = member.byte_range.len();
         }
     }
-}
-
-/// Decides which cluster to drop when their occurrence byte ranges nest.
-/// Returns [`PairDecision::Keep`] when neither cluster dominates the other.
-fn evaluate_pair(outer: &Cluster, inner: &Cluster) -> PairDecision {
-    if all_occurrences_contained_in_some(&inner.members, &outer.members) {
-        // Inner's occurrences all nest inside outer's — outer dominates.
-        if outer.signals.structural >= inner.signals.structural {
-            PairDecision::DropInner
-        } else if embedding_outer_should_survive(outer, inner) {
-            PairDecision::Keep
-        } else if outer_files_covered_by_inner(&inner.members, &outer.members) {
-            PairDecision::DropOuter
-        } else {
-            PairDecision::Keep
-        }
-    } else if all_occurrences_contained_in_some(&outer.members, &inner.members) {
-        // Outer's occurrences all nest inside inner's — inner dominates.
-        PairDecision::DropOuter
-    } else {
-        PairDecision::Keep
-    }
-}
-
-/// Returns true when a small structural cluster must not erase a larger
-/// embedding-dominant cluster that carries distinct semantic evidence.
-fn embedding_outer_should_survive(outer: &Cluster, inner: &Cluster) -> bool {
-    is_embedding_dominant(outer.signals) && inner.signals.structural > outer.signals.structural
-}
-
-/// Returns true for low-structural clusters created by the embedding pass.
-fn is_embedding_dominant(signals: PairScore) -> bool {
-    signals.structural < LOW_STRUCTURAL_TYPE4_CEILING
-        && signals.embedding_cos >= TYPE4_EMBEDDING_FLOOR
 }
 
 /// Implements the [PIPELINE-RANK-WORST-FIRST] formula.

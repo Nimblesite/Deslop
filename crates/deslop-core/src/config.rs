@@ -37,13 +37,13 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// Directory components that are always excluded from discovery.
 ///
 /// `.cargo` covers Cargo's vendored registry / git checkout caches
-/// ([#142]) — even when the surrounding repo points discovery at
+/// — even when the surrounding repo points discovery at
 /// the user's home directory by accident, the boilerplate generated
 /// code under `.cargo/git/checkouts/...` and
 /// `.cargo/registry/src/...` never enters the report.
 ///
 /// `.git` and `.claude` cover working-tree copies that look like source
-/// but are not actionable duplication ([#222]). Claude Code agent
+/// but are not actionable duplication. Claude Code agent
 /// workflows create full git worktrees under `.claude/worktrees/<id>/`;
 /// each is another checkout of the same repo, so without this exclusion
 /// every file is reported as N identical "copies". The initial walk's
@@ -70,19 +70,32 @@ pub const DEFAULT_CONFIG_FILENAME: &str = ".deslop.toml";
 /// dependency files, and because ranking is worst-offenders-first the
 /// resulting third-party duplication outranks every first-party finding
 /// the user can actually act on.
-const BUILTIN_EXCLUDE_COMPONENTS: &[&str] = &[
-    "node_modules",
+/// Third-party *library source* vendored or installed into the corpus.
+/// These are real, readable source files the user did not write, so
+/// analysing them is a legitimate — if unusual — request: auditing a
+/// dependency for duplication, or checking whether first-party code
+/// duplicates a library it already depends on. Governed by
+/// `[analysis] include_dependencies` ([CONFIG-EXCLUDE-DEPENDENCIES]),
+/// which defaults to `false`.
+const BUILTIN_DEPENDENCY_COMPONENTS: &[&str] =
+    &["node_modules", "vendor", ".cargo", ".pub-cache", ".venv"];
+
+/// Build output, tool caches, and working-tree copies
+/// ([CONFIG-EXCLUDE-BUILTIN]). Excluded unconditionally: none of it is
+/// source the user wrote, and none of it is a "library the code depends
+/// on", so no configuration opts back in.
+/// `target`, `dist`, `build`, `__pycache__` and `.dart_tool` are compiler
+/// and codegen output; `.git` and `.claude` are whole additional checkouts
+/// of the same repository which would otherwise report every file
+/// as N identical copies.
+const BUILTIN_ARTEFACT_COMPONENTS: &[&str] = &[
     "target",
     "dist",
     "build",
-    ".venv",
     "__pycache__",
-    ".cargo",
+    ".dart_tool",
     ".git",
     ".claude",
-    ".dart_tool",
-    ".pub-cache",
-    "vendor",
 ];
 
 /// Directory components that are always analysed but hidden from summaries.
@@ -104,7 +117,7 @@ const BUILTIN_REPORT_HIDE_SUFFIXES: &[&str] = &[
     ".openapi.cs",
     ".generated.py",
     "_generated.py",
-    // Dart code generators (issue #95). `.g.dart` covers source_gen
+    // Dart code generators. `.g.dart` covers source_gen
     // (json_serializable, retrofit, drift, hive, …); the rest cover
     // freezed, auto_route, injectable, flutter_gen, mockito, and the
     // protoc Dart plugin. All carry "GENERATED CODE - DO NOT MODIFY".
@@ -333,6 +346,12 @@ struct RawAnalysis {
     /// Whether candidate pairs may span different parser language ids.
     #[serde(default)]
     allow_cross_language_comparison: bool,
+    /// Whether third-party library source vendored or installed into the
+    /// corpus is analysed ([CONFIG-EXCLUDE-DEPENDENCIES]). Off by default:
+    /// ranking is worst-offenders-first, so dependency duplication the
+    /// user cannot act on would outrank every first-party finding.
+    #[serde(default)]
+    include_dependencies: bool,
 }
 
 /// Raw on-disk shape of the `[report]` section.
@@ -406,6 +425,9 @@ pub struct ExclusionConfig {
     /// ([CONFIG-CROSS-LANGUAGE]). Defaults off to keep reports focused
     /// on same-language refactoring.
     allow_cross_language_comparison: bool,
+    /// Whether third-party library source inside the corpus is analysed
+    /// ([CONFIG-EXCLUDE-DEPENDENCIES]). Defaults off.
+    include_dependencies: bool,
     /// Whether the HTML report splits clusters into per-language
     /// sections ([OUTPUT-HUMAN-HTML-LANGUAGE-SECTIONS]). Defaults off.
     split_by_language: bool,
@@ -439,6 +461,7 @@ impl ExclusionConfig {
             default_boilerplate_imports: BoilerplateImportsMode::Suppress,
             fail_over_percent: None,
             allow_cross_language_comparison: false,
+            include_dependencies: false,
             split_by_language: false,
             ranking_policy: RankingPolicy::default().with_global_override(),
         }
@@ -529,14 +552,20 @@ impl ExclusionConfig {
             default_boilerplate_imports,
             fail_over_percent,
             allow_cross_language_comparison: raw.analysis.allow_cross_language_comparison,
+            include_dependencies: raw.analysis.include_dependencies,
             split_by_language: raw.report.split_by_language,
             ranking_policy,
         })
     }
 
     /// Returns a copy of this config bound to `scan_root`.
+    ///
+    /// Binding the root is required for accurate built-in exclusion: it is
+    /// what confines [`corpus_built_in_excluded`] to the analysed corpus
+    /// instead of the whole filesystem path. Watcher call sites that
+    /// build an [`ExclusionConfig::empty`] must bind their root here.
     #[must_use]
-    fn with_scan_root(mut self, scan_root: &Path) -> Self {
+    pub fn with_scan_root(mut self, scan_root: &Path) -> Self {
         self.scan_root = Some(scan_root.to_path_buf());
         self
     }
@@ -587,7 +616,7 @@ impl ExclusionConfig {
     /// match how [`crate::discover`] walks the tree.
     #[must_use]
     pub fn is_excluded(&self, path: &Path, language: Option<&str>) -> bool {
-        if built_in_excluded(path) {
+        if corpus_built_in_excluded(path, self.scan_root.as_deref(), self.include_dependencies) {
             return true;
         }
         if matches(&self.default_exclude, path) {
@@ -629,13 +658,64 @@ impl ExclusionConfig {
     }
 }
 
-/// Returns true when a path is in a built-in ignored dependency or build tree.
-fn built_in_excluded(path: &Path) -> bool {
-    path_components(path).any(|component| {
-        BUILTIN_EXCLUDE_COMPONENTS
+/// Returns true when `path` sits in a built-in excluded tree **inside the
+/// analysed corpus** ([CONFIG-EXCLUDE-BUILTIN]).
+///
+/// Only components at or below `scan_root` are considered. The rule prunes
+/// dependency and build trees *within the corpus the user asked for*; a
+/// directory name above the scan root describes where the checkout happens
+/// to sit on disk and says nothing about its contents. Matching those
+/// ancestors excluded every file in any repository nested under e.g.
+/// `dist`, `build`, `target`, `vendor` or `node_modules`, yielding
+/// `files_analysed: 0`, `clusters: []`, `threshold.breached: false` and a
+/// successful exit — a total, silent false negative. This mirrors the
+/// carve-out [`scan_root_contains_component_pair`] already applies to the
+/// report-hide tier.
+///
+/// When `include_dependencies` is set, [`BUILTIN_DEPENDENCY_COMPONENTS`]
+/// stops applying and third-party library source enters the analysis;
+/// [`BUILTIN_ARTEFACT_COMPONENTS`] applies regardless
+/// ([CONFIG-EXCLUDE-DEPENDENCIES]).
+///
+/// A path outside `scan_root`, or a config with no known root, is not part
+/// of any corpus this rule governs, so the rule does not fire. That
+/// direction can only admit a file for analysis — it can never silently
+/// discard one.
+///
+/// Pinned by `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`
+/// and `crates/deslop/tests/go_vendor_exclusion.rs`.
+fn corpus_built_in_excluded(
+    path: &Path,
+    scan_root: Option<&Path>,
+    include_dependencies: bool,
+) -> bool {
+    let Some(components) = corpus_components(path, scan_root) else {
+        return false;
+    };
+    components.into_iter().any(|component| {
+        BUILTIN_ARTEFACT_COMPONENTS
             .iter()
-            .any(|ignored| component == *ignored)
+            .chain(dependency_components(include_dependencies))
+            .any(|excluded| component == *excluded)
     })
+}
+
+/// The dependency component list when it applies, or nothing when the user
+/// opted into analysing libraries ([CONFIG-EXCLUDE-DEPENDENCIES]).
+fn dependency_components(include_dependencies: bool) -> &'static [&'static str] {
+    if include_dependencies {
+        &[]
+    } else {
+        BUILTIN_DEPENDENCY_COMPONENTS
+    }
+}
+
+/// Returns the lowercased components of `path` lying strictly below
+/// `scan_root` — the part of the path the user asked deslop to analyse.
+/// `None` when no corpus boundary is known or `path` sits outside it.
+fn corpus_components(path: &Path, scan_root: Option<&Path>) -> Option<Vec<String>> {
+    let relative = scan_root.and_then(|root| path.strip_prefix(root).ok())?;
+    Some(path_components(relative).collect())
 }
 
 /// Returns true when built-in generated-code rules hide a path from summaries.
@@ -686,9 +766,9 @@ fn contains_component_pair(components: &[String], pair: (&str, &str)) -> bool {
 /// in a file's head — `@generated` (linguist convention), `GENERATED CODE`
 /// (`build_runner` / `source_gen`), `AUTO[- ]GENERATED` (ffigen),
 /// `Autogenerated` (jnigen), and `automatically generated` (Flutter/Dart
-/// localizations, intl messages, #165). Catches generators that emit no stable file
+/// localizations, intl messages). Catches generators that emit no stable file
 /// suffix, e.g. ffigen/jnigen FFI bindings, so they join the suffix list in
-/// being hidden from the ranked report ([EXCLUSION-CONFIG], #95). Scans only
+/// being hidden from the ranked report ([EXCLUSION-CONFIG]). Scans only
 /// the first kilobyte so a stray phrase deep in hand-written source cannot
 /// trip it, and matches ASCII-case-insensitively without allocating.
 #[must_use]
@@ -702,7 +782,7 @@ pub(crate) fn has_generated_header(source: &[u8]) -> bool {
         // Flutter/Dart codegen (generated localizations, intl messages) and
         // a wide class of generators emit "automatically generated … do not
         // edit". Without this marker these dominated worst-offenders on a
-        // stock Flutter analysis (#165).
+        // stock Flutter analysis.
         b"automatically generated",
     ];
     let head = source.get(..source.len().min(1024)).unwrap_or(source);
@@ -740,7 +820,7 @@ fn matches(matcher: &Gitignore, path: &Path) -> bool {
 
 /// Builds the canonical set of config paths that should trigger a live
 /// exclusion reload — `<root>/.deslop.toml` plus the explicit override
-/// (if any) ([LIVE-CONFIG-LIVE], #139).
+/// (if any) ([LIVE-CONFIG-LIVE]).
 #[must_use]
 pub fn watched_config_paths(root: &Path, override_path: Option<&Path>) -> Vec<PathBuf> {
     let default = root.join(DEFAULT_CONFIG_FILENAME);
@@ -774,7 +854,7 @@ fn canonicalise_or_clone(path: &Path) -> PathBuf {
 /// matcher. The builder is rooted at the scan root when known so user
 /// patterns are scan-root-relative — `subdir/**` matches
 /// `<scan_root>/subdir/...` regardless of where the scan root sits on
-/// disk (#138). With no scan root the matcher falls back to `/` so
+/// disk. With no scan root the matcher falls back to `/` so
 /// absolute-path callers still get the original behaviour.
 ///
 /// Unclosed character classes are rejected here even though

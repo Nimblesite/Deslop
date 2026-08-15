@@ -8,7 +8,7 @@ Deslop ships with conservative built-in defaults, and a `.deslop.toml` in the sc
 - `exclude` — matching files are dropped in [PIPELINE-DISCOVER-FILES] before parsing. They are not counted in `files_analysed`, never fingerprinted, never embedded, and cannot appear in any cluster. Use for third-party vendored code you do not want analysed at all.
 - `report_hide` — matching files **are analysed** and can contribute to clustering, but each occurrence is flagged `hidden = true` at render time. A cluster where **every** occurrence is hidden is dropped from the rendered `clusters` list and counted under `clusters_hidden`. A cluster with at least one non-hidden occurrence is kept intact so the user sees "regular code duplicates generated code." This is the default tier for generated output like `*.g.cs`, `*.generated.cs`, OpenAPI clients, protobuf output.
 
-**Built-in defaults.** Without a config file, Deslop excludes common dependency/build cache directories (`node_modules`, `target`, `dist`, `build`, `.venv`, `__pycache__`, `.cargo`) and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`). Project config adds to these defaults. `.cargo` blocks Cargo's vendored registry and git-checkout caches from entering discovery even when a misconfigured scan root reaches into the user's home directory.
+**Built-in defaults.** Without a config file, Deslop excludes dependency and build directories per [CONFIG-EXCLUDE-BUILTIN] and report-hides generated output (`generated` path components, Alembic migration files under `alembic/versions`, plus suffixes such as `.g.cs`, `.generated.cs`, `.designer.cs`, `.pb.cs`, `.openapi.cs`, `.generated.py`, `_generated.py`, `_pb2.py`, `_pb2_grpc.py`). Project config adds to these defaults.
 
 **File format.** TOML. Parsed via the `toml` crate. Minimal, familiar, diffable:
 
@@ -33,6 +33,19 @@ data_clone_weight = 0.15    # multiplier in demote mode; finite, in (0.0, 1.0]
 ```
 
 `data_clones` selects how `data`-category clusters ([CLONE-NOISE-DART-DATA-TABLE-LITERAL]) are ranked: `demote` (default) down-weights them by `data_clone_weight`, `ignore` drops them from the report, `keep` ranks them at full weight. `data_clone_weight` must be finite and strictly inside `(0.0, 1.0]`; `NaN`, infinity, `0.0`, and values above `1.0` are rejected with a `ConfigThreshold`-style error naming the config path. The weight is consulted only in `demote` mode. Both keys are omittable; absence yields the default `demote` / `0.15`.
+
+**`[metrics]` section** (lands with gh #344, [pipeline.md §METRICS-REPO-WEIGHTED](pipeline.md#metrics-repo-weighted)). Overrides the evidence weights of the weighted duplication percentage:
+
+```toml
+[metrics.bucket_weights]
+structural_only = 0.15      # each key optional; defaults per [METRICS-REPO-WEIGHTED]
+same_behavior = 0.5
+
+[metrics.category_weights]
+data = 0.15
+```
+
+Every value must be finite and in `[0.0, 1.0]`, rejected otherwise with the same `ConfigThreshold`-style error as `[ranking]`. `0.0` is legal here (unlike the ranking multipliers): it removes that class from the weighted numerator only. Nothing in this section can alter the mechanical `duplication_percent` — that figure has no configuration surface, by design.
 
 **Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
 
@@ -59,6 +72,37 @@ The Dart predicate above ships per-grammar CST knowledge, so every other languag
 **Routing interaction.** A literal-dominated shape-only family stays in the surfaced `structural_only` tier instead of the hidden cross-file-scaffolding one: the `[ranking] data_clones` policy ([RANK-CATEGORY]) owns its visibility — demoted by default, dropped under `ignore`, restored by `data_clone_weight = 1.0` — and a policy knob cannot govern a cluster the renderer already hid.
 
 This predicate feeds the [RANK-CATEGORY] policy: under the default **demote** mode the table is down-weighted and labelled `category="data"`; under **ignore** it is dropped; under **keep** it ranks at full weight.
+
+### [CONFIG-EXCLUDE-BUILTIN] Built-in component exclusion
+
+Two fixed lists of directory names, matched case-insensitively against **path components**, not glob patterns. They apply before any `.deslop.toml` rule and independently of `.gitignore`.
+
+**Dependency components** — `node_modules`, `vendor`, `.cargo`, `.pub-cache`, `.venv`. Third-party library source installed or vendored into the corpus. Real, readable source the user did not write. Governed by [CONFIG-EXCLUDE-DEPENDENCIES].
+
+**Artefact components** — `target`, `dist`, `build`, `__pycache__`, `.dart_tool`, `.git`, `.claude`. Compiler and codegen output, tool caches, and whole additional checkouts of the same repository (`.claude/worktrees/<id>/`, gh #222 — without this every file reports as N identical copies). No configuration opts back into these: none of it is source the user wrote, and none of it is a library the code depends on.
+
+**Corpus scope.** Only components **at or below the scan root** are tested. A component above the scan root records where the checkout happens to sit on disk and says nothing about its contents; the user's choice of scan root *is* the request to analyse what is under it.
+
+Matching ancestors was gh #342: a checkout at `~/build/myrepo` (or under `dist`, `target`, `vendor`, `node_modules`) excluded **every** file in the repository, and the run reported `files_analysed: 0`, `clusters: []`, `duplication_percent: 0.0`, `threshold.breached: false` and exited `0`. A total, silent false negative — indistinguishable from a genuinely clean repository, so neither the user nor the `--fail-over` CI gate could detect it. The report-hide tier already scoped itself this way: `scan_root_contains_component_pair` exempts a root that sits inside a hidden component pair for exactly this reason.
+
+**Unknown boundary.** When no scan root is bound, or the path lies outside it, the rule does not fire. That direction can only admit a file for analysis; it can never silently discard one. Every discovery path binds its root: batch discovery ([PIPELINE-DISCOVER-FILES]), incremental session updates, and the live watcher ([live.md §LIVE-WATCHER](live.md#live-watcher-file-watcher)). The latter two have neither a hidden-directory filter nor a `.gitignore` pass, so this rule is their only built-in filter and a missing root would silently widen what they analyse.
+
+Code: `crates/deslop-core/src/config.rs::corpus_built_in_excluded`. Tests: `crates/deslop/tests/issue_342_scan_root_under_excluded_ancestor.rs`, `crates/deslop/tests/go_vendor_exclusion.rs`.
+
+### [CONFIG-EXCLUDE-DEPENDENCIES] Analysing dependencies
+
+```toml
+[analysis]
+include_dependencies = false
+```
+
+Default `false`: the dependency components of [CONFIG-EXCLUDE-BUILTIN] are excluded. Ranking is worst-offenders-first ([PIPELINE-RANK-WORST-FIRST]), so dependency duplication the user cannot act on would otherwise outrank every first-party finding.
+
+Opt-in: `include_dependencies = true` stops the dependency list applying, admitting third-party library source into discovery. Use it to audit a dependency for duplication, or to ask whether first-party code re-implements a library it already depends on.
+
+The artefact components apply under either setting — "analyse the libraries I depend on" is not "analyse my compiler output". The setting is global for the run and orthogonal to scan-root ancestry: a checkout that merely lives under a directory named `vendor` behaves identically to one that does not, under either value.
+
+Code: `crates/deslop-core/src/config.rs::dependency_components`. Tests: `crates/deslop/tests/config_include_dependencies.rs`.
 
 ### [CONFIG-CROSS-LANGUAGE] Cross-language comparison
 The same `.deslop.toml` file controls whether clone candidates may span different parser language ids.

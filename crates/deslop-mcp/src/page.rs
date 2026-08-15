@@ -85,7 +85,7 @@ pub fn build_page(
 /// thousand files — or a few hundred deeply nested ones — that block
 /// outweighs the entire 200 KB tool-result budget before a single
 /// cluster is added, which made every `report-query` overflow. It is
-/// opt-in; the headline totals are always present ([Deslop#286]).
+/// opt-in; the headline totals are always present.
 fn page_metrics(report: &Report, include_per_file: bool) -> RepoMetrics {
     let mut metrics = report.metrics.clone();
     if !include_per_file {

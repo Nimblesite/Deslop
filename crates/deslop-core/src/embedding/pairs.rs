@@ -105,7 +105,7 @@ fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec
             continue;
         };
         let cosine = cosine_between(left_point, right_point);
-        if cosine >= MIN_COSINE {
+        if admits_cosine(cosine) {
             pairs.push(EmbeddingPair {
                 left,
                 right,
@@ -118,6 +118,26 @@ fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec
 /// Returns cosine similarity for two already-normalised points.
 fn cosine_between(left: &CosinePoint, right: &CosinePoint) -> f64 {
     cosine_from_distance(f64::from(left.distance(right)))
+}
+
+/// Returns the cosine similarity of two raw vectors in `[0, 1]`.
+///
+/// This is the crate's single definition of cosine similarity: the same
+/// L2 normalisation, dot product, and negative-cosine clamp the ANN pass
+/// applies to every [`EmbeddingPair`]. Cluster-level signal measurement
+/// calls this so a rendered `embedding_cos` is always computed by the
+/// identical arithmetic that admitted the pair evidence — a second,
+/// subtly different cosine would let the report disagree with the
+/// pipeline about the same two vectors.
+///
+/// Both the normalisation and the dot product run in `f32`. At four
+/// digits of vector width that accumulates about `2e-6` of drift, so two
+/// byte-identical snippets sharing one vector report `0.999998` rather
+/// than `1.0`. Harmless at the current four lanes, load-bearing at any
+/// realistic width — GH #369.
+#[must_use]
+pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
+    cosine_between(&CosinePoint::new(left), &CosinePoint::new(right))
 }
 
 /// Runs a single HNSW query and appends any surviving pairs to `out`.
@@ -134,11 +154,24 @@ fn collect_neighbours(
             continue;
         }
         let cosine = cosine_from_distance(f64::from(hit.distance));
-        if cosine < MIN_COSINE {
+        if !admits_cosine(cosine) {
             continue;
         }
         out.push(order_pair(query_index, neighbour, cosine));
     }
+}
+
+/// Returns `true` when a measured cosine is admissible evidence.
+///
+/// Finiteness is checked first and separately from the floor, because a
+/// non-finite cosine passes any `<` test by definition: written as
+/// `cosine < MIN_COSINE`, the ANN filter kept every `NaN` neighbour it
+/// was handed. `NaN` reaches here whenever a component overflows `f32`,
+/// so a malformed provider response would manufacture pairs rather than
+/// be discarded. Both the exact and ANN paths route through this one
+/// predicate so neither can drift open again.
+fn admits_cosine(cosine: f64) -> bool {
+    cosine.is_finite() && cosine >= MIN_COSINE
 }
 
 /// Converts instant-distance cosine **distance** back to a cosine

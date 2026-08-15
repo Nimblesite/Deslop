@@ -17,6 +17,16 @@
 /// unused import in every binary that never touches the vocabulary.
 pub(crate) mod signals;
 
+/// The deterministic mock-embedder runner. Imported explicitly with
+/// `use crate::common::embeddings::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod embeddings;
+
+/// Report-verdict assertions: metric totals ([METRICS-REPO]) and the
+/// shape of an expected cluster. Imported explicitly with
+/// `use crate::common::verdict::*;`, for the same reason as `signals`.
+pub(crate) mod verdict;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -217,10 +227,7 @@ pub(crate) fn assert_bucketed_clone(
         "{fixture_dir} renamed clone must reach structural identity: {report:#}"
     );
     if bucket == "structural_only" {
-        assert!(
-            signal(clone, "token_jaccard") < 0.05,
-            "{fixture_dir} structural_only routing needs a near-zero token signal: {report:#}"
-        );
+        signals::assert_structural_only_contract(clone, fixture_dir);
     } else {
         assert!(
             approx(signal(clone, "token_jaccard"), 1.0),

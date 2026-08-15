@@ -49,11 +49,17 @@ fn javascript_generator_clone_is_nearly_identical() -> Result<()> {
 
 #[test]
 fn javascript_template_literal_clone_is_detected() -> Result<()> {
+    // Anchor-rich by the module contract above: every template chunk
+    // ("Hello ", " totalling ", " dollars has shipped.", …) survives the
+    // rename verbatim, and `firstName`/`lastName`/`id`/`total`/
+    // `trackingUrl`/`email` map through one substitution. That is a proven
+    // Type-2 rename, so [FUSION-CONTENT-GATE] must keep it out of the
+    // demoted bucket — the exact promotion the content gate exists to make.
     assert_bucketed_clone(
         "js-template-literals",
         8,
         &["render_email.js", "render_receipt.js"],
-        "structural_only",
+        "nearly_identical",
     )
 }
 
@@ -69,11 +75,16 @@ fn javascript_tagged_template_clone_is_nearly_identical() -> Result<()> {
 
 #[test]
 fn javascript_optional_chaining_clone_is_detected() -> Result<()> {
+    // Anchor-rich: `3000`, `5` and "default" are preserved, and so is every
+    // accessed property name (`network`, `timeout`, `retries`, `max`,
+    // `meta`, `name`, `trim`) — only the bound locals are renamed. Pooled
+    // content agreement therefore vouches for the pair even though the
+    // literal count alone sits under the rename-anchor floor.
     assert_bucketed_clone(
         "js-optional-chaining",
         8,
         &["read_config.js", "read_options.js"],
-        "structural_only",
+        "nearly_identical",
     )
 }
 

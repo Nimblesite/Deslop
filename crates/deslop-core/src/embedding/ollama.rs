@@ -37,14 +37,6 @@ const DIMENSION_PROBE_PROMPT: &str = "deslop";
 /// inference is bounded in practice; give enough headroom for cold
 /// model loads without blocking the pipeline forever.
 const HTTP_TIMEOUT: Duration = Duration::from_secs(60);
-/// Hard character cap on any single embed prompt. Ollama returns HTTP
-/// 500 ("the input length exceeds the context length") when a prompt
-/// overflows the model's context window. `nomic-embed-text` and its
-/// peers use a 2048-token window; 6000 chars comfortably undershoots
-/// that at ~4 chars/token, and oversized subtrees (generated code,
-/// minified files) still contribute a usable prefix instead of
-/// aborting the whole pass.
-const MAX_EMBED_CHARS: usize = 6000;
 /// Number of subtrees sent in one Ollama embedding request. The
 /// endpoint accepts array input, but keeping chunks modest avoids
 /// oversized JSON bodies and long all-or-nothing retries.
@@ -74,7 +66,7 @@ where
 /// Extracted because the identical builder chain sat in `probe`,
 /// `post_embeddings`, and `fetch_tags` — Deslop's own `find-similar`
 /// flagged it at `fused=1.00` when a fourth copy was about to be
-/// written for `/api/show` (#286).
+/// written for `/api/show`.
 fn ollama_agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(HTTP_TIMEOUT))
@@ -102,7 +94,7 @@ pub struct OllamaProvider {
     /// Cached spec built at construction time (identity + dimensions).
     spec: EmbeddingSpec,
     /// Per-input character budget derived from the model's own context
-    /// length at construction time (#286).
+    /// length at construction time.
     max_input_chars: usize,
 }
 
@@ -230,21 +222,33 @@ fn probe_dimensions(endpoint: &str, model: &str) -> Result<usize, ProviderError>
     Ok(embedding.len())
 }
 
-/// Sends one `POST /api/embed` call and returns the parsed
-/// embeddings. Centralises truncation, status handling, and error-body
-/// capture so `embed`, `embed_batch`, and `probe_dimensions` behave
-/// identically.
+/// Sends one `POST /api/embed` call and returns the parsed embeddings.
+/// Centralises status handling and error-body capture so `embed`,
+/// `embed_batch`, and `probe_dimensions` behave identically.
+///
+/// **Inputs are dispatched whole** ([FUSION-EMBED-PROVIDER]). The
+/// per-input budget belongs to the provider and is enforced *upstream*:
+/// a subtree longer than `max_input_chars` is counted in
+/// `failed_subtrees` and never reaches here, so everything that does is
+/// already approved against the model's own context length. A second,
+/// pipeline-side cap here could only contradict that decision — and it
+/// did: a fixed 6,000-character clamp silently reduced a
+/// budget-approved subtree to a prefix whenever the model's context
+/// exceeded it, associating a prefix vector with the full source range
+/// the report attributes it to. `truncate: false` makes the provider
+/// reject an over-context input loudly instead of trimming it
+/// silently, so a mis-derived budget surfaces as an error rather than
+/// as quietly wrong evidence.
 fn post_embeddings(
     endpoint: &str,
     model: &str,
     inputs: &[String],
 ) -> Result<Vec<Vec<f32>>, ProviderError> {
     let url = format!("{endpoint}/api/embed");
-    let input: Vec<String> = inputs.iter().map(|input| truncate_prompt(input)).collect();
     let body = EmbedRequest {
         model,
-        input,
-        truncate: true,
+        input: inputs.to_vec(),
+        truncate: false,
     };
     let mut response = call_with_transport_retry(|| ollama_agent().post(&url).send_json(&body))?;
     if !response.status().is_success() {
@@ -271,22 +275,6 @@ fn post_embeddings(
         })
 }
 
-/// Truncates `input` to at most `MAX_EMBED_CHARS` characters at a UTF-8
-/// boundary. Prevents Ollama's "input length exceeds the context
-/// length" HTTP 500 for oversized subtrees (generated / minified code).
-fn truncate_prompt(input: &str) -> String {
-    if input.len() <= MAX_EMBED_CHARS {
-        return input.to_owned();
-    }
-    let end = input
-        .char_indices()
-        .map(|(idx, _)| idx)
-        .take_while(|idx| *idx <= MAX_EMBED_CHARS)
-        .last()
-        .unwrap_or(0);
-    input.get(..end).unwrap_or("").to_owned()
-}
-
 /// `POST /api/embed` request body.
 #[derive(Debug, Serialize)]
 struct EmbedRequest<'a> {
@@ -294,7 +282,9 @@ struct EmbedRequest<'a> {
     model: &'a str,
     /// Texts to embed.
     input: Vec<String>,
-    /// Allow Ollama to trim inputs that still exceed the model window.
+    /// Always `false`: inputs are budget-approved upstream, so a
+    /// provider-side trim could only replace a full subtree with a
+    /// prefix vector ([FUSION-EMBED-PROVIDER]).
     truncate: bool,
 }
 
@@ -343,10 +333,11 @@ fn ensure_dimensions(embedding: &[f32], expected: usize) -> Result<(), ProviderE
 
 /// Conservative characters-per-token ratio used to turn a model's
 /// token context length into a character budget. Source code tokenises
-/// worse than prose, so this stays below the ~4 rule of thumb: a budget
-/// that is slightly too small drops a subtree, one that is too large
-/// gets silently truncated by Ollama (`truncate: true`) and yields a
-/// vector that misrepresents the code ([FUSION-EMBED-PROVIDER]).
+/// worse than prose, so this stays below the ~4 rule of thumb. The two
+/// errors are not symmetric: a budget slightly too small drops a
+/// subtree and says so in `failed_subtrees`, while one too large is
+/// rejected by the provider — never silently trimmed, since requests go
+/// out with `truncate: false` ([FUSION-EMBED-PROVIDER]).
 const CHARS_PER_TOKEN: usize = 3;
 
 /// Request body for `POST /api/show`.
@@ -370,7 +361,7 @@ struct ShowResponse {
 /// model's own context length. Falls back to [`DEFAULT_MAX_INPUT_CHARS`]
 /// whenever `/api/show`, the architecture key, or the context field is
 /// missing — the endpoint is incomplete on some Ollama builds, and a
-/// conservative budget is always safe (#286).
+/// conservative budget is always safe.
 fn fetch_context_chars(endpoint: &str, model: &str) -> usize {
     context_tokens(endpoint, model)
         .and_then(|tokens| tokens.checked_mul(CHARS_PER_TOKEN))

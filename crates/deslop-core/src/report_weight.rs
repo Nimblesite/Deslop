@@ -64,7 +64,7 @@ fn category_multiplier(cluster: &ReportCluster, policy: RankingPolicy) -> f64 {
 /// under `policy` ([RANK-STRUCTURAL-ONLY]). Keyed off the same
 /// [`ClusterKind::StructuralOnly`] routing that assigns the wire label,
 /// so a labelled cluster is always the cluster the policy demotes
-/// (issue #197 inconsistency #1). `data`-category clusters are exempt:
+/// (inconsistency #1). `data`-category clusters are exempt:
 /// their weight belongs to the more specific, user-configurable
 /// `[ranking] data_clones` policy ([RANK-CATEGORY]), and stacking both
 /// demotions would make `data_clone_weight = 1.0` unable to restore a

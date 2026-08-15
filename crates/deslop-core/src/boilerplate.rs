@@ -122,7 +122,7 @@ fn rust_carrier(kind: &str) -> bool {
 /// Dart import/export/part directives. `import_or_export` is the umbrella
 /// node wrapping `library_import`, `library_export`, and `part`/`part of`
 /// directives — all top-level scaffolding, never duplicate logic
-/// (issues #96 / #150 / #155 carried over to Dart export-barrel files).
+/// (carried over to Dart export-barrel files).
 fn dart_carrier(kind: &str) -> bool {
     matches!(kind, "import_or_export")
 }

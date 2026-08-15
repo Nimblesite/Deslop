@@ -1,0 +1,194 @@
+:root {
+  --audit-paper: #fafaf7;
+  --audit-raised: #ffffff;
+  --audit-recess: #f1efe8;
+  --audit-obsidian: #0b0d10;
+  --audit-ink: #14161a;
+  --audit-muted: #55606b;
+  --audit-crimson: #b3261e;
+  --audit-blue: #0b5fff;
+  --audit-green: #1a7f37;
+  --audit-amber: #9a6700;
+}
+
+html {
+  background: var(--audit-paper);
+  color: var(--audit-ink);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 100%;
+  line-height: 1.6;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 65ch;
+  padding: 2rem 1.25rem 4rem;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--audit-ink);
+  font-family: Inter, "Inter Tight", system-ui, sans-serif;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  page-break-after: avoid;
+}
+
+h1 {
+  font-size: 2.25rem;
+  margin-top: 3rem;
+}
+
+h2 {
+  font-size: 1.6rem;
+  margin-top: 2.5rem;
+}
+
+h3 {
+  font-size: 1.2rem;
+  margin-top: 2rem;
+}
+
+p,
+li {
+  orphans: 3;
+  widows: 3;
+}
+
+a {
+  color: var(--audit-blue);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+code {
+  background: var(--audit-recess);
+  padding: 0.08rem 0.22rem;
+}
+
+pre {
+  background: var(--audit-obsidian);
+  color: #f0efe9;
+  line-height: 1.45;
+  overflow-x: auto;
+  padding: 1.25rem;
+  page-break-inside: avoid;
+  white-space: pre-wrap;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+}
+
+blockquote {
+  background: var(--audit-recess);
+  color: var(--audit-ink);
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin: 1.5rem 0;
+  width: 100%;
+}
+
+th,
+td {
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: var(--audit-obsidian);
+  color: #f0efe9;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--audit-recess);
+}
+
+img {
+  display: block;
+  height: auto;
+  margin: 2rem auto 0.75rem;
+  max-width: 100%;
+}
+
+figcaption,
+.caption {
+  color: var(--audit-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+hr {
+  background: var(--audit-recess);
+  border: 0;
+  height: 0.5rem;
+  margin: 3rem 0;
+}
+
+.verdict,
+.warning,
+.verified {
+  background: var(--audit-recess);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  padding: 1rem 1.25rem;
+}
+
+.verdict {
+  color: var(--audit-crimson);
+}
+
+.warning {
+  color: var(--audit-amber);
+}
+
+.verified {
+  color: var(--audit-green);
+}
+
+@media (max-width: 38rem) {
+  body {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  h1 {
+    font-size: 1.9rem;
+  }
+
+  table {
+    font-size: 0.82rem;
+  }
+}
+
+@media print {
+  a {
+    color: var(--audit-ink);
+  }
+
+  pre,
+  table,
+  img {
+    page-break-inside: avoid;
+  }
+}

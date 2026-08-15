@@ -221,7 +221,7 @@ const SCOPE_KINDS: ScopeKinds = ScopeKinds {
     scope_escape_kinds: &["global_statement", "nonlocal_statement"],
     // Plain assignment *binds* (rule 6 territory); only augmented
     // assignment reads-then-rebinds an outer name, so it alone is a
-    // write of a free variable (rule 7, issue #280). `nonlocal` spans
+    // write of a free variable (rule 7). `nonlocal` spans
     // cannot relocate: the module-scope helper has no enclosing
     // function binding — `global` survives, same module either way.
     write_kinds: &[WriteKind {

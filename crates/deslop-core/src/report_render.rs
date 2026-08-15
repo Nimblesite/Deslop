@@ -85,11 +85,10 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
     );
     let interpretation = interpret(kind);
     // The bucket is the wire label of the routed kind — including
-    // `structural_only` ([RANK-STRUCTURAL-ONLY]), which issue #134
-    // introduced as a label-only override here. It is now a
-    // first-class [`ClusterKind`] routed in `report_bucket_kind`, so
-    // the label, the interpretation, and the ranking demotion can no
-    // longer diverge (issue #197 inconsistency #1).
+    // `structural_only` ([RANK-STRUCTURAL-ONLY]), which was once a
+    // label-only override applied here. It is now a first-class
+    // [`ClusterKind`] routed in `report_bucket_kind`, so the label, the
+    // interpretation, and the ranking demotion can no longer diverge.
     let bucket = kind.wire_label().to_owned();
     let occurrences_total = occurrences.len();
     ReportCluster {
@@ -149,7 +148,7 @@ pub(crate) fn occurrence<S: BuildHasher>(
 /// Occurrences, boilerplate rows and per-file metrics all resolve paths
 /// through here, so a single report can never mix relative and absolute
 /// forms — the drift that put the user's home directory into every
-/// `metrics.per_file` row ([Deslop#286]).
+/// `metrics.per_file` row.
 pub(crate) fn relative_to_scan_root(absolute: &Path, scan_root: &Path) -> PathBuf {
     absolute
         .strip_prefix(scan_root)
@@ -233,12 +232,12 @@ pub(crate) fn summarise(
 /// labelling a cluster `Identical` on the signal alone. Any cluster that
 /// reaches [`ClusterKind::Identical`] with a value below this floor was
 /// promoted by the byte-equivalence upgrade in [`report_bucket_kind`], not
-/// by its token signal — the GH #232 fingerprint to correct.
+/// by its token signal — the fingerprint to correct.
 const PROVEN_IDENTICAL_TOKEN_JACCARD_FLOOR: f64 = 0.99;
 
 /// Corrects the reported `token_jaccard` for clusters the byte-equivalence
 /// upgrade in [`report_bucket_kind`] routed to [`ClusterKind::Identical`]
-/// (GH #232).
+///.
 ///
 /// A synthetic sibling-window fingerprint matches no single AST node, so the
 /// non-language signature path resolves it to a byte-offset-seeded fallback
@@ -267,7 +266,7 @@ fn proven_identical_signals(signals: ReportSignals, kind: ClusterKind) -> Report
 /// Routes the signal triple into the report bucket and is the *single
 /// source of truth* for the [CLONE-BUCKETS-IDENTICAL] downgrade.
 ///
-/// Issue #66: structural normalisation collapses identifiers and literals,
+/// Structural normalisation collapses identifiers and literals,
 /// so two snippets that share AST shape but differ in routes, handlers, or
 /// rate-limit policy literals still reach `structural=1.00, jaccard=1.00`.
 /// Calling them "Identical code / every copy is the same" is a lie — the
@@ -302,21 +301,22 @@ pub(crate) fn report_bucket_kind(
         }
         _ => kind,
     };
-    // Structural-only routing ([RANK-STRUCTURAL-ONLY], one shared
-    // predicate with the ranking demotion — issue #197 inconsistency
-    // #1). Source-bytes equivalent clusters (Identical) keep their
-    // bucket because byte-level proof is independent of the signal
-    // triple. Two destinations:
+    // Structural-only routing ([RANK-STRUCTURAL-ONLY]) shares one
+    // predicate with the ranking demotion, so a cluster labelled
+    // `structural_only` is always the cluster the policy demotes.
+    // Source-bytes equivalent clusters (Identical) keep their bucket
+    // because byte-level proof is independent of the signal triple.
+    // Two destinations:
     //
-    // - Issue #134: a *cross-file multi-copy* structural-only match
-    //   (3+ occurrences spread across 3+ files) is test scaffolding /
-    //   generated boilerplate — demoted to `LooselySimilar`, which the
-    //   renderer hides.
+    // - A *cross-file multi-copy* structural-only match (3+ occurrences
+    //   spread across 3+ files) is test scaffolding / generated
+    //   boilerplate — demoted to `LooselySimilar`, which the renderer
+    //   hides.
     // - Everything else with shape-only evidence becomes
     //   [`ClusterKind::StructuralOnly`]: surfaced and labelled
     //   honestly, demoted in ranking by the `[ranking]`
-    //   `structural_only` policy. The *single-file* sibling-method
-    //   family (issue #197) is additionally hidden by the renderer's
+    //   `structural_only` policy. The *single-file* sibling-declaration
+    //   family is additionally hidden by the renderer's
     //   `cluster_is_hidden` AST pass, which needs the CST this
     //   signal-only routing does not have.
     route_shape_identical(kind, signals, content, members)
@@ -330,10 +330,10 @@ pub(crate) fn report_bucket_kind(
 /// vouches for — pooled raw bytes that mostly agree, or a
 /// literal-anchored consistent rename ([`ContentEvidence::support`]) —
 /// is a genuine clone even when the token layer lost its signature to
-/// the fingerprint-scoped fallback (gh #339). Support below the floor
+/// the fingerprint-scoped fallback. Support below the floor
 /// with no semantic backing routes to the demoted structural-only tier
 /// — [`ClusterKind::LooselySimilar`] for the cross-file scaffolding
-/// spread (#134), [`ClusterKind::StructuralOnly`] otherwise.
+/// spread, [`ClusterKind::StructuralOnly`] otherwise.
 fn route_shape_identical(
     kind: ClusterKind,
     signals: ReportSignals,
@@ -353,9 +353,9 @@ fn route_shape_identical(
     }
     // Promotion rescues real clones from the demoted tier for small
     // spreads only: a fallback-signature artifact whose raw bytes agree
-    // (gh #339), or a maximal Type-2 rename whose literals and
+    //, or a maximal Type-2 rename whose literals and
     // identifier mapping prove the copy. The cross-file scaffolding
-    // spread (#134) is excluded: contract-mandated wiring (trait
+    // spread is excluded: contract-mandated wiring (trait
     // adapter impls, framework overrides) pins the very leaves both
     // populations measure, so a 3+-file same-shape family scoring high
     // support is still scaffolding and keeps the legacy hidden
@@ -363,7 +363,7 @@ fn route_shape_identical(
     if content.support() >= CONTENT_PROMOTE_FLOOR && !is_cross_file_scaffolding(members) {
         return ClusterKind::NearlyIdentical;
     }
-    // Literal-dominated families ([CLONE-NOISE-LITERAL-TABLE], #336)
+    // Literal-dominated families ([CLONE-NOISE-LITERAL-TABLE])
     // stay in the surfaced `structural_only` tier instead of the hidden
     // scaffolding one: the data-category policy ([RANK-CATEGORY]) owns
     // their visibility, and a policy knob cannot govern a cluster the
@@ -427,7 +427,7 @@ pub(crate) fn interpret(kind: ClusterKind) -> String {
 /// equal after collapsing ASCII whitespace runs. Whitespace-insensitive so
 /// reformatted-but-identical copies still classify as `Identical`, but
 /// any difference in identifiers, literals, or punctuation prevents the
-/// `Identical` label per [CLONE-BUCKETS-IDENTICAL] (issue #66). When a
+/// `Identical` label per [CLONE-BUCKETS-IDENTICAL]. When a
 /// member's source bytes are unavailable, the function returns `false`
 /// because the renderer cannot prove byte-equivalence.
 pub(crate) fn source_slices_are_equivalent(
@@ -464,7 +464,7 @@ fn source_slices_are_equivalent_for_language(
 /// Member CSTs come from the shared per-render `parse_cache` so a file is
 /// parsed at most once per report regardless of cluster or member count —
 /// re-parsing per member pinned the LSP for minutes on large C# corpora
-/// (GH #239, [CLONE-NOISE-REPARSE-CACHE]).
+/// ([CLONE-NOISE-REPARSE-CACHE]).
 fn csharp_method_declarations_are_equivalent(
     members: &[Fingerprint],
     sources: &HashMap<FileId, Vec<u8>>,

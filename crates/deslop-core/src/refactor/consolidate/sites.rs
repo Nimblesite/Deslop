@@ -156,7 +156,7 @@ fn covered_definition_site(
 
 /// Outer attributes and doc comments are *sibling* nodes in
 /// tree-sitter-rust; they belong to the definition, move with it, and
-/// count toward the byte-equivalence proof (#279 review). Inner doc
+/// count toward the byte-equivalence proof. Inner doc
 /// comments (`//!`, `/*!`) belong to the file and never extend a site.
 fn decorated_start(node: Node<'_>, source: &[u8]) -> usize {
     let mut start = node.start_byte();

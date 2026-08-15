@@ -1,4 +1,4 @@
-__file__ [0..299]
+__file__ [0..298]
   php_tag [0..5]
   class_declaration [26..298]
     __ident__ [32..37]

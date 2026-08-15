@@ -107,7 +107,7 @@ impl From<PairScore> for ReportSignals {
             structural: score.structural,
             token_jaccard: score.token_jaccard,
             embedding_cos: score.embedding_cos,
-            fused: score.fused(),
+            fused: score.bounded_fused(),
         }
     }
 }
@@ -259,8 +259,43 @@ fn materialise_cluster<S: BuildHasher>(
         policy.drops_structural_only() && classify(&report_cluster) == ClusterKind::StructuralOnly;
     let hidden = dropped_as_data
         || dropped_as_structural_only
-        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache);
+        || cluster_is_hidden(cluster, &report_cluster, inputs, parse_cache, category);
+    if hidden {
+        log_hidden_cluster(
+            &report_cluster,
+            cluster.content,
+            dropped_as_data,
+            dropped_as_structural_only,
+        );
+    }
     (report_cluster, hidden)
+}
+
+/// Records why a cluster left the visible report. A duplicate that
+/// silently disappears is the hardest defect class to notice, so the
+/// routing decision — signals and measured content evidence included —
+/// is traceable without re-running the pipeline.
+fn log_hidden_cluster(
+    cluster: &ReportCluster,
+    content: crate::content::ContentEvidence,
+    as_data: bool,
+    as_structural_only: bool,
+) {
+    tracing::debug!(
+        cluster = cluster.id.as_str(),
+        bucket = cluster.bucket.as_str(),
+        category = cluster.category.as_str(),
+        occurrences = cluster.occurrences.len(),
+        structural = cluster.signals.structural,
+        token_jaccard = cluster.signals.token_jaccard,
+        embedding_cos = cluster.signals.embedding_cos,
+        content_agreement = content.agreement,
+        content_rename_consistency = content.rename_consistency,
+        content_substance_varies = content.substance_varies,
+        dropped_as_data = as_data,
+        dropped_as_structural_only = as_structural_only,
+        "cluster hidden from report",
+    );
 }
 
 /// Decides whether a cluster must be dropped from the ranked report.
@@ -284,6 +319,7 @@ fn cluster_is_hidden<S: BuildHasher>(
     report_cluster: &ReportCluster,
     inputs: &ReportInputs<'_, S>,
     parse_cache: &ParseCache,
+    category: CloneCategory,
 ) -> bool {
     let occurrences_all_hidden = !report_cluster.occurrences.is_empty()
         && report_cluster.occurrences.iter().all(|occ| occ.hidden);
@@ -310,15 +346,17 @@ fn cluster_is_hidden<S: BuildHasher>(
             inputs.file_languages,
             parse_cache,
         );
-    // Issue #197: a single-file `structural_only` family of sibling
-    // declarations (REST CRUD / settings / builder methods) is the same
-    // evidence-free noise as the cross-file #134 scaffolding. The AST
-    // check confines this to declaration families, so worth-extracting
-    // statement-window clones stay visible (demoted, not hidden, per
-    // [RANK-STRUCTURAL-ONLY]).
+    // [RANK-STRUCTURAL-ONLY] A single-file `structural_only` family of
+    // sibling declarations (REST CRUD / settings / builder methods) is the
+    // same evidence-free noise as the cross-file scaffolding in
+    // [CLONE-NOISE-SCAFFOLDING]. The content check confines this to members
+    // that provably differ in substance, so worth-extracting clones — a
+    // consistent rename over preserved literals — stay visible (demoted,
+    // not hidden).
     let single_file_declaration_family = kind == ClusterKind::StructuralOnly
         && is_single_file_declaration_family(
-            &cluster.members,
+            cluster,
+            category,
             inputs.sources,
             inputs.file_languages,
             parse_cache,

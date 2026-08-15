@@ -5,7 +5,57 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
+use deslop_test_support::enclosure::{strictly_encloses, Span};
+
+/// The enclosure spans of one rendered cluster.
+fn spans(cluster: &deslop_core::report::ReportCluster) -> Result<Vec<Span>> {
+    cluster
+        .occurrences
+        .iter()
+        .map(|occurrence| {
+            Ok(Span::new(
+                occurrence.path.to_string_lossy(),
+                u64::try_from(occurrence.start_byte)?,
+                u64::try_from(occurrence.end_byte)?,
+            ))
+        })
+        .collect()
+}
+
+/// [PIPELINE-CLUSTER-EXACT]: asserts the refactor suites planned from the
+/// *enclosing* view of the duplication.
+///
+/// This is what makes a refactor golden provably correct rather than
+/// merely code-agreeing. One physical duplication yields two candidate
+/// clusters — the whole duplicated body, and the per-statement clones
+/// nested inside it — and the nested view ranks heavier because it
+/// carries one occurrence per statement. Planning from it would extract
+/// a single statement, leave the rest duplicated, and stamp the *nested*
+/// cluster's id into the emitted helper name that every golden pins. A
+/// golden blessed in that state records the wrong region under a name
+/// that looks equally plausible, so no byte comparison can catch it.
+pub(crate) fn assert_planned_from_enclosing_view(
+    report: &deslop_core::report::Report,
+    chosen: &deslop_core::report::ReportCluster,
+) -> Result<()> {
+    let planned = spans(chosen)?;
+    ensure!(
+        !planned.is_empty(),
+        "the planned cluster must render occurrences"
+    );
+    for other in &report.clusters {
+        ensure!(
+            other.id == chosen.id || !strictly_encloses(&spans(other)?, &planned),
+            "cluster {chosen} is a nested view of {other}; the refactor must \
+             plan from the enclosing duplication, and the golden name embeds \
+             the id of whichever cluster it planned from",
+            chosen = chosen.id,
+            other = other.id,
+        );
+    }
+    Ok(())
+}
 
 /// First cross-file `identical` cluster in the ranked report — the
 /// consolidation suites' shared finder ([AUTOFIX-CONSOLIDATE-SURFACE]).

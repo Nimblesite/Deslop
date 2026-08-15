@@ -1,4 +1,4 @@
-//! Startup threshold-breach warning ([CI-DESLOP], GH #194).
+//! Startup threshold-breach warning ([CI-DESLOP],).
 //!
 //! `.deslop.toml [threshold] max_duplication_percent` is a CLI-only CI
 //! gate ([EXIT-CODES]); the live engine never gates, hides, caps, or

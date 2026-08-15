@@ -8,6 +8,8 @@
 
 #![allow(dead_code)]
 
+pub mod reports;
+
 use std::{
     fs,
     io::BufReader,
@@ -281,6 +283,35 @@ pub fn cluster_count(frame: &serde_json::Value) -> usize {
         .map_or(0, Vec::len)
 }
 
+/// Polls the real `deslop/reportGet` method until `predicate` accepts the
+/// returned report or `timeout` expires. The bounded poll waits on observable
+/// report state rather than assuming how long a cold or incremental pass takes.
+pub fn wait_for_report_matching(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+    timeout: Duration,
+    predicate: impl Fn(&Value) -> bool,
+) -> Result<Value> {
+    let deadline = Instant::now()
+        .checked_add(timeout)
+        .unwrap_or_else(Instant::now);
+    loop {
+        let frame = call(stdin, stdout, "deslop/reportGet", &json!({}))?;
+        let report = frame
+            .get("result")
+            .ok_or_else(|| anyhow!("reportGet returned no result: {frame}"))?;
+        if predicate(report) {
+            return Ok(report.clone());
+        }
+        if Instant::now() >= deadline {
+            return Err(anyhow!(
+                "report state did not converge within {timeout:?}: {report}"
+            ));
+        }
+        std::thread::sleep(POLL_INTERVAL);
+    }
+}
+
 /// Analysis must settle within this budget on any dev machine; the
 /// code-action fixtures are single small files.
 pub const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(20);
@@ -354,4 +385,28 @@ pub fn rewrite_offer<'a>(actions: &'a [Value], title: &str) -> Result<&'a Value>
         "the offer carries the cluster id"
     );
     Ok(offer)
+}
+
+/// Reads `value[key]` without the `Index` impl.
+///
+/// `serde_json`'s `Index` panics on a type mismatch and trips
+/// `clippy::indexing_slicing`, so tests reach fields through this. A
+/// missing key yields `Value::Null` — identical to what `Index` returns
+/// — so an assertion against an absent field still fails loudly rather
+/// than being skipped.
+pub fn at<'a>(value: &'a Value, key: &str) -> &'a Value {
+    value.get(key).unwrap_or(&Value::Null)
+}
+
+/// Reads a nested path, one key per element.
+pub fn path<'a>(value: &'a Value, keys: &[&str]) -> &'a Value {
+    keys.iter().fold(value, |current, key| at(current, key))
+}
+
+/// Reads the `index`th element of a JSON array field.
+pub fn nth<'a>(value: &'a Value, key: &str, index: usize) -> &'a Value {
+    at(value, key)
+        .as_array()
+        .and_then(|items| items.get(index))
+        .unwrap_or(&Value::Null)
 }

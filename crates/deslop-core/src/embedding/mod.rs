@@ -3,7 +3,7 @@
 //! Pluggable `EmbeddingProvider` trait, a disk cache keyed by
 //! `(content_hash, provider_id, model_id, model_version)`, and an HNSW
 //! top-k pair generator that produces the `embedding_cos` signal
-//! consumed by [FUSION-STRATEGY-MAX-SUM].
+//! consumed by [FUSION-STRATEGY-BOUNDED-MAX].
 //!
 //! The module is deliberately small: the trait is the extension point
 //! per [PIPELINE-LANG-TRAIT]-style "single surface" design, and every
@@ -32,7 +32,7 @@ pub use ollama::{
     list_models as list_ollama_models, OllamaModelInfo, OllamaProvider, DEFAULT_OLLAMA_ENDPOINT,
     DEFAULT_OLLAMA_MODEL,
 };
-pub use pairs::{embedding_pairs, EmbeddingPair};
+pub use pairs::{cosine_similarity, embedding_pairs, EmbeddingPair};
 pub use provider::{
     EmbeddingProvider, EmbeddingSpec, ProviderError, DEFAULT_MAX_INPUT_CHARS, DEFAULT_PROVIDER_ID,
 };
@@ -45,9 +45,9 @@ use std::sync::Arc;
 /// the "no embeddings" code path without crash-looping.
 ///
 /// For interactive server processes (LSP, MCP) embeddings are optional
-/// per [LSP-EMBEDDING-CONSENT] / issue #35 — the server must stay alive
-/// regardless of mode. The caller decides how to log the failure
-/// (`error` for `Required`, `warn` for `Auto`).
+/// per [LSP-EMBEDDING-CONSENT] — the server must stay alive regardless
+/// of mode. The caller decides how to log the failure (`error` for
+/// `Required`, `warn` for `Auto`).
 #[must_use]
 pub fn try_connect_ollama(endpoint: &str, model: &str) -> Option<Arc<dyn EmbeddingProvider>> {
     match OllamaProvider::connect(endpoint, model) {

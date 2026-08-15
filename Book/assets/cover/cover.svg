@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1600" height="2560" viewBox="0 0 1600 2560" role="img" aria-labelledby="title description">
+  <title id="title">The Deslop Book cover</title>
+  <desc id="description">Repeated manuscript fragments stop at a crimson audit plane and resolve into one canonical fragment below it.</desc>
+  <rect width="1600" height="2560" fill="#0b0d10"/>
+  <g opacity="0.28" stroke="#242a31" stroke-width="2">
+    <path d="M96 0V2560M256 0V2560M416 0V2560M576 0V2560M736 0V2560M896 0V2560M1056 0V2560M1216 0V2560M1376 0V2560M1536 0V2560"/>
+    <path d="M0 160H1600M0 320H1600M0 480H1600M0 640H1600M0 800H1600M0 960H1600M0 1120H1600M0 1280H1600M0 1440H1600M0 1600H1600M0 1760H1600M0 1920H1600M0 2080H1600M0 2240H1600M0 2400H1600"/>
+  </g>
+
+  <image x="112" y="112" width="176" height="176" href="../../../docs/designs/logo.png" xlink:href="../../../docs/designs/logo.png"/>
+  <text x="336" y="186" fill="#9aa3ad" font-family="JetBrains Mono, monospace" font-size="30" font-weight="600" letter-spacing="5">DUPLICATE CODE · CODING AGENTS</text>
+  <text x="112" y="440" fill="#f0efe9" font-family="Inter, sans-serif" font-size="190" font-weight="800" letter-spacing="-8">THE</text>
+  <text x="112" y="620" fill="#f0efe9" font-family="Inter, sans-serif" font-size="190" font-weight="800" letter-spacing="-8">DESLOP BOOK</text>
+  <text x="116" y="700" fill="#9aa3ad" font-family="JetBrains Mono, monospace" font-size="32" font-weight="500">CHECK BEFORE WRITING · TEST AFTER CLEANUP</text>
+
+  <g transform="translate(178 860)">
+    <g opacity="0.52" transform="translate(440 0)">
+      <rect width="682" height="238" fill="#191e25"/>
+      <rect x="44" y="42" width="210" height="18" fill="#e8eaed"/>
+      <rect x="44" y="82" width="472" height="14" fill="#55606b"/>
+      <rect x="44" y="116" width="380" height="14" fill="#55606b"/>
+      <rect x="44" y="150" width="516" height="14" fill="#55606b"/>
+    </g>
+    <g opacity="0.72" transform="translate(330 72)">
+      <rect width="682" height="238" fill="#242a31"/>
+      <rect x="44" y="42" width="210" height="18" fill="#e8eaed"/>
+      <rect x="44" y="82" width="472" height="14" fill="#9aa3ad"/>
+      <rect x="44" y="116" width="380" height="14" fill="#9aa3ad"/>
+      <rect x="44" y="150" width="516" height="14" fill="#9aa3ad"/>
+    </g>
+    <g transform="translate(220 144)">
+      <rect width="682" height="238" fill="#fafaf7"/>
+      <rect x="44" y="42" width="210" height="18" fill="#14161a"/>
+      <rect x="44" y="82" width="472" height="14" fill="#55606b"/>
+      <rect x="44" y="116" width="380" height="14" fill="#55606b"/>
+      <rect x="44" y="150" width="516" height="14" fill="#55606b"/>
+      <rect x="44" y="190" width="126" height="12" fill="#b3261e"/>
+    </g>
+    <path d="M0 485H1244" stroke="#b3261e" stroke-width="18"/>
+    <rect x="0" y="454" width="218" height="62" fill="#b3261e"/>
+    <text x="26" y="496" fill="#ffffff" font-family="JetBrains Mono, monospace" font-size="26" font-weight="700" letter-spacing="2">CHECK FIRST</text>
+    <text x="958" y="438" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="24" font-weight="600">find-similar</text>
+
+    <path d="M622 542V720" stroke="#6aa8ff" stroke-width="6" stroke-dasharray="14 16"/>
+    <path d="M598 694L622 724L646 694" fill="none" stroke="#6aa8ff" stroke-width="6"/>
+    <g transform="translate(390 766)">
+      <rect width="682" height="238" fill="#fafaf7"/>
+      <rect x="44" y="42" width="210" height="18" fill="#14161a"/>
+      <rect x="44" y="82" width="472" height="14" fill="#55606b"/>
+      <rect x="44" y="116" width="380" height="14" fill="#55606b"/>
+      <rect x="44" y="150" width="516" height="14" fill="#55606b"/>
+      <rect x="44" y="190" width="126" height="12" fill="#0b5fff"/>
+    </g>
+    <text x="390" y="1068" fill="#6aa8ff" font-family="JetBrains Mono, monospace" font-size="26" font-weight="600" letter-spacing="2">USE THE EXISTING IMPLEMENTATION</text>
+  </g>
+
+  <text x="112" y="2238" fill="#e8eaed" font-family="Inter, sans-serif" font-size="48" font-weight="650">Prevent duplicate code before agents write it.</text>
+  <text x="112" y="2308" fill="#e8eaed" font-family="Inter, sans-serif" font-size="48" font-weight="650">Clean up what is already there.</text>
+  <rect x="112" y="2388" width="160" height="10" fill="#b3261e"/>
+  <text x="112" y="2470" fill="#9aa3ad" font-family="JetBrains Mono, monospace" font-size="28" font-weight="500">CHRISTIAN FINDLAY · 2026</text>
+</svg>

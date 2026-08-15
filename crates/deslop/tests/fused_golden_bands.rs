@@ -1,5 +1,5 @@
 //! Golden band coverage for the fused confidence
-//! ([FUSION-STRATEGY-MAX-SUM], [FUSION-CONTENT-GATE], [FUSED-THRESHOLD]).
+//! ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE], [FUSED-THRESHOLD]).
 //!
 //! `docs/root-cause-fusion.md` states the contract the fused score has to
 //! satisfy: it must carry information, so that the three documented agent

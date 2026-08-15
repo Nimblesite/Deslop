@@ -39,7 +39,7 @@ pub enum ClusterKind {
     /// Type-3 near-miss: same shape with small structural or token
     /// differences that may be semantically meaningful.
     NearlyIdentical,
-    /// Structural-only match ([RANK-STRUCTURAL-ONLY], #134/#154/#197):
+    /// Structural-only match ([RANK-STRUCTURAL-ONLY]):
     /// the normalized AST shape is the only positive evidence — no
     /// token overlap, no semantic support. Usually a sibling
     /// boilerplate family (REST CRUD, settings getters, builders);
@@ -215,7 +215,7 @@ fn kind_from_wire_label(label: &str) -> Option<ClusterKind> {
 pub const STRUCTURAL_ONLY_MAX_SUPPORT: f64 = 0.05;
 
 /// Single source of truth for the structural-only evidence test
-/// ([RANK-STRUCTURAL-ONLY], #134/#197): the structural fingerprint is
+/// ([RANK-STRUCTURAL-ONLY]): the structural fingerprint is
 /// the only positive support. Shared by the bucket routing and the
 /// ranking demotion so a cluster labelled `structural_only` is always
 /// the cluster the `[ranking]` policy demotes — the label and the
@@ -229,7 +229,7 @@ pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
 
 /// Lowest content agreement a shape-identical cluster may show while
 /// still counting as a Type-2/3 clone rather than shape-only
-/// scaffolding ([FUSION-CONTENT-GATE], #331/#336). Genuine renamed
+/// scaffolding ([FUSION-CONTENT-GATE]). Genuine renamed
 /// copies change a handful of collapsed-leaf positions and stay well
 /// above this floor; framework-mandated declarations and data tables
 /// change most positions and fall well below it. The 0.7 operating
@@ -238,7 +238,7 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 
 /// Content agreement required to *promote* a shape-identical cluster
 /// into the act-now `nearly_identical` bucket when the token layer lost
-/// its signature to the fingerprint-scoped fallback (gh #339). Between
+/// its signature to the fingerprint-scoped fallback. Between
 /// [`CONTENT_SUPPORT_FLOOR`] and this bar the legacy signal routing
 /// stands: real-world sibling families such as the #197 REST
 /// settings surface measure 0.72–0.80 (shared plumbing, differing
@@ -248,7 +248,7 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
 /// Literal fraction at which a shape-identical cluster counts as a data
-/// literal ([CLONE-NOISE-LITERAL-TABLE], #336): the canonical member's
+/// literal ([CLONE-NOISE-LITERAL-TABLE]): the canonical member's
 /// collapsed leaves are overwhelmingly literal positions — a numeric
 /// array, a lookup table, generated test data — in any language. Such
 /// clusters are governed by the `[ranking] data_clones` policy
@@ -275,12 +275,20 @@ pub fn lacks_content_support(signals: ReportSignals, content: ContentEvidence) -
 /// match, or a near-total kind-stream Jaccard — the token LSH pass
 /// hashes the same normalised representation the structural pass does,
 /// so a `token_jaccard` at the [`classify_signals`] near-identical line
-/// is shape evidence too, not content evidence (gh #331's surviving
+/// is shape evidence too, not content evidence ('s surviving
 /// mixed cluster read `structural=0.62, token_jaccard=0.98`).
 #[must_use]
 pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
-    signals.structural >= 0.99 || signals.token_jaccard >= 0.95
+    signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
 }
+
+/// Token overlap at or above which the token layer is echoing shape
+/// rather than reporting content ([FUSION-CONTENT-GATE]). Named because
+/// the assertion surface has to distinguish the two routes into
+/// `structural_only` — evidence-free below
+/// [`STRUCTURAL_ONLY_MAX_SUPPORT`], content-gated at or above this — and
+/// a test carrying its own copy of the number drifts from the router.
+pub const SATURATING_TOKEN_FLOOR: f64 = 0.95;
 
 /// Confidence discount applied to rename-consistency evidence when the
 /// gate fuses it ([FUSION-CONTENT-GATE]). A literal-anchored bijective
@@ -293,7 +301,7 @@ pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
 pub const RENAME_CONSISTENCY_DISCOUNT: f64 = 0.9;
 
 /// Corrects the rendered fused confidence for shape-identical clusters
-/// ([FUSION-CONTENT-GATE], #331/#336). `structural` and `token_jaccard`
+/// ([FUSION-CONTENT-GATE]). `structural` and `token_jaccard`
 /// are two views of one normalised representation, so summing them says
 /// nothing beyond "the shapes matched" — every shape match used to
 /// render `fused = 1.0`, which made the agent-facing act-now threshold
@@ -322,10 +330,10 @@ pub fn content_gated_signals(
         .clamp(0.0, 1.0);
     // A shape-identical cluster routed `NearlyIdentical` shares one
     // Merkle hash, so the members' normalised kind streams are equal by
-    // construction and the true token Jaccard is 1.0 — the same GH #232
+    // construction and the true token Jaccard is 1.0 — the same
     // argument the byte-equivalence upgrade applies to `Identical`. A
     // lower rendered value is a fingerprint-scoped fallback-signature
-    // artifact (gh #339), not evidence, so it is corrected here. The
+    // artifact, not evidence, so it is corrected here. The
     // `structural` guard scopes the correction to clusters the Merkle
     // argument actually covers — a mixed LSH-glued cluster keeps its
     // estimated value. `StructuralOnly` keeps its unscored signal:

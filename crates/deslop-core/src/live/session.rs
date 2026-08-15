@@ -11,6 +11,7 @@ use std::{
 };
 
 use crate::{
+    config::ExclusionConfig,
     delta::ReportDelta,
     embedding::{EmbeddingMode, EmbeddingProvider},
     lang::LanguageParser,
@@ -29,6 +30,7 @@ use super::{
         initialise_pipeline, live_batch_yield, parse_and_hash_snippet, persist_state_file,
         truncate, try_load_cached_report,
     },
+    watcher::{live_exclusion, publish_exclusion, LiveExclusion},
     wire::{
         EmbeddingModelInfo, EmbeddingProgress, FileReport, FindSimilarInput, FindSimilarRequest,
         FindSimilarResult, SessionConfig,
@@ -100,8 +102,13 @@ pub struct AnalysisSession {
     embedding_progress_reporter: Option<EmbeddingProgressReporter>,
     /// Monotonic id for queued embedding refreshes.
     embedding_refresh_revision: u64,
+    /// Exclusion policy shared with the live watcher. Republished
+    /// whenever the pipeline resolves or reloads its config so the
+    /// watcher's ingest gate and the corpus definition never disagree
+    /// ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    exclusion: LiveExclusion,
     /// Mtime ledger consulted before every IPC read
-    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS], [Deslop#153], [Deslop#156]). Refreshed
+    /// ([LIVE-CLUSTER-OFFSET-FRESHNESS]). Refreshed
     /// after every analysis pass so a stale-mtime read forces a
     /// synchronous `apply_changes` ahead of serving the response.
     freshness: FreshnessTracker,
@@ -220,9 +227,10 @@ impl AnalysisSession {
     ) -> Result<Arc<Report>, LiveError> {
         let previous_report = Arc::clone(&self.latest_report);
         self.pipeline = Some(pipeline);
+        self.republish_exclusion();
         self.generation = self.generation.saturating_add(1);
         self.publish_report(Arc::new(report));
-        // [LIVE-CLUSTER-OFFSET-FRESHNESS] / [Deslop#153] Record the on-disk mtime
+        // [LIVE-CLUSTER-OFFSET-FRESHNESS] / Record the on-disk mtime
         // of every file in the freshly-installed report so the next
         // read does not falsely refire a refresh.
         self.freshness
@@ -297,6 +305,10 @@ impl AnalysisSession {
         let mut freshness = FreshnessTracker::new();
         freshness.record_from_report(&init.root, &init.report);
         let latest_report = Arc::new(init.report);
+        let exclusion = live_exclusion(init.pipeline.as_ref().map_or_else(
+            || Arc::new(ExclusionConfig::empty().with_scan_root(&init.root)),
+            PipelineSession::exclusion_handle,
+        ));
         Self {
             root: init.root,
             min_nodes: init.min_nodes,
@@ -311,6 +323,7 @@ impl AnalysisSession {
             config_path: init.config_path,
             embedding_progress_reporter: None,
             embedding_refresh_revision: 0,
+            exclusion,
             freshness,
         }
     }
@@ -345,6 +358,25 @@ impl AnalysisSession {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard = report;
+    }
+
+    /// Returns the exclusion handle the live watcher must filter with.
+    ///
+    /// The watcher and the corpus apply one policy. Starting the watcher
+    /// with its own config let an opted-in dependency tree be scanned
+    /// cold and then ignored live ([CONFIG-EXCLUDE-DEPENDENCIES]).
+    #[must_use]
+    pub fn exclusion_handle(&self) -> LiveExclusion {
+        Arc::clone(&self.exclusion)
+    }
+
+    /// Republishes the pipeline's resolved exclusion policy to the
+    /// watcher. Called after any pass that may have reloaded config, so
+    /// a `.deslop.toml` edit re-scopes ingest with no restart.
+    fn republish_exclusion(&self) {
+        if let Some(pipeline) = self.pipeline.as_ref() {
+            publish_exclusion(&self.exclusion, pipeline.exclusion_handle());
+        }
     }
 
     /// Returns a clone of the lock-free report-snapshot handle. The LSP
@@ -386,7 +418,7 @@ impl AnalysisSession {
     /// [`crate::PipelineSession::update_files`], which reloads the
     /// exclusion config and re-evaluates the existing corpus against
     /// it — dropping newly-excluded files and re-discovering newly
-    /// re-included ones ([LIVE-CONFIG-LIVE], #139, #189).
+    /// re-included ones ([LIVE-CONFIG-LIVE]).
     ///
     /// # Errors
     ///
@@ -408,7 +440,7 @@ impl AnalysisSession {
             // Nothing analysed moved, so the report cannot have changed.
             // Publishing a new generation here would wake every subscriber
             // — panel, diagnostics, MCP — to re-fetch an identical report
-            // (#299). Report no delta against the generation we kept.
+            //. Report no delta against the generation we kept.
             return Ok(ReportDelta::between(
                 Some((prev_generation, &previous)),
                 prev_generation,
@@ -416,6 +448,10 @@ impl AnalysisSession {
             ));
         };
         self.generation = self.generation.saturating_add(1);
+        // `update_files` reloads the exclusion config when a watched
+        // config path moved, so the watcher's copy is refreshed on the
+        // same pass rather than one edit later.
+        self.republish_exclusion();
         let next_arc = Arc::new(next);
         self.publish_report(Arc::clone(&next_arc));
         // [LIVE-CLUSTER-OFFSET-FRESHNESS] Refresh the mtime ledger so a follow-up
@@ -433,7 +469,7 @@ impl AnalysisSession {
         ))
     }
 
-    /// [LIVE-CLUSTER-OFFSET-FRESHNESS] / [Deslop#153] / [Deslop#156].
+    /// [LIVE-CLUSTER-OFFSET-FRESHNESS] / /.
     ///
     /// Detects files whose on-disk mtime is newer than what the
     /// analyser last observed, and runs a synchronous
@@ -529,7 +565,7 @@ impl AnalysisSession {
         report_for_range_in(&self.latest_report, path, start_byte, end_byte)
     }
 
-    /// Looks up a cluster by its stable id ([Deslop#149]).
+    /// Looks up a cluster by its stable id.
     ///
     /// Accepts either the full 16-hex canonical id or any prefix of at
     /// least 7 hex characters — the same slug the VSIX shows in hover
@@ -641,7 +677,7 @@ impl AnalysisSession {
     /// Runs the underlying pipeline. Caller guarantees `pipeline` is
     /// `Some` — [`Self::apply_changes`] short-circuits otherwise.
     /// [LIVE-SCHEDULER-NOOP] [`None`] means the pass touched no analysed
-    /// file, so the previous report still stands (#299).
+    /// file, so the previous report still stands.
     fn run_pipeline(&mut self, changed: &[PathBuf]) -> Result<Option<Report>, LiveError> {
         let pipeline = self.pipeline.as_mut().ok_or(LiveError::AnalysisNotReady)?;
         let embedding = EmbeddingSettings {
@@ -818,7 +854,7 @@ pub fn read_report_snapshot(handle: &RwLock<Arc<Report>>) -> Arc<Report> {
 /// cache-seed window before the background pipeline installs. Deriving from
 /// the parser registry (not a hand-maintained extension map) keeps the seeded
 /// language set from drifting when a language is added ([PIPELINE-LANG-TRAIT],
-/// GH #270).
+///).
 fn languages_from_report_occurrences(report: &Report) -> Vec<String> {
     let mut seen: std::collections::BTreeSet<&'static str> = std::collections::BTreeSet::new();
     for cluster in &report.clusters {

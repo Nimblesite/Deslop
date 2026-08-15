@@ -1,19 +1,19 @@
 # Webview runtime — the VSIX Preact webviews
 
-This is the single home for the **VSIX webview runtime**: the three Preact webviews the extension ships (cluster detail, full report, duplication report), the signal store that backs them, the host↔webview message protocol that feeds them, the cross-surface contracts they honour, and the coverage gate that keeps the bundle from shipping broken.
+This file specifies the three Preact webviews (cluster detail, full report, and duplication report), their signal store, host↔webview protocol, cross-surface contracts, and coverage gate.
 
-The webviews are one of the surfaces governed by the VS Code extension spec ([vsix.md](vsix.md)); this doc owns the webview-specific sections, while the **cross-surface invariants stay in [vsix.md](vsix.md)** because they span the tree, decorations, bubble, code lenses, and status bar — not just webviews. Read those alongside this doc; do **not** treat the webviews as exempt from them:
+This file owns webview-specific requirements; cross-surface invariants remain in [vsix.md](vsix.md):
 
 - [vsix.md §VSIX-STATE](vsix.md#vsix-state) — the single in-process `ReportStore`. Webviews are readers of that store, never holders of a parallel copy.
 - [vsix.md §VSIX-STATE-DIRTY](vsix.md#vsix-state-dirty) — canonical report vs. visible projection. Webviews receive the **visible projection** through `postMessage`, while commands that resolve a cluster by id still go through the canonical report.
 - [vsix.md §VSIX-REACTIVITY](vsix.md#vsix-reactivity) — Preact Signals everywhere; every surface settles in one microtask after `deslop/reportChanged`.
 - [vsix.md §VSIX-CLUSTER-SYNC](vsix.md#vsix-cluster-sync) — one `selectedClusterId` notion across tree, decorations, bubble, and webview.
 
-The reactive end-to-end requirement these descend from is [principles.md §PRINCIPLES-LIVE-IS-REACTIVE](principles.md#principles-live-is-reactive): *live* means *reactive* — stale UI is a correctness bug, not a polish defect.
+All webviews follow [PRINCIPLES-LIVE-IS-REACTIVE](principles.md#principles-live-is-reactive).
 
 ## [VSIX-WEBVIEW-PROTOCOL] Host↔webview message protocol
 
-The webviews are deliberately **dumb renderers**: the extension host owns all data shaping ([vsix.md §VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4), and the only path that mutates webview state is a `postMessage` from the host. This is the wire contract between `clients/vscode/src/webview/panels.ts` (host) and `clients/vscode/webview-ui/src/store.ts` (webview).
+The extension host owns data shaping ([VSIX-PRINCIPLES](vsix.md#vsix-principles) principle 4); webview state changes only through host `postMessage` calls. The contract joins `clients/vscode/src/webview/panels.ts` and `clients/vscode/webview-ui/src/store.ts`.
 
 **Handshake.** When a webview mounts it posts `{ kind: "ready" }` to the host (`wireMessagePump()` in `store.ts`). The host delays the first feed for the cluster panel until that `ready` arrives (`wireClusterFeed` in `panels.ts`), so the opened cluster is never pushed into a webview that has not yet wired its message listener.
 

@@ -96,7 +96,7 @@ where
 {
     // Install the subscriber at the process boundary so diagnostics reach
     // stderr on *every* path — including argv parse errors that never reach
-    // the serve path (e.g. a rootless `deslop-lsp --stdio`, #201). Without
+    // the serve path (e.g. a rootless `deslop-lsp --stdio`). Without
     // this, `failure_exit`'s `tracing::error!` hits `NoSubscriber` and the
     // process exits 1 silently. `try_init` makes it idempotent.
     init_tracing();
@@ -163,7 +163,7 @@ fn startup_from_args(args: &[String]) -> Result<LspStartup> {
 
 /// Reads the workspace root from the first positional (non-flag) argument.
 ///
-/// [#201] The client's transport flag (`--stdio`, injected by
+/// The client's transport flag (`--stdio`, injected by
 /// `vscode-languageclient`) and `--debug` are not paths. Treating one as
 /// the root pointed the file watcher at a path named `--stdio` and
 /// crash-looped the server. The workspace root is the first argument that
@@ -279,7 +279,7 @@ fn reject_unsupported_startup_flags(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Startup flags removed from the LSP command line by issue #83.
+/// Startup flags removed from the LSP command line by.
 const LEGACY_STARTUP_FLAGS: &[&str] = &[
     "--min-nodes",
     "--embeddings",

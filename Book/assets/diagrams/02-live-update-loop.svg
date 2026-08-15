@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">How Deslop updates the editor and coding agent after an edit</title>
+  <desc id="description">A source edit reaches the running Deslop editor server, which analyses the changed state once and publishes a new report. The editor updates immediately and the coding agent reads that report on its next query.</desc>
+  <rect width="1600" height="1000" fill="#fafaf7"/>
+
+  <text x="86" y="92" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="23" font-weight="700" letter-spacing="5">AFTER AN EDIT</text>
+  <text x="86" y="168" fill="#14161a" font-family="Inter, sans-serif" font-size="58" font-weight="800" letter-spacing="-2">How an edit reaches the editor and agent</text>
+
+  <g transform="translate(86 300)">
+    <rect width="300" height="286" fill="#ffffff"/>
+    <rect width="14" height="286" fill="#0b5fff"/>
+    <text x="42" y="54" fill="#0b5fff" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700" letter-spacing="2">STEP 1</text>
+    <text x="42" y="116" fill="#14161a" font-family="Inter, sans-serif" font-size="38" font-weight="800">Source changes</text>
+    <text x="42" y="174" fill="#55606b" font-family="Inter, sans-serif" font-size="23">Editor buffer or</text>
+    <text x="42" y="207" fill="#55606b" font-family="Inter, sans-serif" font-size="23">file on disk</text>
+    <text x="42" y="254" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="18">one repository root</text>
+  </g>
+
+  <path d="M386 443H476" stroke="#55606b" stroke-width="4"/>
+  <path d="M457 431L477 443L457 455" fill="none" stroke="#55606b" stroke-width="4"/>
+
+  <g transform="translate(478 264)">
+    <rect width="390" height="358" fill="#0b0d10"/>
+    <rect width="14" height="358" fill="#b3261e"/>
+    <text x="42" y="54" fill="#ff8c85" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700" letter-spacing="2">STEP 2</text>
+    <text x="42" y="116" fill="#e8eaed" font-family="Inter, sans-serif" font-size="38" font-weight="800">Live server</text>
+    <text x="42" y="168" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="22">Groups rapid changes</text>
+    <text x="42" y="202" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="22">Analyses the new state</text>
+    <text x="42" y="236" fill="#9aa3ad" font-family="Inter, sans-serif" font-size="22">Builds a new report</text>
+    <rect x="42" y="280" width="306" height="46" fill="#242a31"/>
+    <text x="66" y="310" fill="#e8eaed" font-family="JetBrains Mono, monospace" font-size="18">deslop-lsp</text>
+  </g>
+
+  <path d="M868 443H958" stroke="#55606b" stroke-width="4"/>
+  <path d="M939 431L959 443L939 455" fill="none" stroke="#55606b" stroke-width="4"/>
+
+  <g transform="translate(960 300)">
+    <rect width="260" height="286" fill="#f1efe8"/>
+    <rect width="14" height="286" fill="#9a6700"/>
+    <text x="42" y="54" fill="#9a6700" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700" letter-spacing="2">STEP 3</text>
+    <text x="42" y="116" fill="#14161a" font-family="Inter, sans-serif" font-size="38" font-weight="800">New report</text>
+    <text x="42" y="174" fill="#55606b" font-family="Inter, sans-serif" font-size="22">Groups, labels,</text>
+    <text x="42" y="207" fill="#55606b" font-family="Inter, sans-serif" font-size="22">locations, scores</text>
+    <text x="42" y="254" fill="#14161a" font-family="JetBrains Mono, monospace" font-size="18">updated result</text>
+  </g>
+
+  <path d="M1220 378H1270V326H1292M1220 506H1270V560H1292" fill="none" stroke="#55606b" stroke-width="4"/>
+  <path d="M1273 314L1293 326L1273 338M1273 548L1293 560L1273 572" fill="none" stroke="#55606b" stroke-width="4"/>
+
+  <g transform="translate(1294 232)">
+    <rect width="220" height="188" fill="#ffffff"/>
+    <rect width="12" height="188" fill="#0b5fff"/>
+    <text x="34" y="52" fill="#0b5fff" font-family="JetBrains Mono, monospace" font-size="17" font-weight="700">EDITOR</text>
+    <text x="34" y="102" fill="#14161a" font-family="Inter, sans-serif" font-size="28" font-weight="800">Views update</text>
+    <text x="34" y="142" fill="#55606b" font-family="Inter, sans-serif" font-size="19">Developer sees it</text>
+  </g>
+
+  <g transform="translate(1294 478)">
+    <rect width="220" height="188" fill="#ffffff"/>
+    <rect width="12" height="188" fill="#b3261e"/>
+    <text x="34" y="52" fill="#b3261e" font-family="JetBrains Mono, monospace" font-size="17" font-weight="700">AGENT</text>
+    <text x="34" y="102" fill="#14161a" font-family="Inter, sans-serif" font-size="28" font-weight="800">Next query</text>
+    <text x="34" y="142" fill="#55606b" font-family="Inter, sans-serif" font-size="19">reads current result</text>
+  </g>
+
+  <path d="M1404 666V784H674V624" fill="none" stroke="#9a6700" stroke-width="3" stroke-dasharray="12 10"/>
+  <path d="M662 644L674 624L686 644" fill="none" stroke="#9a6700" stroke-width="3"/>
+  <text x="855" y="828" fill="#9a6700" font-family="JetBrains Mono, monospace" font-size="19" font-weight="700">THE NEXT SOURCE CHANGE STARTS ANOTHER UPDATE</text>
+
+  <rect x="86" y="888" width="1428" height="2" fill="#d8d5cc"/>
+  <text x="86" y="942" fill="#55606b" font-family="Inter, sans-serif" font-size="24">Ordinary edits do not need a new CLI process or a second background scanner.</text>
+</svg>

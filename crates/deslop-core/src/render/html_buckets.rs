@@ -1,5 +1,5 @@
 //! Bucket-group expanders and CSS-only facet controls for the HTML
-//! report ([FACET-HTML], issue #257).
+//! report ([FACET-HTML]).
 //!
 //! Cluster cards are grouped into one collapsible `<details>` per clone
 //! bucket so the reader is never forced to scroll one flat page, and a

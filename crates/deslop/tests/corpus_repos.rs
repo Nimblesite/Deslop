@@ -17,6 +17,29 @@
 //! An empty `must_find` list asserts nothing about recall. It is not evidence
 //! that recall is good — it means duplicates for that repository have not been
 //! hand-verified yet.
+//!
+//! # The determinism gate (#301, `[PIPELINE-DETERMINISM]`)
+//!
+//! `corpus_determinism_*` re-scans one repository twice and asserts the two
+//! reports are identical. It pins two defects that both made the corpus order
+//! a function of something other than the corpus.
+//!
+//! The first was hash-map iteration: the snapshot flattened `per_file` in
+//! `HashMap` order, whose `RandomState` seed changes per process. Two runs over
+//! byte-identical sources emitted different fingerprint sequences, which moved
+//! the LSH star centre and so changed cluster ids, occurrence ranges, and
+//! `duplication_percent` between runs of the same binary on the same repository.
+//!
+//! The second survived the first fix, because sorting by `FileId` looks
+//! deterministic and is not: ids are issued in registration order and the
+//! registry never unregisters, so removing and re-adding a byte-identical file
+//! hands it a fresh, higher id. Determinism must hold over corpus *state*, not
+//! edit history — identical paths and bytes produce an identical report
+//! whatever sequence of edits got there. Measured in the LSP before the fix:
+//! restoring byte-identical source and config moved duplicated LOC from 96
+//! (100%) to 56 (58.33%). Every ordering is now keyed by workspace-relative
+//! path with the id as a tie-breaker only. This gate catches the rerun half;
+//! `deslop-lsp/tests/history_determinism.rs` catches the edit-history half.
 
 use std::{path::Path, time::Duration};
 

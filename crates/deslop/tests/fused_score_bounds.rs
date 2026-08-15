@@ -43,7 +43,7 @@ fn first_unbounded_fused(report: &serde_json::Value) -> Option<String> {
     None
 }
 
-// Implements [FUSION-STRATEGY-MAX-SUM]: component scores are public
+// Implements [FUSION-STRATEGY-BOUNDED-MAX]: component scores are public
 // confidence signals in [0, 1], and the fused confidence reported to
 // agents must be bounded to the same range.
 #[test]

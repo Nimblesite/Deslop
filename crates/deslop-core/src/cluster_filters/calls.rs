@@ -1,20 +1,17 @@
 //! Call-expression shape analysis shared by the language-agnostic
-//! literal-variation cluster filter.
-//!
-//! Issues addressed (see parent `mod.rs` header):
-//! - **#70 / #71 / #72** — test-data / scaffolding clusters whose calls
-//!   share the same callee but vary in one or more string literal
-//!   arguments.
+//! literal-variation cluster filter
+//! ([CLONE-NOISE-LITERAL-VARIATION-CALLS]).
 
 use tree_sitter::Node;
 
 use super::{enclosing_kind, parse_for, Snippet};
 use crate::ast::ByteRange;
 
-/// Detects **issues #70 / #71 / #72**: every cluster member is an
-/// expression (or expression statement) whose top-level call has the
-/// same callee chain across the cluster but **at least one string
-/// literal argument differs**.
+/// Detects literal-variation call scaffolding
+/// ([CLONE-NOISE-LITERAL-VARIATION-CALLS]): every cluster member
+/// resolves to the same callee/arity call shape — one enclosing call,
+/// or the same ordered call sequence — with **at least one string
+/// literal argument differing** across members.
 pub(super) fn is_literal_variation_call_cluster(snippets: &[Snippet<'_>]) -> bool {
     let calls: Option<Vec<CallShape>> = snippets.iter().map(call_shape).collect();
     if is_literal_variation_call_set(calls) {
@@ -89,6 +86,14 @@ fn call_shape_from_node(call: Node<'_>, source: &[u8]) -> Option<CallShape> {
 
 /// Detects body-range clusters whose contained call sequence has the
 /// same callees but intentionally different literal test data.
+///
+/// Every position must vary. A sequence in which some calls carry
+/// differing literals while others are invariant is not payload — the
+/// invariant calls are shared logic the members genuinely duplicate, and
+/// hiding the cluster would lose a real Type-2 clone. Two `[Fact]` tests
+/// that fetch different URLs and then run the same four assertions are
+/// the case this distinguishes: one varying call, four invariant ones.
+/// Scaffolding has nothing left once the literals are removed.
 fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
     let sequences: Option<Vec<Vec<CallShape>>> =
         snippets.iter().map(call_shapes_in_range).collect();
@@ -101,7 +106,7 @@ fn is_literal_variation_call_sequence(snippets: &[Snippet<'_>]) -> bool {
     if first.is_empty() || !sequences.iter().all(|seq| same_call_headers(seq, first)) {
         return false;
     }
-    (0..first.len()).any(|index| sequence_position_differs(&sequences, index))
+    (0..first.len()).all(|index| sequence_position_differs(&sequences, index))
 }
 
 /// Returns every call fully contained in `snippet.range`, preserving
@@ -221,7 +226,7 @@ fn unwrap_argument(node: Node<'_>) -> Node<'_> {
 /// Returns the bytes of `node` when it is a string-literal-like leaf.
 /// Covers Python plain `string`, f-string, and C# `string_literal` /
 /// `interpolated_string_expression` so f-string template differences
-/// in issue #71 are captured.
+/// count as literal variation.
 fn string_literal_bytes(node: Node<'_>, source: &[u8]) -> Option<Vec<u8>> {
     let kind = node.kind();
     let is_string = matches!(

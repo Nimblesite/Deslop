@@ -18,8 +18,9 @@ pub(super) struct EmbeddingObserver {
     cache_hits: usize,
     /// Unique snippets queued after a cache miss.
     cache_misses: usize,
-    /// Duplicate snippets skipped before cache/provider work.
-    duplicate_inputs: usize,
+    /// Subtrees sharing an earlier subtree's snippet. They receive that
+    /// snippet's vector without extra cache or provider work.
+    shared_snippet_inputs: usize,
     /// Number of source subtrees seen by the pass.
     total_subtrees: usize,
     /// Per-provider-batch elapsed milliseconds.
@@ -37,7 +38,7 @@ impl EmbeddingObserver {
             cache_started: now,
             cache_hits: 0,
             cache_misses: 0,
-            duplicate_inputs: 0,
+            shared_snippet_inputs: 0,
             total_subtrees,
             provider_elapsed_ms: Vec::new(),
             provider_tokens: 0,
@@ -54,9 +55,12 @@ impl EmbeddingObserver {
         self.cache_misses = self.cache_misses.saturating_add(1);
     }
 
-    /// Records one duplicate subtree skipped before provider dispatch.
-    pub(super) fn record_duplicate(&mut self) {
-        self.duplicate_inputs = self.duplicate_inputs.saturating_add(1);
+    /// Records one snippet group: every member past the first shares the
+    /// group's single cache/provider lookup and its resulting vector.
+    pub(super) fn record_group(&mut self, group_size: usize) {
+        self.shared_snippet_inputs = self
+            .shared_snippet_inputs
+            .saturating_add(group_size.saturating_sub(1));
     }
 
     /// Emits the cache phase summary event.
@@ -66,7 +70,7 @@ impl EmbeddingObserver {
             cache_hits = self.cache_hits,
             cache_misses = self.cache_misses,
             queued_for_provider,
-            duplicate_inputs = self.duplicate_inputs,
+            shared_snippet_inputs = self.shared_snippet_inputs,
             elapsed_ms = elapsed_millis(self.cache_started.elapsed()),
             "embedding cache phase complete"
         );

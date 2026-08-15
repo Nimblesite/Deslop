@@ -1,6 +1,6 @@
 public class RateLimits
 {
-    private static void MergedFromCluster_1ab9a1(RatePolicy policy, string arg0, int arg1)
+    private static void MergedFromCluster_5f24f5(RatePolicy policy, string arg0, int arg1)
     {
         var label = arg0;
         var ceiling = arg1;
@@ -14,11 +14,11 @@ public class RateLimits
 
     public void ApplyStandard(RatePolicy policy)
     {
-        MergedFromCluster_1ab9a1(policy, "standard", 100);
+        MergedFromCluster_5f24f5(policy, "standard", 100);
     }
 
     public void ApplyPremium(RatePolicy policy)
     {
-        MergedFromCluster_1ab9a1(policy, "premium", 250);
+        MergedFromCluster_5f24f5(policy, "premium", 250);
     }
 }

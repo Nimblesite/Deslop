@@ -11,6 +11,10 @@
 
 #![allow(dead_code)]
 
+/// The per-cluster `language` label contract over `report-query`,
+/// shared by every language whose label regressed.
+pub mod language_label;
+
 use std::{
     fs,
     io::{BufRead, BufReader, Write},

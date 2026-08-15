@@ -61,14 +61,37 @@ impl NormalizedNode {
     /// Descends to the smallest subtree whose byte range contains
     /// `range` — the merge engine's occurrence-narrowing primitive
     /// ([AUTOFIX-MERGE]).
+    ///
+    /// `range` is clipped to this subtree's extent before the descent,
+    /// because callers name a region of the *file* and a file is wider
+    /// than its tree. Normalisation drops comments and the trailing
+    /// newline, so the root spans only the code it kept
+    /// ([PIPELINE-NORMALIZE-AST]); a whole-file request of
+    /// `0..source.len()` is therefore contained by no node at all, and
+    /// answering `None` makes the merge engine refuse a plan it should
+    /// have produced. Clipping asks the question the caller meant: the
+    /// smallest subtree covering the code inside `range`.
+    ///
+    /// A range lying wholly outside the tree clips to nothing and still
+    /// yields `None`.
     #[must_use]
     pub fn smallest_covering(&self, range: ByteRange) -> Option<&Self> {
+        let clipped = ByteRange {
+            start: range.start.max(self.byte_range.start),
+            end: range.end.min(self.byte_range.end),
+        };
+        (!clipped.is_empty()).then(|| self.covering(clipped))?
+    }
+
+    /// Strict-containment descent, once `range` is known to lie inside
+    /// this subtree.
+    fn covering(&self, range: ByteRange) -> Option<&Self> {
         if self.byte_range.start > range.start || self.byte_range.end < range.end {
             return None;
         }
         self.children
             .iter()
-            .find_map(|child| child.smallest_covering(range))
+            .find_map(|child| child.covering(range))
             .or(Some(self))
     }
 

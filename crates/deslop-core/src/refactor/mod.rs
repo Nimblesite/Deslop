@@ -96,9 +96,9 @@ pub fn compute_plan(
 }
 
 /// Dataflow preconditions ([AUTOFIX-EXTRACT-PRECONDITIONS]): rule 6
-/// (issue #278) — a span whose own bindings are read after it would
+/// — a span whose own bindings are read after it would
 /// corrupt the enclosing code when rewritten as a call — and rule 7
-/// (issue #280) — a span writing one of its free variables would
+/// — a span writing one of its free variables would
 /// mutate the helper's parameter copy, silently losing the mutation.
 /// The extract tier refuses silently; reasons are discarded.
 fn passes_dataflow_rules(

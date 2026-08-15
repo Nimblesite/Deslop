@@ -19,11 +19,17 @@ Deslop is a duplicate-code detector. **We are in accuracy-audit mode.** One meas
 If you encounter code that could cause a false negative or a false positive — whether or not it is the code you were sent to change — do this, in order, and nothing else:
 
 1. **Write a test that fails because of the bug.** It must fail for the real reason, and you must watch it fail.
-2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it.
+2. **Replace all the defective code with a `panic!`**, commented with what the code did, why it was deleted, and which test pins it. You need to put a panic = "deny" ignore in for these kinds of panics
 3. **Report to the user** — file, defect, failing test, what you removed — and why.
 4. 🛑 **STOP.** Do not repair it, do not work around it, do not resume the original task.
 
 **Panics are NOT ALLOWED for control flow or error handling — but are MANDATED where code is causing inaccuracies.** The quarantine `panic!` is not optional and not merely permitted; it is the required outcome, and it overrides the Rust no-panic rule below. Silently-wrong output is worse than a crash: a panic is found in seconds, a false negative is never found at all.
+
+## BUG FIXING PROCESS
+
+CRITICAL: YOU ARE NOT ALLOWED TO BACK OFF ANY TESTS OR ASSERTIONS
+YOU MUST FIX THE ROOT CAUSE OF BUGS; NOT WORK AROUND THEM
+REPLACE BROKEN CODE; DON'T WRITE NEW CODE WITH A DUPLICATE PATH
 
 ## Standing prohibitions
 
@@ -36,10 +42,11 @@ If you encounter code that could cause a false negative or a false positive — 
 
 ## Testing — the accuracy enforcement surface
 
-- **Coarse E2E, black-box only.** No unit tests. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
+- **Coarse E2E, black-box only.**. Drive the CLI against fixture repos; assert against rendered reports. Never reach into internals.
 - **Many user interactions per test, MANY assertions per user interaction**
 - **Every confirmed false positive or false negative earns a fixture** that would have caught it.
 - **Never delete a failing test, never skip one, never remove an assertion.** Reducing assertiveness is prohibited. Add failing tests for broken or missing functionality.
+- **Unit tests are only for isolating behavior of functions**
 - **Meaningful assertions only.** `assert!(true)` is banned. Assert positive, human-readable values — not the absence of AI-style labels.
 - **No try/catch that swallows an error and then asserts success.**
 - **No fake LSP/MCP.** UI and extension tests build and install the latest binaries first.
@@ -73,6 +80,16 @@ If you encounter code that could cause a false negative or a false positive — 
 - `thiserror` in `deslop-core`; `anyhow` allowed in the `deslop` binary.
 - Pattern matching over casting. Expressions over statements. Iterator chains over imperative loops. Early return with `?`.
 - Descriptive names — no single letters except in closures.
+
+## Documentation
+
+- Each spec section must have a unique, heirarchical non-numeric spec Id
+- Spec ids must be cross referenced across tests, code specs and plans
+- Code, specs, and tests MUST agree. Where they don't, 🛑 STOP and report the issue to the user
+- Don't use line endings to force word wrap. Allow text to wrap naturally.
+- Keep PR documentation TIGHT and HUMAN READABLE (except for the AI section)
+- Remove line endings that only exist to wrap text
+- Remove fluff from the specs that don't specify anything
 
 ## Run Deslop on Deslop
 
