@@ -84,23 +84,34 @@ fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
 /// Scores every pair exactly for small corpora where ANN top-k recall is
 /// more fragile than the quadratic work is expensive.
 fn exact_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
+    let norms: Vec<f64> = embeddings.iter().map(|vector| norm(vector)).collect();
     let mut pairs = Vec::new();
     for left in 0..embeddings.len() {
-        collect_exact_pairs_from(left, embeddings, &mut pairs);
+        collect_exact_pairs_from(left, embeddings, &norms, &mut pairs);
     }
     pairs
 }
 
 /// Appends exact embedding candidates for one left endpoint.
-fn collect_exact_pairs_from(left: usize, embeddings: &[Vec<f32>], pairs: &mut Vec<EmbeddingPair>) {
-    let Some(left_vector) = embeddings.get(left) else {
+///
+/// `norms` is precomputed once per vector by the caller. Deriving them
+/// inside this loop would re-walk both endpoints for every pair, widening
+/// an already `O(N^2 * D)` pass to three passes over every component.
+fn collect_exact_pairs_from(
+    left: usize,
+    embeddings: &[Vec<f32>],
+    norms: &[f64],
+    pairs: &mut Vec<EmbeddingPair>,
+) {
+    let (Some(left_vector), Some(left_norm)) = (embeddings.get(left), norms.get(left)) else {
         return;
     };
     for right in left.saturating_add(1)..embeddings.len() {
-        let Some(right_vector) = embeddings.get(right) else {
+        let (Some(right_vector), Some(right_norm)) = (embeddings.get(right), norms.get(right))
+        else {
             continue;
         };
-        let cosine = cosine_similarity(left_vector, right_vector);
+        let cosine = cosine_from_parts(left_vector, right_vector, left_norm * right_norm);
         if admits_cosine(cosine) {
             pairs.push(EmbeddingPair {
                 left,
@@ -127,7 +138,14 @@ fn collect_exact_pairs_from(left: usize, embeddings: &[Vec<f32>], pairs: &mut Ve
 /// or dropped on rounding alone. GH #372.
 #[must_use]
 pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
-    let scale = norm(left) * norm(right);
+    cosine_from_parts(left, right, norm(left) * norm(right))
+}
+
+/// Divides the `f64` dot product by an already-computed norm product, so
+/// the quadratic pair loop can hoist both norms out of its inner body
+/// without duplicating the arithmetic [`cosine_similarity`] defines.
+/// A non-positive scale means at least one vector has no direction.
+fn cosine_from_parts(left: &[f32], right: &[f32], scale: f64) -> f64 {
     if scale <= 0.0 {
         return 0.0;
     }
