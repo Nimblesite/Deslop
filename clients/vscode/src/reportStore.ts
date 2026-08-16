@@ -61,6 +61,7 @@ export class ReportStore implements vscode.Disposable {
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
   private readonly _facetFilter = signal<FacetFilter>({ buckets: [], categories: [] });
+  private readonly _retractedClusters = signal<ReadonlySet<string>>(new Set());
 
   private readonly _visibleReport: ReadonlySignal<Report | null> = computed(() =>
     projectVisible(this._report.value, this._dirtyFiles.value),

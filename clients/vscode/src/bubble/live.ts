@@ -346,16 +346,29 @@ export function ghostText(
   return renderBubbleParts(cluster, severity).ghost;
 }
 
+// Three bars: shape, semantic, confidence ([VSIX-LIVE-BUBBLE]).
+// `structural` and `token_jaccard` are two views of one normalised
+// representation — "summing them says nothing beyond 'the shapes matched'"
+// (`deslop-core::buckets::content_gated_signals`) — so drawing both spends
+// two of the three slots on a single piece of evidence and leaves none for
+// the content-gated confidence. That confidence is the only thing
+// separating a verbatim copy from a proven rename: after the #232
+// correction both render `structural 1.0 / token_jaccard 1.0`, so a strip
+// without `fused` collapses "safe to extract" and "identifiers differ"
+// onto the same three glyphs. The shape bar takes the stronger of the two
+// shape views; the third bar draws `fused`.
 export function signalStrip(cluster: ReportCluster): string {
-  const bar = (v: number): string => {
-    const idx = Math.min(
-      BARS.length - 1,
-      Math.max(0, Math.round(v * (BARS.length - 1))),
-    );
-    return BARS[idx] ?? "█";
-  };
-  const s = cluster.signals;
-  return `${bar(s.structural)}${bar(s.token_jaccard)}${bar(s.embedding_cos)}`;
+  const signals = cluster.signals;
+  const shape = Math.max(signals.structural, signals.token_jaccard);
+  return `${bar(shape)}${bar(signals.embedding_cos)}${bar(signals.fused)}`;
+}
+
+function bar(value: number): string {
+  const index = Math.min(
+    BARS.length - 1,
+    Math.max(0, Math.round(value * (BARS.length - 1))),
+  );
+  return BARS[index] ?? "█";
 }
 
 const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
