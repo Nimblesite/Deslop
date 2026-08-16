@@ -18,8 +18,8 @@ repository = "https://github.com/Nimblesite/Deslop"
 
 [workspace.dependencies]
 anyhow = "=1.0.104"
-thiserror = "=2.0.19"
-clap = { version = "=4.6.5", features = ["derive"] }
+thiserror = "=2.0.20"
+clap = { version = "=4.6.6", features = ["derive"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter"] }
 serde = { version = "=1.0.229", features = ["derive"] }
@@ -28,7 +28,7 @@ toml = "=1.1.4"
 assert_cmd = "=2.2.2"
 predicates = "=3.1.4"
 tempfile = "=3.27.0"
-tree-sitter = "=0.26.11"
+tree-sitter = "=0.26.12"
 tree-sitter-c-sharp = "=0.23.5"
 tree-sitter-rust = "=0.24.2"
 tree-sitter-python = "=0.25.0"
@@ -40,14 +40,14 @@ tree-sitter-fsharp = "=0.3.11"
 ignore = "=0.4.33"
 blake3 = "=1.8.6"
 getrandom = "=0.4.3"
-ureq = { version = "=3.3.0", default-features = false, features = ["json"] }
+ureq = { version = "=3.4.0", default-features = false, features = ["json"] }
 instant-distance = "=0.6.1"
 notify = "=8.2.0"
 tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "sync", "io-util", "io-std", "time"] }
 tower = { version = "=0.5.3", default-features = false }
 tower-lsp = "=0.20.0"
-futures = "=0.3.33"
-async-trait = "=0.1.91"
+futures = "=0.3.34"
+async-trait = "=0.1.92"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
