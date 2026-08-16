@@ -76,6 +76,21 @@ The one artefact that *can* go stale is the live state file `live-report.json` (
 
 Zero-zero stats indicate the pass ran without the cache (`--no-incremental` passed, or discovery yielded nothing). Any non-zero counter proves the cache was consulted.
 
+**Scope.** [PIPELINE-INCREMENTAL] governs the parse stage and nothing else. Everything downstream — LSH, candidate pairing, clustering, ranking, metrics, rendering — recomputes in full on every pass regardless of how many files changed. Making that cost track the size of the change is [PIPELINE-INCREMENTAL-ANALYSIS], which is specified but not implemented.
+
+### [PIPELINE-INCREMENTAL-ANALYSIS] Incremental analysis
+⏳ **Specified, not implemented.** Tracked by gh #383, designed in [`plans/incremental-analysis-plan.md`](../plans/incremental-analysis-plan.md).
+
+An **incremental pass** is one that is given the set of files whose content changed since a previous pass over the same corpus, and is permitted to reuse work from that pass. A **cold pass** reuses nothing.
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] An incremental pass owes the cold report.** For any corpus state reachable by any sequence of edits, the report produced by an incremental pass must equal the report a cold pass produces for that same state — field for field: cluster ids, occurrence paths and byte ranges, bucket, every signal, ranking order, `metrics`, and `clusters_hidden`. `cache_stats` is the sole permitted difference. This follows from [PIPELINE-DETERMINISM] holding over corpus *state* rather than edit history: if two paths to the same state can produce different reports, the incremental path is wrong, not the cold one. A performance gain that costs equivalence is not a gain.
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-REUSE] What may be reused.** Any value that is a pure function of content that did not change. Concretely: a MinHash signature is determined by one subtree's normalised token k-grams; a pair's structural and token-Jaccard scores are determined by its two subtrees. Neither depends on the rest of the corpus, so neither needs recomputing when the rest of the corpus is untouched. Values that depend on corpus-wide state — ranking weights, repo metrics, the duplication percentage — are derived from the assembled cluster set and are recomputed every pass.
+
+**[PIPELINE-INCREMENTAL-ANALYSIS-ADDRESSING] Reuse is addressed, not bookkept.** Reused artefacts follow [PIPELINE-INCREMENTAL-INVALIDATION]: each is stored under a key derived from the content that determines it, so a stale artefact is *unaddressable* rather than merely unused. No mtime heuristics, no watcher-maintained validity index, no invalidation step that could be skipped or drift. A key derived from anything other than that content — a version string, a path, a lossy transform of the bytes — does not satisfy this and is a defect, not an optimisation.
+
+**Corpus membership never comes from reuse.** As with the parse cache, every pass performs a fresh discovery walk. Files added or removed while nothing was watching are picked up regardless of what state was carried forward.
+
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 Before ranking, each cluster's occurrences are reduced to one member per **transitively overlapping run** per file. Fingerprinting emits one subtree per AST node, so a duplicated region yields a nest of overlapping windows over the same bytes; publishing more than one inflates the occurrence count, the cluster size, and the duplication percentage. Overlap is transitive, so the run's frontier is tracked separately from its representative: for `[0,100]`, `[90,110]`, `[105,200]` the bridging window is the narrowest and loses the width contest, and a sweep that tests the next window against the representative alone reports one region as two. The widest window of each run is the reported location; a cluster left with one location is not a duplicate and is dropped. Pinned by `crates/deslop-core/tests/cluster_overlap_collapse.rs`.
 
