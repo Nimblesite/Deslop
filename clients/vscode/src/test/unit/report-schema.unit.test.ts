@@ -133,16 +133,42 @@ suite("report schema helpers", () => {
     );
   });
 
-  // 🛑 SKIPPED — DEFECT B1. This test is correct and the code is wrong.
-  // `classifyCluster` claims byte-for-byte parity with the core routing
-  // table but cannot see content evidence (it is not on the wire, #344),
-  // so it reads a proven rename's corrected signals as "identical" and
-  // tells the user "Safe to extract — every copy is the same" about code
-  // whose identifiers all differ. Skipped under an explicit owner mandate
-  // to unblock the release. Do not delete, do not weaken: un-skip it as
-  // part of the fix.
+  // [CLONE-BUCKETS-ROUTING] The UI table claims byte-for-byte parity with
+  // `deslop-core::buckets::classify_signals` and does not have it. The
+  // engine requires `structural >= 0.20` before a high token signal can
+  // reach an act-now bucket and carries no low-structural arm at all;
+  // the UI gates on `structural > 0.0` and adds `structural <= 0.01 &&
+  // token >= 0.9`. Both rows below are `loosely_similar` in the engine
+  // and `nearly_identical` here, so a hint — "Loose textual overlap.
+  // Treat as a hint." — is repainted as an act-now "Review the
+  // locations". Reachable through `--from-report` on any v3 report,
+  // which is precisely when `resolveBucket` falls back to this function.
+  test("classifyCluster must not promote a weak-shape pair the engine calls loosely similar", () => {
+    assert.equal(
+      classifyCluster(signals(0.1, 0.96, 0)),
+      "loosely_similar",
+      "the engine gates on structural >= 0.20 before a token signal reaches act-now",
+    );
+    assert.equal(
+      classifyCluster(signals(0.0, 0.92, 0)),
+      "loosely_similar",
+      "the engine has no low-structural arm — a token-only pair stays a hint",
+    );
+    assert.equal(
+      bucketLabels(classifyCluster(signals(0.1, 0.96, 0))).actionSentence,
+      "Loose textual overlap. Treat as a hint.",
+      "the user must not be told to act on a pair the engine ranked as a hint",
+    );
+  });
+
+  // DEFECT B1 — restored. `classifyCluster` cannot see content evidence
+  // (it is not on the wire, #344), so it read a proven rename's corrected
+  // signals as "identical" and told the user "Safe to extract — every
+  // copy is the same" about code whose identifiers all differ. The
+  // routing now consults the engine-supplied `fused` confidence, which is
+  // what the content gate writes.
   // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
-  test.skip("classifyCluster must not call a content-gated rename byte-identical", () => {
+  test("classifyCluster must not call a content-gated rename byte-identical", () => {
     // A maximal Type-2 rename proven by its literal anchors: the engine
     // routes `nearly_identical` at fused 0.9, and renders token_jaccard
     // 1.0 because the Merkle match already proves the token multiset

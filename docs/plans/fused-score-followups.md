@@ -267,3 +267,74 @@ Plus, in the same issue:
 | 1 | Give the ensemble an independent member | 🟡 Content evidence is independent and now steers routing, fusion, and ranking — but it remains a render-stage gate rather than an ensemble member, and the semantic signal is still off by default. |
 | 2 | Stop clamping away the top of the range | ✅ #343 fixed on this branch: the sum-then-clamp is quarantined and `bounded_fused()` never exceeds the strongest single axis, so `fused = 1.0` again requires an axis that actually measured 1.0 (byte proof, per the content gate). |
 | 3 | Preserve some literal information | 🟡 `ContentEvidence` now compares raw literal bytes positionally (literal preservation is the Type-2 discriminator). The fingerprint and token layers still collapse every literal to `__literal__`. |
+
+## ✅ Checklist
+
+The executable form of everything above. Ticked only when the assertion exists, is green, and the surface it pins actually ships — never on "code written". Branch: `worktree-fused-score-followups`.
+
+### Verified already done (re-confirmed 17 Aug against the tree, not the ledger)
+
+- [x] **#347** corpus gate boots — `corpus.yml` installs `typediagram@0.11.0`
+- [x] **#301** determinism — ordered `snapshot_corpus`; `nest`/`jellyfin` `determinism` entries deleted from `known-failures.json`
+- [x] **#343** sum-then-clamp — `bounded_fused()` at admission and rendering; `issue_343_sum_clamp_saturation.rs` green
+- [x] **#342** ancestor excludes — `corpus_built_in_excluded`; `issue_342_scan_root_under_excluded_ancestor.rs` green
+- [x] **#351** measured cosines discarded — `add_embedding_pairs` now calls `record_cosine` unconditionally; no quarantine panic remains
+- [x] **#372** `f32` cosine drift — fixed by #384 (`cosine_from_parts`, `f64` accumulation); three width-sweep tests on `main`. **Issue still open — close it.**
+- [x] No quarantine `panic!` remains anywhere in `crates/` — every mandated quarantine from this plan has landed its accurate replacement
+
+### 1. Six skipped VSIX tests — outranks everything below
+
+- [ ] **A** `live-bubble-fused.unit.test.ts` — `bestBubbleCluster` must follow the engine's bucket, not a UI-local `fused >= 0.85`
+- [ ] **B1** `report-schema.unit.test.ts` — `classifyCluster` must not label a content-gated rename `identical`
+- [ ] **B2** `report-schema.unit.test.ts` — `classifyCluster` must not promote a demoted shape-only family
+- [ ] **C** `live-bubble-fused.unit.test.ts` — `signalStrip` must draw fused confidence
+- [ ] **D** `severity.unit.test.ts` — severity must not paint a demoted family act-now
+- [ ] **E** `live-bubble.unit.test.ts` — settle the `byId.get(id) ?? cluster` contract first, then fix code or restate test
+
+### 2. 🛑 New defect found 17 Aug — UI routing diverges from the engine
+
+`clients/vscode/src/types/report.ts:223` `classifyCluster` claims byte-for-byte parity with `deslop-core::buckets::classify_signals` and does not have it:
+
+| Signals | Engine | VSIX |
+|---|---|---|
+| `structural 0.10, token 0.96` | `loosely_similar` | `nearly_identical` |
+| `structural 0.00, token 0.92` | `loosely_similar` | `nearly_identical` |
+
+The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and carries an extra `structural <= 0.01 && token >= 0.9` arm. Reachable through `--from-report` on any v3 report — a hint is promoted to act-now on the flagship surface.
+
+- [ ] Failing test pinning both rows, watched failing for the real reason
+- [ ] Quarantine the divergent arm per the strict rule, then land the accurate replacement (shares its fix with B1/B2)
+
+### 3. #344 — carry the confidence to every consumer
+
+- [ ] `agreement` / `rename_consistency` / `literal_fraction` onto `ReportSignals` in [`live-ipc.td`](../models/live-ipc.td), regenerate (never hand-write)
+- [ ] `resolveBucket` trusts the engine's `cluster.bucket` unconditionally
+- [ ] `severity.ts` — rank-only today, never reads confidence (Defect D)
+- [ ] `render/text.rs` — prints no signals at all
+- [ ] `deslop-lsp` diagnostics / code lens — no confidence anywhere
+- [ ] `refactor/preconditions.rs` — bucket pre-filter + byte proof only
+- [ ] Render the three new fields everywhere `fused` renders (HTML footer, Markdown, VSIX `SignalStrip`, `HelpBubble`)
+- [ ] Restore the 17 fixtures #341 softened from maximal to partial renames
+- [x] Pair admission — fixed by #343
+- [ ] `metrics.duplication_percent` / exit-code gate — **delegated** to [weighted-metrics-plan.md](weighted-metrics-plan.md) under [METRICS-REPO-WEIGHTED]; not this plan's work
+
+### 4. #345 — doc drift
+
+- [ ] `REPORTING-CONTEXT.md:100` — `FUSED_THRESHOLD = 0.85` described as what a pair needs "to enter a cluster"; admission and rendered confidence are two quantities sharing one name
+- [ ] `mcp.md:248` — claims `top-offenders` sorts "by fused score"; it sorts by weight
+- [ ] `--embeddings` defaults to `off` (`main.rs:90`) while `EmbeddingMode` docs call `auto` the default — requirement 1 unmet by default
+- [ ] Add `fused_spread` / `type2_recall` check ids to `corpus/known-failures.json` (unblocked now #347 compiles)
+- [x] `fusion.md` + `SPEC.md` reconciled
+
+### 5. Fused-related open bugs
+
+- [ ] **#339** F# `token_jaccard` from the issue-86 fallback signature — byte-offset luck, not token evidence. Named in the ledger above; confirmed empirically during #343
+- [ ] **#71 #79 #103 #283 #284 #285** — unblocked by #343; each needs its own verification against the bounded fusion before closing
+- [ ] **#336** numeric array literals rank #1 on `dotnet/fsharp` — data-table classification is Dart-only
+
+### 6. Issue close-outs (evidence first, never on a run CI has not seen)
+
+- [ ] `workflow_dispatch` the corpus gate; reconcile `known-failures.json` against its first real run
+- [ ] Close **#301**, **#331**, **#336** only on a green corpus run
+- [ ] Close **#343**, **#342**, **#351**, **#372** — fixed and pinned
+

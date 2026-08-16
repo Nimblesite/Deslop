@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: Getting Started — Install Deslop and find duplicate code
-description: Install Deslop and find duplicate code across nine languages. The VS Code extension bundles live editor warnings, checks for coding agents, and the CLI in one install. Homebrew and Scoop for CLI-only.
+description: Install Deslop and find duplicate code across nine languages. The VS Code extension bundles live editor warnings, checks for coding agents, and the CLI in one install. Homebrew, Scoop, or curl for CLI-only.
 eleventyNavigation:
   key: Getting Started
   order: 1
@@ -39,7 +39,7 @@ The extension bundles native binaries for `darwin-arm64`, `darwin-x64`, `linux-x
 
 > **Offline or air-gapped?** Grab the `.vsix` from the [Releases page](/releases/) or the [latest GitHub release](https://github.com/Nimblesite/Deslop/releases/latest), then install it via **Extensions panel → `…` menu → Install from VSIX…**.
 
-## Install the CLI only (Homebrew / Scoop)
+## Install the CLI only (Homebrew / Scoop / curl)
 
 ### macOS / Linux (Homebrew)
 
@@ -59,6 +59,32 @@ deslop --version
 ```
 
 Bucket source: [github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket).
+
+### Linux (curl)
+
+No Homebrew? Pull the archive straight from the latest GitHub release. The snippet resolves the newest version, verifies the published SHA-256 checksum, and installs the same three binaries the Homebrew formula ships (`deslop`, `deslop-lsp`, `deslop-mcp`):
+
+```bash
+tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/Nimblesite/Deslop/releases/latest)
+tag=${tag##*/}        # e.g. v1.2.3
+version=${tag#v}      # e.g. 1.2.3
+case "$(uname -m)" in
+  x86_64)  platform=linux-x64 ;;
+  aarch64) platform=linux-arm64 ;;
+  *) echo "unsupported architecture: $(uname -m)"; exit 1 ;;
+esac
+archive="deslop-${version}-${platform}.tar.gz"
+curl -fsSLO "https://github.com/Nimblesite/Deslop/releases/download/${tag}/${archive}"
+curl -fsSLO "https://github.com/Nimblesite/Deslop/releases/download/${tag}/${archive}.sha256"
+sha256sum -c "${archive}.sha256"
+tar -xzf "$archive"
+sudo install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} /usr/local/bin/
+deslop --version
+```
+
+Prefer a user-local install? Swap the `install` line for `install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} ~/.local/bin/` (no `sudo`) and make sure `~/.local/bin` is on your `PATH`.
+
+To pin a specific version instead of the latest, skip the first two lines and set `tag=vX.Y.Z` yourself.
 
 ### Direct download
 
