@@ -10,6 +10,7 @@ import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { FUSED_THRESHOLD } from "../../types/report";
 import {
+  bubbleCluster,
   bubbleFixture,
   capturingEditor,
   probeCluster as cluster,
@@ -48,11 +49,39 @@ suite("LiveBubble render", () => {
       );
 
       // A probe whose only cluster sits under the cutoff clears the surface.
-      bubble.render(capture.editor, span(6), [cluster("c-low", 10, 0.2)]);
+      //
+      // The bucket is part of the fixture, not decoration. This row used to
+      // carry the `identical` default, a pairing the engine cannot produce:
+      // `content_gated_signals` returns an `Identical` cluster's signals
+      // untouched, and `Identical` requires structural ≥ 0.99 *and*
+      // token_jaccard ≥ 0.99, so its `bounded_fused` is ≥ 0.99 by
+      // construction — a byte-proven copy never renders 0.2. A weak hint
+      // is what the engine actually pairs with a low confidence, and it is
+      // the population the cutoff exists to gate.
+      const weakHint = bubbleCluster("c-low", 10, 0.2, {
+        bucket: "loosely_similar",
+        structural: 0.3,
+        token: 0.4,
+      });
+      bubble.render(capture.editor, span(6), [weakHint]);
       assert.equal(
         capture.visible(),
         undefined,
         `fused 0.2 is under FUSED_THRESHOLD ${FUSED_THRESHOLD} and must clear the bubble`,
+      );
+      // …and the gate is the confidence, not the bucket: the same hint at
+      // the cutoff comes back. Without this the assertion above would also
+      // pass if hints were banned from the surface outright.
+      bubble.render(capture.editor, span(12), [
+        bubbleCluster("c-hint", 10, FUSED_THRESHOLD, {
+          bucket: "loosely_similar",
+          structural: 0.3,
+          token: 0.4,
+        }),
+      ]);
+      assert.ok(
+        capture.visible() !== undefined,
+        `a hint at exactly ${FUSED_THRESHOLD} clears the cutoff and must render`,
       );
     } finally {
       bubble.dispose();
@@ -159,7 +188,16 @@ suite("LiveBubble render", () => {
       bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
       assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
 
-      bubble.render(capture.editor, span(6), [cluster("y", 1, 0.5)]);
+      // The bucket is load-bearing: an `identical` cluster is byte-proven and
+      // its `bounded_fused` is ≥ 0.99 by construction, so the engine cannot
+      // hand this surface an act-now bucket at 0.5. A weak hint is the
+      // population the cutoff governs.
+      const belowCutoff = bubbleCluster("y", 1, 0.5, {
+        bucket: "loosely_similar",
+        structural: 0.4,
+        token: 0.5,
+      });
+      bubble.render(capture.editor, span(6), [belowCutoff]);
       assert.ok(0.5 < FUSED_THRESHOLD, "fixture must sit below the cutoff to prove anything");
       assert.equal(
         capture.visible(),

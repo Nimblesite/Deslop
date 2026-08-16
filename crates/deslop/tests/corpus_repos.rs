@@ -44,9 +44,12 @@
 use std::{path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
-use deslop_test_support::corpus::{
-    baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
-    reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+use deslop_test_support::{
+    corpus::{
+        baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
+        reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+    },
+    corpus_confidence::{check_fused_spread, check_type2_recall},
 };
 use serde_json::Value;
 
@@ -174,6 +177,8 @@ const GATE_CHECKS: &[&str] = &[
     "recall",
     "boilerplate_rank",
     "data_table_rank",
+    "fused_spread",
+    "type2_recall",
     "wall",
     "memory",
 ];
@@ -193,6 +198,11 @@ fn gate(name: &str) -> Result<()> {
     check_recall(&manifest, &run, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
+    // [CORPUS-BASELINE] The two confidence checks. Neither reads the manifest:
+    // they judge the *shape* of the rendered report, so they run on every
+    // repository including the ones whose recall is not yet curated.
+    check_fused_spread(&run.report, &mut failures);
+    check_type2_recall(&run.report, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;
 
     fail_on(name, GATE_CHECKS, &failures)

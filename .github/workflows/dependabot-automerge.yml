@@ -28,11 +28,15 @@ name: Dependabot auto-merge
 #     lock files, so successive bumps never conflict-stall — no merge machinery
 #     left to conflict at all.
 #
-# If the bump ITSELF touches `.github/workflows/*` (a github-actions SECURITY
-# update — version updates of actions target the staging branch and merge on
-# GitHub's side, not here), the token cannot stage it by construction. The
-# sweep then leaves the PR open with a comment instead of failing: an actions
-# security bump warrants human eyes anyway.
+# If the bump ITSELF touches `.github/workflows/*` (the github-actions group),
+# the token cannot COPY it by construction — but the PR merge API is not a
+# push, and the workflow edits were authored by dependabot[bot], which may
+# modify workflow files for its own ecosystem. So the sweep squash-merges the
+# PR into the staging branch server-side instead (one commit, matching the
+# sweep-commit history — exactly how #320 landed). Only if that merge fails
+# (staging-tip conflict) is the PR left open with a comment for a human;
+# stranded actions bumps are what dragged a whole stale staging branch into a
+# feature branch on 17 Aug 2026 when one was hand-merged from its own branch.
 #
 # Nothing reaches `main` this way — the full build/test (ci.yml) + CodeQL
 # (codeql.yml) gate the single `dependabot-upgrades -> main` consolidation PR,
@@ -140,13 +144,16 @@ jobs:
           changed_list="${RUNNER_TEMP}/dependabot-sweep-paths.z"
           git diff -z --name-only "${merge_base}" "origin/${PR_HEAD}" \
             > "${changed_list}"
-          # The token cannot push workflow files at all; hand those to a human.
+          # The token cannot PUSH workflow files, but the merge API is not a
+          # push: squash-merge the PR into the staging branch server-side (see
+          # header). Comment-and-leave-open is the conflict fallback only.
           while IFS= read -r -d '' path; do
             case "${path}" in
               .github/workflows/*)
-                echo "::warning::bump edits ${path}; GITHUB_TOKEN cannot push workflow files — leaving the PR open"
-                gh pr comment "${PR_URL}" --body \
-                  "Not swept: this bump edits \`${path}\`, which the Actions token cannot push (no \`workflows\` scope). Please review and merge manually."
+                echo "bump edits ${path}; squash-merging the PR server-side instead of copying"
+                gh pr merge "${PR_URL}" --squash --delete-branch \
+                  || gh pr comment "${PR_URL}" --body \
+                    "Sweep could not squash-merge this workflow-file bump into \`dependabot-upgrades\` — likely a conflict with the staging tip. Comment \`@dependabot rebase\` and let the sweep retry, or merge manually."
                 exit 0
                 ;;
             esac

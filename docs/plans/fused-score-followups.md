@@ -289,12 +289,21 @@ test that constrains it. Each row records the fix that satisfies its own
 assertions **and** the neighbouring green tests — the constraint that
 made five of the six tractable and the sixth impossible.
 
-- [ ] **A** `live-bubble-fused.unit.test.ts` — `bestBubbleCluster` gates on a UI-local `signals.fused >= FUSED_THRESHOLD` ([`bubble/live.ts:260`](../../clients/vscode/src/bubble/live.ts#L260)). **Contract:** two gates, not one — an act-now bucket (`identical` / `nearly_identical`) is the engine's verdict and needs no second opinion; everything below the act-now bands keeps the fused cutoff. Pinned in both directions by the green `a sub-threshold hint bucket stays off the live surface at the exact cutoff` (a `loosely_similar` hint at exactly 0.85 must show, at 0.84 must not) and `a demoted shape-only family never wins the bubble over a proven clone`.
-- [ ] **B1** `report-schema.unit.test.ts` — `classifyCluster` labels a content-gated rename `identical`
-- [ ] **B2** `report-schema.unit.test.ts` — `classifyCluster` promotes a demoted shape-only family
-- [ ] **C** `live-bubble-fused.unit.test.ts` — `signalStrip` draws `structural | token_jaccard | embedding_cos`, so a verbatim copy and a proven rename both render `█▁█`. **Contract:** the strip stays **three bars wide** — `assert.equal(signalStrip(verbatim).length, 3)` in the skipped test itself and `signalStrip clamps inputs to the bar range` in `bubble.unit.test.ts` both demand it — so a fourth bar is not available. Draw **shape | semantic | confidence**: `max(structural, token_jaccard)`, `embedding_cos`, `fused`. Collapsing the first two is what the engine already says they are worth — *"`structural` and `token_jaccard` are two views of one normalised representation, so summing them says nothing beyond 'the shapes matched'"* ([`buckets.rs:304`](../../crates/deslop-core/src/buckets.rs#L304)) — and it buys the third slot for the only axis that separates the two.
-- [ ] 🛑 **D** `severity.unit.test.ts` — **blocked: D contradicts a green test in the same file.** See below.
-- [ ] **E** `live-bubble.unit.test.ts` — **contract settled.** The `byId.get(id) ?? cluster` fallback serves two populations that `bestBubbleCluster` cannot currently tell apart, and each has a test: a cluster **the report never saw** may bubble on the probe's own evidence (green `deslop.bubble.dismissCluster …` renders `c-dismiss`, absent from the seeded snapshot, and asserts it bubbles), while a cluster **a delta explicitly removed** must stay gone (skipped E). The discriminator is therefore removal, not absence — `ReportStore.applyDelta` already receives `clusters_removed` and drops them on the floor. Expose them and have the bubble honour them.
+**Whole VSIX suite after the fixes: 453 passing, 0 failing, 1 pending (D).**
+
+- [x] **A** `live-bubble-fused.unit.test.ts` — `bestBubbleCluster` gated on a UI-local `signals.fused >= FUSED_THRESHOLD`. **Fixed:** `bubbleAdmits` applies two gates, not one — an act-now bucket (`identical` / `nearly_identical`) is the engine's verdict and needs no second opinion; everything below the act-now bands keeps the fused cutoff. Pinned in both directions by the green `a sub-threshold hint bucket stays off the live surface at the exact cutoff` (a `loosely_similar` hint at exactly 0.85 must show, at 0.84 must not) and `a demoted shape-only family never wins the bubble over a proven clone`.
+- [x] **B1** `report-schema.unit.test.ts` — a content-gated rename was labelled `identical`. Fixed by §2 and re-stated against `resolveBucket`.
+- [x] **B2** `report-schema.unit.test.ts` — a demoted shape-only family was promoted. Same fix, same re-statement.
+- [x] **C** `live-bubble-fused.unit.test.ts` — `signalStrip` drew `structural | token_jaccard | embedding_cos`, so a verbatim copy and a proven rename both rendered `█▁█`. The strip had to stay **three bars wide** — `assert.equal(signalStrip(verbatim).length, 3)` in the test itself and `signalStrip clamps inputs to the bar range` in `bubble.unit.test.ts` both demand it — so a fourth bar was not available. **Fixed** by drawing **shape | semantic | confidence**: `max(structural, token_jaccard)`, `embedding_cos`, `fused`. Collapsing the first two is what the engine already says they are worth — *"`structural` and `token_jaccard` are two views of one normalised representation, so summing them says nothing beyond 'the shapes matched'"* ([`buckets.rs:304`](../../crates/deslop-core/src/buckets.rs#L304)) — and it buys the third slot for the only axis that separates the two.
+- [ ] 🛑 **D** `severity.unit.test.ts` — **blocked: D contradicts a green test in the same file.** Still `test.skip`, still the suite's one pending. See below.
+- [x] **E** `live-bubble.unit.test.ts` — **contract settled, then fixed.** The `byId.get(id) ?? cluster` fallback served two populations `bestBubbleCluster` could not tell apart, and each has a test: a cluster **the report never saw** may bubble on the probe's own evidence (green `deslop.bubble.dismissCluster …` renders `c-dismiss`, absent from the seeded snapshot, and requires it to bubble), while a cluster **a delta explicitly removed** must stay gone (E). The discriminator is retraction, not absence: `ReportStore` now records `clusters_removed` in a `retractedClusters` signal instead of dropping it, `setSnapshot` clears it (a full snapshot re-states the corpus on its own authority), a later `added`/`updated` un-retracts, and `bestBubbleCluster` filters on it before anything else.
+
+#### Two impossible fixtures found while restoring them
+
+Both were green tests asserting a state the engine cannot produce, and both were the last thing holding the fused-only gate in place:
+
+- `inline mode renders the bubble decoration` staged `identical` at `fused 0.2`, and `render clears the bubble when no cluster passes the threshold` staged `identical` at `fused 0.5`. An `Identical` cluster is byte-proven: `content_gated_signals` returns its signals untouched, and `Identical` requires `structural >= 0.99` **and** `token_jaccard >= 0.99`, so its `bounded_fused` is `>= 0.99` by construction. Neither pairing can occur.
+- Both fixtures now carry `loosely_similar` — the population the cutoff actually governs — and each grew an assertion rather than losing one: the first test now also proves a hint at exactly `FUSED_THRESHOLD` *does* render, so "the hint disappeared" cannot pass by hints being banned outright.
 
 #### 🛑 D is unsatisfiable as written — owner decision required
 
@@ -344,9 +353,10 @@ The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and
 
 **Fix: delete `classifyCluster`.** `resolveBucket` becomes the single routing surface and returns the engine's `cluster.bucket`; a report carrying no valid label yields `loosely_similar`, the only bucket whose action sentence makes no claim beyond "treat as a hint". The UI cannot re-derive this routing and every arm that tried has been a defect.
 
-- [ ] Failing test pinning both rows, watched failing for the real reason
-- [ ] Delete `classifyCluster`; `resolveBucket` is the only routing surface (retires B1 and B2 with it)
-- [ ] ⚠️ Two green tests assert the defective contract and must be **inverted, not weakened** — `classifyCluster nearly_identical on high jaccard + low structural` (`signals(0.0, 0.95, 0)`, which the engine calls `loosely_similar`) and `resolveBucket falls back to signals when v3 JSON has no bucket` (asserts a manufactured `identical`). Both are re-stated against `resolveBucket`, keeping every assertion's intent.
+- [x] Failing test pinning both rows, watched failing for the real reason. Watched without a VS Code launch: the pre-fix `classifyCluster` was extracted verbatim from `8c5bd2ada` and evaluated beside `classify_signals` transcribed from `buckets.rs:356-370`. **4 of 5 rows diverge** — `(0.10, 0.96, 0)` and `(0.00, 0.92, 0)` route `nearly_identical` against the engine's `loosely_similar`; B1's `(1.0, 1.0, 0, fused 0.9)` routes `identical` against the engine's wire label `nearly_identical`; B2's `(1.0, 0.3, 0, fused 0.31)` routes `nearly_identical` against `structural_only`.
+- [x] Delete `classifyCluster`; `resolveBucket` is the only routing surface (retires B1 and B2 with it). An unlabelled or unrecognised cluster resolves to `loosely_similar`, the only bucket whose action sentence claims nothing beyond "treat as a hint".
+- [x] ⚠️ Two green tests asserted the defective contract and were **inverted, not weakened** — `classifyCluster nearly_identical on high jaccard + low structural` (`signals(0.0, 0.95, 0)`, which the engine calls `loosely_similar`) and `resolveBucket falls back to signals when v3 JSON has no bucket` (asserted a manufactured `identical`). Both are re-stated against `resolveBucket` with every assertion kept and the expected value corrected to agree with the engine; each carries an `⚠️ INVERTED` comment saying so.
+- [x] Anti-regression assertion added: a cluster whose triple saturates on **every** axis but carries no engine label must still resolve to the hint bucket. Any surviving re-derivation answers `identical` there. The label-set table walk keeps its `structural 0.00 / token 0.95 → nearly_identical` row on purpose — a row whose triple and label disagree is exactly the row that catches a re-derivation coming back.
 
 ### 3. #344 — carry the confidence to every consumer
 
@@ -363,11 +373,12 @@ The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and
 
 ### 4. #345 — doc drift
 
-- [ ] `REPORTING-CONTEXT.md:100` — `FUSED_THRESHOLD = 0.85` described as what a pair needs "to enter a cluster"; admission and rendered confidence are two quantities sharing one name
-- [ ] `mcp.md:248` — claims `top-offenders` sorts "by fused score"; it sorts by weight
-- [ ] `--embeddings` defaults to `off` (`main.rs:90`) while `EmbeddingMode` docs call `auto` the default — requirement 1 unmet by default
-- [ ] Add `fused_spread` / `type2_recall` check ids to `corpus/known-failures.json` (unblocked now #347 compiles)
+- [x] `REPORTING-CONTEXT.md:100` — the admission bar and the rendered confidence are now separated by name, and agents are told to filter on `bucket`, never on `fused >= FUSED_THRESHOLD`. That instruction is not cosmetic: the shipped VSIX had exactly that bug (defect A).
+- [x] `mcp.md:248` — documents report order (confidence-scaled ranking weight) and says why it is not `fused`.
+- [x] `--embeddings` default discrepancy — `fusion.md` states the shipped default (`off`, `nomic-embed-text`) with the reason (no reachable Ollama on a first run) and names the recall cost rather than hiding it.
+- [x] `fused_spread` / `type2_recall` — added to `corpus/known-failures.json` **and implemented** in `crates/deslop-test-support/src/corpus_confidence.rs`, wired into `corpus_repos.rs::gate` + `GATE_CHECKS`, 10 unit tests green. Ids without checks behind them would be placeholders in the one file whose purpose is honesty about what is verified.
 - [x] `fusion.md` + `SPEC.md` reconciled
+- [x] Both public `how-it-works.md` pages (EN + ZH) still taught `clamp(structural + token_jaccard + embedding_cos, 0, 1)` and linked `PairScore::fused` as shipped code — the quarantined arm, documented publicly. Both now describe the bounded max.
 
 ### 5. Fused-related open bugs
 

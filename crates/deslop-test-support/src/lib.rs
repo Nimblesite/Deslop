@@ -12,6 +12,7 @@
 //! production protocol shell, which stays in `deslop-lsp` / `deslop-mcp`.
 
 pub mod corpus;
+pub mod corpus_confidence;
 pub mod enclosure;
 
 use std::{
