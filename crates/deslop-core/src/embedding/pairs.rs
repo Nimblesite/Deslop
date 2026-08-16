@@ -257,3 +257,79 @@ impl Point for CosinePoint {
         1.0_f32 - dot
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Vector widths spanning the mock fixtures (4) and the widths real
+    /// embedding models return, where the accumulated error is largest.
+    const WIDTHS: [usize; 4] = [4, 384, 768, 4096];
+
+    /// Deterministic non-dyadic components, so L2 normalisation cannot be
+    /// exact in binary floating point and the rounding under test is
+    /// actually exercised.
+    fn ramp(width: usize) -> Vec<f32> {
+        (0..width)
+            .map(|index| {
+                let step = u16::try_from(index % 997).unwrap_or_default();
+                0.1_f32 + f32::from(step) * 0.017_f32
+            })
+            .collect()
+    }
+
+    /// [FUSION-EMBED-PROVIDER] A vector is perfectly similar to itself. Two
+    /// byte-identical snippets share one vector (`group_snippets_by_content`
+    /// collapses them), so this is exactly the figure the report renders for
+    /// an identical clone pair — it must be `1.0`, not `0.999998`. GH #372.
+    #[test]
+    fn identical_vectors_have_cosine_similarity_of_exactly_one() {
+        for width in WIDTHS {
+            let vector = ramp(width);
+            let cosine = cosine_similarity(&vector, &vector);
+            assert!(
+                (cosine - 1.0).abs() < f64::EPSILON,
+                "a vector of width {width} must be perfectly similar to itself, got {cosine:.17}",
+            );
+        }
+    }
+
+    /// [FUSION-EMBED-PROVIDER] Scaling a vector does not change its
+    /// direction, so cosine stays exactly `1.0` regardless of magnitude.
+    #[test]
+    fn scaled_copies_of_a_vector_have_cosine_similarity_of_exactly_one() {
+        for width in WIDTHS {
+            let vector = ramp(width);
+            let scaled: Vec<f32> = vector.iter().map(|value| value * 3.5).collect();
+            let cosine = cosine_similarity(&vector, &scaled);
+            assert!(
+                (cosine - 1.0).abs() < f64::EPSILON,
+                "a scaled copy at width {width} must stay perfectly similar, got {cosine:.17}",
+            );
+        }
+    }
+
+    /// [FUSION-EMBED-PROVIDER] The accurate path still reports the analytic
+    /// answers for orthogonal, opposed, and degenerate inputs, so tightening
+    /// precision cannot be mistaken for widening admission.
+    #[test]
+    fn cosine_similarity_reports_analytic_values_for_known_vectors() {
+        assert!(
+            cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]).abs() < f64::EPSILON,
+            "orthogonal vectors must score exactly 0.0",
+        );
+        assert!(
+            cosine_similarity(&[1.0, 0.0], &[-1.0, 0.0]).abs() < f64::EPSILON,
+            "opposed vectors must clamp to exactly 0.0",
+        );
+        assert!(
+            cosine_similarity(&[0.0, 0.0], &[1.0, 1.0]).abs() < f64::EPSILON,
+            "a zero-norm vector must score exactly 0.0",
+        );
+        let half = cosine_similarity(&[1.0, 0.0], &[1.0, 1.0]);
+        assert!(
+            (half - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-9,
+            "45 degrees apart must score 1/sqrt(2), got {half:.17}",
+        );
+    }
+}
