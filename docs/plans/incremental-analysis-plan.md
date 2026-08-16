@@ -41,7 +41,15 @@ It also bounds what may **not** be reused. The embedding/ANN layer is the one ap
 
 The "pair scoring is almost certainly not the cost" hunch is confirmed and quantified. **Signature construction dominates**, which selects the first Phase 2 design below. Banding is the secondary target: `band_key` hashes the 4 row values through blake3, and identity concatenation of the rows has identical collision semantics — recorded as a follow-up optimisation, separate from the reuse work.
 
-Still owed before Phase 0 closes: a committed benchmark corpus, a recorded baseline, and cold golden reports, so every later phase reports a delta against a fixed number rather than a memory, and must reproduce the goldens byte-identically.
+**Benchmark corpus and baseline — recorded.** The benchmark corpus is the pinned tokio clone ([`corpus/tokio.json`](../../corpus/tokio.json), tag `tokio-1.49.0`, sha-verified by `scripts/fetch-corpus.mjs`) — committed as a manifest rather than vendored source, deterministic by pin, and the corpus the Makefile already names fastest and most stable. Release binary, `--embeddings off`, 758 files / 1,779 clusters:
+
+| run | wall | peak RSS | `cache_stats` |
+|---|---|---|---|
+| `--no-incremental` | 5.97 s | 1,412 MB | 0 / 0 |
+| cold, store on | 5.96 s | 1,411 MB | 0 hit / 758 miss |
+| fully warm | 5.58 s | 1,368 MB | 758 hit / 0 miss |
+
+The parse store costs 29 MB for this corpus. All three reports are field-for-field identical with `cache_stats` removed — verified by direct JSON comparison, corroborating [PIPELINE-DETERMINISM] and the warm/cold agreement invariant on a real corpus. The remaining Phase 0 artefact is the cold golden report, enforced as a committed fixture golden by `report_golden.rs`.
 
 ## Phase 1 — write the contract before the code
 
@@ -95,8 +103,8 @@ The live TODO for this plan. Every work session updates this list in the same ch
 ### Phase 0 — attribution and baseline
 - [x] Attribute the LSH block: signature construction ~69%, band enumeration ~30%, pair scoring ~1% (release, `crates/`, 92,973 fingerprints)
 - [x] Record the attribution and the selected Phase 2 design in this plan
-- [ ] Commit a benchmark corpus that later phases measure against
-- [ ] Record the cold and warm baseline for that corpus in this plan
+- [x] Commit a benchmark corpus that later phases measure against — the pinned tokio manifest (`corpus/tokio.json`, sha-verified clone)
+- [x] Record the cold and warm baseline for that corpus in this plan — 5.97 s / 5.96 s / 5.58 s, reports identical modulo `cache_stats`
 - [ ] Commit cold golden reports that every later phase must reproduce byte-identically
 
 ### Phase 1 — equivalence contract ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE])
