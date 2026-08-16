@@ -1,30 +1,30 @@
-//! The incremental fingerprint cache keys on lossy text, not source bytes
-//! ([PIPELINE-INCREMENTAL]).
+//! The incremental fingerprint cache must key on source bytes, never on
+//! lossy text ([PIPELINE-INCREMENTAL]).
 //!
-//! `FingerprintCache::path_for` (`crates/deslop-core/src/fpcache.rs`) computes
-//! its key as `content_hash(&String::from_utf8_lossy(source))`. Every
-//! byte sequence that is not valid UTF-8 collapses to U+FFFD before it is
-//! hashed, so two files with *different bytes* — and different byte
-//! lengths — share one cache entry. The second file read in a run is
-//! served the first file's normalised tree and fingerprints.
+//! Pins gh #382. `FingerprintCache::path_for`
+//! (`crates/deslop-core/src/fpcache.rs`) once computed its key as
+//! `content_hash(&String::from_utf8_lossy(source))`. Every byte sequence
+//! that is not valid UTF-8 collapses to U+FFFD before hashing, so two
+//! files with *different bytes* — and different byte lengths — shared one
+//! cache entry, and the second file read in a run was served the first
+//! file's normalised tree and fingerprints: its clone reported one line
+//! and one byte early, on the comment instead of the function. When the
+//! colliding files are not structurally identical the same collision
+//! hands the second file the first file's fingerprints outright — a false
+//! positive for code it does not contain, a false negative for the code
+//! it does.
 //!
-//! The consequence is a report that points at the wrong code. `beta.rs`
-//! below carries a two-byte truncated UTF-8 sequence where `alpha.rs`
-//! carries a one-byte invalid unit; both lossy-decode to the same string,
-//! so `beta.rs` is one byte longer and every offset inside it is shifted
-//! by one. Served `alpha.rs`'s cached ranges, the cached run reports
-//! `beta.rs`'s clone one line and one byte early — a user following the
-//! report lands on the comment line, not the function.
-//!
-//! The shift is bounded only by how many invalid units the two files
-//! disagree on, so the same collision can slide a reported range onto
-//! entirely unrelated code, and — when the colliding files are not
-//! structurally identical — hand the second file the first file's
-//! fingerprints outright, which is a false positive for code `beta.rs`
-//! does not contain and a false negative for the code it does.
+//! `beta.rs` below carries a two-byte truncated UTF-8 sequence where
+//! `alpha.rs` carries a one-byte invalid unit; both lossy-decode to the
+//! same string, so the pair is byte-distinct, lossy-identical, and one
+//! byte apart — the minimal collision.
 //!
 //! `--no-incremental` never consults the cache, so it is the ground truth
-//! the cached run is asserted against.
+//! every cached run is asserted against. The cold cached run must miss
+//! for *both* files (an injective key can never let byte-distinct files
+//! share an entry), and a second, warm cached run must hit for both and
+//! still render the truth spans — proving the cache is genuinely
+//! exercised and rehydrates the right file.
 
 use std::{fs, path::Path};
 
@@ -67,9 +67,9 @@ fn write_clone(dir: &Path, name: &str, invalid: &[u8]) -> Result<()> {
     Ok(fs::write(dir.join(name), bytes)?)
 }
 
-/// Seeds a fresh scan root holding the colliding pair. `alpha.rs` sorts
-/// first, so it populates the cache entry that `beta.rs` then collides
-/// onto within the same run.
+/// Seeds a fresh scan root holding the byte-distinct, lossy-identical
+/// pair. Under the defective lossy key, `alpha.rs` (first in sort
+/// order) populated the one entry `beta.rs` then collided onto.
 fn seed_colliding_pair(scan_root: &Path) -> Result<()> {
     fs::create_dir_all(scan_root)?;
     write_clone(scan_root, "alpha.rs", ONE_BYTE_INVALID)?;
@@ -149,20 +149,36 @@ fn lossy_utf8_cache_key_must_not_collide_across_distinct_files() -> Result<()> {
     );
 
     let truth = report(&scan_root, false)?;
-    let cached = report(&scan_root, true)?;
+    let cold = report(&scan_root, true)?;
+    let warm = report(&scan_root, true)?;
 
-    // The cached run must actually have consulted the cache, or this
-    // test would pass without exercising the defect at all.
-    let stats = field(&cached, "cache_stats");
+    // An injective key can never let byte-distinct files share an entry:
+    // the cold cached run must miss for both files. A single hit here IS
+    // the collision — beta.rs served alpha.rs's tree.
+    let cold_stats = field(&cold, "cache_stats");
     assert_eq!(
-        field(stats, "hits").as_u64(),
-        Some(1),
-        "beta.rs must be served from alpha.rs's entry for this to test anything: {cached}"
+        field(cold_stats, "hits").as_u64(),
+        Some(0),
+        "byte-distinct files shared a cache entry on the cold run: {cold}"
     );
     assert_eq!(
-        field(stats, "misses").as_u64(),
-        Some(1),
-        "alpha.rs must be the sole miss: {cached}"
+        field(cold_stats, "misses").as_u64(),
+        Some(2),
+        "both files must miss the cold cache: {cold}"
+    );
+
+    // The warm run must hit for both files — proving the cached path is
+    // genuinely exercised, not silently bypassed.
+    let warm_stats = field(&warm, "cache_stats");
+    assert_eq!(
+        field(warm_stats, "hits").as_u64(),
+        Some(2),
+        "both files must be served from cache on the warm run: {warm}"
+    );
+    assert_eq!(
+        field(warm_stats, "misses").as_u64(),
+        Some(0),
+        "warm run must not re-parse either file: {warm}"
     );
 
     // Ground truth: the clone starts on line 2 of both files, one byte
@@ -178,18 +194,21 @@ fn lossy_utf8_cache_key_must_not_collide_across_distinct_files() -> Result<()> {
         "uncached beta.rs span moved: {truth}"
     );
 
-    // The defect: served alpha.rs's cached tree, beta.rs is reported one
-    // line and one byte early — the comment line, not the function.
-    assert_eq!(
-        occurrence_span(&cached, "alpha.rs")?,
-        occurrence_span(&truth, "alpha.rs")?,
-        "cached alpha.rs span must match the uncached run: {cached}"
-    );
-    assert_eq!(
-        occurrence_span(&cached, "beta.rs")?,
-        (2, 8, 5, 176),
-        "cache collision reported beta.rs at alpha.rs's offsets: {cached}"
-    );
+    // Cold and warm cached runs must both render the truth spans. Under
+    // the defective lossy key, beta.rs was reported one line and one byte
+    // early — at alpha.rs's offsets, pointing at the comment line.
+    for (label, cached) in [("cold", &cold), ("warm", &warm)] {
+        assert_eq!(
+            occurrence_span(cached, "alpha.rs")?,
+            (2, 8, 4, 175),
+            "{label} cached alpha.rs span must match the uncached run: {cached}"
+        );
+        assert_eq!(
+            occurrence_span(cached, "beta.rs")?,
+            (2, 8, 5, 176),
+            "{label} cache run reported beta.rs at alpha.rs's offsets: {cached}"
+        );
+    }
 
     Ok(())
 }
