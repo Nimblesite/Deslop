@@ -245,8 +245,11 @@ declaring a new constant, query `duplicates { categories: ["shadowed_constant",
 code passes `buckets: ["identical"]` inside the prevention loop too) and the uniform `limit`
 (default 5, replacing the old `top_n`) + `max_occurrences` params.
 
-Output: top-`limit` clusters by fused score with signals, interpretation, action hints, occurrences,
-and the `filters` echo.
+Output: top-`limit` clusters in **report order** — ranking weight descending, with the
+confidence-scaled `confidence_factor` already folded in ([RANK-SCORE]) — carrying signals,
+interpretation, action hints, occurrences, and the `filters` echo. Not sorted by `fused`: the
+rendered confidence is a per-cluster quality, and ordering by it would put a two-line byte-identical
+pair above a 400-line proven clone.
 
 Edge cases:
 

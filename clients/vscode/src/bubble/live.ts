@@ -20,6 +20,7 @@ import {
   ReportCluster,
   Severity,
   bucketLabels,
+  isActNow,
   occurrenceCount,
   resolveBucket,
 } from "../types/report";
@@ -178,6 +179,7 @@ export class LiveBubble implements vscode.Disposable {
       report.clusters,
       clusters,
       this.dismissedClusters,
+      this.store.current.retractedClusters,
     );
     if (!best) {
       this.clearBubble();
@@ -253,13 +255,31 @@ function bestBubbleCluster(
   reportClusters: ReportCluster[],
   probeClusters: ReportCluster[],
   dismissedClusters: Set<string>,
+  retractedClusters: ReadonlySet<string>,
 ): ReportCluster | undefined {
   const byId = new Map(reportClusters.map((cluster) => [cluster.id, cluster]));
   return probeClusters
+    .filter((cluster) => !retractedClusters.has(cluster.id))
     .map((cluster) => byId.get(cluster.id) ?? cluster)
-    .filter((cluster) => cluster.signals.fused >= FUSED_THRESHOLD)
+    .filter(bubbleAdmits)
     .filter((cluster) => !dismissedClusters.has(cluster.id))
     .sort((a, b) => b.weight - a.weight)[0];
+}
+
+// Two gates, because the two populations carry different evidence
+// ([VSIX-LIVE-BUBBLE], [FUSION-CONTENT-GATE]). An act-now bucket is the
+// engine's own verdict that the user should act, reached with content
+// evidence and byte proof this client never sees; the same gate
+// deliberately pushes a proven rename's confidence *below*
+// `FUSED_THRESHOLD`, so re-testing an act-now cluster against a UI-local
+// cutoff withholds precisely the findings this surface exists to show.
+// Below the act-now bands no such verdict stands behind the cluster and
+// the fused cutoff is the right gate — a weak LSH hint is worth the
+// user's attention only once it clears the line.
+function bubbleAdmits(cluster: ReportCluster): boolean {
+  return (
+    isActNow(resolveBucket(cluster)) || cluster.signals.fused >= FUSED_THRESHOLD
+  );
 }
 
 class BubbleInlayProvider implements vscode.InlayHintsProvider {

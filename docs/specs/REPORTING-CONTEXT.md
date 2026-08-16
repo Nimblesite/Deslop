@@ -97,7 +97,8 @@ The report header carries one honest number: `metrics.duplication_percent = 100 
 ## Thresholds (typical defaults)
 
 - `min-nodes = 15` — smaller subtrees are excluded to cut noise. The header of the report will state the value actually used.
-- `FUSED_THRESHOLD = 0.85` — a pair must score ≥ this on the fused signal (combination of `structural`, `token_jaccard`, `embedding_cos`) to enter a cluster.
+- `FUSED_THRESHOLD = 0.85` — the **admission** bar. A *pair* must reach it on `PairScore::bounded_fused` — the strongest single axis of `structural`, `token_jaccard`, `embedding_cos`, bounded to `[0,1]` ([FUSION-STRATEGY-BOUNDED-MAX]) — to enter a cluster at all.
+- `signals.fused` on a rendered cluster is **not** that quantity, despite the shared name. It is the *rendered confidence*: shape evidence scaled by measured content evidence ([FUSION-CONTENT-GATE]), so a proven Type-2 rename legitimately renders **below** 0.85 while still routing to an act-now bucket. Do not filter reported clusters on `fused >= FUSED_THRESHOLD` — that discards findings the engine already admitted and vouched for. Filter on `bucket` instead, which is the engine's verdict.
 - `LSH_ONLY_MIN_JACCARD = 0.90` and `LSH_ONLY_MIN_NODE_COUNT = 40` — extra gates for LSH-only candidates (no structural anchor), to keep tiny trivial windows from mega-clustering.
 - Cross-language comparison is off by default. Enable `[analysis] allow_cross_language_comparison = true` only when intentionally auditing ports, generated clients, or semantic equivalents across ecosystems.
 

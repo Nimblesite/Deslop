@@ -13,7 +13,9 @@
     "data_table_rank": "A numeric data table ranked in the top N categorised as `logic`.",
     "memory": "Peak RSS exceeded the runner budget.",
     "wall": "Scan exceeded the wall-clock ceiling.",
-    "determinism": "Two identical scans disagreed."
+    "determinism": "Two identical scans disagreed.",
+    "fused_spread": "Rendered confidence collapsed to one value across clusters that carry visibly different evidence — the saturation gh #343 fixed, caught at real-repository scale instead of on a synthetic fixture.",
+    "type2_recall": "A hand-verified Type-2 rename was demoted to `structural_only` or hidden — the recall side of the content gate ([FUSION-CONTENT-GATE]), which a false-positive check cannot see."
   },
   "known_failures": {
     "flutter": [

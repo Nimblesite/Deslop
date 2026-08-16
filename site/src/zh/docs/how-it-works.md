@@ -81,7 +81,7 @@ discover → parse → normalize → fingerprint → cluster
 | `token_jaccard` | 0..1 | 近乎相同的代码 [Type-3] —— MinHash 带碰撞 | `lsh.rs::band_collisions` + `tokens.rs` |
 | `embedding_cos` | 0..1 | 行为相同、代码不同 [Type-3/4] —— HNSW top-k | `embedding/pairs.rs` |
 
-依据集成式 LLM 2025 的发现（求平均有害；求和/取最大有益），融合得分为 `clamp(structural + token_jaccard + embedding_cos, 0, 1)`（[`pair.rs::PairScore::fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)）。当融合得分越过 `FUSED_THRESHOLD = 0.85` 时配对得以幸存。仅由 LSH 产生的配对还要承受一道更严格的信息含量下限（`token_jaccard ≥ 0.90` 且两端点均 ≥ 40 个 AST 节点），这样嘈杂的近似匹配就无法搭着 LSH 的便车混入簇中。除非 `.deslop.toml` 明确启用，否则跨语言配对会被丢弃。
+依据集成式 LLM 2025 的发现（求平均有害；求和与取最大有益），融合得分采用**有界最大值**——`max(structural, token_jaccard, embedding_cos)`，取值于 `[0,1]`（[`pair.rs::PairScore::bounded_fused`](https://github.com/Nimblesite/Deslop/blob/main/crates/deslop-core/src/pair.rs)）。论文中的求和分支假定各成员相互独立；而 Deslop 的结构维度与词法维度是同一棵归一化语法树的两种视图，因此对二者求和会制造出任何单一维度都不具备的置信度——三个维度都不足 0.35 的配对也可能越线。当融合得分越过 `FUSED_THRESHOLD = 0.85` 时配对得以幸存。仅由 LSH 产生的配对还要承受一道更严格的信息含量下限（`token_jaccard ≥ 0.90` 且两端点均 ≥ 40 个 AST 节点），这样嘈杂的近似匹配就无法搭着 LSH 的便车混入簇中。除非 `.deslop.toml` 明确启用，否则跨语言配对会被丢弃。
 
 ## Rank（排名）
 

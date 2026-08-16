@@ -216,18 +216,18 @@ suite("LiveBubble render", () => {
     }
   });
 
-  // 🛑 SKIPPED — DEFECT E. This test is correct and the code is wrong.
-  // [VSIX-STATE-DIRTY] says the bubble derives from the visible
-  // projection, but `bestBubbleCluster` falls back to the probe's own
-  // copy (`byId.get(id) ?? cluster`), so a delta clears the bubble and
-  // the very next keystroke paints it straight back. Skipped under an
-  // explicit owner mandate to unblock the release. Do not delete, do not
-  // weaken: un-skip it as part of the fix. Note this is the least
-  // clear-cut of the five — the same fallback legitimately serves
-  // clusters the probe finds before a rescan — so settle the intended
-  // contract first, then fix the code or restate the test.
+  // DEFECT E — restored, with the contract settled first. The
+  // `byId.get(id) ?? cluster` fallback served two populations that
+  // `bestBubbleCluster` could not tell apart, and each has a test in this
+  // file: a cluster the report has **never seen** may bubble on the
+  // probe's own evidence (`deslop.bubble.dismissCluster …` below renders
+  // `c-dismiss`, absent from the seeded snapshot, and requires it to
+  // show), while a cluster a delta **explicitly retracted** must stay
+  // gone. Absence from `report.clusters` cannot separate them, so
+  // `ReportStore` now records `clusters_removed` instead of dropping it —
+  // the discriminator is retraction, not absence ([VSIX-STATE-DIRTY]).
   // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
-  test.skip("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
+  test("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 
     try {

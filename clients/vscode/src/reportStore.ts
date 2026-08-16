@@ -51,6 +51,9 @@ export interface ReportState {
    * ([FACET-TOP-OFFENDERS-FILTER]) so the status bar and webviews slice
    * in lock-step with the tree. */
   facetFilter: FacetFilter;
+  /** Cluster ids a delta retracted since the last full snapshot. See
+   * `ReportStore.retractedClusters`. */
+  retractedClusters: ReadonlySet<string>;
 }
 
 export class ReportStore implements vscode.Disposable {
@@ -74,6 +77,18 @@ export class ReportStore implements vscode.Disposable {
 
   /** Workspace facet-filter signal ([FACET-TOP-OFFENDERS-FILTER]). */
   readonly facetFilter: ReadonlySignal<FacetFilter> = this._facetFilter;
+  /**
+   * Cluster ids a delta explicitly retracted since the last full snapshot
+   * ([VSIX-STATE-DIRTY]). Surfaces that may render a cluster the canonical
+   * report does not contain — the live bubble accepts LSP probe results
+   * found between rescans — need to tell two populations apart: a cluster
+   * the report has *never seen* (legitimate, the probe is the only evidence
+   * there is) from one the server *withdrew* (a phantom; re-rendering it
+   * paints back what the delta just cleared). Absence from `report.clusters`
+   * cannot distinguish them, so the retraction is recorded instead of
+   * being dropped on the floor.
+   */
+  readonly retractedClusters: ReadonlySignal<ReadonlySet<string>> = this._retractedClusters;
   /** Signal for direct use in effect() — re-renders only when lifecycle changes. */
   readonly lifecycle: ReadonlySignal<LifecyclePhase> = this._lifecycle;
   /** Signal for direct use in effect() — re-renders when embedding model pending changes. */
@@ -91,6 +106,7 @@ export class ReportStore implements vscode.Disposable {
       pendingEmbeddingModel: this._pendingEmbeddingModel.value,
       embeddingProgress: this._embeddingProgress.value,
       facetFilter: this._facetFilter.value,
+      retractedClusters: this._retractedClusters.value,
     };
   }
 
@@ -124,6 +140,10 @@ export class ReportStore implements vscode.Disposable {
     batch(() => {
       this._report.value = report;
       this._generation.value = generation;
+      // A full snapshot re-states the whole corpus, so every earlier
+      // retraction is settled by it — a cluster still absent here is
+      // absent on the snapshot's own authority, not on a stale delta's.
+      this._retractedClusters.value = new Set();
       // A report with findings is self-evidently a completed analysis, so
       // it settles the lifecycle to "ready". An EMPTY report is ambiguous
       // — it may be a cache seed or a mid-scan snapshot — so the "ready"
@@ -155,7 +175,14 @@ export class ReportStore implements vscode.Disposable {
     for (const cluster of delta.clusters_updated) byId.set(cluster.id, cluster);
     for (const cluster of delta.clusters_added) byId.set(cluster.id, cluster);
     const clusters = Array.from(byId.values()).sort((a, b) => b.weight - a.weight);
+    const retracted = new Set(this._retractedClusters.value);
+    for (const id of delta.clusters_removed) retracted.add(id);
+    // A later generation that re-states a cluster un-retracts it: the
+    // server has found it again, so the withdrawal no longer stands.
+    for (const cluster of delta.clusters_updated) retracted.delete(cluster.id);
+    for (const cluster of delta.clusters_added) retracted.delete(cluster.id);
     batch(() => {
+      this._retractedClusters.value = retracted;
       this._report.value = {
         ...current,
         clusters,

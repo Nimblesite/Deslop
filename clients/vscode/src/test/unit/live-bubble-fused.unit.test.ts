@@ -43,15 +43,13 @@ function assertShowing(
 }
 
 suite("LiveBubble fused confidence", () => {
-  // 🛑 SKIPPED — DEFECT A. This test is correct and the code is wrong.
-  // `bestBubbleCluster` gates on a UI-local `fused >= FUSED_THRESHOLD`
-  // instead of the engine's bucket, so act-now clusters below 0.85 are
-  // silently withheld from the flagship live surface. Skipped under an
-  // explicit owner mandate to unblock the release — NOT because the
-  // assertion is wrong. Do not delete it, do not weaken it: un-skip it as
-  // part of the fix.
+  // DEFECT A — restored. `bestBubbleCluster` gated on a UI-local
+  // `fused >= FUSED_THRESHOLD` instead of the engine's bucket, so act-now
+  // clusters below 0.85 were silently withheld from the flagship live
+  // surface. `bubbleAdmits` now takes the engine's verdict for an act-now
+  // bucket and keeps the fused cutoff for everything below it.
   // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
-  test.skip("an act-now near miss below the fused cutoff still reaches the bubble", async () => {
+  test("an act-now near miss below the fused cutoff still reaches the bubble", async () => {
     // A genuine Type-3 near miss: identical shape, real edits, so
     // positional agreement is ~0.8 and the gate renders fused = 0.80
     // while the engine still routes `nearly_identical`. The bubble must
@@ -247,14 +245,13 @@ suite("LiveBubble fused confidence", () => {
     }
   });
 
-  // 🛑 SKIPPED — DEFECT C. This test is correct and the code is wrong.
-  // `signalStrip` draws structural/token/embedding and never draws the
-  // fused confidence, so a verbatim copy and a proven rename both render
-  // "██▁" — the user cannot tell "safe to extract" from "identifiers
-  // differ". Skipped under an explicit owner mandate to unblock the
-  // release. Do not delete, do not weaken: un-skip it as part of the fix.
+  // DEFECT C — restored. `signalStrip` drew structural/token/embedding, so
+  // a verbatim copy and a proven rename both rendered "█▁█" and the user
+  // could not tell "safe to extract" from "identifiers differ". The strip
+  // is still three bars — shape, semantic, confidence — because the two
+  // shape views are one piece of evidence and only `fused` separates them.
   // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
-  test.skip("the signal strip distinguishes a proven rename from a verbatim copy", () => {
+  test("the signal strip distinguishes a proven rename from a verbatim copy", () => {
     // Both render structural 1.0 and token 1.0 — the rename's token
     // signal is corrected upward by the Merkle argument (#232) — so the
     // three-bar strip collapses them. The only thing separating a "safe
