@@ -63,13 +63,14 @@ jobs:
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
           echo "Testing the action against deslop ${tag#v}"
 
-      # `--latest-release` adds the freshness half of the documented-pin check,
-      # which `make deployment-verify` cannot run offline. The tag's README is
-      # the body of the Marketplace listing and `stamp-release-version.mjs`
-      # stamps the build rather than the commit, so a stale committed pin hands
-      # every listing visitor a workflow that installs an older CLI — which is
-      # exactly what v0.30.0 shipped. [ACTION-VERSION]
-      - run: node scripts/test-action-contract.mjs --latest-release "${{ steps.latest.outputs.version }}"
+      # The documented-pin check needs no release to compare against any more.
+      # It once asserted the committed pin equalled the newest release, which
+      # only the network could answer — so it ran here and not in `make
+      # deployment-verify`, and only on push to main, which a tag push is not.
+      # v0.30.0 shipped a Marketplace listing advertising `@v0.27.0` through that
+      # gap. The docs now commit no version for the check to date: it asserts
+      # they cannot, which is true offline, on every PR. [ACTION-VERSION]
+      - run: node scripts/test-action-contract.mjs
 
   # [ACTION-VERSION] end to end. Every other job passes `version:` explicitly, so
   # the derivation path every Marketplace consumer actually takes — no `version:`
@@ -80,8 +81,10 @@ jobs:
   # error here, so a SHA pin would prove the opposite of what this job exists for.
   # This is Deslop's own action in its own repository, so no third party can
   # re-point the tag. The tag is deliberately not asserted to be the newest
-  # release — any tag carrying action.yml proves the derivation, and coupling it
-  # to the release cadence would redden main for a pin bump.
+  # release: any tag carrying action.yml proves the derivation. It is also the
+  # one version literal [ACTION-VERSION-DOCS] cannot remove — `uses:` takes no
+  # expression, so a job proving a *tag* selects the CLI has to name a real one.
+  # Nothing reads it as advice: it is a fixture, not a documented pin.
   derived-version:
     name: Version derived from the pinned tag
     needs: [contract]

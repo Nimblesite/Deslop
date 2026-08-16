@@ -47,6 +47,39 @@ data = 0.15
 
 Every value must be finite and in `[0.0, 1.0]`, rejected otherwise with the same `ConfigThreshold`-style error as `[ranking]`. `0.0` is legal here (unlike the ranking multipliers): it removes that class from the weighted numerator only. Nothing in this section can alter the mechanical `duplication_percent` — that figure has no configuration surface, by design.
 
+**`[tuning]` section.** Every accuracy lever of the detector, one sub-table per pipeline stage. The levers, their defaults, and the provenance of each default are specified in [fusion.md §FUSION-TUNING-LEVERS](fusion.md#fusion-tuning-levers); this section defines only the file surface. Migration is planned in [`plans/unhardcode-tuning-plan.md`](../plans/unhardcode-tuning-plan.md).
+
+```toml
+[tuning.admission]            # every key optional; absence inherits the default
+fused_threshold = 0.85
+lsh_only_min_jaccard = 0.90
+
+[tuning.content_gate]
+support_floor = 0.7
+promote_floor = 0.85
+
+[tuning.representation]       # cache-keyed — see [CONFIG-TUNING-CACHE]
+kgram_width = 5
+```
+
+Similarity, agreement, and cosine keys must be finite and in `[0.0, 1.0]`; multiplier keys finite and in `(0.0, 1.0]`; count keys `≥ 1`. Violations are rejected with the same `ConfigThreshold`-style error as `[ranking]`, naming the key and the invariant. Clamping a bad value is prohibited — it would produce a report the config does not describe.
+
+**Cross-key invariants**, each rejected at load because violating it makes a downstream stage unreachable: `content_gate.support_floor ≤ content_gate.promote_floor` (or the middle zone of [FUSION-CONTENT-GATE] is empty); `content_gate.structural_only_max_support < content_gate.support_floor` (or the two routes into `structural_only` stop being distinguishable); `admission.lsh_only_min_jaccard ≥ admission.fused_threshold` (or the unanchored-pair guard is dead code); `candidates.embedding_min_cosine ≤ admission.fused_threshold` (or embedding candidates are filtered by a bar admission never applies); `content_gate.saturating_token_floor ≤ routing.identical_token_floor` (or a shape match routes `identical` without the gate firing); `representation.minhash_signature_len % representation.lsh_bands == 0`.
+
+**Precedence**, highest first: `--tune <table>.<key>=<value>` CLI flag, then the editor settings channel (`crate::state`, as [VSIX-SETTINGS-RANKING] already does for `structural_only`), then `[tuning]`, then the compiled default. Resolution happens once at config load into one immutable value; no stage reads a global at comparison time.
+
+### [CONFIG-TUNING-CACHE] Representation keys are cache-keyed
+
+`[tuning.representation]` keys change what is hashed or what is dispatched to the embedding provider, so a cached artefact written under one value describes nothing under another. `min_nodes` is already in the fingerprint cache key ([PIPELINE-INCREMENTAL]); the rest are not, because they could not previously vary. The key extends to the whole sub-table in the same change that makes any of them configurable — serving stale fingerprints as fresh is a false negative manufactured by the cache. `rows_per_band` is derived as `minhash_signature_len / lsh_bands` and is never a key.
+
+Every other `[tuning]` sub-table applies downstream of both caches and never invalidates them.
+
+### [CONFIG-TUNING-DECLARED] The report declares the tuning that produced it
+
+A percentage or a cluster count is only meaningful alongside the thresholds that produced it. Every report carries the effective value and source (`default` | `config` | `cli` | `editor`) of each lever: in full in the JSON report ([PRINCIPLES-AUDIENCE-AGENT]), and as a one-line statement — `tuning: defaults`, or `tuning: N overridden` naming them — in the human HTML and text summaries, because a reader comparing two reports must know whether the levers moved before concluding the code did.
+
+The corpus gate and its known-failures ratchet ([CORPUS-*]) run at defaults, always. Figures from a tuned run are not comparable to a default run's, and a corpus baseline recorded under non-default tuning is invalid.
+
 **Pattern semantics.** `ignore::gitignore` syntax. Same engine as [PIPELINE-DISCOVER-FILES] so patterns behave identically to `.gitignore`. Paths are matched relative to the scan root.
 
 **Merge rule.** Per-language sections **extend** `[defaults]`, they do not replace it. A `.rs` file is checked against `defaults.report_hide ∪ language.rust.report_hide`. Keeps the config declarative — you never have to repeat shared patterns in every language block.

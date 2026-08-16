@@ -6,8 +6,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readActionPins } from "./stamp-release-version.mjs";
-
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const stamper = join(repoRoot, "scripts/stamp-release-version.mjs");
 const version = "9.8.7-test.1";
@@ -25,8 +23,7 @@ const tests = [
   stamperSetsEveryProjectVersion,
   stamperStampsGeneratedVsixManifest,
   stamperStampsEveryWorkspaceCrateInLock,
-  stamperStampsEveryReadmeActionPin,
-  stamperStampsPinsQuotedInProse,
+  stamperLeavesDocumentedPinsUntouched,
   stamperRejectsInvalidVersion,
 ];
 
@@ -127,116 +124,45 @@ function stamperStampsEveryWorkspaceCrateInLock(work) {
   if (workspaceCrates === 0) throw new Error("Cargo.lock had no workspace crates to stamp");
 }
 
-// The README is the body of the GitHub Marketplace listing, and the pinned ref
-// IS the CLI version the action installs. An unstamped pin shipped v0.26.0's
-// listing telling every visitor to use v0.25.0 — a tag that predates action.yml,
-// so the advertised snippet failed outright. Every published surface that shows
-// a copy-pasteable pin — the README and both locales of the Action doc page —
-// must move with the tag, or a reader copies a stale version.
-function stamperStampsEveryReadmeActionPin(work) {
+// The inverse of what this once asserted, and the reason the reversal is safe.
+//
+// Stamping rewrites the runner's checkout, never the commit, so a stamped pin
+// never reaches the tag a consumer resolves — and the tag's README is the body
+// of the Marketplace listing. Stamping the pins therefore could not keep them
+// true: whatever version was *committed* is what every visitor copied, which is
+// how v0.30.0 shipped a listing advertising `@v0.27.0`. The docs now commit no
+// version at all, so a stamper that touched them would reintroduce exactly one
+// failure mode — writing a real version into a file that ships as-is, where it
+// would go stale at the very next release with nothing left to catch it.
+//
+// Byte equality is deliberately stricter than the "only the version moved"
+// check it replaces: that one had to reason about line counts, backtick
+// balance and token substitution to bound the blast radius of a rewrite. With
+// no rewrite at all, an untouched file proves every one of those properties at
+// once, and proves them for the whole file rather than the pin lines.
+// [ACTION-VERSION]
+function stamperLeavesDocumentedPinsUntouched(work) {
   copyStampInputs(work);
   const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
 
-  const total = actionPinDocs.reduce(
-    (count, doc) => count + assertDocPinsStamped(doc, read(repoRoot, doc), read(work, doc)),
-    0,
-  );
-  if (total < 7) throw new Error(`only ${total} action pins stamped across the docs, expected 7`);
+  for (const doc of actionPinDocs) {
+    const before = read(repoRoot, doc);
+    const after = read(work, doc);
+    if (after !== before) {
+      throw new Error(`${doc}: stamping rewrote a published surface that must ship exactly as committed`);
+    }
+    if (!after.includes(actionPinPrefix)) throw new Error(`${doc} has no action pin left to protect`);
+    if (after.includes(`${actionPinPrefix}${version}`)) {
+      throw new Error(`${doc}: the stamped version reached a committed pin`);
+    }
+  }
 
   // The SHA-pinned example documents the case where the ref carries no version,
   // so `version:` is required. Rewriting it to a tag would destroy the very
   // thing it illustrates — the stamper must leave a non-`@v` ref alone.
   for (const doc of actionPinDocs.slice(1)) {
     assertIncludes(read(work, doc), "uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f");
-  }
-}
-
-// Stamping must move the version and nothing else, anywhere in the file. The
-// indentation is deliberately NOT asserted to one fixed depth: the README shows
-// a bare two-step fragment while the doc pages show a whole workflow, so the
-// pins legitimately sit at different depths. What has to hold is that whatever
-// depth a pin had, it still has — these snippets are pasted straight into
-// workflow YAML, where a shifted prefix is a syntax error.
-function assertDocPinsStamped(doc, before, after) {
-  const beforeLines = before.split("\n");
-  const afterLines = after.split("\n");
-  if (afterLines.length !== beforeLines.length) {
-    throw new Error(`${doc}: stamping changed the line count`);
-  }
-  const pins = beforeLines.filter((line, index) =>
-    assertLineStamped(doc, index + 1, line, afterLines[index]),
-  );
-  if (pins.length === 0) throw new Error(`${doc} has no action pin to stamp`);
-  return pins.length;
-}
-
-// Returns true when the line carried a pin, so the caller can count them.
-//
-// The version comparison reuses the stamper's own parser rather than a second
-// copy of its rule, which keeps the two from drifting — but it means a
-// mis-parsed pin cannot be caught by parsing, because the check would repeat the
-// mistake and agree with it. Substituting the old token back in has the same
-// blind spot: whatever the parser wrongly ate is restored along with it. So the
-// corruption is caught structurally instead. A version token holds only
-// characters SemVer permits, so stamping one can never change how many backticks
-// a line has — and swallowing the backtick that closes a prose-quoted pin is
-// exactly what dropped it, unterminating the code span. [ACTION-VERSION]
-function assertLineStamped(doc, lineNumber, before, after) {
-  if (!before.includes(actionPinPrefix)) {
-    if (after !== before) {
-      throw new Error(`${doc}:${lineNumber} changed but carries no action pin: ${after}`);
-    }
-    return false;
-  }
-  const [wanted] = readActionPins(before);
-  const [got] = readActionPins(after);
-  if (got !== version) {
-    throw new Error(`${doc}:${lineNumber} pins ${got}, expected ${version}`);
-  }
-  if (after.split("`").length !== before.split("`").length) {
-    throw new Error(`${doc}:${lineNumber} stamping changed the inline code spans: ${after}`);
-  }
-  const reversed = after.split(actionPinPrefix + got).join(actionPinPrefix + wanted);
-  if (reversed !== before) {
-    throw new Error(`${doc}:${lineNumber} stamping moved more than the version: ${after}`);
-  }
-  return true;
-}
-
-// A pin does not only appear as a bare YAML line. The Action doc page states the
-// derivation rule in prose — "so `uses: Nimblesite/Deslop@v0.27.0` installs
-// `deslop` 0.27.0" — where the pin is closed by a backtick, not a space. Reading
-// the version as everything up to the first space swallows that backtick into
-// the version token and drops it on stamping, which unterminates the inline code
-// span and leaves the rest of the sentence rendering as code, still quoting the
-// old version beside the new pin. Assert the reader-visible outcome: the stale
-// version is gone from the line and every backtick survives. [ACTION-VERSION]
-function stamperStampsPinsQuotedInProse(work) {
-  copyStampInputs(work);
-  const before = read(repoRoot, "site/src/docs/github-action.md").split("\n");
-  const result = spawnSync("node", [stamper, version, "--root", work], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`stamper failed: ${result.stderr}`);
-  const after = read(work, "site/src/docs/github-action.md").split("\n");
-
-  const prose = before.flatMap((line, index) =>
-    line.includes(actionPinPrefix) && line.includes("`") ? [index] : [],
-  );
-  if (prose.length === 0) throw new Error("no prose-quoted pin in the Action doc page to exercise");
-
-  for (const index of prose) {
-    const stamped = after[index];
-    const backticks = (text) => [...text].filter((character) => character === "`").length;
-    if (backticks(stamped) !== backticks(before[index])) {
-      throw new Error(
-        `site/src/docs/github-action.md:${index + 1} lost a backtick to stamping, breaking the code span: ${stamped}`,
-      );
-    }
-    if (!stamped.includes(`${actionPinPrefix}${version}\``)) {
-      throw new Error(
-        `site/src/docs/github-action.md:${index + 1} did not stamp the prose-quoted pin cleanly: ${stamped}`,
-      );
-    }
   }
 }
 

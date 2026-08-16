@@ -162,25 +162,35 @@ was cut.
 
 **[ACTION-VERSION] The action and the CLI it installs are the same version.**
 The default `version` input is `github.action_ref` with the leading `v`
-stripped, so `uses: Nimblesite/Deslop@v0.25.0` installs `deslop` 0.25.0 and the
-two cannot drift. `stamp-release-version.mjs` deliberately does not commit its
+stripped, so `uses: Nimblesite/Deslop@vX.Y.Z` installs `deslop` X.Y.Z and the two
+cannot drift. `stamp-release-version.mjs` deliberately does not commit its
 output, so a stamped default in `action.yml` would never reach the tag a
 consumer resolves — deriving from the ref sidesteps that entirely. A commit-SHA
 or branch pin carries no version and is a hard error naming the fix, never a
 silent fall back to "latest".
 
-**The committed pin is a published surface.** Because the stamp never reaches
-the commit, whatever `uses:` version is committed is what the tag carries — and
-the tag's README is the body of the Marketplace listing. v0.30.0 shipped a
-listing advertising `@v0.27.0`, so every visitor who copied the quickstart
-installed a three-release-old CLI. `test-action-contract.mjs` therefore asserts
-that every pin across `README.md` and both locales of the Action doc page names
-one single version, and — given `--latest-release`, which `action-selftest.yml`
-supplies from the resolved newest release — that the version is the current one.
-A pin is closed by the first character SemVer does not permit, not by the first
-space: the Action doc page quotes a pin inline in prose, where the terminator is
-a backtick, and reading to the space swallowed it into the version token and
-dropped it on stamping.
+**[ACTION-VERSION-DOCS] No documented pin commits a version.** Because the stamp
+never reaches the commit, whatever `uses:` version is committed is what the tag
+carries — and the tag's README is the body of the Marketplace listing. v0.30.0
+shipped a listing advertising `@v0.27.0`, so every visitor who copied the
+quickstart installed a three-release-old CLI. A committed version cannot be kept
+true, only audited, and the audit ran on push to `main` — which a tag push is
+not — so the pins were free to rot for a full release cycle before anything
+noticed.
+
+So the pins name no version. `site/src/_data/releases.js` resolves the newest
+published release at build time and the Action doc pages render it as
+`{{ releases.pin }}`; the site deploys after the release exists, so the number
+is current by construction and lives nowhere in git. GitHub serves `README.md`
+raw with no build step, so it names the `X.Y.Z` placeholder its VSIX snippet
+already uses, and points at `/releases/latest`. When the API is unreachable the
+site falls back to the same placeholder — never a bare `@v`.
+
+`test-action-contract.mjs` asserts both halves offline, on every PR: every pin is
+one `resolveVersion` **refuses** to derive a version from — proven against the
+resolver the action runs, not a second copy of its rule — and each surface uses
+the form it can resolve. `test-release-version-stamping.mjs` asserts the stamper
+leaves all three files byte-identical, so the rewrite path cannot return.
 
 **No mutable major alias.** Marketplace consumers conventionally pin `@v1` and
 the publisher re-points it each release. Deslop does not publish one: it would
