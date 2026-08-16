@@ -60,23 +60,25 @@ deslop --version
 
 Bucket source: [github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket).
 
-### Linux (curl)
+### macOS / Linux (curl)
 
-No Homebrew? Pull the archive straight from the latest GitHub release. The snippet resolves the newest version, verifies the published SHA-256 checksum, and installs the same three binaries the Homebrew formula ships (`deslop`, `deslop-lsp`, `deslop-mcp`):
+No Homebrew? Pull the archive straight from the latest GitHub release. The snippet resolves the newest version, picks the right platform, verifies the published SHA-256 checksum, and installs the same three binaries the Homebrew formula ships (`deslop`, `deslop-lsp`, `deslop-mcp`):
 
 ```bash
 tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/Nimblesite/Deslop/releases/latest)
 tag=${tag##*/}        # e.g. v1.2.3
 version=${tag#v}      # e.g. 1.2.3
-case "$(uname -m)" in
-  x86_64)  platform=linux-x64 ;;
-  aarch64) platform=linux-arm64 ;;
-  *) echo "unsupported architecture: $(uname -m)"; exit 1 ;;
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64)  platform=linux-x64 ;;
+  Linux-aarch64) platform=linux-arm64 ;;
+  Darwin-arm64)  platform=macos-arm64 ;;
+  Darwin-x86_64) platform=macos-x64 ;;
+  *) echo "unsupported platform: $(uname -s)-$(uname -m)"; exit 1 ;;
 esac
 archive="deslop-${version}-${platform}.tar.gz"
 curl -fsSLO "https://github.com/Nimblesite/Deslop/releases/download/${tag}/${archive}"
 curl -fsSLO "https://github.com/Nimblesite/Deslop/releases/download/${tag}/${archive}.sha256"
-sha256sum -c "${archive}.sha256"
+if command -v sha256sum >/dev/null; then sha256sum -c "${archive}.sha256"; else shasum -a 256 -c "${archive}.sha256"; fi
 tar -xzf "$archive"
 sudo install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} /usr/local/bin/
 deslop --version

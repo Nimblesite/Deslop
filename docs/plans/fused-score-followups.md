@@ -284,14 +284,48 @@ The executable form of everything above. Ticked only when the assertion exists, 
 
 ### 1. Six skipped VSIX tests — outranks everything below
 
-- [ ] **A** `live-bubble-fused.unit.test.ts` — `bestBubbleCluster` must follow the engine's bucket, not a UI-local `fused >= 0.85`
-- [ ] **B1** `report-schema.unit.test.ts` — `classifyCluster` must not label a content-gated rename `identical`
-- [ ] **B2** `report-schema.unit.test.ts` — `classifyCluster` must not promote a demoted shape-only family
-- [ ] **C** `live-bubble-fused.unit.test.ts` — `signalStrip` must draw fused confidence
-- [ ] **D** `severity.unit.test.ts` — severity must not paint a demoted family act-now
-- [ ] **E** `live-bubble.unit.test.ts` — settle the `byId.get(id) ?? cluster` contract first, then fix code or restate test
+Contracts settled 17 Aug by reading the shipped code and every *passing*
+test that constrains it. Each row records the fix that satisfies its own
+assertions **and** the neighbouring green tests — the constraint that
+made five of the six tractable and the sixth impossible.
 
-### 2. 🛑 New defect found 17 Aug — UI routing diverges from the engine
+- [ ] **A** `live-bubble-fused.unit.test.ts` — `bestBubbleCluster` gates on a UI-local `signals.fused >= FUSED_THRESHOLD` ([`bubble/live.ts:260`](../../clients/vscode/src/bubble/live.ts#L260)). **Contract:** two gates, not one — an act-now bucket (`identical` / `nearly_identical`) is the engine's verdict and needs no second opinion; everything below the act-now bands keeps the fused cutoff. Pinned in both directions by the green `a sub-threshold hint bucket stays off the live surface at the exact cutoff` (a `loosely_similar` hint at exactly 0.85 must show, at 0.84 must not) and `a demoted shape-only family never wins the bubble over a proven clone`.
+- [ ] **B1** `report-schema.unit.test.ts` — `classifyCluster` labels a content-gated rename `identical`
+- [ ] **B2** `report-schema.unit.test.ts` — `classifyCluster` promotes a demoted shape-only family
+- [ ] **C** `live-bubble-fused.unit.test.ts` — `signalStrip` draws `structural | token_jaccard | embedding_cos`, so a verbatim copy and a proven rename both render `█▁█`. **Contract:** the strip stays **three bars wide** — `assert.equal(signalStrip(verbatim).length, 3)` in the skipped test itself and `signalStrip clamps inputs to the bar range` in `bubble.unit.test.ts` both demand it — so a fourth bar is not available. Draw **shape | semantic | confidence**: `max(structural, token_jaccard)`, `embedding_cos`, `fused`. Collapsing the first two is what the engine already says they are worth — *"`structural` and `token_jaccard` are two views of one normalised representation, so summing them says nothing beyond 'the shapes matched'"* ([`buckets.rs:304`](../../crates/deslop-core/src/buckets.rs#L304)) — and it buys the third slot for the only axis that separates the two.
+- [ ] 🛑 **D** `severity.unit.test.ts` — **blocked: D contradicts a green test in the same file.** See below.
+- [ ] **E** `live-bubble.unit.test.ts` — **contract settled.** The `byId.get(id) ?? cluster` fallback serves two populations that `bestBubbleCluster` cannot currently tell apart, and each has a test: a cluster **the report never saw** may bubble on the probe's own evidence (green `deslop.bubble.dismissCluster …` renders `c-dismiss`, absent from the seeded snapshot, and asserts it bubbles), while a cluster **a delta explicitly removed** must stay gone (skipped E). The discriminator is therefore removal, not absence — `ReportStore.applyDelta` already receives `clusters_removed` and drops them on the floor. Expose them and have the bubble honour them.
+
+#### 🛑 D is unsatisfiable as written — owner decision required
+
+`severity.unit.test.ts` holds **two tests that cannot both pass**, and the
+green one is the newer:
+
+- `severity never brightens as rank worsens, at any confidence` (green) hands `indexedSeverity` the order `a(fused 1.0, identical)`, `b(0.3, structural_only)`, `c(0.95, identical)`, … and asserts severity is non-brightening **down the given array**, while also asserting `a` is `worst` and the last entry is `faint`.
+- `a demoted shape-only family is not painted with act-now severity` (skipped, D) hands it `shape-giant(0.31, structural_only)` at rank 1 and `proven(0.95, identical)` at rank 2, asserting `shape-giant` is `faint` **and** `proven` is not.
+
+Any function of `(rank, cluster)` that pays D its `faint` for a demoted
+rank-1 entry must, by the monotonicity test, paint every entry below it
+`faint` too — which is exactly the `notEqual` D forbids. Re-ranking by
+confidence fails monotonicity directly (it is asserted over the input
+order). Confidence-only severity fails both. A running floor satisfies
+monotonicity and fails D's `notEqual`. **The two tests state opposite
+contracts and neither may be weakened**, so the fix is a product
+decision, not an implementation:
+
+- **either** severity stays rank-derived and D is restated against a
+  surface that can carry evidence (the decoration *colour* is not the
+  only channel — a demoted family could keep its rank paint and lose its
+  act-now affordance),
+- **or** the monotonicity test's premise changes: severity re-ranks by
+  evidence, and monotonicity is asserted over the *re-ranked* order
+  rather than the input order.
+
+Reported rather than resolved, per the "code, specs, and tests MUST
+agree — where they don't, STOP and report" rule. A/B1/B2/C/E do not
+depend on it.
+
+### 2. 🛑 New defect found 17 Aug — the UI re-derives a routing it cannot see the inputs to
 
 `clients/vscode/src/types/report.ts:223` `classifyCluster` claims byte-for-byte parity with `deslop-core::buckets::classify_signals` and does not have it:
 
@@ -300,15 +334,24 @@ The executable form of everything above. Ticked only when the assertion exists, 
 | `structural 0.10, token 0.96` | `loosely_similar` | `nearly_identical` |
 | `structural 0.00, token 0.92` | `loosely_similar` | `nearly_identical` |
 
-The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and carries an extra `structural <= 0.01 && token >= 0.9` arm. Reachable through `--from-report` on any v3 report — a hint is promoted to act-now on the flagship surface.
+The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and carries an extra `structural <= 0.01 && token >= 0.9` arm. A hint is promoted to act-now on the flagship surface.
+
+**Root cause — the divergence is a symptom, and closing the two rows would not fix it.** The engine does not route from the signal triple. [`report_bucket_kind`](../../crates/deslop-core/src/report_render.rs#L277) weighs four inputs: the **raw** triple, measured `ContentEvidence`, raw-source byte-equivalence, and the member spread. The triple the client receives is the *post-gate projection* of that decision — [`content_gated_signals`](../../crates/deslop-core/src/buckets.rs#L316) overwrites `token_jaccard` to `1.0` for a shape-identical near miss (#232) and rewrites `fused`. Running the engine's raw-signal table over rendered signals is therefore a category error, and it is the **same** root cause as B1 and B2:
+
+- **B1** — a proven rename renders `structural 1.0 / token_jaccard 1.0` *because of* the #232 correction, so the triple reads `identical` and the user is told "Safe to extract — every copy is the same" about code whose identifiers all differ.
+- **B2** — a demoted family's `structural >= 0.99` falls through to the act-now arm because `lacks_content_support` is invisible from the triple.
+- **This defect** — two arms that were never in the engine's table at all.
+
+**Fix: delete `classifyCluster`.** `resolveBucket` becomes the single routing surface and returns the engine's `cluster.bucket`; a report carrying no valid label yields `loosely_similar`, the only bucket whose action sentence makes no claim beyond "treat as a hint". The UI cannot re-derive this routing and every arm that tried has been a defect.
 
 - [ ] Failing test pinning both rows, watched failing for the real reason
-- [ ] Quarantine the divergent arm per the strict rule, then land the accurate replacement (shares its fix with B1/B2)
+- [ ] Delete `classifyCluster`; `resolveBucket` is the only routing surface (retires B1 and B2 with it)
+- [ ] ⚠️ Two green tests assert the defective contract and must be **inverted, not weakened** — `classifyCluster nearly_identical on high jaccard + low structural` (`signals(0.0, 0.95, 0)`, which the engine calls `loosely_similar`) and `resolveBucket falls back to signals when v3 JSON has no bucket` (asserts a manufactured `identical`). Both are re-stated against `resolveBucket`, keeping every assertion's intent.
 
 ### 3. #344 — carry the confidence to every consumer
 
-- [ ] `agreement` / `rename_consistency` / `literal_fraction` onto `ReportSignals` in [`live-ipc.td`](../models/live-ipc.td), regenerate (never hand-write)
-- [ ] `resolveBucket` trusts the engine's `cluster.bucket` unconditionally
+- [ ] `agreement` / `rename_consistency` / `literal_fraction` onto `ReportSignals` in [`live-ipc.td`](../models/live-ipc.td), regenerate (never hand-write). **Population point located:** `impl From<PairScore> for ReportSignals` ([`report.rs:104`](../../crates/deslop-core/src/report.rs#L104)) converts the raw triple *before* content is measured and cannot carry them; [`content_gated_signals`](../../crates/deslop-core/src/buckets.rs#L316) already holds the `ContentEvidence` and is the one place every rendered cluster passes through. It must stamp the three fields on **both** of its paths — today it early-returns unchanged for `Identical` and for non-saturating shapes.
+- [ ] `resolveBucket` trusts the engine's `cluster.bucket` unconditionally — **superseded and strengthened**: `classifyCluster` is deleted outright rather than corrected, so there is no second routing table left to drift. Tracked in §2.
 - [ ] `severity.ts` — rank-only today, never reads confidence (Defect D)
 - [ ] `render/text.rs` — prints no signals at all
 - [ ] `deslop-lsp` diagnostics / code lens — no confidence anywhere
