@@ -24,7 +24,7 @@
 
 use std::{fs, path::PathBuf};
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use serde_json::Value;
 
 mod common;
@@ -132,8 +132,8 @@ fn committed_golden_satisfies_report_contract() -> Result<()> {
     })?;
     assert_cold_scan_header(&golden);
     assert_occurrences_are_real_type1_clones(&golden)?;
-    assert_ranking_and_cluster_shape(&golden);
-    assert_metrics_arithmetic(&golden);
+    assert_ranking_and_cluster_shape(&golden)?;
+    assert_metrics_arithmetic(&golden)?;
     Ok(())
 }
 
@@ -199,7 +199,7 @@ fn assert_occurrences_are_real_type1_clones(golden: &Value) -> Result<()> {
         let slices = validated_cluster_slices(cluster)?;
         let (first, rest) = slices
             .split_first()
-            .expect("validated_cluster_slices asserts at least two occurrences");
+            .ok_or_else(|| anyhow!("validated_cluster_slices asserts at least two occurrences"))?;
         assert!(
             !first.is_empty(),
             "an occurrence slice can never be empty: {cluster}"
@@ -223,7 +223,7 @@ fn validated_cluster_slices(cluster: &Value) -> Result<Vec<Vec<u8>>> {
     for occurrence in occurrences(cluster) {
         slices.push(validated_occurrence_slice(occurrence)?);
     }
-    let total = u64::try_from(slices.len()).expect("occurrence count fits u64");
+    let total = u64::try_from(slices.len())?;
     assert!(
         total >= 2,
         "a cluster below two occurrences is not a duplicate: {cluster}"
@@ -264,8 +264,12 @@ fn validated_occurrence_slice(occurrence: &Value) -> Result<Vec<u8>> {
         "occurrence [{start}..{end}) must lie within {path}'s {} bytes",
         source.len()
     );
-    let start_line = field(occurrence, "start_line").as_u64().expect("start_line");
-    let end_line = field(occurrence, "end_line").as_u64().expect("end_line");
+    let start_line = field(occurrence, "start_line")
+        .as_u64()
+        .with_context(|| format!("occurrence in {path} is missing start_line"))?;
+    let end_line = field(occurrence, "end_line")
+        .as_u64()
+        .with_context(|| format!("occurrence in {path} is missing end_line"))?;
     assert!(
         start_line >= 1 && start_line <= end_line,
         "occurrence lines {start_line}..{end_line} in {path} must be one-based and ordered"
@@ -275,10 +279,10 @@ fn validated_occurrence_slice(occurrence: &Value) -> Result<Vec<u8>> {
         Some(false),
         "no occurrence in this corpus is hidden: {occurrence}"
     );
-    Ok(source
+    source
         .get(start..end)
-        .expect("range asserted in bounds")
-        .to_vec())
+        .map(<[u8]>::to_vec)
+        .ok_or_else(|| anyhow!("occurrence range [{start}..{end}) fell outside {path}"))
 }
 
 /// The two authored clusters and the ranking between them: the 3-copy
@@ -286,7 +290,7 @@ fn validated_occurrence_slice(occurrence: &Value) -> Result<Vec<u8>> {
 /// `merge_labels` cluster, weights must be finite, positive, and
 /// non-increasing down the report, and every cluster must clear
 /// `--min-nodes`.
-fn assert_ranking_and_cluster_shape(golden: &Value) {
+fn assert_ranking_and_cluster_shape(golden: &Value) -> Result<()> {
     let cluster_list = clusters(golden);
     assert_eq!(
         metric_field(golden, "clusters_total").as_u64(),
@@ -301,20 +305,21 @@ fn assert_ranking_and_cluster_shape(golden: &Value) {
     for cluster in cluster_list {
         let node_count = field(cluster, "canonical_node_count")
             .as_u64()
-            .expect("canonical_node_count");
+            .with_context(|| format!("cluster is missing canonical_node_count: {cluster}"))?;
         assert!(
             node_count >= GOLDEN_MIN_NODES,
             "cluster below --min-nodes {GOLDEN_MIN_NODES}: {cluster}"
         );
     }
-    let trio_rank = rank_of_exact_file_set(golden, &TRIO_FILES);
-    let pair_rank = rank_of_exact_file_set(golden, &PAIR_FILES);
+    let trio_rank = rank_of_exact_file_set(golden, &TRIO_FILES)?;
+    let pair_rank = rank_of_exact_file_set(golden, &PAIR_FILES)?;
     assert!(
         trio_rank < pair_rank,
         "the 3-copy cluster must outrank the 2-copy cluster: {golden}"
     );
-    assert_authored_cluster(cluster_list, trio_rank, 3);
-    assert_authored_cluster(cluster_list, pair_rank, 2);
+    assert_authored_cluster(cluster_list, trio_rank, 3)?;
+    assert_authored_cluster(cluster_list, pair_rank, 2)?;
+    Ok(())
 }
 
 /// Weights down the report: finite, strictly positive, non-increasing.
@@ -340,10 +345,10 @@ fn assert_weights_ranked(cluster_list: &[Value], golden: &Value) {
 /// One authored Type-1 cluster: exact occurrence count, `identical`
 /// bucket, and full-strength structural and token signals with the
 /// embedding channel switched off.
-fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) {
+fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) -> Result<()> {
     let cluster = cluster_list
         .get(rank)
-        .expect("rank_of_exact_file_set returned an in-range index");
+        .ok_or_else(|| anyhow!("rank {rank} is outside the cluster list"))?;
     assert_eq!(
         cluster_size(cluster),
         copies,
@@ -366,31 +371,35 @@ fn assert_authored_cluster(cluster_list: &[Value], rank: usize, copies: u64) {
         approx(signal(cluster, "embedding_cos"), 0.0),
         "--embeddings off must zero the embedding signal: {cluster}"
     );
+    Ok(())
 }
 
 /// Zero-based rank of the cluster whose occurrences span exactly
-/// `files`, panicking with the full report when absent.
-fn rank_of_exact_file_set(golden: &Value, files: &[&str]) -> usize {
+/// `files`, failing with the full report when absent.
+fn rank_of_exact_file_set(golden: &Value, files: &[&str]) -> Result<usize> {
     let expected: std::collections::BTreeSet<String> =
         files.iter().map(|name| (*name).to_owned()).collect();
     clusters(golden)
         .iter()
         .position(|cluster| cluster_file_set(cluster) == expected)
-        .unwrap_or_else(|| panic!("no cluster spans exactly {files:?}: {golden}"))
+        .ok_or_else(|| anyhow!("no cluster spans exactly {files:?}: {golden}"))
 }
 
 /// Repo metrics must be transparent arithmetic over the cluster list:
 /// duplicated LOC recomputed from the visible occurrence spans, the
 /// percentage recomputed from the two LOC totals, per-file rows summing
 /// to the repo totals, and the fixed-flag run carrying no threshold.
-fn assert_metrics_arithmetic(golden: &Value) {
+fn assert_metrics_arithmetic(golden: &Value) -> Result<()> {
     let analysed = metric_field(golden, "analysed_loc")
         .as_u64()
-        .expect("analysed_loc");
+        .with_context(|| format!("metrics is missing analysed_loc: {golden}"))?;
     let duplicated = metric_field(golden, "duplicated_loc")
         .as_u64()
-        .expect("duplicated_loc");
-    assert!(analysed > 0, "five source files must analyse to LOC: {golden}");
+        .with_context(|| format!("metrics is missing duplicated_loc: {golden}"))?;
+    assert!(
+        analysed > 0,
+        "five source files must analyse to LOC: {golden}"
+    );
     assert!(
         duplicated <= analysed,
         "duplicated LOC can never exceed analysed LOC: {golden}"
@@ -402,8 +411,8 @@ fn assert_metrics_arithmetic(golden: &Value) {
     );
     let percent = metric_field(golden, "duplication_percent")
         .as_f64()
-        .expect("duplication_percent");
-    let recomputed = 100.0 * loc_as_f64(duplicated) / loc_as_f64(analysed);
+        .with_context(|| format!("metrics is missing duplication_percent: {golden}"))?;
+    let recomputed = 100.0 * loc_as_f64(duplicated)? / loc_as_f64(analysed)?;
     assert!(
         (percent - recomputed).abs() <= 1e-6,
         "duplication_percent {percent} must equal 100*{duplicated}/{analysed} = {recomputed} within rendering precision"
@@ -413,7 +422,7 @@ fn assert_metrics_arithmetic(golden: &Value) {
         Some(5),
         "every corpus file carries a clone: {golden}"
     );
-    assert_per_file_rows(golden, analysed, duplicated);
+    assert_per_file_rows(golden, analysed, duplicated)?;
     let threshold = metric_field(golden, "threshold");
     assert_eq!(
         field(threshold, "source").as_str(),
@@ -425,31 +434,36 @@ fn assert_metrics_arithmetic(golden: &Value) {
         Some(false),
         "with no threshold nothing can breach: {golden}"
     );
+    Ok(())
 }
 
 /// Per-file metric rows: one per corpus file, each internally
 /// consistent, and both LOC columns summing to the repo totals.
-fn assert_per_file_rows(golden: &Value, analysed: u64, duplicated: u64) {
+fn assert_per_file_rows(golden: &Value, analysed: u64, duplicated: u64) -> Result<()> {
     let rows = per_file_metrics(golden);
     assert_eq!(rows.len(), 5, "one metric row per corpus file: {golden}");
     let mut analysed_sum = 0_u64;
     let mut duplicated_sum = 0_u64;
     for row in rows {
-        let path = field(row, "path").as_str().expect("per_file.path");
+        let path = field(row, "path")
+            .as_str()
+            .with_context(|| format!("per-file metric row is missing path: {row}"))?;
         assert!(
             corpus_dir().join(path).is_file(),
             "per-file metric row {path} must reference a corpus file"
         );
-        let row_analysed = field(row, "analysed_loc").as_u64().expect("per-file analysed_loc");
+        let row_analysed = field(row, "analysed_loc")
+            .as_u64()
+            .with_context(|| format!("{path}: per-file row is missing analysed_loc"))?;
         let row_duplicated = field(row, "duplicated_loc")
             .as_u64()
-            .expect("per-file duplicated_loc");
+            .with_context(|| format!("{path}: per-file row is missing duplicated_loc"))?;
         assert!(
             row_duplicated <= row_analysed,
             "{path}: per-file duplicated LOC exceeds its analysed LOC: {row}"
         );
-        analysed_sum += row_analysed;
-        duplicated_sum += row_duplicated;
+        analysed_sum = analysed_sum.saturating_add(row_analysed);
+        duplicated_sum = duplicated_sum.saturating_add(row_duplicated);
     }
     assert_eq!(
         analysed_sum, analysed,
@@ -459,10 +473,11 @@ fn assert_per_file_rows(golden: &Value, analysed: u64, duplicated: u64) {
         duplicated_sum, duplicated,
         "per-file duplicated LOC must sum to the repo total: {golden}"
     );
+    Ok(())
 }
 
 /// Lossless `u64 → f64` for the line counts in this corpus (all far
 /// below `2^32`), mirroring the renderer's own clamp-then-widen order.
-fn loc_as_f64(value: u64) -> f64 {
-    f64::from(u32::try_from(value).expect("corpus LOC fits in u32"))
+fn loc_as_f64(value: u64) -> Result<f64> {
+    Ok(f64::from(u32::try_from(value)?))
 }

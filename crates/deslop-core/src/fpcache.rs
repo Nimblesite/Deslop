@@ -1,9 +1,11 @@
 //! On-disk fingerprint + normalised-tree cache ([PIPELINE-INCREMENTAL]).
 //!
 //! Keyed by `(language_id, tool_version, min_nodes, source_byte_hash)`. A
-//! cache hit rehydrates both the structural fingerprints and the
-//! normalised AST (kept because downstream token extraction walks it),
-//! skipping tree-sitter entirely for unchanged files. Any mismatch on
+//! cache hit rehydrates the structural fingerprints, the normalised
+//! AST (kept because downstream token extraction walks it), and the
+//! per-fingerprint `MinHash` signatures
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]), skipping tree-sitter and
+//! signature construction entirely for unchanged files. Any mismatch on
 //! the cache key — or a blob whose tree nests past [`MAX_AST_DEPTH`] —
 //! degrades gracefully to a miss, so a stale or corrupt blob cannot
 //! corrupt or crash a run, at worst it wastes disk.
@@ -23,13 +25,18 @@ use crate::{
     embedding::bytes_hash,
     fingerprint::Fingerprint,
     lang::shared::{intern_kind, MAX_AST_DEPTH},
+    lsh::{Signature, SIGNATURE_LEN},
     state::FileId,
 };
 
-/// Magic number at the top of every cache blob. Any mismatch is
-/// treated as a miss; lets us detect corruption and truncated
-/// writes without a separate integrity check.
-const MAGIC: u32 = 0xC0DE_D17E;
+/// Magic number at the top of every cache blob, bumped whenever the
+/// blob layout changes — `0xC0DE_D17E` was the pre-signature layout,
+/// so a blob written before signatures were persisted decodes as a
+/// magic mismatch (a plain miss) and is rewritten in the current
+/// format by the store that follows. Any mismatch is treated as a
+/// miss; lets us detect corruption and truncated writes without a
+/// separate integrity check.
+const MAGIC: u32 = 0xC0DE_D17F;
 
 /// Tool version pinned into the cache key so a `deslop-core` bump
 /// (grammar pins, normalisation rules, hashing changes) invalidates
@@ -54,6 +61,12 @@ pub struct CachedFile {
     pub tree: NormalizedNode,
     /// Structural + sibling fingerprints extracted from `tree`.
     pub fingerprints: Vec<Fingerprint>,
+    /// One `MinHash` signature per entry of `fingerprints`,
+    /// positionally 1:1 ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+    /// Persisted so a warm pass attaches them instead of rebuilding
+    /// every signature from token streams — the dominant cost of the
+    /// LSH stage. The decode enforces the count invariant.
+    pub signatures: Vec<Signature>,
 }
 
 /// On-disk fingerprint cache scoped to a `(language, min_nodes)`
@@ -143,7 +156,20 @@ fn encode(cached: &CachedFile) -> Vec<u8> {
     for fp in &cached.fingerprints {
         encode_fingerprint(fp, &mut out);
     }
+    let signature_len = u64::try_from(cached.signatures.len()).unwrap_or(u64::MAX);
+    out.extend_from_slice(&signature_len.to_le_bytes());
+    for signature in &cached.signatures {
+        encode_signature(signature, &mut out);
+    }
     out
+}
+
+/// Appends one `MinHash` signature — [`SIGNATURE_LEN`] little-endian
+/// `u64` slots — to `out`.
+fn encode_signature(signature: &Signature, out: &mut Vec<u8>) {
+    for slot in signature {
+        out.extend_from_slice(&slot.to_le_bytes());
+    }
 }
 
 /// Appends one normalised node (and its subtree) to `out`.
@@ -192,7 +218,32 @@ fn decode(bytes: &[u8], file_id: FileId) -> io::Result<CachedFile> {
     for _ in 0..fp_count {
         fingerprints.push(decode_fingerprint(&mut cursor, file_id)?);
     }
-    Ok(CachedFile { tree, fingerprints })
+    let signature_count = u64_to_usize(read_u64(&mut cursor)?)?;
+    if signature_count != fp_count {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "cached signature count disagrees with fingerprint count",
+        ));
+    }
+    let mut signatures = Vec::with_capacity(signature_count);
+    for _ in 0..signature_count {
+        signatures.push(decode_signature(&mut cursor)?);
+    }
+    Ok(CachedFile {
+        tree,
+        fingerprints,
+        signatures,
+    })
+}
+
+/// Reads one `MinHash` signature — [`SIGNATURE_LEN`] little-endian
+/// `u64` slots — from `cursor`.
+fn decode_signature(cursor: &mut Cursor<&[u8]>) -> io::Result<Signature> {
+    let mut signature: Signature = [0_u64; SIGNATURE_LEN];
+    for slot in &mut signature {
+        *slot = read_u64(&mut *cursor)?;
+    }
+    Ok(signature)
 }
 
 /// Reconstructs one [`NormalizedNode`] subtree and all of its
@@ -305,4 +356,129 @@ fn read_u64(cursor: &mut Cursor<&[u8]>) -> io::Result<u64> {
     let mut buf = [0_u8; 8];
     cursor.read_exact(&mut buf)?;
     Ok(u64::from_le_bytes(buf))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::state::FileRegistry;
+
+    /// A two-node tree, two fingerprints, and two distinct signatures —
+    /// the smallest bundle exercising every record type in the blob.
+    fn sample(file_id: FileId) -> CachedFile {
+        let leaf = NormalizedNode {
+            kind: "identifier",
+            children: Vec::new(),
+            byte_range: ByteRange { start: 3, end: 9 },
+            file_id,
+        };
+        let tree = NormalizedNode {
+            kind: "function_item",
+            children: vec![leaf],
+            byte_range: ByteRange { start: 0, end: 12 },
+            file_id,
+        };
+        let fingerprints = vec![
+            Fingerprint {
+                hash: [7_u8; 32],
+                file_id,
+                byte_range: ByteRange { start: 0, end: 12 },
+                node_count: 2,
+            },
+            Fingerprint {
+                hash: [9_u8; 32],
+                file_id,
+                byte_range: ByteRange { start: 3, end: 9 },
+                node_count: 1,
+            },
+        ];
+        let signatures = vec![[1_u64; SIGNATURE_LEN], [2_u64; SIGNATURE_LEN]];
+        CachedFile {
+            tree,
+            fingerprints,
+            signatures,
+        }
+    }
+
+    /// A [`FileId`] issued by a throwaway registry.
+    fn registered_file_id() -> FileId {
+        FileRegistry::new().register(PathBuf::from("blob_fixture.rs"))
+    }
+
+    // [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] The blob must give back
+    // exactly the tree, fingerprints, and signatures it was handed —
+    // signatures positionally 1:1 with fingerprints.
+    #[test]
+    fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
+        let file_id = registered_file_id();
+        let original = sample(file_id);
+        let decoded = decode(&encode(&original), file_id)?;
+        assert_eq!(
+            decoded.fingerprints, original.fingerprints,
+            "decoded fingerprints must match the encoded records exactly"
+        );
+        assert_eq!(
+            decoded.signatures, original.signatures,
+            "decoded signatures must match the encoded slots exactly, in order"
+        );
+        assert_eq!(
+            decoded.tree.kind, "function_item",
+            "decoded tree root must keep its normalised kind"
+        );
+        assert_eq!(
+            decoded.tree.byte_range,
+            ByteRange { start: 0, end: 12 },
+            "decoded tree root must keep its byte range"
+        );
+        assert_eq!(
+            decoded.tree.children.len(),
+            1,
+            "decoded tree must keep its child structure"
+        );
+        assert_eq!(
+            decoded.tree.children.first().map(|child| child.kind),
+            Some("identifier"),
+            "decoded child must keep its normalised kind"
+        );
+        Ok(())
+    }
+
+    // [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] A signature list that does
+    // not pair 1:1 with the fingerprint list can never be served — the
+    // positional binding is the whole reuse contract.
+    #[test]
+    fn signature_count_mismatch_is_rejected_as_invalid_data() {
+        let file_id = registered_file_id();
+        let mut cached = sample(file_id);
+        let _dropped = cached.signatures.pop();
+        assert_eq!(
+            decode(&encode(&cached), file_id)
+                .err()
+                .map(|error| error.kind()),
+            Some(io::ErrorKind::InvalidData),
+            "a blob whose signature count disagrees with its fingerprint count must fail decode"
+        );
+    }
+
+    // A blob written by the pre-signature layout carries the old magic
+    // and must decode as a miss-grade error, never as a signature-less
+    // hit.
+    #[test]
+    fn pre_signature_magic_is_rejected() {
+        let file_id = registered_file_id();
+        let encoded = encode(&sample(file_id));
+        let mut blob = 0xC0DE_D17E_u32.to_le_bytes().to_vec();
+        blob.extend_from_slice(encoded.get(4..).unwrap_or_default());
+        assert!(
+            blob.len() == encoded.len(),
+            "the re-stamped blob must differ from the original only in its magic"
+        );
+        assert_eq!(
+            decode(&blob, file_id).err().map(|error| error.kind()),
+            Some(io::ErrorKind::InvalidData),
+            "the pre-signature magic must be rejected as invalid data"
+        );
+    }
 }

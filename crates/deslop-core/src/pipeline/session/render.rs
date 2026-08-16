@@ -16,7 +16,7 @@ use crate::{
     content::attach_content_evidence,
     error::CoreError,
     fingerprint::Fingerprint,
-    lsh::band_collisions,
+    lsh::{band_collisions, Signature},
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
     report::{render_report, CacheStats, Report, ReportInputs},
     report_metrics::AnalysedLines,
@@ -26,7 +26,7 @@ use crate::{
 use super::{
     super::{
         config::PipelineConfig, corpus::FingerprintCorpus, embedding_pass::run_embedding_pass,
-        signatures::build_cross_language_signatures, signatures::build_signatures_with_languages,
+        signatures::build_cross_language_signatures,
     },
     PipelineSession,
 };
@@ -40,17 +40,13 @@ impl PipelineSession {
         last_pass_stats: CacheStats,
     ) -> Result<Report, CoreError> {
         let corpus = self.snapshot_corpus_ordered();
-        tracing::debug!(
-            fingerprints = corpus.fingerprints.len(),
-            "building signatures"
-        );
-        let signatures = build_signatures_with_languages(
-            &corpus.fingerprints,
-            &corpus.trees,
-            &self.file_languages,
-        );
+        // [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] Per-language signatures
+        // arrive with the corpus — built at parse/load time, or
+        // attached from the parse store on a cache hit — so the render
+        // pass constructs none of them.
+        let signatures: &[Signature] = &corpus.signatures;
         tracing::debug!(signatures = signatures.len(), "running LSH band collisions");
-        let lsh_pairs = band_collisions(&signatures);
+        let lsh_pairs = band_collisions(signatures);
         let cross_language_signatures =
             self.exclusion.allows_cross_language_comparison().then(|| {
                 build_cross_language_signatures(
@@ -67,7 +63,7 @@ impl PipelineSession {
         );
         let pairs = candidate_pairs_for_language_policy(
             &corpus.fingerprints,
-            &signatures,
+            signatures,
             &lsh_pairs,
             &embedding_outcome.pairs,
             cross_language_signatures.as_deref(),
@@ -84,7 +80,7 @@ impl PipelineSession {
         // cross-language space compares any pair when the audit mode is
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
-        let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(&signatures);
+        let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
         let mut clusters = build_ranked_fused_clusters(
             &corpus.fingerprints,
             measurement_signatures,
@@ -145,17 +141,23 @@ impl PipelineSession {
     }
 
     /// Builds the transient corpus snapshot from `file_ids`, preserving
-    /// the given order.
+    /// the given order. Fingerprints and signatures flatten from the
+    /// same per-file bundles in the same order, so the positional 1:1
+    /// binding the LSH pass relies on holds by construction
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
     fn corpus_in_order(&self, file_ids: &[FileId]) -> FingerprintCorpus {
         let mut fingerprints: Vec<Fingerprint> = Vec::new();
+        let mut signatures: Vec<Signature> = Vec::new();
         let mut trees: Vec<NormalizedNode> = Vec::with_capacity(file_ids.len());
         for cached in file_ids.iter().filter_map(|id| self.per_file.get(id)) {
-            fingerprints.extend(cached.fingerprints.clone());
+            fingerprints.extend(cached.fingerprints.iter().cloned());
+            signatures.extend_from_slice(&cached.signatures);
             trees.push(cached.tree.clone());
         }
         FingerprintCorpus {
             fingerprints,
             trees,
+            signatures,
             sources: self.sources.clone(),
             per_file: HashMap::new(),
             cache_stats: CacheStats::default(),

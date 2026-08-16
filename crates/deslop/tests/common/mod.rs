@@ -27,6 +27,12 @@ pub(crate) mod embeddings;
 /// `use crate::common::verdict::*;`, for the same reason as `signals`.
 pub(crate) mod verdict;
 
+/// Exact `cache_stats` assertions and the strip-and-compare view of
+/// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]. Imported explicitly
+/// with `use crate::common::incremental::*;`, for the same reason as
+/// `signals`.
+pub(crate) mod incremental;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

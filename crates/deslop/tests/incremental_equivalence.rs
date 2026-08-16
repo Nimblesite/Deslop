@@ -15,20 +15,18 @@
 //! compares the incremental report against a cold report of the same
 //! corpus state as full JSON documents with exactly the top-level
 //! `cache_stats` member removed from both sides. Explicit `cache_stats`
-//! assertions prove the store really served each pass (exact hit and
-//! miss counts), and explicit cluster and metric assertions keep the
-//! comparison from ever passing on an empty or blind report. The tests
-//! pin today's behaviour so any future reuse of downstream work
-//! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) inherits an already-enforced
-//! equivalence contract.
+//! assertions prove the store really served each pass, and explicit
+//! cluster and metric assertions keep the comparison from ever passing
+//! on an empty report — pinning today's behaviour so future downstream
+//! reuse ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) inherits an enforced
+//! contract.
 //!
-//! Every corpus file is byte-distinct on purpose. The store is
-//! content-addressed (blob path = blake3 of the file bytes), so two
-//! byte-identical files would let the second hit the blob the first
-//! wrote *within the cold run*, and the cold miss count would no longer
-//! equal the parseable-file count. Distinct one-line banner comments
-//! keep the clone copies byte-distinct while the function they share
-//! stays byte-identical.
+//! Every corpus file is byte-distinct on purpose: the store is
+//! content-addressed (blob path = blake3 of the file bytes), so a
+//! byte-identical pair would hit within the cold run itself and the
+//! cold miss count would no longer equal the parseable-file count.
+//! Distinct one-line banners keep the clone copies byte-distinct while
+//! the function they share stays byte-identical.
 
 use std::{
     collections::BTreeSet,
@@ -40,7 +38,7 @@ use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{incremental::*, *};
 
 /// `--min-nodes` low enough that the eleven-line clone body
 /// fingerprints as one clusterable subtree.
@@ -95,6 +93,10 @@ pub fn clamp_to_bounds(bounds: &Bounds, value: i64) -> i64 {
 /// mutation and the fresh ground-truth tree so both hold the same bytes.
 const DELTA_BANNER: &str = "delta copy joins after the warm run";
 
+/// Banner for `dup_c.rs` — shared by [`corpus`] and the rename
+/// scenario's ground-truth tree, where `dup_moved.rs` keeps its bytes.
+const GAMMA_BANNER: &str = "gamma copy rounds out the trio";
+
 /// The three files carrying the clone in the baseline corpus.
 const DUPLICATE_TRIO: [&str; 3] = ["dup_a.rs", "dup_b.rs", "dup_c.rs"];
 
@@ -114,58 +116,23 @@ fn dup_source(banner: &str) -> String {
 /// clone plus two structurally unrelated fillers.
 fn corpus() -> Vec<(String, String)> {
     vec![
-        (
-            "dup_a.rs".to_owned(),
-            dup_source("alpha owner of the accumulate clone"),
-        ),
-        (
-            "dup_b.rs".to_owned(),
-            dup_source("beta copy keeps the same shape"),
-        ),
-        (
-            "dup_c.rs".to_owned(),
-            dup_source("gamma copy rounds out the trio"),
-        ),
+        ("dup_a.rs".to_owned(), dup_source("alpha owner")),
+        ("dup_b.rs".to_owned(), dup_source("beta copy, same shape")),
+        ("dup_c.rs".to_owned(), dup_source(GAMMA_BANNER)),
         ("filler_labels.rs".to_owned(), FILLER_LABELS.to_owned()),
         ("filler_bounds.rs".to_owned(), FILLER_BOUNDS.to_owned()),
     ]
 }
 
-/// [`corpus`] with `dup_c.rs` rewritten into the vowel counter — the
-/// corpus state after the one-file edit.
-fn edited_corpus() -> Vec<(String, String)> {
+/// [`corpus`] with the `dup_c.rs` entry replaced by `(file_name,
+/// source)` — builds the edit scenario's ground-truth tree (same name,
+/// new source) and the rename scenario's (new name, same bytes).
+fn corpus_with_dup_c(file_name: &str, source: &str) -> Vec<(String, String)> {
     corpus()
         .into_iter()
-        .map(|(name, source)| match name.as_str() {
-            "dup_c.rs" => (name, REPLACEMENT_FN.to_owned()),
-            _ => (name, source),
-        })
-        .collect()
-}
-
-/// [`corpus`] plus the late-joining `dup_d.rs` copy.
-fn grown_corpus() -> Vec<(String, String)> {
-    let mut files = corpus();
-    files.push(("dup_d.rs".to_owned(), dup_source(DELTA_BANNER)));
-    files
-}
-
-/// [`corpus`] without `dup_c.rs` — the corpus state after the delete.
-fn shrunk_corpus() -> Vec<(String, String)> {
-    corpus()
-        .into_iter()
-        .filter(|(name, _)| name != "dup_c.rs")
-        .collect()
-}
-
-/// [`corpus`] with `dup_c.rs` carrying its exact bytes under the new
-/// name `dup_moved.rs` — the corpus state after the rename.
-fn renamed_corpus() -> Vec<(String, String)> {
-    corpus()
-        .into_iter()
-        .map(|(name, source)| match name.as_str() {
-            "dup_c.rs" => ("dup_moved.rs".to_owned(), source),
-            _ => (name, source),
+        .map(|(name, text)| match name.as_str() {
+            "dup_c.rs" => (file_name.to_owned(), source.to_owned()),
+            _ => (name, text),
         })
         .collect()
 }
@@ -186,11 +153,8 @@ fn run(scan_root: &Path, incremental: bool) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
     let mut cmd = Command::cargo_bin("deslop")?;
-    let _args = cmd
-        .arg(scan_root)
-        .arg("--output")
-        .arg(&output)
-        .args(["--min-nodes", MIN_NODES, "--embeddings", "off"]);
+    let _cmd = cmd.arg(scan_root).arg("--output").arg(&output);
+    let _args = cmd.args(["--min-nodes", MIN_NODES, "--embeddings", "off"]);
     if !incremental {
         let _flag = cmd.arg("--no-incremental");
     }
@@ -198,10 +162,9 @@ fn run(scan_root: &Path, incremental: bool) -> Result<Value> {
     load_json(&output.with_extension("json"))
 }
 
-/// Seeds a fresh root with [`corpus`] and takes it through the cold and
-/// warm baseline runs, asserting the store filled ({hits: 0, misses: 5})
-/// then served in full ({hits: 5, misses: 0}). Returns the temp-dir
-/// guard, the root, and both baseline reports.
+/// Seeds a fresh root with [`corpus`], then asserts the baseline cold
+/// run fills the store ({hits: 0, misses: 5}) and the warm run serves
+/// it in full ({hits: 5, misses: 0}).
 fn seeded_warm_root() -> Result<(tempfile::TempDir, PathBuf, Value, Value)> {
     let guard = tempfile::tempdir()?;
     let root = guard.path().join("src");
@@ -224,67 +187,11 @@ fn cold_truth(files: &[(String, String)]) -> Result<Value> {
     Ok(truth)
 }
 
-/// Asserts the report's exact `cache_stats` — the one member allowed to
-/// differ between an incremental and a cold pass.
-fn assert_cache_stats(report: &Value, hits: u64, misses: u64, label: &str) {
-    let stats = field(report, "cache_stats");
-    assert_eq!(
-        field(stats, "hits").as_u64(),
-        Some(hits),
-        "{label}: cache hits: {report}"
-    );
-    assert_eq!(
-        field(stats, "misses").as_u64(),
-        Some(misses),
-        "{label}: cache misses: {report}"
-    );
-}
-
-/// The report minus its top-level `cache_stats` member — the exact view
-/// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] requires to be equal
-/// between an incremental and a cold pass. Asserts the member existed,
-/// so a schema drift can never make the strip (and the comparison it
-/// feeds) vacuous.
-fn stripped(report: &Value) -> Value {
-    let mut view = report.clone();
-    let removed = view
-        .as_object_mut()
-        .and_then(|members| members.remove("cache_stats"));
-    assert!(
-        removed.is_some(),
-        "report carries no top-level cache_stats member to strip: {report}"
-    );
-    view
-}
-
-/// Top-level members whose values differ between two stripped reports —
-/// the first thing an equivalence failure message must name.
-fn differing_members(left: &Value, right: &Value) -> Vec<String> {
-    let member_names: BTreeSet<String> = [left, right]
-        .iter()
-        .filter_map(|value| value.as_object())
-        .flat_map(|members| members.keys().cloned())
-        .collect();
-    member_names
-        .into_iter()
-        .filter(|name| left.get(name) != right.get(name))
-        .collect()
-}
-
-/// Asserts the incremental report equals the cold report for the same
-/// corpus state, field for field, after removing exactly the top-level
-/// `cache_stats` member from both sides.
-fn assert_reports_equal(incremental: &Value, cold: &Value, scenario: &str) {
-    let incremental_view = stripped(incremental);
-    let cold_view = stripped(cold);
-    let diverging = differing_members(&incremental_view, &cold_view);
-    assert_eq!(
-        incremental_view, cold_view,
-        "{scenario}: incremental report diverged from the cold report of the same corpus \
-         state in top-level members {diverging:?}; cache_stats is the sole permitted \
-         difference ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE])\n\
-         incremental: {incremental:#}\ncold: {cold:#}"
-    );
+/// `files.len()` as the `u64` the wire counts use, following the
+/// saturating conversion precedent in `common::line_count` (a saturated
+/// value fails the assertion loudly instead of panicking).
+fn expected_count(files: &[&str]) -> u64 {
+    u64::try_from(files.len()).unwrap_or(u64::MAX)
 }
 
 /// Every occurrence must cover the clone body's lines 2..=12 — line 1
@@ -314,10 +221,9 @@ fn assert_identical_cluster(report: &Value, files: &[&str], label: &str) -> Resu
         "identical",
         "{label}: clone bucket: {report}"
     );
-    let expected_size = u64::try_from(files.len()).expect("occurrence count fits in u64");
     assert_eq!(
         cluster_size(clone),
-        expected_size,
+        expected_count(files),
         "{label}: clone occurrence count: {report}"
     );
     let expected_files: BTreeSet<String> = files.iter().map(|name| (*name).to_owned()).collect();
@@ -349,29 +255,24 @@ fn assert_report_shape(
     label: &str,
 ) -> Result<()> {
     assert_eq!(
-        field(report, "files_analysed").as_u64(),
-        Some(files_analysed),
-        "{label}: files_analysed: {report}"
+        (
+            field(report, "files_analysed").as_u64(),
+            clusters_hidden(report)
+        ),
+        (Some(files_analysed), 0),
+        "{label}: (files_analysed, clusters_hidden): {report}"
     );
     assert_eq!(
-        clusters_hidden(report),
-        0,
-        "{label}: clusters_hidden: {report}"
+        (
+            metric_field(report, "clusters_total").as_u64(),
+            cluster_count(report)
+        ),
+        (Some(1), 1),
+        "{label}: exactly one visible cluster, none hidden: {report}"
     );
-    assert_eq!(
-        metric_field(report, "clusters_total").as_u64(),
-        Some(1),
-        "{label}: metrics.clusters_total: {report}"
-    );
-    assert_eq!(
-        cluster_count(report),
-        1,
-        "{label}: rendered cluster count: {report}"
-    );
-    let expected_duplicated = u64::try_from(files.len()).expect("file count fits in u64");
     assert_eq!(
         metric_field(report, "duplicated_files").as_u64(),
-        Some(expected_duplicated),
+        Some(expected_count(files)),
         "{label}: metrics.duplicated_files: {report}"
     );
     assert_identical_cluster(report, files, label)
@@ -424,11 +325,11 @@ fn editing_one_file_matches_the_cold_report_of_the_post_edit_tree() -> Result<()
     let incremental = run(&root, true)?;
     assert_cache_stats(&incremental, 4, 1, "post-edit incremental");
     assert_ne!(
-        stripped(&incremental),
-        stripped(&cold),
+        without_cache_stats(&incremental),
+        without_cache_stats(&cold),
         "rewriting dup_c.rs must change the report — otherwise this scenario compares nothing"
     );
-    let truth = cold_truth(&edited_corpus())?;
+    let truth = cold_truth(&corpus_with_dup_c("dup_c.rs", REPLACEMENT_FN))?;
     assert_report_shape(&incremental, 5, &DUPLICATE_PAIR, "post-edit incremental")?;
     assert_report_shape(&truth, 5, &DUPLICATE_PAIR, "post-edit ground truth")?;
     assert_reports_equal(&incremental, &truth, "one-file edit");
@@ -445,7 +346,9 @@ fn adding_a_duplicate_file_matches_the_cold_report_of_the_grown_tree() -> Result
     fs::write(root.join("dup_d.rs"), dup_source(DELTA_BANNER))?;
     let incremental = run(&root, true)?;
     assert_cache_stats(&incremental, 5, 1, "post-add incremental");
-    let truth = cold_truth(&grown_corpus())?;
+    let mut grown = corpus();
+    grown.push(("dup_d.rs".to_owned(), dup_source(DELTA_BANNER)));
+    let truth = cold_truth(&grown)?;
     assert_report_shape(&incremental, 6, &DUPLICATE_QUAD, "post-add incremental")?;
     assert_report_shape(&truth, 6, &DUPLICATE_QUAD, "post-add ground truth")?;
     assert_reports_equal(&incremental, &truth, "file add");
@@ -463,7 +366,11 @@ fn deleting_a_file_matches_the_cold_report_of_the_shrunk_tree() -> Result<()> {
     fs::remove_file(root.join("dup_c.rs"))?;
     let incremental = run(&root, true)?;
     assert_cache_stats(&incremental, 4, 0, "post-delete incremental");
-    let truth = cold_truth(&shrunk_corpus())?;
+    let survivors: Vec<(String, String)> = corpus()
+        .into_iter()
+        .filter(|(name, _)| name != "dup_c.rs")
+        .collect();
+    let truth = cold_truth(&survivors)?;
     assert_report_shape(&incremental, 4, &DUPLICATE_PAIR, "post-delete incremental")?;
     assert_report_shape(&truth, 4, &DUPLICATE_PAIR, "post-delete ground truth")?;
     assert_reports_equal(&incremental, &truth, "file delete");
@@ -481,7 +388,10 @@ fn renaming_a_file_hits_the_content_addressed_store_and_matches_cold() -> Result
     fs::rename(root.join("dup_c.rs"), root.join("dup_moved.rs"))?;
     let incremental = run(&root, true)?;
     assert_cache_stats(&incremental, 5, 0, "post-rename incremental");
-    let truth = cold_truth(&renamed_corpus())?;
+    let truth = cold_truth(&corpus_with_dup_c(
+        "dup_moved.rs",
+        &dup_source(GAMMA_BANNER),
+    ))?;
     let renamed_trio = ["dup_a.rs", "dup_b.rs", "dup_moved.rs"];
     assert_report_shape(&incremental, 5, &renamed_trio, "post-rename incremental")?;
     assert_report_shape(&truth, 5, &renamed_trio, "post-rename ground truth")?;
@@ -513,14 +423,14 @@ fn reverting_an_edit_restores_the_original_cold_report_with_full_hits() -> Resul
     let edited = run(&root, true)?;
     assert_cache_stats(&edited, 4, 1, "mid-edit incremental");
     assert_ne!(
-        stripped(&edited),
-        stripped(&cold),
+        without_cache_stats(&edited),
+        without_cache_stats(&cold),
         "the edit must actually change the report, or the revert below proves nothing"
     );
     fs::write(root.join("dup_c.rs"), &original_bytes)?;
     let reverted = run(&root, true)?;
     assert_cache_stats(&reverted, 5, 0, "post-revert incremental");
     assert_report_shape(&reverted, 5, &DUPLICATE_TRIO, "post-revert incremental")?;
-    assert_reports_equal(&reverted, &cold, "edit-then-revert vs the original cold report");
+    assert_reports_equal(&reverted, &cold, "revert vs the original cold report");
     Ok(())
 }

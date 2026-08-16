@@ -118,8 +118,8 @@ The hot loop — **Developer → VSIX → LSP → `live` module → `update_file
 | Worst-offenders ranking ([PIPELINE-RANK-WORST-FIRST]) | ✅ `nodes × (size−1) × log2(1 + spanned_bytes)` | `crates/deslop-core/src/cluster.rs::rank_weight` |
 | Repo-wide metrics + fail-over threshold ([METRICS-REPO], [EXIT-CODES]) | ✅ exit 3 on breach | `crates/deslop-core/src/report_metrics.rs`, `crates/deslop/src/main.rs` |
 | Evidence-weighted metric + second gate ([METRICS-REPO-WEIGHTED], [EXIT-CODES-WEIGHTED]) | ⏳ specified; lands with gh #344 per [`plans/weighted-metrics-plan.md`](../plans/weighted-metrics-plan.md) | — |
-| Persisted parse processing ([PIPELINE-INCREMENTAL]) | ✅ on by default, `--no-incremental` opts out — parse stage only, ~9% of a run | `crates/deslop-core/src/fpcache.rs` |
-| Incremental analysis ([PIPELINE-INCREMENTAL-ANALYSIS]) | ⏳ specified; gh #383 per [`plans/incremental-analysis-plan.md`](../plans/incremental-analysis-plan.md) | — |
+| Persisted parse processing ([PIPELINE-INCREMENTAL]) | ✅ on by default, `--no-incremental` opts out — parse stage plus per-fingerprint MinHash signatures | `crates/deslop-core/src/fpcache.rs` |
+| Incremental analysis ([PIPELINE-INCREMENTAL-ANALYSIS]) | ⏳ signature reuse ✅ (persisted beside fingerprints, validated on hit, pinned by `signature_reuse.rs` + `incremental_equivalence.rs`); remaining downstream stages per gh #383 and [`plans/incremental-analysis-plan.md`](../plans/incremental-analysis-plan.md) | `crates/deslop-core/src/pipeline/corpus.rs`, `crates/deslop-core/src/pipeline/signatures.rs` |
 | JSON / text / human-HTML renderers ([OUTPUT-SCHEMA-JSON], [OUTPUT-HUMAN-HTML]) | ✅ | `crates/deslop-core/src/render/`, `crates/deslop-core/src/report_render.rs` |
 | Live `AnalysisSession` + watcher + scheduler ([LIVE-*]) | ✅ debounce 250 ms / cap 2 s | `crates/deslop-core/src/live/` (`session.rs`, `watcher.rs`, `scheduler.rs`, `debouncer.rs`) |
 | LSP server with diagnostics, hover, code lens, custom `deslop/*` methods ([LSP-*]) | ✅ | `crates/deslop-lsp/src/` |
@@ -143,5 +143,5 @@ Site-facing version of the same map: [`site/src/docs/research-background.md`](..
 
 ## Sibling docs
 
-- [REPORTING-CONTEXT.md](REPORTING-CONTEXT.md) — embedded `schema_doc` agents see at the top of every JSON report.
+- [REPORTING-CONTEXT.md](REPORTING-CONTEXT.md) — the `schema_doc` markdown agents fetch on demand (`schema-doc` tool / `deslop://schema` resource); rendered CLI reports carry the field present-but-empty (#110/#111, [OUTPUT-SCHEMA-JSON]).
 - [../plans/](../plans/) — remaining work, one file per work stream.

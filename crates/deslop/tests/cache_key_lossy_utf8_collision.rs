@@ -84,11 +84,12 @@ fn report(scan_root: &Path, incremental: bool) -> Result<Value> {
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
     let mut cmd = Command::cargo_bin("deslop")?;
-    let _args = cmd
-        .arg(scan_root)
-        .arg("--output")
-        .arg(&output)
-        .args(["--min-nodes", MIN_NODES, "--embeddings", "off"]);
+    let _args = cmd.arg(scan_root).arg("--output").arg(&output).args([
+        "--min-nodes",
+        MIN_NODES,
+        "--embeddings",
+        "off",
+    ]);
     if !incremental {
         let _flag = cmd.arg("--no-incremental");
     }
@@ -104,7 +105,12 @@ fn occurrence_span(report: &Value, file_name: &str) -> Result<(u64, u64, u64, u6
         .ok_or_else(|| anyhow::anyhow!("report has no clusters array: {report}"))?;
     clusters
         .iter()
-        .flat_map(|cluster| field(cluster, "occurrences").as_array().cloned().unwrap_or_default())
+        .flat_map(|cluster| {
+            field(cluster, "occurrences")
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
         .find(|occurrence| {
             field(occurrence, "path")
                 .as_str()
@@ -136,7 +142,10 @@ fn lossy_utf8_cache_key_must_not_collide_across_distinct_files() -> Result<()> {
     // nothing.
     let alpha_bytes = fs::read(scan_root.join("alpha.rs"))?;
     let beta_bytes = fs::read(scan_root.join("beta.rs"))?;
-    assert_ne!(alpha_bytes, beta_bytes, "fixture files must differ in bytes");
+    assert_ne!(
+        alpha_bytes, beta_bytes,
+        "fixture files must differ in bytes"
+    );
     assert_eq!(
         alpha_bytes.len() + 1,
         beta_bytes.len(),

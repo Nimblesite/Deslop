@@ -43,7 +43,7 @@ use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{incremental::*, *};
 
 /// The clone body shared verbatim by `alpha.rs` and `beta.rs`. Seven
 /// lines, byte-identical in both files, so one cluster spanning the
@@ -172,31 +172,6 @@ fn event_field(line: &str, name: &str) -> Result<u64> {
         .with_context(|| format!("`{name}` field is not a u64 in: {line}"))
 }
 
-/// Asserts a report's `cache_stats` block is exactly `{hits, misses}`.
-fn assert_cache_stats(report: &Value, label: &str, hits: u64, misses: u64) {
-    let stats = field(report, "cache_stats");
-    assert_eq!(
-        field(stats, "hits").as_u64(),
-        Some(hits),
-        "{label} run must report exactly {hits} cache hits: {report}"
-    );
-    assert_eq!(
-        field(stats, "misses").as_u64(),
-        Some(misses),
-        "{label} run must report exactly {misses} cache misses: {report}"
-    );
-}
-
-/// `report` with the top-level `cache_stats` block removed — the only
-/// field allowed to differ between the cold and the warm run.
-fn without_cache_stats(report: &Value) -> Value {
-    let mut clone = report.clone();
-    if let Some(object) = clone.as_object_mut() {
-        let _removed = object.remove("cache_stats");
-    }
-    clone
-}
-
 // Implements [PIPELINE-INCREMENTAL-ANALYSIS-REUSE]: a MinHash
 // signature is a pure function of one subtree's normalised token
 // k-grams, so a fully-warm pass may rebuild none of them — and must
@@ -238,16 +213,12 @@ fn warm_run_reuses_persisted_signatures_instead_of_rebuilding() -> Result<()> {
     );
 
     // All three byte-distinct files miss the cold cache and hit warm.
-    assert_cache_stats(&cold, "cold", 0, 3);
-    assert_cache_stats(&warm, "warm", 3, 0);
+    assert_cache_stats(&cold, 0, 3, "cold");
+    assert_cache_stats(&warm, 3, 0, "warm");
 
     // Reuse can never be bought with a report difference: outside
     // `cache_stats`, the warm report IS the cold report.
-    assert_eq!(
-        without_cache_stats(&warm),
-        without_cache_stats(&cold),
-        "warm report must equal the cold report with /cache_stats removed"
-    );
+    assert_reports_equal(&warm, &cold, "signature reuse warm pass");
 
     // The event line parses, and its existing fields agree with the
     // rendered cache stats — the key=value extraction is sound, so a

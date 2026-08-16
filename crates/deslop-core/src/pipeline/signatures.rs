@@ -1,5 +1,13 @@
-//! `MinHash` signature construction shared by [`super::run`] and
-//! [`super::session`]. Feeds the token-LSH pass in [`crate::lsh`].
+//! `MinHash` signature construction. Feeds the token-LSH pass in
+//! [`crate::lsh`].
+//!
+//! Per-language signatures are built once per file at parse/load time
+//! by [`signatures_for_file`] and persisted in the parse store beside
+//! the fingerprints they were built from
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]); the render pass consumes
+//! the flattened per-file lists instead of reconstructing them.
+//! Cross-language signatures stay render-time — they exist only for
+//! the opt-in audit mode ([CONFIG-CROSS-LANGUAGE]).
 
 use std::{collections::HashMap, hash::BuildHasher};
 
@@ -23,42 +31,50 @@ fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
 
-/// Language-aware signature builder. When the fingerprint's file has
-/// a known language in `file_languages`, import/prologue boilerplate
-/// is stripped from the token stream so shared import patterns stop
-/// feeding the LSH false-positive path described in
+/// Language-aware signature for one fingerprint against its file's
+/// normalised tree. When the language is known, import/prologue
+/// boilerplate is stripped from the token stream so shared import
+/// patterns stop feeding the LSH false-positive path described in
 /// [PIPELINE-BOILERPLATE-FILTER] — the structural pass already applies
-/// the same filter, so the two signals now share the same corpus.
+/// the same filter, so the two signals share the same corpus.
+///
+/// A pure function of the tree content, the fingerprint's range and
+/// hash, and the language — never of [`FileId`] — which is what
+/// licenses persisting the result in the content-addressed parse
+/// store ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+fn signature_for_fingerprint(
+    root: &NormalizedNode,
+    fingerprint: &Fingerprint,
+    language: Option<&str>,
+) -> Signature {
+    let tokens = match language {
+        Some("python") => token_stream_for_fingerprint_with_language(root, fingerprint, "python"),
+        Some(language) if exact_range_contains_boilerplate(root, fingerprint, language) => {
+            token_stream_for_fingerprint_with_language(root, fingerprint, language)
+        }
+        _ => token_stream_for_fingerprint(root, fingerprint),
+    };
+    tokens.map_or_else(
+        || empty_signature(fingerprint, language),
+        |tokens| signature_for_tokens(&tokens, fingerprint, language),
+    )
+}
+
+/// Builds one file's `MinHash` signatures, positionally 1:1 with
+/// `fingerprints`. Called at parse/load time so the result is
+/// persisted in the parse store beside the fingerprints it was built
+/// from and reattached on later cache hits
+/// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
 #[must_use]
-pub fn build_signatures_with_languages<S: BuildHasher>(
+pub fn signatures_for_file(
+    tree: &NormalizedNode,
     fingerprints: &[Fingerprint],
-    trees: &[NormalizedNode],
-    file_languages: &HashMap<FileId, &'static str, S>,
+    language: Option<&str>,
 ) -> Vec<Signature> {
-    let tree_index = build_tree_index(trees);
-    let mut signatures: Vec<Signature> = Vec::with_capacity(fingerprints.len());
-    for fingerprint in fingerprints {
-        let language = file_languages.get(&fingerprint.file_id).copied();
-        let Some(root) = tree_index.get(&fingerprint.file_id).copied() else {
-            signatures.push(empty_signature(fingerprint, language));
-            continue;
-        };
-        let tokens = match language {
-            Some("python") => {
-                token_stream_for_fingerprint_with_language(root, fingerprint, "python")
-            }
-            Some(language) if exact_range_contains_boilerplate(root, fingerprint, language) => {
-                token_stream_for_fingerprint_with_language(root, fingerprint, language)
-            }
-            _ => token_stream_for_fingerprint(root, fingerprint),
-        };
-        let signature = tokens.map_or_else(
-            || empty_signature(fingerprint, language),
-            |tokens| signature_for_tokens(&tokens, fingerprint, language),
-        );
-        signatures.push(signature);
-    }
-    signatures
+    fingerprints
+        .iter()
+        .map(|fingerprint| signature_for_fingerprint(tree, fingerprint, language))
+        .collect()
 }
 
 /// Builds aliases-only signatures for explicit cross-language audits.
