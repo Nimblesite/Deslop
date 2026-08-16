@@ -86,15 +86,15 @@ fn byte_identical_clone_pair_renders_embedding_cosine_of_exactly_one() -> Result
         "byte-identical snippets share one vector, so the rendered cosine must be \
          exactly 1.0, got {cosine:.17}: {cluster:#}",
     );
-    assert_eq!(
-        signal(cluster, "structural"),
-        1.0,
-        "an identical clone must also be structurally exact: {cluster:#}",
+    let structural = signal(cluster, "structural");
+    assert!(
+        (structural - 1.0).abs() < f64::EPSILON,
+        "an identical clone must be structurally exact, got {structural:.17}: {cluster:#}",
     );
-    assert_eq!(
-        signal(cluster, "token_jaccard"),
-        1.0,
-        "an identical clone must also have exact token overlap: {cluster:#}",
+    let jaccard = signal(cluster, "token_jaccard");
+    assert!(
+        (jaccard - 1.0).abs() < f64::EPSILON,
+        "an identical clone must have exact token overlap, got {jaccard:.17}: {cluster:#}",
     );
 
     for other in clusters(&report) {

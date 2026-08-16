@@ -84,27 +84,23 @@ fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
 /// Scores every pair exactly for small corpora where ANN top-k recall is
 /// more fragile than the quadratic work is expensive.
 fn exact_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
-    let points: Vec<CosinePoint> = embeddings
-        .iter()
-        .map(|vector| CosinePoint::new(vector))
-        .collect();
     let mut pairs = Vec::new();
-    for left in 0..points.len() {
-        collect_exact_pairs_from(left, &points, &mut pairs);
+    for left in 0..embeddings.len() {
+        collect_exact_pairs_from(left, embeddings, &mut pairs);
     }
     pairs
 }
 
 /// Appends exact embedding candidates for one left endpoint.
-fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec<EmbeddingPair>) {
-    let Some(left_point) = points.get(left) else {
+fn collect_exact_pairs_from(left: usize, embeddings: &[Vec<f32>], pairs: &mut Vec<EmbeddingPair>) {
+    let Some(left_vector) = embeddings.get(left) else {
         return;
     };
-    for right in left.saturating_add(1)..points.len() {
-        let Some(right_point) = points.get(right) else {
+    for right in left.saturating_add(1)..embeddings.len() {
+        let Some(right_vector) = embeddings.get(right) else {
             continue;
         };
-        let cosine = cosine_between(left_point, right_point);
+        let cosine = cosine_similarity(left_vector, right_vector);
         if admits_cosine(cosine) {
             pairs.push(EmbeddingPair {
                 left,
@@ -115,29 +111,41 @@ fn collect_exact_pairs_from(left: usize, points: &[CosinePoint], pairs: &mut Vec
     }
 }
 
-/// Returns cosine similarity for two already-normalised points.
-fn cosine_between(left: &CosinePoint, right: &CosinePoint) -> f64 {
-    cosine_from_distance(f64::from(left.distance(right)))
-}
-
 /// Returns the cosine similarity of two raw vectors in `[0, 1]`.
 ///
-/// This is the crate's single definition of cosine similarity: the same
-/// L2 normalisation, dot product, and negative-cosine clamp the ANN pass
-/// applies to every [`EmbeddingPair`]. Cluster-level signal measurement
-/// calls this so a rendered `embedding_cos` is always computed by the
-/// identical arithmetic that admitted the pair evidence — a second,
-/// subtly different cosine would let the report disagree with the
-/// pipeline about the same two vectors.
+/// This is the crate's single definition of cosine similarity, used both
+/// to admit exact-path pairs and to measure the rendered `embedding_cos`,
+/// so the report can never disagree with the pipeline about the same two
+/// vectors.
 ///
-/// Both the normalisation and the dot product run in `f32`. At four
-/// digits of vector width that accumulates about `2e-6` of drift, so two
-/// byte-identical snippets sharing one vector report `0.999998` rather
-/// than `1.0`. Harmless at the current four lanes, load-bearing at any
-/// realistic width — GH #369.
+/// Accumulation is `f64` over the raw `f32` components, and no
+/// intermediate normalised vector is materialised. Normalising into `f32`
+/// first and dotting the rounded components made the error grow with
+/// vector width — two byte-identical snippets, which share one vector
+/// because `group_snippets_by_content` collapses them, reported
+/// `0.999998` instead of `1.0`, and near-threshold pairs could be admitted
+/// or dropped on rounding alone. GH #372.
 #[must_use]
 pub fn cosine_similarity(left: &[f32], right: &[f32]) -> f64 {
-    cosine_between(&CosinePoint::new(left), &CosinePoint::new(right))
+    let scale = norm(left) * norm(right);
+    if scale <= 0.0 {
+        return 0.0;
+    }
+    (dot(left, right) / scale).clamp(0.0, 1.0)
+}
+
+/// Dot product accumulated in `f64` over the raw `f32` components.
+fn dot(left: &[f32], right: &[f32]) -> f64 {
+    left.iter()
+        .zip(right.iter())
+        .map(|(lhs, rhs)| f64::from(*lhs) * f64::from(*rhs))
+        .sum()
+}
+
+/// L2 norm accumulated in `f64`. Zero-norm vectors yield `0.0`, which
+/// [`cosine_similarity`] treats as "no direction, no similarity".
+fn norm(vector: &[f32]) -> f64 {
+    dot(vector, vector).sqrt()
 }
 
 /// Runs a single HNSW query and appends any surviving pairs to `out`.
@@ -294,16 +302,23 @@ mod tests {
         }
     }
 
+    /// Tolerance for a rescale, where bit-exactness is unachievable in any
+    /// precision: `dot(v, kv)` rounds to `k * dot(v, v)` while the divisor
+    /// rounds through `sqrt(X) * sqrt(k^2 * X)`. Set four orders of
+    /// magnitude below the `6e-8` the `f32` implementation produced, so
+    /// this still fails against the GH #372 arithmetic.
+    const RESCALE_TOLERANCE: f64 = 1e-12;
+
     /// [FUSION-EMBED-PROVIDER] Scaling a vector does not change its
-    /// direction, so cosine stays exactly `1.0` regardless of magnitude.
+    /// direction, so cosine stays `1.0` regardless of magnitude.
     #[test]
-    fn scaled_copies_of_a_vector_have_cosine_similarity_of_exactly_one() {
+    fn scaled_copies_of_a_vector_have_cosine_similarity_of_one() {
         for width in WIDTHS {
             let vector = ramp(width);
             let scaled: Vec<f32> = vector.iter().map(|value| value * 3.5).collect();
             let cosine = cosine_similarity(&vector, &scaled);
             assert!(
-                (cosine - 1.0).abs() < f64::EPSILON,
+                (cosine - 1.0).abs() < RESCALE_TOLERANCE,
                 "a scaled copy at width {width} must stay perfectly similar, got {cosine:.17}",
             );
         }
