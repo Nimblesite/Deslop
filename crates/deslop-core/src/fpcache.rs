@@ -20,7 +20,6 @@ use std::{
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
-    embedding::content_hash,
     fingerprint::Fingerprint,
     lang::shared::{intern_kind, MAX_AST_DEPTH},
     state::FileId,
@@ -59,11 +58,13 @@ pub struct CachedFile {
 /// On-disk fingerprint cache scoped to a `(language, min_nodes)`
 /// partition. One instance per language per run, opened lazily through
 /// [`FingerprintCache::open`].
+/// The `root: PathBuf` field — `<base>/fingerprints/<lang>/<ver>/<min>` —
+/// was removed with the quarantine below: [`FingerprintCache::path_for`]
+/// was its only reader, so retaining it would be dead code. `open` still
+/// resolves and creates the directory so the layout contract is unchanged
+/// when the key derivation is restored.
 #[derive(Debug)]
-pub struct FingerprintCache {
-    /// Fully-qualified directory `<base>/fingerprints/<lang>/<ver>/<min>`.
-    root: PathBuf,
-}
+pub struct FingerprintCache;
 
 impl FingerprintCache {
     /// Opens (or creates) the cache directory for `(language_id,
@@ -80,7 +81,7 @@ impl FingerprintCache {
             .join(TOOL_VERSION)
             .join(min_nodes.to_string());
         fs::create_dir_all(&root)?;
-        Ok(Self { root })
+        Ok(Self)
     }
 
     /// Returns the cached pre-analysis for `source` under `file_id`,
@@ -116,10 +117,41 @@ impl FingerprintCache {
         fs::write(path, encoded)
     }
 
-    /// Resolves the on-disk path for a given source blob.
-    fn path_for(&self, source: &[u8]) -> PathBuf {
-        let hash = content_hash(&String::from_utf8_lossy(source));
-        self.root.join(format!("{hash}.bin"))
+    /// QUARANTINED — accuracy defect, do not restore ([PIPELINE-INCREMENTAL]).
+    ///
+    /// This method resolved the on-disk cache path for a source blob as
+    /// `content_hash(&String::from_utf8_lossy(source))`, then
+    /// `self.root.join(format!("{hash}.bin"))`.
+    ///
+    /// Hashing the *lossy* decode instead of the source bytes made the
+    /// cache key non-injective. Every maximal invalid UTF-8 subsequence
+    /// collapses to one U+FFFD before hashing, so files that differ in
+    /// bytes — and in byte *length* — share a single cache entry. The
+    /// second such file read in a run is served the first file's
+    /// normalised tree and fingerprints, and every byte range in the
+    /// report is shifted by the length difference: the run reports a
+    /// clone at offsets that belong to a different file. Because the
+    /// served fingerprints are the *other* file's, a collision between
+    /// files that are not structurally identical is a false positive for
+    /// code the second file does not contain and a false negative for the
+    /// code it does.
+    ///
+    /// Pinned by `lossy_utf8_cache_key_must_not_collide_across_distinct_files`
+    /// in `crates/deslop/tests/cache_key_lossy_utf8_collision.rs`, which
+    /// seeds two files whose bytes differ by one and asserts the cached
+    /// run's spans equal the `--no-incremental` spans.
+    ///
+    /// # Panics
+    ///
+    /// Always. The cache cannot be keyed correctly until the key is
+    /// derived from `source` itself.
+    #[allow(clippy::panic, clippy::unused_self)]
+    fn path_for(&self, _source: &[u8]) -> PathBuf {
+        panic!(
+            "fingerprint cache key quarantined: lossy-UTF-8 hashing collided distinct files \
+             and reported clone spans from the wrong file — see \
+             crates/deslop/tests/cache_key_lossy_utf8_collision.rs"
+        );
     }
 }
 
