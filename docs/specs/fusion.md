@@ -31,7 +31,7 @@ The ID records the strategy this section originally specified; the **sum arm was
 1. Compute a candidate set of clone pairs as the **union** of: structural-hash matches, LSH bucket collisions, and top-k embedding neighbors per subtree.
 2. For each candidate pair, compute three scores in [0,1]: `structural_sim`, `token_jaccard`, `embedding_cos`.
 3. Final pair score = the **strongest single axis** — `max(structural_sim, token_jaccard, embedding_cos)`, bounded to [0,1] (`PairScore::bounded_fused`). Never their sum, never their average.
-4. Cluster pairs by transitive closure above a threshold.
+4. Cluster pairs by transitive closure above `admission.fused_threshold` ([FUSION-TUNING-LEVERS]).
 5. Weight each cluster by the ranking formula in §4 for "worst offenders first."
 
 This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on structural+embedding and ~high on LSH, a Type-3 may score high on LSH+embedding and medium on structural, and a Type-4 scores primarily on embedding. Every type lands in the report; scores explain *why*, and the fused confidence never exceeds the best of them. Rendered confidence is defined by [FUSION-CONTENT-GATE]: for shape-saturating clusters the gate substitutes measured content evidence for this function's implicit 1.0 content factor; everywhere else the bounded max **is** the rendered value.
@@ -65,7 +65,8 @@ erased:
      preservation (fraction of literal positions unchanged) and bijective
      identifier-mapping coverage (fraction of identifier positions explained
      by one consistent 1:1 substitution, modal in both directions). Zero
-     without positional alignment or with fewer than 4 literal anchors —
+     without positional alignment or with fewer than
+     `content_gate.rename_evidence_min_literals` literal anchors —
      without anchors, a consistent mapping cannot tell a rename from sibling
      scaffolding that also substitutes names consistently.
    A maximally renamed clone of real logic scores low pooled `agreement` but
@@ -73,19 +74,20 @@ erased:
    demoted textbook Type-2 clones to `structural_only`.
 3. **Rendered confidence**: for shape-identical clusters not proven
    byte-equivalent, `fused = max(embedding_cos, max(structural, token_jaccard)
-   × max(agreement, 0.9 × rename_consistency))`. The 0.9 discount reflects
-   that mapping-explained identifier positions are strictly weaker evidence
-   than byte equality, keeping a proven rename in the act-now band while
-   reserving `fused = 1.0` for byte-proven duplication. LSH-only and
+   × max(agreement, rename_consistency_discount × rename_consistency))`. The
+   discount reflects that mapping-explained identifier positions are strictly
+   weaker evidence than byte equality, keeping a proven rename in the act-now
+   band while reserving `fused = 1.0` for byte-proven duplication. LSH-only and
    embedding-discovered pairs render the bounded max fusion unchanged — the
    same formula with the content factor at its implicit 1.0.
 4. **Routing — three zones over `support = max(agreement,
    rename_consistency)`** (either population may vouch; never their mean).
-   Below the support floor (0.7, the [TECH-TOKEN-SOURCERERCC] Type-3 overlap
-   cutoff) with no semantic support, the cluster joins the
+   Below `content_gate.support_floor` (the [TECH-TOKEN-SOURCERERCC] Type-3
+   overlap cutoff) with no semantic support, the cluster joins the
    [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
-   scaffolding, and demoted in ranking. At or above the promote bar (0.85,
-   act-now grade) the cluster is a proven clone — a byte-agreeing near-miss
+   scaffolding, and demoted in ranking. At or above
+   `content_gate.promote_floor` (act-now grade) the cluster is a proven
+   clone — a byte-agreeing near-miss
    or a consistent maximal rename — and routes `nearly_identical` even when
    the token layer lost its signature to the fingerprint-scoped fallback.
    Between the two, the legacy signal routing stands: real-world sibling
@@ -108,14 +110,16 @@ adds evidence rather than redefining an existing signal.
 
 **The token echo is shape evidence too.** The LSH pass hashes k-grams of the
 same normalised kinds the structural pass hashes, so a near-total
-`token_jaccard` (≥ 0.95, the near-identical routing line) saturates on shape
+`token_jaccard` (≥ `content_gate.saturating_token_floor`, the near-identical
+routing line) saturates on shape
 matches exactly as `structural` does — the surviving flutter/flutter #331
 cluster read `structural=0.62, token_jaccard=0.98, fused=1.00` because
 transitive closure mixed structural and LSH pairs. The gate therefore fires on
 *either* saturating signal. Shape-mismatched members have no positional
 alignment, so their agreement is the key-set Jaccard of their content keys — a
 genuine Type-3 near-miss shares nearly all of them; renamed scaffolding shares
-few. The verbatim guard is proportional (≥ half the members must participate
+few. The verbatim guard is proportional
+(`content_gate.verbatim_member_share_floor` of the members must participate
 in byte-identical duplicates): a verbatim pair among a couple of lookalikes
 (#104) still vouches for its cluster, but two copied example widgets inside a
 453-member framework family (0.4%) do not. `data`-category
@@ -123,6 +127,56 @@ clusters are exempt from the structural-only ranking demotion — their weight
 belongs to the `[ranking] data_clones` policy ([RANK-CATEGORY]) so
 `data_clone_weight = 1.0` can still restore a table the gate routed to the
 structural-only bucket.
+
+### [FUSION-TUNING-LEVERS] Every threshold is a configuration item with a recorded provenance
+
+A number is a **lever** when changing it changes which clusters are reported, which bucket they land in, or how they rank. Every lever is named, defaulted to the value compiled today, range- and invariant-validated at load ([EXCLUSION-CONFIG] `[tuning]`), and declared in the report that its value produced ([CONFIG-TUNING-DECLARED]).
+
+**Unhardcoding is behaviour-preserving.** A run with no `[tuning]` section, no `--tune` flag, and no editor override produces a byte-identical report to the pre-migration build on every fixture and every corpus repository. Changing a *default* is a separate change with its own failing test, its own provenance entry, and its own corpus measurement — widening one during the migration is how an unhardcoding refactor becomes an undetected recall loss.
+
+**Provenance is part of the spec.** A threshold with no recorded justification is an unfalsifiable claim, so each default carries one of four kinds: **literature** (a published operating point, cited by its [TECH-*] id), **defect** (an observed false positive or negative, cited by issue — it says what the value must *not* admit, which beats a curve), **derived** (follows from the fusion algebra or another lever, with the derivation stated), or **unrecorded** (a tracked gap, not a resting state — each earns a citation, a defect, or a measured sweep).
+
+| Key | Site | Default | Provenance |
+| --- | --- | --- | --- |
+| `admission.fused_threshold` | `pair.rs:31` | 0.85 | **Derived.** Under bounded max one axis alone can carry a pair, so the bar on that axis rises to compensate. [TECH-TOKEN-SOURCERERCC] treats Jaccard ≥ 0.7 as the typical Type-3 cutoff; Deslop sits higher for that reason. Not an ROC sweep. |
+| `admission.lsh_only_min_jaccard` | `pair.rs:36` | 0.90 | **Defect.** Not a similarity threshold — a guard. LSH-only pairs have no structural anchor, and tiny `using`/`namespace` sibling windows hit Jaccard ≈ 1.0 by accident, then merge into a mega-cluster through transitive closure. |
+| `admission.lsh_only_min_node_count` | `pair.rs:43` | 40 | **Defect.** The same defect's other half, applied at both endpoints: an 18-node k-gram set is mostly grammar scaffolding, so tens of thousands of such subtrees agree by accident. |
+| `admission.max_endpoint_node_ratio` | `pair.rs:61` | 4 | **Defect** (#368). [PAIR-SIZE-COHERENCE] — an embedding-only pair scored a 19-node parameter list against a 274-node arithmetic chain at cosine 1.00. Deliberately loose; fires only where the pair is self-contradictory. |
+| `candidates.cross_language_min_jaccard` | `pair.rs:66` | 0.10 | **Derived.** Cross-language AST vocabularies differ and the mode is opt-in ([CONFIG-CROSS-LANGUAGE]), so the floor sits below the same-language LSH-only floor. |
+| `candidates.embedding_min_cosine` | `embedding/pairs.rs:27` | 0.80 | **Literature.** SSCD's published operating point, and a candidate-set gate only — `fused_threshold` still decides admission downstream. |
+| `candidates.embedding_top_k` | `embedding/pairs.rs:16` | 5 | **Unrecorded.** The stated rationale — recall comes from the union, not the ANN fan-out — argues for *small*, not for *five*. |
+| `candidates.embedding_exact_pair_limit` | `embedding/pairs.rs:22` | 256 | **Unrecorded.** |
+| `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Literature** (#341). [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff. |
+| `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now grade, matched to `fused_threshold`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
+| `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. |
+| `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
+| `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346). Keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte-proven duplication. |
+| `content_gate.rename_evidence_min_literals` | `content.rs:44` | 4 | **Defect** (#346). Ubiquitous literals (`0`, `1`, `""`) let a couple of positions agree by coincidence; without anchors a consistent mapping cannot separate a rename from sibling scaffolding. |
+| `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family. |
+| `content_gate.literal_table_min_fraction` | `buckets.rs:257` | 0.8 | **Derived** (#341), value unswept. "Overwhelmingly literal" is the stated criterion for [CLONE-NOISE-LITERAL-TABLE]; 0.8 is where it was set, not where it was measured. |
+| `content_gate.literal_table_min_literals` | `content.rs:36` | 8 | **Derived** (#341), value unswept. A data table is a run of values, so a two-element tuple return must not reach the classifier — the argument fixes the direction, not the number. |
+| `ranking.type4_embedding_floor` | `cluster.rs:397` | 0.90 | **Unrecorded.** |
+| `ranking.low_structural_type4_ceiling` | `cluster.rs:395` | 0.10 | **Unrecorded.** |
+| `ranking.low_structural_type4_weight` | `cluster.rs:399`–`401` | 1/10 | **Unrecorded.** |
+| `routing.proven_identical_token_floor` | `report_render.rs:236` | 0.99 | **Unrecorded.** |
+
+`[ranking] data_clone_weight` (0.15) and `structural_only_weight` (0.15) are levers by this definition and are **already configuration** ([RANK-CATEGORY], [RANK-STRUCTURAL-ONLY]); they keep their existing section rather than moving.
+
+**Unnamed levers.** These fail the naming requirement today — they are inline literals in comparisons, so no test can assert them and no spec can reference them. Naming each one is a prerequisite for configuring it:
+
+| Site | Literals | Governs |
+| --- | --- | --- |
+| `buckets.rs:357` | `0.99`, `0.99` | `routing.identical_*` — the `Identical` line |
+| `buckets.rs:359` | `0.80`, `0.50` | `routing.same_behavior_*` — the `SameBehavior` line |
+| `buckets.rs:363`–`364` | `0.99`, `0.20`, `0.95` | `routing.nearly_identical_*` — the `NearlyIdentical` line |
+| `buckets.rs:225`, `:282`, `:342`; `report_render.rs:297` | `0.99` | `routing.shape_identical_floor` — one concept written out four times, so a change to one is a silent divergence |
+| `report.rs:371`–`374` | `0.10`, `0.80`, `10`, `500` | `suppression.embedding_mega_*` — embedding-dominant mega-cluster suppression |
+| `refactor/merge/gate.rs:20`, `:24`, `:27`, `:31` | `20`, `6`, `6`, `0.95` | [AUTOFIX-MERGE] eligibility |
+| `refactor/merge/naming.rs:12` | `4` | [AUTOFIX-MERGE] parameter ceiling |
+
+**Representation parameters** — `min_nodes` (30), `kgram_width` (5), `minhash_signature_len` (128), `lsh_bands` (32), `sibling_max_window_width` (8), `max_ast_depth` (500), `embedding_chars_per_token` (3) — are levers too, but they change what is hashed or dispatched, so they are cache-keyed ([CONFIG-TUNING-CACHE]) rather than free to vary per run.
+
+**Not levers, and never configuration.** `MIN_REPORTABLE_MEMBERS = 2` (`cluster.rs:63`) is definitional — a cluster of one is not duplication. `HNSW_SEED` (`embedding/pairs.rs:31`) is determinism ([PIPELINE-DETERMINISM]); a configurable seed makes runs irreproducible. `F64_MAX_EXACT_INTEGER*` and `F64_TWO_POW_32` (`cluster.rs:388`–`393`) are IEEE-754 facts. `MAGIC` (`fpcache.rs:32`) and `MANIFEST_VERSION` (`version_contract.rs:10`) are format identity. Presentation and transport limits — `LIVE_WIRE_OCCURRENCE_CAP`, `SNIPPET_PREVIEW_LINES`, `CHANNEL_CAPACITY`, `BROADCAST_CAPACITY`, `MIN_CLUSTER_ID_PREFIX_LEN`, and the debouncer's `QUIET_MS` / `CAP_MS` — change what a surface shows or how promptly, never which clusters exist; if ever exposed they belong to a `[live]` or `[report]` section.
 
 ### [REMOVE-STUB] Test-only stub provider must never ship
 The deterministic BLAKE3 stub embedding provider named in [FUSION-EMBED-PROVIDER]

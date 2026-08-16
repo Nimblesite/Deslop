@@ -35,10 +35,17 @@ in development.
 
 ```yaml
 - uses: actions/checkout@v4
-- uses: Nimblesite/Deslop@v0.30.0
+- uses: Nimblesite/Deslop@vX.Y.Z
   with:
     fail-over: "5.0" # fail above 5% duplicated lines
 ```
+
+Substitute the [newest release](https://github.com/Nimblesite/Deslop/releases/latest)
+for `X.Y.Z` — the tag you pin *is* the CLI version the action installs, so this
+file names no version rather than committing one that silently rots into
+installing an older CLI for everyone who copies it. The [Action
+reference](https://deslop.live/docs/github-action/) renders the current number,
+because it is built after each release rather than committed.
 
 The action analyses the workspace, uploads JSON, text, and HTML reports, and
 fails the job if duplication exceeds the threshold. It needs no token and only

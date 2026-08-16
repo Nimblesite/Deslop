@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v{{ releases.pin }}
         with:
           fail-over: "5.0"   # 或省略以使用 .deslop.toml 中的 [threshold]
 ```
@@ -36,16 +36,16 @@ jobs:
 
 ## 版本固定与 CLI 版本
 
-**你固定的标签就是你得到的 CLI 版本。** `version` 输入默认取 `github.action_ref` 并去掉开头的 `v`，因此 `uses: Nimblesite/Deslop@v0.30.0` 会安装同一个 `deslop` 版本。两者不可能产生偏移。
+**你固定的标签就是你得到的 CLI 版本。** `version` 输入默认取 `github.action_ref` 并去掉开头的 `v`，因此 `uses: Nimblesite/Deslop@v{{ releases.pin }}` 会安装同一个 `deslop` 版本。两者不可能产生偏移。
 
-请固定到确切版本而不是可变引用 — Dependabot 会替你升级。这里刻意**没有 `@v1` 别名**：可变的主版本标签正是版本固定要避免的供应链形态。
+请固定到确切版本而不是可变引用 — Dependabot 会替你升级。这里刻意**没有 `@v1` 别名**：可变的主版本标签正是版本固定要避免的供应链形态。本页每段示例中的版本号{% if releases.latest %}都是最新发布版 **{{ releases.pin }}**{% else %}都指向最新发布版{% endif %} — 它在页面构建时解析，从不写入仓库，因此不可能落后于它所安装的 CLI。
 
 如果你固定到某个提交 SHA 或分支，该引用不携带版本，因此 `version` 变为**必填**。缺失它是一个明确指出修复方式的硬错误，绝不会静默回退到「latest」：
 
 ```yaml
       - uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f
         with:
-          version: "0.30.0"
+          version: "{{ releases.pin }}"
 ```
 
 ## 输入
@@ -89,11 +89,11 @@ jobs:
 在每个 PR 上报告数字并交由人来判断，而不是阻塞合并：
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v{{ releases.pin }}
         id: deslop
         with:
           no-fail-over: "true"   # 只度量，不拦截
-      - run: echo "${{ steps.deslop.outputs.duplication-percent }}% duplicated"
+      - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% duplicated"
 ```
 
 这是把 Deslop 引入既有代码库的推荐方式：先无门禁运行几周，观察数字稳定在哪里，然后把 `fail-over` 设在略低于该值的位置并逐步收紧。
@@ -118,7 +118,7 @@ jobs:
 默认情况下，该 Action 会写出 `deslop-report.json`、`deslop-report.txt` 和 `deslop-report.html`，并把三者作为名为 `deslop-report` 的工作流产物上传。
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v{{ releases.pin }}
         with:
           output: reports/duplication
           artifact-name: duplication-reports

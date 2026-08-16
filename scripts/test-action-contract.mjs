@@ -15,14 +15,8 @@ import assert from "node:assert/strict";
 import { releaseArtifact, resolveRelease, resolveVersion } from "./action-resolve-artifact.mjs";
 import { expectedDigest, verifyChecksum } from "./action-verify-checksum.mjs";
 import { readOutputs } from "./action-read-outputs.mjs";
-import { actionPinDocs, readActionPins } from "./stamp-release-version.mjs";
-
-// `--latest-release <version>` adds the freshness half of the documented-pin
-// check. Omitted offline in `make deployment-verify`, where the newest published
-// release is unknowable; supplied by action-selftest.yml, which has already
-// resolved it. Consistency is proven in both modes.
-const latestReleaseFlag = process.argv.indexOf("--latest-release");
-const latestRelease = latestReleaseFlag < 0 ? undefined : process.argv[latestReleaseFlag + 1];
+import { actionPinDocs, readActionPins, PIN_PLACEHOLDER } from "./stamp-release-version.mjs";
+import * as releasesData from "../site/src/_data/releases.js";
 
 const scratch = mkdtempSync(join(tmpdir(), "deslop-action-"));
 let checked = 0;
@@ -259,28 +253,71 @@ check("the pinned ref reaches the resolver", () => {
 // The tag's README is the body of the Marketplace listing, and the tag is what
 // `stamp-release-version.mjs` never gets to rewrite — it stamps the build, not
 // the commit. So whatever is committed here is the workflow every listing
-// visitor copies, and a stale pin installs a stale CLI for all of them.
+// visitor copies. A committed version therefore cannot be kept true: v0.30.0
+// shipped a listing advertising `@v0.27.0`. This asserts the property that makes
+// that impossible rather than merely detectable — no pin names a version at all.
+// The site pages resolve one when they are built, after the release exists; the
+// README, which GitHub serves raw, names the placeholder. Both are checkable
+// offline, on every PR, which the freshness check they replace was not — it
+// needed the newest release, so it ran only where the network was up.
 // [ACTION-VERSION]
-check("every documented pin names one version", () => {
+const sanctionedPins = new Set([PIN_PLACEHOLDER, "{{ releases.pin }}"]);
+
+check("no documented pin commits a version", () => {
   const pins = actionPinDocs.flatMap((doc) =>
-    readActionPins(readFileSync(doc, "utf8")).map((version) => ({ doc, version })),
+    readActionPins(readFileSync(doc, "utf8")).map((token) => ({ doc, token })),
   );
   assert.ok(pins.length >= actionPinDocs.length, `every doc in ${actionPinDocs.join(", ")} must show a pin`);
-  const [first, ...rest] = pins;
-  for (const pin of rest) {
-    assert.equal(
-      pin.version,
-      first.version,
-      `${pin.doc} pins v${pin.version} but ${first.doc} pins v${first.version} — a half-bump hands one audience a different CLI`,
+  for (const { doc, token } of pins) {
+    // Proven against the resolver the action actually runs, not a second copy of
+    // its version rule: a token it refuses to derive a version from is a token
+    // that cannot be a stale version.
+    assert.throws(
+      () => resolveVersion("", token),
+      `${doc} pins v${token} — a committed version rots between releases and hands every visitor ` +
+        `a workflow installing an older CLI. Use {{ releases.pin }} on a built page, ${PIN_PLACEHOLDER} in the README`,
+    );
+    assert.ok(
+      sanctionedPins.has(token),
+      `${doc} pins v${token}, which resolves to nothing — expected ${[...sanctionedPins].join(" or ")}`,
     );
   }
-  if (latestRelease !== undefined) {
-    assert.equal(
-      first.version,
-      latestRelease,
-      `the docs pin v${first.version} but the newest release is v${latestRelease} — ` +
-        `run \`node scripts/stamp-release-version.mjs ${latestRelease}\` and commit the pins`,
-    );
+});
+
+// What the rendered pin actually depends on, and the way it fails silently.
+//
+// Eleventy hands a template the module's *namespace* when a `_data` ESM file
+// exports anything besides `default` — it never calls the function, so
+// `releases` becomes `{default: fn, ...}` and every consumer reads undefined.
+// Nunjucks prints undefined as the empty string, so the documented pin renders
+// as a bare `@v` with no version: a snippet that fails outright rather than one
+// that merely installs an older CLI. It took the whole releases page down with
+// it in the same build, silently — no warning, exit 0. Nothing downstream can
+// catch it, because the markdown source is correct and only the render is
+// wrong. [ACTION-VERSION-DOCS]
+check("the data module backing the rendered pin exports only a default", () => {
+  assert.deepEqual(
+    Object.keys(releasesData).filter((name) => name !== "default"),
+    [],
+    "site/src/_data/releases.js must export nothing but `default` — a named export makes Eleventy " +
+      "skip the function and render every `{{ releases.* }}` as empty, including the documented pin",
+  );
+  assert.equal(typeof releasesData.default, "function", "Eleventy calls the default export to build the data");
+});
+
+// The README is served raw and cannot resolve an expression; a built page must
+// not fall back to the placeholder when it can render the real number.
+check("each surface pins the form it can actually resolve", () => {
+  const [readme, ...builtPages] = actionPinDocs;
+  for (const token of readActionPins(readFileSync(readme, "utf8"))) {
+    assert.equal(token, PIN_PLACEHOLDER, `${readme} is served raw by GitHub, so it cannot render ${token}`);
+  }
+  for (const doc of builtPages) {
+    const tokens = readActionPins(readFileSync(doc, "utf8"));
+    assert.ok(tokens.length > 0, `${doc} must show a pin`);
+    for (const token of tokens) {
+      assert.equal(token, "{{ releases.pin }}", `${doc} is built after the release, so it must render the version`);
+    }
   }
 });
 

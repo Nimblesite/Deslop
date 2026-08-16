@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v{{ releases.pin }}
         with:
           fail-over: "5.0"   # or omit to use [threshold] in .deslop.toml
 ```
@@ -35,16 +35,16 @@ The action needs no token and no permissions beyond the default `contents: read`
 
 ## Pinning and the CLI version
 
-**The tag you pin is the CLI version you get.** The `version` input defaults to `github.action_ref` with the leading `v` stripped, so `uses: Nimblesite/Deslop@v0.30.0` installs that same `deslop` release. The two cannot drift.
+**The tag you pin is the CLI version you get.** The `version` input defaults to `github.action_ref` with the leading `v` stripped, so `uses: Nimblesite/Deslop@v{{ releases.pin }}` installs that same `deslop` release. The two cannot drift.
 
-Pin an exact version rather than a mutable ref — Dependabot bumps it for you. There is deliberately **no `@v1` alias**: a mutable major tag is exactly the supply-chain shape that pinning exists to avoid.
+Pin an exact version rather than a mutable ref — Dependabot bumps it for you. There is deliberately **no `@v1` alias**: a mutable major tag is exactly the supply-chain shape that pinning exists to avoid. Every snippet on this page names {% if releases.latest %}**{{ releases.pin }}**, the newest release{% else %}the newest release{% endif %} — the number is resolved when the page is built, never committed, so it cannot fall behind the CLI it installs.
 
 If you pin to a commit SHA or a branch, the ref carries no version, so `version` becomes **required**. Its absence is a hard error naming the fix, never a silent fall back to "latest":
 
 ```yaml
       - uses: Nimblesite/Deslop@8f4c1e2a9b7d3f6a5c8e1b4d7a0f3c6e9b2d5a8f
         with:
-          version: "0.30.0"
+          version: "{{ releases.pin }}"
 ```
 
 ## Inputs
@@ -88,11 +88,11 @@ Outputs are published **even when the gate trips**, so a later step can comment 
 Report the number on every PR and let a human decide, rather than blocking the merge:
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v{{ releases.pin }}
         id: deslop
         with:
           no-fail-over: "true"   # measure without gating
-      - run: echo "${{ steps.deslop.outputs.duplication-percent }}% duplicated"
+      - run: echo "{% raw %}${{ steps.deslop.outputs.duplication-percent }}{% endraw %}% duplicated"
 ```
 
 This is the recommended way to introduce Deslop to an existing codebase: run it ungated for a few weeks, watch where the number settles, then set `fail-over` just below it and ratchet down.
@@ -117,7 +117,7 @@ Crucially, the reports are rendered and the artifact is uploaded **before** the 
 By default the action writes `deslop-report.json`, `deslop-report.txt` and `deslop-report.html` and uploads all three as a workflow artifact named `deslop-report`.
 
 ```yaml
-      - uses: Nimblesite/Deslop@v0.30.0
+      - uses: Nimblesite/Deslop@v{{ releases.pin }}
         with:
           output: reports/duplication
           artifact-name: duplication-reports
