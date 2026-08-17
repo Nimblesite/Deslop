@@ -8,11 +8,7 @@
 //! corrupt or misaddressed blob can cost a re-parse, never an incorrect
 //! hit and never a crash.
 
-use std::{
-    fs,
-    io::{self, Cursor, Read},
-    path::Path,
-};
+use std::io::{self, Cursor, Read};
 
 use crate::{
     ast::{ByteRange, NormalizedNode},
@@ -23,6 +19,11 @@ use crate::{
 };
 
 use super::CachedFile;
+
+mod bounds;
+
+use bounds::NodeBudget;
+pub(super) use bounds::{read_bounded, MAX_BLOB_BYTES};
 
 /// Magic number at the top of every cache blob, bumped whenever the
 /// blob layout changes — `0xC0DE_D17E` was the pre-signature layout and
@@ -55,13 +56,6 @@ const SIGNATURE_RECORD_LEN: usize = SIGNATURE_LEN * 8;
 /// Minimum encoded bytes of one tree node: kind length, byte range,
 /// and child count, with an empty kind string.
 const MIN_NODE_LEN: usize = 4 + 8 + 8 + 4;
-
-/// Upper bound on a blob file, enforced before `fs::read` so a corrupt
-/// or hostile store entry cannot drive an arbitrarily large allocation
-/// out of its file length alone. Far above any blob a real source file
-/// produces — the whole store for a 758-file corpus measures well
-/// under this.
-pub(super) const MAX_BLOB_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Everything a blob must be provably bound to before it may be served
 /// ([PIPELINE-INCREMENTAL-INTEGRITY]): the address that selected it.
@@ -105,59 +99,6 @@ pub(super) fn binding_digest(binding: &BlobBinding<'_>, payload: &[u8]) -> [u8; 
     }
     let _ = hasher.update(payload);
     *hasher.finalize().as_bytes()
-}
-
-/// Reads the blob at `path` under a hard [`MAX_BLOB_BYTES`] ceiling, or
-/// `None` for a missing, unreadable, or oversized file — every one a
-/// plain miss. Bounds the read allocation itself; decode-side bounds
-/// cannot protect a read that has already materialised an absurd file.
-///
-/// One handle does all three jobs — measure, bound, read. Sizing from
-/// `fs::metadata` and then calling `fs::read` measures one file and
-/// allocates for another: a second binary sharing the store
-/// ([PIPELINE-INCREMENTAL-RETENTION]) can replace or extend the entry in
-/// between, and the ceiling would then apply only to the stale
-/// measurement.
-///
-/// The read is capped at `len + 1` — the measured length plus a single
-/// sentinel byte — not at [`MAX_BLOB_BYTES`]. Both halves matter. The
-/// sentinel is what makes growth *observable*: reading exactly `len`
-/// bytes cannot distinguish "the whole blob" from "a truncated view of a
-/// file that has since grown", and the truncated view is a prefix whose
-/// trailing bytes were silently dropped. Capping at `len + 1` rather than
-/// the global ceiling is what keeps the allocation exact: the buffer is
-/// reserved once, fallibly, at `len + 1`, and the capped read can never
-/// grow it — whereas reading toward `MAX_BLOB_BYTES` would let a file
-/// that grew by megabytes drive `Vec` reallocation far past the
-/// reservation on its way to being rejected.
-pub(super) fn read_bounded(path: &Path) -> Option<Vec<u8>> {
-    let file = fs::File::open(path).ok()?;
-    let len = file.metadata().ok()?.len();
-    if len > MAX_BLOB_BYTES {
-        tracing::warn!(
-            path = %path.display(),
-            len,
-            "fingerprint cache blob exceeds the size bound — treating as miss",
-        );
-        return None;
-    }
-    let capacity = usize::try_from(len).ok()?.checked_add(1)?;
-    let mut bytes = Vec::new();
-    bytes.try_reserve_exact(capacity).ok()?;
-    let _read = file
-        .take(len.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .ok()?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != len {
-        tracing::warn!(
-            path = %path.display(),
-            expected = len,
-            read = bytes.len(),
-            "fingerprint cache blob changed size mid-read — treating as miss",
-        );
-        return None;
-    }
-    Some(bytes)
 }
 
 /// Serialises `cached` into the little-endian blob format, bound to
@@ -409,53 +350,6 @@ fn decode_tree(
         },
         file_id,
     })
-}
-
-/// Ceiling on the nodes one blob may decode into, whatever its declared
-/// counts say. The byte bound alone is not enough: every encoded node
-/// costs 24 bytes minimum on disk but a resident [`NormalizedNode`] —
-/// interned kind pointer, two offsets, a [`FileId`], and a child `Vec` —
-/// is several times that, so a digest-valid blob at the byte ceiling
-/// could still multiply into an allocation many times its file size.
-/// Four million nodes is orders of magnitude past any real source file
-/// (the whole `deslop-core` tree decodes ~29k fingerprints' worth) and
-/// exceeding it costs only a miss: the file re-parses from source and the
-/// blob is rewritten ([PIPELINE-INCREMENTAL-INVALIDATION]).
-const MAX_DECODED_NODES: usize = 4_000_000;
-
-/// The node allowance for one blob's decode, spent as the tree is walked.
-/// Global to the decode, so it bounds the whole tree rather than any one
-/// branch — the depth guard ([`MAX_AST_DEPTH`]) bounds a single path, and
-/// a wide-but-shallow tree evades it entirely.
-struct NodeBudget {
-    /// Nodes still permitted before the decode is refused.
-    remaining: usize,
-}
-
-impl NodeBudget {
-    /// A fresh allowance for one blob.
-    const fn new() -> Self {
-        Self {
-            remaining: MAX_DECODED_NODES,
-        }
-    }
-
-    /// Claims one node plus the `children` slots that must follow it, so
-    /// an absurd child count is refused *before* its `Vec` is reserved
-    /// rather than after the allocation it would drive.
-    fn claim(&mut self, children: usize) -> io::Result<()> {
-        let after_self = self
-            .remaining
-            .checked_sub(1)
-            .ok_or_else(|| invalid_data("cached AST exceeds the decoded-node budget"))?;
-        if children > after_self {
-            return Err(invalid_data(
-                "cached AST child count exceeds the decoded-node budget",
-            ));
-        }
-        self.remaining = after_self;
-        Ok(())
-    }
 }
 
 /// One node's decoded header: interned kind, byte range, and child count,

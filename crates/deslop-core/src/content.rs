@@ -98,22 +98,6 @@ impl ContentEvidence {
         self.agreement.max(self.rename_consistency)
     }
 
-    /// [`Self::support`] where it counts as *proof*, `0.0` where nothing
-    /// was measured. [FUSION-CONTENT-GATE]'s "never demote on a missing
-    /// measurement" default is only safe when another signal proves the
-    /// duplication — an exact Merkle match does. A cluster with no
-    /// structural anchor ([CLONE-BUCKETS-ROUTING] row 4) has no such
-    /// signal, so there an absent measurement means *no evidence*, not
-    /// the benefit of the doubt.
-    #[must_use]
-    pub fn proven_support(self) -> f64 {
-        if self.measured {
-            self.support()
-        } else {
-            0.0
-        }
-    }
-
     /// Evidence for a cluster no measurement pass has touched: full
     /// pooled agreement (so nothing is demoted on a missing
     /// measurement), no rename proof, no literal dominance.

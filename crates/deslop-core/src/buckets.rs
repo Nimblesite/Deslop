@@ -278,20 +278,22 @@ pub fn lacks_content_support(signals: ReportSignals, content: ContentEvidence) -
 /// is shape evidence too, not content evidence ('s surviving
 /// mixed cluster read `structural=0.62, token_jaccard=0.98`).
 ///
-/// The anchor-free row-4 route ([`is_lsh_only_nearmiss`]) is the same
-/// argument at its own floor: it reaches `NearlyIdentical` on token
-/// overlap **alone**, and that overlap is measured over the normalised
-/// stream, so it must face the content gate as well. Without this
-/// disjunct a framework-mandated declaration family re-enters the
-/// act-now bucket through the anchor-free door — six distinct Flutter
-/// widgets measure `structural=0.00, token_jaccard=0.93` on whole-file
-/// spans whose `build` bodies share nothing (#331), and every
-/// [`SATURATING_TOKEN_FLOOR`] test above is blind to that band.
+/// The anchor-free row-4 route ([`is_lsh_only_nearmiss`]) is
+/// deliberately **not** included. Both of this gate's populations —
+/// positional byte agreement and literal-anchored rename consistency —
+/// assume the members align position for position, which is exactly what
+/// an anchor-free cluster does not do: `structural ≤ 0.01` means the
+/// shapes differ. Measured against a genuine Type-3 clone whose
+/// identifiers are all renamed and whose bodies differ by one statement
+/// (`csharp-type3`), agreement collapses to 0.19 — the literals — and
+/// rename consistency to 0.0, because the extra statement destroys the
+/// alignment the rename proof needs. Gating row 4 here therefore demotes
+/// the renamed near-miss, the most valuable clone class there is. Row 4
+/// is instead routed on cluster *spread* in
+/// `report_render::route_shape_identical`.
 #[must_use]
 pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
-    signals.structural >= 0.99
-        || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
-        || is_lsh_only_nearmiss(signals)
+    signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
 }
 
 /// Token overlap at or above which the token layer is echoing shape
