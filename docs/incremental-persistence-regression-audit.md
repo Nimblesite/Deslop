@@ -1,115 +1,61 @@
 # Incremental persisted-processing regression audit
 
-Audit date: 2026-08-17
+Audit date: 2026-08-17 (re-audited and resolved the same day)
 
-Scope: the persisted per-fingerprint MinHash work in `docs/plans/incremental-analysis-plan.md`, including blob integrity, warm/cold report equivalence, signature reuse, the workspace opt-out, and the resource regressions introduced by storing full signatures. Cross-run report diffing and issue #364 remain out of scope.
+Scope: the persisted per-fingerprint MinHash work in `docs/plans/incremental-analysis-plan.md` — blob integrity, warm/cold report equivalence, signature reuse, the workspace opt-out, and the resource cost of storing full signatures. Cross-run report diffing is out of scope.
 
 ## Verdict
 
-**The original cache-correctness defects are fixed, but this branch is not merge-verifiable yet.** Findings 1–4, 7, and 8 from the previous audit now have matching implementation and focused unit coverage. The cache binds every blob to the lookup address, rejects malformed or stale data before serving it, and persists architecture-independent fallback signatures.
+**Merge-ready.** Every finding below is closed in code with matching tests, and the two accuracy defects this audit *uncovered* — one false negative and one false positive, both on the anchor-free routing row — are fixed at the root and pinned from both directions. The store binds every blob to the lookup address, refuses malformed, misplaced, or stale data before serving it, bounds every allocation the decode can drive, and deletes nothing it cannot prove is safe to delete.
 
-## Resolution — 2026-08-17, same day
+Nothing here is accepted as a known-bad. Where a bound is a deliberate ceiling rather than an eliminated risk, it is stated as such below.
 
-Every required next step below is closed, with one deliberate red pin left in the tree per the accuracy rules.
+## The original findings
 
-1. **Compile break fixed; all five suites rerun green.** `corpora.rs` imports `cluster_file_set`; the unused `corpora::*` re-export is gone and the seven consuming suites import `corpora::*` explicitly, matching every other `common` submodule. Actual counts: `signature_reuse` 4/4 · `cache_blob_integrity` 4/4 · `incremental_equivalence` 6/6 · `incremental_multilang_golden` 3/3 · `incremental_multilang_matrix` 4/4. Workspace `cargo check --tests` and `cargo clippy --workspace --all-targets` are clean.
-2. **The LSH-only fixture exposed a live false negative — quarantined.** The authored embeddings-off Python pair (`structural=0.0`, `token_jaccard=0.9297`, 43+-node endpoints, survived every LSH-only floor) rendered **zero** duplication: `buckets::classify_signals` never implemented [CLONE-BUCKETS-ROUTING] row 4 (`structural ≤ 0.01 ∧ token_jaccard ≥ 0.90 → NearlyIdentical`); the triple fell to `LooselySimilar`, which the renderer hides, and `report_render::is_csharp_lsh_type3_near_miss` patches the row for **C# members only**. Per the strict accuracy rule the wrong routing is replaced by a quarantine `panic!` and pinned red by `lsh_only_nearmiss_recall.rs`, watched failing first for the real reason (`clusters_total=0`, `clusters_hidden=1`) and then on the quarantine. The fix must implement the spec row for every language, dissolve the C#-only carve-out, and land the full warm/cold LSH-only equivalence matrix on top — recall equivalence across store states cannot be asserted while the recall path is quarantined.
-3. **RSS and disk: fixed, not merely accepted.** The per-render flatten (an owned copy of every signature — ~157 MiB on tokio — plus fingerprints, trees, and the source map) is deleted; the session owns one canonical flat store (`pipeline/session/store.rs`), spliced per change, borrowed by renders. Retention landed as [PIPELINE-INCREMENTAL-RETENTION]: stale tool-version partitions removed after every full pass, provable orphans **kept** under a 2 GiB budget (they are the revert-reuse set the equivalence suite asserts full-hits), orphans-first then oldest-first eviction over it. Pinned by `cache_retention.rs` 3/3 and `fpcache/retention/tests.rs` 6/6. Re-measured (release, pinned tokio): warm 3.31 s / **1,495 MB** (was 1,609 MB), revert full-hits through the retained orphan; full table in the plan's Phase 4 checklist.
-4. **Status surface fixed.** `session_config().incremental` now reports the *effective* mode — the request gated by the live config through `PipelineSession::effective_incremental` — and MCP forwards it unchanged. Pinned by `live_session_status.rs` 3/3, including the toggle-under-opt-out transition and the store never being created.
-5. **Benchmark rerun and recorded** (plan Phase 4); `deslop-core` lib tests 36/36. The one open accuracy item is the deliberate red pin from step 2.
-
-Two material gaps remain:
-
-1. The targeted integration suites do not currently compile. `crates/deslop/tests/common/corpora.rs:104` calls `cluster_file_set` without importing it; `occurrence_files` in that file and the `corpora::*` re-export in `common/mod.rs` are then rejected as unused. As a result, none of `signature_reuse`, `cache_blob_integrity`, `incremental_equivalence`, `incremental_multilang_golden`, or `incremental_multilang_matrix` ran in this audit.
-2. The equivalence corpus still does not force candidate discovery through persisted MinHash signatures. The current incremental fixtures are structurally identical Type-1 pairs, so the structural candidate route can preserve the cluster even if warm signatures stop producing the required LSH collision. The requested embeddings-off, `structural = 0`, LSH-only cold/warm/edit fixture is still absent.
-
-The memory and disk regressions are also still present. They are economics rather than a demonstrated report-correctness defect, but they need an explicit acceptance decision rather than being described as fixed.
-
-## Current status of the previous findings
-
-| Finding | Current status | Evidence |
+| Finding | Status | Evidence |
 |---|---|---|
-| 1. Corrupted signature payloads served as hits | **Fixed in code; unit-pinned** | Blob format v3 carries a BLAKE3 binding digest over the complete payload. `fpcache::tests::a_flipped_signature_byte_fails_the_binding_digest` passed. The E2E self-heal test exists but could not compile in this audit. |
-| 2. Blob not bound to its content address | **Fixed in code; unit-pinned** | The digest is recomputed from the lookup's language, `min_nodes`, source hash, magic, semantic epoch, signature width, and payload before decode. Wrong-address and copied-address unit tests passed. Same-partition swap and cross-language E2E tests exist but could not compile. |
-| 3. Store-off accounting made `signature_reuse` red | **Fixed in source; execution blocked** | `ReuseCounters::assert_store_disabled` now asserts `{hits: 0, misses: 0}`, builds every signature, and deliberately skips store-on conservation. `signature_reuse.rs` now contains four scenarios, not the stale “3/3” recorded in the plan, but the suite did not compile. |
-| 4. Malformed lengths could panic | **Fixed and unit-pinned** | Blob size is checked before `fs::read`; record, kind, and child counts are proven against remaining bytes before allocation; AST depth and trailing bytes are bounded. All focused malformed-blob unit tests passed. |
-| 5. RSS and disk regression | **Partially fixed; still open** | Exact payload capacity removes encoder reallocations, but rendering still clones every per-file signature into a second flat `Vec<Signature>`, alongside cloned fingerprints, trees, sources, and boilerplate ranges. No cache budget, eviction, or orphan GC exists. |
-| 6. LSH-only equivalence coverage | **Partially improved; still open** | Cache-integrity assertions and a six-language cold/warm golden now pin exact spans, signals, ranking, and metrics. Those corpora use Type-1 clones and do not prove that persisted signatures preserve LSH-only candidate recall. |
-| 7. Semantic invalidation under `0.0.0-dev` | **Fixed and unit-pinned** | `SEMANTIC_EPOCH`, `MAGIC`, and `SIGNATURE_LEN` are bound into the digest; superseded magic and trailing data are rejected. Revision pins passed. |
-| 8. Architecture-dependent fallback signatures | **Fixed and unit-pinned** | Byte offsets are widened to `u64` before hashing. `fallback_signature_slots_are_architecture_independent` passed against fixed slots. |
-| Workspace opt-out | **Implemented; execution blocked** | `[analysis] incremental = false` gates the effective pipeline setting and store creation. Two config opt-out scenarios exist in `signature_reuse.rs`, including an already-warm store, but could not run because of the shared test-helper compile failure. |
+| 1. Corrupted signature payloads served as hits | **Fixed** | Blob format v3 carries a BLAKE3 binding digest over the whole payload, verified *before* any payload byte is decoded. `fpcache::tests::a_flipped_signature_byte_fails_the_binding_digest`; E2E self-heal in `cache_blob_integrity.rs` 4/4. |
+| 2. Blob not bound to its content address | **Fixed** | The digest is recomputed from the lookup's own address — language, **tool version**, `min_nodes`, source hash, magic, semantic epoch, signature width — before decode. `a_blob_is_never_served_under_a_different_address` covers all four axes including a cross-version relocation; `the_binding_digest_is_stable_per_address_and_distinct_across_addresses` proves the digest is a function of each field, not merely stable. |
+| 3. Store-off accounting made `signature_reuse` red | **Fixed** | `ReuseCounters::assert_store_disabled` asserts `{hits: 0, misses: 0}`, every signature built, and skips store-on conservation. `signature_reuse.rs` **4/4** (the plan's earlier "3/3" was stale). |
+| 4. Malformed lengths could panic | **Fixed, and hardened past the original ask** | Counts are proven against remaining bytes before any allocation; `MAX_AST_DEPTH` bounds one path and `MAX_DECODED_NODES` (4 M) bounds the whole tree, claimed per node *including the child slots that follow it* so an absurd child count is refused before its `Vec` is reserved; the read buffer is reserved fallibly. The file read is bounded on the read itself — one handle supplies both the length and the bytes, taken one byte past the 256 MiB ceiling so a file another binary grows mid-read is observable and refused, not silently truncated into a valid-looking prefix. |
+| 5. RSS and disk regression | **Fixed** | The per-render flatten — an owned copy of every signature (~157 MiB on tokio), plus fingerprints, trees, and the source map, on *every* render — is deleted. The session owns one canonical flat store (`pipeline/session/store.rs`), spliced per change and borrowed by renders. Warm peak RSS 1,609 → **1,495 MB**. Disk is bounded by [PIPELINE-INCREMENTAL-RETENTION] (below). |
+| 6. LSH-only equivalence coverage | **Fixed** | `lsh_only_nearmiss_recall.rs` now carries the route-specific matrix: an embeddings-off Python pair with `structural = 0.00` that can only enter through LSH, asserted across cold, fully warm, a mixed pass, and a revert — exact bucket, signal triple, files, spread, ranking, and re-derived `duplication_percent` on every state, reports byte-equal modulo `cache_stats`, and the mixed pass pinned to an **exact** rebuild/reuse split derived from a one-file measurement rather than a hardcoded number. |
+| 7. Semantic invalidation under `0.0.0-dev` | **Fixed** | `SEMANTIC_EPOCH`, `MAGIC`, and `SIGNATURE_LEN` are bound into the digest; superseded magics and trailing data are rejected. |
+| 8. Architecture-dependent fallback signatures | **Fixed** | Byte offsets widened to `u64` before hashing; pinned against fixed slots. |
+| Workspace opt-out | **Fixed** | `[analysis] incremental = false` gates the effective setting and store creation. `session_config().incremental` now reports the *effective* mode via `PipelineSession::effective_incremental`, MCP forwards it unchanged, and `live_session_status.rs` 3/3 pins the toggle-under-opt-out transition and the store never being created. |
 
-## Why the fixed blob path is now trustworthy
+## Accuracy defects this audit uncovered
 
-`crates/deslop-core/src/fpcache/blob.rs` now makes trust a prerequisite to decode:
+The LSH-only fixture finding 6 asked for did its job twice: it exposed a false negative, and fixing that exposed a false positive. Both are on [CLONE-BUCKETS-ROUTING] row 4, and both are now pinned from opposite sides so neither can be traded for the other.
 
-- `MAGIC = 0xC0DE_D180` identifies the digest-bearing layout.
-- `SEMANTIC_EPOCH` invalidates meaning changes independently of the permanently reused development package version.
-- `binding_digest` covers `(magic, semantic epoch, signature width, min_nodes, language id, source hash, payload)`.
-- `FingerprintCache::get` derives the source hash from the bytes supplied by the lookup, checks the file-size ceiling, reads the blob, and passes that lookup address into `decode`.
-- `decode` verifies the stored digest before decoding any payload field.
-- Decode-side counts are checked against the bytes remaining before `Vec::with_capacity` or `vec![...]`; the recursive tree decoder also enforces `MAX_AST_DEPTH`.
-- The decoded payload must consume the blob exactly, and the rehydrated fingerprints are still re-derived from the cached tree before the hit is served.
+**False negative — row 4 was implemented for one language (gh #390).** An authored Python pair (`structural = 0.00`, `token_jaccard = 0.9297`, endpoints past every LSH-only survival floor) rendered **zero** duplication: `classify_signals` had no row-4 arm, so the triple fell to `LooselySimilar`, which the renderer hides, while `report_render::is_csharp_lsh_type3_near_miss` patched the row for C# members only. The carve-out is dissolved into the router — row 4 now routes in every language, as the spec always said.
 
-That closes both demonstrated report-drift paths from the original audit: a changed signature payload cannot alter `token_jaccard` while remaining a hit, and a valid blob moved under another address cannot exchange file spans or parser partitions.
+**False positive — row 4 reached an act-now bucket on no evidence.** Row 4 admits on token overlap *alone*, so it must pass through [FUSION-CONTENT-GATE] like every other shape-saturating route; it did not, because the gate's trigger only knew the higher `SATURATING_TOKEN_FLOOR` (0.95) and row 4 admits at 0.90. Six distinct Flutter widgets measure `structural = 0.00, token_jaccard = 0.93` over whole-file spans whose `build` bodies share nothing — the framework-mandated declaration is most of each file — and were reported at `fused = 0.93` as "nearly identical, review the locations" (#331). Two changes close it:
 
-## What the implementation now saves
+1. `has_saturating_shape_evidence` now fires on the anchor-free route at its own floor, so row 4 faces the content gate.
+2. An anchor-free cluster whose *proven* content support is below the floor routes to `LooselySimilar` — never `StructuralOnly`, which would claim a shape match that `structural = 0.00` says does not exist. "Proven" is the load-bearing word: the gate's "never demote on a missing measurement" default is safe only where another signal proves duplication, and an exact Merkle match does. Row 4 has no such signal, so an *unmeasured* cluster there is unproven, not entitled to the benefit of the doubt. Without this, the #108 JSON-schema pair (`structural = 0.00, token_jaccard = 0.96`, no content measurement) is routed act-now on no evidence whatsoever.
 
-The implementation still solves the narrow Phase 2 bottleneck it targeted:
+The two directions are pinned against each other: `lsh_only_nearmiss_recall.rs` asserts the genuine reorder clone keeps `fused ≥ 0.85` — so a precision fix that widens the gate over real duplicates fails — and `issue_331_336_shape_only_saturation.rs` asserts the scaffold family does not reach that line.
 
-- A miss parses, fingerprints, builds signatures once in `build_cached_file`, and persists the bundle.
-- A validated hit attaches the stored signatures and increments `signatures_reused` without calling `signatures_for_file`.
-- Rendering consumes the attached signatures and builds no per-language signatures.
+## Retention, and what a bound means here
 
-It does **not** make total run cost proportional to the changed file. Band collision enumeration, candidate scoring, clustering, ranking, content evidence, metrics, and rendering still process a corpus-wide flattened snapshot. The renderer also creates a second owned copy of the signature set on every pass.
+[PIPELINE-INCREMENTAL-RETENTION] runs after every full store-on pass, the one moment the addressable blob set is exactly known. Under budget it deletes **nothing**: an orphan is the content-addressed set a revert or branch switch full-hits (the equivalence suite asserts exactly that), and a blob under another tool version may belong to a second binary sharing the workspace — an installed VSIX's LSP beside a freshly-built CLI — which two mutually-sweeping binaries would deadlock into permanent rebuild churn. Over the 2 GiB budget, eviction is by class (other-version, then orphan, then live), then oldest-first, path as tie-break. Class outranks age in both directions.
 
-The latest numbers recorded in the plan are useful historical evidence, but they were **not re-measured in this audit**:
+Evicting any blob is correctness-free: the next pass that addresses it misses, rebuilds from source, and self-heals. That is why the budget is a hard bound rather than an accuracy surface.
 
-| Recorded run | Wall time | Peak RSS | Store accounting |
-|---|---:|---:|---:|
-| `--no-incremental` | 5.88 s | 1,649 MB | 0 hit / 0 miss |
-| cold store-on | 6.22 s | 1,665 MB | 0 hit / 758 miss |
-| fully warm | 2.91 s | 1,609 MB | 758 hit / 0 miss |
-| one-file edit | 2.92 s | not separately recorded | 757 hit / 1 miss |
-| revert | 2.94 s | not separately recorded | 758 hit / 0 miss |
+Two ceilings are deliberate ceilings, not eliminated risks, and both degrade to a plain miss:
 
-The plan records a 185.8 MiB store for 759 blobs, versus the pre-signature 29 MB baseline, and a warm peak about 241 MB above the pre-signature 1,368 MB baseline. One edit/revert cycle leaves one orphaned content-addressed blob. Nothing in the current implementation bounds or collects that growth.
+- **256 MiB per blob** and **4 M decoded nodes** are far past anything a real source file produces. A file that somehow exceeded either would never cache — it would re-parse every pass. That is a cost, never a wrong answer.
+- Both bounds sit *behind* the digest, so ordinary corruption never reaches them: it fails verification first. They exist for a payload whose digest checks out — an encoder bug, or a store an attacker can already write to, in which case they can equally edit the source the tool reads.
 
-## Remaining correctness-assurance gap: the LSH-only route
+## Verification
 
-The new tests are much stronger than the original suite: damaged stores must render exact truth, and the mixed-language golden pins cluster ids, spans, all signals, ranking, and metric arithmetic across cold and warm passes. That is valuable coverage, but it is not the route-specific proof finding 6 requested.
+- `make ci` — full workspace gate (fmt, clippy `-D warnings`, tests with coverage thresholds, build).
+- Accuracy suites re-run after every fix in this round: `lsh_only_nearmiss_recall` 2/2 · `issue_331_336_shape_only_saturation` 3/3 · `issue_98_99_108_120_122_thresholds` 1/1 · `cache_retention` 3/3 · `fpcache` unit group 19/19 (13 blob/cache + 6 retention).
+- Incremental suites: `signature_reuse` 4/4 · `cache_blob_integrity` 4/4 · `incremental_equivalence` 6/6 · `incremental_multilang_golden` 3/3 · `incremental_multilang_matrix` 4/4 · `live_session_status` 3/3.
+- Real-repo lifecycle proof on `deslop-core/src` (135 files, release): cold 1.03 s (0 hit / 135 miss, 29,120 signatures built) → warm 0.43 s (135 hit / 0 miss, **0 built / 29,120 reused**) → edit one file 0.43 s (134 hit / 1 miss, only 165 signatures rebuilt) → revert full-hits. Cold, warm, and revert are byte-equal to the `--no-incremental` report modulo `cache_stats`; the store survives process death (136 blobs / 34 MiB).
+- Pinned tokio benchmark (release, default `min-nodes`, `--embeddings off`): `--no-incremental` 6.45 s / 1,532 MB · cold 6.48 s / 1,550 MB · **warm 3.31 s / 1,495 MB** · one-file edit 3.39 s · revert 3.42 s · store 185.8 MiB / 759 blobs.
 
-For every current incremental fixture, an exact structural hash can add the candidate pair independently of LSH. A corrupted or useless warm signature may therefore move `token_jaccard` and still be caught by the exact signal assertions, but a signature defect that only suppresses an LSH collision is not guaranteed to remove the cluster because structural discovery already supplied the pair.
+## Follow-ups (tracked in the plan, not blockers)
 
-The missing test must use an embeddings-off pair that:
-
-- has `structural = 0` or otherwise cannot enter through the structural candidate path;
-- exceeds the LSH node floor and clears the token-Jaccard-only threshold;
-- is asserted across cold store fill, fully warm reuse, one-file edit, and revert;
-- pins the exact cluster id, files, byte/line spans, bucket, signals, ranking, and metrics;
-- proves mixed hit/miss telemetry builds signatures only for the changed file; and
-- includes the Python and boilerplate-aware token paths if those are claimed by the equivalence contract.
-
-Until that exists, “warm signatures preserve candidate recall” remains an inference from implementation, not an enforced regression contract.
-
-## Status-surface mismatch still present
-
-Operational behaviour honors the config opt-out, but the live session status does not expose the effective setting. `PipelineSession::effective_incremental` combines the requested session mode with the live config. `AnalysisSession::session_config`, however, returns `self.incremental`, and MCP forwards that field unchanged.
-
-Consequently, a session requested with incremental processing enabled can run uncached under `[analysis] incremental = false` while `session-config.incremental` still reports `true`. `cache_stats` exposes the effect after a pass, but the configuration surface itself is ambiguous. The clean fix is to expose requested and effective values separately, or make the existing field explicitly effective and pin the live config-reload transition.
-
-## Verification performed in this audit
-
-- `cargo test -p deslop-core --lib`: **26 passed, 0 failed**.
-- The 26 passing tests include all 12 `fpcache` tests, the architecture-independent fallback-signature vector, and fingerprint-tamper invalidation in the corpus layer.
-- Attempted: `cargo test -p deslop --test signature_reuse --test cache_blob_integrity --test incremental_equivalence --test incremental_multilang_golden --test incremental_multilang_matrix`.
-- Result: **compile failure before test execution** at `crates/deslop/tests/common/corpora.rs:104`, plus denied unused imports at `corpora.rs:13` and `common/mod.rs:60`.
-- The pinned Tokio release benchmark was not rerun because the correctness integration gate did not compile. The table above is explicitly the last measurement recorded in the plan.
-
-## Required next steps
-
-1. Repair the shared integration-test helper so the targeted suites compile, then rerun all five suites and record their actual counts.
-2. Add the LSH-only incremental equivalence fixture and watch it prove the cold/warm/edit/revert route.
-3. Decide and document whether the measured RSS and disk costs are accepted for this phase. If not, remove the second owned signature copy and add a cache budget plus orphan eviction/GC.
-4. Make the status surface distinguish requested incremental mode from the config-gated effective mode.
-5. Only then replace this audit's verdict with a merge-ready statement and, if performance claims matter to that decision, rerun the pinned release benchmark.
+Everything downstream of signatures — band enumeration, pairing, clustering, ranking, metrics, rendering — still recomputes corpus-wide on every pass. Making that cost track the size of the change is the remaining work of [PIPELINE-INCREMENTAL-ANALYSIS] (gh #383); the re-measured attribution in the plan's Phase 3 names banding (~44%) as the next target.

@@ -32,8 +32,14 @@ use std::fs;
 use std::path::Path;
 
 use crate::common::{
-    approx, cluster_bucket, cluster_size, expect_cluster_spanning, field, metric_field, run_report,
-    signal, verdict::loc_as_f64, Result,
+    approx, cluster_bucket, cluster_size, expect_cluster_spanning, field,
+    incremental::{
+        assert_pass, assert_reports_equal, assert_warm_pass, cold_then_warm, run_store_on,
+        ColdThenWarm,
+    },
+    metric_field, run_report, signal,
+    verdict::loc_as_f64,
+    Result,
 };
 
 /// Subtree floor at which only the two function roots (and whole-body
@@ -105,27 +111,123 @@ fn a_python_lsh_only_type3_pair_is_reported_as_nearly_identical() -> Result<()> 
     seed(&scan_root)?;
     let report = run_report(&scan_root, MIN_NODES)?;
 
+    assert_pair_verdict(&report, "store-off pass")
+}
+
+/// The whole verdict for one pass: both files analysed, exactly one
+/// cluster spanning them, the spec's bucket, the exact signal triple, and
+/// every duplication figure off zero and self-consistent. Applied to
+/// *every* state of the persistence matrix below — a warm pass that
+/// merely renders "some cluster" is not the recall this row owes.
+fn assert_pair_verdict(report: &serde_json::Value, label: &str) -> Result<()> {
     assert_eq!(
-        field(&report, "files_analysed").as_u64(),
+        field(report, "files_analysed").as_u64(),
         Some(2),
-        "both seeded files must be analysed: {report}"
+        "{label}: both seeded files must be analysed: {report}"
     );
-    let cluster = expect_cluster_spanning(&report, &["ledger_left.py", "ledger_right.py"])?;
+    let cluster = expect_cluster_spanning(report, &["ledger_left.py", "ledger_right.py"])?;
     assert_eq!(
         cluster_bucket(cluster),
         "nearly_identical",
-        "spec row `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` routes to \
-         NearlyIdentical with no language condition (taxonomy.md \
+        "{label}: spec row `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` routes \
+         to NearlyIdentical with no language condition (taxonomy.md \
          [CLONE-BUCKETS-ROUTING]); the C#-only carve-out must not decide \
          recall: {cluster:#}"
     );
     assert_eq!(
         cluster_size(cluster),
         2,
-        "exactly the two reordered functions form the pair: {cluster:#}"
+        "{label}: exactly the two reordered functions form the pair: {cluster:#}"
     );
     assert_signal_triple(cluster);
-    assert_recall_metrics(&report)
+    assert_recall_metrics(report)
+}
+
+// [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] The LSH-only route runs on
+// *reused* signatures on a warm pass, and a signature is the only
+// evidence this pair has — there is no structural anchor to fall back on.
+// So the whole persistence matrix owes this verdict identically: cold,
+// fully warm, a mixed pass where one file's signatures are rebuilt and
+// the other's are served from the store, and a revert that full-hits.
+#[test]
+fn the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed(&scan_root)?;
+    let right_fingerprints = right_file_fingerprint_count(tmp.path())?;
+
+    let ColdThenWarm {
+        cold,
+        cold_events,
+        warm,
+        warm_events,
+    } = cold_then_warm(&scan_root, &tmp.path().join("matrix"), MIN_NODES, 2)?;
+    assert_pair_verdict(&cold, "cold pass")?;
+    assert_pair_verdict(&warm, "fully warm pass")?;
+    assert!(
+        cold_events.fingerprints > right_fingerprints,
+        "the pair's fingerprint total must exceed the right file's alone, or \
+         the split below asserts nothing: total {} right {right_fingerprints}",
+        cold_events.fingerprints
+    );
+
+    // The mixed pass: `import os` → `import io` in the right file only.
+    // Identifiers collapse under normalisation, so every fingerprint,
+    // span, and token k-gram is untouched while the file's content hash —
+    // the store key — changes. One file must miss and rebuild, the other
+    // must be served, and the report must not move a byte.
+    swap_right_import(&scan_root, "import os", "import io")?;
+    let (edited, edit_events) = run_store_on(&scan_root, &tmp.path().join("edit"), MIN_NODES, &[])?;
+    assert_pass(&edited, &edit_events, 1, 1, "mixed pass");
+    edit_events.assert_signatures(
+        right_fingerprints,
+        warm_events.fingerprints.saturating_sub(right_fingerprints),
+        "mixed pass",
+    );
+    assert_pair_verdict(&edited, "mixed pass")?;
+    assert_reports_equal(&edited, &cold, "mixed pass vs cold pass");
+
+    swap_right_import(&scan_root, "import io", "import os")?;
+    let (reverted, revert_events) =
+        run_store_on(&scan_root, &tmp.path().join("revert"), MIN_NODES, &[])?;
+    assert_warm_pass(&reverted, &revert_events, 2, "revert pass");
+    assert_pair_verdict(&reverted, "revert pass")?;
+    assert_reports_equal(&reverted, &cold, "revert pass vs cold pass");
+    Ok(())
+}
+
+/// Fingerprint count of `ledger_right.py` alone, measured by a cold pass
+/// over a one-file corpus. Derived rather than hardcoded so the mixed
+/// pass can assert the *exact* rebuild/reuse split without a magic
+/// number that drifts when the fixture or `min_nodes` changes.
+fn right_file_fingerprint_count(tmp: &Path) -> Result<u64> {
+    let solo = tmp.join("solo");
+    fs::create_dir_all(&solo)?;
+    fs::write(solo.join("ledger_right.py"), RIGHT_SOURCE)?;
+    let (_report, events) = run_store_on(&solo, &tmp.join("solo-out"), MIN_NODES, &[])?;
+    Ok(events.fingerprints)
+}
+
+/// Rewrites the right file's unused import, `from` → `to`. Both are the
+/// same length and the identifier collapses under normalisation, so the
+/// file's content hash changes while every reported figure — node counts,
+/// byte offsets, signals, LOC — stays exactly what the cold pass
+/// measured.
+fn swap_right_import(scan_root: &Path, from: &str, to: &str) -> Result<()> {
+    assert_eq!(
+        from.len(),
+        to.len(),
+        "the import swap must preserve byte offsets to keep the report pinned"
+    );
+    let path = scan_root.join("ledger_right.py");
+    let original = fs::read_to_string(&path)?;
+    let edited = original.replacen(from, to, 1);
+    assert_ne!(
+        original, edited,
+        "the import swap must actually change the file — `{from}` not found"
+    );
+    fs::write(&path, edited)?;
+    Ok(())
 }
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]) this pair must

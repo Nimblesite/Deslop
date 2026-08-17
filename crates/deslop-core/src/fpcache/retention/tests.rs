@@ -189,7 +189,10 @@ fn budget_pressure_evicts_by_class_before_age_across_every_class() -> io::Result
 
     let second = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 200, 100);
 
-    assert_eq!(second, 1, "shedding one more blob reaches the 100-byte budget");
+    assert_eq!(
+        second, 1,
+        "shedding one more blob reaches the 100-byte budget"
+    );
     assert!(
         !orphan_newer.exists(),
         "the orphan must be evicted before any live blob"

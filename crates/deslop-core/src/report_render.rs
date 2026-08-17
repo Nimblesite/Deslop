@@ -17,8 +17,8 @@ use crate::{
     ast::ByteRange,
     buckets::{
         bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
-        is_structural_only_signals, lacks_content_support, ClusterKind, CONTENT_PROMOTE_FLOOR,
-        LITERAL_TABLE_MIN_FRACTION,
+        is_lsh_only_nearmiss, is_structural_only_signals, lacks_content_support, ClusterKind,
+        CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
@@ -348,6 +348,21 @@ fn route_shape_identical(
     ) || !has_saturating_shape_evidence(signals)
     {
         return kind;
+    }
+    // [CLONE-BUCKETS-ROUTING] row 4 needs *content* proof, because it has
+    // nothing else: `structural ≤ 0.01` means no shape matched at all, so
+    // a normalised-token estimate is the cluster's only evidence. Weak or
+    // absent agreement leaves a hint, not a verdict —
+    // [`ClusterKind::LooselySimilar`], which the renderer hides — and
+    // never [`ClusterKind::StructuralOnly`], which would claim a shape
+    // match that does not exist. `proven_support` (not `support`) is
+    // deliberate: the anchored routes may take an unmeasured cluster on
+    // trust because their Merkle equality is itself proof, while here an
+    // unmeasured cluster is simply unproven. Without this rule the #108
+    // JSON-schema pair (`structural=0.00, token_jaccard=0.96`, no content
+    // measurement) is routed act-now on no evidence whatsoever.
+    if is_lsh_only_nearmiss(signals) && content.proven_support() < CONTENT_SUPPORT_FLOOR {
+        return ClusterKind::LooselySimilar;
     }
     let shape_only = is_structural_only_signals(signals) || lacks_content_support(signals, content);
     if !shape_only {

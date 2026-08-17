@@ -132,8 +132,26 @@ pub(super) fn read_bounded(path: &Path) -> Option<Vec<u8>> {
         );
         return None;
     }
-    let mut bytes = Vec::with_capacity(usize::try_from(len).ok()?);
-    let _read = file.take(MAX_BLOB_BYTES).read_to_end(&mut bytes).ok()?;
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(usize::try_from(len).ok()?).ok()?;
+    // `MAX_BLOB_BYTES + 1`, not `MAX_BLOB_BYTES`: reading exactly the
+    // ceiling cannot distinguish "a blob that fits" from "a truncated
+    // view of one that no longer does", which would hand `decode` a
+    // prefix whose trailing bytes were silently dropped. Reading one byte
+    // past the ceiling makes an over-long file observable, and it is
+    // refused here rather than decoded.
+    let _read = file
+        .take(MAX_BLOB_BYTES.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_BLOB_BYTES {
+        tracing::warn!(
+            path = %path.display(),
+            len = bytes.len(),
+            "fingerprint cache blob grew past the size bound mid-read — treating as miss",
+        );
+        return None;
+    }
     Some(bytes)
 }
 
@@ -253,7 +271,7 @@ pub(super) fn decode(
 /// Decodes the digest-verified payload section, requiring it to consume
 /// the blob exactly.
 fn decode_payload(cursor: &mut Cursor<&[u8]>, file_id: FileId) -> io::Result<CachedFile> {
-    let tree = decode_tree(&mut *cursor, file_id, 1)?;
+    let tree = decode_tree(&mut *cursor, file_id, 1, &mut NodeBudget::new())?;
     let (fingerprints, signatures) = decode_records(cursor, file_id)?;
     ensure_fully_consumed(cursor)?;
     Ok(CachedFile {
@@ -358,14 +376,24 @@ fn decode_tree(
     cursor: &mut Cursor<&[u8]>,
     file_id: FileId,
     depth: usize,
+    budget: &mut NodeBudget,
 ) -> io::Result<NormalizedNode> {
     if depth > MAX_AST_DEPTH {
         return Err(invalid_data("cached AST nests deeper than the depth limit"));
     }
     let header = decode_node_header(cursor)?;
-    let mut children = Vec::with_capacity(header.child_count);
+    budget.claim(header.child_count)?;
+    let mut children = Vec::new();
+    children
+        .try_reserve_exact(header.child_count)
+        .map_err(|_| invalid_data("cached AST child list exceeds available memory"))?;
     for _ in 0..header.child_count {
-        children.push(decode_tree(&mut *cursor, file_id, depth.saturating_add(1))?);
+        children.push(decode_tree(
+            &mut *cursor,
+            file_id,
+            depth.saturating_add(1),
+            budget,
+        )?);
     }
     Ok(NormalizedNode {
         kind: header.kind,
@@ -376,6 +404,53 @@ fn decode_tree(
         },
         file_id,
     })
+}
+
+/// Ceiling on the nodes one blob may decode into, whatever its declared
+/// counts say. The byte bound alone is not enough: every encoded node
+/// costs 24 bytes minimum on disk but a resident [`NormalizedNode`] —
+/// interned kind pointer, two offsets, a [`FileId`], and a child `Vec` —
+/// is several times that, so a digest-valid blob at the byte ceiling
+/// could still multiply into an allocation many times its file size.
+/// Four million nodes is orders of magnitude past any real source file
+/// (the whole `deslop-core` tree decodes ~29k fingerprints' worth) and
+/// exceeding it costs only a miss: the file re-parses from source and the
+/// blob is rewritten ([PIPELINE-INCREMENTAL-INVALIDATION]).
+const MAX_DECODED_NODES: usize = 4_000_000;
+
+/// The node allowance for one blob's decode, spent as the tree is walked.
+/// Global to the decode, so it bounds the whole tree rather than any one
+/// branch — the depth guard ([`MAX_AST_DEPTH`]) bounds a single path, and
+/// a wide-but-shallow tree evades it entirely.
+struct NodeBudget {
+    /// Nodes still permitted before the decode is refused.
+    remaining: usize,
+}
+
+impl NodeBudget {
+    /// A fresh allowance for one blob.
+    const fn new() -> Self {
+        Self {
+            remaining: MAX_DECODED_NODES,
+        }
+    }
+
+    /// Claims one node plus the `children` slots that must follow it, so
+    /// an absurd child count is refused *before* its `Vec` is reserved
+    /// rather than after the allocation it would drive.
+    fn claim(&mut self, children: usize) -> io::Result<()> {
+        let after_self = self
+            .remaining
+            .checked_sub(1)
+            .ok_or_else(|| invalid_data("cached AST exceeds the decoded-node budget"))?;
+        if children > after_self {
+            return Err(invalid_data(
+                "cached AST child count exceeds the decoded-node budget",
+            ));
+        }
+        self.remaining = after_self;
+        Ok(())
+    }
 }
 
 /// One node's decoded header: interned kind, byte range, and child count,

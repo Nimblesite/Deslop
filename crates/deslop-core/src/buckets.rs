@@ -415,10 +415,10 @@ pub fn is_lsh_only_nearmiss(signals: ReportSignals) -> bool {
 pub const STRUCTURAL_ABSENT_CEILING: f64 = 0.01;
 
 /// Token overlap an anchor-free cluster must clear to count as a
-/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). Deliberately equal
-/// to `pair::LSH_ONLY_MIN_JACCARD`: the pair layer admits an LSH-only
-/// candidate at exactly this floor, so a lower value here would hide
-/// clusters the pipeline admitted, and a higher one would reject them
-/// after admission. The two constants are one operating point stated in
-/// the two layers that enforce it.
-pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = 0.90;
+/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). **Is**
+/// [`crate::pair::LSH_ONLY_MIN_JACCARD`], not a copy of its value: the
+/// pair layer admits an LSH-only candidate at exactly this floor, so a
+/// lower value here would hide clusters the pipeline admitted and a
+/// higher one would reject them after admission. Naming it separately
+/// keeps the routing row greppable while leaving one number to change.
+pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = crate::pair::LSH_ONLY_MIN_JACCARD;
