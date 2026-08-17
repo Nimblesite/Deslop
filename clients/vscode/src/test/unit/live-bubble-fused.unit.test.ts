@@ -296,6 +296,44 @@ suite("LiveBubble fused confidence", () => {
     );
   });
 
+  test("the full block is reserved for proof, so 0.96 and 1.00 stay apart", () => {
+    // The band the 0.90 fixture above never reached. `bar()` rounded
+    // `value * 7`, which handed `█` to everything from ~0.929 up — so the
+    // third bar, added precisely to separate proof from near-proof, drew the
+    // same glyph for both. These are real rendered values: a scan of two F#
+    // modules one identifier apart renders `nearly_identical` at fused 0.956
+    // beside `identical` at 1.00.
+    const proven = bubbleCluster("p", 10, 1.0, { bucket: "identical" });
+    const nearly = bubbleCluster("n", 10, 0.956, { bucket: "nearly_identical" });
+
+    assert.notEqual(
+      signalStrip(proven),
+      signalStrip(nearly),
+      `fused 1.00 and 0.956 must not render the same strip; both drew ` +
+        `"${signalStrip(nearly)}" before the top glyph was reserved`,
+    );
+    assert.ok(
+      signalStrip(proven).endsWith("█"),
+      "an exact 1.0 earns the full block",
+    );
+    assert.equal(
+      signalStrip(nearly).endsWith("█"),
+      false,
+      "and anything short of proof must not",
+    );
+
+    // The reservation is on the value, not on the bucket: every band below
+    // 1.0 has to stay off the top glyph, however close it sits.
+    for (const value of [0.929, 0.95, 0.99, 0.999]) {
+      const cluster = bubbleCluster("x", 10, value, { bucket: "nearly_identical" });
+      assert.equal(
+        signalStrip(cluster).endsWith("█"),
+        false,
+        `fused ${value} is not proof and must not draw the proof glyph`,
+      );
+    }
+  });
+
   test("a sub-threshold hint bucket stays off the live surface at the exact cutoff", async () => {
     // Below the act-now bands the fused cutoff is the right gate: a weak
     // LSH hint is worth showing only once it clears FUSED_THRESHOLD.

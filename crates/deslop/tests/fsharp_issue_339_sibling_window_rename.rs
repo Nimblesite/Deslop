@@ -1,139 +1,209 @@
-//! End-to-end regression coverage for #339, sibling-window arm
+//! End-to-end coverage for #339, sibling-window arm
 //! ([FUSION-SIGNALS-THREE-LAYER], [DECISION-TYPE3-TWO-PASS]).
 //!
-//! `fsharp_issue_339_token_fallback_rename.rs` pins the exact-node arm:
-//! a whole-module clone resolves through `locate` and keeps its token
-//! signal. This file pins the arm that `locate` cannot serve.
+//! **What this file can and cannot prove.** The token-evidence question —
+//! does a sibling-window fingerprint score `token_jaccard` from its normalised
+//! kind stream, or from the issue-86 offset-seeded fallback? — is *not*
+//! answerable from a rendered report. `buckets::content_gated_signals`
+//! overwrites `token_jaccard` to `1.0` for every shape-identical cluster it
+//! routes `NearlyIdentical`:
 //!
-//! A sibling-window fingerprint spans `first.byte_range.start ..
-//! last.byte_range.end` across several consecutive children, so no
-//! single subtree carries that range. `token_stream_for_fingerprint`
-//! resolves ranges through the exact-node path only, returns `None`, and
-//! the signature falls back to the issue-86 fingerprint-scoped hash of
-//! `(hash, byte_range)`. Two copies of one window share a structural
-//! hash but not their offsets, so `token_jaccard` measures whether the
-//! byte ranges happen to coincide — byte-offset luck, not token
-//! evidence.
+//! ```text
+//! let token_jaccard = if kind == ClusterKind::NearlyIdentical && signals.structural >= 0.99 {
+//!     1.0
+//! } else { signals.token_jaccard };
+//! ```
 //!
-//! F# and PHP reach this every time: `is_import_boilerplate_carrier`
-//! has no arm for either, so `exact_range_contains_boilerplate` is
-//! always false and the language-aware path — the one that *can*
-//! resolve a sibling window — is never selected.
+//! So a rendered `1.00` is supplied by the renderer, not measured, and an E2E
+//! assertion on it passes whether or not the signature layer works. That
+//! question is pinned where it is answerable, at the signature layer:
+//! `deslop-core::pipeline::signatures::tests::issue_339_sibling_window_signature_is_offset_invariant`.
+//! **That test is currently RED — #339 is live.**
 //!
-//! Correct behaviour pinned here: the normalised kind stream is
-//! rename-invariant by construction, so a module rename that shifts
-//! every following offset must leave `token_jaccard` at 1.0 and leave
-//! the pair in the act-now bucket.
+//! What this file pins instead is the part only an end-to-end run can show:
+//! that the duplicated region surfaces as a *sibling window* at all — a range
+//! spanning several consecutive children that no single subtree covers — and
+//! that it reaches an act-now bucket rather than being demoted to the
+//! shape-only tier by a fallback-signature artifact.
+//!
+//! F# and PHP reach the sibling-window path every time:
+//! `is_import_boilerplate_carrier` has no arm for either, so
+//! `exact_range_contains_boilerplate` is always false and the language-aware
+//! path — the one that *can* resolve a sibling window — is never selected.
 
+use anyhow::anyhow;
 use serde_json::Value;
 
 mod common;
 use crate::common::*;
 
-/// Two consecutive top-level bindings that are duplicated verbatim, plus
-/// a third that differs per file. The duplicated region is therefore a
-/// two-child window inside a three-child module — a range no single
-/// subtree covers, which is what forces the sibling-window path.
-fn module_with_shared_window(module_name: &str, tail_seed: i32) -> String {
-    format!(
-        "module {module_name}\n\n\
-         let accumulate (values: int list) (floor: int) =\n\
-         \x20   let mutable total = 0\n\
-         \x20   for value in values do\n\
-         \x20       if value > floor then\n\
-         \x20           total <- total + value * 2\n\
-         \x20       else\n\
-         \x20           total <- total - 1\n\
-         \x20   total\n\n\
-         let combine (values: int list) (ceiling: int) =\n\
-         \x20   let mutable carried = 1\n\
-         \x20   for value in values do\n\
-         \x20       if value < ceiling then\n\
-         \x20           carried <- carried * value + 7\n\
-         \x20       else\n\
-         \x20           carried <- carried - 3\n\
-         \x20   carried\n\n\
-         let tail (input: int) =\n\
-         \x20   input + {tail_seed}\n"
-    )
+/// The duplicated region: two consecutive top-level bindings, verbatim in
+/// both files.
+const SHARED_WINDOW: &str = "\
+let accumulate (values: int list) (floor: int) =
+    let mutable total = 0
+    for value in values do
+        if value > floor then
+            total <- total + value * 2
+        else
+            total <- total - 1
+    total
+
+let combine (values: int list) (ceiling: int) =
+    let mutable carried = 1
+    for value in values do
+        if value < ceiling then
+            carried <- carried * value + 7
+        else
+            carried <- carried - 3
+    carried
+";
+
+/// The tail of `window_a.fs`.
+///
+/// Structurally different from [`TAIL_B`] — a different *shape*, not a
+/// different literal. The first version of this fixture varied only a numeric
+/// literal, and normalisation collapses literals, so both modules normalised
+/// to one whole-file clone: the reported cluster spanned bytes `0..524` of a
+/// 525-byte file and the sibling-window path was never reached at all. The
+/// tails must diverge in shape or there is no window, only a file.
+const TAIL_A: &str = "
+let tail (input: int) =
+    input + 11
+";
+
+/// The tail of `window_b.fs` — a match expression plus an extra binding.
+const TAIL_B: &str = "
+let tail (input: int) =
+    match input with
+    | 0 -> \"zero\"
+    | 1 -> \"one\"
+    | other -> string other
+
+let extra (a: int) (b: int) (c: int) =
+    let mutable acc = a
+    while acc < b do
+        acc <- acc + c
+    acc
+";
+
+/// A module whose middle is [`SHARED_WINDOW`] and whose tail is `tail`.
+fn module_with_shared_window(module_name: &str, tail: &str) -> String {
+    format!("module {module_name}\n\n{SHARED_WINDOW}{tail}")
 }
 
-/// Asserts the shared window keeps full token identity across a rename
-/// that shifts every byte offset in the second file.
-fn assert_window_rename_invariant(report: &Value) -> Result<()> {
+/// The `(start, end)` byte range of an occurrence in `file`.
+fn occurrence_range(cluster: &Value, file: &str) -> Option<(u64, u64)> {
+    cluster
+        .get("occurrences")?
+        .as_array()?
+        .iter()
+        .find(|occurrence| {
+            occurrence
+                .get("path")
+                .and_then(Value::as_str)
+                .is_some_and(|path| path.ends_with(file))
+        })
+        .and_then(|occurrence| {
+            Some((
+                occurrence.get("start_byte")?.as_u64()?,
+                occurrence.get("end_byte")?.as_u64()?,
+            ))
+        })
+}
+
+/// Asserts the reported clone really is the shared window — not the whole
+/// module — and that it reaches an act-now bucket.
+///
+/// Selection is by *range*, not by file membership: `expect_cluster_spanning`
+/// returns the first cluster whose occurrences merely mention both files,
+/// which is satisfied by a whole-module clone and was what made the earlier
+/// version of this test a false green.
+fn assert_window_clone(report: &Value, sources: (&str, &str), expected: &str) -> Result<()> {
     let clone = expect_cluster_spanning(report, &["window_a.fs", "window_b.fs"])?;
+
+    let (start_a, end_a) =
+        occurrence_range(clone, "window_a.fs").ok_or_else(|| anyhow!("no window_a occurrence"))?;
+    let (start_b, end_b) =
+        occurrence_range(clone, "window_b.fs").ok_or_else(|| anyhow!("no window_b occurrence"))?;
+
+    assert!(
+        end_a < sources.0.len() as u64,
+        "the clone must not span all of window_a.fs ({end_a} of {} bytes) — a whole-module \
+         match is the exact-node path, not the sibling-window path this file exists to \
+         cover: {report:#}",
+        sources.0.len(),
+    );
+    assert!(
+        end_b < sources.1.len() as u64,
+        "the clone must not span all of window_b.fs ({end_b} of {} bytes): {report:#}",
+        sources.1.len(),
+    );
+    assert!(
+        end_a > start_a && end_b > start_b,
+        "both occurrences must cover a real range: {report:#}"
+    );
     assert!(
         approx(signal(clone, "structural"), 1.0),
         "the shared window is a Merkle match — structural must be 1.0: {report:#}"
     );
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "issue #339: a sibling-window fingerprint must score token_jaccard from its \
-         normalised kind stream, which a rename cannot change. Reading 0.0 here means \
-         the signature fell back to blake3(hash, byte_range) and measured offset luck: \
-         {report:#}"
-    );
     assert_ne!(
         cluster_bucket(clone),
         "structural_only",
-        "issue #339: a duplicated window whose content agrees must not be demoted to \
-         the shape-only tier by a fallback-signature artifact: {report:#}"
+        "issue #339: a duplicated window whose content agrees must not be demoted to the \
+         shape-only tier by a fallback-signature artifact: {report:#}"
     );
+    // Actionability is asserted by bucket, deliberately, not by
+    // `fused >= FUSED_THRESHOLD`. [REPORTING-CONTEXT] is explicit that a
+    // proven Type-2 clone may render *below* the admission bar while
+    // remaining actionable, so gating this on the rendered confidence would
+    // assert the opposite of the documented contract.
     assert_eq!(
         cluster_bucket(clone),
-        "nearly_identical",
-        "a renamed copy whose content agrees must stay act-now: {report:#}"
+        expected,
+        "a duplicated window whose content agrees must stay act-now: {report:#}"
     );
     assert!(
-        signal(clone, "fused") >= 0.85,
-        "content-supported window rename must keep act-now confidence: {report:#}"
+        is_act_now(cluster_bucket(clone)),
+        "and `{expected}` must be an act-now bucket: {report:#}"
     );
     Ok(())
 }
 
-// [FUSION-SIGNALS-THREE-LAYER] / #339: `module ParseHelpersB` is one
-// character longer than `module ParseHelpers`, so every byte offset in
-// the second file shifts by one. The duplicated two-binding window is
-// unchanged, so every token-layer reading must be unchanged too.
+/// The wire bucket labels [CLONE-BUCKETS] calls actionable.
+fn is_act_now(bucket: &str) -> bool {
+    matches!(bucket, "identical" | "nearly_identical")
+}
+
+// [FUSION-SIGNALS-THREE-LAYER] / #339: `module ParseHelpersB` is one character
+// longer than `module ParseHelpers`, so every byte offset in the second file
+// shifts by one. The duplicated two-binding window is unchanged.
 #[test]
 fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
+    let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
+    let source_b = module_with_shared_window("ParseHelpersB", TAIL_B);
     let files = [
-        (
-            "window_a.fs".to_owned(),
-            module_with_shared_window("ParseHelpers", 11),
-        ),
-        (
-            "window_b.fs".to_owned(),
-            module_with_shared_window("ParseHelpersB", 29),
-        ),
+        ("window_a.fs".to_owned(), source_a.clone()),
+        ("window_b.fs".to_owned(), source_b.clone()),
     ];
     let report = report_for(&files, 20)?;
-    assert_window_rename_invariant(&report)
+    assert_window_clone(&report, (&source_a, &source_b), "nearly_identical")
 }
 
-// The control: identical module names keep the two windows at identical
-// byte offsets, so the fallback signature collides and reads 1.00. Both
-// files must report the same token evidence as the renamed pair above —
-// a signal that changes when only the offsets change is not measuring
-// tokens. Pinning both arms is what makes the 1.00 in the aligned case
-// evidence rather than luck.
+// The control: identical module names keep the two windows at identical byte
+// offsets, which makes the shared region byte-for-byte equivalent — so the
+// engine proves `identical` here and only `nearly_identical` above. Both are
+// act-now, which is the invariant: shifting every offset with a rename must
+// not push the window out of the actionable tier. A routing decision that
+// *degrades* when only the offsets change is not measuring the code.
 #[test]
-fn issue_339_sibling_window_token_signal_is_offset_independent() -> Result<()> {
-    let aligned = [
-        (
-            "window_a.fs".to_owned(),
-            module_with_shared_window("ParseHelpers", 11),
-        ),
-        (
-            "window_b.fs".to_owned(),
-            module_with_shared_window("ParseHelpers", 29),
-        ),
+fn issue_339_sibling_window_routing_is_offset_independent() -> Result<()> {
+    let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
+    let source_b = module_with_shared_window("ParseHelpers", TAIL_B);
+    let files = [
+        ("window_a.fs".to_owned(), source_a.clone()),
+        ("window_b.fs".to_owned(), source_b.clone()),
     ];
-    let report = report_for(&aligned, 20)?;
-    let clone = expect_cluster_spanning(&report, &["window_a.fs", "window_b.fs"])?;
-    assert!(
-        approx(signal(clone, "token_jaccard"), 1.0),
-        "the aligned window pair must read full token identity: {report:#}"
-    );
-    Ok(())
+    let report = report_for(&files, 20)?;
+    assert_window_clone(&report, (&source_a, &source_b), "identical")
 }

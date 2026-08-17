@@ -10,10 +10,10 @@ import { effect } from "@preact/signals-core";
 import type { LanguageClient } from "vscode-languageclient/node";
 
 import { clusterHoverMarkdown, clusterSlug } from "../clusterHover";
-import { COLOR, SEVERITY_COLOR, SEVERITY_DOT } from "../design";
+import { COLOR, DESLOP_SEVERITY_COLOR, SEVERITY_DOT } from "../design";
 import { shortPath } from "../pathUtils";
 import { ReportStore } from "../reportStore";
-import { indexedSeverity } from "../severity";
+import { clusterSeverity, indexedSeverity } from "../severity";
 import { ANALYSED_LANGUAGE_IDS } from "../types/languages";
 import {
   FUSED_THRESHOLD,
@@ -150,19 +150,51 @@ export class LiveBubble implements vscode.Disposable {
     const startByte = utf8ByteOffset(doc, start);
     const endByte = utf8ByteOffset(doc, end);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), BUDGET_MS);
+    // [VSIX-STATE-DIRTY] Everything the answer is only valid *for*, captured
+    // before the request goes out. A `findSimilar` response describes one
+    // range of one document at one report generation; by the time it resolves
+    // any of the three may have moved on, and the reply then describes a world
+    // that no longer exists. Retraction tombstones cannot cover this on their
+    // own — a full snapshot settles and clears them, so a probe older than the
+    // snapshot comes back to an empty ledger and repaints a cluster the
+    // snapshot authoritatively omitted.
+    const dispatchedAt = {
+      generation: this.store.current.generation,
+      uri: doc.uri.toString(),
+      version: doc.version,
+    };
+    const cancellation = new vscode.CancellationTokenSource();
+    const timeout = setTimeout(() => cancellation.cancel(), BUDGET_MS);
     try {
       const clusters = await client.sendRequest<ReportCluster[]>(
         "deslop/duplicatesFindSimilar",
         { path: doc.uri.fsPath, start_byte: startByte, end_byte: endByte },
+        cancellation.token,
       );
-      clearTimeout(timeout);
+      if (this.hasMovedOn(doc, dispatchedAt)) return;
       this.render(editor, range, clusters);
     } catch {
-      clearTimeout(timeout);
       this.clearBubble();
+    } finally {
+      clearTimeout(timeout);
+      cancellation.dispose();
     }
+  }
+
+  // True when the world the probe asked about is no longer the current one.
+  // Takes the document it was dispatched against rather than reading the
+  // active editor: the reply is only valid for *that* buffer, and by the time
+  // it lands the user may have focused another one entirely.
+  // Public for the test harness, which drives the async race directly.
+  hasMovedOn(
+    doc: vscode.TextDocument,
+    dispatchedAt: { generation: number; uri: string; version: number },
+  ): boolean {
+    return (
+      this.store.current.generation !== dispatchedAt.generation ||
+      doc.uri.toString() !== dispatchedAt.uri ||
+      doc.version !== dispatchedAt.version
+    );
   }
 
   // Public for test harness only — production call sites go through `probe()`.
@@ -213,7 +245,11 @@ export class LiveBubble implements vscode.Disposable {
           renderOptions: {
             after: {
               contentText: inlineText(best, severity),
-              color: SEVERITY_COLOR[severity],
+              // [SEVERITY-COLOR] Colour is the bucket channel; the dot inside
+              // `inlineText` is the percentile channel. The bubble carries both
+              // facts at once — a demoted family topping the report is a grey
+              // `●●`, never the crimson that means "safe to extract".
+              color: DESLOP_SEVERITY_COLOR[clusterSeverity(best)],
               fontStyle: "normal",
               fontWeight: "600",
             },
@@ -383,12 +419,20 @@ export function signalStrip(cluster: ReportCluster): string {
   return `${bar(shape)}${bar(signals.embedding_cos)}${bar(signals.fused)}`;
 }
 
+// The full block is reserved for an exact 1.0 and nothing else. Rounding
+// `value * 7` gave it to everything from 0.929 up, which collapsed the two
+// readings the third bar exists to separate: a byte-proven copy renders
+// `fused 1.00` and a content-gated near-verbatim clone renders `fused 0.96`,
+// and both drew `█`. Proof and near-proof are exactly the distinction a
+// glance at this strip is supposed to make, so the top glyph means proof.
 function bar(value: number): string {
+  if (value >= 1) return BARS[BARS.length - 1] ?? "█";
+  const below = BARS.length - 1;
   const index = Math.min(
-    BARS.length - 1,
-    Math.max(0, Math.round(value * (BARS.length - 1))),
+    below - 1,
+    Math.max(0, Math.round(value * (below - 1))),
   );
-  return BARS[index] ?? "█";
+  return BARS[index] ?? "▁";
 }
 
 const BARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;

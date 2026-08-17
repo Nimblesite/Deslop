@@ -141,8 +141,8 @@ lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
-	@echo "==> VSIX stub-provider packaging gate (unit)..."
-	@node --test clients/vscode/scripts/stub-gate.test.mjs
+	@echo "==> VSIX harness + packaging script gates (unit)..."
+	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
 	@node --test scripts/verify-env-path-writes.test.mjs
 	@node scripts/verify-env-path-writes.mjs

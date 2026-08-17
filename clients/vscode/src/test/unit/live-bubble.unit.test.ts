@@ -18,7 +18,7 @@ import {
   setBubbleMode as setMode,
   span,
 } from "./bubble.helpers";
-import { repoMetrics } from "./report.helpers";
+import { repoMetrics, reportWithClusters } from "./report.helpers";
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
@@ -289,6 +289,72 @@ suite("LiveBubble render", () => {
         capture.visible(),
         undefined,
         "a stale probe must not resurrect a cluster the visible report dropped",
+      );
+    } finally {
+      bubble.dispose();
+    }
+  });
+
+  // The hole retraction alone left open. `setSnapshot` settles and clears
+  // every tombstone — correctly, a full snapshot re-states the whole corpus —
+  // so a probe dispatched before that snapshot comes back to an empty ledger
+  // and `byId.get(id) ?? cluster` falls straight through to the stale probe
+  // cluster. The discriminator has to be the generation the probe was
+  // dispatched at, which no later report can forge.
+  test("a probe that resolves after a newer snapshot is discarded", async () => {
+    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
+
+    try {
+      const dispatchedAt = {
+        generation: store.current.generation,
+        uri: capture.editor.document.uri.toString(),
+        version: capture.editor.document.version,
+      };
+      assert.equal(
+        bubble.hasMovedOn(capture.editor.document, dispatchedAt),
+        false,
+        "nothing has changed yet, so the in-flight answer is still valid",
+      );
+
+      // A newer full snapshot that omits the cluster entirely. This is the
+      // step that clears the tombstones.
+      store.setSnapshot(reportWithClusters([bubbleCluster("c-other", 3, 0.95)]), 2);
+      assert.equal(
+        store.current.retractedClusters.size,
+        0,
+        "a snapshot settles every retraction — that is why it cannot be the guard",
+      );
+      assert.ok(
+        bubble.hasMovedOn(capture.editor.document, dispatchedAt),
+        "the generation moved, so the in-flight answer describes a dead world",
+      );
+
+      // And the surface stays empty: nothing painted, no inlay, no ghost.
+      assert.equal(capture.visible(), undefined, "no decoration may be created");
+      assert.equal(capture.visibleHover(), undefined, "and no hover card either");
+    } finally {
+      bubble.dispose();
+    }
+  });
+
+  test("a probe is also discarded when its document moves under it", async () => {
+    // Generation is not the only thing the answer was scoped to: a
+    // `findSimilar` reply describes byte offsets in one version of one file.
+    const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
+    try {
+      const base = {
+        generation: store.current.generation,
+        uri: capture.editor.document.uri.toString(),
+        version: capture.editor.document.version,
+      };
+      assert.equal(bubble.hasMovedOn(capture.editor.document, base), false, "the baseline must be live");
+      assert.ok(
+        bubble.hasMovedOn(capture.editor.document, { ...base, version: base.version + 1 }),
+        "a later document version invalidates the byte offsets the reply carries",
+      );
+      assert.ok(
+        bubble.hasMovedOn(capture.editor.document, { ...base, uri: "file:///tmp/somewhere-else.cs" }),
+        "and a reply for another document must never paint this one",
       );
     } finally {
       bubble.dispose();

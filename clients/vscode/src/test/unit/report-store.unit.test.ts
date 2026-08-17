@@ -404,6 +404,52 @@ suite("ReportStore", () => {
     });
   });
 
+  // A healthy long-lived session may never receive a full snapshot — deltas
+  // alone carry it — and the retraction ledger used to be cleared only by one.
+  // Every delta cloned the whole accumulated history, so N removals cost O(N)
+  // retained ids and O(N²) copying over the session's life.
+  test("the retraction ledger stays bounded across a long delta-only session", () => {
+    const store = new ReportStore();
+    store.setSnapshot(emptyReport({ clusters: [cluster("seed", 1)] }), 1);
+
+    const churn = 2_000;
+    for (let index = 0; index < churn; index += 1) {
+      store.applyDelta({
+        from_generation: index + 1,
+        to_generation: index + 2,
+        clusters_added: [cluster(`c-${index}`, 1)],
+        // Remove the *previous* generation's cluster. Removing the one this
+        // delta adds would un-retract it in the same pass — an add is the
+        // server saying it found the cluster again.
+        clusters_removed: index === 0 ? [] : [`c-${index - 1}`],
+        clusters_updated: [],
+        metrics: metrics(),
+        cache_stats: { hits: 0, misses: 0 },
+        tool_version: "v",
+      });
+    }
+
+    const retracted = store.current.retractedClusters;
+    assert.ok(
+      retracted.size <= 256,
+      `${churn} unique removals must not retain ${retracted.size} ids`,
+    );
+    assert.ok(
+      retracted.has(`c-${churn - 2}`),
+      "the most recent retraction is the one an in-flight probe could still name",
+    );
+    assert.equal(
+      retracted.has("c-0"),
+      false,
+      "and the oldest is dropped first — no probe from 2000 generations ago is live",
+    );
+    assert.equal(
+      store.current.generation,
+      churn + 1,
+      "every delta must still have applied",
+    );
+  });
+
   test("setEmbeddingProgress(null) clears the active progress state", () => {
     const store = new ReportStore();
     store.setEmbeddingProgress({

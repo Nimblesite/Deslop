@@ -14,11 +14,11 @@ What is fixed on this branch versus still outstanding. "Fixed" means the accurac
 | **#301** corpus determinism | ✅ Fixed | `snapshot_corpus` iteration-order defect quarantined with a mandated panic; ordered replacement landed. `corpus_determinism_nest_typescript` (1293 clusters / 30.0687% both runs) and `corpus_determinism_jellyfin_csharp` (1933 / 19.8354% both runs) green. `known-failures.json` ratcheted: `nest`/`jellyfin` `determinism` entries deleted; only `flutter`/`fsharp` `memory` (#166) remain. |
 | **#343** sum-then-clamp saturation | ✅ Fixed | `PairScore::fused()` quarantined (mandated panic, `pair.rs`); `bounded_fused()` — max of the three axes, bounded to `[0,1]` — replaces it at every call site (admission in `survival_decision`, rendering in `ReportSignals`). Pinned by `issue_343_sum_clamp_saturation.rs` (mid-band `ts-mixed-band` fixture: st 0.00 / tj 0.30 / emb 0.94 rendered fused 1.000 before the fix; the test watched that failure). `ts-mixed-band` added to the `fused_golden_invariants.rs` sweep (now 21 corpora). 33 fused/bucket suites (220 tests) green; corpus cluster counts and percentages unchanged from the post-#301 baselines. |
 | **#342** ancestor excludes → zero files | ✅ Fixed | `built_in_excluded` quarantined (mandated panic, `config.rs`); `corpus_built_in_excluded` replacement excludes only components below the scan root. Pinned by `issue_342_scan_root_under_excluded_ancestor.rs`, which asserts the `dist/`-rooted and plain-rooted reports agree — green. |
-| **#344** carry confidence to every consumer | 🔴 Open | The admission row of its surface table is now fixed as a side-effect of #343 (`bounded_fused` at admission); every other surface — metrics gate, VSIX severity, text report, LSP, autofix preconditions, the wire fields, the 17 softened fixtures — is untouched. |
-| **#345** doc drift | 🟡 Partial | `fusion.md` and `SPEC.md` reconciled on this branch: `[FUSION-STRATEGY-BOUNDED-MAX]` now records the quarantine and specifies the bounded max; `[FUSION-EMBED-PROVIDER]` says "ensemble by max, never sum or average"; `[FUSION-CONTENT-GATE]` states it is the definition of rendered confidence. Outstanding: `REPORTING-CONTEXT.md` threshold naming, `mcp.md` top-offenders claim, `--embeddings` default discrepancy, `fused_spread`/`type2_recall` corpus check ids. |
+| **#344** carry confidence to every consumer | 🔴 Open | Two of its rows are closed: admission uses `bounded_fused` (side-effect of #343), and **VSIX severity** now resolves colour from the engine's post-gate bucket (Defect D). Still untouched: metrics gate, text report, LSP, autofix preconditions, the wire fields, the 17 softened fixtures. |
+| **#345** doc drift | 🟡 Partial | `fusion.md` and `SPEC.md` reconciled on this branch: `[FUSION-STRATEGY-BOUNDED-MAX]` now records the quarantine and specifies the bounded max; `[FUSION-EMBED-PROVIDER]` says "ensemble by max, never sum or average"; `[FUSION-CONTENT-GATE]` states it is the definition of rendered confidence. Outstanding: `REPORTING-CONTEXT.md` threshold naming, `mcp.md` top-offenders claim, `--embeddings` default discrepancy, `fused_bounded_max`/`type2_recall` corpus check ids. |
 | **Six skipped VSIX tests** (A, B1, B2, C, D, E) | 🔴 Open | All six still `test.skip`-ed; all six defects still in the shipped VSIX. A (act-now near miss withheld from the bubble) is the release-introduced regression and remains first in line. |
 | **#331 / #336** | 🟡 Mechanism fixed, awaiting corpus proof | Synthetic suites green since #341; real-repository confirmation now unblocked because #347's fix lets the gate boot. Close only on a green corpus run. |
-| **#339** LSH fallback signatures render `token_jaccard = 0.0` | 🔴 Open | Confirmed empirically during the #343 work: the `ts-mixed-band` mid-band cluster renders tj ≈ 0.30 where the true k-gram Jaccard is far higher, because sibling-window fallback signatures under-measure. Already tracked; not touched on this branch. |
+| **#339** LSH fallback signatures render `token_jaccard = 0.0` | 🔴 Open, **pinned red** | Now isolated at the layer where it is provable: `deslop-core::pipeline::signatures::tests::issue_339_sibling_window_signature_is_offset_invariant` parses two F# modules whose shared window is byte-identical at shifted offsets, gives both the same structural hash, and asserts their signatures match. It does not — they fall through to `blake3(hash, byte_range)` and share nothing. **The test is left red**: quarantining `fallback_signature` behind a `panic!` would abort every scan containing an unresolvable range, which is most of them. Evidence posted to #339. Not fixed on this branch. |
 | **#71 #79 #103 #283 #284 #285** (blocked on #343) | 🔴 Open | Unblocked by this branch; each needs its own verification against the bounded fusion before closing. |
 | **#351** measured cosines discarded (found 12 Aug while hardening the #343 suite) | 🛑 Quarantined, red test in tree | `add_embedding_pair` (`pair/candidates.rs`) silently discarded the ANN pass's measured cosine for pairs already discovered structurally (byte-identical pairs render `embedding_cos = 0.0` under `--embeddings required` — a false figure) or by LSH (the pair reclassifies `lsh_only`, faces the stricter `token_jaccard ≥ 0.90` survival gate, and its cluster hides — a false negative decided by discovery order; a measured 0.8478 cosine was watched being discarded on the `ts-mixed-band` pair). Both arms now carry the mandated panic; `issue_343_sum_clamp_saturation.rs::byte_identical_pair_still_earns_full_confidence_under_the_bound` is the red pinning test and stays red until the accurate replacement lands (record the max cosine for every pair regardless of discovery route; keep recall accounting off the evidence path). The two embedding-enabled tests in that suite are red for this reason; the embeddings-off tests and all other suites are unaffected. |
 
@@ -66,9 +66,9 @@ the weak `token_jaccard < 0.05` fallback assertions were replaced with exact
 renamed `js-type2-pipeline`, since the old name asserted the verdict this
 release overturned.
 
-## 🛑 Skipped VSIX tests to restore
+## ✅ Skipped VSIX tests — all six restored
 
-Six valid assertions are currently `test.skip`-ed under an owner-approved release exception. Restoring them outranks every other item in `docs/plans/` — do it before any feature work. Restore them without weakening or deleting them; each carries a `🛑 SKIPPED — DEFECT <x>` comment pointing here. All six defects remain in the shipped VSIX.
+Six valid assertions were `test.skip`-ed under an owner-approved release exception. **All six are now un-skipped and green; `grep -c "test.skip" clients/vscode/src/test/unit/*.test.ts` returns zero.** None was weakened — every one gained assertions. The table below is the original statement of each defect, kept because the fixes are recorded against it.
 
 | # | Test | File | Defect |
 |---|---|---|---|
@@ -76,7 +76,7 @@ Six valid assertions are currently `test.skip`-ed under an owner-approved releas
 | B1 | `classifyCluster must not call a content-gated rename byte-identical` | `report-schema.unit.test.ts` | `classifyCluster` reads a proven rename's corrected signals as `identical` and tells the user "Safe to extract — every copy is the same" about code whose identifiers all differ. |
 | B2 | `classifyCluster must not promote a shape-only family the content gate demoted` | `report-schema.unit.test.ts` | A shape-only family with a non-trivial token signal falls through to the `structural >= 0.99` arm and is promoted to an act-now bucket — the false positive #341 exists to stop. |
 | C | `the signal strip distinguishes a proven rename from a verbatim copy` | `live-bubble-fused.unit.test.ts` | `signalStrip` never draws the fused confidence, so a verbatim copy and a proven rename both render `██▁`. |
-| D | `a demoted shape-only family is not painted with act-now severity` | `severity.unit.test.ts` | Severity is pure rank, so a large demoted family that still sorts first gets the loudest decoration in the editor. |
+| D | `a demoted shape-only family is not painted with act-now severity` | `severity.unit.test.ts` | Severity is pure rank, so a large demoted family that still sorts first gets the loudest decoration in the editor. **Confirmed and worse:** the paint was *inverted* — crimson on the demoted family, blue on the byte-proven clone. |
 | E | `a stale probe cannot resurrect a cluster the visible report dropped` | `live-bubble.unit.test.ts` | `bestBubbleCluster`'s `byId.get(id) ?? cluster` fallback re-paints a cluster the delta just cleared. **Least clear-cut of the six** — the same fallback legitimately serves clusters found live before a rescan. Settle the intended contract first, then fix the code or restate the test. |
 
 **Defect A is a regression this release introduced.** The content gate
@@ -221,7 +221,7 @@ Surfaces still running on the pre-gate world:
 |---|---|
 | Pair admission to a cluster (`pair.rs`) | ✅ Fixed by #343 — admission now uses `bounded_fused()` (strongest single axis), no longer the raw clamped sum |
 | `metrics.duplication_percent` / exit-code gate (`report.rs`) | Counts lines of visible clusters, unweighted — shape matches breach like verbatim copy-paste. Design settled: side-by-side evidence-weighted metric + second gate, specced in [pipeline.md §METRICS-REPO-WEIGHTED](../specs/pipeline.md#metrics-repo-weighted), sequenced in [weighted-metrics-plan.md](weighted-metrics-plan.md) |
-| VSIX severity / decorations / tree (`severity.ts`) | Rank-derived, never reads `fused` |
+| VSIX severity / decorations / tree (`severity.ts`) | ✅ Fixed by D — colour is bucket-derived via `resolveSeverity(bucket, percentile)` per [SEVERITY-COLOR](../specs/severity.md#severity-color); glyph density stays percentile-derived. It deliberately reads the **bucket**, not `fused`: the bucket is the engine's verdict *after* the content gate, so a surface that trusts it needs no second opinion — the same conclusion §2 reached for routing |
 | CLI text report (`render/text.rs`) | Prints no signals at all |
 | LSP diagnostics / code lens (`deslop-lsp`) | No confidence anywhere |
 | Autofix extract / consolidate gates (`refactor/preconditions.rs`) | Bucket pre-filter + byte proof only |
@@ -256,7 +256,7 @@ Plus, in the same issue:
   definition of rendered confidence. `SPEC.md`'s strategy row now points
   at `PairScore::bounded_fused`.
 - `corpus/known-failures.json` has no confidence check id — add a
-  `fused_spread` / `type2_recall` check so the real-repository gate can
+  `fused_bounded_max` / `type2_recall` check so the real-repository gate can
   catch saturation and rename recall at scale. Blocked by #347: adding a
   check to a gate that cannot compile is a no-op.
 
@@ -295,7 +295,7 @@ made five of the six tractable and the sixth impossible.
 - [x] **B1** `report-schema.unit.test.ts` — a content-gated rename was labelled `identical`. Fixed by §2 and re-stated against `resolveBucket`.
 - [x] **B2** `report-schema.unit.test.ts` — a demoted shape-only family was promoted. Same fix, same re-statement.
 - [x] **C** `live-bubble-fused.unit.test.ts` — `signalStrip` drew `structural | token_jaccard | embedding_cos`, so a verbatim copy and a proven rename both rendered `█▁█`. The strip had to stay **three bars wide** — `assert.equal(signalStrip(verbatim).length, 3)` in the test itself and `signalStrip clamps inputs to the bar range` in `bubble.unit.test.ts` both demand it — so a fourth bar was not available. **Fixed** by drawing **shape | semantic | confidence**: `max(structural, token_jaccard)`, `embedding_cos`, `fused`. Collapsing the first two is what the engine already says they are worth — *"`structural` and `token_jaccard` are two views of one normalised representation, so summing them says nothing beyond 'the shapes matched'"* ([`buckets.rs:304`](../../crates/deslop-core/src/buckets.rs#L304)) — and it buys the third slot for the only axis that separates the two.
-- [ ] 🛑 **D** `severity.unit.test.ts` — **blocked: D contradicts a green test in the same file.** Still `test.skip`, still the suite's one pending. See below.
+- [x] **D** `severity.unit.test.ts` — **fixed. Not a product decision after all: a category error with a spec that already resolved it.** D was right that a demoted family must not wear act-now paint and wrong about which channel carries the paint. [SEVERITY-COLOR](../specs/severity.md#severity-color) defines *two* channels — colour from the **bucket**, glyph density from the **weight percentile** — and the VSIX drove both from the ranking, so the colour channel carried no bucket information at all. Shipped `resolveSeverity(bucket, percentile)` (the resolver that spec has always named), re-keyed the paint, re-stated D against colour. **The suite now has zero skips.** See below.
 - [x] **E** `live-bubble.unit.test.ts` — **contract settled, then fixed.** The `byId.get(id) ?? cluster` fallback served two populations `bestBubbleCluster` could not tell apart, and each has a test: a cluster **the report never saw** may bubble on the probe's own evidence (green `deslop.bubble.dismissCluster …` renders `c-dismiss`, absent from the seeded snapshot, and requires it to bubble), while a cluster **a delta explicitly removed** must stay gone (E). The discriminator is retraction, not absence: `ReportStore` now records `clusters_removed` in a `retractedClusters` signal instead of dropping it, `setSnapshot` clears it (a full snapshot re-states the corpus on its own authority), a later `added`/`updated` un-retracts, and `bestBubbleCluster` filters on it before anything else.
 
 #### Two impossible fixtures found while restoring them
@@ -305,34 +305,66 @@ Both were green tests asserting a state the engine cannot produce, and both were
 - `inline mode renders the bubble decoration` staged `identical` at `fused 0.2`, and `render clears the bubble when no cluster passes the threshold` staged `identical` at `fused 0.5`. An `Identical` cluster is byte-proven: `content_gated_signals` returns its signals untouched, and `Identical` requires `structural >= 0.99` **and** `token_jaccard >= 0.99`, so its `bounded_fused` is `>= 0.99` by construction. Neither pairing can occur.
 - Both fixtures now carry `loosely_similar` — the population the cutoff actually governs — and each grew an assertion rather than losing one: the first test now also proves a hint at exactly `FUSED_THRESHOLD` *does* render, so "the hint disappeared" cannot pass by hints being banned outright.
 
-#### 🛑 D is unsatisfiable as written — owner decision required
+#### D — the spec picked the winner, and the loser was the *channel*, not the test
 
-`severity.unit.test.ts` holds **two tests that cannot both pass**, and the
-green one is the newer:
+`severity.unit.test.ts` held two tests that could not both pass **so long as
+severity was one channel**:
 
-- `severity never brightens as rank worsens, at any confidence` (green) hands `indexedSeverity` the order `a(fused 1.0, identical)`, `b(0.3, structural_only)`, `c(0.95, identical)`, … and asserts severity is non-brightening **down the given array**, while also asserting `a` is `worst` and the last entry is `faint`.
-- `a demoted shape-only family is not painted with act-now severity` (skipped, D) hands it `shape-giant(0.31, structural_only)` at rank 1 and `proven(0.95, identical)` at rank 2, asserting `shape-giant` is `faint` **and** `proven` is not.
+- `severity never brightens as rank worsens, at any confidence` (green) asserts the severity band is non-brightening **down the report**.
+- `a demoted shape-only family is not painted with act-now severity` (D) hands it `shape-giant(0.31, structural_only)` at rank 1 and `proven(0.95, identical)` at rank 2, asserting `shape-giant` is quiet **and** `proven` is not.
 
-Any function of `(rank, cluster)` that pays D its `faint` for a demoted
-rank-1 entry must, by the monotonicity test, paint every entry below it
-`faint` too — which is exactly the `notEqual` D forbids. Re-ranking by
-confidence fails monotonicity directly (it is asserted over the input
-order). Confidence-only severity fails both. A running floor satisfies
-monotonicity and fails D's `notEqual`. **The two tests state opposite
-contracts and neither may be weakened**, so the fix is a product
-decision, not an implementation:
+Any function of `(rank, cluster)` that pays D its quiet answer for a demoted
+rank-1 entry must, by monotonicity, give the same answer to every entry below
+it — exactly what D's `notEqual` forbids. Re-ranking by confidence fails
+monotonicity directly; a running floor satisfies monotonicity and fails D.
 
-- **either** severity stays rank-derived and D is restated against a
-  surface that can carry evidence (the decoration *colour* is not the
-  only channel — a demoted family could keep its rank paint and lose its
-  act-now affordance),
-- **or** the monotonicity test's premise changes: severity re-ranks by
-  evidence, and monotonicity is asserted over the *re-ranked* order
-  rather than the input order.
+**The contradiction was real and the conclusion drawn from it was wrong.** It
+is not evidence that the two tests state opposite contracts; it is evidence
+that they are talking about *different channels*, and
+[SEVERITY-COLOR](../specs/severity.md#severity-color) had already said so:
 
-Reported rather than resolved, per the "code, specs, and tests MUST
-agree — where they don't, STOP and report" rule. A/B1/B2/C/E do not
-depend on it.
+> **Colour** = the cluster's Deslop severity … **Glyph density** = the cluster's weight percentile.
+> A faint identical clone therefore renders as a red `○`, while a high-impact loosely-similar cluster renders as a blue `●●`.
+
+That sentence is D's fixture, inverted. The monotonicity test owns the
+**percentile band** and is correct — a band that is a pure function of rank
+*must* be monotonic down the ranking. D owns the **colour** and was
+expressing itself in the band's vocabulary: the same category error as
+[§2](#2--new-defect-found-17-aug--the-ui-re-derives-a-routing-it-cannot-see-the-inputs-to),
+one channel answering a question only the other holds the inputs for.
+
+**The defect D was pointing at was live, and worse than D described.** Both
+`SEVERITY_COLOR[band]` call sites — the decoration underline/ruler
+(`decorations/manager.ts:102`) and the live bubble's inline colour
+(`bubble/live.ts:216`) — painted from the *rank band*. Measured on D's own
+fixture, the colours came out **inverted**:
+
+| cluster | bucket | rank band | old paint | new paint |
+|---|---|---|---|---|
+| `shape-giant` | `structural_only` | `worst` | **`primaryContainer` (crimson)** | `onSurfaceMuted` (grey) |
+| `proven` | `identical` | `mid` | `tertiary` (blue) | `primaryContainer` (crimson) |
+
+The content-gated family wore the colour that means *"Safe to extract — every
+copy is the same"*, and the byte-proven clone one row below it wore blue.
+
+**Shipped:**
+
+- `types/report.ts` — `DeslopSeverity` (`error · warning · information · hint`) and `DESLOP_SEVERITIES`, orthogonal to `Severity` (the percentile band).
+- `severity.ts` — `BUCKET_SEVERITY`, `deslopSeverityOf(bucket)`, `clusterSeverity(cluster)`, and **`resolveSeverity(bucket, percentile)`**, the resolver [SEVERITY-COLOR] has always named and which did not exist. It returns `{ level, band }` together so a caller cannot reach for one and render the other. `severityForRank` now delegates to `severityOf`, deleting a duplicated threshold ladder.
+- `design.ts` — `DESLOP_SEVERITY_COLOR` keyed by level. Same four tokens; crimson is now earned by evidence rather than by position.
+- `decorations/manager.ts` — decoration types keyed by level. An underline has no glyph, so it carries the bucket channel only. Colour no longer depends on the ranking, so `SeverityCache`/`severitiesFor`/`indexedSeverity` are gone from this file — the memoisation [VSIX-PERF] described exists because there is no longer a ranking to memoise.
+- `bubble/live.ts` — inline colour from the level; the `SEVERITY_DOT` glyph stays on the band, so the bubble carries **both** facts at once.
+- `severity.md` — `StructuralOnly → hint (muted)` added to [SEVERITY-DESLOP-MAP] (the table listed four of the five buckets); the status note now records that the map ships and that rank-percentile colour was a defect; [SEVERITY-COLOR] gains the unsatisfiability argument so the next reader does not re-derive it.
+
+**Tests — nothing weakened, four assertions added and two tests added:**
+
+- D restored and un-skipped, asserting on colour: `shape-giant → hint`, `proven → error`, the two differ, and their **colour tokens** differ. Its original fixture assertions are byte-for-byte intact.
+- D **gained** the orthogonality that makes both contracts survivable: `shape-giant` still holds the `worst` band and still renders `●●`. Muted `●●` — loud about impact, quiet about kind.
+- New `the colour channel is a pure function of the bucket, at every rank` — sweeps every bucket across six percentiles and asserts the level never moves while the band tracks the percentile. This is the invariant that makes D and monotonicity compatible.
+- New `only act-now buckets may wear an act-now colour` — asserts `error` implies `isActNow(bucket)` and that **exactly one** bucket earns crimson, so a future remap cannot quietly hand it back.
+- `design.unit.test.ts` gained `DESLOP_SEVERITY_COLOR covers every level and is a distinct token each` — no two levels may share a token, and `error` is pinned to `COLOR.primaryContainer`.
+
+`severity.unit.test.ts` 14/14, `design.unit.test.ts` 9/9, `report-schema.unit.test.ts` 26/26 — **49 passing, zero skips.** The full extension-host suite could not be re-run in this session (VS Code was open and `vscode-test` requires an exclusive instance; killing it is prohibited). Typecheck and lint are clean, and no test asserts the internals removed from `decorations/manager.ts`.
 
 ### 2. 🛑 New defect found 17 Aug — the UI re-derives a routing it cannot see the inputs to
 
@@ -362,7 +394,7 @@ The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and
 
 - [ ] `agreement` / `rename_consistency` / `literal_fraction` onto `ReportSignals` in [`live-ipc.td`](../models/live-ipc.td), regenerate (never hand-write). **Population point located:** `impl From<PairScore> for ReportSignals` ([`report.rs:104`](../../crates/deslop-core/src/report.rs#L104)) converts the raw triple *before* content is measured and cannot carry them; [`content_gated_signals`](../../crates/deslop-core/src/buckets.rs#L316) already holds the `ContentEvidence` and is the one place every rendered cluster passes through. It must stamp the three fields on **both** of its paths — today it early-returns unchanged for `Identical` and for non-saturating shapes.
 - [ ] `resolveBucket` trusts the engine's `cluster.bucket` unconditionally — **superseded and strengthened**: `classifyCluster` is deleted outright rather than corrected, so there is no second routing table left to drift. Tracked in §2.
-- [ ] `severity.ts` — rank-only today, never reads confidence (Defect D)
+- [x] `severity.ts` — **done (Defect D).** Colour now resolves from the engine's bucket, which is the content gate's own verdict; the percentile band keeps the ranking channel. Does not need the three new wire fields.
 - [ ] `render/text.rs` — prints no signals at all
 - [ ] `deslop-lsp` diagnostics / code lens — no confidence anywhere
 - [ ] `refactor/preconditions.rs` — bucket pre-filter + byte proof only
@@ -376,7 +408,7 @@ The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and
 - [x] `REPORTING-CONTEXT.md:100` — the admission bar and the rendered confidence are now separated by name, and agents are told to filter on `bucket`, never on `fused >= FUSED_THRESHOLD`. That instruction is not cosmetic: the shipped VSIX had exactly that bug (defect A).
 - [x] `mcp.md:248` — documents report order (confidence-scaled ranking weight) and says why it is not `fused`.
 - [x] `--embeddings` default discrepancy — `fusion.md` states the shipped default (`off`, `nomic-embed-text`) with the reason (no reachable Ollama on a first run) and names the recall cost rather than hiding it.
-- [x] `fused_spread` / `type2_recall` — added to `corpus/known-failures.json` **and implemented** in `crates/deslop-test-support/src/corpus_confidence.rs`, wired into `corpus_repos.rs::gate` + `GATE_CHECKS`, 10 unit tests green. Ids without checks behind them would be placeholders in the one file whose purpose is honesty about what is verified.
+- [x] `fused_bounded_max` / `type2_recall` — added to `corpus/known-failures.json` **and implemented** in `crates/deslop-test-support/src/corpus_confidence.rs`, wired into `corpus_repos.rs::gate` + `GATE_CHECKS`, 14 unit tests green. Ids without checks behind them would be placeholders in the one file whose purpose is honesty about what is verified. Both predicates were rewritten after the regression audit — see the quarantine plan's R6 row for why the originals were unsound in both directions.
 - [x] `fusion.md` + `SPEC.md` reconciled
 - [x] Both public `how-it-works.md` pages (EN + ZH) still taught `clamp(structural + token_jaccard + embedding_cos, 0, 1)` and linked `PairScore::fused` as shipped code — the quarantined arm, documented publicly. Both now describe the bounded max.
 

@@ -53,11 +53,14 @@ jobs:
     # private ones. Gating on public visibility lets a private fork skip cleanly
     # (no red X) and self-enable the moment it is made public.
     #
-    # Dependabot PRs are excluded: they are swept into `dependabot-upgrades` by
-    # dependabot-automerge.yml and never merge to main directly, so scanning them
-    # burns 20 minutes per language on a bump we discard. The consolidation PR is
-    # scanned. ([GITHUB-DEPENDABOT])
-    if: github.event.repository.visibility == 'public' && github.actor != 'dependabot[bot]'
+    # Dependabot PRs are NOT excluded. This workflow triggers on
+    # `pull_request: [main]`, and routine version bumps target
+    # `dependabot-upgrades`, so they never reach it. The only Dependabot PR
+    # that does is a SECURITY update against the default branch, which the
+    # sweep leaves for a human — skipping it meant the one PR class opened
+    # because of a known vulnerability was also the one class never scanned.
+    # ([GITHUB-DEPENDABOT])
+    if: github.event.repository.visibility == 'public'
     permissions:
       security-events: write
       actions: read

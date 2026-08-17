@@ -49,7 +49,7 @@ use deslop_test_support::{
         baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
         reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
     },
-    corpus_confidence::{check_fused_spread, check_type2_recall},
+    corpus_confidence::{check_fused_bounded_max, check_type2_recall},
 };
 use serde_json::Value;
 
@@ -177,7 +177,7 @@ const GATE_CHECKS: &[&str] = &[
     "recall",
     "boilerplate_rank",
     "data_table_rank",
-    "fused_spread",
+    "fused_bounded_max",
     "type2_recall",
     "wall",
     "memory",
@@ -201,7 +201,7 @@ fn gate(name: &str) -> Result<()> {
     // [CORPUS-BASELINE] The two confidence checks. Neither reads the manifest:
     // they judge the *shape* of the rendered report, so they run on every
     // repository including the ones whose recall is not yet curated.
-    check_fused_spread(&run.report, &mut failures);
+    check_fused_bounded_max(&run.report, &mut failures);
     check_type2_recall(&run.report, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;
 

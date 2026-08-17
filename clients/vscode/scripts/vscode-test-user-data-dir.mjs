@@ -31,19 +31,46 @@ export const UNIX_SOCKET_PATH_LIMIT = 103;
 export const LONGEST_SOCKET_BASENAME = "999.999-main.sock";
 
 /**
+ * Root the profile is anchored under, for a given platform.
+ *
+ * `/tmp` is two levels deep and present on every POSIX target; the
+ * platform temp dir on macOS is a ~50-byte per-user path that would eat
+ * half the budget on its own. Windows named pipes carry no such limit, so
+ * there the platform temp dir is the better-behaved choice.
+ *
+ * @param {string} [platform] `os.platform()` value; defaults to this host
+ * @param {string} [tmpdir] `os.tmpdir()` value; defaults to this host
+ * @returns {string} directory to anchor the profile under
+ */
+export function profileRoot(platform = os.platform(), tmpdir = os.tmpdir()) {
+  return platform === "win32" ? tmpdir : "/tmp";
+}
+
+/**
+ * True when the platform caps socket paths at [`UNIX_SOCKET_PATH_LIMIT`].
+ *
+ * Windows uses named pipes for the same endpoint and imposes no
+ * comparable limit, so a long `%TEMP%` there is not a defect — asserting
+ * the POSIX cap against it would fail a harness that runs fine.
+ *
+ * @param {string} [platform] `os.platform()` value; defaults to this host
+ * @returns {boolean} whether the byte cap applies
+ */
+export function socketPathIsCapped(platform = os.platform()) {
+  return platform !== "win32";
+}
+
+/**
  * Resolves the user-data directory for a given extension checkout.
  *
  * @param {string} extensionDir absolute path of the extension root
+ * @param {string} [platform] `os.platform()` value; defaults to this host
+ * @param {string} [tmpdir] `os.tmpdir()` value; defaults to this host
  * @returns {string} absolute path to use as `--user-data-dir`
  */
-export function vscodeTestUserDataDir(extensionDir) {
+export function vscodeTestUserDataDir(extensionDir, platform, tmpdir) {
   const key = createHash("sha256").update(extensionDir).digest("hex").slice(0, 8);
-  // `/tmp` is two levels deep and present on every POSIX target; the
-  // platform temp dir on macOS is a ~50-byte per-user path that would eat
-  // half the budget on its own. Windows named pipes carry no such limit,
-  // so there the platform temp dir is the better-behaved choice.
-  const root = os.platform() === "win32" ? os.tmpdir() : "/tmp";
-  return path.join(root, `deslop-vscode-test-${key}`);
+  return path.join(profileRoot(platform, tmpdir), `deslop-vscode-test-${key}`);
 }
 
 /**

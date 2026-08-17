@@ -4,12 +4,13 @@
 // which is the most expensive kind of green.
 
 import assert from "node:assert/strict";
-import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
   UNIX_SOCKET_PATH_LIMIT,
   longestSocketPathLength,
+  profileRoot,
+  socketPathIsCapped,
   vscodeTestUserDataDir,
 } from "./vscode-test-user-data-dir.mjs";
 
@@ -19,18 +20,29 @@ import {
 const DEEP_CHECKOUT =
   "/Users/someone/Documents/Code/Deslop/.claude/worktrees/fused-score-followups/clients/vscode";
 
-test("a deep checkout still yields a socket path the kernel will accept", () => {
-  const dir = vscodeTestUserDataDir(DEEP_CHECKOUT);
-  const length = longestSocketPathLength(dir);
-  assert.ok(
-    length <= UNIX_SOCKET_PATH_LIMIT,
-    `socket path is ${length} bytes, over the ${UNIX_SOCKET_PATH_LIMIT}-byte cap: ${dir}`,
-  );
-  assert.ok(
-    length < UNIX_SOCKET_PATH_LIMIT,
-    "leave headroom rather than sitting exactly on the cap",
-  );
-});
+// Platform inputs are injected rather than read off the host so both
+// behaviours are asserted on every runner. Reading `os.platform()` inside
+// the test means each CI leg only ever exercises its own branch, and the
+// other one ships unverified.
+const POSIX = ["darwin", "linux"];
+const WINDOWS_TMP =
+  "C:\\Users\\a-rather-long-corporate-account-name\\AppData\\Local\\Temp\\vscode-test";
+
+for (const platform of POSIX) {
+  test(`a deep checkout still yields a socket path the kernel will accept on ${platform}`, () => {
+    const dir = vscodeTestUserDataDir(DEEP_CHECKOUT, platform, "/unused");
+    const length = longestSocketPathLength(dir);
+    assert.ok(socketPathIsCapped(platform), `${platform} is a capped platform`);
+    assert.ok(
+      length <= UNIX_SOCKET_PATH_LIMIT,
+      `socket path is ${length} bytes, over the ${UNIX_SOCKET_PATH_LIMIT}-byte cap: ${dir}`,
+    );
+    assert.ok(
+      length < UNIX_SOCKET_PATH_LIMIT,
+      "leave headroom rather than sitting exactly on the cap",
+    );
+  });
+}
 
 test("the default profile location is what actually overflows", () => {
   // Pins the reason this module exists. If `@vscode/test-cli`'s default
@@ -43,27 +55,52 @@ test("the default profile location is what actually overflows", () => {
   );
 });
 
+test("Windows is not held to the Unix socket cap", () => {
+  // Windows opens the same endpoint as a named pipe, which carries no
+  // comparable length limit. Enforcing the POSIX cap there fails a
+  // harness that runs perfectly well on any machine with a long %TEMP%.
+  assert.equal(socketPathIsCapped("win32"), false);
+  const dir = vscodeTestUserDataDir(DEEP_CHECKOUT, "win32", WINDOWS_TMP);
+  assert.ok(
+    longestSocketPathLength(dir) > UNIX_SOCKET_PATH_LIMIT,
+    "this %TEMP% is exactly the long one the POSIX cap would have rejected",
+  );
+  assert.equal(profileRoot("win32", WINDOWS_TMP), WINDOWS_TMP);
+});
+
+test("POSIX anchors at /tmp rather than the platform temp dir", () => {
+  // macOS `os.tmpdir()` is a ~50-byte per-user path that would spend half
+  // the budget before the profile name is appended.
+  assert.equal(profileRoot("darwin", "/var/folders/xy/T/"), "/tmp");
+  assert.equal(profileRoot("linux", "/var/tmp"), "/tmp");
+});
+
 test("two checkouts never share one profile", () => {
-  const worktree = vscodeTestUserDataDir(DEEP_CHECKOUT);
-  const mainline = vscodeTestUserDataDir("/Users/someone/Documents/Code/Deslop/clients/vscode");
+  const worktree = vscodeTestUserDataDir(DEEP_CHECKOUT, "linux", "/unused");
+  const mainline = vscodeTestUserDataDir(
+    "/Users/someone/Documents/Code/Deslop/clients/vscode",
+    "linux",
+    "/unused",
+  );
   assert.notEqual(
     worktree,
     mainline,
     "a shared profile lets two runs race each other's window state",
   );
   assert.equal(
-    vscodeTestUserDataDir(DEEP_CHECKOUT),
+    vscodeTestUserDataDir(DEEP_CHECKOUT, "linux", "/unused"),
     worktree,
     "the same checkout must resolve to the same profile across runs",
   );
 });
 
 test("the profile is anchored outside the checkout", () => {
-  const dir = vscodeTestUserDataDir(DEEP_CHECKOUT);
-  assert.ok(
-    !dir.startsWith(DEEP_CHECKOUT),
-    "a profile inside the checkout reintroduces the depth that caused the overflow",
-  );
-  const expectedRoot = os.platform() === "win32" ? os.tmpdir() : "/tmp";
-  assert.equal(path.dirname(dir), expectedRoot);
+  for (const platform of [...POSIX, "win32"]) {
+    const dir = vscodeTestUserDataDir(DEEP_CHECKOUT, platform, WINDOWS_TMP);
+    assert.ok(
+      !dir.startsWith(DEEP_CHECKOUT),
+      `a profile inside the checkout reintroduces the depth that caused the overflow (${platform})`,
+    );
+    assert.equal(path.dirname(dir), profileRoot(platform, WINDOWS_TMP));
+  }
 });

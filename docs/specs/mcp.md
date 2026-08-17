@@ -60,6 +60,18 @@ envelope.
 > and the array-valued filter block ([MCP-TOOL-FILTERS]) has not landed; the
 > worst-first ranking, occurrence budget, consent gate, and registry-derived
 > enums those sections describe are implemented today on the current surface.
+>
+> **`top-offenders` output order — shipped.** Clusters come back in **report
+> order**: ranking weight descending, with the confidence-scaled
+> `confidence_factor` already folded into the weight
+> ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)). It is
+> **not** sorted by `signals.fused`, and an agent must not re-sort or filter on
+> that field — the rendered confidence is a per-cluster quality, so ordering by
+> it puts a two-line byte-identical pair above a 400-line proven clone, and
+> filtering on it discards proven Type-2 renames the content gate deliberately
+> renders below the admission bar ([REPORTING-CONTEXT](REPORTING-CONTEXT.md)).
+> Filter on `bucket`. The same contract governs `find-similar`
+> ([MCP-TOOL-FINDSIMILAR]).
 
 **Exactly six tools** ([DECISION-MCP-SURFACE]). Two calls carry the product: **`find-similar`
 before writing code (prevention)** and **`duplicates` when fixing it (cure)**; the other four are
@@ -246,7 +258,7 @@ code passes `buckets: ["identical"]` inside the prevention loop too) and the uni
 (default 5, replacing the old `top_n`) + `max_occurrences` params.
 
 Output: top-`limit` clusters in **report order** — ranking weight descending, with the
-confidence-scaled `confidence_factor` already folded in ([RANK-SCORE]) — carrying signals,
+confidence-scaled `confidence_factor` already folded in ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) — carrying signals,
 interpretation, action hints, occurrences, and the `filters` echo. Not sorted by `fused`: the
 rendered confidence is a per-cluster quality, and ordering by it would put a two-line byte-identical
 pair above a 400-line proven clone.

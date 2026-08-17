@@ -56,6 +56,16 @@ export interface ReportState {
   retractedClusters: ReadonlySet<string>;
 }
 
+/**
+ * Retractions kept before the oldest are dropped.
+ *
+ * Sized for concurrency, not for history: at most one probe is in flight per
+ * edit and the debounce coalesces edits, so a handful of generations' worth of
+ * removals is already far more than any live response can refer to. The cap
+ * exists so a long delta-only session cannot accumulate ids without bound.
+ */
+const MAX_RETRACTED_CLUSTERS = 256;
+
 export class ReportStore implements vscode.Disposable {
   private readonly _report = signal<Report | null>(null);
   private readonly _dirtyFiles = signal<ReadonlySet<string>>(new Set());
@@ -165,6 +175,14 @@ export class ReportStore implements vscode.Disposable {
    * never reached; merging it would leave clusters dropped in the skipped
    * generations behind as phantoms. The caller falls back to a full snapshot.
    */
+  /** Drops the oldest retractions once the ledger exceeds its cap. */
+  private pruneRetracted(retracted: Set<string>): void {
+    const excess = retracted.size - MAX_RETRACTED_CLUSTERS;
+    if (excess <= 0) return;
+    // Set iteration is insertion-ordered, so this drops the oldest first.
+    for (const id of Array.from(retracted).slice(0, excess)) retracted.delete(id);
+  }
+
   applyDelta(delta: ReportDelta): boolean {
     const current = this._report.value;
     if (!current) return false;
@@ -181,6 +199,13 @@ export class ReportStore implements vscode.Disposable {
     // server has found it again, so the withdrawal no longer stands.
     for (const cluster of delta.clusters_updated) retracted.delete(cluster.id);
     for (const cluster of delta.clusters_added) retracted.delete(cluster.id);
+    // Bounded on purpose. A retraction only has to outlive the probes that
+    // were already in flight when it happened; correctness for anything older
+    // is `LiveBubble.hasMovedOn`, which compares the report generation and so
+    // cannot be defeated by a pruned id. Keeping the full history instead made
+    // a delta-only session — one that never receives a full snapshot to clear
+    // the ledger — retain O(N) ids and copy O(N²) of them over its lifetime.
+    this.pruneRetracted(retracted);
     batch(() => {
       this._retractedClusters.value = retracted;
       this._report.value = {

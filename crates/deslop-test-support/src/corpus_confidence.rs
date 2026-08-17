@@ -1,5 +1,5 @@
 //! [CORPUS-BASELINE] The two confidence checks the real-repository gate runs
-//! over a finished report: `fused_spread` and `type2_recall`.
+//! over a finished report: `fused_bounded_max` and `type2_recall`.
 //!
 //! Both exist because the synthetic fixtures that pin
 //! [FUSION-STRATEGY-BOUNDED-MAX] and [FUSION-CONTENT-GATE] are built to
@@ -7,9 +7,9 @@
 //! gate *can* separate a proven rename from sibling scaffolding on five files
 //! the author chose; it says nothing about whether the operating point holds
 //! across 30,000 real ones. These two catch the failure modes that only appear
-//! at that scale, and they catch them in opposite directions — one guards
-//! against the confidence axis carrying no information, the other against it
-//! carrying so much that it swallows the findings.
+//! at that scale, and they catch them in opposite directions — one guards the
+//! confidence arithmetic itself, the other guards against that arithmetic
+//! swallowing the findings.
 //!
 //! Both are keyed on rendered report fields only, with no rank in the key, so
 //! they are stable against the cluster-order churn `corpus/known-failures.json`
@@ -19,14 +19,6 @@ use serde_json::Value;
 
 use crate::corpus::Failure;
 
-/// Minimum visible clusters before [`check_fused_spread`] will judge a report.
-///
-/// A repository that reports two clusters can legitimately render one
-/// confidence for both — two byte-identical pairs really do both score 1.0.
-/// Collapse is only evidence of a broken axis once there is enough population
-/// for the axis to have had something to say.
-const SPREAD_MIN_CLUSTERS: usize = 10;
-
 /// Minimum demoted clusters before [`check_type2_recall`] will judge a report.
 ///
 /// Below this the absence of act-now findings is ordinary — a clean repository
@@ -34,71 +26,100 @@ const SPREAD_MIN_CLUSTERS: usize = 10;
 /// found plenty of same-shape families and vouched for none of them.
 const TYPE2_MIN_DEMOTED: usize = 20;
 
-/// Wire bucket labels the engine considers actionable.
-const ACT_NOW_BUCKETS: [&str; 2] = ["identical", "nearly_identical"];
+/// The bucket a shape-identical cluster reaches only by the content gate
+/// vouching for it — the one act-now destination [`check_type2_recall`] can
+/// read as recall evidence.
+///
+/// `identical` is deliberately **not** here. That bucket is decided by raw
+/// byte-equivalence in `report_bucket_kind`, and both `route_shape_identical`
+/// and `content_gated_signals` return before touching it, so a byte-identical
+/// clone is proof about the *byte comparison*, not about the gate. Counting it
+/// made the check vacuous: Tokio renders 452 `identical` clusters, so every
+/// Type-2 rename in the repository could regress into the demoted tier and the
+/// gate would still pass.
+const CONTENT_VOUCHED_BUCKET: &str = "nearly_identical";
+
+/// Tolerance on the bounded-max invariant in [`check_fused_bounded_max`].
+///
+/// The rendered signals are `f64`s serialised to JSON and read back, and the
+/// invariant is an inequality between values the renderer computed from each
+/// other, so only representation error is being absorbed here — not slack for
+/// a differently-shaped formula. `1e-6` is far below the 0.001 the report
+/// itself renders at and far above the last-bit spread of a round trip.
+const BOUNDED_MAX_EPSILON: f64 = 1e-6;
 
 /// Wire bucket labels the content gate demotes a shape-identical cluster into.
 const DEMOTED_BUCKETS: [&str; 2] = ["structural_only", "loosely_similar"];
 
-/// [CORPUS-BASELINE] `fused_spread` — the rendered confidence must distinguish
-/// clusters that carry visibly different evidence.
+/// [CORPUS-BASELINE] `fused_bounded_max` — every rendered confidence must obey
+/// [FUSION-STRATEGY-BOUNDED-MAX].
 ///
-/// This is gh #343 caught at scale. `PairScore::fused` summed three correlated
-/// axes and clamped, so every cluster with any two signals above 0.5 rendered
-/// `fused = 1.000`: a mid-band cluster at `structural 0.00 / token 0.30 /
-/// embedding 0.94` was indistinguishable from a byte-proven verbatim copy. The
-/// synthetic fixture that pins it uses one hand-built corpus; the same
-/// saturation on a real repository shows up as thousands of clusters sharing
-/// one confidence, which no fixture can demonstrate.
+/// This is gh #343 pinned as a formula, per cluster, rather than as a
+/// distribution. `PairScore::fused` summed three correlated axes and clamped,
+/// so a pair at `structural 0.00 / token 0.30 / embedding 0.94` admitted at
+/// `1.00` — indistinguishable from a byte-proven verbatim copy. The shipped
+/// arithmetic is `bounded_fused` = the strongest single axis, and every path
+/// that rewrites the confidence downstream only ever scales it *down*:
 ///
-/// The predicate is deliberately weak — *more than one* distinct value across
-/// clusters whose raw signal triples differ. A strong spread requirement would
-/// encode an operating point and churn every time ranking moves; a collapse to
-/// a single value cannot be anything but a broken axis, because the inputs it
-/// was computed from provably differed.
-pub fn check_fused_spread(report: &Value, failures: &mut Vec<Failure>) {
+/// - an ungated cluster keeps the pair's `bounded_fused`, which is the max;
+/// - `content_gated_signals` renders `max(embedding, max(structural, token) ×
+///   content_confidence)` with `content_confidence ∈ [0,1]`;
+/// - a byte-proven `Identical` cluster renders `1.0` with `token_jaccard` also
+///   corrected to `1.0`, so the max is `1.0` too.
+///
+/// So `fused ≤ max(structural, token_jaccard, embedding_cos)` holds for every
+/// cluster the engine can legitimately render, and `min(1, s + t + e)` breaks
+/// it the moment any two axes are positive. That makes this an exact contract
+/// with no operating point in it: it cannot churn when ranking moves, it
+/// cannot be rescued by one healthy outlier in a population of saturated
+/// clusters, and it cannot fire on a repository whose clusters legitimately
+/// share one confidence.
+///
+/// It replaces an earlier `fused_spread` check that asked whether the
+/// population took more than one distinct value. That predicate was unsound in
+/// both directions — a single outlier cleared it however many clusters were
+/// saturated, and a repository of genuinely byte-identical clones failed it —
+/// and on the scheduled corpora it never reached the arithmetic at all, since
+/// those scans run embeddings-off where every cluster is either byte-identical
+/// or content-gated and the incoming pair `fused` is discarded at render.
+pub fn check_fused_bounded_max(report: &Value, failures: &mut Vec<Failure>) {
     let clusters = visible_clusters(report);
-    if clusters.len() < SPREAD_MIN_CLUSTERS {
-        return;
-    }
-    let fused: Vec<u64> = clusters
+    let breaches: Vec<String> = clusters
         .iter()
-        .map(|cluster| rounded_bits(signal(cluster, "fused")))
+        .filter_map(|cluster| bounded_max_breach(cluster))
         .collect();
-    let Some(collapsed) = single_value(&fused) else {
+    let Some(first) = breaches.first() else {
         return;
     };
-    let triples: Vec<[u64; 3]> = clusters
-        .iter()
-        .map(|cluster| {
-            [
-                rounded_bits(signal(cluster, "structural")),
-                rounded_bits(signal(cluster, "token_jaccard")),
-                rounded_bits(signal(cluster, "embedding_cos")),
-            ]
-        })
-        .collect();
-    let shapes = distinct(&triples);
-    if shapes < 2 {
-        return;
-    }
     failures.push(Failure::new(
-        "fused_spread",
+        "fused_bounded_max",
         format!(
-            "all {} visible clusters render fused = {:.3} while their signal triples take {shapes} \
-             distinct values — the confidence axis is carrying no information (gh #343)",
+            "{} of {} visible clusters render a confidence above the strongest axis they were \
+             computed from, which [FUSION-STRATEGY-BOUNDED-MAX] forbids — the first is {first} \
+             (gh #343: the sum-then-clamp arm renders exactly this)",
+            breaches.len(),
             clusters.len(),
-            f64::from_bits(collapsed),
         ),
     ));
 }
 
-/// The single value every entry takes, or `None` when they differ or the
-/// slice is empty.
-fn single_value(values: &[u64]) -> Option<u64> {
-    let mut entries = values.iter();
-    let first = *entries.next()?;
-    entries.all(|value| *value == first).then_some(first)
+/// Describes how one cluster breaks the bounded-max invariant, or `None`.
+fn bounded_max_breach(cluster: &Value) -> Option<String> {
+    let structural = signal(cluster, "structural");
+    let token = signal(cluster, "token_jaccard");
+    let embedding = signal(cluster, "embedding_cos");
+    let fused = signal(cluster, "fused");
+    let strongest = structural.max(token).max(embedding);
+    (fused > strongest + BOUNDED_MAX_EPSILON).then(|| {
+        format!(
+            "bucket {} at structural {structural:.3} / token {token:.3} / embedding \
+             {embedding:.3} rendering fused {fused:.3}, over the {strongest:.3} ceiling",
+            cluster
+                .get("bucket")
+                .and_then(Value::as_str)
+                .unwrap_or("<unlabelled>"),
+        )
+    })
 }
 
 /// [CORPUS-BASELINE] `type2_recall` — the content gate must vouch for
@@ -112,30 +133,37 @@ fn single_value(values: &[u64]) -> Option<u64> {
 /// separate. The report stays plausible — it is full of clusters — while every
 /// finding a user would act on has quietly become "verify before extracting".
 ///
-/// A repository that produced a large demoted population and *zero* act-now
-/// clusters is that failure. It is not a threshold on a score: a real corpus of
-/// that size containing no verbatim copy and no proven rename at all is not a
-/// state the engine should ever report.
+/// A repository that produced a large demoted population and *zero*
+/// gate-vouched clusters is that failure. It is not a threshold on a score: a
+/// real corpus of that size containing no proven rename at all is not a state
+/// the engine should ever report.
+///
+/// Only [`CONTENT_VOUCHED_BUCKET`] counts as recall. A `identical` cluster is
+/// decided by byte-equivalence before the gate runs, so it is evidence the
+/// byte comparison works and says nothing about whether the gate is vouching
+/// for anything — see that constant for what counting it cost.
 pub fn check_type2_recall(report: &Value, failures: &mut Vec<Failure>) {
     let clusters = visible_clusters(report);
     let demoted = clusters
         .iter()
         .filter(|c| in_set(c, &DEMOTED_BUCKETS))
         .count();
-    let act_now = clusters
+    let vouched = clusters
         .iter()
-        .filter(|c| in_set(c, &ACT_NOW_BUCKETS))
+        .filter(|c| in_set(c, &[CONTENT_VOUCHED_BUCKET]))
         .count();
-    if demoted < TYPE2_MIN_DEMOTED || act_now > 0 {
+    if demoted < TYPE2_MIN_DEMOTED || vouched > 0 {
         return;
     }
+    let proven = clusters.iter().filter(|c| in_set(c, &["identical"])).count();
     failures.push(Failure::new(
         "type2_recall",
         format!(
-            "{demoted} same-shape clusters were demoted and not one reached an act-now bucket \
-             ({}) — the content gate vouched for nothing in the whole repository, so every \
-             genuine rename is being reported as unverified scaffolding",
-            ACT_NOW_BUCKETS.join(" / "),
+            "{demoted} same-shape clusters were demoted and not one reached \
+             `{CONTENT_VOUCHED_BUCKET}` — the content gate vouched for nothing in the whole \
+             repository, so every genuine rename is being reported as unverified scaffolding \
+             (the {proven} byte-identical clusters here are decided before the gate runs and \
+             cannot stand in for it)",
         ),
     ));
 }
@@ -179,25 +207,7 @@ fn signal(cluster: &Value, name: &str) -> f64 {
         .unwrap_or_default()
 }
 
-/// A signal rounded to three decimals, as bits, so equality is exact.
-///
-/// Comparing rendered `f64`s directly would make these checks a float-equality
-/// test on values that legitimately differ in the last bit. Three decimals is
-/// the precision the report itself renders at, and `to_bits` keeps the result
-/// a total-equality key without a lossy numeric cast — `f64::from_bits` turns
-/// it straight back into the value to print.
-fn rounded_bits(value: f64) -> u64 {
-    ((value.clamp(0.0, 1.0) * 1000.0).round() / 1000.0).to_bits()
-}
 
-/// Number of distinct entries, without requiring `Ord` on the element type.
-fn distinct<T: PartialEq>(values: &[T]) -> usize {
-    values
-        .iter()
-        .enumerate()
-        .filter(|(index, value)| !values.iter().take(*index).any(|seen| seen == *value))
-        .count()
-}
 
 #[cfg(test)]
 mod tests {
@@ -226,16 +236,40 @@ mod tests {
 
     /// One cluster with the given bucket, signal triple and rendered fused.
     fn cluster(bucket: &str, structural: f64, token: f64, fused: f64) -> Value {
+        with_embedding(bucket, structural, token, 0.0, fused)
+    }
+
+    /// The same, with the semantic axis set too.
+    fn with_embedding(
+        bucket: &str,
+        structural: f64,
+        token: f64,
+        embedding: f64,
+        fused: f64,
+    ) -> Value {
         json!({
             "bucket": bucket,
             "signals": {
                 "structural": structural,
                 "token_jaccard": token,
-                "embedding_cos": 0.0,
+                "embedding_cos": embedding,
                 "fused": fused,
             },
             "occurrences": [{ "hidden": false }, { "hidden": false }],
         })
+    }
+
+    /// The shipped arithmetic: the strongest single axis, bounded.
+    fn bounded_max(structural: f64, token: f64, embedding: f64) -> f64 {
+        structural.max(token).max(embedding).clamp(0.0, 1.0)
+    }
+
+    /// The quarantined arithmetic from gh #343, kept here as a negative
+    /// control. A gate that never fails against the code it was written to
+    /// catch asserts nothing, so every `fused_bounded_max` test that expects a
+    /// pass is re-run through this to prove it would have caught the revert.
+    fn sum_then_clamp(structural: f64, token: f64, embedding: f64) -> f64 {
+        (structural + token + embedding).clamp(0.0, 1.0)
     }
 
     /// The same cluster with every occurrence hidden, so it renders nothing.
@@ -250,72 +284,138 @@ mod tests {
         json!({ "clusters": clusters })
     }
 
-    /// `count` clusters whose triples all differ, at one shared fused value.
-    fn saturated(count: usize, fused: f64) -> Value {
-        let clusters: Vec<Value> = (0..count)
-            .map(|index| {
-                let step = f64::from(u32::try_from(index).unwrap_or(0)) / 100.0;
-                cluster("nearly_identical", 0.2 + step, 0.3 + step, fused)
-            })
-            .collect();
-        report(&clusters)
-    }
+    /// The signal triples the negative control is run over. Each is a shape
+    /// the engine really renders, and each has at least two positive axes so
+    /// the sum and the max provably disagree.
+    const TRIPLES: [(&str, f64, f64, f64); 5] = [
+        ("identical", 1.0, 1.0, 0.0),
+        ("nearly_identical", 1.0, 1.0, 0.42),
+        ("structural_only", 1.0, 0.30, 0.0),
+        ("loosely_similar", 0.20, 0.30, 0.94),
+        ("same_behavior", 0.10, 0.20, 0.88),
+    ];
 
     #[test]
-    fn saturation_across_differing_evidence_is_reported() {
+    fn the_shipped_arithmetic_passes_and_the_quarantined_one_fails() {
+        // The negative control this gate exists for. Every triple is rendered
+        // twice — once through `bounded_fused`, once through the gh #343
+        // sum-then-clamp arm — and the check must separate them.
+        let shipped: Vec<Value> = TRIPLES
+            .iter()
+            .map(|&(bucket, s, t, e)| with_embedding(bucket, s, t, e, bounded_max(s, t, e)))
+            .collect();
         let mut failures = Vec::new();
-        check_fused_spread(&saturated(12, 1.0), &mut failures);
+        check_fused_bounded_max(&report(&shipped), &mut failures);
+        assert!(
+            failures.is_empty(),
+            "the shipped bounded max must never trip its own gate: {failures:?}"
+        );
+
+        let reverted: Vec<Value> = TRIPLES
+            .iter()
+            .map(|&(bucket, s, t, e)| with_embedding(bucket, s, t, e, sum_then_clamp(s, t, e)))
+            .collect();
+        let mut failures = Vec::new();
+        check_fused_bounded_max(&report(&reverted), &mut failures);
         assert_eq!(
             failures.len(),
             1,
-            "a collapsed confidence axis must be reported"
+            "restoring the sum must be caught: {failures:?}"
         );
-        assert_eq!(only_check(&failures), Some("fused_spread"));
+        assert_eq!(only_check(&failures), Some("fused_bounded_max"));
         assert!(
-            detail_mentions(&failures, "12 visible clusters"),
-            "the detail must name the population size: {failures:?}",
+            detail_mentions(&failures, "2 of 5 visible clusters"),
+            "the two mid-band triples breach; the three whose strongest axis is already 1.0 are \
+             hidden by the clamp: {failures:?}",
         );
         assert!(
-            detail_mentions(&failures, "1.000"),
-            "and the single value they all rendered: {failures:?}",
+            detail_mentions(&failures, "loosely_similar"),
+            "the detail must name a breaching cluster's bucket: {failures:?}",
         );
     }
 
     #[test]
-    fn saturation_at_any_value_is_reported_not_just_at_one() {
-        // The defect is collapse, not the number collapsed onto. A gate that
-        // only recognised `fused == 1.0` would miss a mid-band collapse.
+    fn a_saturated_axis_hides_the_reverted_sum_from_this_gate() {
+        // The limit of what a *rendered-report* check can see, stated as an
+        // assertion rather than left for someone to rediscover. Where the
+        // strongest axis is already 1.0 the clamp makes sum and max agree
+        // exactly, so no invariant over rendered signals can separate them.
+        // Detecting the revert on those clusters needs a pin at the
+        // *admission* layer, on a pair whose axes all sit below the threshold
+        // while their sum clears it — which is the calibration this gate does
+        // not replace.
+        for &(bucket, structural, token, embedding) in &TRIPLES {
+            let strongest = bounded_max(structural, token, embedding);
+            let reverted = sum_then_clamp(structural, token, embedding);
+            let mut failures = Vec::new();
+            check_fused_bounded_max(
+                &report(&[with_embedding(bucket, structural, token, embedding, reverted)]),
+                &mut failures,
+            );
+            let visible = (reverted - strongest) > BOUNDED_MAX_EPSILON;
+            assert_eq!(
+                failures.len(),
+                usize::from(visible),
+                "{bucket}: strongest axis {strongest:.3}, reverted render {reverted:.3}",
+            );
+            assert_eq!(
+                strongest >= 1.0,
+                !visible,
+                "{bucket}: a saturated strongest axis is exactly the blind spot",
+            );
+        }
+    }
+
+    #[test]
+    fn one_saturated_cluster_is_reported_however_healthy_the_rest_are() {
+        // The false negative the old distribution predicate carried: it asked
+        // whether the population took more than one value, so a single honest
+        // outlier cleared a report of otherwise saturated clusters.
+        let mut clusters: Vec<Value> = (0..40)
+            .map(|index| {
+                let step = f64::from(u32::try_from(index).unwrap_or(0)) / 100.0;
+                cluster("nearly_identical", 0.2 + step, 0.3 + step, 0.3 + step)
+            })
+            .collect();
+        clusters.push(with_embedding("loosely_similar", 0.2, 0.3, 0.4, 0.9));
         let mut failures = Vec::new();
-        check_fused_spread(&saturated(12, 0.42), &mut failures);
-        assert_eq!(failures.len(), 1);
-        assert!(detail_mentions(&failures, "0.420"), "{failures:?}");
+        check_fused_bounded_max(&report(&clusters), &mut failures);
+        assert_eq!(failures.len(), 1, "one breach in 41 is still a breach");
+        assert!(
+            detail_mentions(&failures, "1 of 41 visible clusters"),
+            "and the count must be honest about how many: {failures:?}",
+        );
     }
 
     #[test]
-    fn a_spread_confidence_passes() {
+    fn distinct_triples_sharing_one_legitimate_max_pass() {
+        // The false positive the old predicate carried: bounded max is
+        // many-to-one on purpose. These twelve clusters differ on the axes
+        // that are not dominant and legitimately render one confidence.
         let clusters: Vec<Value> = (0..12)
             .map(|index| {
                 let step = f64::from(u32::try_from(index).unwrap_or(0)) / 100.0;
-                cluster("nearly_identical", 0.2 + step, 0.3 + step, 0.5 + step)
+                with_embedding("nearly_identical", 0.9, 0.1 + step, 0.2 + step, 0.9)
             })
             .collect();
         let mut failures = Vec::new();
-        check_fused_spread(&report(&clusters), &mut failures);
+        check_fused_bounded_max(&report(&clusters), &mut failures);
         assert!(
             failures.is_empty(),
-            "a spread axis is the healthy case: {failures:?}"
+            "one dominant axis across differing triples is the formula working, not a defect: \
+             {failures:?}"
         );
     }
 
     #[test]
-    fn identical_evidence_may_render_one_confidence() {
-        // Twelve byte-identical pairs really do all score 1.0. The check must
-        // fire on collapse *despite* differing inputs, never on agreement.
+    fn a_report_of_byte_identical_clones_passes() {
+        // Twelve byte-identical pairs really do all score 1.0, and 1.0 is
+        // exactly their strongest axis.
         let clusters: Vec<Value> = (0..12)
             .map(|_| cluster("identical", 1.0, 1.0, 1.0))
             .collect();
         let mut failures = Vec::new();
-        check_fused_spread(&report(&clusters), &mut failures);
+        check_fused_bounded_max(&report(&clusters), &mut failures);
         assert!(
             failures.is_empty(),
             "identical inputs may share an output: {failures:?}"
@@ -323,32 +423,63 @@ mod tests {
     }
 
     #[test]
-    fn a_small_report_is_not_judged_on_spread() {
+    fn a_content_gated_confidence_below_its_ceiling_passes() {
+        // The shape [FUSION-CONTENT-GATE] renders: a proven rename scaled
+        // *down* off a saturated shape signal. The gate is an inequality, so
+        // scaling down can never trip it — which is what lets a proven rename
+        // legitimately render below the admission bar.
+        let clusters = [
+            cluster("nearly_identical", 1.0, 1.0, 0.62),
+            cluster("structural_only", 1.0, 0.0, 0.0),
+            with_embedding("same_behavior", 0.1, 0.2, 0.88, 0.88),
+        ];
         let mut failures = Vec::new();
-        check_fused_spread(&saturated(SPREAD_MIN_CLUSTERS - 1, 1.0), &mut failures);
-        assert!(
-            failures.is_empty(),
-            "too small a population to conclude anything"
-        );
-        check_fused_spread(&saturated(SPREAD_MIN_CLUSTERS, 1.0), &mut failures);
-        assert_eq!(failures.len(), 1, "and exactly at the floor it is judged");
+        check_fused_bounded_max(&report(&clusters), &mut failures);
+        assert!(failures.is_empty(), "{failures:?}");
     }
 
     #[test]
-    fn hidden_clusters_cannot_collapse_the_spread() {
+    fn a_single_cluster_report_is_still_judged() {
+        // No population floor: the invariant is per cluster, so there is no
+        // size below which a breach stops being one. The old spread check
+        // needed a floor of ten and could say nothing about smaller repos.
+        let mut failures = Vec::new();
+        check_fused_bounded_max(&report(&[with_embedding("x", 0.2, 0.3, 0.4, 0.9)]), &mut failures);
+        assert_eq!(failures.len(), 1, "one cluster is enough to be wrong");
+        assert!(detail_mentions(&failures, "1 of 1 visible clusters"), "{failures:?}");
+    }
+
+    #[test]
+    fn hidden_clusters_cannot_breach_the_invariant() {
         let clusters: Vec<Value> = (0..12)
             .map(|index| {
                 let step = f64::from(u32::try_from(index).unwrap_or(0)) / 100.0;
-                cluster("nearly_identical", 0.2 + step, 0.3 + step, 1.0)
+                hide(cluster("nearly_identical", 0.2 + step, 0.3 + step, 1.0))
             })
             .collect();
-        let clusters: Vec<Value> = clusters.into_iter().map(hide).collect();
         let mut failures = Vec::new();
-        check_fused_spread(&report(&clusters), &mut failures);
+        check_fused_bounded_max(&report(&clusters), &mut failures);
         assert!(
             failures.is_empty(),
             "a hidden cluster makes no claim to the user, so it cannot fail a claim check"
         );
+    }
+
+    #[test]
+    fn float_round_trip_noise_is_not_a_breach() {
+        // The invariant must absorb representation error and nothing wider.
+        let mut failures = Vec::new();
+        check_fused_bounded_max(
+            &report(&[cluster("nearly_identical", 0.7, 0.3, 0.7 + 1e-9)]),
+            &mut failures,
+        );
+        assert!(failures.is_empty(), "last-bit noise is not a defect: {failures:?}");
+
+        check_fused_bounded_max(
+            &report(&[cluster("nearly_identical", 0.7, 0.3, 0.7 + 1e-3)]),
+            &mut failures,
+        );
+        assert_eq!(failures.len(), 1, "a breach at report precision is one");
     }
 
     #[test]
@@ -367,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn one_act_now_cluster_clears_the_recall_check() {
+    fn one_gate_vouched_cluster_clears_the_recall_check() {
         let mut clusters: Vec<Value> = (0..TYPE2_MIN_DEMOTED)
             .map(|_| cluster("structural_only", 1.0, 0.3, 0.31))
             .collect();
@@ -377,6 +508,32 @@ mod tests {
         assert!(
             failures.is_empty(),
             "the check asks whether the gate vouched for anything, not how much: {failures:?}"
+        );
+    }
+
+    #[test]
+    fn byte_identical_clones_cannot_stand_in_for_type2_recall() {
+        // The vacuity this check shipped with. `identical` is decided by byte
+        // equivalence before `route_shape_identical` or
+        // `content_gated_signals` run, so however many of them a repository
+        // reports, none is evidence the content gate vouched for a rename.
+        // Tokio renders 452; counting them meant every Type-2 rename in the
+        // repository could regress into the demoted tier with the gate green.
+        let mut clusters: Vec<Value> = (0..TYPE2_MIN_DEMOTED)
+            .map(|_| cluster("structural_only", 1.0, 0.3, 0.31))
+            .collect();
+        clusters.extend((0..452).map(|_| cluster("identical", 1.0, 1.0, 1.0)));
+        let mut failures = Vec::new();
+        check_type2_recall(&report(&clusters), &mut failures);
+        assert_eq!(
+            failures.len(),
+            1,
+            "452 byte-proven clones must not rescue a repository that vouched for no rename"
+        );
+        assert_eq!(only_check(&failures), Some("type2_recall"));
+        assert!(
+            detail_mentions(&failures, "452 byte-identical clusters"),
+            "and the detail must say why they did not count: {failures:?}",
         );
     }
 
@@ -400,7 +557,7 @@ mod tests {
         let mut clusters: Vec<Value> = (0..TYPE2_MIN_DEMOTED)
             .map(|_| cluster("structural_only", 1.0, 0.3, 0.31))
             .collect();
-        clusters.push(hide(cluster("identical", 1.0, 1.0, 1.0)));
+        clusters.push(hide(cluster("nearly_identical", 1.0, 1.0, 0.9)));
         let mut failures = Vec::new();
         check_type2_recall(&report(&clusters), &mut failures);
         assert_eq!(failures.len(), 1, "a hidden rescue is no rescue");

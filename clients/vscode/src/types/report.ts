@@ -128,6 +128,24 @@ export function severityOf(weightPercentile: number): Severity {
   return "faint";
 }
 
+// [SEVERITY-DESLOP-MAP] The Deslop severity level — the *other* visual
+// channel, and the one that answers "how alarming is this kind of
+// duplicate?". It is a function of the bucket alone, never of the ranking:
+// per [SEVERITY-COLOR] colour carries the bucket and glyph density carries
+// the weight percentile, and the two are orthogonal by design. A faint
+// identical clone is a red `○`; a high-impact shape-only family is a grey
+// `●●`. Collapsing them into one channel is what let a demoted family wear
+// the loudest paint in the editor.
+export type DeslopSeverity = "error" | "warning" | "information" | "hint";
+
+/** Every Deslop severity level, loudest first. */
+export const DESLOP_SEVERITIES: readonly DeslopSeverity[] = [
+  "error",
+  "warning",
+  "information",
+  "hint",
+] as const;
+
 // ---------------------------------------------------------------------------
 // Canonical clone buckets — mirrors deslop-core::buckets.
 // Single source of truth for every user-facing surface in the VS Code

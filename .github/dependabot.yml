@@ -13,8 +13,10 @@
 #     opens them against the repo's default branch (`main`). They are handled by
 #     a human, deliberately — the sweep's base filter is `dependabot-upgrades`
 #     only (see the BASE FILTER note in dependabot-automerge.yml and
-#     [GITHUB-DEPENDABOT]) — and the `security` dependency-review job in ci.yml
-#     still gates them.
+#     [GITHUB-DEPENDABOT]) — and because they are the ONLY Dependabot PRs that
+#     ever reach a `pull_request: [main]` workflow, ci.yml and codeql.yml carry
+#     no actor short-circuit: a security PR gets the full build/test matrix,
+#     dependency review, and CodeQL, like any human PR to main.
 #   * groups -> each ecosystem collapses ALL version bumps (patch, minor AND
 #     major) into ONE PR, and a parallel `*-security` group (`applies-to:
 #     security-updates`) collapses CVE bumps the same way. Majors no longer need
