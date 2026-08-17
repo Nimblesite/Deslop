@@ -62,9 +62,12 @@ envelope.
 > enums those sections describe are implemented today on the current surface.
 >
 > **`top-offenders` output order — shipped.** Clusters come back in **report
-> order**: ranking weight descending, with the confidence-scaled
-> `confidence_factor` already folded into the weight
-> ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)). It is
+> order**: final report `weight` descending, with `confidence_factor` already
+> folded into that weight — the content-gated fused confidence for most
+> clusters, and deliberately `1.0` for `data`-category clusters, whose
+> demotion belongs exclusively to the `[ranking] data_clones` policy
+> ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first),
+> [RANK-CATEGORY]). It is
 > **not** sorted by `signals.fused`, and an agent must not re-sort or filter on
 > that field — the rendered confidence is a per-cluster quality, so ordering by
 > it puts a two-line byte-identical pair above a 400-line proven clone, and
@@ -257,8 +260,10 @@ declaring a new constant, query `duplicates { categories: ["shadowed_constant",
 code passes `buckets: ["identical"]` inside the prevention loop too) and the uniform `limit`
 (default 5, replacing the old `top_n`) + `max_occurrences` params.
 
-Output: top-`limit` clusters in **report order** — ranking weight descending, with the
-confidence-scaled `confidence_factor` already folded in ([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) — carrying signals,
+Output: top-`limit` clusters in **report order** — final report `weight` descending, with
+`confidence_factor` already folded in (the content-gated fused confidence, or `1.0` for
+`data`-category clusters per [RANK-CATEGORY])
+([PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)) — carrying signals,
 interpretation, action hints, occurrences, and the `filters` echo. Not sorted by `fused`: the
 rendered confidence is a per-cluster quality, and ordering by it would put a two-line byte-identical
 pair above a 400-line proven clone.

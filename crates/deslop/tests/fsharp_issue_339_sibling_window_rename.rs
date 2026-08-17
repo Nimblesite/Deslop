@@ -17,19 +17,17 @@
 //! So a rendered `1.00` is supplied by the renderer, not measured, and an E2E
 //! assertion on it passes whether or not the signature layer works. That
 //! question is pinned where it is answerable, at the signature layer:
-//! `deslop-core::pipeline::signatures::tests::issue_339_sibling_window_signature_is_offset_invariant`.
-//! **That test is currently RED — #339 is live.**
+//! `deslop-core::pipeline::signatures::tests::issue_339_sibling_window_signature_is_offset_invariant`,
+//! which holds every known-language fingerprint to the language-aware token
+//! path that resolves sibling windows instead of the offset-seeded fallback.
 //!
 //! What this file pins instead is the part only an end-to-end run can show:
-//! that the duplicated region surfaces as a *sibling window* at all — a range
-//! spanning several consecutive children that no single subtree covers — and
+//! that the duplicated region surfaces as a *sibling window* at all — the
+//! reported occurrences sit at the exact expected boundaries, boundaries no
+//! single normalised subtree owns (asserted against `--debug-ast`) — and
 //! that it reaches an act-now bucket rather than being demoted to the
-//! shape-only tier by a fallback-signature artifact.
-//!
-//! F# and PHP reach the sibling-window path every time:
-//! `is_import_boilerplate_carrier` has no arm for either, so
-//! `exact_range_contains_boilerplate` is always false and the language-aware
-//! path — the one that *can* resolve a sibling window — is never selected.
+//! shape-only tier by a fallback-signature artifact or displaced by a
+//! wider token-matched view (the #339 anchored-representative collapse).
 
 use anyhow::anyhow;
 use serde_json::Value;
@@ -92,6 +90,19 @@ fn module_with_shared_window(module_name: &str, tail: &str) -> String {
     format!("module {module_name}\n\n{SHARED_WINDOW}{tail}")
 }
 
+/// The exact byte range the sibling window must be reported at inside
+/// `source`: from the module-name identifier (the first child the
+/// synthetic window covers) to the last byte of the `combine` binding.
+/// Derived from the fixture text, never hard-coded offsets.
+fn expected_window_range(source: &str) -> Result<(u64, u64)> {
+    let start = "module ".len();
+    let window_text = source
+        .find(SHARED_WINDOW)
+        .ok_or_else(|| anyhow!("fixture must contain the shared window"))?;
+    let end = window_text.saturating_add(SHARED_WINDOW.trim_end().len());
+    Ok((start as u64, end as u64))
+}
+
 /// The `(start, end)` byte range of an occurrence in `file`.
 fn occurrence_range(cluster: &Value, file: &str) -> Option<(u64, u64)> {
     cluster
@@ -112,37 +123,75 @@ fn occurrence_range(cluster: &Value, file: &str) -> Option<(u64, u64)> {
         })
 }
 
-/// Asserts the reported clone really is the shared window — not the whole
-/// module — and that it reaches an act-now bucket.
-///
-/// Selection is by *range*, not by file membership: `expect_cluster_spanning`
-/// returns the first cluster whose occurrences merely mention both files,
-/// which is satisfied by a whole-module clone and was what made the earlier
-/// version of this test a false green.
-fn assert_window_clone(report: &Value, sources: (&str, &str), expected: &str) -> Result<()> {
-    let clone = expect_cluster_spanning(report, &["window_a.fs", "window_b.fs"])?;
+/// The cluster whose occurrences sit at exactly the expected window
+/// boundaries in both files. Selection by exact range, not by file
+/// membership: a cluster whose occurrences merely mention both files is
+/// satisfied by a whole-module clone or a nested-binding family, both of
+/// which made earlier versions of this test a false green.
+fn window_cluster(report: &Value, range_a: (u64, u64), range_b: (u64, u64)) -> Result<&Value> {
+    report
+        .get("clusters")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|cluster| {
+            occurrence_range(cluster, "window_a.fs") == Some(range_a)
+                && occurrence_range(cluster, "window_b.fs") == Some(range_b)
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "expected a cluster at exactly window_a.fs {range_a:?} + window_b.fs \
+                 {range_b:?}: {report:#}"
+            )
+        })
+}
 
-    let (start_a, end_a) =
-        occurrence_range(clone, "window_a.fs").ok_or_else(|| anyhow!("no window_a occurrence"))?;
-    let (start_b, end_b) =
-        occurrence_range(clone, "window_b.fs").ok_or_else(|| anyhow!("no window_b occurrence"))?;
+/// Writes both fixture files, runs the scan, and returns the report plus
+/// each file's `--debug-ast` dump for the no-exact-node assertion.
+fn scan_with_dumps(sources: (&str, &str)) -> Result<(Value, String, String)> {
+    let tmp = tempfile::tempdir()?;
+    let root = tmp.path().join("src");
+    std::fs::create_dir_all(&root)?;
+    let path_a = root.join("window_a.fs");
+    let path_b = root.join("window_b.fs");
+    std::fs::write(&path_a, sources.0)?;
+    std::fs::write(&path_b, sources.1)?;
+    let report = run_report(&root, 20)?;
+    Ok((report, ast_dump(&path_a)?, ast_dump(&path_b)?))
+}
 
+/// The normalised-AST dump of `path` via the CLI's `--debug-ast` flag.
+fn ast_dump(path: &std::path::Path) -> Result<String> {
+    let mut cmd = assert_cmd::Command::cargo_bin("deslop")?;
+    let output = cmd
+        .arg("--debug-ast")
+        .arg(path)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    Ok(String::from_utf8(output)?)
+}
+
+/// Asserts the reported clone really is the shared window — at the exact
+/// expected boundaries, boundaries no single normalised subtree owns —
+/// and that it reaches an act-now bucket.
+fn assert_window_clone(sources: (&str, &str), expected: &str) -> Result<()> {
+    let (report, dump_a, dump_b) = scan_with_dumps(sources)?;
+    let range_a = expected_window_range(sources.0)?;
+    let range_b = expected_window_range(sources.1)?;
+    let clone = window_cluster(&report, range_a, range_b)?;
+
+    let exact_a = format!("[{}..{}]", range_a.0, range_a.1);
+    let exact_b = format!("[{}..{}]", range_b.0, range_b.1);
     assert!(
-        end_a < sources.0.len() as u64,
-        "the clone must not span all of window_a.fs ({end_a} of {} bytes) — a whole-module \
-         match is the exact-node path, not the sibling-window path this file exists to \
-         cover: {report:#}",
-        sources.0.len(),
+        !dump_a.contains(&exact_a) && !dump_b.contains(&exact_b),
+        "the window range must be a synthetic sibling window that no single normalised \
+         node owns — an exact node here means the fixture stopped exercising the \
+         sibling-window path:\n{dump_a}\n{dump_b}"
     );
-    assert!(
-        end_b < sources.1.len() as u64,
-        "the clone must not span all of window_b.fs ({end_b} of {} bytes): {report:#}",
-        sources.1.len(),
-    );
-    assert!(
-        end_a > start_a && end_b > start_b,
-        "both occurrences must cover a real range: {report:#}"
-    );
+
     assert!(
         approx(signal(clone, "structural"), 1.0),
         "the shared window is a Merkle match — structural must be 1.0: {report:#}"
@@ -182,12 +231,7 @@ fn is_act_now(bucket: &str) -> bool {
 fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
     let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
     let source_b = module_with_shared_window("ParseHelpersB", TAIL_B);
-    let files = [
-        ("window_a.fs".to_owned(), source_a.clone()),
-        ("window_b.fs".to_owned(), source_b.clone()),
-    ];
-    let report = report_for(&files, 20)?;
-    assert_window_clone(&report, (&source_a, &source_b), "nearly_identical")
+    assert_window_clone((&source_a, &source_b), "nearly_identical")
 }
 
 // The control: identical module names keep the two windows at identical byte
@@ -200,10 +244,5 @@ fn issue_339_sibling_window_survives_offset_shifting_rename() -> Result<()> {
 fn issue_339_sibling_window_routing_is_offset_independent() -> Result<()> {
     let source_a = module_with_shared_window("ParseHelpers", TAIL_A);
     let source_b = module_with_shared_window("ParseHelpers", TAIL_B);
-    let files = [
-        ("window_a.fs".to_owned(), source_a.clone()),
-        ("window_b.fs".to_owned(), source_b.clone()),
-    ];
-    let report = report_for(&files, 20)?;
-    assert_window_clone(&report, (&source_a, &source_b), "identical")
+    assert_window_clone((&source_a, &source_b), "identical")
 }

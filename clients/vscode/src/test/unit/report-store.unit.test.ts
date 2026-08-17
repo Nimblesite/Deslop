@@ -71,6 +71,46 @@ suite("ReportStore", () => {
     assert.equal(store.current.generation, 7);
   });
 
+  // RA-05: the wire generation is not a freshness token — out-of-order
+  // refresh completions can relabel it backward and then forward again
+  // (ABA). The store owns a strictly monotonic revision instead, and it
+  // refuses a generation rollback outright.
+  test("revision advances on every accepted mutation and generation rollback is rejected", () => {
+    const store = new ReportStore();
+    assert.equal(store.current.revision, 0, "a fresh store starts at revision 0");
+
+    assert.equal(store.setSnapshot(emptyReport({ clusters: [cluster("a", 5)] }), 3), true);
+    assert.equal(store.current.revision, 1, "an accepted snapshot bumps the revision");
+    assert.equal(store.current.generation, 3);
+
+    // A stale completion labelled with an older generation: rejected whole.
+    assert.equal(store.setSnapshot(emptyReport({ clusters: [cluster("stale", 9)] }), 2), false);
+    assert.equal(store.current.generation, 3, "the generation never rolls backward");
+    assert.equal(store.current.revision, 1, "a rejected snapshot must not bump the revision");
+    assert.equal(store.current.report?.clusters[0]?.id, "a", "the content stays untouched");
+
+    // The ABA relabel: same generation, different content — accepted, and
+    // only the revision records that the world changed.
+    assert.equal(store.setSnapshot(emptyReport({ clusters: [cluster("b", 4)] }), 3), true);
+    assert.equal(store.current.revision, 2, "a same-generation replacement still advances the revision");
+    assert.equal(store.current.generation, 3, "the generation label reads 3 again");
+    assert.equal(store.current.report?.clusters[0]?.id, "b");
+
+    const applied = store.applyDelta({
+      from_generation: 3,
+      to_generation: 4,
+      clusters_added: [cluster("c", 2)],
+      clusters_removed: [],
+      clusters_updated: [],
+      metrics: metrics(),
+      cache_stats: { hits: 0, misses: 0 },
+      tool_version: "tool-v2",
+    });
+    assert.equal(applied, true);
+    assert.equal(store.current.revision, 3, "an applied delta bumps the revision");
+    assert.equal(store.current.generation, 4);
+  });
+
   // [PRINCIPLES-LIVE-IS-REACTIVE] [VSIX reactivity] An empty report may be a
   // cache seed or a mid-scan snapshot, so it must NOT settle the lifecycle to
   // "ready" — otherwise

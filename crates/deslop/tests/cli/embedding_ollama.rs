@@ -212,7 +212,7 @@ fn ollama_type4_cross_file_cluster_has_positive_embedding_signal() -> Result<()>
     );
     let cluster =
         find_cross_file_cluster(&json, &["Recursive.cs", "Iterative.cs"]).ok_or_else(|| {
-            anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs")
+            anyhow::anyhow!("no cross-file cluster spanning Recursive.cs + Iterative.cs: {json:#}")
         })?;
     let signals = object_field(&cluster, "signals", "cluster missing signals object")?;
     let embedding_cos = signals

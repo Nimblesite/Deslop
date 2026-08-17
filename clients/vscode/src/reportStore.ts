@@ -44,6 +44,8 @@ export interface ReportState {
   /** Visible projection — canonical with dirty-file occurrences elided. Use for any rendered surface. */
   visibleReport: Report | null;
   generation: number;
+  /** Client-owned freshness token — see `ReportStore.revision`. */
+  revision: number;
   lifecycle: LifecyclePhase;
   pendingEmbeddingModel: string | null;
   embeddingProgress: EmbeddingProgress | null;
@@ -70,6 +72,7 @@ export class ReportStore implements vscode.Disposable {
   private readonly _report = signal<Report | null>(null);
   private readonly _dirtyFiles = signal<ReadonlySet<string>>(new Set());
   private readonly _generation = signal<number>(0);
+  private readonly _revision = signal<number>(0);
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
@@ -87,6 +90,18 @@ export class ReportStore implements vscode.Disposable {
 
   /** Workspace facet-filter signal ([FACET-TOP-OFFENDERS-FILTER]). */
   readonly facetFilter: ReadonlySignal<FacetFilter> = this._facetFilter;
+  /**
+   * Client-owned freshness token: bumps on every *accepted* snapshot or
+   * delta, and never moves backward. The wire `generation` cannot serve as
+   * that token — concurrent refreshes can complete out of order and a
+   * fallback snapshot is labelled with its *initiating* notification's
+   * generation, so the label can read 3 → 2 → 3 while the content changes
+   * every time (ABA). An in-flight answer captured at generation 3 would
+   * see 3 again and wrongly conclude nothing moved. Anything that must
+   * discard stale async replies compares against this revision instead
+   * ([VSIX-STATE-DIRTY]).
+   */
+  readonly revision: ReadonlySignal<number> = this._revision;
   /**
    * Cluster ids a delta explicitly retracted since the last full snapshot
    * ([VSIX-STATE-DIRTY]). Surfaces that may render a cluster the canonical
@@ -112,6 +127,7 @@ export class ReportStore implements vscode.Disposable {
       report: this._report.value,
       visibleReport: this._visibleReport.value,
       generation: this._generation.value,
+      revision: this._revision.value,
       lifecycle: this._lifecycle.value,
       pendingEmbeddingModel: this._pendingEmbeddingModel.value,
       embeddingProgress: this._embeddingProgress.value,
@@ -146,10 +162,21 @@ export class ReportStore implements vscode.Disposable {
     return { dispose: unsub };
   }
 
-  setSnapshot(report: Report, generation: number): void {
+  /**
+   * Replaces the canonical report. Returns `false` without mutating when
+   * `generation` is older than the store's current one: that snapshot is a
+   * stale completion from a refresh that lost the race, and accepting it
+   * would roll the content backward and re-arm the generation label for
+   * ABA against in-flight probes ([VSIX-STATE-DIRTY]). Every accepted
+   * snapshot bumps `revision`, so even a same-generation replacement
+   * invalidates answers dispatched before it.
+   */
+  setSnapshot(report: Report, generation: number): boolean {
+    if (generation < this._generation.value) return false;
     batch(() => {
       this._report.value = report;
       this._generation.value = generation;
+      this._revision.value += 1;
       // A full snapshot re-states the whole corpus, so every earlier
       // retraction is settled by it — a cluster still absent here is
       // absent on the snapshot's own authority, not on a stale delta's.
@@ -164,6 +191,7 @@ export class ReportStore implements vscode.Disposable {
       this._pendingEmbeddingModel.value = null;
       this._embeddingProgress.value = null;
     });
+    return true;
   }
 
   /**
@@ -201,7 +229,7 @@ export class ReportStore implements vscode.Disposable {
     for (const cluster of delta.clusters_added) retracted.delete(cluster.id);
     // Bounded on purpose. A retraction only has to outlive the probes that
     // were already in flight when it happened; correctness for anything older
-    // is `LiveBubble.hasMovedOn`, which compares the report generation and so
+    // is `LiveBubble.hasMovedOn`, which compares the store revision and so
     // cannot be defeated by a pruned id. Keeping the full history instead made
     // a delta-only session — one that never receives a full snapshot to clear
     // the ledger — retain O(N) ids and copy O(N²) of them over its lifetime.
@@ -220,6 +248,7 @@ export class ReportStore implements vscode.Disposable {
         tool_version: delta.tool_version,
       };
       this._generation.value = delta.to_generation;
+      this._revision.value += 1;
       // Same rule as setSnapshot: only a non-empty result settles the
       // lifecycle; an emptied report waits for the server's idle signal.
       if (clusters.length > 0) this._lifecycle.value = { kind: "ready" };

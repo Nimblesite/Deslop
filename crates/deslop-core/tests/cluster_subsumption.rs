@@ -60,9 +60,11 @@ fn published(left: [(usize, usize); 2], right: [(usize, usize); 2]) -> Vec<Clust
     let fused = [
         FusedCluster {
             members: vec![0, 1],
+            edges: Vec::new(),
         },
         FusedCluster {
             members: vec![2, 3],
+            edges: Vec::new(),
         },
     ];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();

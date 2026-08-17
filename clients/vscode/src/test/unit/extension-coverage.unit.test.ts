@@ -10,8 +10,8 @@ import {
   resolveWorkspaceRoot,
   surfaceStartupFailure,
   syncEmbeddingSettingsToLsp,
-  wireNotifications,
 } from "../../extension";
+import { wireNotifications } from "../../notifications";
 import { LifecyclePhase, ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
 import { repoMetrics } from "./report.helpers";

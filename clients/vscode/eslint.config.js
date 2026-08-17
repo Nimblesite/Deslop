@@ -209,7 +209,13 @@ const quickPickLifecyclePlugin = {
       },
       create(context) {
         const filename = normalizedFilename(context);
-        if (!isProductionVsixSource(context) || filename.endsWith("/src/extension.ts")) {
+        // The bootstrap (extension.ts seeds the initial report) and the
+        // serialised notification refresh path (notifications.ts) are the
+        // only two production callers allowed to refetch the full report.
+        const allowed =
+          filename.endsWith("/src/extension.ts") ||
+          filename.endsWith("/src/notifications.ts");
+        if (!isProductionVsixSource(context) || allowed) {
           return {};
         }
         return {

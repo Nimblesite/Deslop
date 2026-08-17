@@ -164,9 +164,11 @@ fn type4_weight_fixture() -> Type4Fixture {
         fused_clusters: vec![
             FusedCluster {
                 members: vec![0, 1],
+                edges: Vec::new(),
             },
             FusedCluster {
                 members: vec![2, 3],
+                edges: Vec::new(),
             },
         ],
     }

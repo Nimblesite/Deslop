@@ -8,13 +8,12 @@ import {
   currentExtensionVersion,
   revealActiveBinary,
   tryResolveOptional,
-  wireNotifications,
-  refreshAfterChange,
   seedInitialReport,
   buildServerArgs,
   syncEmbeddingSettingsToLsp,
   resolveWorkspaceRoot,
 } from "../../extension";
+import { refreshAfterChange, wireNotifications } from "../../notifications";
 import { ReportStore } from "../../reportStore";
 import { cluster, report } from "./tree.helpers";
 import { repoMetrics } from "./report.helpers";
@@ -261,7 +260,7 @@ suite("extension internals", () => {
       },
     } as unknown as LanguageClient;
     const store = new ReportStore();
-    wireNotifications(client, store);
+    const schedule = wireNotifications(client, store);
     progressCb?.({
       phase: "complete",
       provider_id: "ollama",
@@ -269,7 +268,9 @@ suite("extension internals", () => {
       done: 1,
       total: 1,
     });
-    await Promise.resolve();
+    // The refresh runs on the serialised queue; awaiting the schedule is the
+    // deterministic completion point (no microtask counting, no timers).
+    await schedule.settled();
     assert.ok(requests.includes("deslop/reportGet"));
     assert.equal(store.current.report?.files_analysed, 7);
   });
@@ -287,10 +288,10 @@ suite("extension internals", () => {
   });
 
   test("wireNotifications reportChanged applies a delta", async () => {
-    let changedCb: ((p: unknown) => Promise<void>) | undefined;
+    let changedCb: ((p: unknown) => void) | undefined;
     const requests: string[] = [];
     const client = {
-      onNotification: (name: string, cb: (p: unknown) => Promise<void>) => {
+      onNotification: (name: string, cb: (p: unknown) => void) => {
         if (name === "deslop/reportChanged") changedCb = cb;
       },
       sendRequest: (name: string) => {
@@ -327,16 +328,18 @@ suite("extension internals", () => {
       },
       0,
     );
-    wireNotifications(client, store);
-    await changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
+    const schedule = wireNotifications(client, store);
+    changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
+    await schedule.settled();
     assert.ok(requests.includes("deslop/reportDelta"));
+    assert.equal(store.current.generation, 1, "the queued delta must be applied by settled()");
   });
 
   test("wireNotifications reportChanged falls back to reportGet when delta is null", async () => {
-    let changedCb: ((p: unknown) => Promise<void>) | undefined;
+    let changedCb: ((p: unknown) => void) | undefined;
     const requests: string[] = [];
     const client = {
-      onNotification: (name: string, cb: (p: unknown) => Promise<void>) => {
+      onNotification: (name: string, cb: (p: unknown) => void) => {
         if (name === "deslop/reportChanged") changedCb = cb;
       },
       sendRequest: (name: string) => {
@@ -358,9 +361,68 @@ suite("extension internals", () => {
       },
     } as unknown as LanguageClient;
     const store = new ReportStore();
-    wireNotifications(client, store);
-    await changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
+    const schedule = wireNotifications(client, store);
+    changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
+    await schedule.settled();
     assert.ok(requests.includes("deslop/reportGet"));
+    assert.equal(store.current.generation, 5, "the fallback snapshot must be stored by settled()");
+  });
+
+  // RA-05: refreshes used to run concurrently, so an early notification's
+  // slow reportGet could complete *after* a later one's and clobber the
+  // store with older content labelled with an older generation (the first
+  // half of the generation ABA). The queue serialises them: a refresh does
+  // not even dispatch until every earlier one has fully applied.
+  test("reportChanged refreshes are serialised so a slow early snapshot cannot clobber a later one", async () => {
+    let changedCb: ((p: unknown) => void) | undefined;
+    const pendingGets: Array<(snapshot: unknown) => void> = [];
+    const client = {
+      onNotification: (name: string, cb: (p: unknown) => void) => {
+        if (name === "deslop/reportChanged") changedCb = cb;
+      },
+      sendRequest: (name: string) => {
+        if (name === "deslop/reportDelta") return Promise.resolve(null);
+        return new Promise((resolve) => {
+          pendingGets.push(resolve);
+        });
+      },
+    } as unknown as LanguageClient;
+    const store = new ReportStore();
+    const schedule = wireNotifications(client, store);
+
+    const notify = (generation: number) =>
+      changedCb?.({
+        generation,
+        summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 },
+      });
+    const drainUntil = async (condition: () => boolean) => {
+      for (let i = 0; i < 50 && !condition(); i++) await Promise.resolve();
+    };
+
+    notify(2);
+    notify(3);
+    await drainUntil(() => pendingGets.length >= 1);
+    assert.equal(
+      pendingGets.length,
+      1,
+      "the second refresh must stay queued while the first snapshot is in flight",
+    );
+
+    const snapshotFor = (id: string) =>
+      report([cluster(id, 10, `/repo/${id}.cs`)]);
+    pendingGets[0]?.(snapshotFor("older"));
+    await drainUntil(() => pendingGets.length >= 2);
+    assert.equal(store.current.generation, 2, "the first refresh applies before the second dispatches");
+    assert.equal(store.current.report?.clusters[0]?.id, "older");
+
+    pendingGets[1]?.(snapshotFor("newer"));
+    await schedule.settled();
+    assert.equal(store.current.generation, 3, "the later notification's snapshot lands last");
+    assert.equal(
+      store.current.report?.clusters[0]?.id,
+      "newer",
+      "the newer content must win — concurrent refreshes let the older snapshot land last",
+    );
   });
 
   // Regression (#230): a missed/lagged deslop/reportChanged leaves the store at

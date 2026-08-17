@@ -40,9 +40,10 @@ name: Dependabot auto-merge
 #
 # Nothing reaches `main` this way — the full build/test (ci.yml) + CodeQL
 # (codeql.yml) gate the single `dependabot-upgrades -> main` consolidation PR,
-# which is where review and the expensive matrix actually run. ci.yml/codeql.yml
-# deliberately SKIP Dependabot PRs (they would only burn the matrix on a bump we
-# immediately sweep away).
+# which is where review and the expensive matrix actually run. ci.yml,
+# dependency review, and codeql.yml run for Dependabot PRs like any other —
+# their former actor skips were removed, so a security bump against `main` is
+# fully gated.
 #
 # THE DRAIN — the consolidation PR is not optional decoration. Sweeps only flow
 # bumps INTO the staging branch; the `ensure-consolidation-pr` step below is
@@ -54,9 +55,10 @@ name: Dependabot auto-merge
 # this file: `pull_request` sweep runs execute the BASE branch's (staging's)
 # copy, which only a human push can update, but scheduled runs always use the
 # default branch's copy — so the drain cannot rot even when staging's copy has.
-# Caveat: a PR opened by GITHUB_TOKEN does not trigger `pull_request` workflows
-# on itself (GitHub's recursive-workflow guard), so the PR body tells the
-# reviewer to close/reopen it to fire CI — they are the one merging it anyway.
+# Caveat: for a PR opened by GITHUB_TOKEN, GitHub creates its `pull_request`
+# workflow runs in an approval-required state instead of starting them
+# (recursive-workflow guard), so the PR body tells the reviewer to approve the
+# pending runs to fire CI — they are the one merging it anyway.
 #
 # Lives at the repo root so it is present on `dependabot-upgrades` (cut from
 # main): for `pull_request` the workflow is read from the PR's base branch, so
@@ -222,7 +224,7 @@ jobs:
             --body "$(printf '%s\n' \
               "Drains the swept Dependabot bumps into \`main\` — the single consolidation PR that ci.yml and codeql.yml gate ([GITHUB-DEPENDABOT]). It tracks further sweeps until merged." \
               "" \
-              "Opened by the Actions token, so checks do not fire on their own: **close and reopen this PR** to trigger CI before merging.")" \
+              "Opened by the Actions token, so GitHub holds this PR's workflow runs pending approval: **approve the pending workflow runs** on the Checks tab to fire CI before merging.")" \
             || [ "$(gh pr list --repo "${GITHUB_REPOSITORY}" \
                  --head dependabot-upgrades --base main --state open \
                  --json number --jq 'length')" != "0" ]

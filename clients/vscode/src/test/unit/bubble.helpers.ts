@@ -4,6 +4,7 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
+import type { LanguageClient } from "vscode-languageclient/node";
 import { LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
@@ -142,9 +143,21 @@ function activeCall(calls: DecorationCall[]): DecorationCall {
   return { texts: [], hovers: [] };
 }
 
+// A single line of known content so `probe()` can compute ranges and UTF-8
+// byte offsets deterministically against the capturing editor.
+const FAKE_DOCUMENT_LINE = "0123456789abcdefghijklmnopqrstuvwxyz";
+
 function fakeDocument(file: string): vscode.TextDocument {
   return {
     uri: vscode.Uri.file(file),
+    version: 1,
+    offsetAt: (position: vscode.Position) => position.character,
+    positionAt: (offset: number) =>
+      new vscode.Position(0, Math.min(offset, FAKE_DOCUMENT_LINE.length)),
+    getText: (range?: vscode.Range) =>
+      range
+        ? FAKE_DOCUMENT_LINE.slice(range.start.character, range.end.character)
+        : FAKE_DOCUMENT_LINE,
     lineAt: () => ({
       range: new vscode.Range(
         new vscode.Position(0, 0),
@@ -152,6 +165,50 @@ function fakeDocument(file: string): vscode.TextDocument {
       ),
     }),
   } as unknown as vscode.TextDocument;
+}
+
+// The content-change event `onEdit` hands to `probe`: an insertion of
+// `text` at `startChar` on the fake document's single line.
+export function editAt(
+  startChar: number,
+  text: string,
+): vscode.TextDocumentContentChangeEvent {
+  const start = new vscode.Position(0, startChar);
+  return {
+    range: new vscode.Range(start, start),
+    rangeOffset: startChar,
+    rangeLength: 0,
+    text,
+  };
+}
+
+export interface DeferredProbeRequest {
+  params: { path: string; start_byte: number; end_byte: number };
+  token: vscode.CancellationToken;
+  resolve(clusters: ReportCluster[]): void;
+  reject(error: Error): void;
+}
+
+// A fake LSP client whose findSimilar responses are deferred promises the
+// test settles by hand — the deterministic way to stage out-of-order probe
+// completions. No timers, no sleeps: the test holds each probe() promise
+// and awaits it only after settling that probe's deferred response.
+export function deferredProbeClient(): {
+  client: LanguageClient;
+  requests: DeferredProbeRequest[];
+} {
+  const requests: DeferredProbeRequest[] = [];
+  const client = {
+    sendRequest: (
+      _method: string,
+      params: DeferredProbeRequest["params"],
+      token: vscode.CancellationToken,
+    ) =>
+      new Promise((resolve, reject) => {
+        requests.push({ params, token, resolve, reject });
+      }),
+  } as unknown as LanguageClient;
+  return { client, requests };
 }
 
 export interface BubbleFixture {
@@ -170,6 +227,7 @@ export async function bubbleFixture(
     snapshot?: Report | null;
     generation?: number;
     mode?: "inline" | "ghost";
+    client?: LanguageClient;
   } = {},
 ): Promise<BubbleFixture> {
   const store = new ReportStore();
@@ -180,7 +238,7 @@ export async function bubbleFixture(
   return {
     store,
     capture: capturingEditor(),
-    bubble: new LiveBubble(store, () => undefined),
+    bubble: new LiveBubble(store, () => options.client),
   };
 }
 

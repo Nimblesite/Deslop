@@ -406,7 +406,7 @@ The engine gates on `structural >= 0.20`; the UI gates on `structural > 0.0` and
 ### 4. #345 — doc drift
 
 - [x] `REPORTING-CONTEXT.md:100` — the admission bar and the rendered confidence are now separated by name, and agents are told to filter on `bucket`, never on `fused >= FUSED_THRESHOLD`. That instruction is not cosmetic: the shipped VSIX had exactly that bug (defect A).
-- [x] `mcp.md:248` — documents report order (confidence-scaled ranking weight) and says why it is not `fused`.
+- [x] `mcp.md` — the `[MCP-TOOLS]` status note and the `[MCP-TOOL-FINDSIMILAR]` output contract document report order (final report `weight` descending, `confidence_factor` folded in, `1.0` for `data`-category clusters) and say why it is not `fused`.
 - [x] `--embeddings` default discrepancy — `fusion.md` states the shipped default (`off`, `nomic-embed-text`) with the reason (no reachable Ollama on a first run) and names the recall cost rather than hiding it.
 - [x] `fused_bounded_max` / `type2_recall` — added to `corpus/known-failures.json` **and implemented** in `crates/deslop-test-support/src/corpus_confidence.rs`, wired into `corpus_repos.rs::gate` + `GATE_CHECKS`, 14 unit tests green. Ids without checks behind them would be placeholders in the one file whose purpose is honesty about what is verified. Both predicates were rewritten after the regression audit — see the quarantine plan's R6 row for why the originals were unsound in both directions.
 - [x] `fusion.md` + `SPEC.md` reconciled

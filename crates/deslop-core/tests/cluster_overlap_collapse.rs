@@ -20,7 +20,7 @@ use deslop_core::{
     cluster::{build_ranked_fused_clusters, Cluster},
     fingerprint::Fingerprint,
     lsh::Signature,
-    pair::FusedCluster,
+    pair::{FusedCluster, FusedEdge},
     state::{FileId, FileRegistry},
 };
 
@@ -45,6 +45,7 @@ fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
     let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
     let fused = [FusedCluster {
         members: (0..members.len()).collect(),
+        edges: Vec::new(),
     }];
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
     build_ranked_fused_clusters(members, &signatures, &vectors, &fused)
@@ -148,6 +149,88 @@ fn disjoint_windows_in_one_file_stay_separate_occurrences() {
         vec![(0, 100), (200, 300), (0, 100)],
         "two disjoint alpha windows and one beta window are three locations, \
          got {ranges:?}"
+    );
+}
+
+/// #339: within an overlapping run, the member carrying the strongest
+/// cross-file discovery edge represents it — width only breaks ties.
+/// A whole-file root that merely token-matched the window inside the
+/// sibling file (`0.93`) must not displace the exact window occurrence
+/// (`1.0`): promoting the root drops the published cluster's measured
+/// `structural` from 1.0 to 0.0 and hands subsumption a reason to
+/// delete the only view of the duplicate.
+#[test]
+fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
+    let (alpha, beta) = two_files();
+    let members = [
+        member(alpha, 0, 200),
+        member(alpha, 10, 150),
+        member(beta, 10, 150),
+    ];
+    let signatures: Vec<Signature> = members.iter().map(|_| [11_u64; 128]).collect();
+    let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
+    let window_wins = [FusedCluster {
+        members: vec![0, 1, 2],
+        edges: vec![
+            FusedEdge {
+                left: 0,
+                right: 2,
+                strength: 0.93,
+            },
+            FusedEdge {
+                left: 1,
+                right: 2,
+                strength: 1.0,
+            },
+        ],
+    }];
+    let clusters = build_ranked_fused_clusters(&members, &signatures, &vectors, &window_wins);
+    let ranges: Vec<Vec<(usize, usize)>> = clusters
+        .iter()
+        .map(|cluster| {
+            cluster
+                .members
+                .iter()
+                .map(|found| (found.byte_range.start, found.byte_range.end))
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        ranges,
+        vec![vec![(10, 150), (10, 150)]],
+        "the exactly-matched window must represent the alpha run, got {ranges:?}"
+    );
+
+    let root_wins = [FusedCluster {
+        members: vec![0, 1, 2],
+        edges: vec![
+            FusedEdge {
+                left: 0,
+                right: 2,
+                strength: 1.0,
+            },
+            FusedEdge {
+                left: 1,
+                right: 2,
+                strength: 0.93,
+            },
+        ],
+    }];
+    let clusters = build_ranked_fused_clusters(&members, &signatures, &vectors, &root_wins);
+    let published: Vec<(usize, usize)> = clusters
+        .iter()
+        .flat_map(|cluster| {
+            cluster
+                .members
+                .iter()
+                .map(|found| (found.byte_range.start, found.byte_range.end))
+        })
+        .collect();
+    assert_eq!(
+        published,
+        vec![(0, 200), (10, 150)],
+        "with the evidence reversed the wide member is the honest view, so the \
+         rule must be reading the edges rather than the widths, got {published:?}"
     );
 }
 

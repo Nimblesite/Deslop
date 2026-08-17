@@ -146,6 +146,8 @@ lint: typediagram-gen
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
 	@node --test scripts/verify-env-path-writes.test.mjs
 	@node scripts/verify-env-path-writes.mjs
+	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
+	@node --test scripts/installer-snippet.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree

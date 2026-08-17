@@ -7,7 +7,6 @@ use blake3::Hasher;
 
 use crate::{
     ast::NormalizedNode,
-    boilerplate::is_import_boilerplate_only_subtree,
     fingerprint::Fingerprint,
     lsh::{minhash_signature, Signature, SIGNATURE_LEN},
     state::FileId,
@@ -28,7 +27,12 @@ fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode
 /// is stripped from the token stream so shared import patterns stop
 /// feeding the LSH false-positive path described in
 /// [PIPELINE-BOILERPLATE-FILTER] — the structural pass already applies
-/// the same filter, so the two signals now share the same corpus.
+/// the same filter, so the two signals now share the same corpus. The
+/// language-aware path also resolves synthetic sibling-window byte
+/// ranges (#339): a window spanning several consecutive children gets
+/// its signature from the resolved token stream instead of the
+/// offset-seeded fallback, so `token_jaccard` measures token evidence
+/// rather than byte-offset luck.
 #[must_use]
 pub fn build_signatures_with_languages<S: BuildHasher>(
     fingerprints: &[Fingerprint],
@@ -43,15 +47,10 @@ pub fn build_signatures_with_languages<S: BuildHasher>(
             signatures.push(empty_signature(fingerprint, language));
             continue;
         };
-        let tokens = match language {
-            Some("python") => {
-                token_stream_for_fingerprint_with_language(root, fingerprint, "python")
-            }
-            Some(language) if exact_range_contains_boilerplate(root, fingerprint, language) => {
-                token_stream_for_fingerprint_with_language(root, fingerprint, language)
-            }
-            _ => token_stream_for_fingerprint(root, fingerprint),
-        };
+        let tokens = language.map_or_else(
+            || token_stream_for_fingerprint(root, fingerprint),
+            |language| token_stream_for_fingerprint_with_language(root, fingerprint, language),
+        );
         let signature = tokens.map_or_else(
             || empty_signature(fingerprint, language),
             |tokens| signature_for_tokens(&tokens, fingerprint, language),
@@ -95,36 +94,6 @@ fn cross_language_signature(
         || empty_signature(fingerprint, Some(language)),
         |tokens| signature_for_tokens(&tokens, fingerprint, Some(language)),
     )
-}
-
-/// Returns true when an exact fingerprint range contains prologue syntax.
-fn exact_range_contains_boilerplate(
-    node: &NormalizedNode,
-    fingerprint: &Fingerprint,
-    language: &str,
-) -> bool {
-    if node.byte_range.start == fingerprint.byte_range.start
-        && node.byte_range.end == fingerprint.byte_range.end
-    {
-        return subtree_contains_boilerplate(node, language);
-    }
-    if node.byte_range.start > fingerprint.byte_range.start
-        || node.byte_range.end < fingerprint.byte_range.end
-    {
-        return false;
-    }
-    node.children
-        .iter()
-        .any(|child| exact_range_contains_boilerplate(child, fingerprint, language))
-}
-
-/// Returns true when `node` or a descendant is import/prologue boilerplate.
-fn subtree_contains_boilerplate(node: &NormalizedNode, language: &str) -> bool {
-    is_import_boilerplate_only_subtree(language, node)
-        || node
-            .children
-            .iter()
-            .any(|child| subtree_contains_boilerplate(child, language))
 }
 
 /// Produces a signature from a prepared token stream using the configured
@@ -210,31 +179,70 @@ let combine (values: int list) (ceiling: int) =
 ";
 
     /// Parses `source` as F# and returns its normalised root.
-    fn fsharp_tree(source: &str, file_id: FileId) -> NormalizedNode {
+    fn fsharp_tree(source: &str, file_id: FileId) -> Result<NormalizedNode, String> {
         crate::lang::fsharp::FSharpParser
             .parse_and_normalize(source.as_bytes(), file_id)
-            .expect("the F# fixture must parse")
+            .map_err(|error| format!("the F# fixture must parse: {error}"))
     }
 
-    /// A fingerprint spanning the shared window inside `source`.
+    /// Returns the shallowest node whose range starts at `offset`.
+    fn node_starting_at(node: &NormalizedNode, offset: usize) -> Option<&NormalizedNode> {
+        if node.byte_range.start == offset {
+            return Some(node);
+        }
+        node.children
+            .iter()
+            .find_map(|child| node_starting_at(child, offset))
+    }
+
+    /// Returns true when some node in `root` owns exactly `[start, end)`.
+    fn exact_node_exists(root: &NormalizedNode, start: usize, end: usize) -> bool {
+        (root.byte_range.start == start && root.byte_range.end == end)
+            || root
+                .children
+                .iter()
+                .any(|child| exact_node_exists(child, start, end))
+    }
+
+    /// A fingerprint spanning the shared window inside `source`, with the
+    /// range derived from parsed declaration boundaries: it starts at the
+    /// `accumulate` binding's node and ends at the `combine` binding's node.
     ///
-    /// Deliberately not an exact-node range: it starts at the first shared
-    /// binding and ends at the last, which spans several consecutive children
-    /// of the module and therefore matches no single subtree. That is the
-    /// sibling-window shape `token_stream_for_fingerprint` cannot resolve.
+    /// Deliberately not an exact-node range: it spans two consecutive
+    /// children of the module and therefore matches no single subtree. That
+    /// is the sibling-window shape an exact-node resolver cannot resolve.
     /// Both files get the *same* structural hash, because two copies of one
     /// window really do share a Merkle hash — that is why they pair at all.
-    fn window_fingerprint(source: &str, file_id: FileId) -> Fingerprint {
-        let start = source.find(SHARED_WINDOW).expect("fixture contains the window");
-        Fingerprint {
+    fn window_fingerprint(
+        source: &str,
+        root: &NormalizedNode,
+        file_id: FileId,
+    ) -> Result<Fingerprint, String> {
+        let accumulate_offset = source
+            .find("let accumulate")
+            .ok_or("fixture contains the accumulate binding")?;
+        let combine_offset = source
+            .find("let combine")
+            .ok_or("fixture contains the combine binding")?;
+        let start = node_starting_at(root, accumulate_offset)
+            .ok_or("a parsed node starts at the accumulate binding")?
+            .byte_range
+            .start;
+        let end = node_starting_at(root, combine_offset)
+            .ok_or("a parsed node starts at the combine binding")?
+            .byte_range
+            .end;
+        if exact_node_exists(root, start, end) {
+            return Err(format!(
+                "fixture: {start}..{end} must be a sibling window, not an exact node"
+            ));
+        }
+        Ok(Fingerprint {
             hash: [7; 32],
             file_id,
-            byte_range: ByteRange {
-                start,
-                end: start + SHARED_WINDOW.len(),
-            },
+            byte_range: ByteRange { start, end },
             node_count: 40,
-        }
+        })
     }
 
     // #339 ([FUSION-SIGNALS-THREE-LAYER]). Isolated at the signature layer on
@@ -253,51 +261,66 @@ let combine (values: int list) (ceiling: int) =
     // whether the copies happened to land at the same offset, not whether
     // their tokens agree.
     #[test]
-    fn issue_339_sibling_window_signature_is_offset_invariant() {
+    fn issue_339_sibling_window_signature_is_offset_invariant() -> Result<(), String> {
         let mut registry = FileRegistry::new();
         let short = registry.register(PathBuf::from("window_a.fs"));
         let long = registry.register(PathBuf::from("window_b.fs"));
 
         let short_source = format!("module ParseHelpers\n\n{SHARED_WINDOW}");
         let long_source = format!("module ParseHelpersWithALongerName\n\n{SHARED_WINDOW}");
-        let short_window = window_fingerprint(&short_source, short);
-        let long_window = window_fingerprint(&long_source, long);
+        let short_tree = fsharp_tree(&short_source, short)?;
+        let long_tree = fsharp_tree(&long_source, long)?;
+        let short_window = window_fingerprint(&short_source, &short_tree, short)?;
+        let long_window = window_fingerprint(&long_source, &long_tree, long)?;
 
         assert_ne!(
             short_window.byte_range.start, long_window.byte_range.start,
             "fixture: the rename must actually shift the window's offsets"
         );
+        let short_len = short_window
+            .byte_range
+            .end
+            .checked_sub(short_window.byte_range.start);
+        let long_len = long_window
+            .byte_range
+            .end
+            .checked_sub(long_window.byte_range.start);
         assert_eq!(
-            short_window.byte_range.end - short_window.byte_range.start,
-            long_window.byte_range.end - long_window.byte_range.start,
+            short_len, long_len,
             "fixture: and must not change its length"
         );
 
-        let trees = vec![
-            fsharp_tree(&short_source, short),
-            fsharp_tree(&long_source, long),
-        ];
+        let trees = vec![short_tree, long_tree];
         let languages: HashMap<FileId, &'static str> =
             [(short, "fsharp"), (long, "fsharp")].into_iter().collect();
-        let signatures = build_signatures_with_languages(
-            &[short_window, long_window],
-            &trees,
-            &languages,
-        );
+        let fingerprints = [short_window.clone(), long_window.clone()];
+        let signatures = build_signatures_with_languages(&fingerprints, &trees, &languages);
 
-        assert_eq!(signatures.len(), 2, "one signature per fingerprint");
-        assert_eq!(
-            signatures[0], signatures[1],
-            "issue #339: two copies of one window must produce the same token \
-             signature. Differing here means the signature fell back to \
-             blake3(hash, byte_range) and `token_jaccard` is measuring byte-offset \
-             luck rather than token evidence"
+        let [short_signature, long_signature] = signatures.as_slice() else {
+            return Err(format!(
+                "expected one signature per fingerprint, got {}",
+                signatures.len()
+            ));
+        };
+        assert_ne!(
+            *short_signature,
+            fallback_signature(&short_window),
+            "issue #339: the sibling-window signature must come from the resolved token \
+             stream, not the offset-seeded fallback — falling back means `token_jaccard` \
+             measures whether the copies landed at the same byte offset, not whether \
+             their tokens agree"
         );
         assert_ne!(
-            signatures[0],
-            fallback_signature(&window_fingerprint(&short_source, short)),
-            "issue #339: and it must not BE the offset-seeded fallback"
+            *long_signature,
+            fallback_signature(&long_window),
+            "issue #339: the shifted copy must not be the offset-seeded fallback either"
         );
+        assert_eq!(
+            short_signature, long_signature,
+            "issue #339: two copies of one window must produce the same token signature \
+             regardless of the byte offset the rename shifted them to"
+        );
+        Ok(())
     }
 
     #[test]
