@@ -62,11 +62,7 @@ struct RustImplShape {
     impl_source: Vec<u8>,
 }
 
-/// Returns the `LanguageParser` impl contained in — or enclosing —
-/// `snippet.range`. A sibling-window member spans a run of trait
-/// methods *inside* the impl's declaration list rather than the impl
-/// item itself, so when no impl lies within the range the impl that
-/// owns the window carries the shape.
+/// Returns the `LanguageParser` impl contained in `snippet.range`.
 fn rust_language_parser_impl_shape(snippet: &Snippet<'_>) -> Option<RustImplShape> {
     let tree = parse_for(snippet)?;
     let mut shapes = Vec::new();
@@ -74,27 +70,6 @@ fn rust_language_parser_impl_shape(snippet: &Snippet<'_>) -> Option<RustImplShap
     shapes
         .into_iter()
         .find(|shape| shape.trait_name == b"LanguageParser")
-        .or_else(|| enclosing_language_parser_impl_shape(tree.root_node(), snippet))
-}
-
-/// Resolves the innermost `impl` block enclosing the member's trimmed
-/// range and returns its shape when that impl is a `LanguageParser`
-/// adapter. The trait contract pins every method inside the impl, so a
-/// window over any run of its items is the same mandated surface as
-/// the impl itself.
-fn enclosing_language_parser_impl_shape(
-    root: Node<'_>,
-    snippet: &Snippet<'_>,
-) -> Option<RustImplShape> {
-    let range = trimmed_snippet_range(snippet).unwrap_or(snippet.range);
-    let mut node = root.descendant_for_byte_range(range.start, range.end)?;
-    loop {
-        if node.kind() == "impl_item" {
-            return rust_impl_shape_from_node(node, snippet.source)
-                .filter(|shape| shape.trait_name == b"LanguageParser");
-        }
-        node = node.parent()?;
-    }
 }
 
 /// Recursively collects Rust impl blocks fully contained in `range`.
