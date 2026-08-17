@@ -53,11 +53,10 @@ pub(crate) mod seeded;
 /// as `signals`.
 pub(crate) mod store;
 
-/// Building a corpus on disk before the tool runs. Re-exported through
-/// this module because the suites that author corpora reach for these
-/// through the same `use crate::common::*;` glob as the report walkers.
+/// Building a corpus on disk before the tool runs. Imported explicitly
+/// with `use crate::common::corpora::*;`, for the same reason as
+/// `signals`.
 pub(crate) mod corpora;
-pub(crate) use corpora::*;
 
 use std::{
     collections::{BTreeMap, BTreeSet},

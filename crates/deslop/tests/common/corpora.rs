@@ -10,7 +10,7 @@ use std::{fs, path::Path};
 
 use serde_json::Value;
 
-use super::{clusters, field, occurrence_files, run_report, Result};
+use super::{cluster_file_set, clusters, field, run_report, Result};
 
 /// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
 /// into a freshly created `dir`: the minimal corpus for a fully-duplicated
