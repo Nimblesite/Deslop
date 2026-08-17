@@ -78,6 +78,14 @@ pub struct ContentEvidence {
     /// measured — a finding of scaffolding is positive evidence, never an
     /// absent measurement.
     pub substance_varies: bool,
+    /// True when the pass actually compared two members' raw content.
+    /// `false` for [`Self::unmeasured`] and for a cluster whose members
+    /// could not be resolved to source bytes. The other fields carry
+    /// deliberately generous defaults so a missing measurement never
+    /// demotes a cluster some *other* signal proves; this flag is how a
+    /// route with no other signal tells "measured full agreement" apart
+    /// from "nothing was measured" ([FUSION-CONTENT-GATE]).
+    pub measured: bool,
 }
 
 impl ContentEvidence {
@@ -100,6 +108,7 @@ impl ContentEvidence {
             rename_consistency: 0.0,
             literal_fraction: 0.0,
             substance_varies: false,
+            measured: false,
         }
     }
 }
@@ -147,6 +156,11 @@ fn measure_cluster<S: BuildHasher>(
         rename_consistency: cluster_rename_consistency(canonical, &member_keys),
         literal_fraction: canonical_literal_fraction(canonical),
         substance_varies: cluster_substance_varies(canonical, &member_keys),
+        // A comparison needs a canonical member *and* something to
+        // compare it against: one resolvable member alone measures
+        // nothing, and every field above then carries its degenerate
+        // default rather than evidence.
+        measured: canonical.is_some() && member_keys.iter().skip(1).any(Option::is_some),
     }
 }
 

@@ -73,5 +73,44 @@ exclude = [
 #   The remaining ~415 redundant lines needed to reach 12.2 are all in
 #   pre-existing clusters. Removing them is real DRY work, tracked separately;
 #   it was not folded into this branch. Ratchet back down as that lands.
+#
+# 2026-08-17 — raised 12.5 -> 13.65. Written justification, per the rule above.
+# This one is different in kind from the last: **the detector changed, the code
+# did not.** 12.5 was calibrated against a detector carrying a false negative.
+#
+#   [CLONE-BUCKETS-ROUTING] row 4 (`structural <= 0.01 & token_jaccard >= 0.90
+#   -> nearly_identical`) was implemented for C# only, via a carve-out in
+#   report_render. Every other language's LSH-only Type-3 clone fell to
+#   `loosely_similar`, which the renderer hides — so real duplication in this
+#   repo's own Rust, TypeScript, Python and Dart was measured as zero (gh #390).
+#   Row 4 now routes in every language, and this repo's own duplication is
+#   therefore measured higher than it used to be. Nothing was duplicated to
+#   cause it; it was always there and the gate could not see it.
+#
+#   Measured with one binary (the corrected one) against both trees, so the
+#   comparison isolates the code from the detector:
+#     main @ 5813c795c   13.9514%   13504 redundant LOC / 876 clusters
+#     this branch        13.6160%   14052 redundant LOC / 913 clusters
+#   The branch is 0.335 points *below* main under the same detector, even while
+#   adding ~6.4k lines of coarse E2E suites. It removes duplication; the number
+#   went up because the measurement got honest.
+#
+#   Real reduction taken first, not a bare threshold move:
+#     13.6447 -> 13.6160  collapsed the byte-offset-preserving edit helper
+#                         duplicated between cache_retention.rs and
+#                         lsh_only_nearmiss_recall.rs behind one
+#                         `incremental::edit_preserving_offsets`. Deslop scored
+#                         it `nearly_identical, fused 0.90` — above the act-now
+#                         line — and it was written twice on this branch, so it
+#                         is the branch's own debt and it is paid here.
+#
+#   Pinned just above the measured 13.6160. The ~1.1 points between here and
+#   12.5 are pre-existing clusters the old router hid, concentrated in
+#   deslop-mcp/tests/cli.rs (591 LOC), the vscode unit suites (~1.1k LOC across
+#   five files), defaults.rs (310) and refactor_consolidate.rs (292) — none of
+#   them touched by this branch. That is real DRY work, tracked in gh #397; the
+#   one thing it must NOT be paid for with is re-hiding the clusters, which is
+#   what lowering row 4 back to a C#-only carve-out would do.
+#   Ratchet down as that work lands.
 [threshold]
-max_duplication_percent = 12.5
+max_duplication_percent = 13.65

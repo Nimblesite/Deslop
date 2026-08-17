@@ -116,8 +116,8 @@ fn python_type2_clone_has_token_jaccard_of_one() -> Result<()> {
 //   Bug 1: minhash_signature (XOF) produces valid signature values —
 //          a broken implementation (garbage output) would produce
 //          near-zero Jaccard on shared k-gram sets.
-//   Bug 2: build_signatures_with_languages uses the correct tree per
-//          file (HashMap index).  A wrong mapping would give each
+//   Bug 2: signatures_for_file builds each file's signatures against
+//          that file's own tree.  A wrong tree would give each
 //          fingerprint the wrong token stream, scrambling all Jaccard
 //          values and collapsing the cross-file cluster.
 #[test]

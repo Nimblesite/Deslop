@@ -17,15 +17,15 @@ use crate::{
     ast::ByteRange,
     buckets::{
         bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
-        is_structural_only_signals, lacks_content_support, ClusterKind, CONTENT_PROMOTE_FLOOR,
-        LITERAL_TABLE_MIN_FRACTION,
+        is_lsh_only_nearmiss, is_structural_only_signals, lacks_content_support, ClusterKind,
+        CONTENT_PROMOTE_FLOOR, LITERAL_TABLE_MIN_FRACTION,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
     config::ExclusionConfig,
     content::ContentEvidence,
     fingerprint::Fingerprint,
-    pair::{PairScore, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT},
+    pair::PairScore,
     report::{ReportCluster, ReportOccurrence, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
@@ -282,11 +282,13 @@ pub(crate) fn report_bucket_kind(
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
     parse_cache: &ParseCache,
 ) -> ClusterKind {
-    let kind = if is_csharp_lsh_type3_near_miss(signals, members, file_languages) {
-        ClusterKind::NearlyIdentical
-    } else {
-        classify_signals(signals)
-    };
+    // [CLONE-BUCKETS-ROUTING] LSH-only Type-3 near-misses are routed by
+    // `classify_signals` row 4 for every language (gh #390). The
+    // C#-scoped pre-check that used to sit here *was* that row,
+    // implemented for one language — a silent false negative everywhere
+    // else — so it is dissolved into the router rather than duplicated
+    // beside it.
+    let kind = classify_signals(signals);
     let equivalent =
         source_slices_are_equivalent_for_language(members, sources, file_languages, parse_cache);
     // `StructuralOnly` joins `NearlyIdentical` in the byte-equivalence
@@ -334,6 +336,10 @@ pub(crate) fn report_bucket_kind(
 /// with no semantic backing routes to the demoted structural-only tier
 /// — [`ClusterKind::LooselySimilar`] for the cross-file scaffolding
 /// spread, [`ClusterKind::StructuralOnly`] otherwise.
+///
+/// The anchor-free near-miss ([CLONE-BUCKETS-ROUTING] row 4) is decided
+/// *before* that, by [`route_anchor_free`], and on different evidence —
+/// it has no shape match for this gate's populations to measure against.
 fn route_shape_identical(
     kind: ClusterKind,
     signals: ReportSignals,
@@ -343,8 +349,13 @@ fn route_shape_identical(
     if !matches!(
         kind,
         ClusterKind::NearlyIdentical | ClusterKind::StructuralOnly
-    ) || !has_saturating_shape_evidence(signals)
-    {
+    ) {
+        return kind;
+    }
+    if let Some(demoted) = route_anchor_free(signals, content, members) {
+        return demoted;
+    }
+    if !has_saturating_shape_evidence(signals) {
         return kind;
     }
     let shape_only = is_structural_only_signals(signals) || lacks_content_support(signals, content);
@@ -374,6 +385,51 @@ fn route_shape_identical(
     ClusterKind::StructuralOnly
 }
 
+/// Demotion for [CLONE-BUCKETS-ROUTING] **row 4** — the anchor-free
+/// near-miss — or `None` to leave the routing alone. `structural ≤ 0.01`
+/// means no shape matched at all, so a normalised-token estimate is the
+/// cluster's only evidence, and two shapes of cluster carry that estimate
+/// without earning an act-now verdict:
+///
+/// - **A cross-file spread** (3+ members over 3+ files) is the #134
+///   scaffolding pattern arriving through the token door instead of the
+///   structural one. Six distinct Flutter widgets read `structural=0.00,
+///   token_jaccard=0.93` over whole-file spans whose `build` bodies share
+///   nothing, because the framework-mandated declaration is most of each
+///   file (#331). **A genuine clone family of that width is demoted to a
+///   hint too** — the same trade [`is_cross_file_scaffolding`] already
+///   makes for shape-identical spreads, for the same reason, and it is a
+///   trade rather than a free win. Two narrower discriminators were
+///   measured and rejected: the content gate (see
+///   [`has_saturating_shape_evidence`]) and
+///   [`ContentEvidence::substance_varies`], both of which demote
+///   `csharp-type3` — a genuine renamed Type-3 pair — because neither can
+///   evaluate a rename across misaligned shapes. Narrowing this rule
+///   needs a discriminator that survives that fixture.
+/// - **An unmeasured cluster**, where the content pass could not compare
+///   two members at all. The anchored routes may take one on trust
+///   because their Merkle equality is itself proof; row 4 has no such
+///   signal, so unmeasured there means *nothing is known*. The #108
+///   JSON-schema pair (`structural=0.00, token_jaccard=0.96`) would
+///   otherwise be routed act-now on no evidence whatsoever.
+///
+/// The destination is [`ClusterKind::LooselySimilar`] — a hint the
+/// renderer hides — and never [`ClusterKind::StructuralOnly`], which
+/// would claim a shape match `structural = 0.00` says does not exist.
+///
+/// A *pair* that the content pass did measure is left alone even when its
+/// agreement is low: that is the renamed Type-3 clone
+/// ([`has_saturating_shape_evidence`] documents the 0.19 measurement),
+/// which this gate's populations are structurally unable to vouch for.
+fn route_anchor_free(
+    signals: ReportSignals,
+    content: ContentEvidence,
+    members: &[Fingerprint],
+) -> Option<ClusterKind> {
+    let unearned = !content.measured || is_cross_file_scaffolding(members);
+    (is_lsh_only_nearmiss(signals) && unearned).then_some(ClusterKind::LooselySimilar)
+}
+
 /// Returns true when a structural-only cluster spans enough distinct
 /// files to mirror the cross-test-file scaffolding pattern from issue
 /// #134. Caller has already established the structural-only signal
@@ -388,31 +444,6 @@ fn is_cross_file_scaffolding(members: &[Fingerprint]) -> bool {
     files.sort_unstable();
     files.dedup();
     files.len() >= 3
-}
-
-/// Returns true for substantive C# Type-3 candidates found only through
-/// token LSH. These have no exact structural anchor (`structural=0.0`),
-/// but they passed the LSH-only Jaccard and node-count floors, so they
-/// are real near-miss duplication rather than the low-information token
-/// noise hidden from the ranked report.
-fn is_csharp_lsh_type3_near_miss<S: BuildHasher>(
-    signals: ReportSignals,
-    members: &[Fingerprint],
-    file_languages: &HashMap<FileId, &'static str, S>,
-) -> bool {
-    signals.structural <= f64::EPSILON
-        && signals.embedding_cos <= f64::EPSILON
-        && signals.token_jaccard >= LSH_ONLY_MIN_JACCARD
-        && members.len() >= 2
-        && members
-            .iter()
-            .all(|member| member.node_count >= LSH_ONLY_MIN_NODE_COUNT)
-        && members
-            .iter()
-            .all(|member| file_languages.get(&member.file_id).copied() == Some("csharp"))
-        && members
-            .first()
-            .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))
 }
 
 /// Maps the report bucket onto a one-line interpretation for AI agents.

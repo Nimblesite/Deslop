@@ -1,0 +1,165 @@
+{
+  "tool_version": "0.0.0-dev",
+  "min_nodes": 16,
+  "files_analysed": 5,
+  "clusters_hidden": 0,
+  "cache_stats": {
+    "hits": 0,
+    "misses": 0
+  },
+  "metrics": {
+    "analysed_loc": 85,
+    "duplicated_loc": 57,
+    "duplication_percent": 67.05882352941175,
+    "clusters_total": 2,
+    "duplicated_files": 5,
+    "threshold": {
+      "percent": 0.0,
+      "breached": false,
+      "source": "none"
+    },
+    "per_file": [
+      {
+        "path": "alpha.rs",
+        "analysed_loc": 20,
+        "duplicated_loc": 15,
+        "duplication_percent": 75.0
+      },
+      {
+        "path": "beta.rs",
+        "analysed_loc": 20,
+        "duplicated_loc": 15,
+        "duplication_percent": 75.0
+      },
+      {
+        "path": "gamma.rs",
+        "analysed_loc": 23,
+        "duplicated_loc": 15,
+        "duplication_percent": 65.21739130434783
+      },
+      {
+        "path": "delta.rs",
+        "analysed_loc": 11,
+        "duplicated_loc": 6,
+        "duplication_percent": 54.54545454545454
+      },
+      {
+        "path": "epsilon.rs",
+        "analysed_loc": 11,
+        "duplicated_loc": 6,
+        "duplication_percent": 54.54545454545454
+      }
+    ]
+  },
+  "schema_doc": "",
+  "action_hints": [
+    {
+      "pattern": "bucket=identical",
+      "recommendation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "pattern": "bucket=nearly-identical",
+      "recommendation": "Nearly identical code. Review the locations — small differences may matter. (Type-3 near-miss)"
+    },
+    {
+      "pattern": "bucket=structural-only",
+      "recommendation": "Same shape, different content. Only the code shape matches — usually sibling boilerplate. Verify before extracting. (structural-only match (unverified Type-2/3 candidate))"
+    },
+    {
+      "pattern": "bucket=loosely-similar",
+      "recommendation": "Loosely similar code. Loose textual overlap. Treat as a hint. (weak LSH-only signal (sub-Type-3))"
+    },
+    {
+      "pattern": "bucket=same-behavior",
+      "recommendation": "Same behavior, different code. The AI noticed these do the same thing written two ways — read both before merging. (Type-4 semantic clone (AI match))"
+    },
+    {
+      "pattern": "category=data",
+      "recommendation": "Repeated data rows, not duplicated logic. Consider a builder with default arguments, or move the rows to a JSON/CSV/asset file."
+    }
+  ],
+  "boilerplate_hints": [],
+  "embedding_provenance": null,
+  "clusters": [
+    {
+      "id": "4874ca0d497c02cb",
+      "weight": 116.0,
+      "size": 3,
+      "canonical_node_count": 58,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "category": "logic",
+      "occurrences": [
+        {
+          "path": "alpha.rs",
+          "start_byte": 178,
+          "end_byte": 508,
+          "start_line": 6,
+          "end_line": 20,
+          "hidden": false
+        },
+        {
+          "path": "beta.rs",
+          "start_byte": 160,
+          "end_byte": 490,
+          "start_line": 6,
+          "end_line": 20,
+          "hidden": false
+        },
+        {
+          "path": "gamma.rs",
+          "start_byte": 182,
+          "end_byte": 512,
+          "start_line": 9,
+          "end_line": 23,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 3,
+      "occurrences_truncated": false,
+      "summary": "3 copies of a 58-node subtree at alpha.rs:6:8, beta.rs:6:8, gamma.rs:9:8 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    },
+    {
+      "id": "652583a45f9df196",
+      "weight": 38.0,
+      "size": 2,
+      "canonical_node_count": 38,
+      "signals": {
+        "structural": 1.0,
+        "token_jaccard": 1.0,
+        "embedding_cos": 0.0,
+        "fused": 1.0
+      },
+      "bucket": "identical",
+      "category": "logic",
+      "occurrences": [
+        {
+          "path": "delta.rs",
+          "start_byte": 156,
+          "end_byte": 328,
+          "start_line": 6,
+          "end_line": 11,
+          "hidden": false
+        },
+        {
+          "path": "epsilon.rs",
+          "start_byte": 172,
+          "end_byte": 344,
+          "start_line": 6,
+          "end_line": 11,
+          "hidden": false
+        }
+      ],
+      "occurrences_total": 2,
+      "occurrences_truncated": false,
+      "summary": "2 copies of a 38-node subtree at delta.rs:6:1, epsilon.rs:6:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
+    }
+  ]
+}

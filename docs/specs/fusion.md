@@ -18,6 +18,7 @@ The structural and token layers always run. The embedding layer is opt-in: `--em
 - **Default provider + model (overridable).** Provider defaults to `ollama` (local, no network) and model to `nomic-embed-text` (`DEFAULT_OLLAMA_MODEL`), the embedding model an Ollama install is most likely to already carry. `nomic-embed-code` is the code-tuned alternative and is selected with `--embedding-model`; both follow the 2025 ensemble paper's finding that *"smaller embedding sizes, smaller tokenizer vocabularies and tailored datasets are advantageous"*. CodeT5+110M and UniXCoder are alternate top performers cited in the literature; either should be selectable via `--embedding-model` once exposed through a provider.
 - **Local-only is a policy, not a hard requirement of the architecture.** The default stack never touches the network, but the trait doesn't forbid a hosted provider. A user configuring `--embedding-provider=hosted-foo` opts into that tradeoff deliberately; we don't enable it for them.
 - **ANN index: HNSW.** Use `usearch` or `instant-distance` (pure Rust, no C deps). SSCD validated HNSW at 250 MLOC.
+- **One cosine definition, accumulated in `f64`.** Exact-path pair admission and every rendered `embedding_cos` use the crate's single cosine function (`embedding::cosine_similarity`): dot product and norms accumulated in `f64` over the raw `f32` components, no intermediate normalised vector, result clamped to `[0, 1]`. Byte-identical snippets share one vector, so their rendered cosine is exactly `1.0` — `f32` accumulation grew error with vector width and reported `0.999998` (gh #372, pinned by `issue_372_identical_snippet_cosine.rs` and the unit tests beside the function). The HNSW pass measures `f32` cosine distance only to discover candidates; discovery-edge cosines are never rendered ([FUSION-CLUSTER-SIGNALS]).
 - **Ensemble by max, never sum or average.** The 2025 ensemble paper's max/sum finding assumes independent members; Deslop's structural and token axes are two views of one normalised tree, so summing them manufactures confidence neither carries alone (gh #343). Fusion takes the strongest single axis; score normalization is mandatory before combining.
 - **Cache by `(file_content_hash, provider_id, model_id, model_version)`.** Re-runs are free; switching providers or models invalidates only the embedding layer and leaves structural/LSH caches intact. LSP incremental mode reuses the same cache unchanged.
 - **Index granularity: AST subtrees above min-node threshold**, not whole files. We already have those subtrees from the structural pass — embed them directly. This keeps embeddings byte-range-addressable and dramatically reduces the N in k-NN.
@@ -38,7 +39,7 @@ This way, a Type-1 clone scores ≈1 on all three signals, a Type-2 ≈1 on stru
 
 ### [FUSION-CLUSTER-SIGNALS] Rendered cluster signals are measured, never aggregated from discovery edges
 
-A rendered cluster's signal triple is **measured between the occurrences the report shows**: the per-signal mean over every unordered pair of rendered occurrences. Per pair: `structural` is Merkle-hash equality (1.0 or 0.0), `token_jaccard` is the MinHash Jaccard estimate between the two signatures, and `embedding_cos` is the cosine of the two vectors computed by the same arithmetic the ANN pass uses ([FUSION-EMBED-PROVIDER]), including its [0,1] clamp. A pair where either signal input is missing (no vector: embeddings off, oversized input, provider failure) contributes to neither that signal's numerator nor its denominator; a signal with no measurable pair reports 0.0, matching the embeddings-off convention, with the absence explained by the report's embedding provenance.
+A rendered cluster's signal triple is **measured between the occurrences the report shows**: the per-signal mean over every unordered pair of rendered occurrences. Per pair: `structural` is Merkle-hash equality (1.0 or 0.0), `token_jaccard` is the MinHash Jaccard estimate between the two signatures, and `embedding_cos` is the cosine of the two vectors, computed by the crate's single cosine definition ([FUSION-EMBED-PROVIDER]): dot product and norms accumulated in `f64` over the raw `f32` components, clamped to [0,1], so byte-identical occurrences — which share one vector — render exactly `1.0` (gh #372). A pair where either signal input is missing (no vector: embeddings off, oversized input, provider failure) contributes to neither that signal's numerator nor its denominator; a signal with no measurable pair reports 0.0, matching the embeddings-off convention, with the absence explained by the report's embedding provenance.
 
 Averaging the surviving pair scores of the transitive-closure component is prohibited. Closure admits every edge above threshold, so the edge mix is an artifact of discovery topology — structural star buckets, ANN top-k fan-out, LSH band width — not of the rendered occurrences. Under that mean, restored embedding evidence diluted a byte-identical file pair to `structural = 0.36` and routed it `same_behavior` instead of `identical` (gh #343 corpus, pinned by `issue_343_sum_clamp_saturation.rs`). The measured triple also feeds the cross-cluster subsumption pass, which compares structural values: diluted signals let contained artifact clusters escape collapse.
 
@@ -115,7 +116,18 @@ routing line) saturates on shape
 matches exactly as `structural` does — the surviving flutter/flutter #331
 cluster read `structural=0.62, token_jaccard=0.98, fused=1.00` because
 transitive closure mixed structural and LSH pairs. The gate therefore fires on
-*either* saturating signal. Shape-mismatched members have no positional
+*either* saturating signal.
+
+**The gate stops at the anchor-free route.** Row 4 of
+[taxonomy.md §CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing) is
+deliberately outside it. Both populations below assume the members align
+position for position, and `structural ≤ 0.01` says the shapes differ — so
+against a genuine Type-3 clone whose identifiers are all renamed and whose
+bodies differ by one statement (`csharp-type3`), agreement collapses to the
+literals (0.19) and rename consistency to 0.00, because the extra statement
+destroys the alignment the rename proof needs. Gating row 4 here would demote
+the renamed near-miss, the most valuable clone class there is. Row 4 is routed
+on cluster *spread* instead — see the taxonomy row. Shape-mismatched members have no positional
 alignment, so their agreement is the key-set Jaccard of their content keys — a
 genuine Type-3 near-miss shares nearly all of them; renamed scaffolding shares
 few. The verbatim guard is proportional

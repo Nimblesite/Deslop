@@ -166,3 +166,11 @@ pub(crate) fn assert_cluster_mentions(
     }
     Ok(texts)
 }
+
+/// Lossless `u64 → f64` for LOC counts and cluster sizes (all far below
+/// `2^32`), mirroring the renderer's own clamp-then-widen order. Every
+/// metric re-derivation in the golden suites goes through it so no
+/// assertion silently loses precision on the way to a comparison.
+pub(crate) fn loc_as_f64(value: u64) -> Result<f64> {
+    Ok(f64::from(u32::try_from(value)?))
+}

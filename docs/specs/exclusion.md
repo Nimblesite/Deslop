@@ -148,3 +148,16 @@ allow_cross_language_comparison = false
 Default: `false`. Candidate pairs whose two fingerprints belong to different languages are dropped before fusion and transitive-closure clustering. This keeps normal reports focused on code that developers can realistically refactor together and prevents mixed-language scaffolding from dominating the top offenders list.
 
 Opt-in: set `allow_cross_language_comparison = true` to preserve the full language-agnostic candidate union. This is useful for audits that intentionally compare ports, generated client libraries, or semantic equivalents across ecosystems. The option is global for the run; per-language overlays still apply only to exclusion and reporting policy.
+
+### [CONFIG-INCREMENTAL-OPTOUT] Opting out of persisted processing
+
+The parse store ([pipeline.md §PIPELINE-INCREMENTAL](pipeline.md#pipeline-incremental)) is on by default on every surface. The `[analysis]` section is the workspace-level escape hatch:
+
+```toml
+[analysis]
+incremental = false
+```
+
+Default: `true`. Set to `false`, the store is never consulted and never created — every pass parses from source and builds every signature, `cache_stats` reads `{0, 0}`, and no `.deslop/cache/fingerprints/` directory appears on disk. The opt-out gates every surface that loads the config — CLI batch, rerun, LSP, MCP — and it always wins: a session whose invocation requested incremental processing still runs uncached under it, and a live `.deslop.toml` edit setting the key applies from the next change pass without a restart. Opting back *in* live applies from the next session. `deslop --no-incremental` remains the per-invocation spelling of the same thing.
+
+The equivalence contract ([pipeline.md §PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE](pipeline.md#pipeline-incremental-analysis)) makes the opt-out purely economic: outside `cache_stats`, an opted-out report is byte-for-byte the report the store-backed pass renders. Pinned by `crates/deslop/tests/signature_reuse.rs::config_file_opt_out_disables_persisted_processing`.

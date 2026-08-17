@@ -25,7 +25,7 @@ pub mod registry;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
-pub use cache::{content_hash, EmbeddingCache};
+pub use cache::{bytes_hash, content_hash, EmbeddingCache};
 pub use mode::{EmbeddingMode, ParseModeError};
 pub use noop::{NoopProvider, NOOP_PROVIDER_ID};
 pub use ollama::{
