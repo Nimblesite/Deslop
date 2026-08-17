@@ -131,7 +131,8 @@ impl PipelineSession {
         let ranges = collect_import_boilerplate_ranges(&cached.tree, language);
         self.replace_boilerplate_ranges(file_id, ranges);
         let _prev_lines = self.analysed_lines.insert(file_id, lines);
-        let _prev = self.per_file.insert(file_id, cached);
+        let path_key = super::store::relative_path_key(&absolute, &self.root);
+        self.store.upsert(file_id, path_key, cached);
         let _prev_source = self.sources.insert(file_id, source);
         let _prev_path = self.live_paths.insert(file_id, absolute);
         let _prev_lang = self.file_languages.insert(file_id, language);
@@ -241,7 +242,7 @@ impl PipelineSession {
             return CorpusEffect::Untouched;
         };
         let _removed_path = self.live_paths.remove(&file_id);
-        let _removed_cache = self.per_file.remove(&file_id);
+        let _removed_records = self.store.remove(file_id);
         let _removed_source = self.sources.remove(&file_id);
         let _removed_lang = self.file_languages.remove(&file_id);
         let _removed_lines = self.analysed_lines.remove(&file_id);

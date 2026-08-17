@@ -11,6 +11,7 @@
 mod ast_access;
 mod change;
 mod render;
+mod store;
 
 use std::{
     collections::HashMap,
@@ -21,9 +22,8 @@ use std::{
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{discover_files, is_ignore_rule_path, DiscoveryResult, IgnoreMatcher},
+    discover::{discover_files, is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher},
     error::CoreError,
-    fpcache::CachedFile,
     lang::LanguageParser,
     report::{CacheStats, Report},
     report_metrics::AnalysedLines,
@@ -32,10 +32,11 @@ use crate::{
 
 use super::{
     config::{EmbeddingSettings, PipelineConfig},
-    corpus::{build_extension_map, default_parsers, fingerprint_corpus},
+    corpus::{build_extension_map, default_parsers, fingerprint_corpus, FingerprintCorpus},
 };
 
 use change::CorpusEffect;
+use store::CorpusStore;
 
 /// A long-running analysis context owned by the daemon ([LIVE-LIFECYCLE]).
 ///
@@ -76,10 +77,14 @@ pub struct PipelineSession {
     /// keep their [`FileId`] slot (nothing ever gets unregistered) so
     /// old diagnostics retain stable handles.
     pub(super) registry: FileRegistry,
-    /// Per-`FileId` cached tree + fingerprints. Keys here are the
-    /// single source of truth for "which files are currently part of
-    /// the corpus."
-    pub(super) per_file: HashMap<FileId, CachedFile>,
+    /// Canonical flat corpus storage: every fingerprint, signature,
+    /// and normalised tree, in workspace-relative-path order with one
+    /// span per live file. Entry presence is the single source of
+    /// truth for "which files currently contribute fingerprints." A
+    /// render pass borrows it as-is; only a live change copies —
+    /// splicing exactly one file's records
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
+    pub(super) store: CorpusStore,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
@@ -162,7 +167,8 @@ impl PipelineSession {
             embedding,
             incremental: effective_incremental,
         };
-        let corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
+        let mut corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
+        let store = build_store(&mut corpus, &discovery.files, &root);
         let mut live_paths: HashMap<FileId, PathBuf> = HashMap::new();
         let mut file_languages: HashMap<FileId, &'static str> = HashMap::new();
         for discovered in &discovery.files {
@@ -180,7 +186,7 @@ impl PipelineSession {
             exclusion,
             ignore_matcher,
             registry: discovery.registry,
-            per_file: corpus.per_file,
+            store,
             sources: corpus.sources,
             live_paths,
             file_languages,
@@ -285,10 +291,7 @@ impl PipelineSession {
     /// before re-running the pass.
     #[must_use]
     pub fn fingerprint_count(&self) -> usize {
-        self.per_file
-            .values()
-            .map(|cached| cached.fingerprints.len())
-            .sum()
+        self.store.fingerprint_count()
     }
 
     /// Returns the path associated with `file_id`, if the session has
@@ -373,6 +376,28 @@ impl PipelineSession {
         self.ignore_matcher = IgnoreMatcher::build(&self.root);
         Ok(())
     }
+}
+
+/// Moves the freshly-parsed per-file bundles into the canonical flat
+/// store, feeding them in ascending `(relative path, id)` order so
+/// every insert is an append ([PIPELINE-DETERMINISM]).
+fn build_store(
+    corpus: &mut FingerprintCorpus,
+    files: &[DiscoveredFile],
+    root: &Path,
+) -> CorpusStore {
+    let mut keys: Vec<(PathBuf, FileId)> = files
+        .iter()
+        .map(|file| (store::relative_path_key(&file.path, root), file.file_id))
+        .collect();
+    keys.sort_unstable();
+    let mut built = CorpusStore::default();
+    for (path_key, file_id) in keys {
+        if let Some(cached) = corpus.per_file.remove(&file_id) {
+            built.upsert(file_id, path_key, cached);
+        }
+    }
+    built
 }
 
 /// True when a change to `path` re-scopes the corpus rather than
