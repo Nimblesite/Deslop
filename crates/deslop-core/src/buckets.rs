@@ -247,17 +247,6 @@ pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 /// [FUSED-THRESHOLD]).
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
-/// Minimum literal share of the canonical member for a 3+-file
-/// same-shape family to be promotable by content agreement
-/// ([FUSION-CONTENT-GATE]). Contract-mandated wiring — trait adapter
-/// impls, framework overrides ([CLONE-NOISE-RUST-LANGPARSER]) — pins
-/// the very identifier leaves the agreement population measures and
-/// carries no literals at all, so identifier-only agreement across a
-/// 3+-file spread is contract evidence, not copying evidence. Copied
-/// logic carries literal anchors no contract dictates (the mixed-band
-/// near copies measure ≈ 0.5; the trait adapters measure exactly 0.0).
-pub const SCAFFOLDING_PROMOTE_MIN_LITERALS: f64 = 0.05;
-
 /// Literal fraction at which a shape-identical cluster counts as a data
 /// literal ([CLONE-NOISE-LITERAL-TABLE]): the canonical member's
 /// collapsed leaves are overwhelmingly literal positions — a numeric

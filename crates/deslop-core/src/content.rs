@@ -81,9 +81,9 @@ pub struct ContentEvidence {
     /// True when at least [`VERBATIM_MEMBER_SHARE_FLOOR`] of the members
     /// participate in byte-equivalent leaf-content duplicates. Byte
     /// equality between whole members is proof of copying in its own
-    /// right (the #190 verbatim escape hatch), so routing guards that
-    /// key on weaker evidence — literal anchors, identifier agreement —
-    /// must never demote a cluster this flag vouches for.
+    /// right (the #190 verbatim escape hatch), so [`Self::agreement`]
+    /// reports full agreement for such a cluster rather than the
+    /// positional score the odd-one-out members would dilute.
     pub verbatim_dominated: bool,
 }
 
