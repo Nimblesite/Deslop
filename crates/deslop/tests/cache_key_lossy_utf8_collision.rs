@@ -29,11 +29,10 @@
 use std::{fs, path::Path};
 
 use anyhow::Result;
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{incremental::*, *};
 
 /// The clone body shared by both files. Seven lines, identical in each,
 /// so a cluster spanning the pair is guaranteed regardless of the
@@ -56,7 +55,7 @@ const TWO_BYTE_INVALID: &[u8] = b"\xf0\x9f";
 
 /// `min-nodes` low enough that the shared body fingerprints as one
 /// subtree.
-const MIN_NODES: &str = "8";
+const MIN_NODES: u32 = 8;
 
 /// Writes `// <invalid>\n` followed by [`BODY`] to `dir/name`.
 fn write_clone(dir: &Path, name: &str, invalid: &[u8]) -> Result<()> {
@@ -81,20 +80,7 @@ fn seed_colliding_pair(scan_root: &Path) -> Result<()> {
 /// `incremental` runs the default cache-on path; otherwise
 /// `--no-incremental` is added and the cache is never consulted.
 fn report(scan_root: &Path, incremental: bool) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _args = cmd.arg(scan_root).arg("--output").arg(&output).args([
-        "--min-nodes",
-        MIN_NODES,
-        "--embeddings",
-        "off",
-    ]);
-    if !incremental {
-        let _flag = cmd.arg("--no-incremental");
-    }
-    let _assertion = cmd.assert().success();
-    load_json(&output.with_extension("json"))
+    run_report_with_store(scan_root, MIN_NODES, Store::incremental(incremental))
 }
 
 /// The `(start_line, end_line, start_byte, end_byte)` of the sole

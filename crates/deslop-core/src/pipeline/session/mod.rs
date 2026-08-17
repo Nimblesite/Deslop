@@ -49,7 +49,9 @@ pub struct PipelineSession {
     pub(super) root: PathBuf,
     /// Subtree-size floor used throughout the session.
     pub(super) min_nodes: u32,
-    /// Whether to consult the on-disk fingerprint cache.
+    /// Whether the invocation requested the on-disk fingerprint cache.
+    /// Gated per pass by the config escape hatch through
+    /// [`Self::effective_incremental`] ([CONFIG-INCREMENTAL-OPTOUT]).
     pub(super) incremental: bool,
     /// Optional override pointing at a `.deslop.toml` outside the
     /// workspace root. `None` = discover inside `root`.
@@ -139,6 +141,17 @@ impl PipelineSession {
             "pipeline session initialising",
         );
         let exclusion = Arc::new(load_exclusion(&root, config_path.as_deref())?);
+        // [CONFIG-INCREMENTAL-OPTOUT] The config file is the outermost
+        // escape hatch: `[analysis] incremental = false` disables
+        // persisted processing for every surface that reaches this
+        // point — CLI batch, rerun, LSP, MCP — whatever the invocation
+        // requested.
+        let effective_incremental = incremental && exclusion.incremental_enabled();
+        if incremental && !effective_incremental {
+            tracing::info!(
+                "persisted processing disabled by config (`[analysis] incremental = false`)",
+            );
+        }
         let ignore_matcher = IgnoreMatcher::build(&root);
         let discovery = discover_files(&root, &extension_to_language, &exclusion);
         log_discovery_summary(&discovery, &root);
@@ -147,7 +160,7 @@ impl PipelineSession {
             min_nodes,
             config_path: config_path.clone(),
             embedding,
-            incremental,
+            incremental: effective_incremental,
         };
         let corpus = fingerprint_corpus(&discovery.files, &parsers, &config)?;
         let mut live_paths: HashMap<FileId, PathBuf> = HashMap::new();
@@ -253,8 +266,18 @@ impl PipelineSession {
     }
 
     /// Updates whether future change passes consult the fingerprint cache.
+    /// The config escape hatch still gates the effective value
+    /// ([CONFIG-INCREMENTAL-OPTOUT]).
     pub fn set_incremental(&mut self, enabled: bool) {
         self.incremental = enabled;
+    }
+
+    /// The requested store mode gated by the live config's escape hatch
+    /// ([CONFIG-INCREMENTAL-OPTOUT]) — re-evaluated per pass, so a
+    /// `.deslop.toml` edit opting out takes effect on the very next
+    /// change pass without a restart.
+    pub(super) fn effective_incremental(&self) -> bool {
+        self.incremental && self.exclusion.incremental_enabled()
     }
 
     /// Returns the total fingerprint count across every live file.

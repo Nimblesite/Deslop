@@ -26,7 +26,7 @@ use crate::{
 };
 
 /// Builds a `FileId → &NormalizedNode` index to avoid O(files) linear scans
-/// for every fingerprint in [`build_signatures_with_languages`].
+/// for every fingerprint in [`build_cross_language_signatures`].
 fn build_tree_index(trees: &[NormalizedNode]) -> HashMap<FileId, &NormalizedNode> {
     trees.iter().map(|tree| (tree.file_id, tree)).collect()
 }
@@ -172,11 +172,18 @@ fn empty_signature(fingerprint: &Fingerprint, language: Option<&str>) -> Signatu
 /// Fingerprint-scoped signature used when no k-grams are available. This
 /// avoids treating unrelated empty token sets as perfect LSH matches.
 /// Uses blake3 XOF to derive all 128 slot values from a single hash call.
+/// The byte offsets are widened to `u64` before hashing so the input is
+/// always eight little-endian bytes per offset — `usize::to_le_bytes()`
+/// is four bytes on a 32-bit build, and these values persist in the
+/// parse store, where an architecture-dependent signature would defeat
+/// content addressing ([PIPELINE-INCREMENTAL-INTEGRITY]).
 fn fallback_signature(fingerprint: &Fingerprint) -> Signature {
+    let start = u64::try_from(fingerprint.byte_range.start).unwrap_or(u64::MAX);
+    let end = u64::try_from(fingerprint.byte_range.end).unwrap_or(u64::MAX);
     let mut hasher = Hasher::new();
     let _ = hasher.update(&fingerprint.hash);
-    let _ = hasher.update(&fingerprint.byte_range.start.to_le_bytes());
-    let _ = hasher.update(&fingerprint.byte_range.end.to_le_bytes());
+    let _ = hasher.update(&start.to_le_bytes());
+    let _ = hasher.update(&end.to_le_bytes());
     let mut expanded = [0u8; SIGNATURE_LEN * 8];
     hasher.finalize_xof().fill(&mut expanded);
     let mut signature = [0_u64; SIGNATURE_LEN];
@@ -228,6 +235,31 @@ mod tests {
             first_rust,
             empty_signature(&first, Some("rust")),
             "fingerprint-scoped fallback must stay deterministic for the same fingerprint"
+        );
+    }
+
+    // [PIPELINE-INCREMENTAL-INTEGRITY] The fallback signature persists
+    // in the parse store, so its slots must be a pure, fixed function
+    // of the fingerprint — identical on every architecture and across
+    // releases. A 32-bit build hashing 4-byte offsets, or any semantic
+    // drift in the derivation, changes every slot and fails this pin.
+    #[test]
+    fn fallback_signature_slots_are_architecture_independent() {
+        let signature = fallback_signature(&fingerprint(7, 3, 9));
+        assert_eq!(
+            signature.get(..4),
+            Some(
+                &[
+                    13_181_474_024_201_563_239_u64,
+                    1_576_249_985_012_619_851,
+                    14_983_257_718_629_721_174,
+                    4_485_375_611_891_913_186,
+                ][..]
+            ),
+            "the fallback signature's leading slots moved — either the \
+             derivation changed semantics (bump the parse store's \
+             SEMANTIC_EPOCH) or the input encoding became \
+             architecture-dependent"
         );
     }
 }

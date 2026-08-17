@@ -315,7 +315,7 @@ impl PipelineSession {
                 batch_yield: embedding.batch_yield,
                 progress: embedding.progress,
             },
-            incremental: self.incremental,
+            incremental: self.effective_incremental(),
         }
     }
 
@@ -330,7 +330,7 @@ impl PipelineSession {
             min_nodes: self.min_nodes,
             config_path: self.config_path.clone(),
             embedding,
-            incremental: self.incremental,
+            incremental: self.effective_incremental(),
         }
     }
 }

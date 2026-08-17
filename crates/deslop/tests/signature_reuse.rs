@@ -2,296 +2,139 @@
 //! rebuilding every one from token streams
 //! ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
 //!
-//! BORN RED BY DESIGN — this is the test-first pin for
-//! docs/plans/incremental-analysis-plan.md, Phase 2 (signature
-//! persistence). Today the pipeline rebuilds every signature on every
-//! pass, warm or cold, and the "fingerprint corpus built" info event
-//! (crates/deslop-core/src/pipeline/corpus.rs, target
-//! `deslop_core::pipeline::corpus`) carries only `files_processed`,
-//! `fingerprints`, `cache_hits`, and `cache_misses`. The Phase 2
-//! implementation — persisting each subtree's `MinHash` signature beside
-//! its fingerprints in the on-disk parse store and attaching the
-//! stored signatures on cache hits — turns this test green by adding
-//! two structured fields to that same event:
+//! A signature is a pure function of one subtree's normalised token
+//! k-grams, so a fully-warm pass may rebuild none of them. The pass
+//! must say so on the structured tracing surface — timing assertions
+//! are banned — and the reuse can never be bought with a report
+//! difference: outside `cache_stats`, the warm report IS the cold
+//! report.
 //!
-//! - `signatures_built`  — signatures constructed from token streams
-//!   this pass;
-//! - `signatures_reused` — signatures attached from the on-disk parse
-//!   store.
+//! Contract, per `fingerprint corpus built` event: cold default run →
+//! `signatures_reused=0`, `signatures_built=F` where F is the total
+//! fingerprint count; fully-warm run → `signatures_built=0`,
+//! `signatures_reused=F`; a disabled store (`--no-incremental` or the
+//! config opt-out) → `signatures_built=F`, `signatures_reused=0` with
+//! zero hits *and* zero misses, because a store that is never consulted
+//! accounts for no file at all. Conservation (`built + reused == F`)
+//! holds on every pass and is asserted on every pass.
 //!
-//! Contract: cold default run → `signatures_reused=0`,
-//! `signatures_built=F` where F is the total fingerprint count;
-//! fully-warm run → `signatures_built=0`, `signatures_reused=F` (same
-//! F); `--no-incremental` → `signatures_built=F`,
-//! `signatures_reused=0`.
-//!
-//! The observable is the structured tracing surface — timing
-//! assertions are banned. The CLI's default sink writes ANSI-free fmt
-//! lines to `<output dir>/logs/deslop-<ts>.log` (routing pinned by
-//! tests/cli/logging.rs), so each run's event fields are parsed as
-//! `key=value` tokens from the single log file that run wrote. And the
-//! reuse can never be bought with a report difference: the warm report
-//! must equal the cold report with `/cache_stats` removed.
+//! The event-parsing and report-comparison helpers live in
+//! `common::incremental`, the corpus in `common::seeded` — shared with
+//! `cache_blob_integrity.rs`, so there is one definition of "reused,
+//! not rebuilt" across the tree.
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
-
-use anyhow::{anyhow, Context, Result};
-use assert_cmd::Command;
-use serde_json::Value;
+use std::{fs, path::Path};
 
 mod common;
-use crate::common::{incremental::*, *};
+use crate::common::{incremental::*, seeded::*, *};
 
-/// The clone body shared verbatim by `alpha.rs` and `beta.rs`. Seven
-/// lines, byte-identical in both files, so one cluster spanning the
-/// pair is guaranteed at `--min-nodes 8`.
-const CLONE_BODY: &str = "pub fn compute(items: &[i32]) -> i32 {\n\
-    \x20   let mut total = 0;\n\
-    \x20   for item in items {\n\
-    \x20       if *item > 0 { total += item * 2; } else { total -= item; }\n\
-    \x20   }\n\
-    \x20   total\n\
-}\n";
-
-/// A genuinely different function for `gamma.rs` — real code that
-/// duplicates nothing, so the corpus has exactly one clone pair.
-const DISTINCT_SOURCE: &str = "pub fn label(count: usize) -> String {\n\
-    \x20   match count {\n\
-    \x20       0 => \"none\".to_owned(),\n\
-    \x20       1 => \"one\".to_owned(),\n\
-    \x20       other => format!(\"{other} items\"),\n\
-    \x20   }\n\
-}\n";
-
-/// Seeds three byte-distinct Rust files: the `alpha.rs`/`beta.rs`
-/// clone pair (distinct leading comments keep the file bytes — and so
-/// the content-addressed cache keys — distinct) plus the unrelated
-/// `gamma.rs`, so cold/warm cache stats are exactly {0,3}/{3,0}.
-fn seed_corpus(scan_root: &Path) -> Result<()> {
-    fs::create_dir_all(scan_root)?;
-    fs::write(
-        scan_root.join("alpha.rs"),
-        format!("// alpha: the canonical copy.\n{CLONE_BODY}"),
-    )?;
-    fs::write(
-        scan_root.join("beta.rs"),
-        format!("// beta: the pasted copy.\n{CLONE_BODY}"),
-    )?;
-    fs::write(scan_root.join("gamma.rs"), DISTINCT_SOURCE)?;
-    Ok(())
-}
-
-/// Runs `deslop <scan_root>` with the incremental cache on (the
-/// default — the store lands at `<scan_root>/.deslop/cache`), writing
-/// reports under `<out_dir>/report` and the tracing log under
-/// `<out_dir>/logs/`. A fresh out dir per run keeps each run's single
-/// timestamped log file unambiguous. Returns the parsed JSON report
-/// and the raw log body.
-fn run_default_incremental(scan_root: &Path, out_dir: &Path) -> Result<(Value, String)> {
-    fs::create_dir_all(out_dir)?;
-    let output = out_dir.join("report");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _assertion = cmd
-        .env_remove("RUST_LOG")
-        .arg(scan_root)
-        .arg("--output")
-        .arg(&output)
-        .args(["--min-nodes", "8", "--embeddings", "off"])
-        .assert()
-        .success();
-    let report = load_json(&output.with_extension("json"))?;
-    let log_body = read_single_log(out_dir)?;
-    Ok((report, log_body))
-}
-
-/// Reads the single `deslop-<ts>.log` under `<out_dir>/logs/`
-/// ([OUTPUT-DIR]) — the ANSI-free default sink the CLI routes tracing
-/// events to (tests/cli/logging.rs pins that routing).
-fn read_single_log(out_dir: &Path) -> Result<String> {
-    let logs_dir = out_dir.join("logs");
-    let logs: Vec<PathBuf> = fs::read_dir(&logs_dir)
-        .with_context(|| format!("no logs directory under {}", out_dir.display()))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| is_timestamped_log(path))
-        .collect();
-    match logs.as_slice() {
-        [only] => Ok(fs::read_to_string(only)?),
-        other => Err(anyhow!(
-            "expected exactly one deslop-*.log under {}, found {other:?}",
-            logs_dir.display()
-        )),
-    }
-}
-
-/// True for the CLI's `deslop-<unix-seconds>.log` file names.
-fn is_timestamped_log(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with("deslop-"))
-        && path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
-}
-
-/// The single "fingerprint corpus built" event line in `log_body`.
-/// `fingerprint_corpus` emits it exactly once per batch build, so
-/// exactly one line keeps the field parse unambiguous.
-fn corpus_event_line(log_body: &str) -> Result<String> {
-    let lines: Vec<&str> = log_body
-        .lines()
-        .filter(|line| line.contains("fingerprint corpus built"))
-        .collect();
-    match lines.as_slice() {
-        [only] => Ok((*only).to_owned()),
-        other => Err(anyhow!(
-            "expected exactly one \"fingerprint corpus built\" event, found {}: {log_body}",
-            other.len()
-        )),
-    }
-}
-
-/// A `name=value` field off a tracing fmt event line. An absent field
-/// fails naming the missing field — exactly how this test stays red
-/// until [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] lands the
-/// `signatures_built` / `signatures_reused` fields on the event.
-fn event_field(line: &str, name: &str) -> Result<u64> {
-    let prefix = format!("{name}=");
-    let raw = line
-        .split_whitespace()
-        .find_map(|token| token.strip_prefix(prefix.as_str()))
-        .ok_or_else(|| {
-            anyhow!(
-                "\"fingerprint corpus built\" event has no `{name}` field \
-                 ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE] requires it): {line}"
-            )
-        })?;
-    raw.parse::<u64>()
-        .with_context(|| format!("`{name}` field is not a u64 in: {line}"))
-}
-
-// Implements [PIPELINE-INCREMENTAL-ANALYSIS-REUSE]: a MinHash
-// signature is a pure function of one subtree's normalised token
-// k-grams, so a fully-warm pass may rebuild none of them — and must
-// say so on the structured tracing surface, while rendering a report
-// identical to the cold run's outside `cache_stats`.
+// [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] A fully-warm pass rebuilds no
+// signature, attaches one per fingerprint from the parse store, and
+// renders the cold report unchanged.
 #[test]
 fn warm_run_reuses_persisted_signatures_instead_of_rebuilding() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let scan_root = tmp.path().join("src");
     seed_corpus(&scan_root)?;
 
-    let (cold, cold_log) = run_default_incremental(&scan_root, &tmp.path().join("cold"))?;
-    let (warm, warm_log) = run_default_incremental(&scan_root, &tmp.path().join("warm"))?;
+    // The whole cold-fills / warm-serves / warm-owes-cold contract, over
+    // the three seeded files.
+    let cycle = cold_then_warm(&scan_root, tmp.path(), SEEDED_MIN_NODES, SEEDED_FILE_COUNT)?;
 
-    // Mechanics are proven first, so the only failure the contract
-    // block below can produce is the missing signature fields.
+    // And it was a real corpus on both passes, not a blind one.
+    assert_seeded_corpus(&cycle.cold, "cold")?;
+    assert_seeded_corpus(&cycle.warm, "warm")?;
+    Ok(())
+}
 
-    // The corpus is real: three files analysed, one genuine clone pair.
+// [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] `--no-incremental` never
+// consults the store, so it must build every signature on every pass —
+// twice over, proving the opt-out cannot silently start reusing — while
+// rendering the same report the store-backed passes render. A disabled
+// store records zero hits and zero misses; the store-on conservation
+// rule does not apply to it.
+/// Runs the same disabled-store invocation twice, each pass into its
+/// own out dir, and asserts the whole disabled contract on both: exact
+/// `{0, 0}` on both cache surfaces, every signature built, identical
+/// fingerprint counts, a real seeded corpus, and the second report
+/// field-for-field equal to the first. Returns the first pass so the
+/// caller can compare it onward.
+fn assert_two_disabled_passes(
+    scan_root: &Path,
+    out_root: &Path,
+    extra_args: &[&str],
+    scenario: &str,
+) -> Result<(serde_json::Value, ReuseCounters)> {
+    let first_out = out_root.join("first");
+    let (first, first_events) = run_store_on(scan_root, &first_out, SEEDED_MIN_NODES, extra_args)?;
+    let second_out = out_root.join("second");
+    let (second, second_events) =
+        run_store_on(scan_root, &second_out, SEEDED_MIN_NODES, extra_args)?;
+    assert_seeded_corpus(&first, scenario)?;
+    for (label, events) in [("first", &first_events), ("second", &second_events)] {
+        events.assert_invariants(&format!("{scenario} {label}"));
+        events.assert_store_disabled(&format!("{scenario} {label}"));
+    }
+    assert_cache_stats(&first, 0, 0, scenario);
+    assert_cache_stats(&second, 0, 0, scenario);
     assert_eq!(
-        field(&cold, "files_analysed").as_u64(),
-        Some(3),
-        "cold run must analyse all three seeded files: {cold}"
+        first_events.fingerprints, second_events.fingerprints,
+        "{scenario}: two disabled passes over one corpus must fingerprint \
+         identically: {first_events:?} vs {second_events:?}"
     );
-    assert_eq!(
-        field(&warm, "files_analysed").as_u64(),
-        Some(3),
-        "warm run must analyse all three seeded files: {warm}"
-    );
-    let clone = expect_cluster_spanning(&cold, &["alpha.rs", "beta.rs"])?;
-    assert_eq!(
-        cluster_bucket(clone),
-        "identical",
-        "the seeded pair is byte-identical code inside distinct files: {cold}"
-    );
-    assert_eq!(
-        cluster_size(clone),
-        2,
-        "the clone must span exactly the two seeded occurrences: {cold}"
-    );
+    assert_reports_equal(&second, &first, scenario);
+    Ok((first, first_events))
+}
 
-    // All three byte-distinct files miss the cold cache and hit warm.
-    assert_cache_stats(&cold, 0, 3, "cold");
-    assert_cache_stats(&warm, 3, 0, "warm");
+#[test]
+fn no_incremental_runs_always_build_every_signature() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_corpus(&scan_root)?;
 
-    // Reuse can never be bought with a report difference: outside
-    // `cache_stats`, the warm report IS the cold report.
-    assert_reports_equal(&warm, &cold, "signature reuse warm pass");
+    let (first, first_events) = assert_two_disabled_passes(
+        &scan_root,
+        tmp.path(),
+        &["--no-incremental"],
+        "--no-incremental",
+    )?;
 
-    // The event line parses, and its existing fields agree with the
-    // rendered cache stats — the key=value extraction is sound, so a
-    // missing-field failure below indicts the event, not the parser.
-    let cold_event = corpus_event_line(&cold_log)?;
-    let warm_event = corpus_event_line(&warm_log)?;
+    // And the store-off report is the store-on report.
+    let (warm, warm_events) =
+        run_store_on(&scan_root, &tmp.path().join("warm"), SEEDED_MIN_NODES, &[])?;
+    warm_events.assert_invariants("store-on after store-off");
     assert_eq!(
-        event_field(&cold_event, "files_processed")?,
-        3,
-        "cold event must cover all three files: {cold_event}"
+        warm_events.fingerprints, first_events.fingerprints,
+        "the store must not change how many subtrees are fingerprinted: \
+         {warm_events:?} vs {first_events:?}"
     );
-    assert_eq!(
-        event_field(&warm_event, "files_processed")?,
-        3,
-        "warm event must cover all three files: {warm_event}"
-    );
-    assert_eq!(
-        event_field(&cold_event, "cache_hits")?,
-        0,
-        "cold event cache_hits must match the rendered report: {cold_event}"
-    );
-    assert_eq!(
-        event_field(&cold_event, "cache_misses")?,
-        3,
-        "cold event cache_misses must match the rendered report: {cold_event}"
-    );
-    assert_eq!(
-        event_field(&warm_event, "cache_hits")?,
-        3,
-        "warm event cache_hits must match the rendered report: {warm_event}"
-    );
-    assert_eq!(
-        event_field(&warm_event, "cache_misses")?,
-        0,
-        "warm event cache_misses must match the rendered report: {warm_event}"
-    );
-    let total_fingerprints = event_field(&cold_event, "fingerprints")?;
+    assert_reports_equal(&warm, &first, "store-on pass vs --no-incremental pass");
+    Ok(())
+}
+
+// [CONFIG-INCREMENTAL-OPTOUT] `[analysis] incremental = false` in
+// `.deslop.toml` is the config-file escape hatch: it disables persisted
+// processing with no per-invocation flag, for every surface that loads
+// the config. Two default-flag runs must both behave exactly like
+// `--no-incremental` — zero hits, zero misses, every signature built —
+// and the store directory must never be created on disk.
+#[test]
+fn config_file_opt_out_disables_persisted_processing() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_corpus(&scan_root)?;
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[analysis]\nincremental = false\n",
+    )?;
+
+    // No per-invocation flag at all — the config alone must disable the
+    // store, to exactly the contract `--no-incremental` satisfies.
+    let (_first, _events) =
+        assert_two_disabled_passes(&scan_root, tmp.path(), &[], "config-opt-out")?;
     assert!(
-        total_fingerprints > 0,
-        "the corpus must fingerprint at least one subtree: {cold_event}"
+        !scan_root.join(".deslop/cache/fingerprints").exists(),
+        "an opted-out run must never create the parse store on disk"
     );
-    assert_eq!(
-        event_field(&warm_event, "fingerprints")?,
-        total_fingerprints,
-        "warm corpus must carry the same fingerprint count F: {warm_event}"
-    );
-
-    // The [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] contract — red until
-    // plan Phase 2 lands signature persistence.
-
-    // Cold: nothing persisted yet, every signature built from tokens.
-    assert_eq!(
-        event_field(&cold_event, "signatures_reused")?,
-        0,
-        "cold run has no store to reuse signatures from: {cold_event}"
-    );
-    let cold_built = event_field(&cold_event, "signatures_built")?;
-    assert_eq!(
-        cold_built, total_fingerprints,
-        "cold run must build one signature per fingerprint (F): {cold_event}"
-    );
-
-    // Warm: every signature attached from the parse store, none rebuilt.
-    assert_eq!(
-        event_field(&warm_event, "signatures_built")?,
-        0,
-        "fully-warm run must rebuild no signatures: {warm_event}"
-    );
-    assert_eq!(
-        event_field(&warm_event, "signatures_reused")?,
-        cold_built,
-        "fully-warm run must reuse exactly the F signatures the cold run built: {warm_event}"
-    );
-
     Ok(())
 }

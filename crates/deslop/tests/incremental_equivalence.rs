@@ -34,7 +34,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use assert_cmd::Command;
 use serde_json::Value;
 
 mod common;
@@ -42,7 +41,7 @@ use crate::common::{incremental::*, *};
 
 /// `--min-nodes` low enough that the eleven-line clone body
 /// fingerprints as one clusterable subtree.
-const MIN_NODES: &str = "8";
+const MIN_NODES: u32 = 8;
 
 /// The duplicated function every `dup_*.rs` file carries, byte for
 /// byte. Eleven lines, so each copy spans lines 2..=12 under its
@@ -150,16 +149,7 @@ fn seed_tree(root: &Path, files: &[(String, String)]) -> Result<()> {
 /// `incremental` runs the default store-on path; otherwise
 /// `--no-incremental` is added and the store is never consulted.
 fn run(scan_root: &Path, incremental: bool) -> Result<Value> {
-    let tmp = tempfile::tempdir()?;
-    let output = tmp.path().join("report");
-    let mut cmd = Command::cargo_bin("deslop")?;
-    let _cmd = cmd.arg(scan_root).arg("--output").arg(&output);
-    let _args = cmd.args(["--min-nodes", MIN_NODES, "--embeddings", "off"]);
-    if !incremental {
-        let _flag = cmd.arg("--no-incremental");
-    }
-    let _assertion = cmd.assert().success();
-    load_json(&output.with_extension("json"))
+    run_report_with_store(scan_root, MIN_NODES, Store::incremental(incremental))
 }
 
 /// Seeds a fresh root with [`corpus`], then asserts the baseline cold

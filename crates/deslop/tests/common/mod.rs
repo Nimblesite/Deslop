@@ -33,6 +33,21 @@ pub(crate) mod verdict;
 /// `signals`.
 pub(crate) mod incremental;
 
+/// The six-language `incremental-multilang` fixture vocabulary. Imported
+/// explicitly with `use crate::common::multilang::*;`, for the same
+/// reason as `signals`.
+pub(crate) mod multilang;
+
+/// The committed-golden comparison and its `DESLOP_BLESS` regeneration
+/// path ([PIPELINE-DETERMINISM]). Imported explicitly with
+/// `use crate::common::golden::*;`, for the same reason as `signals`.
+pub(crate) mod golden;
+
+/// The three-file seeded Rust corpus the store-accounting suites share.
+/// Imported explicitly with `use crate::common::seeded::*;`, for the
+/// same reason as `signals`.
+pub(crate) mod seeded;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

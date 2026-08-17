@@ -28,7 +28,7 @@ use anyhow::{anyhow, Context as _};
 use serde_json::Value;
 
 mod common;
-use crate::common::*;
+use crate::common::{golden::*, *};
 
 /// Fixed `--min-nodes` the golden is rendered at. 16 sits above the
 /// 12-node `settle_invoice` signature subtree (which would otherwise
@@ -58,6 +58,12 @@ fn corpus_dir() -> PathBuf {
 fn golden_report_path() -> PathBuf {
     golden_dir().join("expected-report.json")
 }
+
+/// The command that regenerates the committed golden.
+const BLESS: &str = "`DESLOP_BLESS=1 cargo test -p deslop --test report_golden`";
+
+/// Why a drift here is worth investigating before it is blessed away.
+const DRIFT_HINT: &str = "Ranking, spans, ids and metrics all change user-visible output.";
 
 /// Copies the corpus into a throwaway scan root and renders the cold
 /// report with the fixed flag set, returning the raw JSON bytes. The
@@ -93,29 +99,7 @@ fn cold_report_matches_committed_golden_byte_for_byte() -> Result<()> {
         String::from_utf8(second)?,
         "two cold renders over identical corpora must be bit-identical [PIPELINE-DETERMINISM]"
     );
-    if std::env::var_os("DESLOP_BLESS").is_some() {
-        fs::write(golden_report_path(), rendered.as_bytes())?;
-        anyhow::bail!(
-            "golden re-blessed at {}; review the diff, then re-run without DESLOP_BLESS to verify",
-            golden_report_path().display()
-        );
-    }
-    let expected = fs::read_to_string(golden_report_path()).with_context(|| {
-        format!(
-            "missing golden {} — generate it with `DESLOP_BLESS=1 cargo test -p deslop --test report_golden`",
-            golden_report_path().display()
-        )
-    })?;
-    assert_eq!(
-        rendered,
-        expected,
-        "cold report drifted from {} [PIPELINE-DETERMINISM]. Regenerating is NOT the default \
-         remedy — ranking, spans, ids, and metrics all change user-visible output, so prove the \
-         drift is intended, then re-bless with `DESLOP_BLESS=1 cargo test -p deslop --test \
-         report_golden` and review the diff.",
-        golden_report_path().display()
-    );
-    Ok(())
+    assert_matches_golden(&rendered, &golden_report_path(), BLESS, DRIFT_HINT)
 }
 
 // [PIPELINE-DETERMINISM] Half two: correct. Byte equality alone only
@@ -124,12 +108,7 @@ fn cold_report_matches_committed_golden_byte_for_byte() -> Result<()> {
 // golden fails here even when it matches the committed bytes exactly.
 #[test]
 fn committed_golden_satisfies_report_contract() -> Result<()> {
-    let golden = load_json(&golden_report_path()).with_context(|| {
-        format!(
-            "unreadable golden {} — generate it with `DESLOP_BLESS=1 cargo test -p deslop --test report_golden`",
-            golden_report_path().display()
-        )
-    })?;
+    let golden = load_golden(&golden_report_path(), BLESS)?;
     assert_cold_scan_header(&golden);
     assert_occurrences_are_real_type1_clones(&golden)?;
     assert_ranking_and_cluster_shape(&golden)?;
