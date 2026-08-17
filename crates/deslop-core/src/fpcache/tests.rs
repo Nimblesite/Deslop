@@ -66,6 +66,7 @@ fn registered_file_id() -> FileId {
 fn source_binding(source_hash: &str) -> BlobBinding<'_> {
     BlobBinding {
         language_id: "rust",
+        tool_version: TOOL_VERSION,
         min_nodes: 8,
         source_hash,
     }
@@ -203,6 +204,16 @@ fn a_blob_is_never_served_under_a_different_address() {
         min_nodes: 9,
         ..source_binding(&hash)
     };
+    // The tool version is the axis a *relocation* attacks: every other
+    // field is reproduced by the directory the blob sits in, so lifting
+    // a blob from `<lang>/<old-version>/<min>/` into the current
+    // version's partition presents an otherwise-perfect address. Without
+    // `tool_version` inside the digest, that blob verifies and this
+    // binary serves fingerprints built by different normalisation rules.
+    let wrong_tool_version = BlobBinding {
+        tool_version: "0.0.0-superseded",
+        ..source_binding(&hash)
+    };
     assert_rejected(&blob, &wrong_source, file_id, "wrong source hash");
     assert_rejected(&blob, &wrong_language, file_id, "wrong language partition");
     assert_rejected(
@@ -210,6 +221,12 @@ fn a_blob_is_never_served_under_a_different_address() {
         &wrong_min_nodes,
         file_id,
         "wrong min_nodes partition",
+    );
+    assert_rejected(
+        &blob,
+        &wrong_tool_version,
+        file_id,
+        "blob relocated across tool versions",
     );
 }
 
@@ -330,6 +347,13 @@ fn the_binding_digest_is_stable_per_address_and_distinct_across_addresses() {
             "min_nodes",
             BlobBinding {
                 min_nodes: 9,
+                ..source_binding(&hash)
+            },
+        ),
+        (
+            "tool version",
+            BlobBinding {
+                tool_version: "0.0.0-superseded",
                 ..source_binding(&hash)
             },
         ),

@@ -116,7 +116,16 @@ routing line) saturates on shape
 matches exactly as `structural` does — the surviving flutter/flutter #331
 cluster read `structural=0.62, token_jaccard=0.98, fused=1.00` because
 transitive closure mixed structural and LSH pairs. The gate therefore fires on
-*either* saturating signal. Shape-mismatched members have no positional
+*either* saturating signal — and on the **anchor-free** near-identical route
+([taxonomy.md §CLONE-BUCKETS-ROUTING](taxonomy.md#clone-buckets-routing) row 4)
+at its own lower floor, `admission.lsh_only_min_jaccard`, because that row
+reaches an act-now bucket on token overlap **alone**. Six distinct Flutter
+widget files measure `structural=0.00, token_jaccard=0.93` over whole-file
+spans whose `build` bodies share nothing (#331): the framework-mandated
+declaration is most of each file, so the echo clears the row-4 floor while
+sitting in the band the `saturating_token_floor` test cannot see. Any route
+into `nearly_identical` that rests on the normalised representation alone owes
+the gate its content measurement. Shape-mismatched members have no positional
 alignment, so their agreement is the key-set Jaccard of their content keys — a
 genuine Type-3 near-miss shares nearly all of them; renamed scaffolding shares
 few. The verbatim guard is proportional

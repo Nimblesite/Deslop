@@ -1,15 +1,17 @@
 //! E2E pins for parse-store retention ([PIPELINE-INCREMENTAL-RETENTION]).
 //!
 //! A full pass owns the only exact knowledge of which blobs its corpus
-//! can address, so retention runs there and nowhere else: stale
-//! tool-version partitions are removed outright, orphans are *kept*
-//! under budget because they are the content-addressed reuse set a
-//! revert or branch switch full-hits
-//! ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]), and a pass that never
-//! consults the store never touches it either
-//! ([CONFIG-INCREMENTAL-OPTOUT]). Every scenario asserts the rendered
-//! report against the seeded truth — retention must never move a
-//! reported figure.
+//! can address, so retention runs there and nowhere else — and under
+//! budget it deletes *nothing*: orphans are the content-addressed reuse
+//! set a revert or branch switch full-hits
+//! ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]), and another tool
+//! version's partition may belong to a second binary still running
+//! against the same workspace (an installed VSIX's LSP beside a
+//! freshly-built CLI), which two mutually-sweeping binaries would
+//! deadlock into permanent rebuild churn. A pass that never consults the
+//! store never touches it either ([CONFIG-INCREMENTAL-OPTOUT]). Every
+//! scenario asserts the rendered report against the seeded truth —
+//! retention must never move a reported figure.
 
 mod common;
 
@@ -22,19 +24,23 @@ use crate::common::{incremental::*, seeded::*, store::*, Result};
 /// Sweep summary event every store-on pass emits exactly once.
 const SWEEP_LOG: &str = "fingerprint store swept";
 
-/// A version directory no running binary addresses.
-const STALE_VERSION_DIR: &str = "0.0.0-superseded";
+/// A version directory this binary cannot address — the partition a
+/// differently-versioned binary sharing the workspace writes.
+const OTHER_VERSION_DIR: &str = "0.0.0-superseded";
 
-/// Plants a fake superseded-version partition holding one junk blob
-/// inside the seeded corpus's Rust store, returning its root.
-fn plant_stale_partition(scan_root: &Path) -> Result<std::path::PathBuf> {
-    let stale_root = store_dir(scan_root)
+/// Blob file the planted other-version partition holds.
+const OTHER_VERSION_BLOB: &str = "deadbeef.bin";
+
+/// Plants an other-tool-version partition holding one blob inside the
+/// seeded corpus's Rust store, returning its root.
+fn plant_other_version_partition(scan_root: &Path) -> Result<std::path::PathBuf> {
+    let other_root = store_dir(scan_root)
         .join("rust")
-        .join(STALE_VERSION_DIR)
+        .join(OTHER_VERSION_DIR)
         .join(SEEDED_MIN_NODES.to_string());
-    fs::create_dir_all(&stale_root)?;
-    fs::write(stale_root.join("deadbeef.bin"), b"superseded-format blob")?;
-    Ok(stale_root)
+    fs::create_dir_all(&other_root)?;
+    fs::write(other_root.join(OTHER_VERSION_BLOB), b"other-version blob")?;
+    Ok(other_root)
 }
 
 /// Rewrites `alpha.rs`'s banner comment with a byte-distinct,
@@ -72,17 +78,21 @@ fn assert_seeded_pass(
     assert_seeded_corpus(report, label)
 }
 
-// [PIPELINE-INCREMENTAL-RETENTION] A partition under a superseded tool
-// version is unaddressable by construction. The next store-on pass
-// removes it — and touches nothing else: the live blobs survive
-// byte-identically and the report is still the seeded truth.
+// [PIPELINE-INCREMENTAL-RETENTION] A partition under another tool
+// version is unaddressable by *this* binary — but a second binary
+// sharing the workspace may own it, so an under-budget sweep classifies
+// it and deletes nothing. The blob keeps its exact bytes, is never
+// served (the pass still full-hits its own partition), the live blobs
+// survive byte-identically, and the report is still the seeded truth.
 #[test]
-fn a_stale_tool_version_partition_is_removed_by_the_next_full_pass() -> Result<()> {
+fn another_tool_versions_partition_survives_an_under_budget_sweep() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let (scan_root, _cold, _cold_events) =
         seeded_cold_pass(tmp.path(), seed_corpus, SEEDED_MIN_NODES, SEEDED_FILE_COUNT)?;
     let live_before = blob_bytes(&scan_root)?;
-    let stale_root = plant_stale_partition(&scan_root)?;
+    let other_root = plant_other_version_partition(&scan_root)?;
+    let other_blob = other_root.join(OTHER_VERSION_BLOB);
+    let other_bytes = fs::read(&other_blob)?;
 
     let out_dir = tmp.path().join("warm");
     let (warm, warm_events) = run_store_on(&scan_root, &out_dir, SEEDED_MIN_NODES, &[])?;
@@ -90,9 +100,15 @@ fn a_stale_tool_version_partition_is_removed_by_the_next_full_pass() -> Result<(
     assert_warm_pass(&warm, &warm_events, SEEDED_FILE_COUNT, "post-sweep warm");
     assert_seeded_corpus(&warm, "post-sweep warm")?;
     assert!(
-        !stale_root.exists(),
-        "the superseded version partition must be removed by the sweep: {}",
-        stale_root.display()
+        other_root.is_dir(),
+        "another binary's version partition must survive an under-budget sweep: {}",
+        other_root.display()
+    );
+    assert_eq!(
+        fs::read(&other_blob).ok().as_ref(),
+        Some(&other_bytes),
+        "the other version's blob must keep its exact bytes: {}",
+        other_blob.display()
     );
     assert_eq!(
         blob_bytes(&scan_root)?,
@@ -100,7 +116,8 @@ fn a_stale_tool_version_partition_is_removed_by_the_next_full_pass() -> Result<(
         "the sweep must leave every live blob byte-identical"
     );
     assert_log_mentions(&out_dir, SWEEP_LOG, 1, "post-sweep warm")?;
-    assert_log_mentions(&out_dir, "stale_partitions=1", 1, "post-sweep warm")?;
+    assert_log_mentions(&out_dir, "other_version_blobs=1", 1, "post-sweep warm")?;
+    assert_log_mentions(&out_dir, "evicted_blobs=0", 1, "post-sweep warm")?;
     Ok(())
 }
 
@@ -150,14 +167,14 @@ fn an_edit_cycle_keeps_the_orphan_and_the_revert_full_hits() -> Result<()> {
 }
 
 // [CONFIG-INCREMENTAL-OPTOUT] A pass that never consults the store
-// never sweeps it either: `--no-incremental` leaves a planted stale
-// partition and every blob byte exactly where they were.
+// never sweeps it either: `--no-incremental` leaves a planted
+// other-version partition and every blob byte exactly where they were.
 #[test]
 fn a_disabled_store_pass_never_sweeps_the_store() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let (scan_root, _cold, _cold_events) =
         seeded_cold_pass(tmp.path(), seed_corpus, SEEDED_MIN_NODES, SEEDED_FILE_COUNT)?;
-    let stale_root = plant_stale_partition(&scan_root)?;
+    let stale_root = plant_other_version_partition(&scan_root)?;
     let blobs_before = blob_bytes(&scan_root)?;
 
     let out_dir = tmp.path().join("disabled");

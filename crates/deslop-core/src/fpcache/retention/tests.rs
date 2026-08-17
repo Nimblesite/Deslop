@@ -1,7 +1,8 @@
 //! Unit tests for store retention ([PIPELINE-INCREMENTAL-RETENTION]):
-//! stale tool-version partitions always go, orphans are kept under
-//! budget (they are the revert-reuse set), and budget pressure evicts
-//! orphans first, then oldest, deterministically.
+//! nothing is deleted under budget — not orphans (the revert-reuse set),
+//! not another tool version's partition (a concurrently-running binary
+//! may own it) — and over budget eviction follows
+//! [`EvictionClass`] precedence, then age, deterministically.
 
 use std::{
     fs, io,
@@ -16,6 +17,10 @@ const LANGUAGE: &str = "rust";
 
 /// Subtree-size floor of the current partition.
 const MIN_NODES: u32 = 8;
+
+/// A tool version that is not [`TOOL_VERSION`] — the partition another
+/// binary writes.
+const OTHER_VERSION: &str = "0.0.0-superseded";
 
 /// Creates `<base>/fingerprints/<language>/<version>/<min>` and
 /// returns it.
@@ -53,23 +58,47 @@ fn live_with(sources: &[&[u8]]) -> LiveBlobs {
     live
 }
 
+/// The eviction class the inventory assigned to `path`, if it was
+/// inventoried at all.
+fn class_of(inventory: &[BlobRecord], path: &Path) -> Option<EvictionClass> {
+    inventory
+        .iter()
+        .find(|record| record.path == path)
+        .map(|record| record.class)
+}
+
 // [PIPELINE-INCREMENTAL-RETENTION] A partition under another tool
-// version is unaddressable by construction — always removed. The
-// current version's partition and everything in it survives.
+// version is unaddressable by *this* binary, but an older binary still
+// running against the same workspace may own it — so an under-budget
+// sweep classifies it [`EvictionClass::OtherVersion`] and deletes
+// nothing. Destroying it would fail that writer's store for no space
+// gain.
 #[test]
-fn stale_tool_version_partitions_are_removed_and_the_current_one_kept() -> io::Result<()> {
+fn another_tool_versions_partition_is_classified_but_never_swept_under_budget() -> io::Result<()> {
     let tmp = tempfile::tempdir()?;
-    let stale = partition(tmp.path(), LANGUAGE, "0.0.0-superseded", MIN_NODES)?;
-    let stale_blob = write_blob(&stale, b"fn dead() {}", 64, 1_000)?;
+    let other = partition(tmp.path(), LANGUAGE, OTHER_VERSION, MIN_NODES)?;
+    let other_blob = write_blob(&other, b"fn concurrent() {}", 64, 1_000)?;
     let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
     let live_source: &[u8] = b"fn live() {}";
     let live_blob = write_blob(&current, live_source, 64, 1_000)?;
+    let live = live_with(&[live_source]);
 
-    sweep_store(tmp.path(), &live_with(&[live_source]), MIN_NODES);
+    let inventory = blob_inventory(&tmp.path().join(FINGERPRINT_DIR), &live, MIN_NODES);
+    sweep_store(tmp.path(), &live, MIN_NODES);
 
+    assert_eq!(
+        class_of(&inventory, &other_blob),
+        Some(EvictionClass::OtherVersion),
+        "the other version's blob must be inventoried as evict-first: {inventory:?}"
+    );
+    assert_eq!(
+        class_of(&inventory, &live_blob),
+        Some(EvictionClass::Live),
+        "the addressable blob must be inventoried live: {inventory:?}"
+    );
     assert!(
-        !stale_blob.exists() && !stale.exists(),
-        "the superseded version partition and its blob must be removed"
+        other_blob.exists() && other.exists(),
+        "an under-budget sweep must not delete another binary's partition"
     );
     assert!(
         live_blob.exists(),
@@ -89,9 +118,16 @@ fn orphans_survive_a_sweep_while_the_store_is_under_budget() -> io::Result<()> {
     let live_source: &[u8] = b"fn live() {}";
     let live_blob = write_blob(&current, live_source, 64, 2_000)?;
     let orphan_blob = write_blob(&current, b"fn old() {}", 64, 1_000)?;
+    let live = live_with(&[live_source]);
 
-    sweep_store(tmp.path(), &live_with(&[live_source]), MIN_NODES);
+    let inventory = blob_inventory(&tmp.path().join(FINGERPRINT_DIR), &live, MIN_NODES);
+    sweep_store(tmp.path(), &live, MIN_NODES);
 
+    assert_eq!(
+        class_of(&inventory, &orphan_blob),
+        Some(EvictionClass::Orphan),
+        "a blob outside the live set must be inventoried as an orphan: {inventory:?}"
+    );
     assert!(
         live_blob.exists() && orphan_blob.exists(),
         "both the live blob and the revert-reuse orphan must survive under budget"
@@ -120,6 +156,49 @@ fn foreign_files_are_never_touched_by_the_sweep_or_the_budget() -> io::Result<()
         "a non-`.bin` file must never enter the eviction inventory: {inventory:?}"
     );
     assert!(foreign.exists(), "the foreign file must survive the sweep");
+    Ok(())
+}
+
+// [PIPELINE-INCREMENTAL-RETENTION] Over budget, class outranks age all
+// the way down: the other version's blob goes first even though it is
+// the newest, then the orphan, and the *oldest* blob in the store
+// survives both because it is the only one this corpus can address.
+#[test]
+fn budget_pressure_evicts_by_class_before_age_across_every_class() -> io::Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let other = partition(tmp.path(), LANGUAGE, OTHER_VERSION, MIN_NODES)?;
+    let other_blob = write_blob(&other, b"fn concurrent() {}", 100, 9_000)?;
+    let current = partition(tmp.path(), LANGUAGE, TOOL_VERSION, MIN_NODES)?;
+    let live_source: &[u8] = b"fn live() {}";
+    let live_oldest = write_blob(&current, live_source, 100, 100)?;
+    let orphan_newer = write_blob(&current, b"fn gone() {}", 100, 5_000)?;
+    let root = tmp.path().join(FINGERPRINT_DIR);
+    let live = live_with(&[live_source]);
+
+    let first = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 300, 250);
+
+    assert_eq!(first, 1, "shedding one blob reaches the 250-byte budget");
+    assert!(
+        !other_blob.exists(),
+        "the other version's blob must be evicted first despite being the newest"
+    );
+    assert!(
+        orphan_newer.exists() && live_oldest.exists(),
+        "orphan and live blobs must survive while an unaddressable blob remains"
+    );
+
+    let second = enforce_budget(blob_inventory(&root, &live, MIN_NODES), 200, 100);
+
+    assert_eq!(second, 1, "shedding one more blob reaches the 100-byte budget");
+    assert!(
+        !orphan_newer.exists(),
+        "the orphan must be evicted before any live blob"
+    );
+    assert!(
+        live_oldest.exists(),
+        "the addressable blob survives even as the oldest in the store — \
+         class outranks age"
+    );
     Ok(())
 }
 
@@ -194,10 +273,10 @@ fn another_min_nodes_partition_is_age_ranked_never_provably_orphaned() -> io::Re
     assert_eq!(
         inventory
             .iter()
-            .map(|record| record.orphan)
+            .map(|record| record.class)
             .collect::<Vec<_>>(),
-        vec![false],
-        "the other-partition blob must be inventoried as non-orphan: {inventory:?}"
+        vec![EvictionClass::Live],
+        "the other-partition blob must be inventoried live, not orphaned: {inventory:?}"
     );
     assert!(
         other_blob.exists(),
