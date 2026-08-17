@@ -3,19 +3,23 @@
 //! A full pass knows exactly which blobs its corpus can address, so it
 //! is the one moment the store can be pruned without guessing:
 //!
-//! - **Stale tool-version partitions are always removed.** A blob under
-//!   another `TOOL_VERSION` directory is unaddressable by construction
-//!   and can never hit again.
-//! - **Orphans are kept while the store is under budget.** A blob in
-//!   the current partition whose source bytes are no longer in the
-//!   corpus is exactly the content-addressed reuse set for a revert or
-//!   a branch switch — [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]
-//!   asserts a revert full-hits the store, so eager orphan removal
-//!   would be a recall regression against that contract.
-//! - **Over budget, eviction is orphans-first, then oldest-first.**
-//!   Evicting a live blob is always safe — the next pass misses,
-//!   rebuilds from source, and self-heals — so the budget is a hard
-//!   bound, not a correctness surface.
+//! - **Nothing is deleted while the store is under budget.** Two
+//!   classes of blob look useless and are not: an *orphan* in the
+//!   current partition (source bytes gone from the corpus) is exactly
+//!   the content-addressed reuse set a revert or branch switch
+//!   full-hits — [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] asserts
+//!   that — and a blob under **another tool version** may belong to a
+//!   different binary still running against this workspace (an old LSP
+//!   beside an upgraded CLI). Deleting either costs hits and can fail a
+//!   concurrent writer's store, so retention leaves both alone until
+//!   the budget actually demands space.
+//! - **Over budget, eviction is other-version blobs first, then
+//!   orphans, then oldest-first.** Other-version blobs go first because
+//!   this binary can never address them; orphans next because the
+//!   current corpus does not reference them. Evicting any blob is safe —
+//!   the next pass that addresses it misses, rebuilds from source, and
+//!   self-heals — so the budget is a hard bound, not a correctness
+//!   surface.
 //!
 //! Every step is best-effort: an unremovable entry is skipped, never an
 //! error — retention must not fail a pass that already has its corpus.
@@ -73,27 +77,52 @@ struct BlobRecord {
     len: u64,
     /// Last-modified time; the eviction age signal.
     modified: SystemTime,
-    /// Whether the current pass can no longer address this blob.
-    orphan: bool,
+    /// How readily this blob may be evicted under budget pressure —
+    /// the primary eviction sort key.
+    class: EvictionClass,
 }
 
-/// Prunes the fingerprint store after a full pass: removes stale
-/// tool-version partitions, then enforces [`STORE_BUDGET_BYTES`] with
-/// orphans-first, oldest-first eviction. Logs counts only.
+/// Eviction precedence under budget pressure. Declaration order *is*
+/// the precedence: `Ord` derives from it, and the eviction sort relies
+/// on that, so reordering these variants changes the policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum EvictionClass {
+    /// Under a tool version this binary cannot address at all. Evicted
+    /// first — but only under pressure, since another running binary
+    /// may still be using it.
+    OtherVersion,
+    /// In the current partition, but its source bytes are no longer in
+    /// the corpus. Useful only as revert reuse.
+    Orphan,
+    /// Addressable by the current corpus, or under another `min_nodes`
+    /// partition a different invocation may still address. Evicted last,
+    /// oldest first.
+    Live,
+}
+
+/// Prunes the fingerprint store after a full pass: classifies every
+/// blob, then enforces [`STORE_BUDGET_BYTES`] by eviction class and age.
+/// Nothing is deleted while the store fits. Logs counts only.
 pub fn sweep_store(cache_base: &Path, live: &LiveBlobs, min_nodes: u32) {
     let root = cache_base.join(FINGERPRINT_DIR);
     if !root.is_dir() {
         return;
     }
-    let stale_partitions = remove_stale_versions(&root);
     let inventory = blob_inventory(&root, live, min_nodes);
     let store_bytes = inventory
         .iter()
         .fold(0_u64, |total, record| total.saturating_add(record.len));
-    let orphan_blobs = inventory.iter().filter(|record| record.orphan).count();
+    let class_count = |wanted: EvictionClass| {
+        inventory
+            .iter()
+            .filter(|record| record.class == wanted)
+            .count()
+    };
+    let other_version_blobs = class_count(EvictionClass::OtherVersion);
+    let orphan_blobs = class_count(EvictionClass::Orphan);
     let evicted_blobs = enforce_budget(inventory, store_bytes, STORE_BUDGET_BYTES);
     tracing::info!(
-        stale_partitions,
+        other_version_blobs,
         orphan_blobs,
         evicted_blobs,
         store_bytes,
@@ -101,43 +130,44 @@ pub fn sweep_store(cache_base: &Path, live: &LiveBlobs, min_nodes: u32) {
     );
 }
 
-/// Removes every `<language>/<version>` partition whose version is not
-/// the running [`TOOL_VERSION`]. Returns the number removed.
-fn remove_stale_versions(root: &Path) -> usize {
-    directory_entries(root)
-        .iter()
-        .flat_map(|language_dir| directory_entries(language_dir))
-        .filter(|version_dir| {
-            directory_name(version_dir).is_some_and(|version| version != TOOL_VERSION)
-        })
-        .filter(|version_dir| fs::remove_dir_all(version_dir).is_ok())
-        .count()
-}
-
-/// Collects every blob in the store with its size, age, and whether the
-/// current pass can still address it. Only a blob in the current
-/// `(language, version, min_nodes)` partition can be proven orphaned;
-/// blobs under other `min_nodes` partitions stay age-ranked because a
-/// different invocation may still address them.
+/// Collects every blob in the store with its size, age, and eviction
+/// class. Only a blob in the current `(language, version, min_nodes)`
+/// partition can be proven orphaned; blobs under another `min_nodes`
+/// stay [`EvictionClass::Live`] because a different invocation may still
+/// address them, and blobs under another tool version become
+/// [`EvictionClass::OtherVersion`] rather than being deleted outright —
+/// another running binary may still own them.
 fn blob_inventory(root: &Path, live: &LiveBlobs, min_nodes: u32) -> Vec<BlobRecord> {
     let current_min = min_nodes.to_string();
     let mut inventory: Vec<BlobRecord> = Vec::new();
     for language_dir in directory_entries(root) {
         let live_names = directory_name(&language_dir).and_then(|name| live.for_language(name));
-        for min_dir in directory_entries(&language_dir.join(TOOL_VERSION)) {
-            let provable = directory_name(&min_dir).is_some_and(|name| name == current_min);
-            collect_partition_blobs(&min_dir, provable, live_names, &mut inventory);
+        for version_dir in directory_entries(&language_dir) {
+            let current_version =
+                directory_name(&version_dir).is_some_and(|version| version == TOOL_VERSION);
+            for min_dir in directory_entries(&version_dir) {
+                let provable = current_version
+                    && directory_name(&min_dir).is_some_and(|name| name == current_min);
+                let class = if current_version {
+                    EvictionClass::Live
+                } else {
+                    EvictionClass::OtherVersion
+                };
+                collect_partition_blobs(&min_dir, class, provable, live_names, &mut inventory);
+            }
         }
     }
     inventory
 }
 
-/// Appends every `.bin` blob in one partition directory. `provable` is
-/// true only for the partition the current pass addressed; there, a
-/// blob outside `live_names` (or any blob, when the pass holds no live
-/// files for the language) is a provable orphan.
+/// Appends every `.bin` blob in one partition directory under `class`.
+/// `provable` is true only for the partition the current pass addressed;
+/// there, a blob outside `live_names` (or any blob, when the pass holds
+/// no live files for the language) is downgraded to
+/// [`EvictionClass::Orphan`].
 fn collect_partition_blobs(
     partition: &Path,
+    class: EvictionClass,
     provable: bool,
     live_names: Option<&HashSet<String>>,
     inventory: &mut Vec<BlobRecord>,
@@ -152,18 +182,22 @@ fn collect_partition_blobs(
         let Ok(modified) = metadata.modified() else {
             continue;
         };
-        let orphan = provable && !live_names.is_some_and(|set| set.contains(file_name.as_str()));
+        let orphaned = provable && !live_names.is_some_and(|set| set.contains(file_name.as_str()));
         inventory.push(BlobRecord {
             path,
             len: metadata.len(),
             modified,
-            orphan,
+            class: if orphaned {
+                EvictionClass::Orphan
+            } else {
+                class
+            },
         });
     }
 }
 
-/// Evicts blobs until the store fits `budget`: provable orphans first,
-/// oldest first within each class, path as the deterministic
+/// Evicts blobs until the store fits `budget`: by [`EvictionClass`],
+/// then oldest first within a class, path as the deterministic
 /// tie-breaker. Returns the number evicted.
 fn enforce_budget(mut inventory: Vec<BlobRecord>, store_bytes: u64, budget: u64) -> usize {
     let mut total = store_bytes;
@@ -171,7 +205,7 @@ fn enforce_budget(mut inventory: Vec<BlobRecord>, store_bytes: u64, budget: u64)
         return 0;
     }
     inventory.sort_by(|left, right| {
-        (!left.orphan, left.modified, &left.path).cmp(&(!right.orphan, right.modified, &right.path))
+        (left.class, left.modified, &left.path).cmp(&(right.class, right.modified, &right.path))
     });
     let mut evicted = 0_usize;
     for record in &inventory {
