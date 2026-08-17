@@ -26,7 +26,7 @@
 use std::{fs, path::Path};
 
 mod common;
-use crate::common::{incremental::*, seeded::*, *};
+use crate::common::{incremental::*, seeded::*, store::*, *};
 
 // [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] A fully-warm pass rebuilds no
 // signature, attaches one per fingerprint from the parse store, and
@@ -130,11 +130,72 @@ fn config_file_opt_out_disables_persisted_processing() -> Result<()> {
 
     // No per-invocation flag at all — the config alone must disable the
     // store, to exactly the contract `--no-incremental` satisfies.
-    let (_first, _events) =
+    let (opted_out, _events) =
         assert_two_disabled_passes(&scan_root, tmp.path(), &[], "config-opt-out")?;
     assert!(
-        !scan_root.join(".deslop/cache/fingerprints").exists(),
+        !store_dir(&scan_root).exists(),
         "an opted-out run must never create the parse store on disk"
+    );
+
+    // The two opt-out spellings are one behaviour, so they owe the same
+    // report — otherwise the escape hatch is a second analysis path.
+    let flagged = run_report_with_store(&scan_root, SEEDED_MIN_NODES, Store::Off)?;
+    assert_reports_equal(
+        &opted_out,
+        &flagged,
+        "config opt-out vs --no-incremental over one corpus",
+    );
+    Ok(())
+}
+
+// [CONFIG-INCREMENTAL-OPTOUT] The opt-out must ignore a store that is
+// already warm, not merely decline to create one. A run that consulted
+// an existing store while claiming to be opted out would serve
+// persisted analysis the operator explicitly turned off — and the "never
+// creates it" assertion above cannot see that, because the directory is
+// already there.
+//
+// The store is filled and proven warm first, so the opted-out passes run
+// against three valid, hit-ready blobs. They must report zero hits and
+// zero misses, build every signature, leave the blobs byte-for-byte
+// untouched — neither read nor rewritten — and still render the report
+// the warm pass rendered.
+#[test]
+fn config_opt_out_ignores_an_already_warm_store() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("src");
+    seed_corpus(&scan_root)?;
+
+    let cycle = cold_then_warm(&scan_root, tmp.path(), SEEDED_MIN_NODES, SEEDED_FILE_COUNT)?;
+    assert_seeded_corpus(&cycle.warm, "warm before opt-out")?;
+    let warm_blobs = blob_bytes(&scan_root)?;
+    assert_eq!(
+        warm_blobs.len() as u64,
+        SEEDED_FILE_COUNT,
+        "the warm store must hold one blob per file before the opt-out"
+    );
+
+    fs::write(
+        scan_root.join(".deslop.toml"),
+        "[analysis]\nincremental = false\n",
+    )?;
+    let (opted_out, _events) = assert_two_disabled_passes(
+        &scan_root,
+        &tmp.path().join("after"),
+        &[],
+        "warm-then-opt-out",
+    )?;
+
+    assert_eq!(
+        blob_bytes(&scan_root)?,
+        warm_blobs,
+        "an opted-out pass must neither consult nor rewrite the blobs that \
+         were already on disk"
+    );
+    assert_reports_equal(
+        &opted_out,
+        &cycle.warm,
+        "config opt-out over a warm store vs the store-backed warm pass",
     );
     Ok(())
 }

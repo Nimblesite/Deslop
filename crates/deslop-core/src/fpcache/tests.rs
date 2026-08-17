@@ -9,7 +9,10 @@
 use std::path::PathBuf;
 
 use super::{
-    blob::{binding_digest, decode, encode, encode_tree, BlobBinding, MAGIC, MAX_BLOB_BYTES},
+    blob::{
+        binding_digest, decode, encode, encode_tree, BlobBinding, MAGIC, MAX_BLOB_BYTES,
+        SEMANTIC_EPOCH,
+    },
     *,
 };
 use crate::{ast::ByteRange, lsh::SIGNATURE_LEN, state::FileRegistry};
@@ -289,6 +292,87 @@ fn an_oversized_blob_file_is_never_read() -> io::Result<()> {
         "a blob past the size bound must be a miss without being read"
     );
     Ok(())
+}
+
+// [PIPELINE-INCREMENTAL-INTEGRITY] The digest must be a *function* of
+// the whole address: stable for one address, and distinct for every
+// single-field change. Without the second half the verification is
+// theatre — a digest that ignored `min_nodes` would still pass every
+// round-trip test while serving blobs across partitions.
+#[test]
+fn the_binding_digest_is_stable_per_address_and_distinct_across_addresses() {
+    let hash = bytes_hash(SOURCE);
+    let other_hash = bytes_hash(b"fn other() {}\n");
+    let payload = b"payload bytes".as_slice();
+    let base = source_binding(&hash);
+    assert_eq!(
+        binding_digest(&base, payload),
+        binding_digest(&source_binding(&hash), payload),
+        "one address over one payload must always digest identically, or a \
+         freshly-written blob would fail its own verification"
+    );
+    let variants = [
+        (
+            "source hash",
+            BlobBinding {
+                source_hash: &other_hash,
+                ..source_binding(&hash)
+            },
+        ),
+        (
+            "language",
+            BlobBinding {
+                language_id: "javascript",
+                ..source_binding(&hash)
+            },
+        ),
+        (
+            "min_nodes",
+            BlobBinding {
+                min_nodes: 9,
+                ..source_binding(&hash)
+            },
+        ),
+    ];
+    for (field, variant) in variants {
+        assert_ne!(
+            binding_digest(&base, payload),
+            binding_digest(&variant, payload),
+            "changing the {field} must change the digest, or blobs are \
+             interchangeable across that axis"
+        );
+    }
+    assert_ne!(
+        binding_digest(&base, payload),
+        binding_digest(&base, b"payload byteS"),
+        "changing one payload byte must change the digest"
+    );
+}
+
+// [PIPELINE-INCREMENTAL-INTEGRITY] The format constants are the
+// compatibility contract with every blob already on disk. Bumping one
+// silently is how a stale-but-addressable blob gets served: the header
+// says v3, the values inside are from an older semantics. Pin them so a
+// change has to be deliberate, and paired with a bump of the other.
+#[test]
+fn the_blob_format_revisions_are_pinned() {
+    assert_eq!(
+        MAGIC, 0xC0DE_D180,
+        "the layout magic changes only when the byte layout changes; \
+         superseded values must stay rejected, never reused"
+    );
+    assert_eq!(
+        SEMANTIC_EPOCH, 1,
+        "the semantic epoch changes when parse/normalise/fingerprint/signature \
+         *meaning* changes without moving a byte — the case the `0.0.0-dev` \
+         directory partition cannot invalidate"
+    );
+    assert_eq!(
+        SIGNATURE_LEN * 8,
+        1024,
+        "a signature is 128 little-endian u64 slots; the width is bound into \
+         the digest, so changing it must invalidate every stored blob"
+    );
 }
 
 // [PIPELINE-INCREMENTAL-INTEGRITY] The cache API end to end: a stored

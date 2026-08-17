@@ -39,7 +39,17 @@ pub(crate) const MULTILANG_MIN_NODES: u32 = 20;
 /// Source files in the fixture — two per language, all byte-distinct.
 pub(crate) const MULTILANG_FILE_COUNT: u64 = 12;
 
-/// One language's authored clone pair.
+/// One occurrence's rendered location: `(start_line, end_line,
+/// start_byte, end_byte)`. Every field is user-visible — a reader clicks
+/// the line, an agent slices the bytes — so the golden pins all four
+/// rather than merely proving a cluster exists.
+pub(crate) type OccurrenceSpan = (u64, u64, u64, u64);
+
+/// One language's authored clone pair, together with everything the
+/// committed golden must report for it. Keeping the expectations beside
+/// the file names means the golden suite and the invalidation matrix
+/// read one table: a fixture edit that moves a span cannot be absorbed
+/// by re-blessing while a second, stale table quietly disagrees.
 pub(crate) struct LangCase {
     /// Language id, used only in assertion messages.
     pub(crate) language: &'static str,
@@ -47,12 +57,29 @@ pub(crate) struct LangCase {
     pub(crate) alpha: &'static str,
     /// The file holding the pasted copy.
     pub(crate) beta: &'static str,
+    /// Stable cluster id ([PIPELINE-DETERMINISM]). Ids travel into
+    /// editor state, MCP `cluster-by-id` lookups and cross-run deltas,
+    /// so a silent id change breaks every consumer holding one.
+    pub(crate) cluster_id: &'static str,
+    /// `canonical_node_count` of the authored clone — the subtree size
+    /// ranking weight is computed from.
+    pub(crate) nodes: u64,
+    /// Where the canonical copy is reported.
+    pub(crate) alpha_span: OccurrenceSpan,
+    /// Where the pasted copy is reported.
+    pub(crate) beta_span: OccurrenceSpan,
 }
 
 impl LangCase {
     /// The pair as the `&[&str]` the cluster lookups take.
     pub(crate) fn files(&self) -> [&'static str; 2] {
         [self.alpha, self.beta]
+    }
+
+    /// The `(file, span)` pairs the golden must report, in the fixture's
+    /// canonical-then-pasted order.
+    pub(crate) fn spans(&self) -> [(&'static str, OccurrenceSpan); 2] {
+        [(self.alpha, self.alpha_span), (self.beta, self.beta_span)]
     }
 }
 
@@ -66,32 +93,68 @@ pub(crate) const MULTILANG_CASES: &[LangCase] = &[
         language: "rust",
         alpha: "ledger_alpha.rs",
         beta: "ledger_beta.rs",
+        cluster_id: "d8a38df1507e6efd",
+        nodes: 45,
+        alpha_span: (5, 15, 124, 381),
+        beta_span: (7, 17, 131, 388),
     },
     LangCase {
         language: "python",
         alpha: "ledger_alpha.py",
         beta: "ledger_beta.py",
+        cluster_id: "3b08286c43ec5193",
+        nodes: 35,
+        alpha_span: (6, 13, 109, 315),
+        beta_span: (8, 15, 118, 324),
     },
     LangCase {
         language: "typescript",
         alpha: "ledger_alpha.ts",
         beta: "ledger_beta.ts",
+        cluster_id: "75331bdf6bb59eea",
+        nodes: 51,
+        alpha_span: (5, 15, 127, 391),
+        beta_span: (7, 17, 138, 402),
     },
     LangCase {
         language: "dart",
         alpha: "ledger_alpha.dart",
         beta: "ledger_beta.dart",
+        cluster_id: "09ec87de54dfeffb",
+        nodes: 50,
+        alpha_span: (5, 15, 121, 350),
+        beta_span: (7, 17, 123, 352),
     },
     LangCase {
         language: "csharp",
         alpha: "LedgerAlpha.cs",
         beta: "LedgerBeta.cs",
+        cluster_id: "71c21f540b600f72",
+        nodes: 44,
+        alpha_span: (9, 24, 180, 537),
+        beta_span: (9, 24, 187, 544),
     },
     LangCase {
         language: "go",
         alpha: "ledger_alpha.go",
         beta: "ledger_beta.go",
+        cluster_id: "7e9099352ffa58f5",
+        nodes: 52,
+        alpha_span: (7, 17, 125, 345),
+        beta_span: (9, 19, 135, 355),
     },
+];
+
+/// Every authored clone is a byte-identical Type-1 copy with embeddings
+/// off, so all four signals are pinned to exact values — no bands, no
+/// approximation. `token_jaccard` is the load-bearing one: the audit's
+/// corrupted-signature regression surfaced precisely as this value
+/// moving while every other field held ([PIPELINE-INCREMENTAL-INTEGRITY]).
+pub(crate) const MULTILANG_SIGNALS: &[(&str, f64)] = &[
+    ("structural", 1.0),
+    ("token_jaccard", 1.0),
+    ("embedding_cos", 0.0),
+    ("fused", 1.0),
 ];
 
 /// `tests/fixtures/incremental-multilang`.

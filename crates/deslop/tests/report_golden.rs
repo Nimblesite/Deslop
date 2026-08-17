@@ -28,7 +28,7 @@ use anyhow::{anyhow, Context as _};
 use serde_json::Value;
 
 mod common;
-use crate::common::{golden::*, *};
+use crate::common::{golden::*, verdict::*, *};
 
 /// Fixed `--min-nodes` the golden is rendered at. 16 sits above the
 /// 12-node `settle_invoice` signature subtree (which would otherwise
@@ -453,10 +453,4 @@ fn assert_per_file_rows(golden: &Value, analysed: u64, duplicated: u64) -> Resul
         "per-file duplicated LOC must sum to the repo total: {golden}"
     );
     Ok(())
-}
-
-/// Lossless `u64 → f64` for the line counts in this corpus (all far
-/// below `2^32`), mirroring the renderer's own clamp-then-widen order.
-fn loc_as_f64(value: u64) -> Result<f64> {
-    Ok(f64::from(u32::try_from(value)?))
 }

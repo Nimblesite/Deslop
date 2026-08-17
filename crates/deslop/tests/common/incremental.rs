@@ -17,7 +17,7 @@ use anyhow::{anyhow, Context as _};
 use assert_cmd::Command;
 use serde_json::Value;
 
-use super::{field, Result};
+use super::{field, store::read_single_log, Result};
 
 /// The `fingerprint corpus built` counters for one pass — the
 /// structured observable [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] is
@@ -214,35 +214,6 @@ pub(crate) fn run_report_with_store(
     let tmp = tempfile::tempdir()?;
     let (bytes, _counters) = run_capturing_bytes(scan_root, tmp.path(), min_nodes, store, &[])?;
     Ok(serde_json::from_slice(&bytes)?)
-}
-
-/// Reads the single `deslop-<ts>.log` under `<out_dir>/logs/`
-/// ([OUTPUT-DIR]) — the ANSI-free default sink the CLI routes tracing
-/// events to (`tests/cli/logging.rs` pins that routing).
-pub(crate) fn read_single_log(out_dir: &Path) -> Result<String> {
-    let logs_dir = out_dir.join("logs");
-    let logs: Vec<PathBuf> = fs::read_dir(&logs_dir)
-        .with_context(|| format!("no logs directory under {}", out_dir.display()))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| is_timestamped_log(path))
-        .collect();
-    match logs.as_slice() {
-        [only] => Ok(fs::read_to_string(only)?),
-        other => Err(anyhow!(
-            "expected exactly one deslop-*.log under {}, found {other:?}",
-            logs_dir.display()
-        )),
-    }
-}
-
-/// True for the CLI's `deslop-<unix-seconds>.log` file names.
-fn is_timestamped_log(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with("deslop-"))
-        && path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("log"))
 }
 
 /// The single `fingerprint corpus built` event line in `log_body`.

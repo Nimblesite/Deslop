@@ -31,7 +31,7 @@
 use serde_json::Value;
 
 mod common;
-use crate::common::{golden::*, incremental::*, multilang::*, *};
+use crate::common::{golden::*, incremental::*, multilang::*, verdict::*, *};
 
 /// Renders the fixture cold, with the store never consulted, into a
 /// throwaway scan root — the checked-in fixture is never scanned in
@@ -86,6 +86,202 @@ fn committed_multilang_golden_satisfies_the_authored_contract() -> Result<()> {
     assert_cold_header(&golden);
     assert_every_occurrence_is_a_real_clone(&golden)?;
     assert_one_cluster_per_language(&golden)?;
+    assert_every_cluster_is_reported_exactly(&golden)?;
+    assert_golden_metrics(&golden)?;
+    Ok(())
+}
+
+/// Every user-visible field of every cluster, pinned per language from
+/// [`MULTILANG_CASES`]: the stable id, the subtree size, the exact
+/// occurrence spans, the bucket, the category, and all four signals.
+///
+/// The looser halves above would survive drifts that matter. A cluster
+/// can span the right file pair with a moved span, a re-derived id, a
+/// halved node count, or — the audit's regression — a `token_jaccard`
+/// that changed while nothing else did. Each of those is a different
+/// report for the same source, so each gets its own assertion.
+fn assert_every_cluster_is_reported_exactly(golden: &Value) -> Result<()> {
+    for case in MULTILANG_CASES {
+        let language = case.language;
+        let clone = expect_lang_clone(golden, case)?;
+        assert_eq!(
+            cluster_id(clone),
+            case.cluster_id,
+            "{language}: cluster ids are stable across runs and sessions \
+             ([PIPELINE-DETERMINISM]); a changed id breaks every consumer \
+             holding the old one: {clone:#}"
+        );
+        assert_eq!(
+            field(clone, "canonical_node_count").as_u64(),
+            Some(case.nodes),
+            "{language}: the authored clone is a {} node subtree, and \
+             ranking weight is computed from that count: {clone:#}",
+            case.nodes
+        );
+        assert_eq!(
+            field(clone, "category").as_str(),
+            Some("logic"),
+            "{language}: an extractable reconciliation routine is `logic`, \
+             never a demoted data table ([RANK-CATEGORY]): {clone:#}"
+        );
+        assert_occurrence_shape(clone, language);
+        assert_exact_spans(clone, case)?;
+        assert_pinned_signals(clone, language);
+    }
+    Ok(())
+}
+
+/// The occurrence-set shape: exactly two live copies, nothing truncated,
+/// and neither copy hidden. A hidden occurrence would silently shrink
+/// the visible cluster size and the ranking weight derived from it.
+fn assert_occurrence_shape(clone: &Value, language: &str) {
+    assert_eq!(
+        (
+            cluster_size(clone),
+            field(clone, "occurrences_total").as_u64(),
+            field(clone, "occurrences_truncated").as_bool(),
+        ),
+        (2, Some(2), Some(false)),
+        "{language}: the authored pair is two untruncated occurrences: {clone:#}"
+    );
+    for occurrence in occurrences(clone) {
+        assert_eq!(
+            field(occurrence, "hidden").as_bool(),
+            Some(false),
+            "{language}: neither authored copy is generated or hidden \
+             ([EXCLUSION-CONFIG]): {occurrence:#}"
+        );
+    }
+}
+
+/// The exact `(start_line, end_line, start_byte, end_byte)` of both
+/// occurrences, matched by file name so occurrence order cannot mask a
+/// swap — the failure mode the audit's blob-swap probe produced, where
+/// the two files kept their names and exchanged their spans.
+fn assert_exact_spans(clone: &Value, case: &LangCase) -> Result<()> {
+    let language = case.language;
+    for (file, expected) in case.spans() {
+        let occurrence = occurrences(clone)
+            .iter()
+            .find(|candidate| {
+                field(candidate, "path")
+                    .as_str()
+                    .is_some_and(|path| path.ends_with(file))
+            })
+            .ok_or_else(|| anyhow::anyhow!("{language}: no occurrence for {file}: {clone:#}"))?;
+        let actual = (
+            field(occurrence, "start_line").as_u64().unwrap_or_default(),
+            field(occurrence, "end_line").as_u64().unwrap_or_default(),
+            field(occurrence, "start_byte").as_u64().unwrap_or_default(),
+            field(occurrence, "end_byte").as_u64().unwrap_or_default(),
+        );
+        assert_eq!(
+            actual, expected,
+            "{language}: {file} must be reported at exactly \
+             (start_line, end_line, start_byte, end_byte) {expected:?} — a \
+             reader clicks the line and an agent slices the bytes: {occurrence:#}"
+        );
+    }
+    Ok(())
+}
+
+/// All four signals, exactly. Embeddings are off and both copies are
+/// byte-identical, so every value is determined — there is no band to
+/// hide inside ([FUSED-THRESHOLD]).
+fn assert_pinned_signals(clone: &Value, language: &str) {
+    for (name, expected) in MULTILANG_SIGNALS {
+        let actual = signal(clone, name);
+        assert!(
+            approx(actual, *expected),
+            "{language}: signal `{name}` must be {expected}, got {actual}. A \
+             signal that moves while the source does not is the corrupted- \
+             or misaddressed-blob signature ([PIPELINE-INCREMENTAL-INTEGRITY]): \
+             {clone:#}"
+        );
+    }
+}
+
+/// [METRICS-REPO] The reported figures must be transparent and
+/// reproducible: the exact totals, *and* the arithmetic that connects
+/// them. The per-file rows are re-summed here and the percentage
+/// re-divided, so a golden whose header numbers were blessed from a
+/// different corpus state fails even though each number looks plausible
+/// on its own.
+fn assert_golden_metrics(golden: &Value) -> Result<()> {
+    assert_eq!(
+        (
+            metric_field(golden, "analysed_loc").as_u64(),
+            metric_field(golden, "duplicated_loc").as_u64(),
+            metric_field(golden, "clusters_total").as_u64(),
+            metric_field(golden, "duplicated_files").as_u64(),
+        ),
+        (Some(210), Some(136), Some(6), Some(MULTILANG_FILE_COUNT)),
+        "the twelve-file corpus measures 210 analysed / 136 duplicated LOC \
+         across 6 clusters, every file duplicated: {golden:#}"
+    );
+    assert_metric_arithmetic(golden)?;
+    assert_eq!(
+        field(metric_field(golden, "threshold"), "source").as_str(),
+        Some("none"),
+        "the fixture opts into no CI gate, so the threshold source is `none` \
+         ([EXIT-CODES]): {golden:#}"
+    );
+    assert_eq!(
+        field(metric_field(golden, "threshold"), "breached").as_bool(),
+        Some(false),
+        "no gate can be breached when none is configured: {golden:#}"
+    );
+    assert_eq!(
+        field(golden, "embedding_provenance"),
+        &Value::Null,
+        "the golden is rendered with `--embeddings off`, so it declares no \
+         embedding provenance: {golden:#}"
+    );
+    Ok(())
+}
+
+/// Re-derives every headline metric from the parts of the report that
+/// are independently asserted elsewhere — the per-file rows and the
+/// cluster spans — so no figure is taken on the renderer's word.
+fn assert_metric_arithmetic(golden: &Value) -> Result<()> {
+    let rows = per_file_metrics(golden);
+    assert_eq!(
+        rows.len() as u64,
+        MULTILANG_FILE_COUNT,
+        "every analysed file needs its own per-file row: {golden:#}"
+    );
+    let summed_analysed: u64 = rows
+        .iter()
+        .map(|row| field(row, "analysed_loc").as_u64().unwrap_or_default())
+        .sum();
+    let summed_duplicated: u64 = rows
+        .iter()
+        .map(|row| field(row, "duplicated_loc").as_u64().unwrap_or_default())
+        .sum();
+    assert_eq!(
+        (summed_analysed, summed_duplicated),
+        (
+            metric_field(golden, "analysed_loc").as_u64().unwrap_or(0),
+            metric_field(golden, "duplicated_loc").as_u64().unwrap_or(0),
+        ),
+        "the repo totals must be the sum of the per-file rows: {golden:#}"
+    );
+    assert_eq!(
+        visible_duplicated_loc(golden),
+        summed_duplicated,
+        "duplicated LOC must equal the lines the visible cluster spans \
+         actually cover — the metric and the clusters are two views of one \
+         measurement: {golden:#}"
+    );
+    let expected_percent = 100.0 * loc_as_f64(summed_duplicated)? / loc_as_f64(summed_analysed)?;
+    let reported = metric_field(golden, "duplication_percent")
+        .as_f64()
+        .unwrap_or(-1.0);
+    assert!(
+        approx(reported, expected_percent),
+        "duplication_percent must be duplicated/analysed × 100 = \
+         {expected_percent}, got {reported}: {golden:#}"
+    );
     Ok(())
 }
 
