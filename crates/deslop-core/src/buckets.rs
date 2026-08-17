@@ -360,8 +360,8 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
-    } else if signals.structural <= 0.01 && signals.token_jaccard >= 0.90 {
-        lsh_only_nearmiss_quarantine(signals)
+    } else if is_lsh_only_nearmiss(signals) {
+        ClusterKind::NearlyIdentical
     } else if signals.structural >= 0.99
         || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
@@ -371,33 +371,38 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     }
 }
 
-/// 🛑 ACCURACY QUARANTINE — [CLONE-BUCKETS-ROUTING] row 4 is
-/// unimplemented, and what stood here was a silent false negative.
+/// [CLONE-BUCKETS-ROUTING] row 4: a cluster with no structural anchor
+/// whose token overlap clears [`LSH_ONLY_NEARMISS_MIN_JACCARD`] is a
+/// genuine Type-3 near-miss, in **every** language.
 ///
-/// The spec routes `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` to
-/// `NearlyIdentical` with **no language condition**
-/// (docs/specs/taxonomy.md). This function's else-arm routed the triple
-/// to `LooselySimilar`, which the renderer hides, so an LSH-only Type-3
-/// pair that survived the `LSH_ONLY_MIN_JACCARD = 0.90` and
-/// `LSH_ONLY_MIN_NODE_COUNT = 40` floors rendered as **zero**
-/// duplication. `report_render::is_csharp_lsh_type3_near_miss` patched
-/// the row for C# members only, leaving every other language's recall
-/// silently broken. The wrong routing is deleted rather than repaired
-/// here per the accuracy quarantine rule — a panic is found in seconds,
-/// a hidden real clone is never found at all. Pinned red by
-/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`; the fix must
-/// implement the spec row for every language (dissolving the C#-only
-/// carve-out) and turn that pin green.
-#[allow(clippy::panic)] // Mandated by the accuracy quarantine rule.
-fn lsh_only_nearmiss_quarantine(signals: ReportSignals) -> ClusterKind {
-    panic!(
-        "[CLONE-BUCKETS-ROUTING] row 4 (structural <= 0.01 && token_jaccard >= 0.90 \
-         -> NearlyIdentical) is unimplemented for this cluster \
-         (structural={structural}, token_jaccard={jaccard}, embedding_cos={cosine}); \
-         the previous code hid the cluster as LooselySimilar — a false negative. \
-         See lsh_only_nearmiss_recall.rs.",
-        structural = signals.structural,
-        jaccard = signals.token_jaccard,
-        cosine = signals.embedding_cos,
-    )
+/// A cluster only reaches the renderer with this triple by surviving
+/// `pair::survival_decision`, which admits a structurally-unanchored
+/// pair only above the same Jaccard floor and above the endpoint
+/// node-count floor — the pipeline has already ruled out low-information
+/// token noise, which is why this row is a signal test and needs no
+/// language, size, or spread condition. Routing it anywhere else means
+/// the pipeline admitted a pair as real duplication and the renderer
+/// then discarded it: previously it fell to
+/// [`ClusterKind::LooselySimilar`], which the renderer hides, so a fully
+/// duplicated pair reported zero duplication in every language except
+/// the one a report-render carve-out special-cased (gh #390). Pinned by
+/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`.
+#[must_use]
+pub fn is_lsh_only_nearmiss(signals: ReportSignals) -> bool {
+    signals.structural <= STRUCTURAL_ABSENT_CEILING
+        && signals.token_jaccard >= LSH_ONLY_NEARMISS_MIN_JACCARD
 }
+
+/// Highest `structural` a cluster may show while counting as having no
+/// structural anchor ([CLONE-BUCKETS-ROUTING] row 4). Mirrors the
+/// spec's `structural ≤ 0.01`.
+pub const STRUCTURAL_ABSENT_CEILING: f64 = 0.01;
+
+/// Token overlap an anchor-free cluster must clear to count as a
+/// Type-3 near-miss ([CLONE-BUCKETS-ROUTING] row 4). Deliberately equal
+/// to `pair::LSH_ONLY_MIN_JACCARD`: the pair layer admits an LSH-only
+/// candidate at exactly this floor, so a lower value here would hide
+/// clusters the pipeline admitted, and a higher one would reject them
+/// after admission. The two constants are one operating point stated in
+/// the two layers that enforce it.
+pub const LSH_ONLY_NEARMISS_MIN_JACCARD: f64 = 0.90;

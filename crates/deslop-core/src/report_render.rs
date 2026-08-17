@@ -25,7 +25,7 @@ use crate::{
     config::ExclusionConfig,
     content::ContentEvidence,
     fingerprint::Fingerprint,
-    pair::{PairScore, LSH_ONLY_MIN_JACCARD, LSH_ONLY_MIN_NODE_COUNT},
+    pair::PairScore,
     report::{ReportCluster, ReportOccurrence, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
@@ -282,11 +282,13 @@ pub(crate) fn report_bucket_kind(
     file_languages: &HashMap<FileId, &'static str, impl BuildHasher>,
     parse_cache: &ParseCache,
 ) -> ClusterKind {
-    let kind = if is_csharp_lsh_type3_near_miss(signals, members, file_languages) {
-        ClusterKind::NearlyIdentical
-    } else {
-        classify_signals(signals)
-    };
+    // [CLONE-BUCKETS-ROUTING] LSH-only Type-3 near-misses are routed by
+    // `classify_signals` row 4 for every language (gh #390). The
+    // C#-scoped pre-check that used to sit here *was* that row,
+    // implemented for one language — a silent false negative everywhere
+    // else — so it is dissolved into the router rather than duplicated
+    // beside it.
+    let kind = classify_signals(signals);
     let equivalent =
         source_slices_are_equivalent_for_language(members, sources, file_languages, parse_cache);
     // `StructuralOnly` joins `NearlyIdentical` in the byte-equivalence
@@ -388,31 +390,6 @@ fn is_cross_file_scaffolding(members: &[Fingerprint]) -> bool {
     files.sort_unstable();
     files.dedup();
     files.len() >= 3
-}
-
-/// Returns true for substantive C# Type-3 candidates found only through
-/// token LSH. These have no exact structural anchor (`structural=0.0`),
-/// but they passed the LSH-only Jaccard and node-count floors, so they
-/// are real near-miss duplication rather than the low-information token
-/// noise hidden from the ranked report.
-fn is_csharp_lsh_type3_near_miss<S: BuildHasher>(
-    signals: ReportSignals,
-    members: &[Fingerprint],
-    file_languages: &HashMap<FileId, &'static str, S>,
-) -> bool {
-    signals.structural <= f64::EPSILON
-        && signals.embedding_cos <= f64::EPSILON
-        && signals.token_jaccard >= LSH_ONLY_MIN_JACCARD
-        && members.len() >= 2
-        && members
-            .iter()
-            .all(|member| member.node_count >= LSH_ONLY_MIN_NODE_COUNT)
-        && members
-            .iter()
-            .all(|member| file_languages.get(&member.file_id).copied() == Some("csharp"))
-        && members
-            .first()
-            .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))
 }
 
 /// Maps the report bucket onto a one-line interpretation for AI agents.
