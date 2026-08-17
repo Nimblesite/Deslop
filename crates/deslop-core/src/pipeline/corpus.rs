@@ -13,9 +13,8 @@ use crate::{
     discover::DiscoveredFile,
     error::CoreError,
     fingerprint::{collect_non_boilerplate_fingerprints, Fingerprint},
-    fpcache::{CachedFile, FingerprintCache},
+    fpcache::{sweep_store, CachedFile, FingerprintCache, LiveBlobs},
     lang::LanguageParser,
-    lsh::Signature,
     report::CacheStats,
     report_metrics::{count_analysed_lines, AnalysedLines},
     sibling::collect_non_boilerplate_sibling_fingerprints,
@@ -61,25 +60,14 @@ impl SignatureStats {
 /// from disk.
 #[derive(Debug, Default)]
 pub struct FingerprintCorpus {
-    /// All structural + sibling fingerprints, flattened in
-    /// workspace-relative-path order. Filled by the session snapshot
-    /// ([PIPELINE-DETERMINISM]); [`fingerprint_corpus`] leaves it
-    /// empty because the session re-snapshots from `per_file`.
-    pub fingerprints: Vec<Fingerprint>,
-    /// Normalised trees kept for token extraction, filled by the
-    /// session snapshot alongside `fingerprints`.
-    pub trees: Vec<NormalizedNode>,
-    /// `MinHash` signatures positionally 1:1 with `fingerprints`,
-    /// filled by the session snapshot from the per-file bundles
-    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
-    pub signatures: Vec<Signature>,
     /// File contents keyed by [`FileId`] so the embedding pass can
     /// read the exact bytes referenced by a fingerprint without
     /// re-reading the file once per subtree.
     pub sources: HashMap<FileId, Vec<u8>>,
     /// Per-file cached parse + fingerprint bundle keyed by
-    /// [`FileId`]. Used by the session to splice in updated entries
-    /// without re-scanning the whole workspace.
+    /// [`FileId`]. The session moves these into its canonical flat
+    /// store in workspace-relative-path order
+    /// ([PIPELINE-DETERMINISM]); nothing re-flattens per render.
     pub per_file: HashMap<FileId, CachedFile>,
     /// Per-run incremental-cache hit/miss counters
     /// ([PIPELINE-INCREMENTAL]).
@@ -109,6 +97,7 @@ pub fn fingerprint_corpus(
     let min_nodes_usize = usize::try_from(config.min_nodes).unwrap_or(usize::MAX);
     let mut corpus = FingerprintCorpus::default();
     let mut signature_stats = SignatureStats::default();
+    let mut live_blobs = LiveBlobs::default();
     let cache_base = crate::paths::cache_dir(&config.root);
     let mut caches: HashMap<&'static str, FingerprintCache> = HashMap::new();
     for discovered in files {
@@ -116,6 +105,9 @@ pub fn fingerprint_corpus(
             continue;
         };
         let source = read_source(&discovered.path)?;
+        if config.incremental {
+            live_blobs.record(discovered.language, &source);
+        }
         let cache = if config.incremental {
             fingerprint_cache_for(
                 &mut caches,
@@ -170,6 +162,13 @@ pub fn fingerprint_corpus(
         signatures_reused = signature_stats.reused,
         "fingerprint corpus built",
     );
+    // [PIPELINE-INCREMENTAL-RETENTION] A full pass is the one moment
+    // the live blob set is exactly known, so retention runs here —
+    // never on a single-file change pass, and never when the store is
+    // disabled (the opt-out must leave the store untouched).
+    if config.incremental {
+        sweep_store(&cache_base, &live_blobs, config.min_nodes);
+    }
     Ok(corpus)
 }
 

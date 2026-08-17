@@ -27,8 +27,10 @@ use crate::{
 };
 
 use blob::{blob_len_admissible, decode, encode, BlobBinding, MAX_BLOB_BYTES};
+pub use retention::{sweep_store, LiveBlobs};
 
 mod blob;
+mod retention;
 #[cfg(test)]
 mod tests;
 
@@ -157,7 +159,7 @@ impl FingerprintCache {
     /// `lossy_utf8_cache_key_must_not_collide_across_distinct_files`
     /// in `crates/deslop/tests/cache_key_lossy_utf8_collision.rs`.
     fn blob_path(&self, source_hash: &str) -> PathBuf {
-        self.root.join(format!("{source_hash}.bin"))
+        self.root.join(blob_file_name(source_hash))
     }
 
     /// The full address a blob under `source_hash` must be bound to.
@@ -168,4 +170,11 @@ impl FingerprintCache {
             source_hash,
         }
     }
+}
+
+/// On-disk file name of the blob for `source_hash` — the single
+/// definition of the `.bin` convention, shared by the lookup path and
+/// retention ([PIPELINE-INCREMENTAL-RETENTION]).
+fn blob_file_name(source_hash: &str) -> String {
+    format!("{source_hash}.bin")
 }

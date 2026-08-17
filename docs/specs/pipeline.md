@@ -61,7 +61,7 @@ The parse store holds one blob per `(language_id, tool_version, min_nodes, sourc
 
 Two further properties make persistence-on-by-default safe for the CLI:
 
-- **Corpus membership never comes from the store.** Every run performs a fresh discovery walk, so files added or deleted while nothing was watching are picked up regardless of store state. A deleted file's blob is simply orphaned — unused, never consulted.
+- **Corpus membership never comes from the store.** Every run performs a fresh discovery walk, so files added or deleted while nothing was watching are picked up regardless of store state. A deleted file's blob is orphaned — never consulted, kept as revert reuse until [PIPELINE-INCREMENTAL-RETENTION] prunes it.
 - **A warm run and a cold run agree.** Wiping `.deslop/cache/` changes the `cache_stats` counters and nothing else about the report. The store never defines results — the source tree is the only source of truth; persistence only decides how much of it must be re-derived.
 
 The one artefact that *can* go stale is the live state file `live-report.json` ([LIVE-STATE-FILE]) — a whole-report snapshot, not a content-addressed entry. The CLI never reads it. The LSP seeds from it for instant warm-start and immediately runs a cold pass that replaces it, reporting `Running` until that pass installs ([LIVE-CACHE-SEED]).
@@ -89,6 +89,17 @@ Pinned end-to-end by `crates/deslop/tests/cache_blob_integrity.rs` (tampered sig
 Zero-zero stats indicate the pass ran without the store (`--no-incremental` passed, the `[analysis] incremental = false` config opt-out ([CONFIG-INCREMENTAL-OPTOUT]) applied, or discovery yielded nothing). Any non-zero counter proves the store was consulted.
 
 **Scope.** [PIPELINE-INCREMENTAL] governs persistence for the parse stage and for the per-fingerprint MinHash signatures stored beside it ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) — the dominant cost of the LSH block. Everything further downstream — band collision enumeration, candidate pairing, clustering, ranking, metrics, rendering — recomputes in full on every pass regardless of how many files changed. Making that remaining cost track the size of the change is the rest of [PIPELINE-INCREMENTAL-ANALYSIS].
+
+### [PIPELINE-INCREMENTAL-RETENTION] The store prunes itself after every full pass
+
+A full pass is the one moment the live blob set is exactly known — every admissible file was read, so every blob the corpus can address is enumerable. Retention runs there and only there: never on a single-file change pass, and never when the store is disabled (the opt-out leaves the store untouched, [CONFIG-INCREMENTAL-OPTOUT]).
+
+- **Stale tool-version partitions are always removed.** A `<language>/<version>` directory for another tool version is unaddressable by construction and can never hit again.
+- **Orphans are kept while the store is under budget.** A blob in the current partition whose source bytes left the corpus is exactly the content-addressed reuse set for a revert or a branch switch — [PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE] asserts a revert full-hits the store — so eager orphan removal would be a recall regression against that contract.
+- **The budget is 2 GiB** over the whole fingerprint store (~11× the pinned tokio benchmark's 185.8 MiB store). Over budget, eviction is provable-orphans first, then oldest modification time, path as the deterministic tie-break, stopping the moment the store fits. Blobs under other `min_nodes` partitions are never provably orphaned — a different invocation may still address them — and are age-ranked only. Evicting any blob is correctness-free: the next pass that addresses it misses, rebuilds from source, and self-heals ([PIPELINE-INCREMENTAL-INVALIDATION]).
+- Only `.bin` blobs are retention's to manage; foreign files are never touched. Every step is best-effort — an unremovable entry is skipped, never an error. The sweep logs counts only: `fingerprint store swept { stale_partitions, orphan_blobs, evicted_blobs, store_bytes }`.
+
+Pinned end-to-end by `crates/deslop/tests/cache_retention.rs` (stale-partition removal with live blobs byte-unchanged, an edit cycle whose kept orphan lets the revert full-hit, disabled-store passes leaving the store untouched) and at the unit level by `crates/deslop-core/src/fpcache/retention/tests.rs` (orphan-before-live eviction order, oldest-first fallback, budget stop condition, foreign-file safety, other-partition non-provability).
 
 ### [PIPELINE-INCREMENTAL-ANALYSIS] Incremental analysis
 ⏳ **Partially implemented.** Signature reuse ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]) is implemented and pinned by `crates/deslop/tests/signature_reuse.rs`; the equivalence contract is enforced end-to-end by `crates/deslop/tests/incremental_equivalence.rs`, and across six languages sharing one store by `crates/deslop/tests/incremental_multilang_golden.rs` (committed cold golden, warm reproduction) and `crates/deslop/tests/incremental_multilang_matrix.rs` (per-language touch, delete, revert, edit-chain and parser-partition scenarios). The remaining downstream stages are tracked by gh #383, designed in [`plans/incremental-analysis-plan.md`](../plans/incremental-analysis-plan.md).

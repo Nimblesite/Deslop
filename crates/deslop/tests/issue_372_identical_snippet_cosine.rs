@@ -27,8 +27,8 @@ use anyhow::Result;
 use mock_ollama::MockOllama;
 
 use crate::common::{
-    cluster_bucket, clusters, corpora::write_identical_pair,
-    embeddings::run_mock_embedding_report, expect_cluster_spanning, occurrence_files, signal,
+    cluster_bucket, clusters, corpora::write_identical_pair, embeddings::run_mock_embedding_report,
+    expect_cluster_spanning, occurrence_files, signal,
 };
 
 /// A non-trivial C# method: a guard clause, an accumulator loop and a

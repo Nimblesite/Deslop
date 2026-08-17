@@ -22,7 +22,9 @@ use std::{
 use crate::{
     boilerplate::BoilerplateRange,
     config::{is_config_path, watched_config_paths, ExclusionConfig},
-    discover::{discover_files, is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher},
+    discover::{
+        discover_files, is_ignore_rule_path, DiscoveredFile, DiscoveryResult, IgnoreMatcher,
+    },
     error::CoreError,
     lang::LanguageParser,
     report::{CacheStats, Report},
@@ -83,8 +85,9 @@ pub struct PipelineSession {
     /// truth for "which files currently contribute fingerprints." A
     /// render pass borrows it as-is; only a live change copies —
     /// splicing exactly one file's records
-    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]).
-    pub(super) store: CorpusStore,
+    /// ([PIPELINE-INCREMENTAL-ANALYSIS-REUSE]). Private: session
+    /// submodules reach it as descendants; nothing outside does.
+    store: CorpusStore,
     /// Per-`FileId` source bytes so the embedding pass can read the
     /// exact snippet covered by a fingerprint without re-reading
     /// from disk.
@@ -176,7 +179,7 @@ impl PipelineSession {
             let _prev_language = file_languages.insert(discovered.file_id, discovered.language);
         }
         let files_analysed = discovery.files.len();
-        let mut session = Self {
+        let session = Self {
             root,
             min_nodes,
             incremental,
@@ -281,8 +284,12 @@ impl PipelineSession {
     /// The requested store mode gated by the live config's escape hatch
     /// ([CONFIG-INCREMENTAL-OPTOUT]) — re-evaluated per pass, so a
     /// `.deslop.toml` edit opting out takes effect on the very next
-    /// change pass without a restart.
-    pub(super) fn effective_incremental(&self) -> bool {
+    /// change pass without a restart. This is the value passes actually
+    /// run with, and therefore the value every status surface must
+    /// report — surfacing the raw request instead leaves the config
+    /// surface claiming a store the passes never consult.
+    #[must_use]
+    pub fn effective_incremental(&self) -> bool {
         self.incremental && self.exclusion.incremental_enabled()
     }
 

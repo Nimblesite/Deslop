@@ -541,7 +541,17 @@ impl AnalysisSession {
             embedding_provenance: self.latest_report.embedding_provenance.clone(),
             exclusion_config_path: self.config_path.clone(),
             cache_root: crate::paths::cache_dir(&self.root),
-            incremental: self.incremental,
+            // [CONFIG-INCREMENTAL-OPTOUT] The surfaced value is the
+            // *effective* mode — the request gated by the live config —
+            // never the raw request: a session asked to persist under
+            // `[analysis] incremental = false` runs every pass uncached,
+            // and reporting `true` here made the config surface claim a
+            // store no pass consults. Before the first pipeline exists
+            // nothing has run, so the request is the only honest answer.
+            incremental: self
+                .pipeline
+                .as_ref()
+                .map_or(self.incremental, PipelineSession::effective_incremental),
         }
     }
 

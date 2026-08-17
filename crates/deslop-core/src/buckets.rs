@@ -360,6 +360,8 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
+    } else if signals.structural <= 0.01 && signals.token_jaccard >= 0.90 {
+        lsh_only_nearmiss_quarantine(signals)
     } else if signals.structural >= 0.99
         || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
@@ -367,4 +369,35 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     } else {
         ClusterKind::LooselySimilar
     }
+}
+
+/// 🛑 ACCURACY QUARANTINE — [CLONE-BUCKETS-ROUTING] row 4 is
+/// unimplemented, and what stood here was a silent false negative.
+///
+/// The spec routes `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` to
+/// `NearlyIdentical` with **no language condition**
+/// (docs/specs/taxonomy.md). This function's else-arm routed the triple
+/// to `LooselySimilar`, which the renderer hides, so an LSH-only Type-3
+/// pair that survived the `LSH_ONLY_MIN_JACCARD = 0.90` and
+/// `LSH_ONLY_MIN_NODE_COUNT = 40` floors rendered as **zero**
+/// duplication. `report_render::is_csharp_lsh_type3_near_miss` patched
+/// the row for C# members only, leaving every other language's recall
+/// silently broken. The wrong routing is deleted rather than repaired
+/// here per the accuracy quarantine rule — a panic is found in seconds,
+/// a hidden real clone is never found at all. Pinned red by
+/// `crates/deslop/tests/lsh_only_nearmiss_recall.rs`; the fix must
+/// implement the spec row for every language (dissolving the C#-only
+/// carve-out) and turn that pin green.
+#[allow(clippy::panic)] // Mandated by the accuracy quarantine rule.
+fn lsh_only_nearmiss_quarantine(signals: ReportSignals) -> ClusterKind {
+    panic!(
+        "[CLONE-BUCKETS-ROUTING] row 4 (structural <= 0.01 && token_jaccard >= 0.90 \
+         -> NearlyIdentical) is unimplemented for this cluster \
+         (structural={structural}, token_jaccard={jaccard}, embedding_cos={cosine}); \
+         the previous code hid the cluster as LooselySimilar — a false negative. \
+         See lsh_only_nearmiss_recall.rs.",
+        structural = signals.structural,
+        jaccard = signals.token_jaccard,
+        cosine = signals.embedding_cos,
+    )
 }
