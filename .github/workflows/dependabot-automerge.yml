@@ -90,8 +90,9 @@ on:
     branches:
       - dependabot-upgrades
   # Weekly drain heartbeat, shortly after Dependabot's own weekly runs. Runs
-  # from main's copy of this file (see THE DRAIN above), adds no check runs to
-  # any PR, so the [GITHUB-DEPENDABOT] dead-skipped-check concern does not apply.
+  # from the default branch's copy of this file (see THE DRAIN above), adds no
+  # check runs to any PR, so the [GITHUB-DEPENDABOT] dead-skipped-check
+  # concern does not apply.
   schedule:
     - cron: "0 6 * * 1"
 

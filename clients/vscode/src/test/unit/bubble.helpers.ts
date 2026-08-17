@@ -5,7 +5,7 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
-import { LiveBubble } from "../../bubble/live";
+import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
@@ -228,6 +228,7 @@ export async function bubbleFixture(
     generation?: number;
     mode?: "inline" | "ghost";
     client?: LanguageClient;
+    budget?: BudgetScheduler;
   } = {},
 ): Promise<BubbleFixture> {
   const store = new ReportStore();
@@ -238,7 +239,7 @@ export async function bubbleFixture(
   return {
     store,
     capture: capturingEditor(),
-    bubble: new LiveBubble(store, () => options.client),
+    bubble: new LiveBubble(store, () => options.client, options.budget),
   };
 }
 

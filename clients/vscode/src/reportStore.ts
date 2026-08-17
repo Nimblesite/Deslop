@@ -46,6 +46,8 @@ export interface ReportState {
   generation: number;
   /** Client-owned freshness token — see `ReportStore.revision`. */
   revision: number;
+  /** Counts LSP server sessions — see `ReportStore.sessionEpoch`. */
+  sessionEpoch: number;
   lifecycle: LifecyclePhase;
   pendingEmbeddingModel: string | null;
   embeddingProgress: EmbeddingProgress | null;
@@ -73,6 +75,7 @@ export class ReportStore implements vscode.Disposable {
   private readonly _dirtyFiles = signal<ReadonlySet<string>>(new Set());
   private readonly _generation = signal<number>(0);
   private readonly _revision = signal<number>(0);
+  private readonly _sessionEpoch = signal<number>(0);
   private readonly _lifecycle = signal<LifecyclePhase>({ kind: "starting" });
   private readonly _pendingEmbeddingModel = signal<string | null>(null);
   private readonly _embeddingProgress = signal<EmbeddingProgress | null>(null);
@@ -103,6 +106,16 @@ export class ReportStore implements vscode.Disposable {
    */
   readonly revision: ReadonlySignal<number> = this._revision;
   /**
+   * Counts LSP server sessions: bumped by `resetForNewSession` when the
+   * client reconnects to a restarted server ([VSIX-STATE]). Generations
+   * only order snapshots *within* one session, so an async refresh must
+   * capture this epoch at dispatch and discard its completion when the
+   * epoch has moved — otherwise a request answered by the dead session
+   * can land its generation-100 snapshot after the reset and re-arm the
+   * rollback guard against the new session's generation 1.
+   */
+  readonly sessionEpoch: ReadonlySignal<number> = this._sessionEpoch;
+  /**
    * Cluster ids a delta explicitly retracted since the last full snapshot
    * ([VSIX-STATE-DIRTY]). Surfaces that may render a cluster the canonical
    * report does not contain — the live bubble accepts LSP probe results
@@ -128,6 +141,7 @@ export class ReportStore implements vscode.Disposable {
       visibleReport: this._visibleReport.value,
       generation: this._generation.value,
       revision: this._revision.value,
+      sessionEpoch: this._sessionEpoch.value,
       lifecycle: this._lifecycle.value,
       pendingEmbeddingModel: this._pendingEmbeddingModel.value,
       embeddingProgress: this._embeddingProgress.value,
@@ -284,6 +298,30 @@ export class ReportStore implements vscode.Disposable {
     const next = new Set(this._dirtyFiles.value);
     next.delete(key);
     this._dirtyFiles.value = next;
+  }
+
+  /**
+   * Atomically clears every server-derived field when a new LSP session
+   * begins ([VSIX-STATE]). Generations are per server session — a
+   * restarted server counts again from 1, so a store still holding the
+   * dead session's generation would reject every new snapshot via the
+   * rollback guard and pin the old report on screen forever. The
+   * revision bumps (it never rewinds) so async answers dispatched
+   * against the old session fail their revision comparison and are
+   * discarded. Dirty-file tracking survives: unsaved local edits are
+   * client state and outlive any server session.
+   */
+  resetForNewSession(): void {
+    batch(() => {
+      this._report.value = null;
+      this._generation.value = 0;
+      this._revision.value += 1;
+      this._sessionEpoch.value += 1;
+      this._retractedClusters.value = new Set();
+      this._lifecycle.value = { kind: "analysing" };
+      this._pendingEmbeddingModel.value = null;
+      this._embeddingProgress.value = null;
+    });
   }
 
   setLifecycle(lifecycle: LifecyclePhase): void {

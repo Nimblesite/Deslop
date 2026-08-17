@@ -23,6 +23,7 @@ const TEXT_EXTENSIONS = [".md", ".ts", ".mjs", ".json", ".njk", ".yml", ".rs", "
 const tests = [
   releaseWorkflowPublishesPlatformSpecificVsixArtifacts,
   documentedExtensionDirectoryCarriesItsPlatformTarget,
+  installerSnippetContractRunsWhereverTheSnippetCanChange,
 ];
 
 let failed = 0;
@@ -64,6 +65,50 @@ function documentedExtensionDirectoryCarriesItsPlatformTarget() {
     throw new Error(
       `the installed extension directory is ${EXTENSION_DIRECTORY}-<platform>; these paths omit the target and resolve to nothing:\n  ${offenders.join("\n  ")}`,
     );
+  }
+}
+
+// [DEPLOY-DOCS-INSTALLER-FAILCLOSED] routing contract. The fail-closed
+// installer snippet lives on the published site pages, and CI classifies a
+// PR touching only those pages as `site=true, code=false` — skipping the
+// `ci` job where `make lint` runs the snippet's contract test. The security
+// test must therefore also be a step of the `site` job, or a site-only PR
+// can regress the exact snippet the test was written to protect. The
+// routing half asserts the classifier and the site job's gate still wire an
+// installer-page-only change to that step: `site/**` changes set
+// `site=true`, and the site job runs exactly when they do.
+function installerSnippetContractRunsWhereverTheSnippetCanChange() {
+  const ciWorkflow = readFileSync(resolve(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  const makefile = readFileSync(resolve(repoRoot, "Makefile"), "utf8");
+  const runner = "node --test scripts/installer-snippet.test.mjs";
+  if (!makefile.includes(runner)) {
+    throw new Error("make lint no longer runs the installer snippet contract; code PRs would stop covering it");
+  }
+  requireInOrder(ciWorkflow, ["grep -qE '^site/'", 'echo "site=true"'],
+    "the classifier no longer maps site/** changes to site=true; an installer-page-only PR would skip the site job entirely");
+  const siteJob = ciWorkflow.indexOf("\n  site:");
+  const securityJob = ciWorkflow.indexOf("\n  security:");
+  if (siteJob < 0 || securityJob < 0) {
+    throw new Error("ci.yml no longer declares the site/security jobs this contract anchors on; update the contract");
+  }
+  const siteJobBody = ciWorkflow.slice(siteJob, securityJob);
+  if (!siteJobBody.includes("if: needs.changes.outputs.site == 'true'")) {
+    throw new Error("the site job no longer gates on the classifier's site output; the routing this contract proves has changed");
+  }
+  if (!siteJobBody.includes(runner)) {
+    throw new Error(
+      "the site job does not run the installer snippet contract; a site-only PR could change the published installer without the fail-closed test running",
+    );
+  }
+}
+
+// Asserts each needle appears, and after the previous one — the shape of the
+// classifier's "match then emit" bash without parsing it.
+function requireInOrder(text, needles, message) {
+  let at = 0;
+  for (const needle of needles) {
+    at = text.indexOf(needle, at);
+    if (at < 0) throw new Error(`${message} (missing: ${needle})`);
   }
 }
 

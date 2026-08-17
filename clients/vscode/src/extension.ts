@@ -23,7 +23,7 @@ import {
 } from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
 import { wireMcpRegistration } from "./mcpRegistration";
-import { wireNotifications } from "./notifications";
+import { wireNotifications, wireSessionReset } from "./notifications";
 import { promptToIgnoreCache } from "./gitignorePrompt";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
@@ -246,6 +246,10 @@ export async function activate(
 
   if (client) {
     reportStore.setLifecycle({ kind: "analysing" });
+    // Armed before start() so the initial Running transition is counted
+    // as session one — subscribing later would make the first *restart*
+    // look like the initial session and skip its reset.
+    context.subscriptions.push(wireSessionReset(client, reportStore));
     try {
       await client.start();
     } catch (err) {

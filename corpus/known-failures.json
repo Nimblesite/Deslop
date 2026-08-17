@@ -15,7 +15,8 @@
     "wall": "Scan exceeded the wall-clock ceiling.",
     "determinism": "Two identical scans disagreed.",
     "fused_bounded_max": "A rendered confidence exceeded the strongest single axis it was computed from, which [FUSION-STRATEGY-BOUNDED-MAX] forbids — the sum-then-clamp saturation gh #343 removed, pinned as an exact per-cluster formula rather than as a distribution.",
-    "type2_recall": "A large same-shape population was demoted and not one cluster reached `nearly_identical` — the recall side of the content gate ([FUSION-CONTENT-GATE]), which a false-positive check cannot see. `identical` does not count: it is decided by byte equivalence before the gate runs."
+    "type2_gate_liveness": "A large same-shape population was demoted and not one visible cluster reached `nearly_identical` through the gate's own saturating-shape precondition ([FUSION-CONTENT-GATE]). A population-shape heuristic, not a recall assertion: it identifies no expected pair. `identical` does not count (decided by byte equivalence before the gate runs) and neither does a sub-floor token near-miss (classified by the ordinary Type-3 path without the gate judging it).",
+    "type2_recall": "A hand-verified Type-2 rename curated in the manifest's `must_find_type2` was not reported as a visible gate-vouched `nearly_identical` cluster spanning its files — a false negative on known rename ground truth ([CORPUS-RECALL])."
   },
   "known_failures": {
     "flutter": [

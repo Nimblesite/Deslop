@@ -55,16 +55,32 @@ interface DispatchedAt {
 
 // One in-flight probe: its supersession epoch (only the newest probe may
 // touch the UI — success *or* failure), the cancellation source that a newer
-// probe or `dispose()` fires, the budget timer, and the world it was
+// probe or `dispose()` fires, the budget deadline, and the world it was
 // dispatched against.
 interface ProbeDispatch {
   epoch: number;
   doc: vscode.TextDocument;
   range: vscode.Range;
   cancellation: vscode.CancellationTokenSource;
-  timeout: NodeJS.Timeout;
+  // Set when the budget deadline fired: the edit cycle is skipped outright.
+  // Cancellation alone cannot enforce the deadline — `$/cancelRequest` is
+  // advisory and a server that ignores it still resolves the promise — so
+  // the expiry is recorded and `isSuperseded` rejects the late completion.
+  expired: boolean;
+  budget: vscode.Disposable;
   dispatchedAt: DispatchedAt;
 }
+
+/**
+ * Schedules the probe-budget deadline. Injectable so tests fire the
+ * deadline deterministically instead of sleeping ([VSIX-LIVE-BUBBLE]).
+ */
+export type BudgetScheduler = (expire: () => void, ms: number) => vscode.Disposable;
+
+const realBudgetScheduler: BudgetScheduler = (expire, ms) => {
+  const handle = setTimeout(expire, ms);
+  return { dispose: () => clearTimeout(handle) };
+};
 
 export class LiveBubble implements vscode.Disposable {
   private readonly bubbleDecoration: vscode.TextEditorDecorationType;
@@ -84,6 +100,7 @@ export class LiveBubble implements vscode.Disposable {
   constructor(
     private readonly store: ReportStore,
     private readonly clientOf: () => LanguageClient | undefined,
+    private readonly scheduleBudget: BudgetScheduler = realBudgetScheduler,
   ) {
     this.bubbleDecoration = vscode.window.createTextEditorDecorationType({
       after: {
@@ -216,35 +233,38 @@ export class LiveBubble implements vscode.Disposable {
     this.inflight?.cancel();
     const cancellation = new vscode.CancellationTokenSource();
     this.inflight = cancellation;
-    const start = change.range.start;
-    const end = doc.positionAt(doc.offsetAt(start) + change.text.length);
     this.probeEpoch += 1;
-    return {
+    const dispatch: ProbeDispatch = {
       epoch: this.probeEpoch,
       doc,
-      range: new vscode.Range(start, end),
+      range: probeRange(doc, change),
       cancellation,
-      timeout: setTimeout(() => cancellation.cancel(), BUDGET_MS),
+      expired: false,
+      budget: { dispose: () => undefined },
       dispatchedAt: {
         revision: this.store.current.revision,
         uri: doc.uri.toString(),
         version: doc.version,
       },
     };
+    dispatch.budget = this.scheduleBudget(() => expireProbe(dispatch), BUDGET_MS);
+    return dispatch;
   }
 
-  // True when this completion may no longer touch the UI: a newer probe was
-  // dispatched (or the bubble disposed) since, or the world it asked about
-  // has moved on. Both the success and the failure path gate on this.
+  // True when this completion may no longer touch the UI: its budget
+  // deadline fired, a newer probe was dispatched (or the bubble disposed)
+  // since, or the world it asked about has moved on. Both the success and
+  // the failure path gate on this.
   private isSuperseded(dispatch: ProbeDispatch): boolean {
     return (
+      dispatch.expired ||
       dispatch.epoch !== this.probeEpoch ||
       this.hasMovedOn(dispatch.doc, dispatch.dispatchedAt)
     );
   }
 
   private endProbe(dispatch: ProbeDispatch): void {
-    clearTimeout(dispatch.timeout);
+    dispatch.budget.dispose();
     if (this.inflight === dispatch.cancellation) this.inflight = null;
     dispatch.cancellation.dispose();
   }
@@ -425,6 +445,24 @@ class BubbleInlayProvider implements vscode.InlayHintsProvider {
     hint.tooltip = bubbleHover(this.current.cluster);
     return [hint];
   }
+}
+
+// The probe's budget deadline fired: record the expiry so the completion
+// is rejected even if the server ignores the advisory cancellation, and
+// still cancel so a compliant server stops working on a dead question.
+function expireProbe(dispatch: ProbeDispatch): void {
+  dispatch.expired = true;
+  dispatch.cancellation.cancel();
+}
+
+// The probed range: from the edit's start through the inserted text.
+function probeRange(
+  doc: vscode.TextDocument,
+  change: vscode.TextDocumentContentChangeEvent,
+): vscode.Range {
+  const start = change.range.start;
+  const end = doc.positionAt(doc.offsetAt(start) + change.text.length);
+  return new vscode.Range(start, end);
 }
 
 // Wire params for deslop/duplicatesFindSimilar: byte offsets, because the

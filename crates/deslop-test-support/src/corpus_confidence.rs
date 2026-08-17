@@ -1,5 +1,6 @@
-//! [CORPUS-BASELINE] The two confidence checks the real-repository gate runs
-//! over a finished report: `fused_bounded_max` and `type2_recall`.
+//! [CORPUS-BASELINE] The confidence checks the real-repository gate runs
+//! over a finished report: `fused_bounded_max`, `type2_gate_liveness` and the
+//! curated `type2_recall`.
 //!
 //! Both exist because the synthetic fixtures that pin
 //! [FUSION-STRATEGY-BOUNDED-MAX] and [FUSION-CONTENT-GATE] are built to
@@ -15,11 +16,13 @@
 //! they are stable against the cluster-order churn `corpus/known-failures.json`
 //! documents.
 
+use deslop_core::{buckets::has_saturating_shape_evidence, wire_generated::ReportSignals};
 use serde_json::Value;
 
-use crate::corpus::Failure;
+use crate::corpus::{reports_clone_spanning, Failure};
 
-/// Minimum demoted clusters before [`check_type2_recall`] will judge a report.
+/// Minimum demoted clusters before [`check_type2_gate_liveness`] will judge a
+/// report.
 ///
 /// Below this the absence of act-now findings is ordinary — a clean repository
 /// has neither population. The check fires on the *shape* of a report that
@@ -27,8 +30,8 @@ use crate::corpus::Failure;
 const TYPE2_MIN_DEMOTED: usize = 20;
 
 /// The bucket a shape-identical cluster reaches only by the content gate
-/// vouching for it — the one act-now destination [`check_type2_recall`] can
-/// read as recall evidence.
+/// vouching for it — the one act-now destination
+/// [`check_type2_gate_liveness`] can read as evidence the gate is alive.
 ///
 /// `identical` is deliberately **not** here. That bucket is decided by raw
 /// byte-equivalence in `report_bucket_kind`, and both `route_shape_identical`
@@ -37,6 +40,14 @@ const TYPE2_MIN_DEMOTED: usize = 20;
 /// made the check vacuous: Tokio renders 452 `identical` clusters, so every
 /// Type-2 rename in the repository could regress into the demoted tier and the
 /// gate would still pass.
+///
+/// The bucket alone is not enough either: the token-LSH Type-3 path can
+/// classify a cluster `nearly_identical` from token overlap *below* the
+/// saturating floor, in which case `content_gated_signals` returned without
+/// ever judging it — so counting such a cluster as gate evidence let one
+/// unrelated near miss keep this check green while every genuine rename sank.
+/// [`gate_vouched`] therefore also requires the gate's own precondition,
+/// [`has_saturating_shape_evidence`].
 const CONTENT_VOUCHED_BUCKET: &str = "nearly_identical";
 
 /// Tolerance on the bounded-max invariant in [`check_fused_bounded_max`].
@@ -122,36 +133,32 @@ fn bounded_max_breach(cluster: &Value) -> Option<String> {
     })
 }
 
-/// [CORPUS-BASELINE] `type2_recall` — the content gate must vouch for
-/// *something*.
+/// [CORPUS-BASELINE] `type2_gate_liveness` — the content gate must vouch for
+/// *something* when it demotes a large same-shape population.
 ///
-/// The recall side of [FUSION-CONTENT-GATE], and the direction a
-/// false-positive check structurally cannot see. `route_shape_identical`
-/// demotes a shape-identical cluster whose content evidence is absent; set the
-/// operating point slightly too high and every genuine Type-2 rename in a real
-/// repository sinks into the demoted tier with the scaffolding it was built to
-/// separate. The report stays plausible — it is full of clusters — while every
-/// finding a user would act on has quietly become "verify before extracting".
+/// This is a population-shape heuristic, **not** a recall assertion — it
+/// identifies no expected pair and reads no curated ground truth (that is
+/// [`check_type2_curated_recall`]'s job). What it catches is the catastrophic
+/// operating-point failure [FUSION-CONTENT-GATE] makes possible:
+/// `route_shape_identical` demotes a shape-identical cluster whose content
+/// evidence is absent; set the operating point slightly too high and every
+/// genuine Type-2 rename in a real repository sinks into the demoted tier
+/// with the scaffolding it was built to separate. The report stays plausible
+/// — it is full of clusters — while every finding a user would act on has
+/// quietly become "verify before extracting".
 ///
 /// A repository that produced a large demoted population and *zero*
-/// gate-vouched clusters is that failure. It is not a threshold on a score: a
-/// real corpus of that size containing no proven rename at all is not a state
-/// the engine should ever report.
-///
-/// Only [`CONTENT_VOUCHED_BUCKET`] counts as recall. A `identical` cluster is
-/// decided by byte-equivalence before the gate runs, so it is evidence the
-/// byte comparison works and says nothing about whether the gate is vouching
-/// for anything — see that constant for what counting it cost.
-pub fn check_type2_recall(report: &Value, failures: &mut Vec<Failure>) {
+/// gate-vouched clusters is that failure. Only a [`gate_vouched`] cluster
+/// counts as evidence the gate is alive: the right bucket reached *through*
+/// the gate's own precondition — see [`CONTENT_VOUCHED_BUCKET`] for why
+/// neither byte-identical clusters nor sub-floor token near-misses count.
+pub fn check_type2_gate_liveness(report: &Value, failures: &mut Vec<Failure>) {
     let clusters = visible_clusters(report);
     let demoted = clusters
         .iter()
         .filter(|c| in_set(c, &DEMOTED_BUCKETS))
         .count();
-    let vouched = clusters
-        .iter()
-        .filter(|c| in_set(c, &[CONTENT_VOUCHED_BUCKET]))
-        .count();
+    let vouched = clusters.iter().filter(|c| gate_vouched(c)).count();
     if demoted < TYPE2_MIN_DEMOTED || vouched > 0 {
         return;
     }
@@ -160,15 +167,116 @@ pub fn check_type2_recall(report: &Value, failures: &mut Vec<Failure>) {
         .filter(|c| in_set(c, &["identical"]))
         .count();
     failures.push(Failure::new(
-        "type2_recall",
+        "type2_gate_liveness",
         format!(
             "{demoted} same-shape clusters were demoted and not one reached \
-             `{CONTENT_VOUCHED_BUCKET}` — the content gate vouched for nothing in the whole \
-             repository, so every genuine rename is being reported as unverified scaffolding \
-             (the {proven} byte-identical clusters here are decided before the gate runs and \
-             cannot stand in for it)",
+             `{CONTENT_VOUCHED_BUCKET}` through the gate — the content gate vouched for \
+             nothing in the whole repository, so every genuine rename is being reported as \
+             unverified scaffolding (the {proven} byte-identical clusters here are decided \
+             before the gate runs and cannot stand in for it)",
         ),
     ));
+}
+
+/// True when a cluster is evidence the content gate vouched: the vouched
+/// bucket, reached with the saturating shape evidence that is the gate's own
+/// precondition. A `nearly_identical` cluster *below* both saturation lines
+/// was classified by the ordinary token-LSH Type-3 path — the gate returned
+/// without judging it, so it proves nothing about the gate.
+fn gate_vouched(cluster: &Value) -> bool {
+    in_set(cluster, &[CONTENT_VOUCHED_BUCKET])
+        && has_saturating_shape_evidence(rendered_signals(cluster))
+}
+
+/// The cluster's rendered signal breakdown, absent axes read as zero.
+fn rendered_signals(cluster: &Value) -> ReportSignals {
+    ReportSignals {
+        structural: signal(cluster, "structural"),
+        token_jaccard: signal(cluster, "token_jaccard"),
+        embedding_cos: signal(cluster, "embedding_cos"),
+        fused: signal(cluster, "fused"),
+    }
+}
+
+/// [CORPUS-RECALL] `type2_recall` — every hand-verified Type-2 rename in the
+/// manifest's `must_find_type2` list must be reported as a visible,
+/// gate-vouched cluster spanning its curated files.
+///
+/// This is the actual recall assertion [`check_type2_gate_liveness`] is not:
+/// each entry names a pair a human verified is a rename-duplicate by diffing
+/// the code, so a miss is a false negative on known ground truth, a hidden
+/// cluster is a claim the user never sees, and a demoted or sub-floor bucket
+/// means the gate failed to vouch for a proven rename. An empty list asserts
+/// nothing — `must_find_status` in the manifest says so explicitly.
+pub fn check_type2_curated_recall(manifest: &Value, report: &Value, failures: &mut Vec<Failure>) {
+    let entries = manifest
+        .get("must_find_type2")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    for entry in entries {
+        check_one_curated_type2(entry, report, failures);
+    }
+}
+
+/// Judges one curated `must_find_type2` entry against the rendered report.
+fn check_one_curated_type2(entry: &Value, report: &Value, failures: &mut Vec<Failure>) {
+    let files: Vec<String> = entry
+        .get("files")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|file| file.as_str().map(ToOwned::to_owned))
+        .collect();
+    let why = entry.get("why").and_then(Value::as_str).unwrap_or("");
+    if !reports_clone_spanning(report, &files) {
+        failures.push(Failure::new(
+            "type2_recall",
+            format!("no cluster spans {files:?}. Hand-verified Type-2 rename: {why}"),
+        ));
+        return;
+    }
+    let vouched = visible_clusters(report)
+        .iter()
+        .any(|cluster| gate_vouched(cluster) && cluster_spans(cluster, &files));
+    if !vouched {
+        failures.push(Failure::new(
+            "type2_recall",
+            format!(
+                "a cluster spans {files:?} but no shown gate-vouched \
+                 `{CONTENT_VOUCHED_BUCKET}` cluster does — the proven rename was demoted, \
+                 one of its occurrences is hidden, or its evidence did not come from the \
+                 gate. Hand-verified Type-2 rename: {why}"
+            ),
+        ));
+    }
+}
+
+/// True when every curated file appears among the cluster's *shown*
+/// occurrence paths — the same exact-path predicate as
+/// [`crate::corpus::reports_clone_spanning`], and false for an empty list
+/// for the same reason: an entry naming no files must never pass vacuously.
+///
+/// Hidden occurrences are excluded rather than merely deprioritised.
+/// [`visible_clusters`] only asks that *some* occurrence of a cluster is
+/// shown, so a cluster carrying twenty siblings could satisfy it while the
+/// curated rename's own side is suppressed — the user would never see the
+/// pair, which is the false negative the entry exists to catch.
+fn cluster_spans(cluster: &Value, files: &[String]) -> bool {
+    if files.is_empty() {
+        return false;
+    }
+    let paths: Vec<&str> = cluster
+        .get("occurrences")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter(|occurrence| occurrence.get("hidden").and_then(Value::as_bool) != Some(true))
+        .filter_map(|occurrence| occurrence.get("path").and_then(Value::as_str))
+        .collect();
+    files.iter().all(|file| paths.contains(&file.as_str()))
 }
 
 /// Clusters the report actually shows a user. A hidden cluster carries no
