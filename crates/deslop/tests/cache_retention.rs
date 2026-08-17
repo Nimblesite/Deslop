@@ -31,6 +31,9 @@ const OTHER_VERSION_DIR: &str = "0.0.0-superseded";
 /// Blob file the planted other-version partition holds.
 const OTHER_VERSION_BLOB: &str = "deadbeef.bin";
 
+/// The seeded file whose banner comment the edit cycle rewrites.
+const ALPHA: &str = "alpha.rs";
+
 /// Plants an other-tool-version partition holding one blob inside the
 /// seeded corpus's Rust store, returning its root.
 fn plant_other_version_partition(scan_root: &Path) -> Result<std::path::PathBuf> {
@@ -41,27 +44,6 @@ fn plant_other_version_partition(scan_root: &Path) -> Result<std::path::PathBuf>
     fs::create_dir_all(&other_root)?;
     fs::write(other_root.join(OTHER_VERSION_BLOB), b"other-version blob")?;
     Ok(other_root)
-}
-
-/// Rewrites `alpha.rs`'s banner comment with a byte-distinct,
-/// same-length variant: the file's content hash changes while every
-/// AST node, byte offset, line count, and therefore every reported
-/// figure stays exactly the seeded truth.
-fn edit_alpha_banner(scan_root: &Path, from: &str, to: &str) -> Result<()> {
-    assert_eq!(
-        from.len(),
-        to.len(),
-        "the banner edit must preserve byte offsets to keep the report pinned"
-    );
-    let path = scan_root.join("alpha.rs");
-    let original = fs::read_to_string(&path)?;
-    let edited = original.replacen(from, to, 1);
-    assert_ne!(
-        original, edited,
-        "the banner edit must actually change alpha.rs — `{from}` not found"
-    );
-    fs::write(&path, edited)?;
-    Ok(())
 }
 
 /// Asserts a report is byte-for-byte the seeded truth *and* its pass
@@ -143,7 +125,12 @@ fn an_edit_cycle_keeps_the_orphan_and_the_revert_full_hits() -> Result<()> {
         "the seeded cold pass stores one blob per file: {original_blobs:?}"
     );
 
-    edit_alpha_banner(&scan_root, "the canonical copy.", "the canonical copy!")?;
+    edit_preserving_offsets(
+        &scan_root,
+        ALPHA,
+        "the canonical copy.",
+        "the canonical copy!",
+    )?;
     let edit_out = tmp.path().join("edit");
     let (edited, edit_events) = run_store_on(&scan_root, &edit_out, SEEDED_MIN_NODES, &[])?;
     assert_seeded_pass(&edited, &edit_events, 2, 1, "edit pass")?;
@@ -162,7 +149,12 @@ fn an_edit_cycle_keeps_the_orphan_and_the_revert_full_hits() -> Result<()> {
     assert_log_mentions(&edit_out, "orphan_blobs=1", 1, "edit pass")?;
     assert_log_mentions(&edit_out, "evicted_blobs=0", 1, "edit pass")?;
 
-    edit_alpha_banner(&scan_root, "the canonical copy!", "the canonical copy.")?;
+    edit_preserving_offsets(
+        &scan_root,
+        ALPHA,
+        "the canonical copy!",
+        "the canonical copy.",
+    )?;
     let revert_out = tmp.path().join("revert");
     let (reverted, revert_events) = run_store_on(&scan_root, &revert_out, SEEDED_MIN_NODES, &[])?;
     assert_warm_pass(&reverted, &revert_events, SEEDED_FILE_COUNT, "revert pass");

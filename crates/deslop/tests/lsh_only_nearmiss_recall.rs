@@ -34,8 +34,8 @@ use std::path::Path;
 use crate::common::{
     approx, cluster_bucket, cluster_size, expect_cluster_spanning, field,
     incremental::{
-        assert_pass, assert_reports_equal, assert_warm_pass, cold_then_warm, run_store_on,
-        ColdThenWarm,
+        assert_pass, assert_reports_equal, assert_warm_pass, cold_then_warm,
+        edit_preserving_offsets, run_store_on, ColdThenWarm,
     },
     metric_field, run_report, signal,
     verdict::loc_as_f64,
@@ -86,6 +86,9 @@ const RIGHT_SOURCE: &str = "import os\nimport sys\n\n\ndef settle(entries, floor
     \x20   weighted_margin = spread_margin * 2\n\
     \x20   return settlement_value + opening_total\n";
 
+/// The file the mixed pass edits — the right-hand member of the pair.
+const RIGHT_FILE: &str = "ledger_right.py";
+
 /// Token-Jaccard the pair measures (`MinHash` estimate, deterministic per
 /// [PIPELINE-DETERMINISM]) — captured from the reproducing run. Above
 /// the 0.90 LSH-only floor, below the 0.95 saturating-shape line, so
@@ -96,7 +99,7 @@ const MEASURED_JACCARD: f64 = 0.929_687_5;
 fn seed(scan_root: &Path) -> Result<()> {
     fs::create_dir_all(scan_root)?;
     fs::write(scan_root.join("ledger_left.py"), LEFT_SOURCE)?;
-    fs::write(scan_root.join("ledger_right.py"), RIGHT_SOURCE)?;
+    fs::write(scan_root.join(RIGHT_FILE), RIGHT_SOURCE)?;
     Ok(())
 }
 
@@ -176,7 +179,7 @@ fn the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result
     // span, and token k-gram is untouched while the file's content hash —
     // the store key — changes. One file must miss and rebuild, the other
     // must be served, and the report must not move a byte.
-    swap_right_import(&scan_root, "import os", "import io")?;
+    edit_preserving_offsets(&scan_root, RIGHT_FILE, "import os", "import io")?;
     let (edited, edit_events) = run_store_on(&scan_root, &tmp.path().join("edit"), MIN_NODES, &[])?;
     assert_pass(&edited, &edit_events, 1, 1, "mixed pass");
     edit_events.assert_signatures(
@@ -187,7 +190,7 @@ fn the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result
     assert_pair_verdict(&edited, "mixed pass")?;
     assert_reports_equal(&edited, &cold, "mixed pass vs cold pass");
 
-    swap_right_import(&scan_root, "import io", "import os")?;
+    edit_preserving_offsets(&scan_root, RIGHT_FILE, "import io", "import os")?;
     let (reverted, revert_events) =
         run_store_on(&scan_root, &tmp.path().join("revert"), MIN_NODES, &[])?;
     assert_warm_pass(&reverted, &revert_events, 2, "revert pass");
@@ -203,31 +206,9 @@ fn the_lsh_only_pair_keeps_its_verdict_across_the_persistence_matrix() -> Result
 fn right_file_fingerprint_count(tmp: &Path) -> Result<u64> {
     let solo = tmp.join("solo");
     fs::create_dir_all(&solo)?;
-    fs::write(solo.join("ledger_right.py"), RIGHT_SOURCE)?;
+    fs::write(solo.join(RIGHT_FILE), RIGHT_SOURCE)?;
     let (_report, events) = run_store_on(&solo, &tmp.join("solo-out"), MIN_NODES, &[])?;
     Ok(events.fingerprints)
-}
-
-/// Rewrites the right file's unused import, `from` → `to`. Both are the
-/// same length and the identifier collapses under normalisation, so the
-/// file's content hash changes while every reported figure — node counts,
-/// byte offsets, signals, LOC — stays exactly what the cold pass
-/// measured.
-fn swap_right_import(scan_root: &Path, from: &str, to: &str) -> Result<()> {
-    assert_eq!(
-        from.len(),
-        to.len(),
-        "the import swap must preserve byte offsets to keep the report pinned"
-    );
-    let path = scan_root.join("ledger_right.py");
-    let original = fs::read_to_string(&path)?;
-    let edited = original.replacen(from, to, 1);
-    assert_ne!(
-        original, edited,
-        "the import swap must actually change the file — `{from}` not found"
-    );
-    fs::write(&path, edited)?;
-    Ok(())
 }
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]) this pair must

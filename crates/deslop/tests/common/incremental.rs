@@ -19,6 +19,45 @@ use serde_json::Value;
 
 use super::{field, store::read_single_log, Result};
 
+/// Rewrites a same-length, byte-distinct substring in `<scan_root>/<file>`:
+/// `from` → `to`, first occurrence only.
+///
+/// This is the edit shape every mixed-pass scenario needs. The store is
+/// keyed on the file's content hash, so the edit must change that hash —
+/// but the *report* must not move, or the pass cannot be compared field
+/// for field against a cold run ([PIPELINE-INCREMENTAL-ANALYSIS-EQUIVALENCE]).
+/// Equal lengths keep every byte offset, node count and line number
+/// exactly where the cold pass measured them, and the two assertions are
+/// what stop a silently-inert edit from being read as a passing test: a
+/// `from` that is absent would leave the file untouched, the pass would
+/// full-hit, and the scenario would prove nothing.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error when the file cannot be read or
+/// written.
+pub(crate) fn edit_preserving_offsets(
+    scan_root: &Path,
+    file: &str,
+    from: &str,
+    to: &str,
+) -> Result<()> {
+    assert_eq!(
+        from.len(),
+        to.len(),
+        "the {file} edit must preserve byte offsets to keep the report pinned"
+    );
+    let path = scan_root.join(file);
+    let original = fs::read_to_string(&path)?;
+    let edited = original.replacen(from, to, 1);
+    assert_ne!(
+        original, edited,
+        "the edit must actually change {file} — `{from}` not found"
+    );
+    fs::write(&path, edited)?;
+    Ok(())
+}
+
 /// The `fingerprint corpus built` counters for one pass — the
 /// structured observable [PIPELINE-INCREMENTAL-ANALYSIS-REUSE] is
 /// judged by. Timing assertions are banned, so reuse is proven by
