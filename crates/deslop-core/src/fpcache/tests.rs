@@ -319,6 +319,70 @@ fn an_oversized_blob_file_is_never_read() -> io::Result<()> {
     Ok(())
 }
 
+// [PIPELINE-INCREMENTAL-INTEGRITY] The bounded read allocates exactly
+// once, for exactly the measured length plus the growth sentinel, and
+// returns exactly the file's bytes. The capacity assertion is the point:
+// a read capped at the *global* ceiling instead of `len + 1` would let a
+// file that grew by megabytes reallocate the buffer far past the
+// reservation on its way to being rejected.
+#[test]
+fn the_bounded_read_returns_the_whole_file_without_growing_its_buffer() -> io::Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let path = tmp.path().join("blob.bin");
+    let contents = vec![7_u8; 4_096];
+    fs::write(&path, &contents)?;
+
+    let read = read_bounded(&path).ok_or_else(|| invalid_data_error("admissible blob refused"))?;
+
+    assert_eq!(
+        read, contents,
+        "the bounded read must return the file's bytes verbatim"
+    );
+    assert!(
+        read.capacity() <= contents.len().saturating_add(1),
+        "the buffer must be reserved once at len + 1 and never grown, got \
+         capacity {} for a {}-byte file",
+        read.capacity(),
+        contents.len()
+    );
+    assert!(
+        read_bounded(&tmp.path().join("absent.bin")).is_none(),
+        "a missing blob is a plain miss, never an error"
+    );
+    Ok(())
+}
+
+// [PIPELINE-INCREMENTAL-INTEGRITY] The decoded-node budget is global to
+// one blob: it bounds a wide-but-shallow tree, which `MAX_AST_DEPTH`
+// cannot see, and it is claimed *including* the child slots that follow a
+// node so an absurd child count is refused before its `Vec` is reserved.
+#[test]
+fn the_decoded_node_budget_is_global_and_refuses_child_counts_before_reserving() {
+    let mut budget = NodeBudget::new();
+    assert!(
+        budget.claim(MAX_DECODED_NODES.saturating_sub(1)).is_ok(),
+        "a tree that exactly fits the allowance must be admitted"
+    );
+    assert!(
+        budget.claim(0).is_err(),
+        "the allowance is spent, so even a childless node must be refused — \
+         the budget is global across the recursion, not per node"
+    );
+    let mut fresh = NodeBudget::new();
+    assert!(
+        fresh.claim(MAX_DECODED_NODES).is_err(),
+        "a child count one past the allowance must be refused before the \
+         child list is reserved"
+    );
+    let mut small = NodeBudget::new();
+    for _ in 0_u32..3 {
+        assert!(
+            small.claim(1).is_ok(),
+            "ordinary nodes must not be refused"
+        );
+    }
+}
+
 // [PIPELINE-INCREMENTAL-INTEGRITY] The digest must be a *function* of
 // the whole address: stable for one address, and distinct for every
 // single-field change. Without the second half the verification is
