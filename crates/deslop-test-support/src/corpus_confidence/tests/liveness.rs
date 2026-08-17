@@ -33,7 +33,7 @@ fn a_report_that_vouches_for_nothing_is_reported() {
 }
 
 #[test]
-fn one_gate_vouched_cluster_clears_the_recall_check() {
+fn one_gate_vouched_cluster_clears_the_liveness_check() {
     let failures = judge(vec![cluster("nearly_identical", 1.0, 1.0, 0.9)]);
     assert!(
         failures.is_empty(),
@@ -42,7 +42,7 @@ fn one_gate_vouched_cluster_clears_the_recall_check() {
 }
 
 #[test]
-fn byte_identical_clones_cannot_stand_in_for_type2_recall() {
+fn byte_identical_clones_are_not_gate_evidence() {
     // The vacuity this check shipped with. `identical` is decided by byte
     // equivalence before `route_shape_identical` or
     // `content_gated_signals` run, so however many of them a repository
@@ -67,7 +67,7 @@ fn byte_identical_clones_cannot_stand_in_for_type2_recall() {
 }
 
 #[test]
-fn a_small_demoted_population_is_not_judged_on_recall() {
+fn a_small_demoted_population_is_not_judged_at_all() {
     let failures = judge_population(TYPE2_MIN_DEMOTED - 1, Vec::new());
     assert!(
         failures.is_empty(),
@@ -76,7 +76,7 @@ fn a_small_demoted_population_is_not_judged_on_recall() {
 }
 
 #[test]
-fn a_hidden_act_now_cluster_does_not_rescue_recall() {
+fn a_hidden_act_now_cluster_is_not_gate_evidence() {
     // A cluster the renderer hid was never offered to the user, so it
     // cannot stand as evidence that the gate vouched for something.
     let failures = judge(vec![hide(cluster("nearly_identical", 1.0, 1.0, 0.9))]);
