@@ -6,22 +6,11 @@
 //! Split from `common` proper, which walks a report the tool already
 //! rendered. These helpers run before the tool does.
 
-use std::{fs, path::Path};
+use std::fs;
 
 use serde_json::Value;
 
 use super::{cluster_file_set, clusters, field, run_report, Result};
-
-/// Writes two byte-identical source files (`a.<extension>`, `b.<extension>`)
-/// into a freshly created `dir`: the minimal corpus for a fully-duplicated
-/// repo, used to prove the duplication metric is language-agnostic.
-pub(crate) fn write_identical_pair(dir: &Path, extension: &str, source: &str) -> Result<()> {
-    fs::create_dir_all(dir)?;
-    for stem in ["a", "b"] {
-        fs::write(dir.join(format!("{stem}.{extension}")), source)?;
-    }
-    Ok(())
-}
 
 /// A genuine copy-pasted F# function — byte-identical across two files.
 /// Shared recall-guard source for the #331/#336 shape-only fixtures.

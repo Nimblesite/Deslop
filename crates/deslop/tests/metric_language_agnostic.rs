@@ -13,7 +13,7 @@ mod common;
 
 use serde_json::Value;
 
-use crate::common::{corpora::*, *};
+use crate::common::*;
 
 /// One language's minimal fully-duplicated corpus: a file extension and a
 /// source body written byte-identically into `a.<ext>` and `b.<ext>`.
