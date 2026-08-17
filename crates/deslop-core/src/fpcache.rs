@@ -162,10 +162,13 @@ impl FingerprintCache {
         self.root.join(blob_file_name(source_hash))
     }
 
-    /// The full address a blob under `source_hash` must be bound to.
+    /// The full address a blob under `source_hash` must be bound to —
+    /// every component of the documented store key
+    /// `(language_id, tool_version, min_nodes, source_byte_hash)`.
     fn binding<'a>(&'a self, source_hash: &'a str) -> BlobBinding<'a> {
         BlobBinding {
             language_id: &self.language_id,
+            tool_version: TOOL_VERSION,
             min_nodes: self.min_nodes,
             source_hash,
         }

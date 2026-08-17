@@ -360,11 +360,15 @@ pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly
-    } else if is_lsh_only_nearmiss(signals) {
-        ClusterKind::NearlyIdentical
-    } else if signals.structural >= 0.99
+    } else if is_lsh_only_nearmiss(signals)
+        || signals.structural >= 0.99
         || (signals.structural >= 0.20 && signals.token_jaccard >= 0.95)
     {
+        // [CLONE-BUCKETS-ROUTING] rows 4 and 5 share this destination:
+        // the anchor-free LSH-only near-miss ([`is_lsh_only_nearmiss`])
+        // and the structurally-anchored near-miss. Kept as one arm
+        // because both routes produce the identical bucket — the named
+        // predicate is what keeps row 4 legible and greppable.
         ClusterKind::NearlyIdentical
     } else {
         ClusterKind::LooselySimilar

@@ -71,6 +71,12 @@ pub(super) const MAX_BLOB_BYTES: u64 = 256 * 1024 * 1024;
 pub(super) struct BlobBinding<'a> {
     /// Parser language id of the partition the lookup runs in.
     pub(super) language_id: &'a str,
+    /// Tool version of the partition the lookup runs in. Part of the
+    /// documented store key, so it is part of the digest: a blob
+    /// *relocated* between version directories (a copied, restored, or
+    /// merged store) would otherwise verify cleanly under a version
+    /// that never wrote it.
+    pub(super) tool_version: &'a str,
     /// Subtree-size floor of the partition the lookup runs in.
     pub(super) min_nodes: u32,
     /// BLAKE3 hex digest of the raw source bytes being looked up.
@@ -78,19 +84,25 @@ pub(super) struct BlobBinding<'a> {
 }
 
 /// BLAKE3 digest binding `payload` to `binding` and to the current
-/// layout, semantic, and signature-width revisions. Length-prefixing
-/// the language id keeps the input injective.
+/// layout, semantic, and signature-width revisions. Every variable-width
+/// field is length-prefixed so the input stays injective — without it a
+/// `("rust", "1.2")` address and a `("rust1", ".2")` one would hash
+/// identically.
 pub(super) fn binding_digest(binding: &BlobBinding<'_>, payload: &[u8]) -> [u8; 32] {
-    let language_len = u64::try_from(binding.language_id.len()).unwrap_or(u64::MAX);
     let signature_width = u64::try_from(SIGNATURE_LEN).unwrap_or(u64::MAX);
     let mut hasher = blake3::Hasher::new();
     let _ = hasher.update(&MAGIC.to_le_bytes());
     let _ = hasher.update(&SEMANTIC_EPOCH.to_le_bytes());
     let _ = hasher.update(&signature_width.to_le_bytes());
     let _ = hasher.update(&binding.min_nodes.to_le_bytes());
-    let _ = hasher.update(&language_len.to_le_bytes());
-    let _ = hasher.update(binding.language_id.as_bytes());
-    let _ = hasher.update(binding.source_hash.as_bytes());
+    for field in [
+        binding.language_id,
+        binding.tool_version,
+        binding.source_hash,
+    ] {
+        let _ = hasher.update(&u64::try_from(field.len()).unwrap_or(u64::MAX).to_le_bytes());
+        let _ = hasher.update(field.as_bytes());
+    }
     let _ = hasher.update(payload);
     *hasher.finalize().as_bytes()
 }
