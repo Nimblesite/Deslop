@@ -78,6 +78,13 @@ pub struct ContentEvidence {
     /// measured — a finding of scaffolding is positive evidence, never an
     /// absent measurement.
     pub substance_varies: bool,
+    /// True when at least [`VERBATIM_MEMBER_SHARE_FLOOR`] of the members
+    /// participate in byte-equivalent leaf-content duplicates. Byte
+    /// equality between whole members is proof of copying in its own
+    /// right (the #190 verbatim escape hatch), so routing guards that
+    /// key on weaker evidence — literal anchors, identifier agreement —
+    /// must never demote a cluster this flag vouches for.
+    pub verbatim_dominated: bool,
 }
 
 impl ContentEvidence {
@@ -100,6 +107,7 @@ impl ContentEvidence {
             rename_consistency: 0.0,
             literal_fraction: 0.0,
             substance_varies: false,
+            verbatim_dominated: false,
         }
     }
 }
@@ -126,6 +134,16 @@ pub fn attach_content_evidence<S: BuildHasher>(
         trees.iter().map(|tree| (tree.file_id, tree)).collect();
     for cluster in clusters.iter_mut() {
         cluster.content = measure_cluster(&cluster.members, &tree_index, sources);
+        tracing::debug!(
+            cluster_id = %cluster.id,
+            member_count = cluster.members.len(),
+            agreement = cluster.content.agreement,
+            rename_consistency = cluster.content.rename_consistency,
+            literal_fraction = cluster.content.literal_fraction,
+            substance_varies = cluster.content.substance_varies,
+            verbatim_dominated = cluster.content.verbatim_dominated,
+            "cluster content evidence"
+        );
     }
     tracing::debug!(cluster_count = clusters.len(), "content evidence attached");
 }
@@ -142,11 +160,14 @@ fn measure_cluster<S: BuildHasher>(
         .map(|member| member_content_keys(member, tree_index, sources))
         .collect();
     let canonical = member_keys.first().and_then(Option::as_deref);
+    let verbatim_dominated = member_keys.len() >= 2
+        && duplicated_member_share(&member_keys) >= VERBATIM_MEMBER_SHARE_FLOOR;
     ContentEvidence {
-        agreement: cluster_agreement(&member_keys),
+        agreement: cluster_agreement(&member_keys, verbatim_dominated),
         rename_consistency: cluster_rename_consistency(canonical, &member_keys),
         literal_fraction: canonical_literal_fraction(canonical),
         substance_varies: cluster_substance_varies(canonical, &member_keys),
+        verbatim_dominated,
     }
 }
 
@@ -209,11 +230,8 @@ fn canonical_literal_fraction(canonical: Option<&[LeafKey]>) -> f64 {
 /// canonical (first) member. `1.0` for degenerate single-member
 /// clusters; a member whose leaves cannot be resolved contributes `0.0`
 /// — unresolvable content is no evidence of agreement.
-fn cluster_agreement(member_keys: &[Option<Vec<LeafKey>>]) -> f64 {
-    if member_keys.len() < 2 {
-        return 1.0;
-    }
-    if duplicated_member_share(member_keys) >= VERBATIM_MEMBER_SHARE_FLOOR {
+fn cluster_agreement(member_keys: &[Option<Vec<LeafKey>>], verbatim_dominated: bool) -> f64 {
+    if member_keys.len() < 2 || verbatim_dominated {
         return 1.0;
     }
     let canonical = member_keys.first().and_then(Option::as_deref);

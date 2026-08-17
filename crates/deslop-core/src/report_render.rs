@@ -18,7 +18,7 @@ use crate::{
     buckets::{
         bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
         ClusterKind, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, LITERAL_TABLE_MIN_FRACTION,
-        SCAFFOLDING_PROMOTE_MIN_LITERALS, STRUCTURAL_ONLY_MAX_SUPPORT,
+        STRUCTURAL_ONLY_MAX_SUPPORT,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
@@ -367,13 +367,7 @@ fn route_shape_identical(
     } else {
         CONTENT_PROMOTE_FLOOR
     };
-    // A 3+-file family whose canonical member carries no literal
-    // anchors is contract-pinned wiring, however high its
-    // identifier-only agreement — it stays with the scaffolding
-    // routing below ([`SCAFFOLDING_PROMOTE_MIN_LITERALS`]).
-    let contract_pinned_family = is_cross_file_scaffolding(members)
-        && content.literal_fraction < SCAFFOLDING_PROMOTE_MIN_LITERALS;
-    if content.support() >= promote_floor && !contract_pinned_family {
+    if content.support() >= promote_floor {
         return ClusterKind::NearlyIdentical;
     }
     // Literal-dominated families ([CLONE-NOISE-LITERAL-TABLE])
