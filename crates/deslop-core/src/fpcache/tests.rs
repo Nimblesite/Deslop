@@ -295,18 +295,26 @@ fn corrupt_node_lengths_are_rejected_before_any_allocation() {
 }
 
 // [PIPELINE-INCREMENTAL-INTEGRITY] A blob file past the size bound is
-// never read at all — the bound protects the `fs::read` allocation the
-// decode-side checks cannot reach.
+// never read into memory — the bound protects the read allocation the
+// decode-side checks cannot reach — and the oversized file is left on
+// disk untouched for the next write to heal.
 #[test]
 fn an_oversized_blob_file_is_never_read() -> io::Result<()> {
     let tmp = tempfile::tempdir()?;
     let cache = FingerprintCache::open(tmp.path(), "rust", 8)?;
     let path = cache.blob_path(&bytes_hash(SOURCE));
     let file = fs::File::create(&path)?;
-    file.set_len(MAX_BLOB_BYTES.saturating_add(1))?;
+    let oversized = MAX_BLOB_BYTES.saturating_add(1);
+    file.set_len(oversized)?;
     assert!(
         cache.get(SOURCE, registered_file_id()).is_none(),
         "a blob past the size bound must be a miss without being read"
+    );
+    assert_eq!(
+        fs::metadata(&path)?.len(),
+        oversized,
+        "the refused blob must be left exactly as found — a lookup never \
+         mutates the store"
     );
     Ok(())
 }

@@ -107,23 +107,34 @@ pub(super) fn binding_digest(binding: &BlobBinding<'_>, payload: &[u8]) -> [u8; 
     *hasher.finalize().as_bytes()
 }
 
-/// True when the blob at `path` is small enough to read at all. Bounds
-/// the `fs::read` allocation itself — decode-side bounds cannot protect
-/// a read that has already materialised an absurd file. A missing file
-/// is a plain miss.
-pub(super) fn blob_len_admissible(path: &Path) -> bool {
-    match fs::metadata(path) {
-        Ok(meta) if meta.len() <= MAX_BLOB_BYTES => true,
-        Ok(meta) => {
-            tracing::warn!(
-                path = %path.display(),
-                len = meta.len(),
-                "fingerprint cache blob exceeds the size bound — treating as miss",
-            );
-            false
-        }
-        Err(_) => false,
+/// Reads the blob at `path` under a hard [`MAX_BLOB_BYTES`] ceiling, or
+/// `None` for a missing, unreadable, or oversized file — every one a
+/// plain miss. Bounds the read allocation itself; decode-side bounds
+/// cannot protect a read that has already materialised an absurd file.
+///
+/// One handle does both jobs. Sizing from `fs::metadata` and then
+/// calling `fs::read` measures one file and allocates for another: a
+/// second binary sharing the store ([PIPELINE-INCREMENTAL-RETENTION])
+/// can replace or extend the entry in between, and the ceiling the spec
+/// promises would apply only to the stale measurement. Here the length
+/// comes off the opened handle and [`Read::take`] enforces the ceiling
+/// on the read regardless, so a file that grows mid-read yields
+/// truncated bytes that fail the binding digest — a miss, never an
+/// unbounded allocation.
+pub(super) fn read_bounded(path: &Path) -> Option<Vec<u8>> {
+    let file = fs::File::open(path).ok()?;
+    let len = file.metadata().ok()?.len();
+    if len > MAX_BLOB_BYTES {
+        tracing::warn!(
+            path = %path.display(),
+            len,
+            "fingerprint cache blob exceeds the size bound — treating as miss",
+        );
+        return None;
     }
+    let mut bytes = Vec::with_capacity(usize::try_from(len).ok()?);
+    let _read = file.take(MAX_BLOB_BYTES).read_to_end(&mut bytes).ok()?;
+    Some(bytes)
 }
 
 /// Serialises `cached` into the little-endian blob format, bound to

@@ -1,22 +1,30 @@
-//! 🛑 RED PIN — [CLONE-BUCKETS-ROUTING] row 4 is unimplemented outside C#.
+//! [CLONE-BUCKETS-ROUTING] row 4 recall — in every language (gh #390).
 //!
 //! The spec routes `structural ≤ 0.01 ∧ token_jaccard ≥ 0.90` to
-//! `NearlyIdentical` (docs/specs/taxonomy.md, no language condition).
-//! `deslop-core::buckets::classify_signals` has no such arm, so the
-//! triple falls to its else-arm — `LooselySimilar`, which the renderer
-//! hides. `report_render::is_csharp_lsh_type3_near_miss` patches the
-//! missing row for C# members only, so every other language's LSH-only
-//! Type-3 pair — one that passed the `LSH_ONLY_MIN_JACCARD = 0.90` and
+//! `NearlyIdentical` with no language condition. `classify_signals` had
+//! no such arm, so the triple fell to its else-arm — `LooselySimilar`,
+//! which the renderer hides — while
+//! `report_render::is_csharp_lsh_type3_near_miss` patched the missing
+//! row for C# members only. Every other language's LSH-only Type-3 pair,
+//! one that passed the `LSH_ONLY_MIN_JACCARD = 0.90` and
 //! `LSH_ONLY_MIN_NODE_COUNT = 40` survival floors as "real near-miss
-//! duplication" — reports **zero** duplication: a silent false
-//! negative.
+//! duplication", reported **zero** duplication: a silent false negative.
+//! Reproduced (release CLI, `--min-nodes 35 --embeddings off`) as
+//! `clusters_total=0, duplicated_loc=0, clusters_hidden=1` on the Python
+//! pair below. The carve-out is dissolved into the router; this test
+//! pins the recall it owed.
 //!
-//! Reproduced (release CLI, `--min-nodes 35 --embeddings off`): the
-//! Python pair below clusters at `structural=0.0,
-//! token_jaccard=0.9296875`, then renders `clusters_total=0,
-//! duplicated_loc=0, clusters_hidden=1` with the cluster demoted to
-//! `loosely_similar`. This test asserts the spec's routing and fails
-//! until the row is implemented for every language.
+//! **The precision half lives in `issue_331_336_shape_only_saturation.rs`
+//! and this file is its counterweight.** Row 4 admits on token overlap
+//! alone, so it passes through [FUSION-CONTENT-GATE] like every other
+//! shape-saturating route: a framework-mandated declaration family
+//! measures the same anchor-free triple (`structural=0.00,
+//! token_jaccard=0.93` across six distinct Flutter widgets) and is
+//! demoted there on measured content evidence. That gate must not cost
+//! this pair its confidence, so the assertions below pin the *fused*
+//! value at act-now grade, not merely the bucket label — a fix that
+//! bought #331's precision by widening the gate over genuine duplicates
+//! fails here.
 
 mod common;
 
@@ -120,8 +128,16 @@ fn a_python_lsh_only_type3_pair_is_reported_as_nearly_identical() -> Result<()> 
     assert_recall_metrics(&report)
 }
 
+/// The agent-facing act-now line ([FUSED-THRESHOLD]) this pair must
+/// stay at or above: a verbatim statement-reorder clone is duplication
+/// an agent may act on, and [FUSION-CONTENT-GATE] measures real content
+/// agreement here, so the gate that demotes shape-only families
+/// ([CLONE-NOISE-DART-WIDGET-SCAFFOLD], #331) must leave this pair alone.
+const ACT_NOW_FUSED: f64 = 0.85;
+
 /// The pair's exact signal triple: no structural anchor, the measured
-/// token overlap, embeddings off.
+/// token overlap, embeddings off, and a fused confidence the content
+/// gate left at act-now grade.
 fn assert_signal_triple(cluster: &serde_json::Value) {
     let structural = signal(cluster, "structural");
     assert!(
@@ -139,6 +155,13 @@ fn assert_signal_triple(cluster: &serde_json::Value) {
     assert!(
         approx(cosine, 0.0),
         "embeddings are off, so the cosine must be 0.0, got {cosine}: {cluster:#}"
+    );
+    let fused = signal(cluster, "fused");
+    assert!(
+        fused >= ACT_NOW_FUSED,
+        "the content gate must leave a genuine reorder clone at act-now \
+         confidence (>= {ACT_NOW_FUSED}), got {fused} — demoting this pair \
+         is how a #331 precision fix silently costs recall: {cluster:#}"
     );
     let nodes = field(cluster, "canonical_node_count").as_u64().unwrap_or(0);
     assert!(

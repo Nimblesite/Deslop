@@ -105,15 +105,20 @@ fn another_tool_versions_partition_survives_an_under_budget_sweep() -> Result<()
         other_root.display()
     );
     assert_eq!(
-        fs::read(&other_blob).ok().as_ref(),
-        Some(&other_bytes),
+        fs::read(&other_blob).ok(),
+        Some(other_bytes.clone()),
         "the other version's blob must keep its exact bytes: {}",
         other_blob.display()
     );
+    let mut expected = live_before;
+    expected.push(other_bytes);
+    expected.sort();
+    let mut after = blob_bytes(&scan_root)?;
+    after.sort();
     assert_eq!(
-        blob_bytes(&scan_root)?,
-        live_before,
-        "the sweep must leave every live blob byte-identical"
+        after, expected,
+        "the sweep must leave the store exactly as it found it — every live \
+         blob byte-identical and the other version's blob still present"
     );
     assert_log_mentions(&out_dir, SWEEP_LOG, 1, "post-sweep warm")?;
     assert_log_mentions(&out_dir, "other_version_blobs=1", 1, "post-sweep warm")?;
@@ -174,7 +179,7 @@ fn a_disabled_store_pass_never_sweeps_the_store() -> Result<()> {
     let tmp = tempfile::tempdir()?;
     let (scan_root, _cold, _cold_events) =
         seeded_cold_pass(tmp.path(), seed_corpus, SEEDED_MIN_NODES, SEEDED_FILE_COUNT)?;
-    let stale_root = plant_other_version_partition(&scan_root)?;
+    let other_root = plant_other_version_partition(&scan_root)?;
     let blobs_before = blob_bytes(&scan_root)?;
 
     let out_dir = tmp.path().join("disabled");
@@ -185,10 +190,10 @@ fn a_disabled_store_pass_never_sweeps_the_store() -> Result<()> {
     events.assert_store_disabled("disabled pass");
     assert_seeded_corpus(&report, "disabled pass")?;
     assert!(
-        stale_root.exists(),
-        "a disabled-store pass must not sweep: the planted stale partition \
-         must survive at {}",
-        stale_root.display()
+        other_root.exists(),
+        "a disabled-store pass must not sweep: the planted other-version \
+         partition must survive at {}",
+        other_root.display()
     );
     assert_eq!(
         blob_bytes(&scan_root)?,

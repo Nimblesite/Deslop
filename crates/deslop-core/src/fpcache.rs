@@ -26,7 +26,7 @@ use crate::{
     state::FileId,
 };
 
-use blob::{blob_len_admissible, decode, encode, BlobBinding, MAX_BLOB_BYTES};
+use blob::{decode, encode, read_bounded, BlobBinding, MAX_BLOB_BYTES};
 pub use retention::{sweep_store, LiveBlobs};
 
 mod blob;
@@ -111,10 +111,7 @@ impl FingerprintCache {
     pub fn get(&self, source: &[u8], file_id: FileId) -> Option<CachedFile> {
         let source_hash = bytes_hash(source);
         let path = self.blob_path(&source_hash);
-        if !blob_len_admissible(&path) {
-            return None;
-        }
-        let bytes = fs::read(&path).ok()?;
+        let bytes = read_bounded(&path)?;
         match decode(&bytes, &self.binding(&source_hash), file_id) {
             Ok(cached) => Some(cached),
             Err(error) => {
