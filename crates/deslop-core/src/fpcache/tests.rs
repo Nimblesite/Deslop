@@ -10,8 +10,8 @@ use std::path::PathBuf;
 
 use super::{
     blob::{
-        binding_digest, decode, encode, encode_tree, BlobBinding, MAGIC, MAX_BLOB_BYTES,
-        SEMANTIC_EPOCH,
+        binding_digest, decode, encode, encode_tree, read_bounded, BlobBinding, NodeBudget, MAGIC,
+        MAX_BLOB_BYTES, MAX_DECODED_NODES, SEMANTIC_EPOCH,
     },
     *,
 };

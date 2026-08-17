@@ -112,15 +112,24 @@ pub(super) fn binding_digest(binding: &BlobBinding<'_>, payload: &[u8]) -> [u8; 
 /// plain miss. Bounds the read allocation itself; decode-side bounds
 /// cannot protect a read that has already materialised an absurd file.
 ///
-/// One handle does both jobs. Sizing from `fs::metadata` and then
-/// calling `fs::read` measures one file and allocates for another: a
-/// second binary sharing the store ([PIPELINE-INCREMENTAL-RETENTION])
-/// can replace or extend the entry in between, and the ceiling the spec
-/// promises would apply only to the stale measurement. Here the length
-/// comes off the opened handle and [`Read::take`] enforces the ceiling
-/// on the read regardless, so a file that grows mid-read yields
-/// truncated bytes that fail the binding digest — a miss, never an
-/// unbounded allocation.
+/// One handle does all three jobs — measure, bound, read. Sizing from
+/// `fs::metadata` and then calling `fs::read` measures one file and
+/// allocates for another: a second binary sharing the store
+/// ([PIPELINE-INCREMENTAL-RETENTION]) can replace or extend the entry in
+/// between, and the ceiling would then apply only to the stale
+/// measurement.
+///
+/// The read is capped at `len + 1` — the measured length plus a single
+/// sentinel byte — not at [`MAX_BLOB_BYTES`]. Both halves matter. The
+/// sentinel is what makes growth *observable*: reading exactly `len`
+/// bytes cannot distinguish "the whole blob" from "a truncated view of a
+/// file that has since grown", and the truncated view is a prefix whose
+/// trailing bytes were silently dropped. Capping at `len + 1` rather than
+/// the global ceiling is what keeps the allocation exact: the buffer is
+/// reserved once, fallibly, at `len + 1`, and the capped read can never
+/// grow it — whereas reading toward `MAX_BLOB_BYTES` would let a file
+/// that grew by megabytes drive `Vec` reallocation far past the
+/// reservation on its way to being rejected.
 pub(super) fn read_bounded(path: &Path) -> Option<Vec<u8>> {
     let file = fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
@@ -132,23 +141,19 @@ pub(super) fn read_bounded(path: &Path) -> Option<Vec<u8>> {
         );
         return None;
     }
+    let capacity = usize::try_from(len).ok()?.checked_add(1)?;
     let mut bytes = Vec::new();
-    bytes.try_reserve_exact(usize::try_from(len).ok()?).ok()?;
-    // `MAX_BLOB_BYTES + 1`, not `MAX_BLOB_BYTES`: reading exactly the
-    // ceiling cannot distinguish "a blob that fits" from "a truncated
-    // view of one that no longer does", which would hand `decode` a
-    // prefix whose trailing bytes were silently dropped. Reading one byte
-    // past the ceiling makes an over-long file observable, and it is
-    // refused here rather than decoded.
+    bytes.try_reserve_exact(capacity).ok()?;
     let _read = file
-        .take(MAX_BLOB_BYTES.saturating_add(1))
+        .take(len.saturating_add(1))
         .read_to_end(&mut bytes)
         .ok()?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_BLOB_BYTES {
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) != len {
         tracing::warn!(
             path = %path.display(),
-            len = bytes.len(),
-            "fingerprint cache blob grew past the size bound mid-read — treating as miss",
+            expected = len,
+            read = bytes.len(),
+            "fingerprint cache blob changed size mid-read — treating as miss",
         );
         return None;
     }
