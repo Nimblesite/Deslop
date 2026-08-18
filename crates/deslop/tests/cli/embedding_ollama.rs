@@ -56,6 +56,42 @@ fn seed_scan(fixture_name: &str) -> Result<(tempfile::TempDir, PathBuf)> {
 /// mode. The model is the same in every case, so restating the whole
 /// argument list per test is how a flag rename would silently reach only
 /// some of them.
+/// Pins one run's `cache_stats` hit/miss counters. The two-run cache
+/// proofs each asserted the same two counters the same way; Deslop scored
+/// the copies `structural_only` against this repo's own corpus.
+fn assert_cache_counters(
+    json: &serde_json::Value,
+    missing: &str,
+    hits: u64,
+    why_hits: &str,
+    misses: u64,
+    why_misses: &str,
+) -> Result<()> {
+    let stats = object_field(json, "cache_stats", missing)?;
+    assert_eq!(
+        stats.get("hits").and_then(serde_json::Value::as_u64),
+        Some(hits),
+        "{why_hits}"
+    );
+    assert_eq!(
+        stats.get("misses").and_then(serde_json::Value::as_u64),
+        Some(misses),
+        "{why_misses}"
+    );
+    Ok(())
+}
+
+/// One string field of the report's `embedding_provenance` block.
+fn provenance_str<'a>(
+    json: &'a serde_json::Value,
+    missing: &str,
+    key: &str,
+) -> Result<Option<&'a str>> {
+    Ok(object_field(json, "embedding_provenance", missing)?
+        .get(key)
+        .and_then(serde_json::Value::as_str))
+}
+
 fn run_ollama_scan(
     scan_root: &Path,
     output_prefix: &Path,
@@ -262,13 +298,12 @@ fn ollama_auto_mode_populates_provenance_when_reachable() -> Result<()> {
     let out = outputs_under(tmp.path());
     run_ollama_scan(&scan_root, &tmp.path().join("report"), "8", "auto")?;
     let json = load_report_json(&out.json)?;
-    let provenance = object_field(
-        &json,
-        "embedding_provenance",
-        "auto mode with reachable Ollama must populate provenance",
-    )?;
     assert_eq!(
-        provenance.get("provider_id").and_then(|v| v.as_str()),
+        provenance_str(
+            &json,
+            "auto mode with reachable Ollama must populate provenance",
+            "provider_id"
+        )?,
         Some("ollama"),
     );
     Ok(())
@@ -322,9 +357,8 @@ fn ollama_embedding_cache_persists_across_runs() -> Result<()> {
     );
 
     let json = load_report_json(&tmp.path().join("second.json"))?;
-    let provenance = object_field(&json, "embedding_provenance", "second run lost provenance")?;
     assert_eq!(
-        provenance.get("model_id").and_then(|v| v.as_str()),
+        provenance_str(&json, "second run lost provenance", "model_id")?,
         Some("nomic-embed-text"),
     );
     Ok(())
@@ -366,39 +400,25 @@ fn ollama_incremental_plus_embeddings_second_run_hits_both_caches() -> Result<()
     run_ollama_scan(&scan_root, &tmp.path().join("first"), "15", "required")?;
 
     let first_json = load_report_json(&tmp.path().join("first.json"))?;
-    let first_stats = object_field(&first_json, "cache_stats", "first run missing cache_stats")?;
-    assert_eq!(
-        first_stats.get("hits").and_then(serde_json::Value::as_u64),
-        Some(0),
+    assert_cache_counters(
+        &first_json,
+        "first run missing cache_stats",
+        0,
         "first incremental run must be a clean miss",
-    );
-    assert_eq!(
-        first_stats
-            .get("misses")
-            .and_then(serde_json::Value::as_u64),
-        Some(2),
+        2,
         "first incremental run must register both files as misses",
-    );
+    )?;
 
     run_ollama_scan(&scan_root, &tmp.path().join("second"), "15", "required")?;
     let second_json = load_report_json(&tmp.path().join("second.json"))?;
-    let second_stats = object_field(
+    assert_cache_counters(
         &second_json,
-        "cache_stats",
         "second run missing cache_stats",
-    )?;
-    assert_eq!(
-        second_stats.get("hits").and_then(serde_json::Value::as_u64),
-        Some(2),
+        2,
         "second run must hit the fingerprint cache for both files",
-    );
-    assert_eq!(
-        second_stats
-            .get("misses")
-            .and_then(serde_json::Value::as_u64),
-        Some(0),
+        0,
         "second run must have zero fingerprint-cache misses",
-    );
+    )?;
 
     let cluster = find_cross_file_cluster(&second_json, &["Recursive.cs", "Iterative.cs"])
         .ok_or_else(|| anyhow::anyhow!("cached run lost the cross-file cluster"))?;

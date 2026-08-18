@@ -179,13 +179,16 @@ jobs:
       - name: Build
         run: make build
 
-      # Duplication gate ([CI-DESLOP]). Self-hosted: run the release binary
-      # built by the step above against this repo. It reads the ratcheted
-      # [threshold] max_duplication_percent from .deslop.toml and exits 3
-      # (failing CI) the moment repo-wide duplication climbs past it. The
-      # threshold is the single source of truth — never hardcoded here.
+      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
+      # built by the step above against this repo, so the gate is always the
+      # CURRENT detector. It reads the ratcheted [threshold]
+      # max_duplication_percent from .deslop.toml and exits 3 (failing CI) the
+      # moment repo-wide duplication climbs past it. The threshold is the single
+      # source of truth — never hardcoded here. The command lives in `make
+      # dup-gate`, which `make ci` also runs, so a green local run cannot
+      # disagree with this step.
       - name: Duplication gate (deslop)
-        run: ./target/release/deslop . --no-color
+        run: make dup-gate
 
       - name: Deployment manifest and binary gates
         run: make deployment-verify

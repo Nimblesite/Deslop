@@ -2,7 +2,8 @@
 // clusters. Split from report-store.unit.test.ts to honour the 500-line
 // file rule; used by every report-store suite.
 
-import { Report, ReportCluster, RepoMetrics } from "../../types/report";
+import { ReportStore } from "../../reportStore";
+import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
 
 export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
   return {
@@ -55,5 +56,37 @@ export function cluster(
     occurrences_truncated: false,
     summary: "",
     interpretation: "",
+  };
+}
+
+/**
+ * A store already carrying one snapshot. Suites opened with the same
+ * `new ReportStore()` + `setSnapshot(emptyReport({ clusters }), gen)`
+ * pair; Deslop scored the copies against this repo's own corpus. Suites
+ * that must observe the seeding `onDidChange` still wire the listener
+ * themselves before calling `setSnapshot`.
+ */
+export function seededStore(clusters: ReportCluster[], generation = 1): ReportStore {
+  const store = new ReportStore();
+  store.setSnapshot(emptyReport({ clusters }), generation);
+  return store;
+}
+
+/**
+ * A generation 1 -> 2 delta carrying nothing. Overrides name only what a
+ * test is actually asserting, the same shape `emptyReport` already uses,
+ * so a new wire field is added in one place rather than at every literal.
+ */
+export function delta(overrides: Partial<ReportDelta> = {}): ReportDelta {
+  return {
+    from_generation: 1,
+    to_generation: 2,
+    clusters_added: [],
+    clusters_removed: [],
+    clusters_updated: [],
+    metrics: metrics(),
+    cache_stats: { hits: 0, misses: 0 },
+    tool_version: "tool-v1",
+    ...overrides,
   };
 }

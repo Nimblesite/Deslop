@@ -6,17 +6,18 @@
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { LiveBubble } from "../../bubble/live";
-import { ReportStore } from "../../reportStore";
 import { FUSED_THRESHOLD } from "../../types/report";
 import {
   bubbleCluster,
   bubbleFixture,
+  openLiveDocument,
   probeCluster as cluster,
   probeReport as report,
+  renderFullConfidenceBubble,
+  retractCluster,
   setBubbleMode as setMode,
   span,
 } from "./bubble.helpers";
-import { repoMetrics } from "./report.helpers";
 
 suite("LiveBubble render", () => {
   test("inline mode renders the bubble decoration", async () => {
@@ -169,12 +170,8 @@ suite("LiveBubble render", () => {
 
       // Once a snapshot lands the very same probe renders.
       store.setSnapshot(report(), 0);
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
-      assert.ok(
-        capture.visible() !== undefined,
-        "the identical probe must render once a report exists",
-      );
-      assert.match(capture.visible() ?? "", /Identical code/, "and carry its bucket title");
+      const visible = renderFullConfidenceBubble(capture, bubble, 0, "c-a");
+      assert.match(visible, /Identical code/, "and carry its bucket title");
     } finally {
       bubble.dispose();
     }
@@ -183,8 +180,7 @@ suite("LiveBubble render", () => {
   test("render clears the bubble when no cluster passes the threshold", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
-      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+      renderFullConfidenceBubble(capture, bubble, 0, "c-a");
 
       // The bucket is load-bearing: an `identical` cluster is byte-proven and
       // its `bounded_fused` is ≥ 0.99 by construction, so the engine cannot
@@ -222,25 +218,10 @@ suite("LiveBubble render", () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
-      assert.ok(
-        capture.visible() !== undefined,
-        "fixture must start with an active inline bubble",
-      );
-      assert.match(capture.visible() ?? "", /Identical code/, "seeded at full confidence");
+      const visible = renderFullConfidenceBubble(capture, bubble, 0, "c-a");
+      assert.match(visible, /Identical code/, "seeded at full confidence");
 
-      store.applyDelta({
-        from_generation: 1,
-        to_generation: 2,
-        clusters_added: [],
-        clusters_removed: ["c-a"],
-        clusters_updated: [],
-        metrics: repoMetrics({
-          analysed_loc: 10,
-        }),
-        cache_stats: { hits: 0, misses: 0 },
-        tool_version: "v2",
-      });
+      retractCluster(store, "c-a");
 
       assert.equal(
         capture.visible(),
@@ -267,19 +248,9 @@ suite("LiveBubble render", () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-a", 10, 0.95)]);
-      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+      renderFullConfidenceBubble(capture, bubble, 0, "c-a");
 
-      store.applyDelta({
-        from_generation: 1,
-        to_generation: 2,
-        clusters_added: [],
-        clusters_removed: ["c-a"],
-        clusters_updated: [],
-        metrics: repoMetrics({ analysed_loc: 10 }),
-        cache_stats: { hits: 0, misses: 0 },
-        tool_version: "v2",
-      });
+      retractCluster(store, "c-a");
       assert.equal(capture.visible(), undefined, "the delta must clear the bubble");
 
       bubble.render(capture.editor, span(6), [cluster("c-a", 10, 0.95)]);
@@ -328,11 +299,7 @@ suite("LiveBubble render", () => {
   test("deslop.bubble.dismissCluster command hides the dismissed cluster from future renders", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-dismiss", 10, 0.95)]);
-      assert.ok(
-        capture.visible() !== undefined,
-        "a full-confidence cluster must bubble before it is dismissed",
-      );
+      renderFullConfidenceBubble(capture, bubble, 0, "c-dismiss");
 
       bubble.dismissCluster("c-dismiss");
       // The dismissedClusters filter drops it before the sort step, so
@@ -345,12 +312,8 @@ suite("LiveBubble render", () => {
       );
 
       // Dismissal is per-cluster, not a global mute.
-      bubble.render(capture.editor, span(12), [cluster("c-other", 10, 0.95)]);
-      assert.ok(
-        capture.visible() !== undefined,
-        "a different cluster at the same confidence must still render",
-      );
-      assert.match(capture.visible() ?? "", /Identical code/, "and keep its bucket title");
+      const visible = renderFullConfidenceBubble(capture, bubble, 12, "c-other");
+      assert.match(visible, /Identical code/, "and keep its bucket title");
     } finally {
       bubble.dispose();
     }
@@ -359,8 +322,7 @@ suite("LiveBubble render", () => {
   test("deslop.bubble.dismiss command clears the active bubble", async () => {
     const { capture, bubble } = await bubbleFixture();
     try {
-      bubble.render(capture.editor, span(0), [cluster("c-clear", 10, 0.95)]);
-      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+      renderFullConfidenceBubble(capture, bubble, 0, "c-clear");
 
       bubble.dismiss();
       assert.equal(
@@ -370,24 +332,14 @@ suite("LiveBubble render", () => {
       );
 
       // Plain dismiss is not sticky — it clears, it does not blacklist.
-      bubble.render(capture.editor, span(6), [cluster("c-clear", 10, 0.95)]);
-      assert.ok(
-        capture.visible() !== undefined,
-        "plain dismiss must not blacklist the cluster from later probes",
-      );
+      renderFullConfidenceBubble(capture, bubble, 6, "c-clear");
     } finally {
       bubble.dispose();
     }
   });
 
   test("inlay hints provider emits a Type hint after render is populated", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "line one\nline two\n",
-      language: "csharp",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
+    const { doc, editor, store } = await openLiveDocument("line one\nline two\n");
     const bubble = new LiveBubble(store, () => undefined);
     try {
       const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 4));

@@ -7,25 +7,18 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import type { LanguageClient } from "vscode-languageclient/node";
 import { LiveBubble } from "../../bubble/live";
-import { ReportStore } from "../../reportStore";
 import {
   capturingEditor,
+  openLiveDocument,
   probeCluster as cluster,
-  probeReport as report,
-  span,
+  renderFullConfidenceBubble,
 } from "./bubble.helpers";
 
 suite("LiveBubble onEdit path", () => {
   test("buffer edit path reaches probe and the LSP request is dispatched with byte offsets", async () => {
     // Exercises onEdit → debounced probe → client.sendRequest → render.
     // Covers utf8ByteOffset and the AbortController timeout branch.
-    const doc = await vscode.workspace.openTextDocument({
-      content: "abc\n",
-      language: "csharp",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
+    const { editor, store } = await openLiveDocument("abc\n");
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.enabled", true, vscode.ConfigurationTarget.Workspace);
     const requests: { method: string; params: unknown }[] = [];
@@ -62,13 +55,7 @@ suite("LiveBubble onEdit path", () => {
   });
 
   test("probe rejection clears the bubble without propagating the error", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "xyz\n",
-      language: "csharp",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
+    const { editor, store } = await openLiveDocument("xyz\n");
     const fakeClient = {
       sendRequest: () => Promise.reject(new Error("probe boom")),
     } as unknown as LanguageClient;
@@ -77,8 +64,7 @@ suite("LiveBubble onEdit path", () => {
     try {
       // Seed an active bubble so we can observe the rejection → clearBubble path
       // exercise the `active.editor` branch of clearBubble.
-      bubble.render(capture.editor, span(0), [cluster("c-seed", 10, 0.95)]);
-      assert.ok(capture.visible() !== undefined, "fixture must start with a visible bubble");
+      renderFullConfidenceBubble(capture, bubble, 0, "c-seed");
 
       await editor.edit((builder) => builder.insert(new vscode.Position(0, 3), "d"));
       await new Promise<void>((resolve) => {
@@ -87,13 +73,9 @@ suite("LiveBubble onEdit path", () => {
 
       // A rejected probe must not poison the surface: the next successful
       // render still paints, at unchanged confidence.
-      bubble.render(capture.editor, span(6), [cluster("c-after", 10, 0.95)]);
-      assert.ok(
-        capture.visible() !== undefined,
-        "a rejected probe must not disable later renders",
-      );
+      const visible = renderFullConfidenceBubble(capture, bubble, 6, "c-after");
       assert.match(
-        capture.visible() ?? "",
+        visible,
         /Identical code/,
         "the recovered bubble keeps its bucket title",
       );
@@ -103,13 +85,7 @@ suite("LiveBubble onEdit path", () => {
   });
 
   test("live bubble disabled via config short-circuits onEdit before probe", async () => {
-    const doc = await vscode.workspace.openTextDocument({
-      content: "pqr\n",
-      language: "csharp",
-    });
-    const editor = await vscode.window.showTextDocument(doc);
-    const store = new ReportStore();
-    store.setSnapshot(report(), 0);
+    const { editor, store } = await openLiveDocument("pqr\n");
     const cfg = vscode.workspace.getConfiguration("deslop");
     await cfg.update("liveBubble.enabled", false, vscode.ConfigurationTarget.Workspace);
     const calls: number[] = [];

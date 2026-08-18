@@ -15,7 +15,7 @@ import {
 } from "../../extension";
 import { wireNotifications } from "../../notifications";
 import { ReportStore } from "../../reportStore";
-import { repoMetrics } from "./report.helpers";
+import { emptyReport, repoMetrics } from "./report.helpers";
 import {
   BundledBinaryMissingError,
   UnsupportedPlatformError,
@@ -235,16 +235,10 @@ suite("extension internals", () => {
       },
       sendRequest: (name: string) => {
         requests.push(name);
-        return Promise.resolve({
+        return Promise.resolve(emptyReport({
           tool_version: "v",
-          min_nodes: 30,
           files_analysed: 7,
-          clusters_hidden: 0,
-          cache_stats: { hits: 0, misses: 0 },
           metrics: repoMetrics(),
-          schema_doc: "",
-          action_hints: [],
-          boilerplate_hints: [],
           embedding_provenance: {
             provider_id: "ollama",
             model_id: "nomic-embed-text",
@@ -254,8 +248,7 @@ suite("extension internals", () => {
             indexed_subtrees: 1,
             failed_subtrees: 0,
           },
-          clusters: [],
-        });
+        }));
       },
     } as unknown as LanguageClient;
     const store = new ReportStore();
@@ -289,19 +282,11 @@ suite("extension internals", () => {
   test("seedInitialReport stores the returned snapshot", async () => {
     const client = {
       sendRequest: () =>
-        Promise.resolve({
+        Promise.resolve(emptyReport({
           tool_version: "v",
-          min_nodes: 30,
           files_analysed: 2,
-          clusters_hidden: 0,
-          cache_stats: { hits: 0, misses: 0 },
           metrics: repoMetrics(),
-          schema_doc: "",
-          action_hints: [],
-          boilerplate_hints: [],
-          embedding_provenance: undefined,
-          clusters: [],
-        }),
+        })),
     } as unknown as LanguageClient;
     const store = new ReportStore();
     await seedInitialReport(client, store);

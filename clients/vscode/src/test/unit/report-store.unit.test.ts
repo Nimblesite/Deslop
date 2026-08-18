@@ -3,10 +3,30 @@
 
 import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
-import { ReportDelta } from "../../types/report";
+import { Report, ReportDelta } from "../../types/report";
 
-import { cluster, emptyReport, metrics, occurrence } from "./report-store.helpers";
+import { cluster, delta, emptyReport, metrics, occurrence } from "./report-store.helpers";
 
+
+/** The recomputed metrics every applyDelta case asserts against. */
+const DELTA_METRICS = metrics({
+  analysed_loc: 9367,
+  duplicated_loc: 1046,
+  duplication_percent: 11.2,
+});
+
+/**
+ * Applies one delta and returns the resulting report. Every applyDelta
+ * case respelled the same apply-then-assert-it-exists preamble; Deslop
+ * scored the copies against this repo's own corpus. The `assert.ok` also
+ * narrows `Report | undefined` for the caller's own assertions.
+ */
+function applyAndRead(store: ReportStore, overrides: Partial<ReportDelta>): Report {
+  store.applyDelta(delta(overrides));
+  const out = store.current.report;
+  assert.ok(out, "report must exist after applyDelta");
+  return out;
+}
 
 suite("ReportStore", () => {
   test("setSnapshot fires onDidChange with the stored state", () => {
@@ -100,17 +120,13 @@ suite("ReportStore", () => {
     store.onDidChange(() => {
       fired += 1;
     });
-    const delta: ReportDelta = {
-      from_generation: 0,
-      to_generation: 1,
-      clusters_added: [],
-      clusters_removed: [],
-      clusters_updated: [],
-      metrics: metrics(),
-      cache_stats: { hits: 0, misses: 0 },
-      tool_version: "v",
-    };
-    store.applyDelta(delta);
+    store.applyDelta(
+      delta({
+        from_generation: 0,
+        to_generation: 1,
+        tool_version: "v",
+      }),
+    );
     assert.equal(fired, 0);
   });
 
@@ -119,17 +135,15 @@ suite("ReportStore", () => {
     const a = cluster("a", 1);
     const b = cluster("b", 2);
     store.setSnapshot(emptyReport({ clusters: [a, b] }), 1);
-    const delta: ReportDelta = {
-      from_generation: 1,
-      to_generation: 2,
-      clusters_added: [cluster("c", 10)],
-      clusters_removed: ["a"],
-      clusters_updated: [cluster("b", 5)],
-      metrics: metrics(),
-      cache_stats: { hits: 3, misses: 4 },
-      tool_version: "v2",
-    };
-    store.applyDelta(delta);
+    store.applyDelta(
+      delta({
+        clusters_added: [cluster("c", 10)],
+        clusters_removed: ["a"],
+        clusters_updated: [cluster("b", 5)],
+        cache_stats: { hits: 3, misses: 4 },
+        tool_version: "v2",
+      }),
+    );
     const out = store.current.report;
     assert.ok(out, "report must exist after applyDelta");
     assert.deepEqual(
@@ -154,19 +168,7 @@ suite("ReportStore", () => {
       }),
       1,
     );
-    const delta: ReportDelta = {
-      from_generation: 1,
-      to_generation: 2,
-      clusters_added: [],
-      clusters_removed: [],
-      clusters_updated: [],
-      metrics: metrics({ analysed_loc: 9367, duplicated_loc: 1046, duplication_percent: 11.2 }),
-      cache_stats: { hits: 0, misses: 0 },
-      tool_version: "tool-v1",
-    };
-    store.applyDelta(delta);
-    const out = store.current.report;
-    assert.ok(out, "report must exist after applyDelta");
+    const out = applyAndRead(store, { metrics: DELTA_METRICS });
     assert.equal(out.metrics.duplication_percent, 11.2, "headline percent must follow the delta");
     assert.equal(out.metrics.analysed_loc, 9367, "analysed LOC must follow the delta");
     assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta");
@@ -184,24 +186,15 @@ suite("ReportStore", () => {
     const store = new ReportStore();
     store.setSnapshot(emptyReport(), 1);
     assert.equal(store.current.report?.metrics.duplicated_loc, 0, "seed starts clean");
-    const delta: ReportDelta = {
-      from_generation: 1,
-      to_generation: 2,
+    const out = applyAndRead(store, {
       clusters_added: [
         cluster("71a9ee9", 6191, [
           occurrence("crates/osprey-codegen/src/collections.rs", 0, 10),
           occurrence("crates/osprey-codegen/src/strings.rs", 0, 10),
         ]),
       ],
-      clusters_removed: [],
-      clusters_updated: [],
-      metrics: metrics({ analysed_loc: 9367, duplicated_loc: 1046, duplication_percent: 11.2 }),
-      cache_stats: { hits: 0, misses: 0 },
-      tool_version: "tool-v1",
-    };
-    store.applyDelta(delta);
-    const out = store.current.report;
-    assert.ok(out, "report must exist after applyDelta");
+      metrics: DELTA_METRICS,
+    });
     assert.equal(out.metrics.duplicated_loc, 1046, "duplicated LOC must follow the delta off zero");
     assert.equal(out.metrics.duplication_percent, 11.2, "headline percent must reflect the delta");
     assert.equal(out.clusters.length, 1, "the delta's cluster must populate Top Offenders");

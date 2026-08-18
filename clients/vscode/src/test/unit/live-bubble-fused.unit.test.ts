@@ -8,14 +8,13 @@
 // These tests pin what the user must see on the live surface as a result.
 
 import * as assert from "node:assert/strict";
-import { LiveBubble, signalStrip } from "../../bubble/live";
-import { ReportStore } from "../../reportStore";
+import { signalStrip } from "../../bubble/live";
 import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
 import {
   BubbleCapture,
   assertBubbleShows,
   bubbleCluster,
-  capturingEditor,
+  bubbleFixture,
   setBubbleMode,
   span,
 } from "./bubble.helpers";
@@ -61,11 +60,9 @@ suite("LiveBubble fused confidence", () => {
       token: 1,
       occurrenceTotal: 3,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([near]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([near]),
+    });
 
     try {
       // 1. The user's cursor lands on the near miss.
@@ -141,11 +138,9 @@ suite("LiveBubble fused confidence", () => {
       structural: 1,
       token: 1,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([shapeOnly, proven]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([shapeOnly, proven]),
+    });
 
     try {
       // 1. The probe returns both; the heavier demoted family must lose.
@@ -198,11 +193,9 @@ suite("LiveBubble fused confidence", () => {
       token: 0.3,
     });
     const staleProbe = bubbleCluster("c-x", 50, 0.99, { bucket: "identical" });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([demotedInReport]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { store, capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([demotedInReport]),
+    });
 
     try {
       // 1. An over-confident probe cannot override a demoted report entry.
@@ -347,11 +340,9 @@ suite("LiveBubble fused confidence", () => {
       structural: 0.4,
       token: 0.9,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([atCutoff, underCutoff]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([atCutoff, underCutoff]),
+    });
 
     try {
       // 1. Just under the cutoff: nothing.

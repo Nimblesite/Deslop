@@ -36,11 +36,12 @@ fn a_curated_type2_pair_reported_and_vouched_passes() {
 fn a_missing_curated_type2_pair_is_a_false_negative() {
     let elsewhere = ["src/other.ts", "src/else.ts"];
     let failures = judge_spanning("nearly_identical", 1.0, 1.0, &elsewhere);
-    assert_eq!(failures.len(), 1, "an unreported curated pair must fail");
-    assert_eq!(only_check(&failures), Some("type2_recall"));
-    assert!(
-        detail_mentions(&failures, "src/a.ts"),
-        "the detail names the missed pair: {failures:?}"
+    assert_only_failure(
+        &failures,
+        "type2_recall",
+        "an unreported curated pair must fail",
+        "src/a.ts",
+        "the detail names the missed pair",
     );
 }
 
@@ -50,11 +51,12 @@ fn a_curated_pair_found_but_demoted_is_a_gate_failure() {
     // user is told to verify scaffolding instead of acting on a proven
     // rename. Recall is about what the report *claims*, not what it lists.
     let failures = judge_spanning("structural_only", 1.0, 0.3, &PAIR);
-    assert_eq!(failures.len(), 1, "a demoted curated pair must fail");
-    assert_eq!(only_check(&failures), Some("type2_recall"));
-    assert!(
-        detail_mentions(&failures, "demoted"),
-        "the detail says the gate failed to vouch: {failures:?}"
+    assert_only_failure(
+        &failures,
+        "type2_recall",
+        "a demoted curated pair must fail",
+        "demoted",
+        "the detail says the gate failed to vouch",
     );
 }
 
@@ -75,11 +77,12 @@ fn a_curated_pair_whose_own_occurrence_is_hidden_is_not_recall() {
     // is suppressed, so the user never sees the pair the entry proves is
     // there. Recall is what the report *shows*, not what it contains.
     let failures = judge(&[with_hidden(&["src/a.ts", "src/c.ts"], &["src/b.ts"])]);
-    assert_eq!(failures.len(), 1, "a suppressed curated side must fail");
-    assert_eq!(only_check(&failures), Some("type2_recall"));
-    assert!(
-        detail_mentions(&failures, "hidden"),
-        "the detail must name suppression as a cause: {failures:?}"
+    assert_only_failure(
+        &failures,
+        "type2_recall",
+        "a suppressed curated side must fail",
+        "hidden",
+        "the detail must name suppression as a cause",
     );
 }
 

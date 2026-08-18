@@ -10,6 +10,7 @@ import { LanguageClient, State } from "vscode-languageclient/node";
 import { ReportStore } from "../../reportStore";
 import { refreshAfterChange, wireSessionReset } from "../../notifications";
 import { Report, ReportCluster } from "../../types/report";
+import { emptyReport } from "./report.helpers";
 
 type StateChange = { oldState: State; newState: State };
 
@@ -47,12 +48,9 @@ function cluster(id: string, path: string): ReportCluster {
 }
 
 function report(clusterId: string, path: string): Report {
-  return {
+  return emptyReport({
     tool_version: "tool-v1",
-    min_nodes: 30,
     files_analysed: 1,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
     metrics: {
       analysed_loc: 100,
       duplicated_loc: 10,
@@ -62,12 +60,8 @@ function report(clusterId: string, path: string): Report {
       threshold: { percent: 0, breached: false, source: "none" },
       per_file: [],
     },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
     clusters: [cluster(clusterId, path)],
-  } as unknown as Report;
+  }) as unknown as Report;
 }
 
 const running: StateChange = { oldState: State.Starting, newState: State.Running };

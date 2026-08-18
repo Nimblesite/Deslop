@@ -8,13 +8,11 @@
 // and the sequence does not.
 
 import * as assert from "node:assert/strict";
-import { LiveBubble } from "../../bubble/live";
-import { ReportStore } from "../../reportStore";
 import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
 import {
   assertBubbleShows,
   bubbleCluster,
-  capturingEditor,
+  bubbleFixture,
   setBubbleMode,
   span,
 } from "./bubble.helpers";
@@ -44,11 +42,9 @@ suite("LiveBubble journeys", () => {
   test("a rescan that changes confidence changes what the live surface offers", async () => {
     const proven = provenClone("c-1", 0.9);
     const family = shapeFamily("c-2");
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([family, proven]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { store, capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([family, proven]),
+    });
 
     try {
       // 1. Cursor on the proven clone: it is offered, in full.
@@ -109,11 +105,9 @@ suite("LiveBubble journeys", () => {
 
   test("mode switching never changes the engine's verdict, only its presentation", async () => {
     const proven = provenClone("c-mode", 0.9);
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([proven]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([proven]),
+    });
 
     try {
       // 1. Inline: title, count, hover, no ghost furniture.
@@ -159,11 +153,10 @@ suite("LiveBubble journeys", () => {
       bucket: "identical",
       occurrenceTotal: 2,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([first, second]), 1);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { store, capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([first, second]),
+      generation: 1,
+    });
 
     try {
       // 1. Both clusters are offerable to begin with.

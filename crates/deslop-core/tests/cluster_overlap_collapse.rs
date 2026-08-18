@@ -51,6 +51,28 @@ fn ranked(members: &[Fingerprint]) -> Vec<Cluster> {
     build_ranked_fused_clusters(members, &signatures, &vectors, &fused)
 }
 
+/// One cluster's member byte ranges, in published order. Four call sites
+/// respelled this same `members.iter().map(..).collect()` chain; Deslop
+/// scored the copies `identical`/`nearly_identical` against this repo's
+/// own corpus, and a divergent respelling would have meant two tests
+/// disagreeing about what "the published range" is.
+fn member_ranges(cluster: &Cluster) -> Vec<(usize, usize)> {
+    cluster
+        .members
+        .iter()
+        .map(|found| (found.byte_range.start, found.byte_range.end))
+        .collect()
+}
+
+/// One surviving discovery edge between two fingerprint indices.
+fn edge(left: usize, right: usize, strength: f64) -> FusedEdge {
+    FusedEdge {
+        left,
+        right,
+        strength,
+    }
+}
+
 /// The occurrence byte ranges of the single published cluster.
 fn occurrence_ranges(members: &[Fingerprint]) -> Vec<(usize, usize)> {
     let clusters = ranked(members);
@@ -59,16 +81,16 @@ fn occurrence_ranges(members: &[Fingerprint]) -> Vec<(usize, usize)> {
         1,
         "one fused group publishes one cluster, got {clusters:#?}"
     );
-    clusters
-        .first()
-        .map(|cluster| {
-            cluster
-                .members
-                .iter()
-                .map(|found| (found.byte_range.start, found.byte_range.end))
-                .collect()
-        })
-        .unwrap_or_default()
+    clusters.first().map(member_ranges).unwrap_or_default()
+}
+
+/// Asserts the occurrence ranges the collapse publishes for `members`.
+/// Four cases respelled the same bind-then-compare pair; Deslop scored
+/// the copies against this repo's own corpus. The observed ranges stay in
+/// the failure message, so a red test still names what it actually got.
+fn assert_occurrence_ranges(members: &[Fingerprint], expected: &[(usize, usize)], why: &str) {
+    let ranges = occurrence_ranges(members);
+    assert_eq!(ranges.as_slice(), expected, "{why}, got {ranges:?}");
 }
 
 /// Two files, one of which carries a transitively-overlapping run.
@@ -120,16 +142,15 @@ fn a_transitively_overlapping_run_collapses_to_one_occurrence() {
 #[test]
 fn the_widest_window_of_a_run_represents_it_regardless_of_emission_order() {
     let (alpha, beta) = two_files();
-    let ranges = occurrence_ranges(&[
-        member(alpha, 0, 40),
-        member(alpha, 30, 60),
-        member(alpha, 20, 200),
-        member(beta, 0, 200),
-    ]);
-    assert_eq!(
-        ranges,
-        vec![(20, 200), (0, 200)],
-        "the 180-byte window represents the run, got {ranges:?}"
+    assert_occurrence_ranges(
+        &[
+            member(alpha, 0, 40),
+            member(alpha, 30, 60),
+            member(alpha, 20, 200),
+            member(beta, 0, 200),
+        ],
+        &[(20, 200), (0, 200)],
+        "the 180-byte window represents the run",
     );
 }
 
@@ -139,16 +160,14 @@ fn the_widest_window_of_a_run_represents_it_regardless_of_emission_order() {
 #[test]
 fn disjoint_windows_in_one_file_stay_separate_occurrences() {
     let (alpha, beta) = two_files();
-    let ranges = occurrence_ranges(&[
-        member(alpha, 0, 100),
-        member(alpha, 200, 300),
-        member(beta, 0, 100),
-    ]);
-    assert_eq!(
-        ranges,
-        vec![(0, 100), (200, 300), (0, 100)],
-        "two disjoint alpha windows and one beta window are three locations, \
-         got {ranges:?}"
+    assert_occurrence_ranges(
+        &[
+            member(alpha, 0, 100),
+            member(alpha, 200, 300),
+            member(beta, 0, 100),
+        ],
+        &[(0, 100), (200, 300), (0, 100)],
+        "two disjoint alpha windows and one beta window are three locations,",
     );
 }
 
@@ -171,30 +190,10 @@ fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
     let vectors: HashMap<usize, Vec<f32>> = HashMap::new();
     let window_wins = [FusedCluster {
         members: vec![0, 1, 2],
-        edges: vec![
-            FusedEdge {
-                left: 0,
-                right: 2,
-                strength: 0.93,
-            },
-            FusedEdge {
-                left: 1,
-                right: 2,
-                strength: 1.0,
-            },
-        ],
+        edges: vec![edge(0, 2, 0.93), edge(1, 2, 1.0)],
     }];
     let clusters = build_ranked_fused_clusters(&members, &signatures, &vectors, &window_wins);
-    let ranges: Vec<Vec<(usize, usize)>> = clusters
-        .iter()
-        .map(|cluster| {
-            cluster
-                .members
-                .iter()
-                .map(|found| (found.byte_range.start, found.byte_range.end))
-                .collect()
-        })
-        .collect();
+    let ranges: Vec<Vec<(usize, usize)>> = clusters.iter().map(member_ranges).collect();
     assert_eq!(
         ranges,
         vec![vec![(10, 150), (10, 150)]],
@@ -203,29 +202,10 @@ fn the_strongest_cross_file_edge_outranks_width_in_a_run() {
 
     let root_wins = [FusedCluster {
         members: vec![0, 1, 2],
-        edges: vec![
-            FusedEdge {
-                left: 0,
-                right: 2,
-                strength: 1.0,
-            },
-            FusedEdge {
-                left: 1,
-                right: 2,
-                strength: 0.93,
-            },
-        ],
+        edges: vec![edge(0, 2, 1.0), edge(1, 2, 0.93)],
     }];
     let clusters = build_ranked_fused_clusters(&members, &signatures, &vectors, &root_wins);
-    let published: Vec<(usize, usize)> = clusters
-        .iter()
-        .flat_map(|cluster| {
-            cluster
-                .members
-                .iter()
-                .map(|found| (found.byte_range.start, found.byte_range.end))
-        })
-        .collect();
+    let published: Vec<(usize, usize)> = clusters.iter().flat_map(member_ranges).collect();
     assert_eq!(
         published,
         vec![(0, 200), (10, 150)],

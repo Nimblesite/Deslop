@@ -66,6 +66,22 @@ function legacyName(): string {
   return ["Verd", "ict"].join("");
 }
 
+/**
+ * Asserts `resolveBucket` hands back the engine's own label for a signal
+ * triple. Each [CLONE-BUCKETS-ROUTING] row respelled the same
+ * build-cluster / resolve / compare shape; Deslop scored the copies
+ * against this repo's own corpus. The row's name and comment stay on the
+ * `test(..)` that carries them, so what each row proves is unchanged.
+ */
+function assertCarriesBucket(
+  bucket: ReportCluster["bucket"],
+  structural: number,
+  token: number,
+  embedding: number,
+): void {
+  assert.equal(resolveBucket(cluster({ bucket, signals: signals(structural, token, embedding) })), bucket);
+}
+
 suite("report schema helpers", () => {
   test("FUSED_THRESHOLD is 0.85", () => {
     assert.equal(FUSED_THRESHOLD, 0.85);
@@ -99,17 +115,11 @@ suite("report schema helpers", () => {
   // five previously asserted the *defective* contract and are inverted
   // here; both inversions are called out on the row that carries them.
   test("resolveBucket carries the engine's identical verdict", () => {
-    assert.equal(
-      resolveBucket(cluster({ bucket: "identical", signals: signals(1.0, 1.0, 0) })),
-      "identical",
-    );
+    assertCarriesBucket("identical", 1.0, 1.0, 0);
   });
 
   test("resolveBucket carries the engine's same_behavior verdict", () => {
-    assert.equal(
-      resolveBucket(cluster({ bucket: "same_behavior", signals: signals(0.2, 0.3, 0.9) })),
-      "same_behavior",
-    );
+    assertCarriesBucket("same_behavior", 0.2, 0.3, 0.9);
   });
 
   // ⚠️ INVERTED. This row used to assert `nearly_identical` for
@@ -133,10 +143,7 @@ suite("report schema helpers", () => {
   });
 
   test("resolveBucket carries the engine's fused-family near-miss verdict", () => {
-    assert.equal(
-      resolveBucket(cluster({ bucket: "nearly_identical", signals: signals(0.4, 0.96, 0) })),
-      "nearly_identical",
-    );
+    assertCarriesBucket("nearly_identical", 0.4, 0.96, 0);
   });
 
   test("resolveBucket carries the engine's loosely_similar verdict", () => {

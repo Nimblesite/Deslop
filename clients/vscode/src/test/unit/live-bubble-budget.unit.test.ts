@@ -10,7 +10,7 @@ import {
   bubbleFixture,
   deferredProbeClient,
   editAt,
-  probeCluster,
+  resolveProbe,
 } from "./bubble.helpers";
 import { BudgetScheduler } from "../../bubble/live";
 
@@ -46,15 +46,8 @@ suite("LiveBubble probe budget deadline", () => {
       assert.equal(deadlines[0]?.ms, 250, "the budget is the specified 250 ms");
 
       deadlines[0]?.expire();
-      assert.equal(
-        requests[0]?.token.isCancellationRequested,
-        true,
-        "the deadline still cancels so a compliant server stops working",
-      );
-
       // The server ignores the cancellation and answers anyway.
-      requests[0]?.resolve([probeCluster("c-a", 10, 0.95)]);
-      await probe;
+      await resolveProbe(requests[0], probe, true);
       assert.equal(
         capture.visible(),
         undefined,
@@ -71,8 +64,7 @@ suite("LiveBubble probe budget deadline", () => {
     const { capture, bubble } = await bubbleFixture({ generation: 1, client, budget: scheduler });
     try {
       const probeA = bubble.probe(capture.editor, editAt(0, "aaaa"));
-      requests[0]?.resolve([probeCluster("c-a", 10, 0.95)]);
-      await probeA;
+      await resolveProbe(requests[0], probeA);
       const rendered = capture.visible();
       assert.ok(rendered !== undefined, "the in-budget probe must render its bubble");
       assert.match(rendered ?? "", /Identical code/, "the bubble carries the bucket title");
@@ -97,8 +89,7 @@ suite("LiveBubble probe budget deadline", () => {
     const { capture, bubble } = await bubbleFixture({ generation: 1, client, budget: scheduler });
     try {
       const probe = bubble.probe(capture.editor, editAt(0, "aaaa"));
-      requests[0]?.resolve([probeCluster("c-a", 10, 0.95)]);
-      await probe;
+      await resolveProbe(requests[0], probe);
       assert.match(
         capture.visible() ?? "",
         /Identical code/,

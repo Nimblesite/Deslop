@@ -71,6 +71,31 @@ pub(crate) struct LangCase {
 }
 
 impl LangCase {
+    /// One row of [`MULTILANG_CASES`], positional by design. Six
+    /// languages each respelling the same seven field names cost 45
+    /// redundant lines that Deslop scored `structural_only` against
+    /// this repo's own corpus; the field docs above stay the single
+    /// place a reader learns what each position means.
+    const fn row(
+        language: &'static str,
+        alpha: &'static str,
+        beta: &'static str,
+        cluster_id: &'static str,
+        nodes: u64,
+        alpha_span: OccurrenceSpan,
+        beta_span: OccurrenceSpan,
+    ) -> Self {
+        Self {
+            language,
+            alpha,
+            beta,
+            cluster_id,
+            nodes,
+            alpha_span,
+            beta_span,
+        }
+    }
+
     /// The pair as the `&[&str]` the cluster lookups take.
     pub(crate) fn files(&self) -> [&'static str; 2] {
         [self.alpha, self.beta]
@@ -89,60 +114,60 @@ impl LangCase {
 /// the shared body while the whole-file `__file__` nodes stay distinct
 /// and no file-level cluster forms.
 pub(crate) const MULTILANG_CASES: &[LangCase] = &[
-    LangCase {
-        language: "rust",
-        alpha: "ledger_alpha.rs",
-        beta: "ledger_beta.rs",
-        cluster_id: "d8a38df1507e6efd",
-        nodes: 45,
-        alpha_span: (5, 15, 124, 381),
-        beta_span: (7, 17, 131, 388),
-    },
-    LangCase {
-        language: "python",
-        alpha: "ledger_alpha.py",
-        beta: "ledger_beta.py",
-        cluster_id: "3b08286c43ec5193",
-        nodes: 35,
-        alpha_span: (6, 13, 109, 315),
-        beta_span: (8, 15, 118, 324),
-    },
-    LangCase {
-        language: "typescript",
-        alpha: "ledger_alpha.ts",
-        beta: "ledger_beta.ts",
-        cluster_id: "75331bdf6bb59eea",
-        nodes: 51,
-        alpha_span: (5, 15, 127, 391),
-        beta_span: (7, 17, 138, 402),
-    },
-    LangCase {
-        language: "dart",
-        alpha: "ledger_alpha.dart",
-        beta: "ledger_beta.dart",
-        cluster_id: "09ec87de54dfeffb",
-        nodes: 50,
-        alpha_span: (5, 15, 121, 350),
-        beta_span: (7, 17, 123, 352),
-    },
-    LangCase {
-        language: "csharp",
-        alpha: "LedgerAlpha.cs",
-        beta: "LedgerBeta.cs",
-        cluster_id: "f887f991dc1f4969",
-        nodes: 46,
-        alpha_span: (9, 24, 173, 537),
-        beta_span: (9, 24, 180, 544),
-    },
-    LangCase {
-        language: "go",
-        alpha: "ledger_alpha.go",
-        beta: "ledger_beta.go",
-        cluster_id: "7e9099352ffa58f5",
-        nodes: 52,
-        alpha_span: (7, 17, 125, 345),
-        beta_span: (9, 19, 135, 355),
-    },
+    LangCase::row(
+        "rust",
+        "ledger_alpha.rs",
+        "ledger_beta.rs",
+        "d8a38df1507e6efd",
+        45,
+        (5, 15, 124, 381),
+        (7, 17, 131, 388),
+    ),
+    LangCase::row(
+        "python",
+        "ledger_alpha.py",
+        "ledger_beta.py",
+        "3b08286c43ec5193",
+        35,
+        (6, 13, 109, 315),
+        (8, 15, 118, 324),
+    ),
+    LangCase::row(
+        "typescript",
+        "ledger_alpha.ts",
+        "ledger_beta.ts",
+        "75331bdf6bb59eea",
+        51,
+        (5, 15, 127, 391),
+        (7, 17, 138, 402),
+    ),
+    LangCase::row(
+        "dart",
+        "ledger_alpha.dart",
+        "ledger_beta.dart",
+        "09ec87de54dfeffb",
+        50,
+        (5, 15, 121, 350),
+        (7, 17, 123, 352),
+    ),
+    LangCase::row(
+        "csharp",
+        "LedgerAlpha.cs",
+        "LedgerBeta.cs",
+        "f887f991dc1f4969",
+        46,
+        (9, 24, 173, 537),
+        (9, 24, 180, 544),
+    ),
+    LangCase::row(
+        "go",
+        "ledger_alpha.go",
+        "ledger_beta.go",
+        "7e9099352ffa58f5",
+        52,
+        (7, 17, 125, 345),
+        (9, 19, 135, 355),
+    ),
 ];
 
 /// Every authored clone is a byte-identical Type-1 copy with embeddings

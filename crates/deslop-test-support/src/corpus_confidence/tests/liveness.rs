@@ -24,11 +24,12 @@ fn judge(extra: Vec<Value>) -> Vec<Failure> {
 #[test]
 fn a_report_that_vouches_for_nothing_is_reported() {
     let failures = judge(Vec::new());
-    assert_eq!(failures.len(), 1, "total demotion must be reported");
-    assert_eq!(only_check(&failures), Some("type2_gate_liveness"));
-    assert!(
-        detail_mentions(&failures, "nearly_identical"),
-        "the detail must name the bucket that stayed empty: {failures:?}",
+    assert_only_failure(
+        &failures,
+        "type2_gate_liveness",
+        "total demotion must be reported",
+        "nearly_identical",
+        "the detail must name the bucket that stayed empty",
     );
 }
 
@@ -54,15 +55,12 @@ fn byte_identical_clones_are_not_gate_evidence() {
             .map(|_| cluster("identical", 1.0, 1.0, 1.0))
             .collect(),
     );
-    assert_eq!(
-        failures.len(),
-        1,
-        "452 byte-proven clones must not rescue a repository that vouched for no rename"
-    );
-    assert_eq!(only_check(&failures), Some("type2_gate_liveness"));
-    assert!(
-        detail_mentions(&failures, "452 byte-identical clusters"),
-        "and the detail must say why they did not count: {failures:?}",
+    assert_only_failure(
+        &failures,
+        "type2_gate_liveness",
+        "452 byte-proven clones must not rescue a repository that vouched for no rename",
+        "452 byte-identical clusters",
+        "and the detail must say why they did not count",
     );
 }
 

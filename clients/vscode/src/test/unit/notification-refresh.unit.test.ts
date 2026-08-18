@@ -8,7 +8,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { refreshAfterChange, wireNotifications } from "../../notifications";
 import { ReportStore } from "../../reportStore";
 import { cluster, report } from "./tree.helpers";
-import { repoMetrics } from "./report.helpers";
+import { emptyReport, repoMetrics } from "./report.helpers";
 
 suite("reportChanged refresh wiring", () => {
   test("wireNotifications reportChanged applies a delta", async () => {
@@ -37,19 +37,10 @@ suite("reportChanged refresh wiring", () => {
     } as unknown as LanguageClient;
     const store = new ReportStore();
     store.setSnapshot(
-      {
+      emptyReport({
         tool_version: "v0",
-        min_nodes: 30,
-        files_analysed: 0,
-        clusters_hidden: 0,
-        cache_stats: { hits: 0, misses: 0 },
         metrics: repoMetrics(),
-        schema_doc: "",
-        action_hints: [],
-        boilerplate_hints: [],
-        embedding_provenance: undefined,
-        clusters: [],
-      },
+      }),
       0,
     );
     const schedule = wireNotifications(client, store);
@@ -69,19 +60,10 @@ suite("reportChanged refresh wiring", () => {
       sendRequest: (name: string) => {
         requests.push(name);
         if (name === "deslop/reportDelta") return Promise.resolve(null);
-        return Promise.resolve({
+        return Promise.resolve(emptyReport({
           tool_version: "x",
-          min_nodes: 30,
-          files_analysed: 0,
-          clusters_hidden: 0,
-          cache_stats: { hits: 0, misses: 0 },
           metrics: repoMetrics(),
-          schema_doc: "",
-          action_hints: [],
-          boilerplate_hints: [],
-          embedding_provenance: undefined,
-          clusters: [],
-        });
+        }));
       },
     } as unknown as LanguageClient;
     const store = new ReportStore();

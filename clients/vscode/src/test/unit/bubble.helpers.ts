@@ -8,7 +8,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
-import { reportWithClusters } from "./report.helpers";
+import { repoMetrics, reportWithClusters } from "./report.helpers";
 
 export interface ClusterSignalOptions {
   // Engine-routed wire bucket. `resolveBucket` prefers it over
@@ -211,10 +211,43 @@ export function deferredProbeClient(): {
   return { client, requests };
 }
 
+export async function resolveProbe(
+  request: DeferredProbeRequest | undefined,
+  probe: Promise<void>,
+  cancellationExpected?: boolean,
+  clusters: ReportCluster[] = [probeCluster("c-a", 10, 0.95)],
+): Promise<void> {
+  assert.ok(request !== undefined, "probe request must exist");
+  if (cancellationExpected !== undefined) {
+    assert.equal(
+      request.token.isCancellationRequested,
+      cancellationExpected,
+      `request cancellation must be ${cancellationExpected}`,
+    );
+  }
+  request.resolve(clusters);
+  await probe;
+}
+
 export interface BubbleFixture {
   store: ReportStore;
   capture: BubbleCapture;
   bubble: LiveBubble;
+}
+
+export async function openLiveDocument(content: string): Promise<{
+  doc: vscode.TextDocument;
+  editor: vscode.TextEditor;
+  store: ReportStore;
+}> {
+  const doc = await vscode.workspace.openTextDocument({
+    content,
+    language: "csharp",
+  });
+  const editor = await vscode.window.showTextDocument(doc);
+  const store = new ReportStore();
+  store.setSnapshot(probeReport(), 0);
+  return { doc, editor, store };
 }
 
 // One assembled live-bubble rig: a store seeded with `snapshot` (pass
@@ -258,6 +291,35 @@ export function assertBubbleShows(
     `${context}: expected the ${title} title`,
   );
   return visible ?? "";
+}
+
+export function renderFullConfidenceBubble(
+  capture: BubbleCapture,
+  bubble: LiveBubble,
+  startChar: number,
+  clusterId: string,
+): string {
+  bubble.render(capture.editor, span(startChar), [
+    probeCluster(clusterId, 10, 0.95),
+  ]);
+  return assertBubbleShows(
+    capture,
+    "Identical code",
+    `expected ${clusterId} at character ${startChar}`,
+  );
+}
+
+export function retractCluster(store: ReportStore, clusterId: string): void {
+  store.applyDelta({
+    from_generation: 1,
+    to_generation: 2,
+    clusters_added: [],
+    clusters_removed: [clusterId],
+    clusters_updated: [],
+    metrics: repoMetrics({ analysed_loc: 10 }),
+    cache_stats: { hits: 0, misses: 0 },
+    tool_version: "v2",
+  });
 }
 
 export function capturingEditor(file = "/tmp/A.cs"): BubbleCapture {

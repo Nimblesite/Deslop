@@ -4,6 +4,15 @@
 
 use super::*;
 
+/// The failures [`check_fused_bounded_max`] reports for `clusters`.
+/// Seven cases respelled the same build-vec / call / pass-by-mut-ref
+/// preamble; Deslop scored the copies against this repo's own corpus.
+fn judge_fused(clusters: &[Value]) -> Vec<Failure> {
+    let mut failures = Vec::new();
+    check_fused_bounded_max(&report(clusters), &mut failures);
+    failures
+}
+
 #[test]
 fn the_shipped_arithmetic_passes_and_the_quarantined_one_fails() {
     // The negative control this gate exists for. Every triple is rendered
@@ -13,8 +22,7 @@ fn the_shipped_arithmetic_passes_and_the_quarantined_one_fails() {
         .iter()
         .map(|&(bucket, s, t, e)| with_embedding(bucket, s, t, e, bounded_max(s, t, e)))
         .collect();
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&shipped), &mut failures);
+    let failures = judge_fused(&shipped);
     assert!(
         failures.is_empty(),
         "the shipped bounded max must never trip its own gate: {failures:?}"
@@ -24,8 +32,7 @@ fn the_shipped_arithmetic_passes_and_the_quarantined_one_fails() {
         .iter()
         .map(|&(bucket, s, t, e)| with_embedding(bucket, s, t, e, sum_then_clamp(s, t, e)))
         .collect();
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&reverted), &mut failures);
+    let failures = judge_fused(&reverted);
     assert_eq!(
         failures.len(),
         1,
@@ -89,8 +96,7 @@ fn one_saturated_cluster_is_reported_however_healthy_the_rest_are() {
         })
         .collect();
     clusters.push(with_embedding("loosely_similar", 0.2, 0.3, 0.4, 0.9));
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&clusters), &mut failures);
+    let failures = judge_fused(&clusters);
     assert_eq!(failures.len(), 1, "one breach in 41 is still a breach");
     assert!(
         detail_mentions(&failures, "1 of 41 visible clusters"),
@@ -109,8 +115,7 @@ fn distinct_triples_sharing_one_legitimate_max_pass() {
             with_embedding("nearly_identical", 0.9, 0.1 + step, 0.2 + step, 0.9)
         })
         .collect();
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&clusters), &mut failures);
+    let failures = judge_fused(&clusters);
     assert!(
         failures.is_empty(),
         "one dominant axis across differing triples is the formula working, not a defect: \
@@ -125,8 +130,7 @@ fn a_report_of_byte_identical_clones_passes() {
     let clusters: Vec<Value> = (0..12)
         .map(|_| cluster("identical", 1.0, 1.0, 1.0))
         .collect();
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&clusters), &mut failures);
+    let failures = judge_fused(&clusters);
     assert!(
         failures.is_empty(),
         "identical inputs may share an output: {failures:?}"
@@ -144,8 +148,7 @@ fn a_content_gated_confidence_below_its_ceiling_passes() {
         cluster("structural_only", 1.0, 0.0, 0.0),
         with_embedding("same_behavior", 0.1, 0.2, 0.88, 0.88),
     ];
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&clusters), &mut failures);
+    let failures = judge_fused(&clusters);
     assert!(failures.is_empty(), "{failures:?}");
 }
 
@@ -174,8 +177,7 @@ fn hidden_clusters_cannot_breach_the_invariant() {
             hide(cluster("nearly_identical", 0.2 + step, 0.3 + step, 1.0))
         })
         .collect();
-    let mut failures = Vec::new();
-    check_fused_bounded_max(&report(&clusters), &mut failures);
+    let failures = judge_fused(&clusters);
     assert!(
         failures.is_empty(),
         "a hidden cluster makes no claim to the user, so it cannot fail a claim check"

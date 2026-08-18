@@ -6,7 +6,7 @@
 
 import * as assert from "node:assert/strict";
 import { ReportStore } from "../../reportStore";
-import { cluster, emptyReport, occurrence } from "./report-store.helpers";
+import { cluster, emptyReport, occurrence, seededStore } from "./report-store.helpers";
 
 suite("ReportStore dirty-file projection", () => {
   test("visibleReport elides dirty-file occurrences and singleton clusters; canonical report keeps everything (#78, #117, #130)", () => {
@@ -80,18 +80,9 @@ suite("ReportStore dirty-file projection", () => {
   });
 
   test("clearFileDirty re-exposes occurrences in the visible projection (#130)", () => {
-    const store = new ReportStore();
-    store.setSnapshot(
-      emptyReport({
-        clusters: [
-          cluster("c", 10, [
-            occurrence("/repo/Alpha.cs", 0, 10),
-            occurrence("/repo/Beta.cs", 0, 10),
-          ]),
-        ],
-      }),
-      1,
-    );
+    const store = seededStore([
+      cluster("c", 10, [occurrence("/repo/Alpha.cs", 0, 10), occurrence("/repo/Beta.cs", 0, 10)]),
+    ]);
     store.markFileDirty("/repo/Alpha.cs");
     assert.equal(
       store.current.visibleReport?.clusters.length,
@@ -119,12 +110,11 @@ suite("ReportStore dirty-file projection", () => {
   // peer to an unsaved edit. The canonical report is owned by the LSP — only
   // deslop/reportChanged retracts a cluster.
   test("markFileDirty leaves the canonical report intact so cluster ids stay resolvable (#130)", () => {
-    const store = new ReportStore();
     const onlyCluster = cluster("only-cluster", 30, [
       occurrence("/repo/Alpha.cs", 10, 20),
       occurrence("/repo/Beta.cs", 30, 40),
     ]);
-    store.setSnapshot(emptyReport({ clusters: [onlyCluster] }), 1);
+    const store = seededStore([onlyCluster]);
 
     store.markFileDirty("/repo/Alpha.cs");
 

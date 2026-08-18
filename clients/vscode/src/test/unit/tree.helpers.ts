@@ -3,6 +3,7 @@
 
 import * as vscode from "vscode";
 import { Bucket, FileMetric, RepoMetrics, Report, ReportCluster } from "../../types/report";
+import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
 
 export function cluster(
   id: string,
@@ -75,33 +76,27 @@ export function fileMetric(path: string, analysedLoc: number, duplicatedLoc: num
   };
 }
 
+/** The tree suites' populated metrics block, over the shared zero base. */
 export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
-  return {
+  return zeroMetrics({
     analysed_loc: 100,
     duplicated_loc: 10,
     duplication_percent: 10,
-    clusters_total: 0,
     duplicated_files: 2,
-    threshold: { percent: 0, breached: false, source: "none" },
-    per_file: [],
     ...overrides,
-  };
+  });
 }
 
 export function report(
   clusters: ReportCluster[],
   metricsOverride: Partial<RepoMetrics> = {},
 ): Report {
-  return {
+  return emptyReport({
     tool_version: "v",
-    min_nodes: 30,
     files_analysed: 5,
-    clusters_hidden: 0,
     cache_stats: { hits: 1, misses: 2 },
     metrics: metrics({ clusters_total: clusters.length, ...metricsOverride }),
     schema_doc: "docs",
-    action_hints: [],
-    boilerplate_hints: [],
     embedding_provenance: {
       provider_id: "ollama",
       model_id: "nomic-embed-text",
@@ -112,7 +107,7 @@ export function report(
       failed_subtrees: 0,
     },
     clusters,
-  };
+  });
 }
 
 // Save and restore a persisted `deslop.*` setting so a dispatch-style

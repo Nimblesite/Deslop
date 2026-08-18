@@ -12,7 +12,7 @@ import {
   bubbleFixture,
   deferredProbeClient,
   editAt,
-  probeCluster,
+  resolveProbe,
 } from "./bubble.helpers";
 import { reportWithClusters } from "./report.helpers";
 
@@ -32,14 +32,7 @@ suite("LiveBubble stale-probe races", () => {
         true,
         "dispatching probe B must cancel probe A's in-flight request",
       );
-      assert.equal(
-        requests[1]?.token.isCancellationRequested,
-        false,
-        "the newest probe must stay live",
-      );
-
-      requests[1]?.resolve([probeCluster("c-a", 10, 0.95)]);
-      await probeB;
+      await resolveProbe(requests[1], probeB, false);
       const rendered = capture.visible();
       assert.ok(rendered !== undefined, "probe B must render its bubble");
       assert.match(rendered ?? "", /Identical code/, "B carries the report's bucket title");
@@ -82,8 +75,7 @@ suite("LiveBubble stale-probe races", () => {
         "a snapshot settles every retraction — the freshness token must catch what the ledger cannot",
       );
 
-      requests[0]?.resolve([probeCluster("c-a", 10, 0.95)]);
-      await probeA;
+      await resolveProbe(requests[0], probeA);
       assert.equal(
         capture.calls.length,
         0,
@@ -95,8 +87,9 @@ suite("LiveBubble stale-probe races", () => {
       // Positive proof the guard discriminates rather than blinds: a fresh
       // probe against the new snapshot still renders.
       const probeB = bubble.probe(capture.editor, editAt(6, "bbbb"));
-      requests[1]?.resolve([bubbleCluster("c-other", 3, 0.95)]);
-      await probeB;
+      await resolveProbe(requests[1], probeB, undefined, [
+        bubbleCluster("c-other", 3, 0.95),
+      ]);
       assert.match(
         capture.visible() ?? "",
         /Identical code/,
@@ -149,8 +142,7 @@ suite("LiveBubble stale-probe races", () => {
       );
       assert.equal(store.current.generation, 3, "the generation label reads 3 again — ABA");
 
-      requests[0]?.resolve([probeCluster("c-a", 10, 0.95)]);
-      await probeA;
+      await resolveProbe(requests[0], probeA);
       assert.equal(
         capture.calls.length,
         0,
@@ -170,14 +162,7 @@ suite("LiveBubble stale-probe races", () => {
     assert.equal(requests[0]?.token.isCancellationRequested, false, "live before dispose");
 
     bubble.dispose();
-    assert.equal(
-      requests[0]?.token.isCancellationRequested,
-      true,
-      "dispose() must cancel the in-flight request",
-    );
-
-    requests[0]?.resolve([probeCluster("c-a", 10, 0.95)]);
-    await probeA;
+    await resolveProbe(requests[0], probeA, true);
     assert.equal(
       capture.calls.length,
       0,
