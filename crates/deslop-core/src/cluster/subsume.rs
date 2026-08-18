@@ -50,7 +50,11 @@
 //! makes this easy to get wrong, because the enclosing view can be the
 //! narrower one.
 
-use crate::fingerprint::Fingerprint;
+use crate::{
+    buckets::{is_demoted_tier, measured_kind},
+    fingerprint::Fingerprint,
+    report::ReportSignals,
+};
 
 use super::{Cluster, LOW_STRUCTURAL_TYPE4_CEILING, TYPE4_EMBEDDING_FLOOR};
 
@@ -201,11 +205,40 @@ fn preferred_view(proposed: &Cluster, other: &Cluster) -> Preference {
     }
 }
 
-/// Between two views of one region over one file set, the structurally
-/// more precise view wins. An embedding-dominant nomination stands even
-/// against a more precise rival: it carries semantic evidence over the
-/// same bytes that a structural view cannot express.
+/// Between two views of one region over one file set, measured content
+/// credibility decides first (#367, #408): a view the report will
+/// demote or hide — `structural_only` or `loosely_similar` under
+/// [`measured_kind`] — never deletes a view the report will publish as
+/// actionable. The deleted view is the only place the reader would ever
+/// see the duplication; replacing a credible whole-method Type-3 clone
+/// with a saturated 13-node fragment nested inside it erased the only
+/// actionable finding in five languages. Where the tiers do not
+/// distinguish the views, the structurally more precise view wins as
+/// before ([`structural_precision`]).
 fn precision_preference(proposed: &Cluster, other: &Cluster) -> Preference {
+    match (demoted(proposed), demoted(other)) {
+        (false, true) => Preference::First,
+        (true, false) => Preference::Second,
+        _ => structural_precision(proposed, other),
+    }
+}
+
+/// True when the report will demote or hide this view — the
+/// content-credibility test [`precision_preference`] ranks tiers by.
+/// [`measured_kind`] routes the same measured evidence the renderer
+/// routes, minus the byte-equivalence proof, which never moves a view
+/// across the demoted/credible boundary (a byte-equivalent cluster's
+/// leaves agree, so its content evidence already vouches for it).
+fn demoted(cluster: &Cluster) -> bool {
+    let signals: ReportSignals = cluster.signals.into();
+    is_demoted_tier(measured_kind(signals, cluster.content, &cluster.members))
+}
+
+/// The pre-content tie-break: the structurally more precise view wins.
+/// An embedding-dominant nomination stands even against a more precise
+/// rival: it carries semantic evidence over the same bytes that a
+/// structural view cannot express.
+fn structural_precision(proposed: &Cluster, other: &Cluster) -> Preference {
     if other.signals.structural > proposed.signals.structural
         && !is_embedding_dominant(proposed.signals)
     {

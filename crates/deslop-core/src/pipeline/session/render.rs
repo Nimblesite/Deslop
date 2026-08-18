@@ -12,7 +12,6 @@
 
 use crate::{
     cluster::build_ranked_fused_clusters,
-    content::attach_content_evidence,
     error::CoreError,
     lsh::band_collisions,
     pair::{candidate_pairs_for_language_policy, cluster_by_transitive_closure},
@@ -82,13 +81,14 @@ impl PipelineSession {
         // on; the per-language space is exact otherwise. Mixing spaces
         // inside one cluster mean would average incomparable values.
         let measurement_signatures = cross_language_signatures.as_deref().unwrap_or(signatures);
-        let mut clusters = build_ranked_fused_clusters(
+        let clusters = build_ranked_fused_clusters(
             fingerprints,
             measurement_signatures,
             &embedding_outcome.vectors,
             &fused_clusters,
+            self.store.trees(),
+            &self.sources,
         );
-        attach_content_evidence(&mut clusters, self.store.trees(), &self.sources);
         tracing::info!(
             ranked_clusters = clusters.len(),
             fingerprints = fingerprints.len(),

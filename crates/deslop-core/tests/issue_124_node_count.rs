@@ -37,6 +37,8 @@ fn issue_124_type4_node_count_does_not_dominate_refactor_ranking() -> Result<()>
         &fixture.signatures,
         &fixture.vectors,
         &fixture.fused_clusters,
+        &[],
+        &HashMap::new(),
     );
     assert_eq!(
         clusters.len(),

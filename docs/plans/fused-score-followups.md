@@ -38,7 +38,7 @@ do not weaken it without moving that suite with it.
 
 ## The remaining fused gap
 
-**Destructive cross-cluster subsumption runs before content measurement.**
+**Destructive cross-cluster subsumption runs before content measurement** ([#367](https://github.com/Nimblesite/Deslop/issues/367), [#408](https://github.com/Nimblesite/Deslop/issues/408)).
 `build_ranked_fused_clusters` materialises clusters with
 `ContentEvidence::unmeasured()`, sorts them by raw geometry, and calls
 `collapse_cross_cluster_overlap`. Only the survivors reach `attach_content_evidence` in
@@ -54,7 +54,23 @@ confidence explanation, through one renderer per language runtime. Section 2 rec
 
 # TODO
 
-## 1. Close the pre-content subsumption gap
+## 1. Close the pre-content subsumption gap — #367, #408
+
+### Two fixtures, one defect
+
+`ts-mixed-band` ([#367](https://github.com/Nimblesite/Deslop/issues/367)) and `csharp-type3` ([#408](https://github.com/Nimblesite/Deslop/issues/408)) are the same defect. #408 was filed as an independent five-language Type-3 recall hole. Traced, the enclosing clone is *built* and then thrown away:
+
+```
+DEBUG clustering by transitive closure candidate_pairs=92
+DEBUG cross-cluster subsumption decision="drop_outer"
+      survivor="c45b477b557d3686"  survivor_size=2  survivor_structural=1.0
+      discarded="1999f08270059b2f" discarded_size=2 discarded_structural=0.0
+INFO  bucket distribution visible=2 hidden=0 structural_only=2
+```
+
+The discarded cluster is the whole-method pair, `structural = 0.0` because one inserted statement rehashes every ancestor Merkle. The survivor is a 13-node fragment nested inside it whose `structural = 1.0` holds by construction: `precision_preference` ([`subsume.rs`](../../crates/deslop-core/src/cluster/subsume.rs)) lets that overturn `strictly_encloses`, and no content evidence exists yet to contradict it. Delete only the inserted statement and the same fixture renders one `nearly_identical` cluster over both files at `fused 0.7560` carried by `rename_consistency 0.84`, with both fragments gone. The enclosing view is reachable; subsumption removes it. The LSH-only floors are not involved — the two `method_declaration` subtrees are 51 and 45 nodes, clear of `LSH_ONLY_MIN_NODE_COUNT = 40`.
+
+So #408 is blocked by this section rather than being work of its own, and `csharp-type3` is the cheaper of the two regression fixtures. #367's step 4, the C#-gated row-4 promotion, is already gone: `is_csharp_lsh_type3_near_miss` no longer exists and row 4 routes language-agnostically through `is_lsh_only_nearmiss`.
 
 ### Measured decision: do not move cluster evidence into pair admission
 
@@ -80,6 +96,17 @@ meaning as well as their cost.
       `identical`; the enclosing shape-only view must not delete it before measurement.
 - [ ] Preserve `[PIPELINE-CLUSTER-SUBSUME]`'s file-coverage and enclosure guarantees for ties where
       content does not distinguish the views.
+- [ ] Add the Type-3 fixtures as a black-box regression asserting the *enclosing* method pair is the visible cluster. Assert the occurrence set, not only the bucket — the fragments would satisfy a bucket-only assertion. Measured today at `--min-nodes 8`:
+
+      | fixture | visible | hidden | what is reported |
+      |---|---|---|---|
+      | `csharp-type3` | 2 | 0 | 13-node guard and loop-header fragments, both `structural_only`, `fused` 0.6667 / 0.5727 |
+      | `dart-type3` | 2 | 1 | fragments, `structural_only`, `fused` 0.6000 / 0.5400 |
+      | `go-type3` | 2 | 0 | fragments, `structural_only`, `fused` 0.6000 / 0.4500 |
+      | `python-type3` | 1 | 0 | fragment, `structural_only`, `fused` 0.6000 |
+      | `ts-type3-stmt` | **0** | 1 | nothing visible |
+
+      In no language does the whole-method pair appear. `ts-type3-stmt` is the sharpest assertion available: one inserted statement takes the visible clone count from one to zero.
 
 ## 2. Finish #344 — one confidence explanation on every decision surface
 
@@ -184,6 +211,12 @@ branch reddens `js-classes` (support 0.18) and `js-async` (support 0.29).
       floor sits and therefore cannot be satisfied by moving one. This single test replaces restoring five
       softened fixtures that would all have pinned the same root cause.
 
+- [ ] **[#410](https://github.com/Nimblesite/Deslop/issues/410) is the gate's *other* term, and it is independent of #409.** `rename_consistency` is one product — `min(literal_preservation, coverage) * anchor_weight(anchors)` in [`content.rs`](../../crates/deslop-core/src/content.rs) — and the two issues are its two factors. Neither subsumes the other, measured: `ts-qualified-type-rename` scores `literal_preservation 1.0` and `coverage 1.0`, so #409's fix cannot move it; it demotes purely on `anchor_weight(8) = 8/(8+4) = 0.6667` against `CONTENT_SUPPORT_FLOOR` 0.7 — missing by 0.033 a bijection the engine's own coverage and literal terms certify as total. `ts-decorators` is the mirror: `literal_preservation 3/5` caps the product at 0.6 whatever the mass term does.
+
+      Fix #409 first, then re-measure #410, because #409 changes #410's only input — `anchors = preserved_literal_count(literals) + mapping.explained`, so crediting a literal renamed alongside its symbol raises the anchor count as well as the numerator. Recorded as a blocked-by edge on the issues.
+
+      **No test pins #410.** Restoring `ts-qualified-type-rename` is what would: `typescript_features.rs:104` (`typescript_qualified_type_name_rename_is_token_invariant`) asserts `nearly_identical` and goes red the moment the maximal rename comes back. That restoration belongs with the ten files above, not before them.
+
 ## 3. Re-verify the fused false positives
 
 These reports predate `[FUSION-CONTENT-GATE]`; measure before changing code. None is closeable until the
@@ -214,10 +247,12 @@ corpus can express *"these two things are not duplicates"* — section A of
 ## Order
 
 ```
-pre-content subsumption regression and repair ──► #344 remaining readers
-                                              └──► fused false-positive re-measurement
-corpus-assertion.md A–E ─────────────────────────► supplies the precision pins
+§1  #367 pre-content subsumption ──► #408 five-language Type-3 recall
+§2  #409 literal_preservation ──► #410 anchor mass ──► restore the 10 softened fixtures
+§3  corpus-assertion.md A–E ──► the precision pins the false-positive re-measurement needs
 ```
+
+§1 and §2 are independent and can run in parallel. §3 cannot start until `corpus-assertion.md` section A lands, because none of #71 / #79 / #103 / #283 / #284 / #285 / #362 is closeable while the corpus cannot assert *"these two things are not duplicates"* — the same gap #401 reports.
 
 ---
 

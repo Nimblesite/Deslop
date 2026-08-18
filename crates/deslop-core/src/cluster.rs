@@ -15,7 +15,8 @@ use std::{
 };
 
 use crate::{
-    content::ContentEvidence,
+    ast::NormalizedNode,
+    content::{attach_content_evidence, ContentEvidence},
     fingerprint::Fingerprint,
     lsh::Signature,
     pair::{FusedCluster, PairScore},
@@ -53,8 +54,10 @@ pub struct Cluster {
     /// pooled byte agreement, Type-2 rename consistency, and literal
     /// dominance ([CLONE-NOISE-LITERAL-TABLE]). Starts
     /// [`ContentEvidence::unmeasured`];
-    /// `crate::content::attach_content_evidence` measures it during
-    /// render, before bucket routing and the ranking weight read it.
+    /// [`crate::content::attach_content_evidence`] measures it inside
+    /// [`build_ranked_fused_clusters`], before cross-cluster
+    /// subsumption elects the surviving view and before bucket routing
+    /// and the ranking weight read it (#367).
     pub content: ContentEvidence,
 }
 
@@ -70,15 +73,20 @@ const MIN_REPORTABLE_MEMBERS: usize = 2;
 ///
 /// The signal breakdown is measured between each cluster's rendered
 /// occurrences ([FUSION-CLUSTER-SIGNALS]) from `signatures` and
-/// `embedding_vectors`. Cluster ids are derived from the smallest
-/// member's hash so identical fused clusters across runs always report
-/// the same id.
+/// `embedding_vectors`, and each cluster's [`ContentEvidence`] is
+/// measured from `trees` and `sources` **before** cross-cluster
+/// subsumption elects the surviving view ([FUSION-CONTENT-GATE],
+/// [PIPELINE-CLUSTER-SUBSUME]). Cluster ids are derived from the
+/// smallest member's hash so identical fused clusters across runs
+/// always report the same id.
 #[must_use]
-pub fn build_ranked_fused_clusters<S: BuildHasher>(
+pub fn build_ranked_fused_clusters<S: BuildHasher, H: BuildHasher>(
     fingerprints: &[Fingerprint],
     signatures: &[Signature],
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused_clusters: &[FusedCluster],
+    trees: &[NormalizedNode],
+    sources: &HashMap<FileId, Vec<u8>, H>,
 ) -> Vec<Cluster> {
     let mut clusters =
         reportable_clusters(fingerprints, signatures, embedding_vectors, fused_clusters);
@@ -90,6 +98,11 @@ pub fn build_ranked_fused_clusters<S: BuildHasher>(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| left.id.cmp(&right.id))
     });
+    // [FUSION-CONTENT-GATE] before [PIPELINE-CLUSTER-SUBSUME] (#367,
+    // #408): subsumption deletes whole views, and the choice must see
+    // the same measured content evidence the report will render — a
+    // survivor elected on raw geometry cannot be re-elected later.
+    attach_content_evidence(&mut clusters, trees, sources);
     let collapsed = collapse_cross_cluster_overlap(clusters);
     log_ranked_cluster_distribution(&collapsed, fused_clusters.len(), dropped_below_min_members);
     collapsed
