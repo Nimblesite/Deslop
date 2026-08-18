@@ -58,6 +58,7 @@ jobs:
 | `no-fail-over` | `false` | 为本次运行清除已配置的阈值 |
 | `min-nodes` | `30` | 克隆候选的最小 AST 子树节点数 |
 | `config` | *(未设置)* | 显式指定 `.deslop.toml` 路径 |
+| `cache` | `true` | 通过 Actions 缓存在运行之间保留解析存储，预热运行只重新解析有变化的文件 |
 | `output` | `deslop-report` | 报告路径前缀；会追加 `.json`、`.txt`、`.html` |
 | `nojson` / `notext` / `nohtml` | `false` | 抑制某种输出格式 |
 | `log-level` | `info` | `error`、`warn`、`info`、`debug` 或 `trace` |

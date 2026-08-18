@@ -204,7 +204,7 @@ check("the Marketplace name is not the org-colliding bare product name", () => {
 
 check("every documented input is declared", () => {
   const inputs = [
-    "path", "version", "fail-over", "no-fail-over", "min-nodes", "config",
+    "path", "version", "fail-over", "no-fail-over", "min-nodes", "config", "cache",
     "output", "nojson", "notext", "nohtml", "log-level", "upload-artifact", "artifact-name",
   ];
   for (const input of inputs) assert.ok(action.includes(`\n  ${input}:`), `action.yml lost input ${input}`);
@@ -223,15 +223,58 @@ check("every output is wired to the report step", () => {
   }
 });
 
-check("the nested action is pinned to a full-length commit SHA", () => {
-  const marker = "actions/upload-artifact@";
-  const start = action.indexOf(marker) + marker.length;
-  assert.ok(start > marker.length - 1, "action.yml no longer uploads the reports");
-  const pin = action.slice(start).split(" ")[0].trim();
-  assert.equal(pin.length, 40, `upload-artifact must be pinned to a 40-character SHA, found "${pin}"`);
+// Every nested third-party action must be pinned to an immutable commit, not a
+// movable tag ([SWR-SEC-ACTION-PINNING]) — a re-pointed tag in a dependency
+// would execute arbitrary code inside every consumer's workflow.
+check("every nested action is pinned to a full-length commit SHA", () => {
+  for (const marker of ["actions/upload-artifact@", "actions/cache/restore@", "actions/cache/save@"]) {
+    const name = marker.slice(0, -1);
+    const start = action.indexOf(marker);
+    assert.ok(start >= 0, `action.yml lost its ${name} step`);
+    const pin = action.slice(start + marker.length).split(" ")[0].trim();
+    assert.equal(pin.length, 40, `${name} must be pinned to a 40-character SHA, found "${pin}"`);
+    assert.ok(
+      [...pin].every((character) => "0123456789abcdef".includes(character)),
+      `${name} pin "${pin}" is not hexadecimal`,
+    );
+  }
+});
+
+// The parse store must be restored before the CLI runs and saved after it, from
+// the scan root the `path` input names — never the repository root — under a
+// per-run key whose prefix fallback lets each run restore the newest
+// same-version store and save its own successor. [ACTION-CACHE]
+check("the parse store is cached around the run, keyed per version and run", () => {
+  const key = "key: deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-${{ github.run_id }}";
+  assert.equal(action.split(key).length - 1, 2, "restore and save must share the exact per-run key");
   assert.ok(
-    [...pin].every((character) => "0123456789abcdef".includes(character)),
-    `upload-artifact pin "${pin}" is not hexadecimal`,
+    action.includes("deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-\n"),
+    "restore-keys must fall back to the version+OS prefix so a new run restores the newest store",
+  );
+  assert.equal(
+    action.split("path: ${{ inputs.path }}/.deslop/cache").length - 1,
+    2,
+    "restore and save must target .deslop/cache under the scan root, not the repository root",
+  );
+  const restoreAt = action.indexOf("actions/cache/restore@");
+  const runAt = action.indexOf('deslop "${args[@]}"');
+  assert.ok(restoreAt >= 0 && restoreAt < runAt, "the store must be restored before deslop runs");
+  assert.ok(action.indexOf("actions/cache/save@") > runAt, "the store must be saved after deslop runs");
+});
+
+check("the cache is opt-out and a storeless run skips the save instead of failing it", () => {
+  assert.equal(
+    action.split("if: inputs.cache != 'false'").length - 1,
+    3,
+    "the restore, the existence probe, and the save must all honour the cache input",
+  );
+  assert.ok(
+    action.includes("if: inputs.cache != 'false' && steps.store.outputs.exists == 'true'"),
+    "the save must be skipped when no store exists — actions/cache/save fails on a missing path",
+  );
+  assert.ok(
+    action.includes('if [ -d "${SCAN_PATH}/.deslop/cache" ]'),
+    "store existence must be probed under the scan root the path input names",
   );
 });
 

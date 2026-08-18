@@ -57,6 +57,7 @@ If you pin to a commit SHA or a branch, the ref carries no version, so `version`
 | `no-fail-over` | `false` | Clear any configured threshold for this run |
 | `min-nodes` | `30` | Minimum AST subtree node count for a clone candidate |
 | `config` | *(unset)* | Explicit `.deslop.toml` path |
+| `cache` | `true` | Carry the parse store between runs through the Actions cache, so a warm run re-parses only what changed |
 | `output` | `deslop-report` | Report path prefix; `.json`, `.txt`, `.html` are appended |
 | `nojson` / `notext` / `nohtml` | `false` | Suppress an output format |
 | `log-level` | `info` | `error`, `warn`, `info`, `debug` or `trace` |

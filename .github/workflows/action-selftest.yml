@@ -113,6 +113,87 @@ jobs:
           CODE: ${{ steps.derived.outputs.exit-code }}
           CLUSTERS: ${{ steps.derived.outputs.cluster-count }}
 
+  # [ACTION-CACHE] end to end: the store one run saves is the store the next
+  # run restores. Two jobs on two runners, so the warm pass can only be warm if
+  # the store crossed the Actions cache — nothing else survives the runner.
+  # The gate matrix's linux-x64 leg shares the per-run cache key (same version,
+  # OS and run id) and the same fixture, so whichever job saves first the
+  # restored store is content-addressed for the identical tree — the hit and
+  # equivalence assertions hold under every interleaving.
+  cache-seed:
+    name: Cache seed pass
+    needs: [contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Seed the parse store through the action
+        id: seed
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.contract.outputs.version }}
+          fail-over: "100"
+          output: cache-seed-report
+          artifact-name: deslop-cache-seed-report
+
+      - name: The seed pass measured the fixture and left a store to save
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CODE}" = "0"
+          test "${CLUSTERS}" -ge 1
+          test -d examples/rust/.deslop/cache
+        env:
+          CODE: ${{ steps.seed.outputs.exit-code }}
+          CLUSTERS: ${{ steps.seed.outputs.cluster-count }}
+
+  cache-warm:
+    name: Cache warm pass
+    needs: [contract, cache-seed]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run warm from the restored store
+        id: warm
+        uses: ./
+        with:
+          path: examples/rust
+          version: ${{ needs.contract.outputs.version }}
+          fail-over: "100"
+          output: cache-warm-report
+          upload-artifact: "false"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: deslop-cache-seed-report
+          path: seed
+
+      - name: The store crossed the cache and changed nothing but cache_stats
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${CODE}" = "0"
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            const parse = (path) => JSON.parse(readFileSync(path, "utf8"));
+            const seed = parse("seed/cache-seed-report.json");
+            const warm = parse("cache-warm-report.json");
+            const { hits, misses } = warm.cache_stats;
+            console.log(`warm cache_stats: ${hits} hits / ${misses} misses`);
+            assert.ok(hits > 0, "the warm run restored no blobs — the store did not cross the cache");
+            assert.equal(misses, 0, "a warm run of an unchanged tree must miss nothing");
+            delete seed.cache_stats;
+            delete warm.cache_stats;
+            assert.deepStrictEqual(warm, seed, "the restored store changed the report — [ACTION-CACHE] forbids that");
+          '
+        env:
+          CODE: ${{ steps.warm.outputs.exit-code }}
+
   gate:
     name: Gate (${{ matrix.artifact }})
     needs: [contract]

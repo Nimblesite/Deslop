@@ -52,6 +52,13 @@ inputs:
     description: Explicit .deslop.toml path. Defaults to the one beside the scan root.
     required: false
     default: ""
+  cache:
+    description: >-
+      Carry the parse store between runs through the GitHub Actions cache, so a
+      warm run re-parses only what changed. Set to "false" to leave the Actions
+      cache untouched.
+    required: false
+    default: "true"
   output:
     description: Report path prefix; `.json`, `.txt` and `.html` are appended.
     required: false
@@ -177,6 +184,27 @@ runs:
         ARCHIVE: ${{ steps.resolve.outputs.archive }}
         STAGE: ${{ steps.resolve.outputs.stage }}
 
+    # The parse store survives between runs. [ACTION-CACHE]
+    #
+    # The key ends in the run id because the store mutates every pass and
+    # actions/cache never re-saves an exact-key hit — a run-stable key would
+    # freeze the first store forever. Each run restores the newest same-version
+    # store through the prefix fallback and saves its own successor; keying on
+    # the resolved CLI version keeps superseded partitions from riding between
+    # releases. Correctness never rests on what is restored: every blob is
+    # digest-verified against its full address and refused into a plain
+    # re-parse on any mismatch (pipeline.md [PIPELINE-INCREMENTAL-INTEGRITY]),
+    # and the CLI's post-pass retention sweep bounds every save at 2 GiB
+    # ([PIPELINE-INCREMENTAL-RETENTION]).
+    - name: Restore the parse store
+      if: inputs.cache != 'false'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}/.deslop/cache
+        key: deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-${{ github.run_id }}
+        restore-keys: |
+          deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-
+
     # A non-zero deslop status is the product, not a failure of this step.
     # GitHub runs composite `shell: bash` steps under an injected `-e`
     # (`bash -eo pipefail`), and a later `set` cannot clear it — so the status
@@ -209,6 +237,30 @@ runs:
         NOJSON: ${{ inputs.nojson }}
         NOTEXT: ${{ inputs.notext }}
         NOHTML: ${{ inputs.nohtml }}
+
+    # actions/cache/save hard-fails on a missing path, and a run that exited
+    # before analysis — a usage error, an unreadable scan root — leaves no
+    # store; the save is skipped then, never failed. [ACTION-CACHE]
+    - name: Check the parse store exists
+      id: store
+      if: inputs.cache != 'false'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -d "${SCAN_PATH}/.deslop/cache" ]; then
+          echo "exists=true" >> "${GITHUB_OUTPUT}"
+        else
+          echo "exists=false" >> "${GITHUB_OUTPUT}"
+        fi
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+
+    - name: Save the parse store
+      if: inputs.cache != 'false' && steps.store.outputs.exists == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}/.deslop/cache
+        key: deslop-${{ steps.resolve.outputs.version }}-${{ runner.os }}-${{ github.run_id }}
 
     # Skipped under `nojson`, which leaves every report-derived output empty.
     - name: Read the report
