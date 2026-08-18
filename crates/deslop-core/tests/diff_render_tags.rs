@@ -4,8 +4,9 @@
 //! Black-box over `deslop-core`'s public render surface. The E2E CLI
 //! coverage lives in `crates/deslop/tests/diff_scoped_reporting.rs`;
 //! this file pins the two properties the CLI test cannot see directly:
-//! the exact text a tagged report renders, and the byte-identity of an
-//! untagged report's rendering with the pre-diff build.
+//! the exact text a tagged report renders, and the byte-exact
+//! rendering of an untagged report — the pre-diff output a no-`--diff`
+//! run must keep producing.
 
 use std::path::PathBuf;
 
@@ -100,6 +101,21 @@ fn cluster(id: &str, first: &str, second: &str, tags: Tags) -> ReportCluster {
     }
 }
 
+/// The three populations, tagged as `--diff` stamps them or fully
+/// untagged. Order matters: the goldens below pin it.
+fn clusters(tagged: bool) -> Vec<ReportCluster> {
+    let (mixed, fresh, legacy) = if tagged {
+        (MIXED, FRESH, LEGACY)
+    } else {
+        (UNTAGGED, UNTAGGED, UNTAGGED)
+    };
+    vec![
+        cluster("aaaa1111", "src/caller.rs", "src/helper.rs", mixed),
+        cluster("bbbb2222", "src/fresh_a.rs", "src/fresh_b.rs", fresh),
+        cluster("cccc3333", "src/legacy_a.rs", "src/legacy_b.rs", legacy),
+    ]
+}
+
 fn metrics(diff: Option<DiffMetrics>) -> RepoMetrics {
     RepoMetrics {
         analysed_loc: 200,
@@ -130,21 +146,14 @@ fn diff_metrics() -> DiffMetrics {
     }
 }
 
-/// A three-cluster report. `tagged` switches every diff field on at
-/// once, exactly as `--diff` does.
-fn report(tagged: bool, outside: Option<usize>) -> Report {
-    let (mixed, fresh, legacy) = if tagged {
-        (MIXED, FRESH, LEGACY)
-    } else {
-        (UNTAGGED, UNTAGGED, UNTAGGED)
-    };
+fn report(clusters: Vec<ReportCluster>, diff: bool, outside: Option<usize>) -> Report {
     Report {
         tool_version: "test".to_owned(),
         min_nodes: 3,
         files_analysed: 6,
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
-        metrics: metrics(tagged.then(diff_metrics)),
+        metrics: metrics(diff.then(diff_metrics)),
         schema_doc: "schema".to_owned(),
         action_hints: vec![ActionHint {
             pattern: "bucket=identical".to_owned(),
@@ -152,25 +161,189 @@ fn report(tagged: bool, outside: Option<usize>) -> Report {
         }],
         boilerplate_hints: Vec::new(),
         embedding_provenance: None,
-        clusters: vec![
-            cluster("aaaa1111", "src/caller.rs", "src/helper.rs", mixed),
-            cluster("bbbb2222", "src/fresh_a.rs", "src/fresh_b.rs", fresh),
-            cluster("cccc3333", "src/legacy_a.rs", "src/legacy_b.rs", legacy),
-        ],
+        clusters,
         clusters_outside_diff: outside,
     }
 }
 
+/// A run without `--diff`: no diff metrics, no tags, nothing omitted.
+fn untagged_report() -> Report {
+    report(clusters(false), false, None)
+}
+
+/// A `--diff` run without `--only-changed`: every cluster tagged and
+/// kept, `clusters_outside_diff` absent.
+fn diff_report() -> Report {
+    report(clusters(true), true, None)
+}
+
+/// A `--diff --only-changed` run: the legacy cluster is dropped from
+/// the body and counted, exactly as `apply_only_changed` produces —
+/// the only state in which `clusters_outside_diff` is ever `Some`.
+fn only_changed_report() -> Report {
+    let mut kept = clusters(true);
+    kept.truncate(2);
+    report(kept, true, Some(1))
+}
+
+fn count(haystack: &str, needle: &str) -> usize {
+    haystack.matches(needle).count()
+}
+
+/// The pre-diff text output, byte for byte. Cluster blocks carry no
+/// occurrence rows — badged rows exist only under `--diff`, so this
+/// golden is the byte-identity contract for every no-diff run.
+const UNTAGGED_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
+repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
+threshold: 10.00% (breached)
+embeddings: off
+-- action hints --
+  [bucket=identical] extract
+#1 [aaaa1111] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+#2 [bbbb2222] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+#3 [cccc3333] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+";
+
+/// A `--diff` run: the diff gate lines and one badged row per
+/// occurrence, no delta line (nothing was omitted).
+const DIFF_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
+repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
+threshold: 10.00% (breached)
+diff: 63.2% of added lines duplicated (24 / 38 added LOC)
+diff threshold: 0.00% (breached)
+embeddings: off
+-- action hints --
+  [bucket=identical] extract
+#1 [aaaa1111] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+  - src/caller.rs:8-17 [in diff]
+  - src/helper.rs:30-39 [existing]
+#2 [bbbb2222] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+  - src/fresh_a.rs:8-17 [in diff]
+  - src/fresh_b.rs:30-39 [in diff]
+#3 [cccc3333] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+  - src/legacy_a.rs:8-17 [existing]
+  - src/legacy_b.rs:30-39 [existing]
+";
+
+/// A `--diff --only-changed` run: the delta line names one newly
+/// introduced cluster, two kept, one omitted; the repo-wide metrics
+/// line still says 3 clusters — filtering never touches `metrics`.
+const ONLY_CHANGED_TEXT: &str = "deslop test -- 6 file(s), 2 cluster(s), 0 hidden
+repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
+threshold: 10.00% (breached)
+diff: 63.2% of added lines duplicated (24 / 38 added LOC)
+diff threshold: 0.00% (breached)
+delta: 1 newly introduced cluster(s), 2 intersecting the diff, 1 untouched cluster(s) omitted
+embeddings: off
+-- action hints --
+  [bucket=identical] extract
+#1 [aaaa1111] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+  - src/caller.rs:8-17 [in diff]
+  - src/helper.rs:30-39 [existing]
+#2 [bbbb2222] weight=4.50 size=2 nodes=12
+  two identical copies
+  :: extract a shared helper
+  - src/fresh_a.rs:8-17 [in diff]
+  - src/fresh_b.rs:30-39 [in diff]
+";
+
+/// The untagged banner, closed at the threshold verdict — pinning the
+/// exact bytes forecloses any diff tail leaking into a no-diff run.
+const UNTAGGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
+     20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
+     (breached)</p>";
+
+/// The `--diff` banner: the added-lines figure appended, no delta
+/// segment (nothing was omitted).
+const DIFF_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
+     20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
+     (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC)</p>";
+
+/// The `--only-changed` banner: delta segment appended.
+const ONLY_CHANGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
+     20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
+     (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · 1 newly \
+     introduced group(s), 1 untouched group(s) omitted</p>";
+
 #[test]
-fn dump_renderings() {
-    println!("===TEXT-UNTAGGED===");
-    println!("{}", render_text(&report(false, None)));
-    println!("===TEXT-TAGGED===");
-    println!("{}", render_text(&report(true, Some(1))));
-    println!("===HTML-UNTAGGED-LEN===");
-    println!("{}", render_html(&report(false, None), None, false).len());
-    println!("===HTML-UNTAGGED===");
-    println!("{}", render_html(&report(false, None), None, false));
-    println!("===HTML-TAGGED===");
-    println!("{}", render_html(&report(true, Some(1)), None, false));
+fn untagged_report_renders_the_exact_pre_diff_bytes() {
+    let report = untagged_report();
+    assert_eq!(render_text(&report), UNTAGGED_TEXT);
+
+    let html = render_html(&report, None, false);
+    assert_eq!(count(&html, UNTAGGED_BANNER), 1, "banner ends at the repo verdict");
+    assert_eq!(
+        count(&html, "class=\"cluster-card kind-identical cat-logic\""),
+        3,
+        "all three cards carry the plain class list"
+    );
+    assert_eq!(
+        count(&html, "<span class=\"diff-badge\">"),
+        0,
+        "no badge element renders without --diff (the CSS rule alone is static)"
+    );
+    assert_eq!(count(&html, "facet-diff"), 0, "no diff facet controls without --diff");
+}
+
+#[test]
+fn diff_tagged_text_renders_the_gate_and_one_badged_row_per_occurrence() {
+    assert_eq!(render_text(&diff_report()), DIFF_TEXT);
+    assert_eq!(render_text(&only_changed_report()), ONLY_CHANGED_TEXT);
+}
+
+#[test]
+fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
+    let html = render_html(&diff_report(), None, false);
+    assert_eq!(count(&html, DIFF_BANNER), 1, "banner carries the added-lines figure");
+    assert_eq!(
+        count(&html, "class=\"cluster-card kind-identical cat-logic in-diff\""),
+        2,
+        "the mixed and fresh cards are marked in-diff"
+    );
+    assert_eq!(
+        count(&html, "class=\"cluster-card kind-identical cat-logic\""),
+        1,
+        "the legacy card keeps the plain class list"
+    );
+    assert_eq!(count(&html, "<span class=\"diff-badge\">[in diff]</span>"), 3);
+    assert_eq!(count(&html, "<span class=\"diff-badge\">[existing]</span>"), 3);
+    assert_eq!(
+        count(
+            &html,
+            "<input type=\"checkbox\" id=\"facet-diff-touched\" \
+             class=\"facet-input facet-diff-touched\" checked>",
+        ),
+        1,
+    );
+    assert_eq!(
+        count(
+            &html,
+            "<input type=\"checkbox\" id=\"facet-diff-untouched\" \
+             class=\"facet-input facet-diff-untouched\" checked>",
+        ),
+        1,
+    );
+    assert_eq!(count(&html, ">Touched by diff"), 1, "facet chip label");
+    assert_eq!(count(&html, ">Untouched by diff"), 1, "facet chip label");
+
+    let filtered = render_html(&only_changed_report(), None, false);
+    assert_eq!(
+        count(&filtered, ONLY_CHANGED_BANNER),
+        1,
+        "the --only-changed banner appends the newly-introduced delta"
+    );
 }
