@@ -17,7 +17,9 @@ use blake3::Hasher;
 use crate::{
     ast::{ByteRange, NormalizedNode},
     boilerplate::{is_boilerplate, is_import_boilerplate_only_subtree},
-    fingerprint::{is_literal_data_item, is_literal_data_subtree, subtree_hash, Fingerprint},
+    fingerprint::{
+        is_literal_data_item, is_literal_data_subtree, subtree_hash, Fingerprint, HashScratch,
+    },
 };
 
 /// Synthetic node kind used as the hash prefix for a sibling window. The
@@ -38,7 +40,14 @@ const MAX_WINDOW_WIDTH: usize = 8;
 #[must_use]
 pub fn collect_sibling_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    walk(root, min_nodes, &mut out, None, false);
+    walk(
+        root,
+        min_nodes,
+        &mut out,
+        None,
+        false,
+        &mut HashScratch::default(),
+    );
     out
 }
 
@@ -50,26 +59,43 @@ pub fn collect_non_boilerplate_sibling_fingerprints(
     language: &str,
 ) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    walk(root, min_nodes, &mut out, Some(language), false);
+    walk(
+        root,
+        min_nodes,
+        &mut out,
+        Some(language),
+        false,
+        &mut HashScratch::default(),
+    );
     out
 }
 
 /// Recursively inspects `node`'s children, emitting sibling-window
-/// fingerprints whose aggregated node count clears `min_nodes`.
-fn walk(
-    node: &NormalizedNode,
+/// fingerprints whose aggregated node count clears `min_nodes`. One
+/// `scratch` is threaded through the whole walk so every
+/// [`subtree_hash`] call reuses the same buffers instead of allocating.
+fn walk<'tree>(
+    node: &'tree NormalizedNode,
     min_nodes: usize,
     out: &mut Vec<Fingerprint>,
     language: Option<&str>,
     inside_boilerplate: bool,
+    scratch: &mut HashScratch<'tree>,
 ) {
     let current_boilerplate =
         inside_boilerplate || is_boilerplate(language, node) || is_literal_data_subtree(node);
     if !current_boilerplate {
-        emit_windows(&node.children, min_nodes, out, language);
+        emit_windows(&node.children, min_nodes, out, language, scratch);
     }
     for child in &node.children {
-        walk(child, min_nodes, out, language, current_boilerplate);
+        walk(
+            child,
+            min_nodes,
+            out,
+            language,
+            current_boilerplate,
+            scratch,
+        );
     }
 }
 
@@ -98,14 +124,18 @@ fn all_hashes_uniform(hashes: &[[u8; 32]]) -> bool {
 /// [`is_literal_data_subtree`]: literal-only containers (dicts, lists) are
 /// treated as boilerplate before `emit_windows` is ever reached, so
 /// their child entries never enter the sibling window fingerprinter.
-fn emit_windows(
-    siblings: &[NormalizedNode],
+fn emit_windows<'tree>(
+    siblings: &'tree [NormalizedNode],
     min_nodes: usize,
     out: &mut Vec<Fingerprint>,
     language: Option<&str>,
+    scratch: &mut HashScratch<'tree>,
 ) {
     let cumulative = cumulative_node_counts(siblings);
-    let child_hashes: Vec<[u8; 32]> = siblings.iter().map(subtree_hash).collect();
+    let child_hashes: Vec<[u8; 32]> = siblings
+        .iter()
+        .map(|sibling| subtree_hash(sibling, scratch))
+        .collect();
     // [PIPELINE-FINGERPRINT-MERKLE] BUG #61: when every sibling hashes
     // identically after normalisation (e.g. a C# repetitive pattern), every
     // same-width window is trivially equal — not a real clone. Individual

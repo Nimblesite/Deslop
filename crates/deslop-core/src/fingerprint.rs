@@ -32,7 +32,14 @@ pub struct Fingerprint {
 #[must_use]
 pub fn collect_fingerprints(root: &NormalizedNode, min_nodes: usize) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    let _ = hash_and_collect(root, min_nodes, &mut out, None, false);
+    let _ = hash_and_collect(
+        root,
+        min_nodes,
+        &mut out,
+        None,
+        false,
+        &mut HashScratch::default(),
+    );
     out
 }
 
@@ -44,56 +51,110 @@ pub fn collect_non_boilerplate_fingerprints(
     language: &str,
 ) -> Vec<Fingerprint> {
     let mut out = Vec::new();
-    let _ = hash_and_collect(root, min_nodes, &mut out, Some(language), false);
+    let _ = hash_and_collect(
+        root,
+        min_nodes,
+        &mut out,
+        Some(language),
+        false,
+        &mut HashScratch::default(),
+    );
     out
 }
 
 /// Hashes `node` bottom-up, pushing a [`Fingerprint`] into `out` whenever a
 /// subtree meets the minimum node count. Returns `(hash, subtree_node_count)`
 /// for the caller to incorporate into its own hash.
-fn hash_and_collect(
-    node: &NormalizedNode,
+///
+/// `scratch` supplies the frame stack and hash arena; a caller invoking this
+/// repeatedly over one tree ([`subtree_hash`]) reuses their capacity so the
+/// walk allocates only on its first call.
+fn hash_and_collect<'tree>(
+    node: &'tree NormalizedNode,
     min_nodes: usize,
     out: &mut Vec<Fingerprint>,
     language: Option<&str>,
     inside_boilerplate: bool,
+    scratch: &mut HashScratch<'tree>,
 ) -> ([u8; 32], usize) {
-    let mut stack = vec![Frame::new(node, language, inside_boilerplate)];
     let mut root_result = ([0_u8; 32], 0_usize);
-    while let Some(step) = next_step(&mut stack) {
+    let base = scratch.hashes.len();
+    scratch
+        .frames
+        .push(Frame::new(node, language, inside_boilerplate, base));
+    while let Some(step) = next_step(&mut scratch.frames) {
         match step {
             Step::Descend(child, inherited) => {
-                stack.push(Frame::new(child, language, inherited));
+                let base = scratch.hashes.len();
+                scratch
+                    .frames
+                    .push(Frame::new(child, language, inherited, base));
             }
-            Step::Finish => {
-                let Some(frame) = stack.pop() else { break };
-                let finished = frame.finish(min_nodes, out);
-                match stack.last_mut() {
-                    Some(parent) => parent.absorb(finished),
-                    None => root_result = finished,
-                }
-            }
+            Step::Finish => finish_top(scratch, min_nodes, out, &mut root_result),
         }
     }
+    // The root's hash is returned by value; popping its arena entry restores
+    // `scratch` to its caller's baseline for the next reuse.
+    let _root_hash = scratch.hashes.pop();
     root_result
+}
+
+/// Pops the finished top frame, folding its result into its parent — or into
+/// `root_result` when the stack empties.
+fn finish_top(
+    scratch: &mut HashScratch<'_>,
+    min_nodes: usize,
+    out: &mut Vec<Fingerprint>,
+    root_result: &mut ([u8; 32], usize),
+) {
+    let Some(frame) = scratch.frames.pop() else {
+        return;
+    };
+    let (hash, count) = frame.finish(min_nodes, out, &mut scratch.hashes);
+    match scratch.frames.last_mut() {
+        Some(parent) => parent.absorb(count),
+        None => *root_result = (hash, count),
+    }
+}
+
+/// Reusable buffers for [`hash_and_collect`]: the explicit frame stack and
+/// the arena of finished child hashes.
+///
+/// [`subtree_hash`] runs once per sibling at every node of the sibling walk,
+/// so a fresh allocation per call is a measured ~10% scan regression; the
+/// walk instead borrows these buffers, which grow once and are then reused
+/// allocation-free.
+#[derive(Default)]
+pub(crate) struct HashScratch<'tree> {
+    /// In-progress frames, one per node on the current root-to-node path.
+    frames: Vec<Frame<'tree>>,
+    /// Finished child hashes; each open frame's children occupy the
+    /// contiguous run starting at its [`Frame::hash_base`].
+    hashes: Vec<[u8; 32]>,
 }
 
 /// One node's in-progress state on [`hash_and_collect`]'s explicit stack.
 ///
-/// The walk is iterative rather than recursive because a `blake3::Hasher` is
-/// ~1.9 KB and stays live for the whole of a node's visit. Recursing held one
-/// per stack frame, so a file the [`MAX_AST_DEPTH`] guard *accepted* still
-/// exhausted a 1 MB thread stack (Windows' default) part-way down and aborted
-/// the process with no report at all — every duplicate in every other file
-/// lost. Here the per-node state lives on the heap and stack depth is
-/// constant. Pinned by `deslop::fsharp_deep_match_stack_overflow`.
+/// The walk is iterative rather than recursive so a file the
+/// [`MAX_AST_DEPTH`] guard *accepts* cannot exhaust a 1 MB thread stack
+/// (Windows' default) part-way down and abort the process with no report at
+/// all — every duplicate in every other file lost. Pinned by
+/// `deslop::fsharp_deep_match_stack_overflow`.
+///
+/// The frame is deliberately small. A `blake3::Hasher` is ~1.9 KB, and
+/// holding one per open node made deep walks pay for hasher-sized memcpys on
+/// every stack growth; instead children's hashes accumulate in
+/// [`HashScratch::hashes`] and the hasher exists only inside
+/// [`Frame::finish`], fed `kind`, the separator, then the child hashes in
+/// order — byte-for-byte the digest input of the original recursive walk.
 ///
 /// [`MAX_AST_DEPTH`]: crate::lang::shared::MAX_AST_DEPTH
 struct Frame<'tree> {
     /// The node being hashed.
     node: &'tree NormalizedNode,
-    /// Running digest over the node kind and its children's hashes.
-    hasher: Hasher,
+    /// Start of this node's finished child hashes in
+    /// [`HashScratch::hashes`].
+    hash_base: usize,
     /// Index of the next child to descend into.
     next_child: usize,
     /// Nodes counted in this subtree so far, including the node itself.
@@ -111,15 +172,17 @@ enum Step<'tree> {
 }
 
 impl<'tree> Frame<'tree> {
-    /// Opens a frame, seeding the digest with the node kind exactly as the
-    /// recursive walk did so hashes stay byte-compatible.
-    fn new(node: &'tree NormalizedNode, language: Option<&str>, inherited: bool) -> Self {
-        let mut hasher = Hasher::new();
-        let _ = hasher.update(node.kind.as_bytes());
-        let _ = hasher.update(b"\0");
+    /// Opens a frame over `node` whose children's hashes will land at
+    /// `hash_base` on the shared arena.
+    fn new(
+        node: &'tree NormalizedNode,
+        language: Option<&str>,
+        inherited: bool,
+        hash_base: usize,
+    ) -> Self {
         Self {
             node,
-            hasher,
+            hash_base,
             next_child: 0,
             node_count: 1,
             boilerplate: inherited
@@ -128,16 +191,22 @@ impl<'tree> Frame<'tree> {
         }
     }
 
-    /// Folds a finished child's hash and node count into this frame.
-    fn absorb(&mut self, (hash, count): ([u8; 32], usize)) {
-        let _ = self.hasher.update(&hash);
+    /// Folds a finished child's node count into this frame; the child's hash
+    /// is already on the arena where [`Frame::finish`] reads it.
+    fn absorb(&mut self, count: usize) {
         self.node_count = self.node_count.saturating_add(count);
     }
 
-    /// Closes the frame, emitting a [`Fingerprint`] when the subtree
-    /// qualifies, and returns its hash and node count for the parent.
-    fn finish(self, min_nodes: usize, out: &mut Vec<Fingerprint>) -> ([u8; 32], usize) {
-        let hash: [u8; 32] = self.hasher.finalize().into();
+    /// Closes the frame: digests the node over its children's arena hashes,
+    /// emits a [`Fingerprint`] when the subtree qualifies, then replaces the
+    /// children's arena run with this node's own hash.
+    fn finish(
+        self,
+        min_nodes: usize,
+        out: &mut Vec<Fingerprint>,
+        hashes: &mut Vec<[u8; 32]>,
+    ) -> ([u8; 32], usize) {
+        let hash = digest_node(self.node, hashes.get(self.hash_base..).unwrap_or(&[]));
         if self.node_count >= min_nodes && !self.boilerplate && !re_describes_only_child(self.node)
         {
             out.push(Fingerprint {
@@ -147,8 +216,23 @@ impl<'tree> Frame<'tree> {
                 node_count: self.node_count,
             });
         }
+        hashes.truncate(self.hash_base);
+        hashes.push(hash);
         (hash, self.node_count)
     }
+}
+
+/// Digests one node: its kind, the separator, then `child_hashes` in order
+/// — byte-for-byte the digest input of the original recursive walk, which is
+/// what keeps every persisted fingerprint and report hash stable.
+fn digest_node(node: &NormalizedNode, child_hashes: &[[u8; 32]]) -> [u8; 32] {
+    let mut hasher = Hasher::new();
+    let _ = hasher.update(node.kind.as_bytes());
+    let _ = hasher.update(b"\0");
+    for child_hash in child_hashes {
+        let _ = hasher.update(child_hash);
+    }
+    hasher.finalize().into()
 }
 
 /// Advances the top frame: descend into its next child, or report it done.
@@ -167,11 +251,15 @@ fn next_step<'tree>(stack: &mut [Frame<'tree>]) -> Option<Step<'tree>> {
 ///
 /// Iterative for the same reason as [`hash_and_collect`], whose scheme it
 /// shares — one hash definition, so a change to either cannot drift them
-/// apart.
+/// apart. Callers invoking this per sibling thread one [`HashScratch`]
+/// through so repeated calls reuse the same buffers.
 #[must_use]
-pub(crate) fn subtree_hash(node: &NormalizedNode) -> [u8; 32] {
+pub(crate) fn subtree_hash<'tree>(
+    node: &'tree NormalizedNode,
+    scratch: &mut HashScratch<'tree>,
+) -> [u8; 32] {
     let mut discarded = Vec::new();
-    let (hash, _count) = hash_and_collect(node, usize::MAX, &mut discarded, None, true);
+    let (hash, _count) = hash_and_collect(node, usize::MAX, &mut discarded, None, true, scratch);
     hash
 }
 
