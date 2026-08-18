@@ -59,7 +59,7 @@ complete report. `--output` cannot redirect the cache; it stays at the scan root
 ### [CLI-ARG-DIFF] `--diff` unified-diff scope
 
 > **Status: specified, not shipped.** Lands with gh #364 per
-> [diff-scoped-reporting-plan.md](../plans/diff-scoped-reporting-plan.md).
+> [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
 
 `--diff <FILE|->` supplies a unified diff (`-` reads stdin) whose new-side added
 lines scope the report. The scan itself is unchanged — the whole tree is analysed

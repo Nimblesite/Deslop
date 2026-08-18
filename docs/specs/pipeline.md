@@ -124,7 +124,7 @@ An **incremental pass** is one that is given the set of files whose content chan
 
 ### [PIPELINE-DIFF-INGEST] Unified-diff ingestion and verification
 
-> **Status: specified, not shipped.** Lands with gh #364 per [diff-scoped-reporting-plan.md](../plans/diff-scoped-reporting-plan.md).
+> **Status: specified, not shipped.** Lands with gh #364 per [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
 
 `--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) is consumed by a strict line-oriented parser — exact structural prefixes and integer parsing, never pattern matching; an unrecognised construct rejects the whole diff (exit `2`) rather than guessing at spans. Recognised grammar: `diff --git` headers, `---`/`+++` file targets with `a/`/`b/` prefixes and C-quoted paths, rename/copy/similarity and `Binary files` lines, `@@ -l[,n] +l[,n] @@` hunks, and ` `/`+`/`-`/`\` body lines. Only new-side **added** lines produce spans — context and deletions scope nothing, so a pure rename or a deletion-only hunk tags nothing. Spans are merged and sorted per file. Paths resolve against the working directory, then re-relativise to the scan root — the same form `ReportOccurrence.path` carries; diff files outside the corpus are ignored for tagging and counted on the `diff ingested` tracing event, since a repo-root diff legitimately touches files the scan never sees.
 
@@ -313,7 +313,7 @@ Default output paths, the format suppressors, and `--from-report` re-rendering a
 
 #### [OUTPUT-SCHEMA-DIFF-TAGS] Diff-scope tags
 
-> **Status: specified, not shipped.** Lands with gh #364 per [diff-scoped-reporting-plan.md](../plans/diff-scoped-reporting-plan.md).
+> **Status: specified, not shipped.** Lands with gh #364 per [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
 
 Under `--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) the report carries the diff verdicts; without it every field below is **absent**, never defaulted `false` — a run given no diff asserts nothing about one. Intersection is closed-interval over the 1-indexed `start_line`/`end_line` the occurrence already carries; one added line inside an occurrence tags it, because touching a clone counts as touching the clone. Cluster rollups ignore `hidden` occurrences, matching the [METRICS-REPO] projection.
 

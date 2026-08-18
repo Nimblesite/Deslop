@@ -245,6 +245,12 @@ stays with [pipeline.md §EXIT-CODES](pipeline.md).
 Every input reaches its script through `env`, never through `${{ }}`
 interpolated into a `run` body, so a crafted input cannot inject shell.
 
+**[ACTION-CACHE] The parse store survives between runs.**
+
+> **Status: specified, not shipped.** Lands with gh #381 per [incremental-analysis-plan.md](../plans/incremental-analysis-plan.md).
+
+The action restores `.deslop/cache` under the scan root before the run step and saves it afterwards with the SHA-pinned `actions/cache/restore` and `actions/cache/save` steps ([SWR-SEC-ACTION-PINNING]). The path derives from the `path` input, never the repository root — the store lives beside the scan root by contract ([pipeline.md §PIPELINE-INCREMENTAL]). The key is `deslop-<resolved version>-<runner os>-<run id>` with a `restore-keys` prefix that drops the run id: the store mutates every pass and an exact-key hit is never re-saved, so the per-run key plus prefix fallback is what lets each run restore the newest same-version store and save its own successor. Keying on the resolved CLI version keeps superseded partitions from riding between runs, and the post-pass retention sweep bounds every save at 2 GiB ([pipeline.md §PIPELINE-INCREMENTAL-RETENTION]), well under the 10 GiB repository ceiling Actions evicts against. Correctness never rests on the restore: every blob is digest-verified against its full address before a payload byte is decoded, and anything stale, foreign, or tampered is refused into a plain miss and rebuilt from source ([pipeline.md §PIPELINE-INCREMENTAL-INTEGRITY]) — the worst a bad cache entry can cost is a re-parse. A `cache: "false"` input skips both steps and changes nothing else.
+
 **[ACTION-PUBLISH] Listing the action is a manual, human step.** Draft a release
 from the `action.yml` page, tick *Publish this Action to the GitHub
 Marketplace*, choose the categories, and publish with 2FA. It requires the
