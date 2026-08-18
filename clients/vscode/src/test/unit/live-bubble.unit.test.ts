@@ -243,7 +243,7 @@ suite("LiveBubble render", () => {
   // gone. Absence from `report.clusters` cannot separate them, so
   // `ReportStore` now records `clusters_removed` instead of dropping it —
   // the discriminator is retraction, not absence ([VSIX-STATE-DIRTY]).
-  // → docs/plans/fused-score-followups.md § "Branch regression audit"
+  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("a stale probe cannot resurrect a cluster the visible report dropped", async () => {
     const { store, capture, bubble } = await bubbleFixture({ generation: 1 });
 

@@ -47,7 +47,7 @@ suite("LiveBubble fused confidence", () => {
   // clusters below 0.85 were silently withheld from the flagship live
   // surface. `bubbleAdmits` now takes the engine's verdict for an act-now
   // bucket and keeps the fused cutoff for everything below it.
-  // → docs/plans/fused-score-followups.md § "Branch regression audit"
+  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("an act-now near miss below the fused cutoff still reaches the bubble", async () => {
     // A genuine Type-3 near miss: identical shape, real edits, so
     // positional agreement is ~0.8 and the gate renders fused = 0.80
@@ -243,7 +243,7 @@ suite("LiveBubble fused confidence", () => {
   // could not tell "safe to extract" from "identifiers differ". The strip
   // is still three bars — shape, semantic, confidence — because the two
   // shape views are one piece of evidence and only `fused` separates them.
-  // → docs/plans/fused-score-followups.md § "Branch regression audit"
+  // → docs/plans/fused-score-followups.md § "Where fused stands against it"
   test("the signal strip distinguishes a proven rename from a verbatim copy", () => {
     // Both render structural 1.0 and token 1.0 — the rename's token
     // signal is corrected upward by the Merkle argument (#232) — so the

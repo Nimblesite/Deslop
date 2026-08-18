@@ -63,10 +63,11 @@ Not history — each is a property of the code as it stands today.
 
 ## 0. 🛑 QUARANTINED — a maximal Type-2 rename was reported as coincidence
 
-`content::pair_rename_consistency` is a `panic!`. Every scan that reaches a shape-saturating cluster whose
-member pair carries fewer than four literal anchors now aborts with exit 101, by design: a false negative on
-the textbook Type-2 clone is worse than a crash. **Nothing else may be built on this crate until the
-replacement lands.**
+The sub-floor branch of `content::pair_rename_consistency` is a `panic!` — the above-floor path still
+computes `literal_preservation.min(mapping_consistency)` unchanged. Every scan that reaches a
+shape-saturating cluster whose member pair carries fewer than four literal anchors now aborts with exit 101,
+by design: a false negative on the textbook Type-2 clone is worse than a crash. **Nothing else may be built
+on this crate until the replacement lands.**
 
 `crates/deslop/tests/type2_rename_anchor_floor.rs::a_maximal_rename_with_few_literals_is_still_a_type2_clone`
 was watched failing on the rendered verdict **before** the quarantine replaced the code. Two TypeScript
