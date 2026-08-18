@@ -315,10 +315,16 @@ let combine (values: int list) (ceiling: int) =
             "fixture: and must not change its length"
         );
 
-        let short_signatures =
-            signatures_for_file(&short_tree, &[short_window.clone()], Some("fsharp"));
-        let long_signatures =
-            signatures_for_file(&long_tree, &[long_window.clone()], Some("fsharp"));
+        let short_signatures = signatures_for_file(
+            &short_tree,
+            std::slice::from_ref(&short_window),
+            Some("fsharp"),
+        );
+        let long_signatures = signatures_for_file(
+            &long_tree,
+            std::slice::from_ref(&long_window),
+            Some("fsharp"),
+        );
 
         let ([short_signature], [long_signature]) =
             (short_signatures.as_slice(), long_signatures.as_slice())
