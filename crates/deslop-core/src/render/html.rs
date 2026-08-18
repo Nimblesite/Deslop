@@ -29,7 +29,7 @@ use crate::{
         html_footer::write_run_details,
     },
     report::{Report, ReportCluster, ReportOccurrence},
-    report_location::format_occurrence,
+    report_location::{diff_badge, format_occurrence},
     report_metrics::ThresholdSource,
 };
 
@@ -402,7 +402,7 @@ pub(super) fn write_cluster_card(
     };
     let _ = write!(
         out,
-        "<article class=\"cluster-card {kind_class} cat-{category_class}\">\
+        "<article class=\"cluster-card {kind_class} cat-{category_class}{diff_class}\">\
          <header class=\"cluster-card__head\">\
          <h3 class=\"cluster-card__title\">{title}</h3>\
          {ai_badge}{category_chip}\
@@ -411,6 +411,7 @@ pub(super) fn write_cluster_card(
          <p class=\"cluster-card__action\">{action}</p>",
         kind_class = kind_class(kind),
         category_class = category.wire_label(),
+        diff_class = diff_card_class(cluster),
         title = escape(&kind_title(kind, occurrences.len())),
         category_chip = category_chip(category),
         cost = escape(&cost_chip(cluster)),
@@ -419,6 +420,28 @@ pub(super) fn write_cluster_card(
     write_example(out, occurrences, snippets);
     write_also_list(out, occurrences, snippets);
     let _ = write!(out, "</article>");
+}
+
+/// Card class suffix for a cluster the verified diff touches
+/// ([OUTPUT-SCHEMA-DIFF-TAGS]): `" in-diff"` when any non-hidden
+/// occurrence carries added lines, empty otherwise — including on
+/// no-diff runs, so their markup stays byte-identical.
+fn diff_card_class(cluster: &ReportCluster) -> &'static str {
+    match cluster.intersects_diff {
+        Some(true) => " in-diff",
+        Some(false) | None => "",
+    }
+}
+
+/// Badge markup for an occurrence's diff membership, sourced from the
+/// shared [`diff_badge`] helper. Empty on a no-diff run.
+fn diff_badge_markup(in_diff: Option<bool>) -> String {
+    diff_badge(in_diff).map_or_else(String::new, |badge| {
+        format!(
+            " <span class=\"diff-badge\">{badge}</span>",
+            badge = escape(badge),
+        )
+    })
 }
 
 /// Renders the `data table` category chip for the card header, or an empty

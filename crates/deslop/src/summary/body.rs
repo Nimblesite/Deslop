@@ -29,6 +29,7 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
     let theme = Theme::pick(color);
     eprintln!();
     write_headline(&theme, report);
+    write_diff_delta_line(&theme, report);
     if report.clusters_hidden > 0 {
         eprintln!(
             "  {dim}({hidden} more groups hidden by your .deslop.toml config){reset}",
@@ -91,6 +92,28 @@ fn write_headline(theme: &Theme, report: &Report) {
         clusters = report.clusters.len(),
         files = report.files_analysed,
         kb = total_bytes.div_ceil(1024).max(1),
+    );
+}
+
+/// Diff-scoped delta line ([CLI-ARG-ONLY-CHANGED]): leads the summary
+/// with what this diff newly introduced and how many untouched groups
+/// the filter omitted. Silent unless `--only-changed` filtered the
+/// cluster list, so every other run's stderr stays identical.
+fn write_diff_delta_line(theme: &Theme, report: &Report) {
+    let Some(outside) = report.clusters_outside_diff else {
+        return;
+    };
+    let newly = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster.is_newly_introduced == Some(true))
+        .count();
+    eprintln!(
+        "  {bold}{newly} group(s) newly introduced by this diff{reset} \
+         {dim}({outside} untouched group(s) omitted by --only-changed){reset}",
+        bold = theme.bold,
+        dim = theme.dim,
+        reset = theme.reset,
     );
 }
 

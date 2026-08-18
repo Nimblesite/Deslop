@@ -7,9 +7,10 @@
 //! sharing at least one identical band are returned as candidate Type-3
 //! clones. Jaccard similarity is estimated from the full signatures.
 //!
-//! All hashing uses `blake3` so two different processes produce identical
-//! signatures given the same input — a prerequisite for caching per
-//! [PRINCIPLES-LONG-RUNNING-DAEMON].
+//! `MinHash` signature construction uses `blake3` so two different processes
+//! produce identical signatures given the same input — a prerequisite for
+//! caching per [PRINCIPLES-LONG-RUNNING-DAEMON]. Band keys preserve their four
+//! rows directly because those rows already fill the 32-byte bucket key.
 
 use std::collections::HashMap;
 
@@ -126,17 +127,18 @@ fn ordered_pair(a: usize, b: usize) -> (usize, usize) {
     (a.min(b), a.max(b))
 }
 
-/// Hashes one band of a signature into a stable 32-byte key used as a
-/// `HashMap` bucket.
+/// Encodes one band as its four little-endian rows for use as a `HashMap` key.
+/// The rows fill the 32-byte key, so key equality exactly preserves band
+/// equality without an additional hash.
 fn band_key(signature: &Signature, band: usize) -> [u8; 32] {
-    let mut hasher = Hasher::new();
+    let mut key = [0; ROWS_PER_BAND * size_of::<u64>()];
     let start = band.saturating_mul(ROWS_PER_BAND);
-    for offset in 0..ROWS_PER_BAND {
+    for (offset, key_row) in key.chunks_exact_mut(size_of::<u64>()).enumerate() {
         let slot_index = start.saturating_add(offset);
         let value = signature.get(slot_index).copied().unwrap_or(0);
-        let _ = hasher.update(&value.to_le_bytes());
+        key_row.copy_from_slice(&value.to_le_bytes());
     }
-    hasher.finalize().into()
+    key
 }
 
 /// Flattens a k-gram into a byte buffer with a nul separator so
@@ -148,4 +150,25 @@ fn kgram_bytes(gram: &[&'static str]) -> Vec<u8> {
         buffer.push(0);
     }
     buffer
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{band_key, Signature, ROWS_PER_BAND, SIGNATURE_LEN};
+
+    fn byte_index(index: usize) -> u8 {
+        u8::try_from(index).expect("test byte index fits in u8")
+    }
+
+    #[test]
+    fn band_key_is_identity_concatenation() {
+        let rows: [u64; ROWS_PER_BAND] = std::array::from_fn(|row| {
+            let start = byte_index(row * size_of::<u64>());
+            u64::from_le_bytes(std::array::from_fn(|byte| start + byte_index(byte)))
+        });
+        let mut signature: Signature = [0; SIGNATURE_LEN];
+        signature[ROWS_PER_BAND..ROWS_PER_BAND * 2].copy_from_slice(&rows);
+
+        assert_eq!(band_key(&signature, 1), std::array::from_fn(byte_index));
+    }
 }

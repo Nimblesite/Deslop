@@ -21,23 +21,24 @@ const RENDERS_REPORT = new Set([0, 3]);
  * must say "added lines" rather than claim the repo-wide figure failed. `--diff`
  * alone never moves the gate, so tagging a run must not rename its scope either.
  *
- * @param {Record<string, unknown> | undefined} diffMetrics `metrics.diff`, absent without `--diff`
+ * @param {{duplication_percent?: number, threshold?: {percent?: number}} | undefined} diffMetrics
+ *   `metrics.diff`, absent without `--diff`
  * @param {boolean} onlyChanged whether the run passed `--only-changed`
  * @param {string} jsonPath the report the metrics were read from, for the error
- * @returns {{scope: string, percent: unknown, ceiling: unknown}}
+ * @returns {{scope: string, percent: string, ceiling: string} | undefined}
  */
-function gateScope(diffMetrics, onlyChanged, jsonPath) {
-  if (!onlyChanged) return { scope: "repository", percent: undefined, ceiling: undefined };
-  if (!diffMetrics) {
+function diffGate(diffMetrics, onlyChanged, jsonPath) {
+  if (!onlyChanged) return undefined;
+  if (typeof diffMetrics?.duplication_percent !== "number") {
     throw new Error(
-      `only-changed gated this run but ${jsonPath} carries no metrics.diff block, so the ` +
-        "percentage the gate measured cannot be named",
+      `only-changed gated this run but ${jsonPath} carries no metrics.diff duplication_percent, ` +
+        "so the percentage the gate measured cannot be named",
     );
   }
   return {
     scope: "added-lines",
-    percent: diffMetrics.duplication_percent,
-    ceiling: diffMetrics.threshold?.percent,
+    percent: String(diffMetrics.duplication_percent),
+    ceiling: String(diffMetrics.threshold?.percent ?? 0),
   };
 }
 
@@ -60,15 +61,19 @@ export function readOutputs(reportPrefix, exitCode, onlyChanged = false) {
   const metrics = JSON.parse(readFileSync(jsonPath, "utf8")).metrics ?? {};
   const duplicationPercent = String(metrics.duplication_percent ?? 0);
   const thresholdPercent = String(metrics.threshold?.percent ?? 0);
-  const gate = gateScope(metrics.diff, onlyChanged, jsonPath);
+  const gate = diffGate(metrics.diff, onlyChanged, jsonPath) ?? {
+    scope: "repository",
+    percent: duplicationPercent,
+    ceiling: thresholdPercent,
+  };
   return {
     "exit-code": String(exitCode),
     "duplication-percent": duplicationPercent,
     "cluster-count": String(metrics.clusters_total ?? 0),
     "threshold-percent": thresholdPercent,
     "gate-scope": gate.scope,
-    "gate-percent": String(gate.percent ?? duplicationPercent),
-    "gate-threshold-percent": String(gate.ceiling ?? thresholdPercent),
+    "gate-percent": gate.percent,
+    "gate-threshold-percent": gate.ceiling,
     "report-json": jsonPath,
     "report-text": `${reportPrefix}.txt`,
     "report-html": `${reportPrefix}.html`,
@@ -76,11 +81,11 @@ export function readOutputs(reportPrefix, exitCode, onlyChanged = false) {
 }
 
 function main(argv) {
-  const [reportPrefix, exitCode] = argv;
+  const [reportPrefix, exitCode, onlyChanged] = argv;
   if (!reportPrefix || exitCode === undefined) {
-    throw new Error("usage: action-read-outputs.mjs <reportPrefix> <exitCode>");
+    throw new Error("usage: action-read-outputs.mjs <reportPrefix> <exitCode> [onlyChanged]");
   }
-  const outputs = readOutputs(reportPrefix, Number.parseInt(exitCode, 10));
+  const outputs = readOutputs(reportPrefix, Number.parseInt(exitCode, 10), onlyChanged === "true");
   writeOutputs(outputs);
   console.log(
     `deslop measured ${outputs["duplication-percent"] ?? "no"} percent duplication ` +
