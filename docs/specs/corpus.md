@@ -22,6 +22,10 @@ The memory ceiling is **7168 MB — the RAM of a standard GitHub Actions runner*
 
 **An empty `must_find` asserts nothing, and the suite says so out loud** — such a run prints `ACCURACY UNASSERTED` and has proven only that the scan fit its budget. A green corpus test is not evidence of accuracy unless the repository has curated entries. An entry that lists no files fails rather than passing vacuously.
 
+`must_find_type2` is the same contract for **renames**: pairs a human confirmed are the same code with different identifiers, each carrying `verified` — how the rename was checked — alongside `why` and `files`. Byte-identical clones belong in `must_find`; a Type-2 pair is not byte-identical by definition, so it can never reach the `identical` bucket and must be earned from the content gate. The entry passes only when a cluster spans its files, that cluster is `nearly_identical`, its shown signals carry saturating shape evidence, and the curated occurrences are themselves visible. A hidden occurrence fails: recall is what the report *shows*, not what it contains.
+
+`must_find_type2_status` states the curation position in words and must not contradict the list. Because an empty list silently asserts nothing, the manifests are themselves under test: curated Type-2 ground truth must exist in at least two languages, and every entry must name at least two distinct files with its human evidence attached.
+
 ### [CORPUS-PRECISION] Ranking rules
 
 Ranking *is* the product, so the head of the report is where a false positive does the most damage. Two rules apply to the top-ranked clusters:

@@ -11,6 +11,7 @@
 import { defineConfig } from "@vscode/test-cli";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { vscodeTestUserDataDir } from "./scripts/vscode-test-user-data-dir.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.join(here, "out", "test", "fixtures", "csharp-type4");
@@ -21,7 +22,8 @@ export default defineConfig({
       label: "ollama-e2e",
       files: "out/test/ollama/**/*.test.js",
       workspaceFolder: fixture,
-      launchArgs: ["--disable-extensions"],
+      // Same 103-byte socket-path cap as .vscode-test.mjs.
+      launchArgs: ["--disable-extensions", "--user-data-dir", vscodeTestUserDataDir(here)],
       env: {
         DESLOP_TEST_FIXTURE: fixture,
         DESLOP_BINARY_DIR: "",

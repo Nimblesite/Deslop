@@ -74,6 +74,10 @@ scoop bucket add nimblesite https://github.com/Nimblesite/scoop-bucket
 scoop install deslop
 ```
 
+On macOS or Linux without Homebrew, `curl` the latest release archive instead —
+the [install docs](https://deslop.live/docs/#macos--linux-curl) have a
+checksum-verified snippet that always resolves the newest version.
+
 ## How it works
 
 Deslop parses code with tree-sitter and compares structure instead of merely

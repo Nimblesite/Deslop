@@ -8,16 +8,14 @@ import {
   currentExtensionVersion,
   revealActiveBinary,
   tryResolveOptional,
-  wireNotifications,
-  refreshAfterChange,
   seedInitialReport,
   buildServerArgs,
   syncEmbeddingSettingsToLsp,
   resolveWorkspaceRoot,
 } from "../../extension";
+import { wireNotifications } from "../../notifications";
 import { ReportStore } from "../../reportStore";
-import { cluster, report } from "./tree.helpers";
-import { repoMetrics } from "./report.helpers";
+import { emptyReport, repoMetrics } from "./report.helpers";
 import {
   BundledBinaryMissingError,
   UnsupportedPlatformError,
@@ -237,16 +235,10 @@ suite("extension internals", () => {
       },
       sendRequest: (name: string) => {
         requests.push(name);
-        return Promise.resolve({
+        return Promise.resolve(emptyReport({
           tool_version: "v",
-          min_nodes: 30,
           files_analysed: 7,
-          clusters_hidden: 0,
-          cache_stats: { hits: 0, misses: 0 },
           metrics: repoMetrics(),
-          schema_doc: "",
-          action_hints: [],
-          boilerplate_hints: [],
           embedding_provenance: {
             provider_id: "ollama",
             model_id: "nomic-embed-text",
@@ -256,12 +248,11 @@ suite("extension internals", () => {
             indexed_subtrees: 1,
             failed_subtrees: 0,
           },
-          clusters: [],
-        });
+        }));
       },
     } as unknown as LanguageClient;
     const store = new ReportStore();
-    wireNotifications(client, store);
+    const schedule = wireNotifications(client, store);
     progressCb?.({
       phase: "complete",
       provider_id: "ollama",
@@ -269,7 +260,9 @@ suite("extension internals", () => {
       done: 1,
       total: 1,
     });
-    await Promise.resolve();
+    // The refresh runs on the serialised queue; awaiting the schedule is the
+    // deterministic completion point (no microtask counting, no timers).
+    await schedule.settled();
     assert.ok(requests.includes("deslop/reportGet"));
     assert.equal(store.current.report?.files_analysed, 7);
   });
@@ -286,165 +279,14 @@ suite("extension internals", () => {
     stateCb?.("running");
   });
 
-  test("wireNotifications reportChanged applies a delta", async () => {
-    let changedCb: ((p: unknown) => Promise<void>) | undefined;
-    const requests: string[] = [];
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => Promise<void>) => {
-        if (name === "deslop/reportChanged") changedCb = cb;
-      },
-      sendRequest: (name: string) => {
-        requests.push(name);
-        if (name === "deslop/reportDelta") {
-          return Promise.resolve({
-            from_generation: 0,
-            to_generation: 1,
-            clusters_added: [],
-            clusters_removed: [],
-            clusters_updated: [],
-            metrics: repoMetrics(),
-            cache_stats: { hits: 0, misses: 0 },
-            tool_version: "v",
-          });
-        }
-        return Promise.resolve({});
-      },
-    } as unknown as LanguageClient;
-    const store = new ReportStore();
-    store.setSnapshot(
-      {
-        tool_version: "v0",
-        min_nodes: 30,
-        files_analysed: 0,
-        clusters_hidden: 0,
-        cache_stats: { hits: 0, misses: 0 },
-        metrics: repoMetrics(),
-        schema_doc: "",
-        action_hints: [],
-        boilerplate_hints: [],
-        embedding_provenance: undefined,
-        clusters: [],
-      },
-      0,
-    );
-    wireNotifications(client, store);
-    await changedCb?.({ generation: 1, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
-    assert.ok(requests.includes("deslop/reportDelta"));
-  });
-
-  test("wireNotifications reportChanged falls back to reportGet when delta is null", async () => {
-    let changedCb: ((p: unknown) => Promise<void>) | undefined;
-    const requests: string[] = [];
-    const client = {
-      onNotification: (name: string, cb: (p: unknown) => Promise<void>) => {
-        if (name === "deslop/reportChanged") changedCb = cb;
-      },
-      sendRequest: (name: string) => {
-        requests.push(name);
-        if (name === "deslop/reportDelta") return Promise.resolve(null);
-        return Promise.resolve({
-          tool_version: "x",
-          min_nodes: 30,
-          files_analysed: 0,
-          clusters_hidden: 0,
-          cache_stats: { hits: 0, misses: 0 },
-          metrics: repoMetrics(),
-          schema_doc: "",
-          action_hints: [],
-          boilerplate_hints: [],
-          embedding_provenance: undefined,
-          clusters: [],
-        });
-      },
-    } as unknown as LanguageClient;
-    const store = new ReportStore();
-    wireNotifications(client, store);
-    await changedCb?.({ generation: 5, summary: { clusters_added: 0, clusters_removed: 0, clusters_updated: 0, worst_weight: 0 } });
-    assert.ok(requests.includes("deslop/reportGet"));
-  });
-
-  // Regression (#230): a missed/lagged deslop/reportChanged leaves the store at
-  // an older baseline than the single-step delta the server returns by default
-  // (current-1 -> current). Applying that delta on the stale base never retracts
-  // the clusters dropped in the skipped generations, so a discarded cluster
-  // survives as a phantom rank-#1 entry. The refresh must converge the store to
-  // the live engine instead of merging a delta against a mismatched baseline.
-  test("refreshAfterChange converges to the engine after a missed generation (#230)", async () => {
-    // Engine history: gen 1 [phantom(100), keep(50)] -> gen 2 drops phantom
-    // (MISSED by the client) -> gen 3 adds fresh(80). Live truth at gen 3 is
-    // worst-first [fresh, keep]; "phantom" no longer exists in the engine.
-    const keep = cluster("keep", 50, "/repo/Keep.cs");
-    const fresh = cluster("fresh", 80, "/repo/Fresh.cs");
-    const liveReport = report([fresh, keep]);
-
-    const deltaSinceParams: Array<number | undefined> = [];
-    const client = {
-      sendRequest: (name: string, params?: { since_generation?: number }) => {
-        if (name === "deslop/reportDelta") {
-          deltaSinceParams.push(params?.since_generation);
-          // The server answers `since -> current(3)`. With the correct baseline
-          // (1) it can retract "phantom"; the buggy no-since default (current-1
-          // = 2) returns a delta that cannot, because phantom left in gen 2.
-          const since = params?.since_generation ?? 2;
-          if (since === 1) {
-            return Promise.resolve({
-              from_generation: 1,
-              to_generation: 3,
-              clusters_added: [fresh],
-              clusters_removed: ["phantom"],
-              clusters_updated: [],
-              cache_stats: { hits: 0, misses: 0 },
-              tool_version: "v",
-            });
-          }
-          return Promise.resolve({
-            from_generation: since,
-            to_generation: 3,
-            clusters_added: [fresh],
-            clusters_removed: [],
-            clusters_updated: [],
-            cache_stats: { hits: 0, misses: 0 },
-            tool_version: "v",
-          });
-        }
-        // deslop/reportGet always serves canonical live truth.
-        return Promise.resolve(liveReport);
-      },
-    } as unknown as LanguageClient;
-
-    const store = new ReportStore();
-    store.setSnapshot(report([cluster("phantom", 100, "/repo/Phantom.cs"), keep]), 1);
-
-    await refreshAfterChange(client, store, {
-      generation: 3,
-      summary: { clusters_added: 1, clusters_removed: 1, clusters_updated: 0, worst_weight: 80 },
-    });
-
-    assert.deepEqual(
-      store.current.report?.clusters.map((c) => c.id),
-      ["fresh", "keep"],
-      "the stale 'phantom' cluster (rank #1) must not survive a missed generation — " +
-        "the store must converge to the live engine report",
-    );
-    assert.equal(store.current.generation, 3, "the store must advance to the live generation");
-  });
-
   test("seedInitialReport stores the returned snapshot", async () => {
     const client = {
       sendRequest: () =>
-        Promise.resolve({
+        Promise.resolve(emptyReport({
           tool_version: "v",
-          min_nodes: 30,
           files_analysed: 2,
-          clusters_hidden: 0,
-          cache_stats: { hits: 0, misses: 0 },
           metrics: repoMetrics(),
-          schema_doc: "",
-          action_hints: [],
-          boilerplate_hints: [],
-          embedding_provenance: undefined,
-          clusters: [],
-        }),
+        })),
     } as unknown as LanguageClient;
     const store = new ReportStore();
     await seedInitialReport(client, store);

@@ -10,11 +10,13 @@
 #     codeql.yml only trigger on `pull_request: [main]` (the filter matches the
 #     PR *base*), so these staging PRs run NO build/test/CodeQL.
 #   * SECURITY updates -> GitHub IGNORES `target-branch` for these and always
-#     opens them against the repo's default branch (`main`). The auto-merge
-#     workflow therefore also fires on `main` and folds the security bump into
-#     the SAME staging branch, then retires the PR — so a CVE bump never sits on
-#     main waiting for a human either. (ci.yml/codeql.yml skip Dependabot PRs, so
-#     the matrix never burns on a bump we immediately sweep away.)
+#     opens them against the repo's default branch (`main`). They are handled by
+#     a human, deliberately — the sweep's base filter is `dependabot-upgrades`
+#     only (see the BASE FILTER note in dependabot-automerge.yml and
+#     [GITHUB-DEPENDABOT]) — and because they are the ONLY Dependabot PRs that
+#     ever reach a `pull_request: [main]` workflow, ci.yml and codeql.yml carry
+#     no actor short-circuit: a security PR gets the full build/test matrix,
+#     dependency review, and CodeQL, like any human PR to main.
 #   * groups -> each ecosystem collapses ALL version bumps (patch, minor AND
 #     major) into ONE PR, and a parallel `*-security` group (`applies-to:
 #     security-updates`) collapses CVE bumps the same way. Majors no longer need

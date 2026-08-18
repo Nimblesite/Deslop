@@ -13,5 +13,17 @@
   },
 
   "must_find": [],
-  "must_find_status": "NOT YET CURATED. No recall assertion runs for this repository until duplicates here are hand-verified by diffing the reported ranges. An empty list asserts nothing - it must never be read as evidence that recall is good."
+  "must_find_status": "NOT YET CURATED. No recall assertion runs for this repository until duplicates here are hand-verified by diffing the reported ranges. An empty list asserts nothing - it must never be read as evidence that recall is good.",
+
+  "must_find_type2": [
+    {
+      "why": "The two standard-stream handles are one module written twice. Both declare the same struct wrapping SplitByUtf8BoundaryIfWindows<Blocking<std::io::X>>, the same constructor, the same AsRawFd/AsFd/AsRawHandle/AsHandle impls behind the same cfg gates, and the same AsyncWrite impl.",
+      "verified": "diff of tokio/src/io/stderr.rs against tokio/src/io/stdout.rs changes only the renamed symbols - Stderr/Stdout, stderr()/stdout(), io::stderr()/io::stdout(), std::io::Stderr/std::io::Stdout - on every declaration and impl header. The only non-rename difference is extra doc-comment examples in stdout.rs; no statement differs.",
+      "files": [
+        "tokio/src/io/stderr.rs",
+        "tokio/src/io/stdout.rs"
+      ]
+    }
+  ],
+  "must_find_type2_status": "CURATED. Hand-verified by diffing the two files: the differences are renamed identifiers plus doc prose, so this is Type-2 and not byte-identical - it cannot reach the `identical` bucket. This is the Rust half of the curated Type-2 ground truth; nest carries the TypeScript half, so a language-specific recall regression cannot hide behind the other."
 }

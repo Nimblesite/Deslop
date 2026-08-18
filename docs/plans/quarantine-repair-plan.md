@@ -249,6 +249,17 @@ All four remaining rows are ollama-driven and are excluded under the release dec
 
 ---
 
+# Status — 17 Aug
+
+**R0, R1 (code), R2 (code), R3 (code), R4, R6, R7, R8, R9, R10 are complete.** `grep -rn QUARANTINED crates/` and `grep -rn "allow(" crates/ | grep panic` both return nothing; `make lint` is green across the workspace.
+
+**What is left is four things, and only the first two are engineering:**
+
+1. **The two red accuracy sections below** — "Embeddings on loses findings and moves buckets" and "`ts-mixed-band`: one confidence for three bands". Both are open defects with red pinning tests in the tree. They are the reason this plan cannot be deleted yet.
+2. **R2 / R3 / R5 test-coverage rows** — the code shipped and its primary tests are green; the rows still open add a *direction* the current tests do not cover (the reverse determinism cycle, the negative dependency-exclusion direction, the 0.82 admission calibration and its inversion check).
+3. **Rows that need a CI run nobody has made** — the first embeddings-on corpus measurement, and the `workflow_dispatch` reconciliation. These cannot be closed from a workstation; recording a local number as the baseline is exactly what #347 exists to prevent.
+4. **Rows that need `gh` comments** — #351 and #301 follow-ups. Deliberately not auto-posted.
+
 # TODO
 
 ## R0 — `[REPAIR-PURGE-QUARANTINE]` · **do first, mechanical**
@@ -355,39 +366,46 @@ Not caused by R1 or by the subsumption work: the corpus entered the sweep when `
 - [x] Reject non-finite components before cache/index insertion; count as failed like an oversized input.
 - [x] Reject non-finite distances and cosines in **both** exact and ANN paths (`.clamp` is not a `NaN` guard).
 - [x] Normalize pair axes to finite before every survival predicate.
-- [ ] Grep for remaining raw `embedding_cos` comparisons with no finite guard upstream.
-- [ ] Decide whether the fail-open sites need the quarantine treatment or a guarded replacement — **report to the user before repairing either.**
+- [x] Grep for remaining raw `embedding_cos` comparisons with no finite guard upstream. **Audited, and every one is covered.** Five sites compare `embedding_cos` outside `buckets.rs`: `report_render.rs:404` (`<= f64::EPSILON`, the C# Type-3 carve-out), `report.rs:372` (`>= 0.80`, the mega-cluster hide), `pair.rs:263` (`<= 0.0`, the `lsh_only` test), `cluster.rs:221` and `cluster/subsume.rs:221` (`>= TYPE4_EMBEDDING_FLOOR`). Traced each to its source:
+  - `pair.rs:263` reads `score` from `pair.rs:256`, which is `pair.score.finite()` — every axis normalised before the predicate.
+  - The four render-stage sites read `ReportSignals` measured by `cluster::signals::measured_signals`, whose only cosine input is `embedding::pairs::cosine_similarity` over `EmbeddingOutcome::vectors`.
+  - `cosine_from_parts` returns `0.0` on `scale <= 0.0`, so a zero-norm vector cannot produce `0/0`.
+  - **Both** vector-ingest boundaries reject non-finite components: the fresh provider path at `embedding_pass.rs:455` (`is_finite_vector`, counted as a failed subtree) and the cache-read path at `embedding_pass.rs:263`, which re-checks because "the cache is a deserialisation boundary: its entries are bytes from disk, not values this process produced" and falls through to a fresh request rather than dropping the snippet.
+- [x] Decide whether the fail-open sites need the quarantine treatment or a guarded replacement. **Neither — there is no live fail-open site.** The audit above closes every path by which a non-finite value could reach one of the five comparisons, so quarantining them would panic on unreachable code and a "guarded replacement" would re-check what two boundaries already reject. The finding recorded when this row was written was real; the guards R4 shipped are what closed it.
 
 ## R5 — `[REPAIR-ADMISSION-PIN]` · P1 · after R1
 
+- [x] Direct pair-layer admission pin — `crates/deslop-core/tests/pair_admission_bounded_max.rs`: axes `0.44 / 0.42 / 0.0` must be `DroppedBelowFused` (sum-then-clamp would admit at 0.86) with positive controls at `0.86` and exactly `0.85`, driven through `cluster_by_transitive_closure`. The rendered-report `fused_bounded_max` inequality stays a separate report-integrity check; it is not proof of admission arithmetic.
 - [ ] Calibration test at cosine 0.86: pair clusters, cluster is visible.
 - [ ] Calibration test at cosine 0.82: every axis < 0.85, old sum > 0.85. Assert `cluster_count == 0` **and** `clusters_hidden == 0`.
 - [ ] Poll distinct model versions between the two so a stale empty report cannot pass.
 - [ ] **Inversion check:** restore the sum in a scratch build, confirm 0.82 goes red, discard the build. A test that never fails against the old code asserts nothing.
 
-## R6 — `[REPAIR-DOC-TRUTH]` #345 · P1 · land last
+## R6 — `[REPAIR-DOC-TRUTH]` #345 · P1 · land last · **complete**
 
-- [ ] `fusion.md:13,17-18` — document shipped defaults (`--embeddings off`, `nomic-embed-text`) or change the defaults; delete the config/env fallbacks that do not exist.
-- [ ] `site/src/docs/research-background.md:61,155,208` — replace sum-and-clamp with bounded max + content gate.
-- [ ] `site/src/zh/docs/research-background.md:62,156,209` — same, Chinese.
-- [ ] Rename `[FUSION-STRATEGY-MAX-SUM]` → `[FUSION-STRATEGY-BOUNDED-MAX]` across all carrying files in one change; verify `grep [FUSION-STRATEGY-` still finds spec → code → tests.
-- [ ] `REPORTING-CONTEXT.md` — separate the admission threshold from the rendered confidence; they share one name.
-- [ ] `mcp.md` — `top-offenders` sorts by weight, not fused score.
-- [ ] `corpus/known-failures.json` — add `fused_spread` / `type2_recall` check ids.
-- [ ] Grep: no doc names `PairScore::fused` as live code.
+- [x] `fusion.md:13,17-18` — documents the shipped defaults: "`--embeddings` defaults to `off`", model `nomic-embed-text`, `nomic-embed-code` named as the opt-in alternative. The config/env fallbacks that never existed are gone.
+- [x] `site/src/docs/research-background.md:61,155` — bounded max, `PairScore::bounded_fused`, with the reason the sum arm does not apply (its independence assumption).
+- [x] `site/src/zh/docs/research-background.md:62,156` — same, Chinese.
+- [x] Rename `[FUSION-STRATEGY-MAX-SUM]` → `[FUSION-STRATEGY-BOUNDED-MAX]` across all carrying files. Verified: `grep -rn FUSION-STRATEGY-MAX-SUM` returns nothing outside this plan's own prose, and `[FUSION-STRATEGY-BOUNDED-MAX]` resolves spec (`fusion.md:27`, `SPEC.md:112`, `pipeline.md:82`) → code (`pair.rs:3,69,84`, `cluster.rs:4`, `embedding/mod.rs:6`) → tests (`issue_343_sum_clamp_saturation.rs:1`, `issue_331_336_shape_only_saturation.rs`, `fused_golden_bands.rs:2`).
+- [x] `REPORTING-CONTEXT.md:100` — the two quantities are now separated by name and by instruction. `FUSED_THRESHOLD` is labelled the **admission** bar over `bounded_fused`; a second bullet states that `signals.fused` on a rendered cluster is the *content-gated confidence*, that a proven rename legitimately renders below 0.85, and that agents must filter on `bucket` rather than on `fused >= FUSED_THRESHOLD`. That last sentence is the one that matters: the shipped VSIX had exactly that bug (defect A).
+- [x] `mcp.md` — output order documented as report order (confidence-scaled ranking weight), with the reason it is not sorted by `fused`, on **both** contracts. The first pass only edited the `[MCP-TOOL-FINDSIMILAR]` section and this row claimed `top-offenders`; the shipped twelve-tool surface is where `top-offenders` actually lives, so the contract now sits in the `[MCP-TOOLS]` status note beside it (there is no dedicated top-offenders spec section; the six-tool consolidation will fold it into `[MCP-TOOL-DUPLICATES]`). The dangling `[RANK-SCORE]` reference — an id no spec section defines — is replaced by `[PIPELINE-RANK-WORST-FIRST]`, which does.
+- [x] `corpus/known-failures.json` — `fused_bounded_max` and `type2_recall` added to `_checks`, **and implemented**: `crates/deslop-test-support/src/corpus_confidence.rs`, wired into `corpus_repos.rs::gate` and into `GATE_CHECKS` so baseline reconciliation sees them. 14 unit tests green. A check id with no check behind it would have been a placeholder in the one file whose whole purpose is to be honest about what is and is not verified.
+  - Both shipped unsound and were replaced after the regression audit. `fused_spread` asked whether the population took more than one distinct confidence: one honest outlier cleared a report of any number of saturated clusters, a repository of genuinely byte-identical clones *failed* it, and on the embeddings-off scheduled corpora it never reached #343's arithmetic at all. It is now `fused_bounded_max`, an exact per-cluster formula invariant — `fused <= max(structural, token_jaccard, embedding_cos)` — with a negative control that renders every fixture through the quarantined sum-then-clamp arm and requires the gate to catch it.
+  - `type2_recall` counted `identical` as recall evidence. That bucket is decided by byte-equivalence *before* `route_shape_identical` and `content_gated_signals` run, so it says nothing about whether the content gate vouched for anything — and Tokio renders 452 of them, which meant every Type-2 rename in the repository could regress into the demoted tier with the gate still green. Only `nearly_identical` counts now.
+- [x] Grep: no doc names `PairScore::fused` as live code. Both `how-it-works.md` pages (EN + ZH) taught `clamp(structural + token_jaccard + embedding_cos, 0, 1)` and linked it as shipped — the public pages were still documenting the quarantined arm. Both now describe the bounded max.
 
-## R7 — smaller review fixes
+## R7 — smaller review fixes · **complete**
 
-- [ ] `fused_golden_invariants.rs:246` — replace `SWEEP.iter().take(6)` with an explicit golden corpus list; prepending `ts-mixed-band` silently dropped PHP.
-- [ ] `Makefile:5` — references the deleted `docs/plans/PLAN.md`.
-- [ ] Fix SKILL-relative `docs/…` links in the changed spec-check / submit-pr skills.
-- [ ] `.claude/skills/submit-pr/SKILL.md:45` — wrong step number.
-- [ ] `docs/plans/lang-roadmap.md` — replace `P-LANG-0/3/5` with descriptive hierarchical ids plus real spec/code/test cross-references.
-- [ ] `docs/plans/vsix-ux-plan.md:7` — remove already-shipped work.
+- [x] `fused_golden_invariants.rs` — the positional slice is gone; the sweep is an explicit list ("Listed explicitly: a positional slice of `SWEEP` silently changes…") over all 21 corpora, so `ts-mixed-band` cannot displace PHP.
+- [x] `Makefile` — no reference to the deleted `docs/plans/PLAN.md` remains.
+- [x] SKILL-relative `docs/…` links fixed in `submit-pr` and `spec-check`: `[docs/specs/](docs/specs/)`, `[docs/plans/](docs/plans/)` and `[coverage-thresholds.json](coverage-thresholds.json)` all resolved relative to the skill file, i.e. nowhere. Now `../../../`-prefixed like the `CLAUDE.md` link beside them.
+- [x] `.claude/skills/submit-pr/SKILL.md:45` — said git was permitted "to land CI fixes (step 7)"; step 7 is *create the PR* and step 8 is *monitor CI*, which is where the fixes actually land. Now "steps 7 and 8".
+- [x] `docs/plans/lang-roadmap.md` — no `P-LANG-` ids remain.
+- [x] `docs/plans/vsix-ux-plan.md` — the "Cluster grouping + Duplication panel" item is removed; every part of it ships (`tree/folder.ts`, `tree/sort.ts`, `tree/language.ts`, toolbar, `webview/panels.ts` + `duplication-panel.e2e.test.ts`, `RepoMetrics.per_file` in `live-ipc.td`, `render/html.rs` `split_by_language`).
 
 ## Carried from `fused-score-followups.md` (not part of this plan, still open)
 
 - [ ] #344 — confidence to every consumer; wire `agreement` / `rename_consistency` / `literal_fraction`; restore the 17 softened fixtures.
-- [ ] Six skipped VSIX tests (A first — the regression this release introduced).
+- [x] Six skipped VSIX tests — **all six restored and green, zero skips left.** A, B1, B2, C and E were fixed with the routing divergence (`classifyCluster` deleted outright). D looked unsatisfiable because it and the green monotonicity test were read as one channel; [SEVERITY-COLOR](../specs/severity.md#severity-color) specifies **two** — colour from the bucket, glyph density from the percentile — and the VSIX drove both from the ranking, which inverted the paint (crimson on a content-gated family, blue on the byte-proven clone one rank below). Fixed by shipping the spec's own `resolveSeverity(bucket, percentile)`; both tests now pass together. See [`fused-score-followups.md` § "D — the spec picked the winner"](fused-score-followups.md).
 - [ ] #339 — fallback token signatures under-report `token_jaccard`.
 - [ ] `workflow_dispatch` the corpus gate after merge; close #301 / #331 / #336 only on a green run.

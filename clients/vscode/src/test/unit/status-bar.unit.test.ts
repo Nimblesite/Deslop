@@ -6,14 +6,12 @@ import * as assert from "node:assert/strict";
 import { StatusBar, sameFile, shortPath } from "../../commands/statusBar";
 import { ReportStore } from "../../reportStore";
 import { Report } from "../../types/report";
-import { repoMetrics } from "./report.helpers";
+import { emptyReport, repoMetrics } from "./report.helpers";
 
 function report(): Report {
-  return {
+  return emptyReport({
     tool_version: "v",
-    min_nodes: 30,
     files_analysed: 5,
-    clusters_hidden: 0,
     cache_stats: { hits: 1, misses: 2 },
     metrics: repoMetrics({
       analysed_loc: 200,
@@ -22,10 +20,6 @@ function report(): Report {
       clusters_total: 2,
       duplicated_files: 1,
     }),
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
     clusters: [
       {
         id: "a",
@@ -43,7 +37,7 @@ function report(): Report {
         interpretation: "",
       },
     ],
-  };
+  });
 }
 
 suite("statusBar", () => {

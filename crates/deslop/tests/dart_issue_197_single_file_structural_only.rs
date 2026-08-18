@@ -50,17 +50,6 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
     let scan_root = fixture("dart-issue-197-settings-getters");
     let report = run_report(&scan_root)?;
 
-    // [METRICS-REPO] The duplication metric counts only the clusters the
-    // report renders. Every family in this fixture is a hidden
-    // structural-only sibling-method family, so the metric must report zero
-    // duplication even though the families were detected (asserted via
-    // `clusters_hidden` below) — proving a structural-only shape match
-    // cannot inflate the percentage.
-    // The fixture reproduces the issue's two #1/#2 families (be951a686525
-    // size=7, 7f363063109f size=8); both must be suppressed via the
-    // hidden-cluster path so they still count toward visibility telemetry.
-    assert_fully_suppressed(&report, 2);
-
     let clusters = report
         .get("clusters")
         .and_then(Value::as_array)
@@ -91,5 +80,55 @@ fn single_file_structural_only_method_families_do_not_top_the_report() -> Result
          surface in the ranked report regardless of file spread. Offending \
          clusters: {offenders:#?}"
     );
+
+    // [CLONE-BUCKETS-ROUTING] row 4, the *other* door into this family.
+    // Row 4 routes `structural <= 0.01 && token_jaccard >= 0.90` to
+    // `NearlyIdentical` in every language (gh #390), and the honest #339
+    // sibling-window signatures gave this fixture exactly that triple —
+    // the inverse of the one the issue reported. Suppression through this
+    // door is earned the same way as through the structural one: the
+    // report's noise gate consults [RANK-STRUCTURAL-ONLY-FORWARDING] for
+    // the anchor-free near-miss too, and what convicts these wrappers is
+    // what each body *is*, never the file count. Row 4's recall
+    // counterweight (`lsh_only_nearmiss_recall.rs`) pins a genuine
+    // two-file pair whose bodies compute, which the forwarding proof
+    // acquits — so this assertion cannot cost that test its verdict.
+    let anchor_free: Vec<String> = clusters
+        .iter()
+        .filter(|cluster| signal(cluster, "structural") <= 0.01)
+        .filter(|cluster| signal(cluster, "token_jaccard") >= 0.9)
+        .filter(|cluster| cluster_file_set(cluster).len() < 2)
+        .map(|cluster| {
+            format!(
+                "cluster {id} bucket={bucket} size={size} files={files:?} \
+                 signals={{structural={s:.2}, token_jaccard={t:.2}}}",
+                id = cluster.get("id").and_then(Value::as_str).unwrap_or("?"),
+                bucket = cluster_bucket(cluster),
+                size = cluster_size(cluster),
+                files = cluster_file_set(cluster),
+                s = signal(cluster, "structural"),
+                t = signal(cluster, "token_jaccard"),
+            )
+        })
+        .collect();
+    assert!(
+        anchor_free.is_empty(),
+        "issue #197 via [CLONE-BUCKETS-ROUTING] row 4: an anchor-free \
+         near-miss confined to a single file is the same REST-settings API \
+         surface arriving through the token door instead of the structural \
+         one, and must not hold an act-now verdict. Offending clusters: \
+         {anchor_free:#?}"
+    );
+    // [METRICS-REPO] The duplication metric counts only the clusters the
+    // report renders. Every family in this fixture is a hidden
+    // structural-only sibling-method family, so the metric must report zero
+    // duplication even though the families were detected (asserted via
+    // `clusters_hidden` below) — proving a structural-only shape match
+    // cannot inflate the percentage.
+    // The fixture reproduces the issue's two #1/#2 families (be951a686525
+    // size=7, 7f363063109f size=8); both must be suppressed via the
+    // hidden-cluster path so they still count toward visibility telemetry.
+    assert_fully_suppressed(&report, 2);
+
     Ok(())
 }

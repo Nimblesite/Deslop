@@ -162,15 +162,32 @@ pub struct CandidatePair {
 
 /// A cluster discovered via transitive closure of surviving candidate pairs.
 ///
-/// Carries membership only. Signals are **not** aggregated here: the
-/// pairs that glued a component together are discovery evidence, and
-/// averaging them once diluted byte-proven pairs with every weaker edge
-/// in the component. The rendered signal breakdown is measured between
-/// the rendered occurrences in `crate::cluster` instead.
+/// Carries membership plus the surviving discovery edges. Signals are
+/// **not** aggregated from the edges: the pairs that glued a component
+/// together are discovery evidence, and averaging them once diluted
+/// byte-proven pairs with every weaker edge in the component. The
+/// rendered signal breakdown is measured between the rendered
+/// occurrences in `crate::cluster` instead. The edges exist solely so
+/// the same-file overlap collapse there can keep the occurrence
+/// carrying the component's strongest cross-file evidence (#339).
 #[derive(Debug, Clone)]
 pub struct FusedCluster {
     /// Members of the cluster, sorted ascending by fingerprint index.
     pub members: Vec<usize>,
+    /// The surviving candidate-pair edges inside this component.
+    pub edges: Vec<FusedEdge>,
+}
+
+/// One surviving discovery edge inside a [`FusedCluster`]: the two
+/// fingerprint indices it connects and its bounded fused strength.
+#[derive(Debug, Clone, Copy)]
+pub struct FusedEdge {
+    /// Lower fingerprint index of the surviving pair.
+    pub left: usize,
+    /// Higher fingerprint index of the surviving pair.
+    pub right: usize,
+    /// The pair's [`PairScore::bounded_fused`] score.
+    pub strength: f64,
 }
 
 /// Reason one candidate pair did or did not enter transitive closure.
@@ -292,21 +309,35 @@ pub fn cluster_by_transitive_closure(pairs: &[CandidatePair]) -> Vec<FusedCluste
         let _right = ensure_root(&mut parents, pair.right);
         union(&mut parents, pair.left, pair.right);
     }
-    build_clusters(&mut parents)
+    build_clusters(&mut parents, &surviving)
 }
 
-/// Groups members by union-find root into membership-only clusters.
-fn build_clusters(parents: &mut BTreeMap<usize, usize>) -> Vec<FusedCluster> {
+/// Groups members by union-find root, attaching each surviving edge to
+/// the component it glued together.
+fn build_clusters(
+    parents: &mut BTreeMap<usize, usize>,
+    surviving: &[&CandidatePair],
+) -> Vec<FusedCluster> {
     let mut groups: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
     let members: Vec<usize> = parents.keys().copied().collect();
     for member in members {
         let root = find(parents, member);
         let _inserted = groups.entry(root).or_default().insert(member);
     }
+    let mut edges: BTreeMap<usize, Vec<FusedEdge>> = BTreeMap::new();
+    for pair in surviving {
+        let root = find(parents, pair.left);
+        edges.entry(root).or_default().push(FusedEdge {
+            left: pair.left,
+            right: pair.right,
+            strength: pair.score.finite().bounded_fused(),
+        });
+    }
     groups
-        .into_values()
-        .map(|members| FusedCluster {
+        .into_iter()
+        .map(|(root, members)| FusedCluster {
             members: members.into_iter().collect(),
+            edges: edges.remove(&root).unwrap_or_default(),
         })
         .collect()
 }

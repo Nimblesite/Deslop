@@ -107,9 +107,7 @@ fn mechanical_plan(
     };
     let spans: Vec<ByteRange> = scopes.iter().map(OccurrenceScope::span).collect();
     if preconditions::slices_equivalent(source, &spans) {
-        return Ok(Err(
-            "occurrences are byte-identical Type-1 — use the verbatim extract action".to_owned(),
-        ));
+        return Ok(Err(type1_refusal(&scopes, source, parser, scope_kinds)));
     }
     let context = MergeContext {
         cluster,
@@ -122,6 +120,29 @@ fn mechanical_plan(
         spans: &spans,
     };
     Ok(build_plan(&context, file_root))
+}
+
+/// The refusal reason for a byte-identical Type-1 candidate. Routing
+/// the user to the verbatim extract action is only honest when that
+/// action's dataflow rules would accept the span — the extract tier
+/// refuses such spans silently, so the advice would dead-end. A failing
+/// rule therefore surfaces its own safety reason ([AUTOFIX-MERGE-SAFETY]).
+fn type1_refusal(
+    scopes: &[OccurrenceScope<'_>],
+    source: &[u8],
+    parser: &dyn LanguageParser,
+    scope_kinds: &'static crate::refactor::tables::ScopeKinds,
+) -> String {
+    let free_variables = scopes.first().map_or_else(Vec::new, |scope| {
+        crate::refactor::free_variables_of_run(&scope.run, source, parser, scope_kinds)
+    });
+    crate::refactor::dataflow_refusal(scopes, &free_variables, source, parser, scope_kinds)
+        .map_or_else(
+            |reason| reason,
+            |()| {
+                "occurrences are byte-identical Type-1 — use the verbatim extract action".to_owned()
+            },
+        )
 }
 
 /// Everything the gate → safety → naming → emission pipeline consumes.

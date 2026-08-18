@@ -23,6 +23,7 @@ import {
 } from "./binary";
 import { log, logError, initOutputChannel } from "./logging";
 import { wireMcpRegistration } from "./mcpRegistration";
+import { wireNotifications, wireSessionReset } from "./notifications";
 import { promptToIgnoreCache } from "./gitignorePrompt";
 import { ReportStore } from "./reportStore";
 import { registerCommands } from "./commands/register";
@@ -44,13 +45,7 @@ import { LiveBubble } from "./bubble/live";
 import { StatusBar } from "./commands/statusBar";
 import { registerCompareProvider } from "./compare/provider";
 import { registerClusterDocumentProvider } from "./clusterDocument";
-import {
-  Report,
-  ReportChangedNotification,
-  ReportDelta,
-  AnalysisState,
-  EmbeddingProgress,
-} from "./types/report";
+import { Report } from "./types/report";
 
 let client: LanguageClient | undefined;
 let resolvedLsp: ResolvedBinary | undefined;
@@ -251,6 +246,10 @@ export async function activate(
 
   if (client) {
     reportStore.setLifecycle({ kind: "analysing" });
+    // Armed before start() so the initial Running transition is counted
+    // as session one — subscribing later would make the first *restart*
+    // look like the initial session and skip its reset.
+    context.subscriptions.push(wireSessionReset(client, reportStore));
     try {
       await client.start();
     } catch (err) {
@@ -452,70 +451,6 @@ function embeddingSettingsFromConfiguration(
     endpoint,
     mode: cfg.get<string>("embedding.mode", DEFAULT_EMBEDDING_MODE),
   };
-}
-
-export async function refreshAfterChange(
-  c: LanguageClient,
-  store: ReportStore,
-  payload: ReportChangedNotification,
-): Promise<void> {
-  // Pull the delta spanning the store's own baseline (#230). Without a
-  // `since_generation` the server defaults to `current - 1`, which only spans
-  // one generation — so a client that missed a `reportChanged` (lagged
-  // broadcast or async gap) would merge a delta that never retracts the
-  // clusters dropped in the skipped generations, leaving them as phantoms.
-  const delta = await c.sendRequest<ReportDelta | null>("deslop/reportDelta", {
-    since_generation: store.current.generation,
-  });
-  // applyDelta rejects (returns false) when no report is seeded yet or the
-  // delta's baseline does not match the store's generation. Either way fall
-  // back to the full snapshot so the store converges to the live engine.
-  if (delta && store.applyDelta(delta)) return;
-  const snapshot = await c.sendRequest<Report>("deslop/reportGet");
-  store.setSnapshot(snapshot, payload.generation);
-}
-
-async function refreshAfterEmbedding(
-  c: LanguageClient,
-  store: ReportStore,
-): Promise<void> {
-  const snapshot = await c.sendRequest<Report>("deslop/reportGet");
-  store.setSnapshot(snapshot, store.current.generation + 1);
-}
-
-export function wireNotifications(c: LanguageClient, store: ReportStore): void {
-  c.onNotification(
-    "deslop/reportChanged",
-    (payload: ReportChangedNotification) => {
-      refreshAfterChange(c, store, payload).catch((err: unknown) =>
-        logError(err, "refresh report after change"),
-      );
-    },
-  );
-  c.onNotification("deslop/analysisState", (state: AnalysisState) => {
-    log("analysis state", { state });
-    if (state.state === "running") store.setLifecycle({ kind: "analysing" });
-    else if (state.state === "idle") store.setLifecycle({ kind: "ready" });
-    else if (state.state === "errored") {
-      store.setLifecycle({
-        kind: "failed",
-        message: state.message,
-      });
-    }
-  });
-  c.onNotification(
-    "deslop/embeddingProgress",
-    (progress: EmbeddingProgress) => {
-      if (progress.phase === "complete") {
-        store.setEmbeddingProgress(null);
-        refreshAfterEmbedding(c, store).catch((err: unknown) =>
-          logError(err, "refresh report after embedding"),
-        );
-      } else {
-        store.setEmbeddingProgress(progress);
-      }
-    },
-  );
 }
 
 export function wireDirtyDocuments(store: ReportStore): vscode.Disposable {

@@ -11,7 +11,7 @@ use std::{collections::HashMap, hash::BuildHasher, path::Path};
 
 use crate::{
     boilerplate::BoilerplateRange,
-    buckets::{classify, ClusterKind},
+    buckets::{classify, is_lsh_only_nearmiss, ClusterKind},
     clone_category::CloneCategory,
     cluster::Cluster,
     cluster_filters::{
@@ -353,7 +353,22 @@ fn cluster_is_hidden<S: BuildHasher>(
     // that provably differ in substance, so worth-extracting clones — a
     // consistent rename over preserved literals — stay visible (demoted,
     // not hidden).
-    let single_file_declaration_family = kind == ClusterKind::StructuralOnly
+    //
+    // The anchor-free near-miss ([CLONE-BUCKETS-ROUTING] row 4, judged on
+    // the *raw* signals the routing itself used) must consult the same
+    // proof. The #197 settings family is one family whichever door it
+    // arrives through: the offset-invariant #339 sibling-window
+    // signatures inverted its triple from `structural=1.00,
+    // token_jaccard=0.00` to `structural=0.00, token_jaccard=0.91`, and
+    // gating the proof on the `structural_only` label alone let the very
+    // wrappers it was written to convict ride row 4 into the act-now
+    // tier as the top offender. The proof, not the bucket, is the
+    // discriminator: a genuine in-file Type-3 copy whose body binds
+    // locals, loops or branches fails `forwarding_body` and stays
+    // visible, so recall pays nothing.
+    let family_evidence_kind =
+        kind == ClusterKind::StructuralOnly || is_lsh_only_nearmiss(cluster.signals.into());
+    let single_file_declaration_family = family_evidence_kind
         && is_single_file_declaration_family(
             cluster,
             category,

@@ -5,36 +5,40 @@
 // ONLY — never by raw text edits. Deslop reacts to FILE changes (the LSP's file
 // watcher), so decorations repaint when a fresh report lands or when an editor
 // becomes visible, not on every keystroke. Repaints are coalesced through a
-// trailing debounce, the severity ranking is memoised per report, and each
-// editor's byte→UTF-16 buffer is built once per redraw instead of once per
-// occurrence.
+// trailing debounce, and each editor's byte→UTF-16 buffer is built once per
+// redraw instead of once per occurrence.
+//
+// [SEVERITY-COLOR] The underline and ruler stripe are pure colour — there is no
+// glyph on an underline — so they carry the bucket channel and nothing else. A
+// decoration therefore needs no ranking at all: an occurrence is coloured by
+// what kind of duplicate it is, which is the same answer wherever it sorts.
 
 import * as vscode from "vscode";
 import { effect } from "@preact/signals-core";
 
 import { clusterHoverMarkdown } from "../clusterHover";
 import { ReportStore } from "../reportStore";
-import { indexedSeverity, SEVERITY_COLOR } from "../severity";
+import { clusterSeverity, DESLOP_SEVERITY_COLOR } from "../severity";
 import { sameFile } from "../pathUtils";
 import { debounce, Debounced, ScheduleFn } from "../util/debounce";
-import { Report, ReportCluster, ReportOccurrence, Severity, visibleOccurrenceCount } from "../types/report";
+import {
+  DESLOP_SEVERITIES,
+  DeslopSeverity,
+  Report,
+  ReportCluster,
+  ReportOccurrence,
+  visibleOccurrenceCount,
+} from "../types/report";
 
-const SEVERITIES: Severity[] = ["worst", "top10", "mid", "faint"];
 const REDRAW_DEBOUNCE_MS = 60;
 
-interface SeverityCache {
-  report: Report;
-  severities: Map<string, Severity>;
-}
-
 export class DecorationManager implements vscode.Disposable {
-  private readonly byKind: Map<Severity, vscode.TextEditorDecorationType>;
+  private readonly byKind: Map<DeslopSeverity, vscode.TextEditorDecorationType>;
   private readonly disposables: vscode.Disposable[] = [];
-  private severityCache: SeverityCache | undefined;
   private readonly scheduleRedraw: Debounced;
 
   constructor(private readonly store: ReportStore, schedule?: ScheduleFn) {
-    this.byKind = new Map(SEVERITIES.map((kind) => [kind, createDecoration(kind)]));
+    this.byKind = new Map(DESLOP_SEVERITIES.map((kind) => [kind, createDecoration(kind)]));
     this.scheduleRedraw = debounce(() => this.flush(), REDRAW_DEBOUNCE_MS, schedule);
     this.disposables.push(
       // Repaint when the report changes (a file-change-driven analysis update — an
@@ -60,27 +64,21 @@ export class DecorationManager implements vscode.Disposable {
       for (const editor of vscode.window.visibleTextEditors) this.clear(editor);
       return;
     }
-    const severities = this.severitiesFor(report);
-    for (const editor of vscode.window.visibleTextEditors) this.redraw(editor, report, severities);
-  }
-
-  private severitiesFor(report: Report): Map<string, Severity> {
-    if (this.severityCache?.report === report) return this.severityCache.severities;
-    const severities = indexedSeverity(report.clusters);
-    this.severityCache = { report, severities };
-    return severities;
+    for (const editor of vscode.window.visibleTextEditors) this.redraw(editor, report);
   }
 
   // [VSIX-STATE-DIRTY]: render from the visible projection so decorations vanish
   // immediately when the user edits a duplicated file (its occurrences are elided
   // from the projection). The document buffer is built lazily and exactly once —
   // only when this editor actually owns an occurrence.
-  private redraw(editor: vscode.TextEditor, report: Report, severities: Map<string, Severity>): void {
+  private redraw(editor: vscode.TextEditor, report: Report): void {
     const activePath = editor.document.uri.fsPath;
-    const buckets = new Map<Severity, vscode.DecorationOptions[]>(SEVERITIES.map((kind) => [kind, []]));
+    const buckets = new Map<DeslopSeverity, vscode.DecorationOptions[]>(
+      DESLOP_SEVERITIES.map((kind) => [kind, []]),
+    );
     let buffer: Buffer | undefined;
     for (const cluster of report.clusters) {
-      const severity = severities.get(cluster.id) ?? "faint";
+      const severity = clusterSeverity(cluster);
       for (const occurrence of cluster.occurrences) {
         if (!sameFile(occurrence.path, activePath)) continue;
         buffer ??= Buffer.from(editor.document.getText(), "utf8");
@@ -98,8 +96,8 @@ export class DecorationManager implements vscode.Disposable {
   }
 }
 
-function createDecoration(severity: Severity): vscode.TextEditorDecorationType {
-  const color = SEVERITY_COLOR[severity];
+function createDecoration(severity: DeslopSeverity): vscode.TextEditorDecorationType {
+  const color = DESLOP_SEVERITY_COLOR[severity];
   return vscode.window.createTextEditorDecorationType({
     textDecoration: `underline ${color}`,
     overviewRulerColor: color,

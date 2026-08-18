@@ -17,8 +17,8 @@ use crate::{
     ast::ByteRange,
     buckets::{
         bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
-        is_lsh_only_nearmiss, is_structural_only_signals, lacks_content_support, ClusterKind,
-        CONTENT_PROMOTE_FLOOR, LITERAL_TABLE_MIN_FRACTION,
+        is_lsh_only_nearmiss, ClusterKind, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR,
+        LITERAL_TABLE_MIN_FRACTION, STRUCTURAL_ONLY_MAX_SUPPORT,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
@@ -325,16 +325,18 @@ pub(crate) fn report_bucket_kind(
 }
 
 /// [FUSION-CONTENT-GATE] routing tail: for shape-identical clusters the
-/// measured content evidence decides in both directions. It subsumes
-/// the legacy `token_jaccard < 0.05` structural-only test (a
-/// fallback-signature artifact scores `0.0` content on unresolvable
-/// members) and overrides it the other way: a cluster either population
-/// vouches for — pooled raw bytes that mostly agree, or a
-/// literal-anchored consistent rename ([`ContentEvidence::support`]) —
-/// is a genuine clone even when the token layer lost its signature to
-/// the fingerprint-scoped fallback. Support below the floor
-/// with no semantic backing routes to the demoted structural-only tier
-/// — [`ClusterKind::LooselySimilar`] for the cross-file scaffolding
+/// measured content evidence decides in both directions. The
+/// deterministic signals cannot: `structural` and `token_jaccard` are
+/// two views of one normalised representation, so once the shape
+/// saturates, the token axis echoes it at 1.0 for every same-shape
+/// family — the honest #339 sibling-window signatures made that echo
+/// universal, and the #197 REST settings family (content 0.72–0.80)
+/// would ride it straight into the act-now tier. So content decides:
+/// support at or above [`CONTENT_PROMOTE_FLOOR`] proves the clone
+/// (pooled raw bytes that mostly agree, or a literal-anchored
+/// consistent rename — [`ContentEvidence::support`]); anything below,
+/// with no semantic backing, routes to the demoted tier —
+/// [`ClusterKind::LooselySimilar`] for the cross-file scaffolding
 /// spread, [`ClusterKind::StructuralOnly`] otherwise.
 ///
 /// The anchor-free near-miss ([CLONE-BUCKETS-ROUTING] row 4) is decided
@@ -358,20 +360,25 @@ fn route_shape_identical(
     if !has_saturating_shape_evidence(signals) {
         return kind;
     }
-    let shape_only = is_structural_only_signals(signals) || lacks_content_support(signals, content);
-    if !shape_only {
+    // Semantic backing is content-independent evidence; the embedding
+    // pass measured behaviour, not shape, so the gate keeps its verdict.
+    if signals.embedding_cos >= STRUCTURAL_ONLY_MAX_SUPPORT {
         return kind;
     }
-    // Promotion rescues real clones from the demoted tier for small
-    // spreads only: a fallback-signature artifact whose raw bytes agree
-    //, or a maximal Type-2 rename whose literals and
-    // identifier mapping prove the copy. The cross-file scaffolding
-    // spread is excluded: contract-mandated wiring (trait
-    // adapter impls, framework overrides) pins the very leaves both
-    // populations measure, so a 3+-file same-shape family scoring high
-    // support is still scaffolding and keeps the legacy hidden
-    // destination.
-    if content.support() >= CONTENT_PROMOTE_FLOOR && !is_cross_file_scaffolding(members) {
+    // Promotion rescues real clones from the demoted tier: pooled raw
+    // bytes that agree, or a maximal Type-2 rename whose literals and
+    // identifier mapping prove the copy. The bar depends on spread —
+    // a cross-file cluster promotes at the Type-3 overlap cutoff
+    // ([`CONTENT_SUPPORT_FLOOR`]), while a single-file cluster must
+    // share nearly every position ([`CONTENT_PROMOTE_FLOOR`]): the
+    // #197 in-class sibling families live in one file and measure
+    // 0.72–0.80 and are API surface, not extract-worthy duplication.
+    let promote_floor = if spans_multiple_files(members) {
+        CONTENT_SUPPORT_FLOOR
+    } else {
+        CONTENT_PROMOTE_FLOOR
+    };
+    if content.support() >= promote_floor {
         return ClusterKind::NearlyIdentical;
     }
     // Literal-dominated families ([CLONE-NOISE-LITERAL-TABLE])
@@ -383,6 +390,15 @@ fn route_shape_identical(
         return ClusterKind::LooselySimilar;
     }
     ClusterKind::StructuralOnly
+}
+
+/// Returns true when a cluster's occurrences reach at least two files —
+/// the spread that separates a duplicated copy from an in-file sibling
+/// family in [`route_shape_identical`]'s promotion bar.
+fn spans_multiple_files(members: &[Fingerprint]) -> bool {
+    members
+        .first()
+        .is_some_and(|first| members.iter().any(|member| member.file_id != first.file_id))
 }
 
 /// Demotion for [CLONE-BUCKETS-ROUTING] **row 4** — the anchor-free
@@ -432,8 +448,8 @@ fn route_anchor_free(
 
 /// Returns true when a structural-only cluster spans enough distinct
 /// files to mirror the cross-test-file scaffolding pattern from issue
-/// #134. Caller has already established the structural-only signal
-/// shape via [`is_structural_only_signals`]. The 3-member, 3-file
+/// #134. Caller has already established the saturating shape-evidence
+/// signal via [`has_saturating_shape_evidence`]. The 3-member, 3-file
 /// floors preserve small two-occurrence pairs; smaller spreads route
 /// to [`ClusterKind::StructuralOnly`] instead.
 fn is_cross_file_scaffolding(members: &[Fingerprint]) -> bool {

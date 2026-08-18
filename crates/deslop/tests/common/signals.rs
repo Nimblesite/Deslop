@@ -60,8 +60,8 @@ pub(crate) const ACT_NOW_BUCKETS: [&str; 3] = ["identical", "nearly_identical", 
 ///
 /// An earlier revision asserted that `token_jaccard` could not land
 /// between the two constants. Production emits exactly that: a
-/// `structural = 1.00`, mid-token, low-content cluster satisfies
-/// `lacks_content_support` and routes here. Content evidence is not on
+/// `structural = 1.00`, mid-token, low-content cluster is demoted by
+/// `route_shape_identical` and routes here. Content evidence is not on
 /// the report wire, so no helper reading three signals can reconstruct
 /// which route ran — scenario tests pin the bucket and metrics instead.
 pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
