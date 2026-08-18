@@ -61,11 +61,16 @@ Not history — each is a property of the code as it stands today.
 
 # TODO
 
-## 0. 🛑 RED IN THE TREE — a maximal Type-2 rename is reported as coincidence
+## 0. 🛑 QUARANTINED — a maximal Type-2 rename was reported as coincidence
+
+`content::pair_rename_consistency` is a `panic!`. Every scan that reaches a shape-saturating cluster whose
+member pair carries fewer than four literal anchors now aborts with exit 101, by design: a false negative on
+the textbook Type-2 clone is worse than a crash. **Nothing else may be built on this crate until the
+replacement lands.**
 
 `crates/deslop/tests/type2_rename_anchor_floor.rs::a_maximal_rename_with_few_literals_is_still_a_type2_clone`
-is **failing**, and it fails for the defect's own reason. Two TypeScript files, identical logic, every
-identifier renamed, one literal (`0`):
+was watched failing on the rendered verdict **before** the quarantine replaced the code. Two TypeScript
+files, identical logic, every identifier renamed, one literal (`0`):
 
 ```
 id=f461c761183864b0 bucket=structural_only category=logic size=2 weight=0.388
@@ -89,10 +94,15 @@ Why no suite caught it: every `fused-golden-<lang>` rename fixture keeps **ident
 sides, so the band is only ever exercised above the floor. #341 then softened 17 rename-showcase fixtures
 from maximal to partial renames, which moved the shipped fixtures above the floor as well.
 
-- [ ] **Quarantine decision needed from the user.** The strict accuracy rule mandates replacing the
-      defective code with `panic!`. Here that aborts **every scan** containing a shape-saturating cluster
-      with fewer than four literal anchors — the two-file fixture above trips it, so effectively every run.
-      The failing test is in the tree and pins the defect; the `panic!` is not applied.
+**Blast radius, measured.** `cargo test --workspace --all-targets --features deslop-core/live -- --skip
+ollama_ --skip corpus_` is fail-fast and now stops at `deslop --test boilerplate`
+(`import_boilerplate_is_suppressed_but_real_clones_still_report`,
+`import_boilerplate_report_mode_emits_low_noise_hints`), exit 101, both on the quarantine panic. The same
+command was **exit 0 across 170 binaries** immediately before the quarantine, so every casualty from here on
+is this defect being made visible, not a new one. `cargo clippy --release --all-targets --workspace` is
+clean; the `#[allow(clippy::panic)]` on the quarantined function is the sanctioned exception and must be
+deleted with the panic.
+
 - [ ] Fix the discriminator, not the constant, and keep `dart_issue_197_single_file_structural_only`,
       `declaration_family_plurality` and `declaration_family_mixed_component` green — those are the
       sibling-scaffolding side the floor was protecting.

@@ -276,10 +276,46 @@ fn cluster_rename_consistency(
 }
 
 /// Type-2 rename evidence between two members: the lesser of literal
-/// preservation and bijective identifier-mapping coverage
-/// ([FUSION-CONTENT-GATE]). Zero without positional alignment (an
-/// LSH-paired near-miss has no leaf-to-leaf correspondence) and zero
-/// below [`RENAME_EVIDENCE_MIN_LITERALS`] literal anchors.
+/// preservation and bijective identifier-mapping coverage.
+///
+/// 🛑 The sub-floor branch is QUARANTINED — [FUSION-CONTENT-GATE] rename
+/// evidence, removed for manufacturing false negatives on the textbook
+/// Type-2 clone.
+///
+/// **What the deleted code did.** Below [`RENAME_EVIDENCE_MIN_LITERALS`]
+/// (4) literal anchor positions it returned no evidence outright:
+///
+/// ```text
+/// if literals.len() < RENAME_EVIDENCE_MIN_LITERALS {
+///     return 0.0;
+/// }
+/// ```
+///
+/// **Why it was deleted.** [`crate::buckets::content_gated_signals`]
+/// scores a shape-saturating cluster `max(agreement, 0.9 × rename
+/// consistency)`. A maximal identifier rename agrees on almost no raw
+/// identifier bytes, so once this floored to `0.0` the whole gate
+/// collapsed to the agreement term. Measured on two TypeScript files
+/// with identical logic, every identifier renamed and one literal:
+/// `structural = 1.00`, `token_jaccard = 1.00`, **`fused = 0.0588`**,
+/// bucket `structural_only` — inside the `< 0.6` band in which
+/// `CLAUDE.md` instructs an agent to write the copy anyway. No suite
+/// caught it because every `fused-golden-<lang>` rename fixture keeps
+/// identical literals on both sides, so the band was only ever
+/// exercised above the floor.
+///
+/// **The floor was not arbitrary**, and a lower constant is not the
+/// repair: without anchors, a consistent identifier mapping cannot
+/// separate a Type-2 rename from sibling scaffolding that also
+/// substitutes names consistently. The replacement must discriminate
+/// those two without depending on literal mass.
+///
+/// **Pinned by**
+/// `deslop/tests/type2_rename_anchor_floor.rs::a_maximal_rename_with_few_literals_is_still_a_type2_clone`,
+/// whose assertions are the spec contract — rendered bucket, signals and
+/// confidence — and which was watched failing on them before this
+/// quarantine replaced the code.
+#[allow(clippy::panic)]
 fn pair_rename_consistency(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
@@ -289,7 +325,14 @@ fn pair_rename_consistency(canonical: Option<&[LeafKey]>, member: Option<&[LeafK
     }
     let literals = population(canonical, member, true);
     if literals.len() < RENAME_EVIDENCE_MIN_LITERALS {
-        return 0.0;
+        panic!(
+            "QUARANTINED [FUSION-CONTENT-GATE]: a member pair with {count} literal \
+             anchors (floor {RENAME_EVIDENCE_MIN_LITERALS}) had its rename evidence \
+             floored to 0.0, rendering a maximal Type-2 rename as structural_only at \
+             fused 0.0588. Measure rename evidence here without depending on literal \
+             mass; see this function's doc comment.",
+            count = literals.len()
+        )
     }
     literal_preservation(&literals).min(mapping_consistency(&population(canonical, member, false)))
 }
