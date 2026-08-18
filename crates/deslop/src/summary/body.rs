@@ -41,11 +41,7 @@ pub fn summary(color: ColorChoice, report: &Report, technical: bool) {
     write_cache_line(&theme, report, technical);
     write_provenance_line(&theme, report, technical);
     if report.clusters.is_empty() {
-        eprintln!(
-            "  {green}✔ no duplication detected — your codebase is clean.{reset}",
-            green = theme.green,
-            reset = theme.reset,
-        );
+        write_clean_line(&theme, report);
         return;
     }
     write_breakdown_line(&theme, report, technical);
@@ -95,8 +91,10 @@ fn write_headline(theme: &Theme, report: &Report) {
     );
 }
 
-/// Diff-scoped delta line ([CLI-ARG-ONLY-CHANGED]): leads the summary
-/// with what this diff newly introduced and how many untouched groups
+/// Diff-scoped delta line ([CLI-ARG-ONLY-CHANGED],
+/// [METRICS-DIFF-SCOPE]): leads the summary with what this diff newly
+/// introduced, how many surviving groups clone untouched code (#364's
+/// requested cross-file classification), and how many untouched groups
 /// the filter omitted. Silent unless `--only-changed` filtered the
 /// cluster list, so every other run's stderr stays identical.
 fn write_diff_delta_line(theme: &Theme, report: &Report) {
@@ -108,13 +106,36 @@ fn write_diff_delta_line(theme: &Theme, report: &Report) {
         .iter()
         .filter(|cluster| cluster.is_newly_introduced == Some(true))
         .count();
+    let cross_file = report.clusters.len().saturating_sub(newly);
     eprintln!(
-        "  {bold}{newly} group(s) newly introduced by this diff{reset} \
+        "  {bold}{newly} group(s) newly introduced by this diff, {cross_file} cross-file with untouched code{reset} \
          {dim}({outside} untouched group(s) omitted by --only-changed){reset}",
         bold = theme.bold,
         dim = theme.dim,
         reset = theme.reset,
     );
+}
+
+/// The empty-body closer. A plain run with no clusters means the
+/// codebase is clean; an `--only-changed` run that omitted untouched
+/// groups only proves the *diff* added nothing — claiming the codebase
+/// is clean right after naming the omitted legacy debt would be false
+/// ([METRICS-DIFF-SCOPE]).
+fn write_clean_line(theme: &Theme, report: &Report) {
+    let omitted = report.clusters_outside_diff.unwrap_or(0);
+    if omitted > 0 {
+        eprintln!(
+            "  {green}✔ no diff-affected duplication — {omitted} untouched group(s) omitted by --only-changed.{reset}",
+            green = theme.green,
+            reset = theme.reset,
+        );
+    } else {
+        eprintln!(
+            "  {green}✔ no duplication detected — your codebase is clean.{reset}",
+            green = theme.green,
+            reset = theme.reset,
+        );
+    }
 }
 
 /// "Worst N groups" heading with the colour legend. Legend covers all

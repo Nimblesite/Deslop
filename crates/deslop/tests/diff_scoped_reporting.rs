@@ -299,10 +299,22 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
         !all_paths.iter().any(|path| path.contains("legacy")),
         "no legacy path may survive --only-changed: {all_paths:?}"
     );
+    // [METRICS-REPO] through [METRICS-DIFF-SCOPE]: the banner count
+    // follows the filtered body, the repo-wide count stays recoverable
+    // as clusters_total + clusters_outside_diff, and every line metric
+    // is untouched by filtering.
+    let mut full_metrics = mechanical_metrics(&full);
+    let mut filtered_metrics = mechanical_metrics(&report);
+    assert_eq!(field(&filtered_metrics, "clusters_total"), 2);
+    assert_eq!(field(&full_metrics, "clusters_total"), 3);
+    for metrics in [&mut full_metrics, &mut filtered_metrics] {
+        if let Some(map) = metrics.as_object_mut() {
+            let _ = map.remove("clusters_total");
+        }
+    }
     assert_eq!(
-        mechanical_metrics(&full),
-        mechanical_metrics(&report),
-        "--only-changed filters clusters, never metrics"
+        full_metrics, filtered_metrics,
+        "--only-changed filters clusters, never the line metrics"
     );
     let surviving = id_set(&report);
     assert!(
@@ -310,14 +322,17 @@ fn only_changed_filters_untouched_clusters_and_renders_the_delta() -> Result<()>
         "filtered ids must be a subset of the full run's ids"
     );
     assert!(
-        stderr.contains("newly introduced"),
-        "stderr summary must lead with the delta: {stderr}"
+        stderr.contains("1 group(s) newly introduced by this diff, 1 cross-file with untouched code"),
+        "stderr summary must lead with the four-figure delta: {stderr}"
     );
 
     let text = fs::read_to_string(output.with_extension("txt"))?;
     assert!(
-        text.contains("newly introduced"),
-        "text report must carry the delta summary: {text}"
+        text.contains(
+            "delta: 2 cluster(s) intersect the diff — 1 newly introduced, \
+             1 cross-file with untouched code; 1 untouched cluster(s) omitted"
+        ),
+        "text report must carry the four-figure delta summary: {text}"
     );
     assert!(
         text.contains("[in diff]") && text.contains("[existing]"),
@@ -343,7 +358,7 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     // Clean diff over a legacy-heavy repo: repo gate breached, run passes.
     let tmp = tempfile::tempdir()?;
     let output = tmp.path().join("report");
-    let _assert = diff_cmd(
+    let assert = diff_cmd(
         &output,
         &[
             "--diff",
@@ -355,6 +370,7 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     )?
     .assert()
     .code(0);
+    let clean_stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     let report = load_json(&output.with_extension("json"))?;
     let metrics = field(&report, "metrics");
     assert_eq!(
@@ -370,6 +386,33 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     assert_eq!(field(field(diff_metrics, "threshold"), "source"), "cli");
     assert_eq!(clusters(&report).len(), 0, "an empty diff touches nothing");
     assert_eq!(field(&report, "clusters_outside_diff"), 3);
+    assert_eq!(
+        field(metrics, "clusters_total"),
+        0,
+        "the banner counts the filtered body ([METRICS-REPO])"
+    );
+    // [METRICS-DIFF-SCOPE]: a filtered-empty run must not claim the
+    // codebase is clean while naming the legacy debt it omitted.
+    assert!(
+        clean_stderr
+            .contains("no diff-affected duplication — 3 untouched group(s) omitted"),
+        "the clean-diff summary names the diff scope, not the codebase: {clean_stderr}"
+    );
+    assert!(
+        !clean_stderr.contains("your codebase is clean"),
+        "a filtered-empty run must not claim the codebase is clean: {clean_stderr}"
+    );
+    // The governing clean diff gate renders ok even though the repo
+    // gate is breached — page and exit code agree.
+    let clean_html = fs::read_to_string(output.with_extension("html"))?;
+    assert!(
+        clean_html.contains("metrics-banner metrics-banner--ok"),
+        "the HTML banner follows the governing (clean) diff gate"
+    );
+    assert!(
+        clean_html.contains("diff threshold 0.00% (ok)"),
+        "the HTML banner names the governing diff verdict"
+    );
 
     // A diff that introduces duplication trips the same gate.
     let tmp2 = tempfile::tempdir()?;
@@ -391,6 +434,16 @@ fn only_changed_gate_reads_the_diff_percentage() -> Result<()> {
     assert_eq!(field(verdict, "breached"), true);
     assert_eq!(field(verdict, "source"), "cli");
     assert_eq!(field(verdict, "percent"), 0.0);
+    // The page must agree with exit 3: the governing diff gate breached.
+    let breached_html = fs::read_to_string(output2.with_extension("html"))?;
+    assert!(
+        breached_html.contains("metrics-banner metrics-banner--breached"),
+        "the HTML banner follows the governing (breached) diff gate"
+    );
+    assert!(
+        breached_html.contains("diff threshold 0.00% (breached)"),
+        "the HTML banner names the governing diff verdict"
+    );
 
     // Without --only-changed the repo-wide gate governs, diff or not.
     let tmp3 = tempfile::tempdir()?;

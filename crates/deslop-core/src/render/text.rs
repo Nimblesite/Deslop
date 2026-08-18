@@ -37,13 +37,19 @@ pub fn render_text(report: &Report) -> String {
 /// keep local runs terse.
 fn write_metrics(out: &mut String, report: &Report) {
     let metrics = &report.metrics;
+    // The repo line is repo-scoped: under `--only-changed`,
+    // `clusters_total` follows the filtered body ([METRICS-REPO]), so
+    // the repo-wide count is body + omitted ([METRICS-DIFF-SCOPE]).
+    let repo_clusters = metrics
+        .clusters_total
+        .saturating_add(report.clusters_outside_diff.unwrap_or(0));
     let _ = writeln!(
         out,
         "repo: {percent:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         percent = metrics.duplication_percent,
         dup = metrics.duplicated_loc,
         total = metrics.analysed_loc,
-        clusters = metrics.clusters_total,
+        clusters = repo_clusters,
         files = metrics.duplicated_files,
     );
     let verdict = match metrics.threshold.source {
@@ -94,9 +100,11 @@ fn write_diff_metrics(out: &mut String, report: &Report) {
     write_diff_delta(out, report);
 }
 
-/// Writes the `--only-changed` delta line ([CLI-ARG-ONLY-CHANGED]):
-/// how many clusters this diff newly introduced, how many it touches,
-/// and how many untouched clusters the filter omitted.
+/// Writes the `--only-changed` delta line ([CLI-ARG-ONLY-CHANGED],
+/// [METRICS-DIFF-SCOPE]): every surviving cluster intersects the diff
+/// by construction, split into newly introduced and cross-file with
+/// untouched code (#364's requested classification), with the omitted
+/// count beside them so all four figures reconcile.
 fn write_diff_delta(out: &mut String, report: &Report) {
     let Some(outside) = report.clusters_outside_diff else {
         return;
@@ -106,9 +114,10 @@ fn write_diff_delta(out: &mut String, report: &Report) {
         .iter()
         .filter(|cluster| cluster.is_newly_introduced == Some(true))
         .count();
+    let cross_file = report.clusters.len().saturating_sub(newly);
     let _ = writeln!(
         out,
-        "delta: {newly} newly introduced cluster(s), {touched} intersecting the diff, {outside} untouched cluster(s) omitted",
+        "delta: {touched} cluster(s) intersect the diff — {newly} newly introduced, {cross_file} cross-file with untouched code; {outside} untouched cluster(s) omitted",
         touched = report.clusters.len(),
     );
 }

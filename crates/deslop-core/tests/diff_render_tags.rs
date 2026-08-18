@@ -133,27 +133,35 @@ fn metrics(diff: Option<DiffMetrics>) -> RepoMetrics {
     }
 }
 
-fn diff_metrics() -> DiffMetrics {
+/// `gated: true` models the `--only-changed` shape, where the CLI
+/// resolved `--fail-over` onto the diff scope; `false` models plain
+/// `--diff`, where the diff threshold stays `none()` — the repo gate
+/// governs ([METRICS-DIFF-SCOPE]).
+fn diff_metrics(gated: bool) -> DiffMetrics {
     DiffMetrics {
         added_loc: 38,
         duplicated_added_loc: 24,
         duplication_percent: 63.157_894_736_842_11,
-        threshold: ThresholdSummary {
-            percent: 0.0,
-            breached: true,
-            source: ThresholdSource::Cli,
+        threshold: if gated {
+            ThresholdSummary {
+                percent: 0.0,
+                breached: true,
+                source: ThresholdSource::Cli,
+            }
+        } else {
+            ThresholdSummary::none()
         },
     }
 }
 
-fn report(clusters: Vec<ReportCluster>, diff: bool, outside: Option<usize>) -> Report {
+fn report(clusters: Vec<ReportCluster>, diff: Option<DiffMetrics>, outside: Option<usize>) -> Report {
     Report {
         tool_version: "test".to_owned(),
         min_nodes: 3,
         files_analysed: 6,
         clusters_hidden: 0,
         cache_stats: CacheStats::default(),
-        metrics: metrics(diff.then(diff_metrics)),
+        metrics: metrics(diff),
         schema_doc: "schema".to_owned(),
         action_hints: vec![ActionHint {
             pattern: "bucket=identical".to_owned(),
@@ -168,22 +176,41 @@ fn report(clusters: Vec<ReportCluster>, diff: bool, outside: Option<usize>) -> R
 
 /// A run without `--diff`: no diff metrics, no tags, nothing omitted.
 fn untagged_report() -> Report {
-    report(clusters(false), false, None)
+    report(clusters(false), None, None)
 }
 
 /// A `--diff` run without `--only-changed`: every cluster tagged and
-/// kept, `clusters_outside_diff` absent.
+/// kept, `clusters_outside_diff` absent, diff threshold unresolved —
+/// the repo-wide gate governs.
 fn diff_report() -> Report {
-    report(clusters(true), true, None)
+    report(clusters(true), Some(diff_metrics(false)), None)
 }
 
 /// A `--diff --only-changed` run: the legacy cluster is dropped from
-/// the body and counted, exactly as `apply_only_changed` produces —
-/// the only state in which `clusters_outside_diff` is ever `Some`.
+/// the body and counted, `clusters_total` follows the body, and the
+/// diff gate governs — exactly as `apply_only_changed` plus the CLI's
+/// gate rerouting produce. Repo threshold ok, diff threshold breached:
+/// the state whose banner colour proves which gate governs.
 fn only_changed_report() -> Report {
     let mut kept = clusters(true);
     kept.truncate(2);
-    report(kept, true, Some(1))
+    let mut filtered = report(kept, Some(diff_metrics(true)), Some(1));
+    filtered.metrics.clusters_total = 2;
+    filtered.metrics.threshold.breached = false;
+    filtered
+}
+
+/// The opposite governing-gate direction: legacy repo debt breaches
+/// the repo threshold, but the diff itself is clean — the banner must
+/// read from the governing diff gate and render ok.
+fn only_changed_clean_report() -> Report {
+    let mut clean = only_changed_report();
+    clean.metrics.threshold.breached = true;
+    if let Some(diff) = clean.metrics.diff.as_mut() {
+        diff.threshold.percent = 65.0;
+        diff.threshold.breached = false;
+    }
+    clean
 }
 
 fn count(haystack: &str, needle: &str) -> usize {
@@ -210,13 +237,13 @@ embeddings: off
   :: extract a shared helper
 ";
 
-/// A `--diff` run: the diff gate lines and one badged row per
-/// occurrence, no delta line (nothing was omitted).
+/// A `--diff` run: the added-lines figure and one badged row per
+/// occurrence; no diff-threshold verdict (the repo gate governs) and
+/// no delta line (nothing was omitted).
 const DIFF_TEXT: &str = "deslop test -- 6 file(s), 3 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
 threshold: 10.00% (breached)
 diff: 63.2% of added lines duplicated (24 / 38 added LOC)
-diff threshold: 0.00% (breached)
 embeddings: off
 -- action hints --
   [bucket=identical] extract
@@ -237,15 +264,17 @@ embeddings: off
   - src/legacy_b.rs:30-39 [existing]
 ";
 
-/// A `--diff --only-changed` run: the delta line names one newly
-/// introduced cluster, two kept, one omitted; the repo-wide metrics
-/// line still says 3 clusters — filtering never touches `metrics`.
+/// A `--diff --only-changed` run: the governing diff gate renders its
+/// verdict, the delta line carries all four figures (intersecting =
+/// newly + cross-file; omitted named beside them), and the repo line
+/// still says 3 clusters — derived as `clusters_total +
+/// clusters_outside_diff`, since `clusters_total` follows the body.
 const ONLY_CHANGED_TEXT: &str = "deslop test -- 6 file(s), 2 cluster(s), 0 hidden
 repo: 20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files)
-threshold: 10.00% (breached)
+threshold: 10.00% (ok)
 diff: 63.2% of added lines duplicated (24 / 38 added LOC)
 diff threshold: 0.00% (breached)
-delta: 1 newly introduced cluster(s), 2 intersecting the diff, 1 untouched cluster(s) omitted
+delta: 2 cluster(s) intersect the diff — 1 newly introduced, 1 cross-file with untouched code; 1 untouched cluster(s) omitted
 embeddings: off
 -- action hints --
   [bucket=identical] extract
@@ -273,11 +302,22 @@ const DIFF_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
      (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC)</p>";
 
-/// The `--only-changed` banner: delta segment appended.
+/// The `--only-changed` banner: the governing diff verdict and the
+/// four-figure delta appended, and the colour class read from the
+/// governing diff gate — breached here although the repo gate is ok.
 const ONLY_CHANGED_BANNER: &str = "<p class=\"metrics-banner metrics-banner--breached\">repo: \
      20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
-     (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · 1 newly \
-     introduced group(s), 1 untouched group(s) omitted</p>";
+     (ok) · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · diff threshold \
+     0.00% (breached) · 1 newly introduced group(s), 1 cross-file with untouched code, \
+     1 untouched group(s) omitted</p>";
+
+/// The opposite direction: repo debt breached, diff clean — the class
+/// must follow the governing diff gate and render ok.
+const ONLY_CHANGED_CLEAN_BANNER: &str = "<p class=\"metrics-banner metrics-banner--ok\">repo: \
+     20.0% duplicated (40 / 200 LOC, 3 clusters across 4 files) · threshold 10.00% \
+     (breached) · diff: 63.2% of added lines duplicated (24 / 38 added LOC) · diff threshold \
+     65.00% (ok) · 1 newly introduced group(s), 1 cross-file with untouched code, \
+     1 untouched group(s) omitted</p>";
 
 #[test]
 fn untagged_report_renders_the_exact_pre_diff_bytes() {
@@ -344,6 +384,12 @@ fn diff_tagged_html_marks_banner_cards_badges_and_facets() {
     assert_eq!(
         count(&filtered, ONLY_CHANGED_BANNER),
         1,
-        "the --only-changed banner appends the newly-introduced delta"
+        "breached diff gate governs the banner although the repo gate is ok"
+    );
+    let clean = render_html(&only_changed_clean_report(), None, false);
+    assert_eq!(
+        count(&clean, ONLY_CHANGED_CLEAN_BANNER),
+        1,
+        "clean diff gate governs the banner although the repo gate is breached"
     );
 }

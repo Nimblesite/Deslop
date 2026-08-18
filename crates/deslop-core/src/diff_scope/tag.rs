@@ -15,22 +15,27 @@ pub fn tag_clusters(clusters: &mut [ReportCluster], scope: &DiffScope) {
 }
 
 /// Stamps one cluster. `intersects_diff` is true when any non-hidden
-/// occurrence is in the diff; `is_newly_introduced` when every
-/// non-hidden occurrence is — the whole visible family arrived with
-/// the change.
+/// occurrence is in the diff; `is_newly_introduced` when that holds
+/// **and** every occurrence — hidden included — is in the diff. A
+/// hidden pre-existing copy vetoes the flag: content that already
+/// existed anywhere in the tree did not arrive with this change, and
+/// claiming otherwise in a merge gate would be a false accusation
+/// ([OUTPUT-SCHEMA-DIFF-TAGS], #364's "all occurrences" definition).
 fn tag_cluster(cluster: &mut ReportCluster, scope: &DiffScope) {
     for occurrence in &mut cluster.occurrences {
         occurrence.in_diff = Some(occurrence_in_diff(occurrence, scope));
     }
-    let visible: Vec<bool> = cluster
+    let visible_in_diff = cluster
         .occurrences
         .iter()
         .filter(|occurrence| !occurrence.hidden)
-        .map(|occurrence| occurrence.in_diff == Some(true))
-        .collect();
-    let any_in_diff = visible.iter().any(|in_diff| *in_diff);
-    cluster.intersects_diff = Some(any_in_diff);
-    cluster.is_newly_introduced = Some(any_in_diff && visible.iter().all(|in_diff| *in_diff));
+        .any(|occurrence| occurrence.in_diff == Some(true));
+    let every_copy_in_diff = cluster
+        .occurrences
+        .iter()
+        .all(|occurrence| occurrence.in_diff == Some(true));
+    cluster.intersects_diff = Some(visible_in_diff);
+    cluster.is_newly_introduced = Some(visible_in_diff && every_copy_in_diff);
 }
 
 /// True when the occurrence's line range overlaps an added span.
@@ -41,14 +46,20 @@ fn occurrence_in_diff(occurrence: &ReportOccurrence, scope: &DiffScope) -> bool 
 }
 
 /// Drops every cluster that does not intersect the diff and records
-/// how many were omitted ([CLI-ARG-ONLY-CHANGED]). Metrics are never
-/// touched — filtering changes what is listed, not what was measured.
+/// how many were omitted ([CLI-ARG-ONLY-CHANGED]). The repo-wide line
+/// metrics are never touched — filtering changes what is listed, not
+/// what was measured — but `clusters_total` follows the body so the
+/// [METRICS-REPO] invariant (banner counts the list it sits above)
+/// survives filtering; the repo-wide count stays recoverable as
+/// `clusters_total + clusters_outside_diff`, which is what the repo
+/// line renders ([METRICS-DIFF-SCOPE]).
 pub fn apply_only_changed(report: &mut Report) {
     let before = report.clusters.len();
     report
         .clusters
         .retain(|cluster| cluster.intersects_diff == Some(true));
     report.clusters_outside_diff = Some(before.saturating_sub(report.clusters.len()));
+    report.metrics.clusters_total = report.clusters.len();
 }
 
 #[cfg(test)]
@@ -127,11 +138,12 @@ mod tests {
         Ok(())
     }
 
-    // [OUTPUT-SCHEMA-DIFF-TAGS]: hidden occurrences never decide the
-    // cluster verdicts — a hidden out-of-diff copy cannot veto
-    // `is_newly_introduced`.
+    // [OUTPUT-SCHEMA-DIFF-TAGS]: a hidden pre-existing copy vetoes
+    // `is_newly_introduced` — content that already existed anywhere in
+    // the tree, hidden or not, did not arrive with this change. The
+    // hidden copy still never decides `intersects_diff`.
     #[test]
-    fn hidden_occurrences_do_not_veto_newly_introduced() -> Result<()> {
+    fn hidden_out_of_diff_occurrence_vetoes_newly_introduced() -> Result<()> {
         let mut clusters = vec![cluster(vec![
             occurrence("src/new.rs", 1, 5, false),
             occurrence("src/new.rs", 6, 9, false),
@@ -139,8 +151,26 @@ mod tests {
         ])];
         tag_clusters(&mut clusters, &scope_with("src/new.rs", [1, 9]));
         let tagged = clusters.first().context("the tagged cluster")?;
-        assert_eq!(tagged.is_newly_introduced, Some(true));
+        assert_eq!(tagged.intersects_diff, Some(true));
+        assert_eq!(tagged.is_newly_introduced, Some(false));
         assert_eq!(occurrence_at(tagged, 2)?.in_diff, Some(false));
+        Ok(())
+    }
+
+    // [OUTPUT-SCHEMA-DIFF-TAGS]: when the whole family — hidden copies
+    // included — arrives with the diff, the cluster is newly introduced.
+    #[test]
+    fn a_family_wholly_inside_the_diff_is_newly_introduced() -> Result<()> {
+        let mut scope = scope_with("src/new.rs", [1, 5]);
+        scope.insert_lines(PathBuf::from("generated/gen.rs"), [1, 5]);
+        let mut clusters = vec![cluster(vec![
+            occurrence("src/new.rs", 1, 5, false),
+            occurrence("generated/gen.rs", 1, 5, true),
+        ])];
+        tag_clusters(&mut clusters, &scope);
+        let tagged = clusters.first().context("the tagged cluster")?;
+        assert_eq!(tagged.intersects_diff, Some(true));
+        assert_eq!(tagged.is_newly_introduced, Some(true));
         Ok(())
     }
 
@@ -167,9 +197,14 @@ mod tests {
             clusters: vec![touched, untouched],
             clusters_outside_diff: None,
         };
+        report.metrics.clusters_total = 2;
         apply_only_changed(&mut report);
         assert_eq!(report.clusters.len(), 1);
         assert_eq!(report.clusters_outside_diff, Some(1));
+        // [METRICS-REPO] survives filtering: the banner counts the body
+        // it sits above, and the repo-wide count stays recoverable as
+        // `clusters_total + clusters_outside_diff`.
+        assert_eq!(report.metrics.clusters_total, 1);
         assert_eq!(
             report
                 .clusters

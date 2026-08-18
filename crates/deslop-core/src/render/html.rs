@@ -162,12 +162,12 @@ fn write_intro(out: &mut String, report: &Report, split_by_language: bool) {
 }
 
 /// Writes the repo-wide duplication banner per [METRICS-REPO]. Colour
-/// comes from a class selector driven by the threshold verdict so
-/// themes override it cleanly:
+/// comes from a class selector driven by the **governing** threshold
+/// verdict so themes override it cleanly:
 /// `metrics-banner--ok` (green) / `--breached` (red) / `--neutral`.
 fn write_metrics_banner(out: &mut String, report: &Report) {
-    let metrics = &report.metrics;
-    let variant = match (metrics.threshold.source, metrics.threshold.breached) {
+    let governing = governing_threshold(report);
+    let variant = match (governing.source, governing.breached) {
         (ThresholdSource::None, _) => "neutral",
         (_, true) => "breached",
         (_, false) => "ok",
@@ -179,17 +179,35 @@ fn write_metrics_banner(out: &mut String, report: &Report) {
     );
 }
 
+/// The gate that governs the banner colour and the run's exit code:
+/// the diff-scoped threshold when the CLI resolved one onto the diff
+/// (`--only-changed`), otherwise the repo-wide threshold
+/// ([METRICS-DIFF-SCOPE]). The page must never render green while the
+/// run exited breached.
+fn governing_threshold(report: &Report) -> &crate::report_metrics::ThresholdSummary {
+    match report.metrics.diff.as_ref() {
+        Some(diff) if !matches!(diff.threshold.source, ThresholdSource::None) => &diff.threshold,
+        _ => &report.metrics.threshold,
+    }
+}
+
 /// Plain-English metrics + threshold sentence rendered inside the
 /// banner. Kept as text (not HTML) so escaping is uniform with the
 /// rest of the intro.
 fn metrics_banner_text(report: &Report) -> String {
     let metrics = &report.metrics;
+    // Repo-scoped figure: under `--only-changed`, `clusters_total`
+    // follows the filtered body ([METRICS-REPO]), so the repo-wide
+    // count is body + omitted ([METRICS-DIFF-SCOPE]).
+    let repo_clusters = metrics
+        .clusters_total
+        .saturating_add(report.clusters_outside_diff.unwrap_or(0));
     let head = format!(
         "repo: {pct:.1}% duplicated ({dup} / {total} LOC, {clusters} clusters across {files} files)",
         pct = metrics.duplication_percent,
         dup = metrics.duplicated_loc,
         total = metrics.analysed_loc,
-        clusters = metrics.clusters_total,
+        clusters = repo_clusters,
         files = metrics.duplicated_files,
     );
     let mut sentence = match metrics.threshold.source {
@@ -211,9 +229,9 @@ fn metrics_banner_text(report: &Report) -> String {
 }
 
 /// Diff-scoped tail of the metrics banner ([METRICS-DIFF-SCOPE]):
-/// added-line duplication plus, under `--only-changed`, the
-/// newly-introduced delta. Empty on a no-diff run so the banner stays
-/// byte-identical.
+/// added-line duplication, the governing diff-gate verdict when the
+/// CLI resolved one, and under `--only-changed` the four-figure delta.
+/// Empty on a no-diff run so the banner stays byte-identical.
 fn diff_banner_text(report: &Report) -> String {
     let Some(diff) = report.metrics.diff.as_ref() else {
         return String::new();
@@ -224,18 +242,34 @@ fn diff_banner_text(report: &Report) -> String {
         dup = diff.duplicated_added_loc,
         added = diff.added_loc,
     );
-    if let Some(outside) = report.clusters_outside_diff {
-        let newly = report
-            .clusters
-            .iter()
-            .filter(|cluster| cluster.is_newly_introduced == Some(true))
-            .count();
+    if !matches!(diff.threshold.source, ThresholdSource::None) {
+        let verdict = if diff.threshold.breached { "breached" } else { "ok" };
         let _ = write!(
             tail,
-            " · {newly} newly introduced group(s), {outside} untouched group(s) omitted",
+            " · diff threshold {pct:.2}% ({verdict})",
+            pct = diff.threshold.percent,
         );
     }
+    tail.push_str(&diff_delta_segment(report));
     tail
+}
+
+/// The `--only-changed` delta segment: newly introduced, cross-file
+/// with untouched code (#364's requested classification), and the
+/// omitted count. Empty unless the filter ran.
+fn diff_delta_segment(report: &Report) -> String {
+    let Some(outside) = report.clusters_outside_diff else {
+        return String::new();
+    };
+    let newly = report
+        .clusters
+        .iter()
+        .filter(|cluster| cluster.is_newly_introduced == Some(true))
+        .count();
+    let cross_file = report.clusters.len().saturating_sub(newly);
+    format!(
+        " · {newly} newly introduced group(s), {cross_file} cross-file with untouched code, {outside} untouched group(s) omitted",
+    )
 }
 
 /// Builds the plain-English intro line. Avoids jargon; says what was
