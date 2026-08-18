@@ -10,7 +10,7 @@
 //! Found by scanning the pinned `fsharp` corpus (dotnet/fsharp v15.2.302),
 //! which contains a real instance:
 //! `tests/fsharp/core/large/matches/LargeMatches-maxtested.fs`. Scanning
-//! that one 9 KB file exits `0xC00000FD` (STATUS_STACK_OVERFLOW) with
+//! that one 9 KB file exits `0xC00000FD` (`STATUS_STACK_OVERFLOW`) with
 //! `thread 'main' has overflowed its stack`, so the whole 6233-file corpus
 //! reports nothing.
 //!
