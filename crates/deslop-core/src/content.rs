@@ -9,12 +9,16 @@
 //! - **agreement** — the fraction of collapsed-leaf positions whose raw
 //!   source bytes still match across members, identifiers and literals
 //!   pooled. High for verbatim and lightly-edited copies.
-//! - **rename consistency** — the Type-2 discriminator: a genuine maximal
-//!   rename preserves every literal and maps identifiers through one
-//!   bijective substitution, while sibling scaffolding changes its
-//!   literals. Pooling the populations averaged this proof away and
-//!   demoted textbook Type-2 clones to `structural_only`; measured
-//!   separately, a renamed clone keeps its act-now verdict.
+//! - **rename consistency** — the Type-2 discriminator
+//!   ([TECH-PMATCH-BAKER]): a genuine maximal rename preserves every
+//!   literal and maps identifiers through one bijective substitution
+//!   whose renamed names *repeat* — Baker's prev-encoding, where a
+//!   symbol's first occurrence constrains nothing and repetition carries
+//!   the binding proof. Sibling scaffolding changes its literals and
+//!   substitutes only its own subject name. Pooling the populations
+//!   averaged this proof away and demoted textbook Type-2 clones to
+//!   `structural_only`; measured separately, a renamed clone keeps its
+//!   act-now verdict.
 //!
 //! The result is stored on each [`Cluster`] so bucket routing, the
 //! rendered fused confidence, and the ranking weight can separate real
@@ -35,13 +39,26 @@ use crate::{
 /// must not reach the data-category classifier.
 const LITERAL_TABLE_MIN_LITERALS: usize = 8;
 
-/// Minimum literal-anchor positions a member pair needs before rename
-/// evidence exists at all. Ubiquitous literals (`0`, `1`, `""`) let a
-/// couple of positions agree by coincidence, and without anchors a
-/// consistent identifier mapping cannot tell a Type-2 rename from
-/// sibling scaffolding that also substitutes names consistently — the
-/// literals are the discriminator, so they must carry real mass.
-const RENAME_EVIDENCE_MIN_LITERALS: usize = 4;
+/// Minimum occurrences of a substituted identifier pair before it counts
+/// as rename evidence ([TECH-PMATCH-BAKER]). In Baker's prev-encoding a
+/// parameter symbol's first occurrence matches anything and constrains
+/// nothing; only repetition carries binding proof — sibling scaffolding
+/// gets one consistent substitution for free from its own subject name.
+const RENAME_CORROBORATION_MIN_OCCURRENCES: usize = 2;
+
+/// Half-saturation anchor mass for rename evidence: [`anchor_weight`]
+/// scales the rename proof by `anchors / (anchors + this)`, where
+/// anchors are every position whose byte-level evidence affirms the
+/// copy — preserved literals, identity identifiers, and substitutions
+/// corroborated by repetition. Replaces the deleted
+/// `RENAME_EVIDENCE_MIN_LITERALS = 4` cliff, which zeroed every
+/// sub-floor pair and rendered a maximal one-literal Type-2 rename at
+/// `fused = 0.0588` (`deslop/tests/type2_rename_anchor_floor.rs`):
+/// scarce anchors now weaken the proof smoothly instead of erasing it,
+/// while a forwarding scaffold's echoed subject substitution (its name
+/// twice plus its collaborator, mass 3, weight 3/7) stays below every
+/// routing floor.
+const RENAME_EVIDENCE_HALF_MASS: f64 = 4.0;
 
 /// Minimum share of members that must participate in verbatim
 /// duplicates before the guard vouches for the whole cluster. The #104
@@ -62,10 +79,12 @@ pub struct ContentEvidence {
     /// Mean fraction of collapsed-leaf positions whose raw bytes match
     /// the canonical member, identifiers and literals pooled, in `[0, 1]`.
     pub agreement: f64,
-    /// Mean Type-2 rename evidence in `[0, 1]`: the lesser of literal
-    /// preservation and bijective identifier-mapping coverage. `0.0`
-    /// when a member pair lacks positional alignment or the literal
-    /// anchors to prove anything.
+    /// Mean Type-2 rename evidence in `[0, 1]`
+    /// ([TECH-PMATCH-BAKER]): the lesser of literal preservation and
+    /// corroborated rename-mapping coverage, scaled by the anchor-mass
+    /// weight, so the value carries both how consistent the substitution
+    /// is and how much independent evidence backs it. `0.0` when a
+    /// member pair lacks positional alignment.
     pub rename_consistency: f64,
     /// Fraction of the canonical member's collapsed leaves that are
     /// literal positions ([CLONE-NOISE-LITERAL-TABLE]).
@@ -275,47 +294,20 @@ fn cluster_rename_consistency(
     total / member_count(member_keys.len().saturating_sub(1))
 }
 
-/// Type-2 rename evidence between two members: the lesser of literal
-/// preservation and bijective identifier-mapping coverage.
+/// Type-2 rename evidence between two members ([TECH-PMATCH-BAKER]): the
+/// lesser of literal preservation and corroborated rename-mapping
+/// coverage, scaled by the smooth anchor-mass weight.
 ///
-/// 🛑 The sub-floor branch is QUARANTINED — [FUSION-CONTENT-GATE] rename
-/// evidence, removed for manufacturing false negatives on the textbook
-/// Type-2 clone.
-///
-/// **What the deleted code did.** Below [`RENAME_EVIDENCE_MIN_LITERALS`]
-/// (4) literal anchor positions it returned no evidence outright:
-///
-/// ```text
-/// if literals.len() < RENAME_EVIDENCE_MIN_LITERALS {
-///     return 0.0;
-/// }
-/// ```
-///
-/// **Why it was deleted.** [`crate::buckets::content_gated_signals`]
-/// scores a shape-saturating cluster `max(agreement, 0.9 × rename
-/// consistency)`. A maximal identifier rename agrees on almost no raw
-/// identifier bytes, so once this floored to `0.0` the whole gate
-/// collapsed to the agreement term. Measured on two TypeScript files
-/// with identical logic, every identifier renamed and one literal:
-/// `structural = 1.00`, `token_jaccard = 1.00`, **`fused = 0.0588`**,
-/// bucket `structural_only` — inside the `< 0.6` band in which
-/// `CLAUDE.md` instructs an agent to write the copy anyway. No suite
-/// caught it because every `fused-golden-<lang>` rename fixture keeps
-/// identical literals on both sides, so the band was only ever
-/// exercised above the floor.
-///
-/// **The floor was not arbitrary**, and a lower constant is not the
-/// repair: without anchors, a consistent identifier mapping cannot
-/// separate a Type-2 rename from sibling scaffolding that also
-/// substitutes names consistently. The replacement must discriminate
-/// those two without depending on literal mass.
-///
-/// **Pinned by**
-/// `deslop/tests/type2_rename_anchor_floor.rs::a_maximal_rename_with_few_literals_is_still_a_type2_clone`,
-/// whose assertions are the spec contract — rendered bucket, signals and
-/// confidence — and which was watched failing on them before this
-/// quarantine replaced the code.
-#[allow(clippy::panic)]
+/// Baker's prev-encoding is the discriminator the deleted literal-anchor
+/// cliff could not provide: a substituted identifier pair seen once is
+/// an unconstrained wildcard — sibling scaffolding gets one free from
+/// its own subject name — while repeated consistent substitutions and
+/// preserved literals are independent anchors of deliberate copying.
+/// Scarce anchors weaken the proof smoothly instead of erasing it; the
+/// cliff rendered a maximal one-literal Type-2 rename at
+/// `fused = 0.0588`, an agent-surface false negative pinned by
+/// `deslop/tests/type2_rename_anchor_floor.rs`. `0.0` without
+/// positional alignment.
 fn pair_rename_consistency(canonical: Option<&[LeafKey]>, member: Option<&[LeafKey]>) -> f64 {
     let (Some(canonical), Some(member)) = (canonical, member) else {
         return 0.0;
@@ -324,17 +316,68 @@ fn pair_rename_consistency(canonical: Option<&[LeafKey]>, member: Option<&[LeafK
         return 0.0;
     }
     let literals = population(canonical, member, true);
-    if literals.len() < RENAME_EVIDENCE_MIN_LITERALS {
-        panic!(
-            "QUARANTINED [FUSION-CONTENT-GATE]: a member pair with {count} literal \
-             anchors (floor {RENAME_EVIDENCE_MIN_LITERALS}) had its rename evidence \
-             floored to 0.0, rendering a maximal Type-2 rename as structural_only at \
-             fused 0.0588. Measure rename evidence here without depending on literal \
-             mass; see this function's doc comment.",
-            count = literals.len()
-        )
+    let mapping = rename_mapping(&population(canonical, member, false));
+    let anchors = preserved_literal_count(&literals).saturating_add(mapping.explained);
+    literal_preservation(&literals).min(mapping.coverage) * anchor_weight(anchors)
+}
+
+/// Rename-mapping evidence over one pair's aligned identifier positions
+/// ([TECH-PMATCH-BAKER]), produced by [`rename_mapping`].
+struct RenameMapping {
+    /// Fraction of *constrained* identifier positions explained by
+    /// admissible evidence: bidirectionally-modal raw-byte identity, or
+    /// a bidirectionally-modal substitution corroborated by repetition.
+    /// A consistent substitution seen once is Baker's unconstrained
+    /// first occurrence — `prev = 0` matches any other first occurrence
+    /// — so it belongs to neither the numerator nor the denominator: a
+    /// renamed one-shot declaration name is not evidence against the
+    /// clone, and an inconsistent position still is. Vacuously 1.0 when
+    /// nothing is constrained — an all-literal or all-wildcard subtree
+    /// leaves the anchor weight to carry the verdict.
+    coverage: f64,
+    /// Explained positions — the identifier anchors [`anchor_weight`]
+    /// prices. Identity positions are backed by byte equality at the
+    /// position itself; substituted positions by repetition. Wildcards
+    /// are backed by nothing and never count.
+    explained: usize,
+}
+
+/// Measures [`RenameMapping`] for one pair's identifier positions,
+/// classifying each position exactly as [TECH-PMATCH-BAKER]'s
+/// prev-encoding constrains it: identity and corroborated substitutions
+/// are explained, inconsistent positions are constrained-but-unexplained,
+/// and consistent one-shot substitutions are wildcards outside the
+/// population.
+fn rename_mapping(identifiers: &[(u64, u64)]) -> RenameMapping {
+    let bijection = ModalBijection::over(identifiers);
+    let counts = pair_counts(identifiers.iter().copied());
+    let (mut constrained, mut explained) = (0_usize, 0_usize);
+    for pair in identifiers {
+        let substituted = pair.0 != pair.1;
+        let repeats = counts.get(pair).copied().unwrap_or_default()
+            >= RENAME_CORROBORATION_MIN_OCCURRENCES;
+        if bijection.explains(pair) && substituted && !repeats {
+            continue;
+        }
+        constrained = constrained.saturating_add(1);
+        if bijection.explains(pair) {
+            explained = explained.saturating_add(1);
+        }
     }
-    literal_preservation(&literals).min(mapping_consistency(&population(canonical, member, false)))
+    RenameMapping {
+        coverage: vacuous_share(explained, constrained),
+        explained,
+    }
+}
+
+/// Smooth evidence-mass weight for rename proof:
+/// `anchors / (anchors + RENAME_EVIDENCE_HALF_MASS)`. Zero anchors weigh
+/// vacuous evidence to zero and accumulating independent anchors
+/// approach full weight; a cliff here is what manufactured the
+/// quarantined false negative.
+fn anchor_weight(anchors: usize) -> f64 {
+    let mass = member_count(anchors);
+    mass / (mass + RENAME_EVIDENCE_HALF_MASS)
 }
 
 /// Paired keys at the positions where both members carry the requested
@@ -350,36 +393,86 @@ fn population(canonical: &[LeafKey], member: &[LeafKey], literal: bool) -> Vec<(
         .collect()
 }
 
-/// Fraction of literal positions whose raw bytes match — a Type-2 clone
-/// preserves its literals; a sibling scaffold or a data table does not.
-/// Callers guarantee a non-empty population via the anchor floor.
-fn literal_preservation(literals: &[(u64, u64)]) -> f64 {
-    let matched = literals
+/// Aligned literal positions whose raw bytes match — each one an
+/// independent anchor priced by [`anchor_weight`].
+fn preserved_literal_count(literals: &[(u64, u64)]) -> usize {
+    literals
         .iter()
         .filter(|(left, right)| left == right)
-        .count();
-    member_count(matched) / member_count(literals.len())
+        .count()
+}
+
+/// Fraction of literal positions whose raw bytes match — a Type-2 clone
+/// preserves its literals; a sibling scaffold or a data table does not.
+/// Vacuously `1.0` with no literal positions: absent literals prove
+/// nothing either way, and [`anchor_weight`] already prices the missing
+/// mass, so the mapping term carries the whole proof.
+fn literal_preservation(literals: &[(u64, u64)]) -> f64 {
+    vacuous_share(preserved_literal_count(literals), literals.len())
 }
 
 /// Share of identifier positions explained by one consistent 1:1
-/// substitution: a position counts when its pair is the modal partner in
-/// both directions. A genuine rename maps every occurrence of a name to
-/// one new name (identity included); scattergun similarity does not.
-/// Vacuously `1.0` with no identifier positions — an all-literal subtree
-/// leaves nothing to substitute.
+/// substitution ([`ModalBijection`], identity included). Vacuously
+/// `1.0` with no identifier positions — an all-literal subtree leaves
+/// nothing to substitute. This is the *substance* notion of consistency
+/// ([`pair_substance_varies`]): corroboration is deliberately not
+/// required here, because an uncorroborated-but-consistent substitution
+/// is no proof that the members differ.
 fn mapping_consistency(identifiers: &[(u64, u64)]) -> f64 {
-    if identifiers.is_empty() {
-        return 1.0;
-    }
-    let forward = modal_partners(identifiers.iter().map(|(left, right)| (*left, *right)));
-    let backward = modal_partners(identifiers.iter().map(|(left, right)| (*right, *left)));
+    let bijection = ModalBijection::over(identifiers);
     let explained = identifiers
         .iter()
-        .filter(|(left, right)| {
-            forward.get(left) == Some(right) && backward.get(right) == Some(left)
-        })
+        .filter(|pair| bijection.explains(pair))
         .count();
-    member_count(explained) / member_count(identifiers.len())
+    vacuous_share(explained, identifiers.len())
+}
+
+/// The bidirectionally-modal substitution test shared by the substance
+/// and rename measures: a position is explained when its pair is the
+/// modal partner in both directions. A genuine rename maps every
+/// occurrence of a name to one new name (identity included); scattergun
+/// similarity does not.
+struct ModalBijection {
+    /// Modal partner of each left key.
+    forward: BTreeMap<u64, u64>,
+    /// Modal partner of each right key.
+    backward: BTreeMap<u64, u64>,
+}
+
+impl ModalBijection {
+    /// Builds the two modal maps over one pair's identifier positions.
+    fn over(identifiers: &[(u64, u64)]) -> Self {
+        Self {
+            forward: modal_partners(identifiers.iter().map(|(left, right)| (*left, *right))),
+            backward: modal_partners(identifiers.iter().map(|(left, right)| (*right, *left))),
+        }
+    }
+
+    /// True when the pair is the modal partner in both directions.
+    fn explains(&self, (left, right): &(u64, u64)) -> bool {
+        self.forward.get(left) == Some(right) && self.backward.get(right) == Some(left)
+    }
+}
+
+/// `numerator / denominator`, vacuously `1.0` over an empty denominator
+/// — an empty evidence population proves nothing either way, and
+/// [`anchor_weight`] prices the absent mass.
+fn vacuous_share(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 {
+        return 1.0;
+    }
+    member_count(numerator) / member_count(denominator)
+}
+
+/// Occurrence count per aligned key pair — the corroboration ledger for
+/// [`rename_mapping`] and the tally [`modal_partners`] folds.
+fn pair_counts(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<(u64, u64), usize> {
+    let mut counts: BTreeMap<(u64, u64), usize> = BTreeMap::new();
+    for pair in pairs {
+        let slot = counts.entry(pair).or_insert(0_usize);
+        *slot = slot.saturating_add(1);
+    }
+    counts
 }
 
 /// Modal partner per key: the partner seen most often. Counting and
@@ -387,13 +480,8 @@ fn mapping_consistency(identifiers: &[(u64, u64)]) -> f64 {
 /// requires a strictly greater count, so ties resolve to the smallest
 /// partner key and the map is deterministic across runs.
 fn modal_partners(pairs: impl Iterator<Item = (u64, u64)>) -> BTreeMap<u64, u64> {
-    let mut counts: BTreeMap<(u64, u64), usize> = BTreeMap::new();
-    for pair in pairs {
-        let slot = counts.entry(pair).or_insert(0_usize);
-        *slot = slot.saturating_add(1);
-    }
     let mut modes: BTreeMap<u64, (u64, usize)> = BTreeMap::new();
-    for ((key, partner), count) in counts {
+    for ((key, partner), count) in pair_counts(pairs) {
         let best = modes.entry(key).or_insert((partner, count));
         if count > best.1 {
             *best = (partner, count);

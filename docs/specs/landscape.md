@@ -2,6 +2,15 @@
 
 Ordered from cheapest/oldest to most expensive/newest.
 
+### [TECH-PMATCH-BAKER] Parameterized matching (Baker 1995/1996)
+
+- **Baker's `dup`** — the original Type-2 formalism: two fragments *p-match* when one consistent one-to-one substitution over their parameter symbols maps one onto the other.
+- **prev-encoding** — each parameter occurrence is encoded as the distance to the previous occurrence of the same symbol, `0` for a first occurrence. Two fragments p-match iff their encodings are equal, with the structural consequence Deslop's rename evidence is built on: **a symbol seen once encodes `0` and matches any other first occurrence — it carries no binding constraint — while every repetition is a constraint the match must satisfy.** Corroboration by repetition, not mere consistency, is the proof of a deliberate rename; sibling scaffolding gets one consistent substitution for free from its own subject name.
+
+URLs:
+- [Baker 1995 — On Finding Duplication and Near-Duplication (dup / p-match, WCRE)](https://plg.uwaterloo.ca/~migod/846/papers/wcre95-baker.pdf)
+- [Baker 1996 — Parameterized Pattern Matching (prev-encoding, JCSS)](https://www.sciencedirect.com/science/article/pii/S0022000096900033)
+
 ### [TECH-TOKEN-SOURCERERCC] Token-based (SourcererCC, CCFinder, NiCad)
 
 - **SourcererCC**: bag-of-tokens + inverted index + overlap filter. Scales to **250 MLOC on a workstation**, targets Type-1/2/3. Still the scalability benchmark.

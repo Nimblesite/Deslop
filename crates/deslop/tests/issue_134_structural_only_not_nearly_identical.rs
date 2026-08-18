@@ -1,12 +1,15 @@
-//! Issue #134: a cluster whose only positive signal is the structural
-//! fingerprint (`structural >= 0.99`) but whose `token_jaccard` and
-//! `embedding_cos` are essentially zero must NOT be labeled
-//! `nearly_identical`. Without supporting token or semantic evidence,
-//! agents have no way to tell a real Type-2 clone from a structural
-//! skeleton match (test scaffolding, generated boilerplate). Bucketing
-//! these as `nearly_identical` makes top-offenders fill with
-//! low-actionability results, which is the exact regression #134
-//! reproduces.
+//! Issue #134: a same-shape family whose members differ in *substance*
+//! must NOT be labeled `nearly_identical`. The fixture is three
+//! handlers sharing one 96-node skeleton whose renamed identifiers map
+//! consistently but whose loop strides (`+ 1` / `+ 2` / `+ 3`) diverge
+//! at the aligned literal position: [FUSION-CONTENT-GATE] measures zero
+//! literal preservation, so no content evidence vouches for the family
+//! and it stays a hidden structural-only match (test scaffolding,
+//! generated boilerplate). The divergent literal is what separates this
+//! family from a genuine Type-2 clone — an identical-logic rename with
+//! its literals preserved is the *reportable* side of the same line
+//! (`fused_golden_bands.rs`, `type2_rename_anchor_floor.rs`,
+//! [TECH-PMATCH-BAKER]).
 //!
 //! Acceptance: no cluster in the rendered report carries
 //! `bucket=nearly_identical` together with `structural >= 0.99`,

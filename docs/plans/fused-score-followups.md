@@ -31,7 +31,8 @@ sits on top of.
 | Fusion is the strongest single axis, never the sum — at **admission**, not only at render | `pair_admission_bounded_max.rs` (axes `0.44 / 0.42 / 0.0` must be `DroppedBelowFused`; the sum would admit at 0.86), `issue_343_sum_clamp_saturation.rs` |
 | Rendered signals are measured between the occurrences the report shows, never averaged over discovery edges | `cluster::signals::measured_signals`, `[FUSION-CLUSTER-SIGNALS]` |
 | Shape-saturating clusters are re-scored against measured content evidence | `buckets::content_gated_signals`, `[FUSION-CONTENT-GATE]` |
-| All three agent bands are reachable and mean the same thing in six languages — **but the rename band is only pinned above the literal-anchor floor; see section 0** | `fused_golden_bands.rs` — verbatim / maximal rename / shape-only, with band separation and rank order per language |
+| All three agent bands are reachable and mean the same thing in six languages, with the rename band pinned on **both** sides of the old literal-anchor line | `fused_golden_bands.rs` — verbatim / maximal rename / lean maximal rename / shape-only, with band separation and rank order per language |
+| Rename evidence is Baker-corroborated anchor mass (`[TECH-PMATCH-BAKER]`: preserved literals + repeated consistent substitutions, smoothly weighted), never a literal-count cliff | `type2_rename_anchor_floor.rs`, the `rename_lean` scenarios, `cli::logging::technical_mode_uses_type_taxonomy_in_breakdown_row`; the convicted side held by `issue_134_structural_only_not_nearly_identical.rs` (divergent literals) and `dart_issue_197_single_file_structural_only` |
 | No report renders a constant confidence; every component stays in `[0,1]`; only byte-proven duplication saturates | `fused_golden_invariants.rs`, swept over 21 corpora |
 | One cosine definition, `f64` accumulation, byte-identical snippets render exactly `1.0` | `issue_372_identical_snippet_cosine.rs` |
 
@@ -60,55 +61,6 @@ Not history — each is a property of the code as it stands today.
 ---
 
 # TODO
-
-## 0. 🛑 QUARANTINED — a maximal Type-2 rename was reported as coincidence
-
-The sub-floor branch of `content::pair_rename_consistency` is a `panic!` — the above-floor path still
-computes `literal_preservation.min(mapping_consistency)` unchanged. Every scan that reaches a
-shape-saturating cluster whose member pair carries fewer than four literal anchors now aborts with exit 101,
-by design: a false negative on the textbook Type-2 clone is worse than a crash. **Nothing else may be built
-on this crate until the replacement lands.**
-
-`crates/deslop/tests/type2_rename_anchor_floor.rs::a_maximal_rename_with_few_literals_is_still_a_type2_clone`
-was watched failing on the rendered verdict **before** the quarantine replaced the code. Two TypeScript
-files, identical logic, every identifier renamed, one literal (`0`):
-
-```
-id=f461c761183864b0 bucket=structural_only category=logic size=2 weight=0.388
-structural=1.0000 token_jaccard=1.0000 embedding_cos=0.0000 fused=0.0588
-files={"charge.ts", "invoice.ts"}
-```
-
-`fused = 0.0588` is inside the `< 0.6` band in which `CLAUDE.md` instructs an agent to **write the copy
-anyway**. This is a false negative on the clone class `fused_golden_bands.rs` calls "the load-bearing one …
-every clone detector must report it".
-
-**Mechanism**, and it is deliberate code, not a slip:
-[`content::pair_rename_consistency`](../../crates/deslop-core/src/content.rs) returns `0.0` outright when a
-member pair carries fewer than `RENAME_EVIDENCE_MIN_LITERALS = 4` literal positions. `content_gated_signals`
-then scores the cluster `max(agreement, 0.9 × 0.0)`, and a maximal rename agrees on almost no raw identifier
-bytes. The floor exists for a real reason — without anchors, a consistent identifier mapping cannot separate
-a Type-2 rename from sibling scaffolding that also substitutes names consistently — so the fix is a
-discriminator that does not depend on literal mass, not a lowered constant.
-
-Why no suite caught it: every `fused-golden-<lang>` rename fixture keeps **identical literals** on both
-sides, so the band is only ever exercised above the floor. #341 then softened 17 rename-showcase fixtures
-from maximal to partial renames, which moved the shipped fixtures above the floor as well.
-
-**Blast radius, measured.** `cargo test --workspace --all-targets --features deslop-core/live -- --skip
-ollama_ --skip corpus_` is fail-fast and now stops at `deslop --test boilerplate`
-(`import_boilerplate_is_suppressed_but_real_clones_still_report`,
-`import_boilerplate_report_mode_emits_low_noise_hints`), exit 101, both on the quarantine panic. The same
-command was **exit 0 across 170 binaries** immediately before the quarantine, so every casualty from here on
-is this defect being made visible, not a new one. `cargo clippy --release --all-targets --workspace` is
-clean; the `#[allow(clippy::panic)]` on the quarantined function is the sanctioned exception and must be
-deleted with the panic.
-
-- [ ] Fix the discriminator, not the constant, and keep `dart_issue_197_single_file_structural_only`,
-      `declaration_family_plurality` and `declaration_family_mixed_component` green — those are the
-      sibling-scaffolding side the floor was protecting.
-- [ ] Extend `fused_golden_bands.rs` with a below-floor rename scenario per language so the band is pinned
-      across the anchor count, not only above it.
 
 ## 1. Eight assertions are `#[ignore]`d — every one is a live accuracy defect
 

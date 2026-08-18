@@ -62,17 +62,33 @@ erased:
      identifiers and literals pooled. Byte-identical members score 1.0;
      lightly-edited copies stay high; framework-mandated scaffolding (every
      name differs) and data tables (every literal differs) fall low.
-   - `rename_consistency` — the Type-2 discriminator: the lesser of literal
-     preservation (fraction of literal positions unchanged) and bijective
-     identifier-mapping coverage (fraction of identifier positions explained
-     by one consistent 1:1 substitution, modal in both directions). Zero
-     without positional alignment or with fewer than
-     `content_gate.rename_evidence_min_literals` literal anchors —
-     without anchors, a consistent mapping cannot tell a rename from sibling
-     scaffolding that also substitutes names consistently.
+   - `rename_consistency` — the Type-2 discriminator, [TECH-PMATCH-BAKER]
+     quantified: the lesser of literal preservation (fraction of literal
+     positions unchanged; vacuously 1.0 with none) and rename-mapping
+     coverage, scaled by the smooth anchor-mass weight `anchors / (anchors
+     + content_gate.rename_evidence_half_mass)`, where anchors are the
+     preserved literal positions plus the corroborated substituted
+     positions. Coverage classifies each identifier position exactly as
+     Baker's prev-encoding constrains it: bidirectionally-modal raw-byte
+     identity and substitutions corroborated by at least
+     `content_gate.rename_corroboration_min` occurrences are explained;
+     positions the bijection cannot explain are constrained-but-unexplained
+     and count against coverage; a *consistent substitution seen once* is
+     an unconstrained first occurrence (`prev = 0` matches any other first
+     occurrence) and belongs to neither numerator nor denominator — a
+     renamed one-shot declaration name is not evidence against the clone.
+     Zero without positional alignment. Consistency alone cannot tell a
+     rename from sibling scaffolding that also substitutes names
+     consistently — the anchors carry that burden, and they must *weigh*
+     the proof, never gate it: the deleted
+     `rename_evidence_min_literals` cliff zeroed every pair below four
+     literal anchors and rendered a maximal one-literal Type-2 rename at
+     `fused = 0.0588`, an agent-surface false negative
+     (`type2_rename_anchor_floor.rs`).
    A maximally renamed clone of real logic scores low pooled `agreement` but
-   `rename_consistency ≈ 1.0`; pooling the populations into one mean is what
-   demoted textbook Type-2 clones to `structural_only`.
+   high `rename_consistency` — every renamed name repeats, so nearly every
+   position is a corroborated anchor; pooling the populations into one mean
+   is what demoted textbook Type-2 clones to `structural_only`.
 3. **Rendered confidence**: for shape-identical clusters not proven
    byte-equivalent, `fused = max(embedding_cos, max(structural, token_jaccard)
    × max(agreement, rename_consistency_discount × rename_consistency))`. The
@@ -163,7 +179,8 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. |
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
 | `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346). Keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte-proven duplication. |
-| `content_gate.rename_evidence_min_literals` | `content.rs:44` | 4 | **Defect** (#346). Ubiquitous literals (`0`, `1`, `""`) let a couple of positions agree by coincidence; without anchors a consistent mapping cannot separate a rename from sibling scaffolding. |
+| `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |
+| `content_gate.rename_evidence_half_mass` | `content.rs` | 4 | **Defect.** Replaces the `rename_evidence_min_literals = 4` cliff (#346), which zeroed sub-floor rename evidence and rendered a maximal one-literal Type-2 rename at `fused = 0.0588` (`type2_rename_anchor_floor.rs`). Same operating point, now a half-saturation mass: a forwarding echo's single substitution (mass 2, weight 1/3) stays below every routing floor while a 16-anchor maximal rename clears the reuse line. |
 | `content_gate.verbatim_member_share_floor` | `content.rs:54` | 0.5 | **Defect** (#341, tightened #346). #104's verbatim pair among lookalikes (share ≥ 2/3) must stay visible; two byte-identical widgets inside 453 framework declarations (≈ 0.004) must not vouch for the family. |
 | `content_gate.literal_table_min_fraction` | `buckets.rs:257` | 0.8 | **Derived** (#341), value unswept. "Overwhelmingly literal" is the stated criterion for [CLONE-NOISE-LITERAL-TABLE]; 0.8 is where it was set, not where it was measured. |
 | `content_gate.literal_table_min_literals` | `content.rs:36` | 8 | **Derived** (#341), value unswept. A data table is a run of values, so a two-element tuple return must not reach the classifier — the argument fixes the direction, not the number. |

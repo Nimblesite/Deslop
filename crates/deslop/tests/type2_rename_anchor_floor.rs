@@ -1,30 +1,26 @@
-//! A maximal Type-2 rename with fewer literal anchors than
-//! [FUSION-CONTENT-GATE]'s evidence floor is reported as shape-only
-//! coincidence ([FUSED-THRESHOLD], [RANK-STRUCTURAL-ONLY]).
+//! A maximal Type-2 rename with almost no literal anchors is still a
+//! Type-2 clone ([FUSION-CONTENT-GATE], [FUSED-THRESHOLD],
+//! [RANK-STRUCTURAL-ONLY], [TECH-PMATCH-BAKER]).
 //!
 //! `fused_golden_bands.rs` pins the Type-2 band — "the load-bearing one.
 //! A rename-only copy is the textbook definition of a Type-2 clone and
-//! every clone detector must report it" — but every golden rename
-//! fixture keeps **identical literals** on both sides, so the band is
-//! only ever exercised above the anchor floor.
+//! every clone detector must report it." This suite pins the band at the
+//! anchor-starved end, where the shipped engine once manufactured a
+//! false negative: `content::pair_rename_consistency` used to return
+//! `0.0` outright below a four-literal-anchor cliff, the gate collapsed
+//! to the agreement term, and this exact fixture rendered
+//! `structural 1.00 / token_jaccard 1.00 / fused 0.0588`, bucket
+//! `structural_only` — inside the `< 0.6` band in which `CLAUDE.md`
+//! instructs an agent to **write the copy anyway**. Rename evidence is
+//! now Baker's parameterized match quantified — corroborated
+//! substitutions and preserved literals as smooth anchor mass — so
+//! scarce anchors weaken the proof instead of erasing it.
 //!
-//! `content::pair_rename_consistency` returns `0.0` outright when a
-//! member pair carries fewer than `RENAME_EVIDENCE_MIN_LITERALS` (4)
-//! literal positions. `buckets::content_gated_signals` then scores the
-//! cluster `max(agreement, 0.9 * 0.0)`, and a maximal rename agrees on
-//! almost no raw identifier bytes, so a proven Type-2 clone renders a
-//! confidence indistinguishable from unrelated scaffolding.
-//!
-//! This fixture is that clone: one loop, one accumulator, one
-//! multiplication, identical logic on both sides, every identifier
-//! renamed, and exactly one literal (`0`). Measured on the shipped
-//! engine it renders `structural 1.00 / token_jaccard 1.00 /
-//! fused 0.0588`, bucket `structural_only` — below the `< 0.6` band in
-//! which `CLAUDE.md` instructs an agent to **write the copy anyway**.
-//!
-//! The assertions below are the same contract `fused_golden_bands.rs`
-//! holds every other language's rename scenario to. Nothing here is
-//! specific to the literal count; that is the point.
+//! The fixture: one loop, one accumulator, one multiplication, identical
+//! logic on both sides, every identifier renamed, and exactly one
+//! literal (`0`). The assertions below are the same contract
+//! `fused_golden_bands.rs` holds every language's rename scenarios to.
+//! Nothing here is specific to the literal count; that is the point.
 
 use serde_json::Value;
 
