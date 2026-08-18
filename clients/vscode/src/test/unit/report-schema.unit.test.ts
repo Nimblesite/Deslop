@@ -222,7 +222,7 @@ suite("report schema helpers", () => {
   // extract — every copy is the same" about code whose identifiers all
   // differ. Every assertion is preserved; the surface under test is the
   // one the extension calls.
-  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  // → docs/plans/fused-score-followups.md § "Branch regression audit"
   test("a content-gated rename is never labelled byte-identical", () => {
     // A maximal Type-2 rename proven by its literal anchors: the engine
     // routes `nearly_identical` at fused 0.9 and renders token_jaccard
@@ -258,7 +258,7 @@ suite("report schema helpers", () => {
   // family fell through the old `structural >= 0.99` arm into an act-now
   // bucket — the exact false positive #341 exists to stop — because
   // `lacks_content_support` is invisible from the signal triple.
-  // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
+  // → docs/plans/fused-score-followups.md § "Branch regression audit"
   test("a shape-only family the content gate demoted is never promoted", () => {
     // Sibling boilerplate: shape saturates, content evidence is absent,
     // so the engine demotes it to `structural_only` at fused 0.31.

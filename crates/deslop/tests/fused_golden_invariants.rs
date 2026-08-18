@@ -2,7 +2,7 @@
 //! in *every* report ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE],
 //! [FUSED-THRESHOLD], [RANK-STRUCTURAL-ONLY]).
 //!
-//! `docs/root-cause-fusion.md` names the failure mode precisely: sum-then-
+//! `docs/plans/fused-score-followups.md` names the failure mode precisely: sum-then-
 //! clamp fusion over two views of one normalised tree makes `fused` a
 //! re-encoding of "the shapes matched", pinned at 1.0. [FUSION-CONTENT-GATE]
 //! rescues the two saturating corners (`structural >= 0.99` or
@@ -46,7 +46,7 @@ const MIN_INSPECTED_CLUSTERS: usize = 20;
 /// Smallest number of distinct rendered `fused` values the sweep must
 /// see across every corpus. Two would be satisfied by "1.0 and 0.0";
 /// three forces the middle of the range to be reachable, which is the
-/// property `docs/root-cause-fusion.md` says the metric lacks.
+/// property `docs/plans/fused-score-followups.md` says the metric lacks.
 const MIN_DISTINCT_FUSED_VALUES: usize = 3;
 
 /// Fixture corpora swept, with the node floor each is sized for.

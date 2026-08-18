@@ -1,7 +1,7 @@
 //! Golden band coverage for the fused confidence
 //! ([FUSION-STRATEGY-BOUNDED-MAX], [FUSION-CONTENT-GATE], [FUSED-THRESHOLD]).
 //!
-//! `docs/root-cause-fusion.md` states the contract the fused score has to
+//! `docs/plans/fused-score-followups.md` states the contract the fused score has to
 //! satisfy: it must carry information, so that the three documented agent
 //! bands are all reachable and mean what the docs say they mean. Each
 //! `fused-golden-<language>` fixture directory stages the same three
