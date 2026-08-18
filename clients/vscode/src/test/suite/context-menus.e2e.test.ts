@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import { Bucket, ReportCluster, ReportOccurrence } from "../../types/report";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { activateExtension } from "./helpers";
+import { signalsWith } from "../signals.helpers";
 
 function cluster(
   id: string,
@@ -23,12 +24,12 @@ function cluster(
     size: occurrences.length,
     canonical_node_count: 12,
     bucket: "identical",
-    signals: {
+    signals: signalsWith(bucket, {
       structural: 0.5,
       token_jaccard: 0.6,
       embedding_cos: 0.7,
       fused: 0.8,
-    },
+    }),
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
     occurrences_total: 0,
     occurrences_truncated: false,

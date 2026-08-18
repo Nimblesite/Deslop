@@ -1,13 +1,16 @@
 //! `textDocument/codeLens` provider ([LSP-CODE-LENS]).
 //!
 //! Emits one code lens per occurrence in the requested file. The lens
-//! title carries cluster count + signals so a reader sees the full
-//! context without opening the report view, and the attached command
-//! jumps to the next occurrence.
+//! title carries the cluster count and the shared confidence
+//! explanation — fused score plus measured content evidence
+//! ([FUSION-CONTENT-GATE]) — so a reader sees the full context without
+//! opening the report view, and the attached command jumps to the next
+//! occurrence.
 
 use std::path::Path;
 
 use deslop_core::live::FileReport;
+use deslop_core::render::signals::plain_explanation;
 use deslop_core::report::ReportCluster;
 use serde_json::json;
 use tower_lsp::lsp_types::{CodeLens, Command, Position, Range};
@@ -54,14 +57,17 @@ fn lens_for_occurrence(cluster: &ReportCluster, occurrence_index: usize) -> Code
 }
 
 /// Builds the lens title. Spec-compliant two-dot severity glyph at
-/// the front, cluster count, then the three signals.
+/// the front, cluster count, then the confidence explanation.
+///
+/// [FUSION-CONTENT-GATE] The signal breakdown is the one shared
+/// `render::signals` rendering, so the lens states the fused confidence
+/// and the measured content evidence rather than a hand-rolled subset
+/// that cannot separate a corroborated rename from a scaffolding family.
 fn title_for(cluster: &ReportCluster) -> String {
     format!(
-        "●● {count} copies — structural {structural:.2} · jaccard {jaccard:.2} · embedding {embedding:.2} — jump to next",
+        "●● {count} copies — {explanation} — jump to next",
         count = cluster.size,
-        structural = cluster.signals.structural,
-        jaccard = cluster.signals.token_jaccard,
-        embedding = cluster.signals.embedding_cos,
+        explanation = plain_explanation(cluster.signals),
     )
 }
 
@@ -97,7 +103,10 @@ mod tests {
                 structural: 0.87,
                 token_jaccard: 0.72,
                 embedding_cos: 0.55,
-                fused: 2.14,
+                fused: 0.88,
+                agreement: 0.63,
+                rename_consistency: 0.94,
+                literal_fraction: 0.11,
             },
             bucket: "nearly_identical".into(),
             category: "logic".into(),
@@ -176,6 +185,16 @@ mod tests {
                     .title
                     .contains("structural 0.87 · jaccard 0.72 · embedding 0.55"),
                 "title carries three signals to 2dp: {}",
+                command.title
+            );
+            // [FUSION-CONTENT-GATE] #344: every lens states the fused
+            // confidence and the measured content evidence behind it.
+            assert!(
+                command.title.contains(
+                    "structural 0.87 · jaccard 0.72 · embedding 0.55 · fused 0.88 · \
+                     agreement 0.63 · rename 0.94 · literal 0.11"
+                ),
+                "title carries all seven signals via render::signals: {}",
                 command.title
             );
             assert!(
@@ -261,5 +280,62 @@ mod tests {
         assert!(title.contains("jaccard 0.72"), "{title}");
         assert!(title.contains("embedding 0.55"), "{title}");
         assert!(title.ends_with("jump to next"), "{title}");
+    }
+
+    // [FUSION-CONTENT-GATE] #344: structural and jaccard alone cannot tell a
+    // corroborated Type-2 rename from an anchor-poor scaffolding family, so
+    // the lens must also state the fused score and the measured evidence.
+    #[test]
+    fn title_for_states_fused_confidence_and_measured_content_evidence() {
+        let cluster = make_cluster("c", 7, vec![]);
+        let title = title_for(&cluster);
+        assert!(title.contains("fused 0.88"), "fused confidence: {title}");
+        assert!(title.contains("agreement 0.63"), "byte agreement: {title}");
+        assert!(
+            title.contains("rename 0.94"),
+            "Baker rename corroboration: {title}"
+        );
+        assert!(
+            title.contains("literal 0.11"),
+            "literal share of the match: {title}"
+        );
+        assert_eq!(
+            title,
+            format!(
+                "●● 7 copies — {} — jump to next",
+                deslop_core::render::signals::plain_explanation(cluster.signals)
+            ),
+            "the lens title must be the shared render::signals rendering, never a \
+             second hand-rolled formatter"
+        );
+    }
+
+    // A lens whose evidence differs must render differently — pins that the
+    // title reads the cluster's own signals rather than a constant.
+    #[test]
+    fn title_for_tracks_each_clusters_own_evidence() {
+        let mut anchor_poor = make_cluster("scaffolding", 4, vec![]);
+        anchor_poor.signals = ReportSignals {
+            structural: 1.0,
+            token_jaccard: 1.0,
+            embedding_cos: 0.99,
+            fused: 0.42,
+            agreement: 0.07,
+            rename_consistency: 0.03,
+            literal_fraction: 0.81,
+        };
+        let title = title_for(&anchor_poor);
+        assert!(
+            title.contains("structural 1.00 · jaccard 1.00"),
+            "identical shape: {title}"
+        );
+        assert!(
+            title.contains("fused 0.42 · agreement 0.07 · rename 0.03 · literal 0.81"),
+            "anchor-poor evidence separates it from a corroborated rename: {title}"
+        );
+        assert!(
+            !title.contains("agreement 0.63"),
+            "must not echo another cluster's evidence: {title}"
+        );
     }
 }

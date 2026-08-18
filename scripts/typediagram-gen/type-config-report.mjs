@@ -7,6 +7,12 @@ export const REPORT_TYPE_CONFIG = {
       token_jaccard: "Mean token Jaccard estimate across cluster pairs.",
       embedding_cos: "Mean embedding cosine similarity across cluster pairs.",
       fused: "Unit-bounded fused confidence from the three components.",
+      agreement:
+        "Pooled byte agreement across the collapsed content frontier — how much of the content the members actually share.",
+      rename_consistency:
+        "Baker-corroborated evidence that one consistent identifier renaming explains the members' differences.",
+      literal_fraction:
+        "Share of the matched content that is literal data rather than logic.",
     },
   },
   ReportOccurrence: {

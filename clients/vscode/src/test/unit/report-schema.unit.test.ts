@@ -16,6 +16,7 @@ import {
   type ReportCluster,
   type ReportSignals,
 } from "../../types/report";
+import { signalsWith } from "../signals.helpers";
 
 // `fused` is a confidence in [0,1], never a raw sum — the engine's gate
 // multiplies shape evidence by content evidence ([FUSION-CONTENT-GATE]).
@@ -25,12 +26,13 @@ const signals = (
   j: number,
   e: number,
   fused = Math.min(1, Math.max(s, j, e)),
-): ReportSignals => ({
-  structural: s,
-  token_jaccard: j,
-  embedding_cos: e,
-  fused,
-});
+): ReportSignals =>
+  signalsWith("identical", {
+    structural: s,
+    token_jaccard: j,
+    embedding_cos: e,
+    fused,
+  });
 
 const cluster = (overrides: Partial<ReportCluster> = {}): ReportCluster => ({
   id: "x",

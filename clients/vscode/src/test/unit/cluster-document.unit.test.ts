@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { clusterDocumentContent } from "../../clusterDocument";
 import type { Report, ReportCluster } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { signalsWith } from "../signals.helpers";
 
 function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
   return {
@@ -12,12 +13,12 @@ function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
     size: 2,
     canonical_node_count: 12,
     bucket: "identical",
-    signals: {
+    signals: signalsWith("nearly_identical", {
       structural: 1,
       token_jaccard: 0.875,
       embedding_cos: 0.25,
       fused: 0.9,
-    },
+    }),
     occurrences: [
       {
         path: "/repo/Alpha.cs",

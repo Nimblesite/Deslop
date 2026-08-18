@@ -76,6 +76,8 @@ The canonical signal thresholds that map a cluster's `(structural, token_jaccard
 
 `StructuralOnly` is tested **before** the near-miss rows so a shape-only triple never absorbs into `NearlyIdentical` ([RANK-STRUCTURAL-ONLY], issues #134/#154/#197).
 
+Row 2's `0.80` is `deslop-core::pair::EMBEDDING_SUPPORT_FLOOR` — the single operating point at which a measured cosine counts as the embedding pass *vouching for* a cluster rather than merely having measured one. The same line admits a pair as an ANN candidate at all (`embedding/pairs.rs`) and releases a shape-saturating cluster from the content gate (`report_render::route_shape_identical`). It is one number because it answers one question, and it is named rather than written inline in each of those places: the two functions this table binds — `report::interpret` and `buckets::classify_signals` — are required above to agree, and a literal repeated per call site is exactly how they would silently stop agreeing. Do not confuse it with `STRUCTURAL_ONLY_MAX_SUPPORT` (0.05), which is a ceiling *below* which a signal counts as **absent**; reading that ceiling as a support floor is the defect gh #356 fixed.
+
 **Two routes reach it, and a consumer that knows only the first will misread the second.**
 
 1. **Evidence-free** (`is_structural_only_signals`) — token and embedding support both below `deslop-core::buckets::STRUCTURAL_ONLY_MAX_SUPPORT` (0.05, tolerating MinHash collision noise). Shape is the only positive signal; the #197 REST settings family is the canonical case.

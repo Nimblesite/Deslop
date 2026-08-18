@@ -22,6 +22,7 @@ import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
 import { ResolvedBinary } from "../../binary";
+import { bucketSignals } from "../signals.helpers";
 
 function resolvedLsp(): ResolvedBinary {
   return {
@@ -40,7 +41,7 @@ function clusterAcross(dirtyPath: string, otherPath: string): ReportCluster {
     size: 2,
     canonical_node_count: 3,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: [
       { path: dirtyPath, start_byte: 0, end_byte: 4, hidden: false },
       { path: otherPath, start_byte: 0, end_byte: 4, hidden: false },

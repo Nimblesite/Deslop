@@ -19,6 +19,7 @@ import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 function fakeCtx(): vscode.ExtensionContext {
   return {
@@ -35,7 +36,7 @@ function cluster(id: string): ReportCluster {
     size: 2,
     canonical_node_count: 3,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: [
       { path: "/a.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/b.cs", start_byte: 0, end_byte: 10, hidden: false },

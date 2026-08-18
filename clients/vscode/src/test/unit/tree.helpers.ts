@@ -4,6 +4,10 @@
 import * as vscode from "vscode";
 import { Bucket, FileMetric, RepoMetrics, Report, ReportCluster } from "../../types/report";
 import { emptyReport, metrics as zeroMetrics } from "./report-store.helpers";
+import { bucketSignals } from "../signals.helpers";
+
+/** Re-exported so a tree suite needs one helper module, not two. */
+export { bucketSignals };
 
 export function cluster(
   id: string,
@@ -36,19 +40,6 @@ export function cluster(
     summary: "",
     interpretation: `dup in ${occurrencePath}`,
   };
-}
-
-export function bucketSignals(bucket: Bucket) {
-  if (bucket === "nearly_identical") {
-    return { structural: 0.99, token_jaccard: 0.96, embedding_cos: 0, fused: 0.96 };
-  }
-  if (bucket === "loosely_similar") {
-    return { structural: 0.2, token_jaccard: 0.4, embedding_cos: 0, fused: 0.4 };
-  }
-  if (bucket === "same_behavior") {
-    return { structural: 0.2, token_jaccard: 0.3, embedding_cos: 0.9, fused: 0.9 };
-  }
-  return { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
 }
 
 export function labelText(item: vscode.TreeItem): string {

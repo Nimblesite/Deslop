@@ -9,6 +9,7 @@ import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
 import { repoMetrics, reportWithClusters } from "./report.helpers";
+import { signalsWith } from "../signals.helpers";
 
 export interface ClusterSignalOptions {
   // Engine-routed wire bucket. `resolveBucket` prefers it over
@@ -35,12 +36,12 @@ export function bubbleCluster(
     size: total,
     canonical_node_count: 4,
     bucket: options.bucket ?? "identical",
-    signals: {
+    signals: signalsWith(options.bucket ?? "identical", {
       structural: options.structural ?? 1,
       token_jaccard: options.token ?? 1,
       embedding_cos: options.embedding ?? 0,
       fused,
-    },
+    }),
     occurrences: [
       { path: "/tmp/A.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/tmp/B.cs", start_byte: 0, end_byte: 10, hidden: false },

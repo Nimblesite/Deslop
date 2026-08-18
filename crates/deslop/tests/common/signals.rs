@@ -9,7 +9,13 @@
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::anyhow;
-use deslop_core::buckets::{SATURATING_TOKEN_FLOOR, STRUCTURAL_ONLY_MAX_SUPPORT};
+use deslop_core::{
+    buckets::{
+        CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR, SATURATING_TOKEN_FLOOR,
+        STRUCTURAL_ONLY_MAX_SUPPORT,
+    },
+    pair::EMBEDDING_SUPPORT_FLOOR,
+};
 use serde_json::Value;
 
 use super::{
@@ -61,9 +67,12 @@ pub(crate) const ACT_NOW_BUCKETS: [&str; 3] = ["identical", "nearly_identical", 
 /// An earlier revision asserted that `token_jaccard` could not land
 /// between the two constants. Production emits exactly that: a
 /// `structural = 1.00`, mid-token, low-content cluster is demoted by
-/// `route_shape_identical` and routes here. Content evidence is not on
-/// the report wire, so no helper reading three signals can reconstruct
-/// which route ran — scenario tests pin the bucket and metrics instead.
+/// `route_shape_identical` and routes here.
+///
+/// Since #344 the measured content evidence *is* on the report wire, so
+/// this helper no longer has to guess which door a cluster came through
+/// — [`assert_reached_a_real_route`] checks each door by its own entry
+/// condition.
 pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
     let structural = signal(cluster, "structural");
     let token = signal(cluster, "token_jaccard");
@@ -76,15 +85,61 @@ pub(crate) fn assert_structural_only_contract(cluster: &Value, label: &str) {
         dump = signal_dump(cluster)
     );
     assert!(
-        signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT,
-        "{label}: semantic support disqualifies structural_only on both \
-         routes: {dump}",
+        signal(cluster, "embedding_cos") < EMBEDDING_SUPPORT_FLOOR,
+        "{label}: a cosine that *vouches* for the cluster escapes the \
+         content gate entirely (`route_shape_identical`), so it can never \
+         co-exist with this bucket: {dump}",
         dump = signal_dump(cluster)
     );
+    assert_reached_a_real_route(cluster, label);
     assert!(
         signal(cluster, "fused") < ACT_NOW_FUSED,
         "{label}: structural_only is a demoted verdict and must stay below \
          the act-now line: {dump}",
+        dump = signal_dump(cluster)
+    );
+}
+
+/// Asserts the cluster satisfies the entry condition of **one of the two
+/// real doors** into `structural_only`, rather than merely wearing the
+/// label ([CLONE-BUCKETS-ROUTING]).
+///
+/// This is the assertion the helper could not make until #344. Its doc
+/// used to record that "content evidence is not on the report wire, so
+/// no helper reading three signals can reconstruct which route ran", and
+/// it stood in a single blanket bound — `embedding_cos <
+/// STRUCTURAL_ONLY_MAX_SUPPORT` — for both. That bound is only route
+/// 1's. Route 2 demotes on *content*, and `route_shape_identical` lets
+/// it hold any cosine short of [`EMBEDDING_SUPPORT_FLOOR`], so the
+/// blanket bound asserted a property the engine never promised: a
+/// content-gated cluster at cosine 0.61 is a correct `structural_only`
+/// and the old assertion called it a defect. It never fired only because
+/// its one caller runs with embeddings off. `agreement` and
+/// `rename_consistency` are now on the wire, so each door is checked by
+/// its own entry condition instead.
+fn assert_reached_a_real_route(cluster: &Value, label: &str) {
+    let evidence_free = signal(cluster, "token_jaccard") < STRUCTURAL_ONLY_MAX_SUPPORT
+        && signal(cluster, "embedding_cos") < STRUCTURAL_ONLY_MAX_SUPPORT;
+    // `route_shape_identical` promotes back out of the demoted tier at
+    // the Type-3 overlap cutoff when the cluster spans files, and at the
+    // near-total-agreement bar when it does not — the #197 in-file
+    // sibling families measure 0.72–0.80 and are API surface, not
+    // extractable duplication.
+    let promote_floor = if cluster_file_set(cluster).len() > 1 {
+        CONTENT_SUPPORT_FLOOR
+    } else {
+        CONTENT_PROMOTE_FLOOR
+    };
+    let support = signal(cluster, "agreement").max(signal(cluster, "rename_consistency"));
+    assert!(
+        evidence_free || support < promote_floor,
+        "{label}: structural_only requires one of the two documented \
+         routes — evidence-free (token and embedding both below \
+         {STRUCTURAL_ONLY_MAX_SUPPORT}), or content-gated (measured \
+         support below {promote_floor}). This cluster satisfies neither, \
+         so the bucket claims a demotion the evidence does not support \
+         — a promoted clone wearing a demoted label is a false negative: \
+         support={support:.4} {dump}",
         dump = signal_dump(cluster)
     );
 }

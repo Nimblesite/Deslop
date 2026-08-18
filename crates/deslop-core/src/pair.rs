@@ -64,6 +64,34 @@ pub const MAX_ENDPOINT_NODE_RATIO: usize = 4;
 /// vocabularies differ, and the mode is opt-in for ports/generated
 /// clients rather than normal same-language refactoring.
 pub const CROSS_LANGUAGE_MIN_JACCARD: f64 = 0.10;
+/// Cosine at or above which a measured `embedding_cos` counts as the
+/// embedding pass *vouching for* a cluster rather than merely having
+/// measured it ([FUSION-CLUSTER-SIGNALS]).
+///
+/// A cosine belongs to the pair, not to the pass that surfaced it
+/// ([REPAIR-COSINE-MERGE], gh #351), so once embeddings are on every
+/// rendered cluster carries one — including clusters the model considers
+/// unrelated. The question a consumer must ask is therefore never *is
+/// there a cosine* but *is the cosine positive evidence*, and this is
+/// the only line that answers it: it is both the operating point at
+/// which the ANN pass admits a pair as a candidate at all
+/// ([TECH-EMBED-NEURAL]; the `candidates.embedding_min_cosine` lever in
+/// `embedding/pairs.rs`) and the line at which
+/// [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket
+/// on its own.
+///
+/// Asking the other question instead is how a bucket came to follow the
+/// discovery route. `report_render::route_shape_identical` tested the
+/// [FUSION-CONTENT-GATE] escape against
+/// `buckets::STRUCTURAL_ONLY_MAX_SUPPORT` — the ceiling *below* which a
+/// signal counts as **absent** — so a cosine of 0.05 read as semantic
+/// backing strong enough to overrule the measured content evidence. The
+/// embeddings-off run has no cosine and is gated; the embeddings-on run
+/// has a near-zero one and is not. `csharp-type3` rendered the identical
+/// two occurrences as `structural_only` at cosine 0.00 and
+/// `nearly_identical` at 0.61. Pinned by
+/// `deslop::embedding_route_invariance` (gh #356).
+pub const EMBEDDING_SUPPORT_FLOOR: f64 = 0.80;
 
 /// Per-pair score breakdown in `[0, 1]`. See
 /// [FUSION-STRATEGY-BOUNDED-MAX] for the semantics. Three slots are reserved

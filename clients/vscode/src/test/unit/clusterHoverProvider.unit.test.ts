@@ -10,6 +10,7 @@ import { ClusterHoverProvider } from "../../decorations/clusterHoverProvider";
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
+import { signalsWith } from "../signals.helpers";
 
 function reportWith(clusters: ReportCluster[]): Report {
   return reportWithClusters(clusters);
@@ -22,7 +23,12 @@ function clusterAt(path: string, startByte: number, endByte: number): ReportClus
     size: 2,
     canonical_node_count: 3,
     bucket: "same_behavior",
-    signals: { structural: 0.1, token_jaccard: 0.2, embedding_cos: 0.9, fused: 0.95 },
+    signals: signalsWith("same_behavior", {
+      structural: 0.1,
+      token_jaccard: 0.2,
+      embedding_cos: 0.9,
+      fused: 0.95,
+    }),
     occurrences: [{ path, start_byte: startByte, end_byte: endByte, hidden: false }],
     occurrences_total: 0,
     occurrences_truncated: false,

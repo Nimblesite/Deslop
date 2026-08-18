@@ -5,6 +5,7 @@ import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { hoverFor, byteRangeToRange } from "../../decorations/manager";
 import { ReportCluster, ReportOccurrence } from "../../types/report";
+import { signalsWith } from "../signals.helpers";
 
 function cluster(): ReportCluster {
   return {
@@ -13,7 +14,12 @@ function cluster(): ReportCluster {
     size: 4,
     canonical_node_count: 5,
     bucket: "same_behavior",
-    signals: { structural: 0.1, token_jaccard: 0.2, embedding_cos: 0.9, fused: 0.95 },
+    signals: signalsWith("same_behavior", {
+      structural: 0.1,
+      token_jaccard: 0.2,
+      embedding_cos: 0.9,
+      fused: 0.95,
+    }),
     occurrences: [
       { path: "/a.cs", start_byte: 0, end_byte: 10, hidden: false },
       { path: "/b.cs", start_byte: 0, end_byte: 10, hidden: false },

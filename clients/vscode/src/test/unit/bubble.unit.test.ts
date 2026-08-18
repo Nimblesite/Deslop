@@ -12,14 +12,15 @@ import {
 import * as liveBubble from "../../bubble/live";
 import { clusterHoverMarkdown } from "../../clusterHover";
 import { ReportCluster } from "../../types/report";
+import { bucketSignals, signalsWith } from "../signals.helpers";
 
 function cluster(
-  signals = {
+  signals = signalsWith("nearly_identical", {
     structural: 1,
     token_jaccard: 0.9,
     embedding_cos: 0.5,
     fused: 0.95,
-  },
+  }),
 ): ReportCluster {
   return {
     id: "abcdef0123456789",
@@ -61,12 +62,14 @@ suite("bubble rendering helpers", () => {
 
   test("signalStrip clamps inputs to the bar range", () => {
     const strip = signalStrip(
-      cluster({
-        structural: 2,
-        token_jaccard: -1,
-        embedding_cos: 0.5,
-        fused: 1,
-      }),
+      cluster(
+        signalsWith("identical", {
+          structural: 2,
+          token_jaccard: -1,
+          embedding_cos: 0.5,
+          fused: 1,
+        }),
+      ),
     );
     assert.equal(strip.length, 3);
   });
@@ -90,7 +93,7 @@ suite("bubble rendering helpers", () => {
   // the first line — never the hybridTitle taxonomy variant.
   test("bubbleHover bucket label in the title is the plain human name (#30)", () => {
     const c = cluster();
-    c.signals = { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 };
+    c.signals = bucketSignals("identical");
     const text = bubbleHover(c).value;
     const firstLine = text.split("\n")[0] ?? "";
     assert.match(

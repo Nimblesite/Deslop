@@ -7,6 +7,7 @@ import { StatusBar, sameFile, shortPath } from "../../commands/statusBar";
 import { ReportStore } from "../../reportStore";
 import { Report } from "../../types/report";
 import { emptyReport, repoMetrics } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 function report(): Report {
   return emptyReport({
@@ -27,7 +28,7 @@ function report(): Report {
         size: 3,
         canonical_node_count: 4,
         bucket: "identical",
-        signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+        signals: bucketSignals("identical"),
         occurrences: [
           { path: "/tmp/A/Alpha.cs", start_byte: 0, end_byte: 10, hidden: false },
         ],

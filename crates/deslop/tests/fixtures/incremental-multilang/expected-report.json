@@ -132,7 +132,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.84,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
@@ -168,7 +171,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8181818181818182,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
@@ -204,7 +210,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8333333333333334,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
@@ -240,7 +249,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8333333333333334,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
@@ -276,7 +288,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8260869565217391,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
@@ -312,7 +327,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",

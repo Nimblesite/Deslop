@@ -82,6 +82,15 @@ pub(crate) fn cross_file_identical_cluster(
 /// A synthetic report cluster over explicit occurrences — full control
 /// of the precondition-relevant fields for the refactor suites.
 /// Signals are proven-Identical; the caller picks the bucket label.
+///
+/// The content-evidence fields carry `ContentEvidence::unmeasured()`
+/// — full pooled agreement, no rename proof, no literal dominance —
+/// because no measurement pass ever ran over a hand-built cluster, and
+/// [FUSION-CONTENT-GATE]'s contract is that a missing measurement never
+/// demotes. Zeroes here would read as "measured, and found nothing" and
+/// would make every refusal in `refactor_extract_negative.rs` pass
+/// through the content gate instead of through the rule each case was
+/// written to pin ([AUTOFIX-EXTRACT-PRECONDITIONS], gh #344).
 pub(crate) fn synthetic_report_cluster(
     occurrences: Vec<deslop_core::report::ReportOccurrence>,
     bucket: &str,
@@ -96,6 +105,9 @@ pub(crate) fn synthetic_report_cluster(
             token_jaccard: 1.0,
             embedding_cos: 0.0,
             fused: 1.0,
+            agreement: 1.0,
+            rename_consistency: 0.0,
+            literal_fraction: 0.0,
         },
         bucket: bucket.to_owned(),
         category: "logic".to_owned(),

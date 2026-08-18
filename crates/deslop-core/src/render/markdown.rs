@@ -56,8 +56,13 @@ fn write_signals(out: &mut String, cluster: &ReportCluster) {
     let signals = cluster.signals;
     let _ = writeln!(
         out,
-        "- signals: structural=`{:.2}` jaccard=`{:.2}` embedding=`{:.2}` fused=`{:.2}`",
-        signals.structural, signals.token_jaccard, signals.embedding_cos, signals.fused,
+        "- signals: {}",
+        crate::render::signals::confidence_summary(signals),
+    );
+    let _ = writeln!(
+        out,
+        "- content evidence: {}",
+        crate::render::signals::evidence_summary(signals),
     );
     let _ = writeln!(out);
 }
@@ -151,6 +156,9 @@ mod tests {
                 token_jaccard: 0.98,
                 embedding_cos: 0.0,
                 fused: 0.98,
+                agreement: 0.0,
+                rename_consistency: 0.0,
+                literal_fraction: 0.0,
             },
             bucket: String::new(),
             category: String::new(),

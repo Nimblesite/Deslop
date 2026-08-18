@@ -282,6 +282,48 @@ pub fn has_saturating_shape_evidence(signals: ReportSignals) -> bool {
     signals.structural >= 0.99 || signals.token_jaccard >= SATURATING_TOKEN_FLOOR
 }
 
+/// Content support carried by the two independent measured
+/// populations: either may vouch for a shape-identical cluster — pooled
+/// byte agreement or a corroborated consistent rename —
+/// and [FUSION-CONTENT-GATE] routes on the stronger, never on their
+/// mean. Defined once here because the mean is what demoted maximal
+/// Type-2 renames, so the two callers that read this quantity —
+/// [`ContentEvidence::support`] on the measured evidence and
+/// [`lacks_content_support`] on the rendered signals — must not be free
+/// to drift apart.
+#[must_use]
+pub fn content_support(agreement: f64, rename_consistency: f64) -> f64 {
+    agreement.max(rename_consistency)
+}
+
+/// [CLONE-BUCKETS-ROUTING] route 2 into the demoted tier, read back off
+/// a *rendered* signal triple: the deterministic shape evidence
+/// saturates by construction ([`has_saturating_shape_evidence`]) while
+/// the measured content evidence stays below [`CONTENT_SUPPORT_FLOOR`],
+/// so nothing about what the code actually *said* vouches for the
+/// match. A scaffolding family and a corroborated Type-2 rename render
+/// the identical `structural = 1.00, token_jaccard = 1.00` triple; this
+/// is the predicate that separates them.
+///
+/// Consumers are decision surfaces that must not act on shape alone —
+/// today the refactor preconditions
+/// ([AUTOFIX-EXTRACT-PRECONDITIONS] rule 1), which would otherwise fold
+/// two unrelated methods into one shared helper.
+///
+/// The anchor-free row-4 near-miss is excluded for the reason
+/// [`has_saturating_shape_evidence`] documents at length: its members do
+/// not align position for position, so *both* content populations are
+/// structurally unable to vouch for a genuine renamed Type-3 clone
+/// (`csharp-type3` measures agreement 0.19, rename consistency 0.00).
+/// Convicting it here would manufacture the exact false negative
+/// `report_render::route_anchor_free` exists to avoid.
+#[must_use]
+pub fn lacks_content_support(signals: ReportSignals) -> bool {
+    has_saturating_shape_evidence(signals)
+        && !is_lsh_only_nearmiss(signals)
+        && content_support(signals.agreement, signals.rename_consistency) < CONTENT_SUPPORT_FLOOR
+}
+
 /// Token overlap at or above which the token layer is echoing shape
 /// rather than reporting content ([FUSION-CONTENT-GATE]). Named because
 /// the assertion surface has to distinguish the two routes into
@@ -318,6 +360,15 @@ pub fn content_gated_signals(
     content: ContentEvidence,
     kind: ClusterKind,
 ) -> ReportSignals {
+    // #344: the measured content evidence is stamped on **every** path,
+    // including the two that leave the confidence untouched. A reader
+    // that can see `fused` but not the evidence behind it cannot tell a
+    // corroborated rename from an anchor-poor scaffolding family — the
+    // two render the same triple ([FUSION-CONTENT-GATE]). Returning the
+    // input unchanged here would leave those fields at the zeroes
+    // `From<PairScore>` seeded, which reads as "measured, and found
+    // nothing" rather than "measured, and found this".
+    let signals = with_content_evidence(signals, content);
     if kind == ClusterKind::Identical || !has_saturating_shape_evidence(signals) {
         return signals;
     }
@@ -351,12 +402,25 @@ pub fn content_gated_signals(
     }
 }
 
+/// Stamps the measured content evidence onto a rendered signal triple
+/// without touching the confidence ([FUSION-CONTENT-GATE], #344).
+fn with_content_evidence(signals: ReportSignals, content: ContentEvidence) -> ReportSignals {
+    ReportSignals {
+        agreement: content.agreement,
+        rename_consistency: content.rename_consistency,
+        literal_fraction: content.literal_fraction,
+        ..signals
+    }
+}
+
 /// Signals-only fallback for reports that do not carry `cluster.bucket`.
 #[must_use]
 pub fn classify_signals(signals: ReportSignals) -> ClusterKind {
     if signals.structural >= 0.99 && signals.token_jaccard >= 0.99 {
         ClusterKind::Identical
-    } else if signals.embedding_cos >= 0.80 && signals.structural < 0.50 {
+    } else if signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
+        && signals.structural < 0.50
+    {
         ClusterKind::SameBehavior
     } else if is_structural_only_signals(signals) {
         ClusterKind::StructuralOnly

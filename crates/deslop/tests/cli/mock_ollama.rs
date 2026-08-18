@@ -339,7 +339,9 @@ fn embed_vector(text: &str) -> Vec<f32> {
         let hash = shingle_hash(shingle);
         let lane = usize::from(u8::try_from(hash & 0x7F).unwrap_or_default());
         let sign = if hash & 0x80 == 0 { 1.0_f32 } else { -1.0_f32 };
-        vector[lane] += sign;
+        if let Some(slot) = vector.get_mut(lane) {
+            *slot += sign;
+        }
     }
     vector
 }

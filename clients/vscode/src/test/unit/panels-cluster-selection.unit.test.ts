@@ -13,6 +13,7 @@ import { ReportStore } from "../../reportStore";
 import { anchorForClusterId, clusterPanelFeed, resolveAnchoredCluster } from "../../clusterSelection";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 interface PostedMessage {
   kind?: string;
@@ -85,7 +86,7 @@ function clusterOf(id: string, weight: number, occurrences: ReportOccurrence[]):
     size: occurrences.length,
     canonical_node_count: 0,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences,
     occurrences_total: occurrences.length,
     occurrences_truncated: false,

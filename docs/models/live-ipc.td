@@ -167,6 +167,7 @@ type EmbeddingProvenance {
   model_version: String
   dimensions: Int
   attempted_subtrees: Int
+  succeeded_subtrees: Int
   indexed_subtrees: Int
   failed_subtrees: Int
 }
@@ -176,6 +177,9 @@ type ReportSignals {
   token_jaccard: Float
   embedding_cos: Float
   fused: Float
+  agreement: Float
+  rename_consistency: Float
+  literal_fraction: Float
 }
 
 type ReportOccurrence {

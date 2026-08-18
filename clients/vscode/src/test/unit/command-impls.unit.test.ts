@@ -37,6 +37,7 @@ import { ReportStore } from "../../reportStore";
 import { activateExtension } from "../suite/helpers";
 import { ClusterNode, OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster, ReportOccurrence } from "../../types/report";
+import { bucketSignals, signalsWith } from "../signals.helpers";
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let i = 0; i < 20; i += 1) {
@@ -74,7 +75,7 @@ function cluster(id: string, paths: string[]): ReportCluster {
     size: 2,
     canonical_node_count: 4,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: paths.map((p) => ({
       path: p,
       start_byte: 0,
@@ -98,7 +99,7 @@ function clusterWithRanges(
     size: occurrences.length,
     canonical_node_count: 4,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: occurrences.map((o) => ({ ...o, hidden: false })),
     occurrences_total: 0,
     occurrences_truncated: false,
@@ -512,12 +513,12 @@ suite("tree menu renderers", () => {
       { path: "src/foo.cs", start_byte: 10, end_byte: 200 },
     ]);
     c.bucket = "same_behavior";
-    c.signals = {
+    c.signals = signalsWith("same_behavior", {
       structural: 0.1,
       token_jaccard: 0.2,
       embedding_cos: 0.9,
       fused: 0.85,
-    };
+    });
 
     const text = aiPayloadForCluster(c, 7);
     assert.match(text, /cluster_id: c-ai/);

@@ -36,6 +36,31 @@ pub struct EmbeddingPair {
     pub cosine: f64,
 }
 
+impl EmbeddingPair {
+    /// Returns the pair with `left < right` so pair equality is
+    /// order-insensitive.
+    ///
+    /// Every producer routes through this one constructor. The ANN loop
+    /// discovers a pair from whichever endpoint it queried, and the
+    /// duplicate-snippet expansion in `pipeline::embedding_batch` emits
+    /// owner pairs in group order; neither knows the other's ordering, and
+    /// an unordered pair reaching [`dedupe`] would survive as a second copy
+    /// of a pair already recorded.
+    #[must_use]
+    pub fn ordered(first: usize, second: usize, cosine: f64) -> Self {
+        let (left, right) = if first <= second {
+            (first, second)
+        } else {
+            (second, first)
+        };
+        Self {
+            left,
+            right,
+            cosine,
+        }
+    }
+}
+
 /// Builds an HNSW over `embeddings` and returns the top-k nearest
 /// neighbour pairs whose cosine clears [`MIN_COSINE`]. Each index in
 /// `embeddings` corresponds one-to-one with the `fingerprints` slice
@@ -130,7 +155,7 @@ fn collect_neighbours(
         if !admits_cosine(cosine) {
             continue;
         }
-        out.push(order_pair(query_index, neighbour, cosine));
+        out.push(EmbeddingPair::ordered(query_index, neighbour, cosine));
     }
 }
 
@@ -154,24 +179,6 @@ fn admits_cosine(cosine: f64) -> bool {
 /// fused sum.
 fn cosine_from_distance(distance: f64) -> f64 {
     (1.0 - distance).clamp(0.0, 1.0)
-}
-
-/// Returns an [`EmbeddingPair`] with `left < right` so pair equality
-/// is order-insensitive.
-fn order_pair(a: usize, b: usize, cosine: f64) -> EmbeddingPair {
-    if a <= b {
-        EmbeddingPair {
-            left: a,
-            right: b,
-            cosine,
-        }
-    } else {
-        EmbeddingPair {
-            left: b,
-            right: a,
-            cosine,
-        }
-    }
 }
 
 /// Keeps the highest cosine for each (left, right) pair. HNSW can

@@ -12,6 +12,7 @@ import {
 } from "../../locations";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 suite("occurrence display locations", () => {
   test("projects a byte offset to one-indexed line and column", () => {
@@ -126,7 +127,7 @@ function cluster(file: string, startByte: number): ReportCluster {
     size: 1,
     canonical_node_count: 1,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: [{ path: file, start_byte: startByte, end_byte: startByte + 9, hidden: false }],
     occurrences_total: 0,
     occurrences_truncated: false,

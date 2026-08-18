@@ -748,7 +748,7 @@ fn cached_report() -> serde_json::Value {
             "weight": 9.0,
             "size": 2,
             "canonical_node_count": 6,
-            "signals": {"structural": 1.0, "token_jaccard": 1.0, "embedding_cos": 0.0, "fused": 1.0},
+            "signals": {"structural": 1.0, "token_jaccard": 1.0, "embedding_cos": 0.0, "fused": 1.0, "agreement": 1.0, "rename_consistency": 0.0, "literal_fraction": 0.0},
             "bucket": "identical",
             "occurrences": [
                 {"path": "Alpha.cs", "start_byte": 0, "end_byte": 10, "hidden": false},

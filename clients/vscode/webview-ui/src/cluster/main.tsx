@@ -23,6 +23,7 @@ import {
   type HelpTopic,
 } from "../components/HelpBubble";
 import { bucketLabels, clusterSlug, occurrenceCount, resolveBucket } from "../../../src/types/report";
+import { helpValueTitle } from "../../../src/types/signals";
 import type { ReportCluster, ReportOccurrence } from "../../../src/types/report";
 
 const focusedOccurrenceIndex = signal(0);
@@ -394,7 +395,7 @@ function HotkeyHelp({ accent }: { accent: string }) {
 }
 
 function StatItem({ topic, label, value }: { topic: HelpTopic; label: string; value: string }) {
-  const title = `${helpCopy(topic)} Current value: ${value}.`;
+  const title = helpValueTitle(helpCopy(topic), value);
   return (
     <span class="with-help" title={title}>
       <span>

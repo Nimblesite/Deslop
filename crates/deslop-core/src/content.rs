@@ -118,10 +118,13 @@ impl ContentEvidence {
     /// Content support for bucket routing: either population may vouch
     /// for a shape-identical cluster — pooled byte agreement or a proven
     /// consistent rename. [FUSION-CONTENT-GATE] routes on both, never on
-    /// their mean; the mean is what demoted maximal Type-2 renames.
+    /// their mean; the mean is what demoted maximal Type-2 renames. The
+    /// rule itself lives in [`crate::buckets::content_support`], which
+    /// the decision surfaces reading the *rendered* signals share, so
+    /// the measured and rendered views cannot drift apart.
     #[must_use]
     pub fn support(self) -> f64 {
-        self.agreement.max(self.rename_consistency)
+        crate::buckets::content_support(self.agreement, self.rename_consistency)
     }
 
     /// Evidence for a cluster no measurement pass has touched: full
@@ -365,8 +368,8 @@ fn rename_mapping(identifiers: &[(u64, u64)]) -> RenameMapping {
     let (mut constrained, mut explained) = (0_usize, 0_usize);
     for pair in identifiers {
         let substituted = pair.0 != pair.1;
-        let corroborated = counts.get(pair).copied().unwrap_or_default()
-            >= RENAME_CORROBORATION_MIN_OCCURRENCES;
+        let corroborated =
+            counts.get(pair).copied().unwrap_or_default() >= RENAME_CORROBORATION_MIN_OCCURRENCES;
         if substituted && bijection.explains(pair) && !corroborated {
             continue;
         }
@@ -375,7 +378,10 @@ fn rename_mapping(identifiers: &[(u64, u64)]) -> RenameMapping {
             explained = explained.saturating_add(1);
         }
     }
-    RenameMapping { coverage: vacuous_share(explained, constrained), explained }
+    RenameMapping {
+        coverage: vacuous_share(explained, constrained),
+        explained,
+    }
 }
 
 /// The aligned positions whose raw bytes differ — [TECH-PMATCH-BAKER]'s

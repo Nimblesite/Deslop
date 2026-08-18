@@ -14,10 +14,19 @@
 //! embedding correctly pairs must still surface.
 //!
 //! Determinism: the in-process [`MockOllama`] embeds each snippet to a
-//! 4-lane vector seeded by its byte length and first byte, so two
-//! snippets of equal length give cosine ~= 1.0. The fixtures are tuned
-//! so the cross-role and same-role pairs both clear the embedding gate
-//! while structural overlap stays at zero.
+//! signed feature hash of its distinct 5-byte shingles, so cosine
+//! tracks *lexical* overlap (GH #369, replacing the length-residue
+//! vector of GH #366).
+//!
+//! 🛑 BOTH FIXTURES BELOW ARE MISCALIBRATED AGAINST THAT MOCK — see the
+//! `#[ignore]` note on [`same_role_function_pair_still_surfaces`]. They
+//! were tuned against the deleted GH #366 vector, whose two constant
+//! lanes floored *every* pair near cosine 1.0. Neither fixture now
+//! reaches `MIN_COSINE = 0.80`
+//! (`crates/deslop-core/src/embedding/pairs.rs`), so the ANN pass emits
+//! zero pairs, no cluster forms, and the role gate under test never
+//! executes. Recalibrating them is a GH #366 follow-up, not a
+//! production fix.
 
 #[path = "cli/mock_ollama.rs"]
 mod mock_ollama;
@@ -102,11 +111,18 @@ fn class_function_role_mismatch_does_not_surface() -> Result<()> {
 // pass pairs share one top-level role, so the role gate must NOT hide
 // them. They must still surface as "Same behavior, different code".
 #[test]
-#[ignore = "GH #358: ollama-provider suite, excluded from the release gate. The role gate \
-            is currently one-way — it suppresses the mismatched pair (sibling test passes) \
-            and the matching pair alike, so no same_behavior cluster surfaces at all. A \
-            false negative. Rule out the GH #356 ANN-bridge interaction before blaming the \
-            gate. Assertions are intact — run with `-- --ignored`."]
+#[ignore = "GH #358: MEASURED — the role gate is NOT at fault and never executes here. \
+            The ANN pass logs `pair_count=0`, the report logs `hidden=0`, so nothing is \
+            suppressed; no cluster is formed at all. Root cause is fixture calibration \
+            against the deleted GH #366 mock vector (two constant lanes floored every \
+            pair near cosine 1.0). Under the honest GH #369 shingle mock this fixture \
+            measures cosine 0.27, and the real nomic-embed-text measures 0.78 — both \
+            below MIN_COSINE = 0.80. A same-role probe fixture that DOES clear 0.80 \
+            surfaces correctly as `same_behavior` (visible=1, hidden=0), proving the gate \
+            keeps matching pairs. GH #356 is ruled out: an ANN bridge cannot relabel a \
+            component when zero ANN pairs exist. Fixing this needs a fixture the *real* \
+            embedder pairs, which the lexical mock cannot also pair — a GH #366 harness \
+            follow-up, not a production change. Assertions are intact — `-- --ignored`."]
 fn same_role_function_pair_still_surfaces() -> Result<()> {
     let scan_root = fixture("python-issue-119-same-role");
     let report = run_report(&scan_root)?;

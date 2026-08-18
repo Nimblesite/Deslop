@@ -4,6 +4,7 @@
 
 import { ReportStore } from "../../reportStore";
 import { Report, ReportCluster, ReportDelta, RepoMetrics } from "../../types/report";
+import { bucketSignals } from "../signals.helpers";
 
 export function metrics(overrides: Partial<RepoMetrics> = {}): RepoMetrics {
   return {
@@ -50,7 +51,7 @@ export function cluster(
     size: Math.max(1, occurrences.length),
     canonical_node_count: 0,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences,
     occurrences_total: occurrences.length,
     occurrences_truncated: false,

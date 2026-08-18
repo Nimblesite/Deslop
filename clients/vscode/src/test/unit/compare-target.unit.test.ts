@@ -12,6 +12,7 @@ import { ReportStore } from "../../reportStore";
 import { OccurrenceNode } from "../../tree/providers";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 async function findDiffTab(): Promise<vscode.TabInputTextDiff> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -45,7 +46,7 @@ function cluster(
     size: occurrences.length,
     canonical_node_count: 4,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: occurrences.map((occurrence) => ({ ...occurrence, hidden: false })),
     occurrences_total: 0,
     occurrences_truncated: false,

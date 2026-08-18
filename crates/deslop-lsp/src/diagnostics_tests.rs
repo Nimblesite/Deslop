@@ -24,7 +24,10 @@ fn sample_cluster(
             structural: 1.0,
             token_jaccard: 0.9,
             embedding_cos: 0.4,
-            fused: 2.2,
+            fused: 0.91,
+            agreement: 0.58,
+            rename_consistency: 0.72,
+            literal_fraction: 0.24,
         },
         bucket: bucket.into(),
         category: "logic".into(),
@@ -179,6 +182,92 @@ fn diagnostic_message_shows_category_count_and_action() {
     );
 }
 
+// [FUSION-CONTENT-GATE] #344: the bucket title alone cannot tell a
+// corroborated Type-2 rename from an anchor-poor scaffolding family — both
+// render structural=1.00. The diagnostic must state the fused confidence and
+// the measured content evidence the gate scored, using the one shared
+// `render::signals` rendering.
+#[test]
+fn diagnostic_message_states_fused_confidence_and_measured_content_evidence() {
+    let cluster = sample_cluster(
+        "c",
+        100.0,
+        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
+        "nearly_identical",
+    );
+    let message = diagnostic_message(&cluster);
+    assert!(
+        message.contains("Nearly identical code × 2"),
+        "the existing human label and count survive the addition: {message}"
+    );
+    assert!(
+        message.contains("structural 1.00"),
+        "structural axis: {message}"
+    );
+    assert!(message.contains("jaccard 0.90"), "token axis: {message}");
+    assert!(
+        message.contains("embedding 0.40"),
+        "embedding axis: {message}"
+    );
+    assert!(
+        message.contains("fused 0.91"),
+        "fused confidence: {message}"
+    );
+    assert!(
+        message.contains("agreement 0.58"),
+        "pooled byte agreement: {message}"
+    );
+    assert!(
+        message.contains("rename 0.72"),
+        "Baker rename corroboration: {message}"
+    );
+    assert!(
+        message.contains("literal 0.24"),
+        "literal share of the match: {message}"
+    );
+    assert!(
+        message.ends_with(&deslop_core::render::signals::plain_explanation(
+            cluster.signals
+        )),
+        "the explanation must be the shared render::signals rendering, never a \
+         second hand-rolled formatter: {message}"
+    );
+}
+
+// A cluster with different evidence must produce a different message — pins
+// that the text reads this cluster's signals, not a constant.
+#[test]
+fn diagnostic_message_tracks_each_clusters_own_evidence() {
+    let mut anchor_poor = sample_cluster(
+        "scaffolding",
+        100.0,
+        vec![occurrence("a.cs", 0, 1), occurrence("b.cs", 0, 1)],
+        "structural_only",
+    );
+    anchor_poor.signals = ReportSignals {
+        structural: 1.0,
+        token_jaccard: 0.0,
+        embedding_cos: 0.0,
+        fused: 0.33,
+        agreement: 0.04,
+        rename_consistency: 0.02,
+        literal_fraction: 0.77,
+    };
+    let message = diagnostic_message(&anchor_poor);
+    assert!(
+        message.contains("structural 1.00 · jaccard 0.00 · embedding 0.00"),
+        "shape-only support: {message}"
+    );
+    assert!(
+        message.contains("fused 0.33 · agreement 0.04 · rename 0.02 · literal 0.77"),
+        "anchor-poor evidence is what separates this from a real rename: {message}"
+    );
+    assert!(
+        !message.contains("agreement 0.58"),
+        "must not echo another cluster's evidence: {message}"
+    );
+}
+
 // [LSP-SEVERITY-BUCKET] Identical code → Error; canonical link present.
 #[test]
 fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Result<()> {
@@ -205,6 +294,20 @@ fn build_for_file_emits_error_for_identical_cluster_with_canonical_link() -> Res
         .first()
         .ok_or_else(|| anyhow!("diagnostic present"))?;
     assert_eq!(diagnostic.source.as_deref(), Some("deslop"));
+    // [FUSION-CONTENT-GATE] #344: the evidence reaches the published
+    // Diagnostic, not merely the formatter.
+    assert!(
+        diagnostic
+            .message
+            .contains("fused 0.91 · agreement 0.58 · rename 0.72 · literal 0.24"),
+        "published diagnostic carries the fused score and content evidence: {}",
+        diagnostic.message
+    );
+    assert!(
+        diagnostic.message.starts_with("Identical code × 2 — "),
+        "the existing bucket title and count are still first: {}",
+        diagnostic.message
+    );
     assert_eq!(
         diagnostic.severity,
         Some(DiagnosticSeverity::ERROR),

@@ -19,6 +19,7 @@ import {
   isActNow,
   severityOf,
 } from "../../types/report";
+import { signalsWith } from "../signals.helpers";
 
 function cluster(id: string, fused = 0, bucket: Bucket = "identical"): ReportCluster {
   return {
@@ -27,7 +28,7 @@ function cluster(id: string, fused = 0, bucket: Bucket = "identical"): ReportClu
     size: 0,
     canonical_node_count: 0,
     bucket,
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused },
+    signals: signalsWith("identical", { fused }),
     occurrences: [],
     occurrences_total: 0,
     occurrences_truncated: false,

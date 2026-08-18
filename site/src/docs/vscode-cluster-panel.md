@@ -83,7 +83,7 @@ Canonical does not mean "best" or "source of truth." It is just a stable anchor 
 
 ## Signals
 
-Signals explain why the locations were grouped. Scores are shown from `0.00` to `1.00`; higher means that signal saw stronger similarity.
+Signals explain why the locations were grouped. Scores are shown from `0.00` to `1.00`; higher means that signal saw stronger similarity. The first four are confidence; the three under Content Evidence are what Deslop measured inside the matched code.
 
 ## Structural
 
@@ -101,7 +101,25 @@ Embeddings are off in a fresh live session until a model is selected.
 
 ## Fused
 
-`fused` is Deslop's combined clone score. It joins structural, token, and embedding evidence and is the score used to decide whether a pair is reportable.
+`fused` is Deslop's combined clone score. It joins structural, token, and embedding evidence and is the score used to decide whether a pair is reportable. A shape match is discounted by the content evidence below, so `fused` can sit far under a perfect structural score.
+
+## Content Evidence
+
+Shape alone cannot tell a renamed copy from unrelated code that happens to share a skeleton. Two clusters can both score `structural 1.00` and `jaccard 1.00` while one is a genuine duplicate and the other is sibling boilerplate — the same `if/else` skeleton around entirely different code. Content Evidence is what Deslop measured inside the match, and it is what discounts the shape score into the fused confidence.
+
+The panel prints a plain-English reading of the two together under the bars, so you do not have to do the arithmetic: it names the shape score, the measured agreement, and the confidence they produced.
+
+## Agreement
+
+`agreement` is how much of the matched content the locations genuinely share, byte for byte. Low agreement under a high shape score means the skeleton lined up but the code inside it did not.
+
+## Rename Consistency
+
+`rename` is whether one consistent identifier renaming explains every difference between the locations. This is what tells a real renamed copy apart from unrelated code that merely shares a shape: a cluster with `agreement 0.10` and `rename 1.00` is the same code with different names, and worth extracting.
+
+## Literal Fraction
+
+`literal` is how much of the match is literal data rather than logic. A match that is mostly literals is a data table, not a function worth extracting.
 
 ## Occurrences
 

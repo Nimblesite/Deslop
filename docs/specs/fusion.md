@@ -105,8 +105,10 @@ erased:
 4. **Routing — three zones over `support = max(agreement,
    rename_consistency)`** (either population may vouch; never their mean).
    Below `content_gate.support_floor` (the [TECH-TOKEN-SOURCERERCC] Type-3
-   overlap cutoff) with no semantic support, the cluster joins the
-   [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
+   overlap cutoff), and with no semantic support (`embedding_cos` below
+   `candidates.embedding_support_floor`, the line at which the embedding pass
+   vouches for a cluster rather than merely having measured it), the cluster
+   joins the [RANK-STRUCTURAL-ONLY] routing — surfaced honestly or hidden as cross-file
    scaffolding, and demoted in ranking. At or above
    `content_gate.promote_floor` (act-now grade) the cluster is a proven
    clone — a byte-agreeing near-miss
@@ -181,7 +183,8 @@ A number is a **lever** when changing it changes which clusters are reported, wh
 | `candidates.embedding_exact_pair_limit` | `embedding/pairs.rs:22` | 256 | **Unrecorded.** |
 | `content_gate.support_floor` | `buckets.rs:237` | 0.7 | **Literature** (#341). [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff. |
 | `content_gate.promote_floor` | `buckets.rs:248` | 0.85 | **Derived** (#341). The act-now grade, matched to `fused_threshold`; bounded below by a defect — the #197 REST settings family measures 0.72–0.80 and must keep its demoted verdict. |
-| `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. |
+| `content_gate.structural_only_max_support` | `buckets.rs:215` | 0.05 | **Defect.** #197's acceptance criterion (`token_jaccard = 0.00`, `embedding_cos = 0.00`) plus tolerance for MinHash collision noise. It is a ceiling below which a signal counts as *absent*, and is never a support floor — `route_shape_identical` read it as one, so a cosine of 0.05 overruled the measured content evidence and the gate's verdict followed whether the embedding pass ran (#356). |
+| `candidates.embedding_support_floor` | `pair.rs:91` | 0.80 | **Derived** (#356). The cosine at which a measured `embedding_cos` is the embedding pass *vouching for* a cluster rather than merely having measured it — the ANN candidate gate's own operating point, and the line [CLONE-BUCKETS-ROUTING] row 2 lets semantic evidence carry a bucket alone. The [FUSION-CONTENT-GATE] escape is judged against it. |
 | `content_gate.saturating_token_floor` | `buckets.rs:291` | 0.95 | **Defect** (#368). The surviving flutter/flutter #331 cluster read `structural = 0.62, token_jaccard = 0.98` — the token layer echoing shape, not reporting content. |
 | `content_gate.rename_consistency_discount` | `buckets.rs:301` | 0.9 | **Derived** (#346). Keeps a proven Type-2 rename above `fused_threshold` while reserving `fused = 1.0` for byte-proven duplication. |
 | `content_gate.rename_corroboration_min` | `content.rs` | 2 | **Literature.** [TECH-PMATCH-BAKER] prev-encoding: a parameter symbol's first occurrence matches anything and constrains nothing; only repetition carries binding proof. |

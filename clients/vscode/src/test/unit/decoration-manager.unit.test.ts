@@ -10,6 +10,7 @@ import { ReportStore } from "../../reportStore";
 import { ScheduleFn } from "../../util/debounce";
 import { Report, ReportCluster } from "../../types/report";
 import { reportWithClusters } from "./report.helpers";
+import { bucketSignals } from "../signals.helpers";
 
 // Runs the debounced flush synchronously so each redraw path executes inline.
 const immediate: ScheduleFn = (callback) => {
@@ -54,7 +55,7 @@ function cluster(path: string): ReportCluster {
     size: 3,
     canonical_node_count: 4,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: [{ path, start_byte: 0, end_byte: 3, hidden: false }],
     occurrences_total: 0,
     occurrences_truncated: false,

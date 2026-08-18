@@ -102,12 +102,21 @@ pub fn distinct_visible_path_count(cluster: &ReportCluster) -> usize {
 }
 
 impl From<PairScore> for ReportSignals {
+    /// The content triple is left at zero here and stamped later by
+    /// [`crate::buckets::content_gated_signals`] ([FUSION-CONTENT-GATE],
+    /// #344). A `PairScore` is the deterministic pair evidence, produced
+    /// before any content is measured, so it has nothing truthful to put
+    /// in those fields — every rendered cluster passes through the gate,
+    /// which does.
     fn from(score: PairScore) -> Self {
         Self {
             structural: score.structural,
             token_jaccard: score.token_jaccard,
             embedding_cos: score.embedding_cos,
             fused: score.bounded_fused(),
+            agreement: 0.0,
+            rename_consistency: 0.0,
+            literal_fraction: 0.0,
         }
     }
 }
@@ -384,7 +393,7 @@ fn cluster_is_hidden<S: BuildHasher>(
 /// the real-world "all pytest modules are related" closure failure.
 fn is_low_structure_embedding_mega_cluster(cluster: &ReportCluster) -> bool {
     cluster.signals.structural < 0.10
-        && cluster.signals.embedding_cos >= 0.80
+        && cluster.signals.embedding_cos >= crate::pair::EMBEDDING_SUPPORT_FLOOR
         && cluster.size > 10
         && cluster.canonical_node_count > 500
 }

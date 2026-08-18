@@ -90,7 +90,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8666666666666667,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",
@@ -134,7 +137,10 @@
         "structural": 1.0,
         "token_jaccard": 1.0,
         "embedding_cos": 0.0,
-        "fused": 1.0
+        "fused": 1.0,
+        "agreement": 1.0,
+        "rename_consistency": 0.8095238095238095,
+        "literal_fraction": 0.0
       },
       "bucket": "identical",
       "category": "logic",

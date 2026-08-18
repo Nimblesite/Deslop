@@ -65,7 +65,8 @@ Fields:
 | `structural` | `[0, 1]`. `1.0` = exact Merkle hash match. `0.0` = no exact structural match (found via LSH only). |
 | `token_jaccard` | `[0, 1]`. Estimated Jaccard of normalized k-gram token sets. |
 | `embedding_cos` | `[0, 1]` cosine similarity from the semantic-embedding pass, or `0.00` if that pass was disabled for this run. |
-| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `attempted_subtrees` when duplicate snippets collapse before indexing. |
+| `embedding_provenance.succeeded_subtrees` | Occurrences that obtained a vector. Together with `failed_subtrees` this accounts for every `attempted_subtrees`, so a reader can confirm nothing vanished silently. |
+| `embedding_provenance.indexed_subtrees` | Count of unique successful subtree embeddings fed into ANN. Lower than `succeeded_subtrees` when duplicate snippets collapse before indexing. It counts index points, not occurrences — do not read it as coverage. |
 | `embedding_provenance.failed_subtrees` | Count of subtree embeddings the provider rejected. Rejected subtrees are excluded from embedding ANN rather than substituted with zero vectors. |
 | `boilerplate_hints[]` | Optional low-severity import/prologue hygiene hints emitted only when `.deslop.toml` sets `boilerplate.imports = "report"`. These carry suppressed byte ranges but are not clone clusters and do not affect `weight` or metrics. |
 

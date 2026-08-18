@@ -36,7 +36,7 @@ fn from_report_preserves_current_empty_bucket_issue_85() -> Result<()> {
                 \"weight\": 1.0,\n\
                 \"size\": 2,\n\
                 \"canonical_node_count\": 8,\n\
-                \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0},\n\
+                \"signals\": {\"structural\": 1.0, \"token_jaccard\": 1.0, \"embedding_cos\": 0.0, \"fused\": 1.0, \"agreement\": 1.0, \"rename_consistency\": 0.0, \"literal_fraction\": 0.0},\n\
                 \"bucket\": \"\",\n\
                 \"occurrences\": [],\n\
                 \"occurrences_total\": 0,\n\
@@ -92,7 +92,7 @@ fn from_report_preserves_same_behavior_bucket_in_html() -> Result<()> {
                     \"weight\": 4.0,\n\
                     \"size\": 2,\n\
                     \"canonical_node_count\": 12,\n\
-                    \"signals\": {\"structural\": 0.0, \"token_jaccard\": 0.0, \"embedding_cos\": 0.9, \"fused\": 0.9},\n\
+                    \"signals\": {\"structural\": 0.0, \"token_jaccard\": 0.0, \"embedding_cos\": 0.9, \"fused\": 0.9, \"agreement\": 1.0, \"rename_consistency\": 0.0, \"literal_fraction\": 0.0},\n\
                     \"bucket\": \"same_behavior\",\n\
                     \"occurrences\": [{\"path\": \"missing.unknown\", \"start_byte\": 0, \"end_byte\": 0, \"hidden\": false}],\n\
                     \"occurrences_total\": 0,\n\

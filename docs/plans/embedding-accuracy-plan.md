@@ -58,8 +58,106 @@ Fix: replace with a deterministic content-similarity vector (e.g. hashed byte-n-
 
 Order matters: 1 is the root cause and must land first — without it §2 has nothing to promote; 2 then lets the recovered pair reach a real bucket in every language; 3 stops the mock garbage surviving on ε-cosine; 4 stops the garbage existing at all. After each step: the three red tests, then the full workspace sweep (`cargo test --workspace --all-targets --features deslop-core/live`), then the self-scan duplication gate.
 
+## Measured 18 Aug — §4 has landed, and the blocker moved
+
+`MockOllama::embed_vector` is now the 128-lane signed 5-byte-shingle signature §4 prescribes (commit
+31d5efd18). It works: `issue_343` no longer renders the two embedding-only false positives, and the real
+`settleLedger`/`settleQuarter` pair is a visible `same_behavior` cluster at `embedding_cos = 0.979`, so
+`cluster_count == 1` now passes.
+
+**The remaining blocker is `clusters_hidden == 1`, not the cosine.** The extra cluster is the two function
+*signatures*: `structural = 1.00, token_jaccard = 1.00, agreement = 0.80` — four of five collapsed leaves
+agree, only `settleLedger` vs `settleQuarter` differs — `rename_consistency = 0.50`. It is admitted as a
+candidate at `--min-nodes 12` and then suppressed at render by `cluster_filters::is_signature_only_cluster`,
+which is the right verdict for a bare signature. So the assertion is not asking for a different bucket; it is
+asking that a bare signature never become a candidate. **Fix it at admission, never by relaxing the
+assertion.**
+
+Two changes landed alongside §4 that it did not prescribe and that nothing pins:
+`exact_embedding_pairs` and `EXACT_PAIR_LIMIT` were deleted from `embedding/pairs.rs`, leaving ANN
+`TOP_K = 5` as the only pair source. Both this plan and `rename-recall-plan.md` say to *shrink the width to
+128 so the exact pass is affordable* — "that is the width to time first" — not to remove it. The deleted doc
+named the guard: "small fixture and edited-file runs can have many near-tied subtree embeddings; exact
+scoring prevents top-k neighbour truncation from dropping the only declaration-level Type-4 pair."
+Restoring it does **not** change `issue_343`'s outcome (measured), so it is not the blocker — but the guard
+it removed is now unpinned, and small-corpus recall needs a test either way.
+
+## 🔴 The release gate is red — a real Type-4 clone is missed ([#407](https://github.com/Nimblesite/Deslop/issues/407))
+
+`dart_issue_119_embedding_role_mismatch::dart_same_role_function_pair_still_surfaces` is red and is **not**
+`#[ignore]`d, so `make ci` fails. It is red for a true reason and must not be weakened.
+
+The fixture is a textbook Type-4 semantic clone — `totalRecursive` vs `totalIterative`, both summing
+`1..limit`, different code and identical behaviour. It no longer surfaces: no embedding pair forms, so no
+cluster is built. It was never really detected; the pre-#369 mock's two constant lanes floored every cosine
+near 1.0, so it only looked detected. Making the instrument honest made the recall hole visible.
+
+Measured against **live Ollama**, so this is production behaviour and not a harness artifact
+(`MIN_COSINE = 0.80`, `embedding/pairs.rs:21`): same-role **0.7763**, role-mismatch 0.6101, same-role with a
+shared docstring 0.8311. Production misses the clone by 0.037 of cosine.
+
+Do **not** lower `MIN_COSINE` to make it green — widening a threshold to pass an assertion is prohibited, and
+0.80 was never chosen against this evidence.
+
+The deeper blocker: `MockOllama` structurally cannot express a Type-4 clone. Its signature is lexical, so a
+pair the real embedder scores 0.8311 the mock scores 0.5727 and drops, while any pair lexically close enough
+to clear 0.80 in the mock is near-verbatim and routes `identical`/`nearly_identical`, never `same_behavior`.
+No trustworthy `same_behavior` assertion can be driven through it. Either those fixtures move behind the
+real-Ollama gate (renamed `ollama_*`), or the mock gains a deterministic semantic mode. That is a
+test-semantics decision, not a code fix.
+
+Consequence for **#358**: its premise — "the Python role gate over-suppresses" — is falsified. Measured on
+`python-issue-119-same-role`: `embedding pass complete pair_count=0`, `candidate_pairs=0`,
+`visible=0 hidden=0`. Nothing was suppressed because nothing was ever formed; the gate never runs. A probe
+fixture with enough overlap to clear 0.80 produced `visible=1 hidden=0 same_behavior=1` — the gate is
+healthy. #358 needs retitling; the work is this harness problem.
+
+## The other embeddings-on ignores
+
+Moved here from `fused-score-followups.md`, where they did not belong — these are recall defects, not
+fused-scoring defects.
+
+- **#356** — two ignores in `embedding_route_invariance`, the blast-radius pins for `[REPAIR-COSINE-MERGE]`.
+  `csharp-type3` publishes two `structural_only` clusters at `structural 1.0` with embeddings off and **one**
+  `same_behavior` cluster with them on; `ts-mixed-band` publishes a four-file `nearly_identical` cluster off
+  and **zero** clusters on. Restored cosines are changing cluster *membership* through the closure. A bucket
+  must be a function of a cluster's occurrences, never of which pass reached them
+  ([FUSION-CLUSTER-SIGNALS]).
+- ✅ **#357 — landed.** `EmbeddingBatch::push` emitted one ANN point per *fingerprint*, so the HNSW was built
+  over N identical points and `indexed_subtrees` reported the occurrence count. It now emits one point per
+  distinct snippet carrying all its owners, and `vectors_by_fingerprint` fans the vector back to every owner
+  so no pair loses its measured cosine (`[REPAIR-COSINE-MERGE]`). Measured on a 300-statement C# corpus
+  against real `nomic-embed-text`: **305 s → 17 s wall, 2597 s → 8 s CPU**, occurrence-for-occurrence
+  identical to the embeddings-off baseline. `embedding_perf` un-ignored, 3 green.
+
+  Adjudicated afterwards: the collapse put `issue_82_embedding_context_budget` in contradiction with
+  `embedding_perf` — one asserted `attempted == indexed + failed`, the other requires `indexed < attempted`
+  with no failures. `[REPORTING-CONTEXT]` settles it: `indexed_subtrees` is "the count of **unique**
+  successful subtree embeddings … **lower than** `attempted_subtrees` when duplicate snippets collapse", so
+  the old identity was the spec's negation and was only ever green because the code violated the spec. The
+  three fields were also in two different units with nothing to reconcile them, which made
+  `indexed/attempted` read as a coverage ratio — the HTML footer literally rendered "indexed 29/52", implying
+  23 lost subtrees where none were lost. `EmbeddingProvenance` now carries a fourth field,
+  `succeeded_subtrees` (occurrence-level successes), so `attempted = succeeded + failed` holds in one unit and
+  `indexed <= succeeded` is checkable. The test gained two assertions rather than losing one; the footer now
+  reads "embedded 52/52 subtrees via 29 index points".
+
+- ~~**#357** — duplicate subtrees are not collapsed before ANN indexing (312 attempted / 312 indexed),~~
+  `embedding_perf`. The collapse must expand pairs correctly so no pair loses its measured cosine (#351);
+  `EmbeddingBatch::push` documents why every fingerprint sharing a snippet must receive the vector.
+- **#358** — the Python role gate over-suppresses: a same-role, behaviour-equivalent function pair never
+  surfaces, `python_issue_119`. Rule out a #356 ANN-bridge interaction before blaming the gate.
+
 ## Also carried
 
-- `deslop-lsp::embedding_failure_progress` hangs (pre-existing; revert-proved past 300 s) — needs its own root-cause pass.
+- ✅ `deslop-lsp::embedding_failure_progress` no longer hangs (#370, landed). The stall was never a missing
+  terminal frame: the LSP test harness piped the child's stderr and held the read end open without ever
+  reading it, so the pipe filled, the next `tracing` event blocked while holding the subscriber's stderr
+  lock, and the `tower-lsp` serve loop queued behind it and stopped answering. `common::StderrDrain` now
+  reads it to EOF on a background thread — 14m41s to 9.5s, and every LSP test loses the same latent
+  deadlock. Un-ignoring it then exposed a live false negative: a refresh in which the provider rejected all
+  851 subtrees was committed over the last good report and announced `phase = "complete", done = 851`. That
+  code is quarantined under `[QUARANTINE-EMBED-REFRESH-COMPLETE]` in `live/api.rs` and the test is
+  deliberately red. The terminal-phase rule is now stated in `[LIVE-EMBEDDING-CONSENT]`.
 - Hidden clusters are absent from the JSON wire entirely (`clusters: [], clusters_hidden: 1`) — an AI consumer cannot reconstruct the human view or audit the hide reasons; consider putting hidden clusters with their drop reason on the wire (#344 adjacent).
 - `report.rs::log_hidden_cluster` now logs the signal triple and content evidence for every hidden cluster (landed on `fused`) — keep using it to audit hides.

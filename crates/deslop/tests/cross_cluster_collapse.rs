@@ -113,6 +113,103 @@ fn clusters_for_file(report: &serde_json::Value, needle: &str) -> Vec<serde_json
         .unwrap_or_default()
 }
 
+const SHARED_LOGIC: &str = r"if (sharedGate()) {
+        const sharedValue = 7;
+        emitShared(sharedValue);
+        persistShared(sharedValue);
+        auditShared(sharedValue);
+    }";
+
+const ALPHA_SOURCE: &str = r"export function calculateAlpha(alphaSeed: number): number {
+    const alphaOne = alphaSeed + 11;
+    const alphaTwo = alphaOne * 13;
+    const alphaThree = alphaTwo - 17;
+    const alphaFour = alphaThree / 19;
+    const alphaFive = alphaFour + 23;
+    const alphaSix = alphaFive * 29;
+    if (sharedGate()) {
+        const sharedValue = 7;
+        emitShared(sharedValue);
+        persistShared(sharedValue);
+        auditShared(sharedValue);
+    }
+    const alphaSeven = alphaSix - 31;
+    const alphaEight = alphaSeven + 37;
+    return alphaEight;
+}
+";
+
+const BETA_SOURCE: &str = r"export function calculateBeta(betaSeed: number): number {
+    const betaOne = betaSeed + 41;
+    const betaTwo = betaOne * 43;
+    const betaThree = betaTwo - 47;
+    const betaFour = betaThree / 53;
+    const betaFive = betaFour + 59;
+    const betaSix = betaFive * 61;
+    if (sharedGate()) {
+        const sharedValue = 7;
+        emitShared(sharedValue);
+        persistShared(sharedValue);
+        auditShared(sharedValue);
+    }
+    const betaSeven = betaSix - 67;
+    const betaEight = betaSeven + 71;
+    return betaEight;
+}
+";
+
+/// Writes two content-divergent wrappers around one byte-identical clone.
+fn write_content_subsumption_fixture(root: &Path) -> Result<()> {
+    fs::create_dir_all(root)?;
+    fs::write(root.join("alpha.ts"), ALPHA_SOURCE)?;
+    fs::write(root.join("beta.ts"), BETA_SOURCE)?;
+    Ok(())
+}
+
+/// Finds the exact two-member shared block or reports its disappearance.
+fn expect_shared_logic<'a>(
+    report: &'a serde_json::Value,
+    root: &Path,
+) -> Result<&'a serde_json::Value> {
+    for cluster in clusters(report) {
+        let texts = occurrence_texts(root, cluster)?;
+        if texts.len() == 2 && texts.iter().all(|text| text == SHARED_LOGIC) {
+            return Ok(cluster);
+        }
+    }
+    Err(anyhow::anyhow!(
+        "content-proven nested clone disappeared during cross-cluster subsumption: {report:#}"
+    ))
+}
+
+/// Pins the evidence and verdict of the clone that subsumption must preserve.
+fn assert_content_proven(cluster: &serde_json::Value) {
+    assert_eq!(
+        cluster_size(cluster),
+        2,
+        "the clone must span exactly two files"
+    );
+    assert_eq!(cluster_bucket(cluster), "identical");
+    for name in ["structural", "token_jaccard", "agreement", "fused"] {
+        assert!(
+            approx(signal(cluster, name), 1.0),
+            "content-proven clone must render {name}=1: {cluster:#}"
+        );
+    }
+}
+
+/// A low-content enclosing shape must not delete a byte-proven inner clone
+/// before [FUSION-CONTENT-GATE] can measure either view.
+#[test]
+fn content_proven_nested_clone_survives_content_poor_enclosing_view() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let scan_root = tmp.path().join("corpus");
+    write_content_subsumption_fixture(&scan_root)?;
+    let report = run_report(tmp.path(), &scan_root)?;
+    assert_content_proven(expect_shared_logic(&report, &scan_root)?);
+    Ok(())
+}
+
 // Issue #50 acceptance: a small C# file with two [Fact]-decorated
 // near-identical test methods must produce exactly one cluster covering
 // the test-method region. Pre-fix, the `attribute_list +

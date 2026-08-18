@@ -3,267 +3,215 @@
 One document. It replaces `root-cause-fusion.md`, `quarantine-repair-plan.md` and
 `worktree-fused-score-followups-regression-audit.md`, all three deleted.
 
-**The mechanism is shipped and specified.** `[FUSION-STRATEGY-BOUNDED-MAX]`, `[FUSION-CLUSTER-SIGNALS]` and
-`[FUSION-CONTENT-GATE]` in [`fusion.md`](../specs/fusion.md) are the contract, and they carry their own
-reasoning. Nothing here re-explains them — this plan is only the open work, and every claim below names the
-assertion or the source line that establishes it. The real-repository gate that has to settle the precision
-claims is planned separately in [`corpus-assertion.md`](corpus-assertion.md).
+**Scope:** only work that changes fused admission, measured cluster confidence, content gating, bucket
+routing, or confidence-aware ranking belongs here. Candidate generation, cache mechanics, watcher state,
+CI maintenance, and repository-wide metrics have their own plans. A candidate-route problem belongs here
+only when two runs produce the same final occurrence set but assign it different measured confidence.
+
+The shipped contract is `[FUSION-STRATEGY-BOUNDED-MAX]`, `[FUSION-CLUSTER-SIGNALS]` and
+`[FUSION-CONTENT-GATE]` in [`fusion.md`](../specs/fusion.md). The real-repository precision gate is planned
+separately in [`corpus-assertion.md`](corpus-assertion.md).
 
 ## The one measure
 
-Every reported cluster is a real duplicate, and every real duplicate is reported. Ordered by how much each
-item moves that number.
+Every reported cluster is a real duplicate, and every real duplicate is reported. Order open work by how
+much it moves that number.
 
 ## The contract
 
-`fused` must **carry information**: the three agent bands in `CLAUDE.md` (`>= 0.85` do not write the copy,
-`0.6..0.85` read the canonical occurrence and bias to reuse, `< 0.6` author it) must all be reachable, and
-must mean the same thing in every language. `fused_golden_bands.rs` cites this paragraph; do not weaken it
-without moving that suite with it.
+`fused` must **carry information**: the three agent bands in `CLAUDE.md` (`>= 0.85` do not write the
+copy, `0.6..0.85` read the canonical occurrence and bias to reuse, `< 0.6` author it) must all be
+reachable, and must mean the same thing in every language. `fused_golden_bands.rs` cites this paragraph;
+do not weaken it without moving that suite with it.
 
-## Where fused stands against it
-
-Established, with the assertion that holds it. These are not open work; they are the baseline the open work
-sits on top of.
+## Established baseline
 
 | Property | Held by |
 |---|---|
-| Fusion is the strongest single axis, never the sum — at **admission**, not only at render | `pair_admission_bounded_max.rs` (axes `0.44 / 0.42 / 0.0` must be `DroppedBelowFused`; the sum would admit at 0.86), `issue_343_sum_clamp_saturation.rs` |
+| Fusion is the strongest single axis, never the sum, at admission | `pair_admission_bounded_max.rs`, `fused_golden_invariants.rs` |
 | Rendered signals are measured between the occurrences the report shows, never averaged over discovery edges | `cluster::signals::measured_signals`, `[FUSION-CLUSTER-SIGNALS]` |
 | Shape-saturating clusters are re-scored against measured content evidence | `buckets::content_gated_signals`, `[FUSION-CONTENT-GATE]` |
-| All three agent bands are reachable and mean the same thing in six languages, with the rename band pinned on **both** sides of the old literal-anchor line | `fused_golden_bands.rs` — verbatim / maximal rename / lean maximal rename / shape-only, with band separation and rank order per language |
-| Rename evidence is Baker-corroborated anchor mass (`[TECH-PMATCH-BAKER]`: preserved literals + explained identifier positions, smoothly weighted), never a literal-count cliff; the parameter bijection is elected over substituted pairs alone, so a homonym byte-string cannot veto its own rename | `type2_rename_anchor_floor.rs`, `js_ts_clone_buckets.rs` and the `rename_lean` scenarios — all three through the single `common::signals::assert_proven_rename_contract`, so no two suites can judge one signal triple by different rules — plus `cli::logging::technical_mode_uses_type_taxonomy_in_breakdown_row`; the convicted side held by `issue_134_structural_only_not_nearly_identical.rs` (divergent literals), `js_language_features.rs` (the `js-classes` family, `structural = token = 1.00` at `fused = 0.16`) and `dart_issue_197_single_file_structural_only` |
-| Content evidence tests each byte position once — the collapsed *frontier*, never a collapsed node plus the collapsed descendants it spans | `tokens::collapsed_leaves`, `js_language_features.rs` template-literal and optional-chaining clones |
-| No report renders a constant confidence; every component stays in `[0,1]`; only byte-proven duplication saturates | `fused_golden_invariants.rs`, swept over 21 corpora |
-| One cosine definition, `f64` accumulation, byte-identical snippets render exactly `1.0` | `issue_372_identical_snippet_cosine.rs` |
+| All three agent bands are reachable in six languages | `fused_golden_bands.rs` — verbatim, maximal rename, lean maximal rename and shape-only cases |
+| Rename evidence is Baker-corroborated anchor mass, never a literal-count cliff | `type2_rename_anchor_floor.rs`, `js_ts_clone_buckets.rs`, the `rename_lean` scenarios and `[TECH-PMATCH-BAKER]` |
+| Content evidence tests each byte position once through the collapsed frontier | `tokens::collapsed_leaves`, the template-literal and optional-chaining cases in `js_language_features.rs` |
+| Every rendered component stays in `[0,1]`; only byte-proven duplication saturates | `fused_golden_invariants.rs`, swept over 21 corpora |
 
-## The three gaps that are actually open
+## The two fused gaps
 
-Not history — each is a property of the code as it stands today.
-
-1. **Content evidence is a render-stage correction, not an ensemble member.** `attach_content_evidence`
-   runs once per render, immediately after ranking
-   ([`session/render.rs`](../../crates/deslop-core/src/pipeline/session/render.rs)). Pair admission
-   (`pair::survival_decision`) and transitive closure never see it, so a cluster that content evidence would
-   convict was already admitted, clustered and ranked on shape alone. The gate can lower a rendered
-   confidence; it cannot stop a pair becoming a cluster.
-2. **The evidence never reaches a consumer.** `ContentEvidence` measures `agreement`,
-   `rename_consistency` and `literal_fraction`
-   ([`content.rs`](../../crates/deslop-core/src/content.rs)) and logs all three at `debug`, but
-   `ReportSignals` in [`live-ipc.td`](../models/live-ipc.td) carries only `structural`, `token_jaccard`,
-   `embedding_cos`, `fused`. No report, panel, agent or black-box test can see *why* a cluster routed where
-   it did. That is #344, section 2 below.
-3. **The semantic axis is off by default.** `--embeddings` defaults to `off`, deliberately and per
-   `[FUSION-SIGNALS-THREE-LAYER]` — the shipped CLI must produce a report on a machine with no Ollama. The
-   consequence is still real: on a default run the ensemble is two correlated views of one normalised tree
-   plus the content gate. The spec calls this "a measurable recall loss … only as a default that never
-   blocks a first run", and every embeddings-on assertion in the tree is currently `#[ignore]`d — section 1.
+1. **Destructive cross-cluster subsumption runs before content measurement.**
+   `build_ranked_fused_clusters` materialises clusters with
+   `ContentEvidence::unmeasured()`, sorts them by raw geometry, and calls
+   `collapse_cross_cluster_overlap`. Only the survivors reach `attach_content_evidence` in
+   [`session/render.rs`](../../crates/deslop-core/src/pipeline/session/render.rs). The final report does
+   reweight and sort with content-gated confidence, but it cannot recover a stronger view already deleted
+   by subsumption.
+2. **#344 is only partly in front of readers.** `ReportSignals` now carries `agreement`,
+   `rename_consistency` and `literal_fraction`; `content_gated_signals` populates them, and the HTML,
+   Markdown and text renderers expose them. The VSIX signal strip/help bubble, LSP diagnostics and
+   refactor preconditions still cannot show or consume the complete confidence explanation. Code lenses
+   expose raw axes but not fused confidence or content evidence.
 
 ---
 
 # TODO
 
-## 1. Seven assertions are `#[ignore]`d — every one is a live accuracy defect
+## 1. Close the pre-content subsumption gap
 
-Nothing is deleted or weakened: each carries an `#[ignore = "…"]` naming its issue and runs under
-`cargo test … -- --ignored`. This is the top of the list because **every embeddings-on assertion in the
-workspace is currently switched off**, which is why gap 3 above cannot be measured, let alone closed.
-Measured 18 Aug: `cargo test --workspace --all-targets --features deslop-core/live -- --skip ollama_
---skip corpus_` exited 0 across 170 test binaries with exactly 8 ignored. #370 is now discharged, leaving
-7, and the assertion it unblocked is **deliberately red** against
-`[QUARANTINE-EMBED-REFRESH-COMPLETE]` — a sweep that stops there is reporting the quarantine, not a
-regression. Work order for the rest: #356, #369, #357, #358.
+### Measured decision: do not move cluster evidence into pair admission
 
-- [ ] **[#369](https://github.com/Nimblesite/Deslop/issues/369)** — three ignores.
-      `issue_343_sum_clamp_saturation::mid_band_cluster_confidence_never_exceeds_its_strongest_axis` renders
-      two embedding-only false positives and hides the real clone; both false pairs carry `structural = 0`
-      and `token_jaccard = 0` and survive on `MockOllama`'s length-residue cosine alone.
-      `pair_size_coherence::an_embedding_only_pair_does_not_join_occurrences_of_different_size` and
-      `lsp_embedding_determinism::lsp_embedding_refresh_is_bounded_and_reproducible` fail on the same
-      mechanism. The known fix has an O(N²·D) blowup — that is the part to solve.
-- [x] **[#370](https://github.com/Nimblesite/Deslop/issues/370)** — hang fixed and its `#[ignore]`
-      removed. The stall was **not** a missing terminal frame. Measured with `sample(1)` against the wedged
-      server: the main thread sat in `Stderr::write_all` → `pthread_mutex_lock_wait`. The harness piped the
-      child's stderr and held the read end open without ever reading it, so the pipe buffer filled, the next
-      `tracing` event blocked its thread while holding the subscriber's stderr lock, and the `tower-lsp`
-      serve loop queued behind that lock and stopped answering. The rejection path hits it first because it
-      logs per failed subtree and per bisect retry. `common::StderrDrain` now reads the child's stderr to
-      EOF on a background thread; the binary went from 14m41s to 9.5s, and every LSP test in the tree loses
-      the same latent deadlock. **The unignored test then exposed a live false negative** — see
-      `[QUARANTINE-EMBED-REFRESH-COMPLETE]` below; it is red on purpose and stays red.
-- [ ] **[#356](https://github.com/Nimblesite/Deslop/issues/356)** — two ignores in
-      `embedding_route_invariance`, the blast-radius pins for `[REPAIR-COSINE-MERGE]`. `csharp-type3`
-      publishes two `structural_only` clusters at `structural 1.0` with embeddings off and **one**
-      `same_behavior` cluster with them on — proven duplication re-labelled as a semantic guess, the bucket
-      following the discovery route, which `[FUSION-CLUSTER-SIGNALS]` forbids. `ts-mixed-band` publishes a
-      four-file `nearly_identical` cluster off and **zero clusters** on. Restored cosines are changing
-      cluster *membership* through the closure. Fix so a bucket is a function of a cluster's occurrences,
-      never of which pass reached them.
-- [ ] **[#357](https://github.com/Nimblesite/Deslop/issues/357)** — duplicate subtrees are not collapsed
-      before ANN indexing (312 attempted / 312 indexed), `embedding_perf`.
-- [ ] **[#358](https://github.com/Nimblesite/Deslop/issues/358)** — the Python role gate over-suppresses: a
-      same-role, behaviour-equivalent function pair never surfaces, `python_issue_119`.
+On the 2026-08-18 repository run:
 
-## 2. #344 — put the content evidence on the wire and in front of a reader
+- 123,663 fingerprints produced 595,609 candidate pairs;
+- 11,868 pairs survived into 3,616 closure components;
+- ranking/subsumption left 1,349 clusters;
+- the interval from `ranked clusters built` to `render complete`, which contains content attachment, was
+  about 134 ms.
 
-Closes gap 2. Until it lands, no black-box test can assert the gate's input.
+The current pass is cheap because it measures cluster members after closure. Admission would instead ask
+for content on nearly 596,000 candidate pairs. Caching leaf keys could avoid repeated tree walks, but it
+would not remove the pair comparisons, and the existing evidence includes cluster-level facts such as the
+canonical-member mean and verbatim-member share. Treating those as pair evidence would change their
+meaning as well as their cost.
 
-| Surface | Renders today |
-|---|---|
-| HTML footer (`render/html_footer.rs`) | `structural token_jaccard embedding_cos fused` |
-| Markdown (`render/markdown.rs`) | the same four |
-| CLI text report (`render/text.rs`) | **no signals at all** — only the embedding provenance line |
-| LSP diagnostics / code lens | **no confidence on any production surface** |
-| Autofix gates (`refactor/preconditions.rs`) | bucket pre-filter + byte proof only |
+- [x] Keep pair admission on the bounded score axes. Content evidence remains a cluster measurement.
+- [ ] Split materialisation from destructive cross-cluster subsumption: materialise closure components,
+      attach content evidence, then choose the surviving view and perform the final report reweight.
+- [ ] Add a black-box regression with two low-agreement enclosing views over a byte-identical inner clone.
+      The identical inner occurrence set must survive with `agreement = 1`, `fused = 1` and bucket
+      `identical`; the enclosing shape-only view must not delete it before measurement.
+- [ ] Preserve `[PIPELINE-CLUSTER-SUBSUME]`'s file-coverage and enclosure guarantees for ties where
+      content does not distinguish the views.
 
-- [ ] `agreement` / `rename_consistency` / `literal_fraction` onto `ReportSignals` in
-      [`live-ipc.td`](../models/live-ipc.td), regenerate — never hand-write. **Population point:**
-      `impl From<PairScore> for ReportSignals` converts the raw triple *before* content is measured and
-      cannot carry them; [`content_gated_signals`](../../crates/deslop-core/src/buckets.rs) holds the
-      `ContentEvidence` and is the one place every rendered cluster passes through. It must stamp all three
-      on **both** paths — today it early-returns unchanged for `Identical` and for non-saturating shapes.
-- [ ] Render the three fields everywhere `fused` renders — HTML footer, Markdown, VSIX `SignalStrip`,
+## 2. Finish #344 — one confidence explanation on every decision surface
+
+Already present: generated wire fields, core population, and HTML/Markdown/text rendering — the last three
+through one shared [`render/signals.rs`](../../crates/deslop-core/src/render/signals.rs), so no surface
+restates the field list and they cannot drift.
+
+Putting the evidence on the wire also paid for itself in the test vocabulary. `assert_structural_only_contract`
+(`crates/deslop/tests/common/signals.rs`) previously stood in a single blanket bound —
+`embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT` — for **both** routes into the bucket, because its own doc
+recorded that "no helper reading three signals can reconstruct which route ran". That bound belongs only to
+the evidence-free route; the content-gated route demotes on content and may legitimately hold any cosine
+short of `EMBEDDING_SUPPORT_FLOOR`, so the assertion claimed a property the engine never promised and would
+have fired spuriously the moment anyone asserted the contract with embeddings on. Each door is now checked by
+its own entry condition against the measured `agreement` / `rename_consistency`, which is strictly *more*
+assertive: the content-gated branch now proves the gate actually refused. Mutation-verified — disabling that
+branch reddens `js-classes` (support 0.18) and `js-async` (support 0.29).
+
+- [ ] Render `agreement`, `rename_consistency` and `literal_fraction` in the VSIX `SignalStrip` and
       `HelpBubble`.
-- [ ] Add them to `render/text.rs`, `deslop-lsp` and `refactor/preconditions.rs`, which carry no confidence
-      at all today.
-- [ ] Restore the 17 rename-showcase fixtures #341 softened from maximal to partial renames. Unblocked:
-      `[REPAIR-RENAME-ANCHOR-MASS]` deleted the anchor floor that would have converted them into 17 false
-      negatives.
-- [ ] `metrics.duplication_percent` / exit-code gate — **delegated** to
-      [weighted-metrics-plan.md](weighted-metrics-plan.md) under `[METRICS-REPO-WEIGHTED]`.
+- [ ] Carry fused confidence plus the three content fields through LSP diagnostics and code lenses.
+- [ ] Make refactor preconditions consume the same measured confidence explanation rather than only a
+      bucket plus byte proof.
+- [x] **7 of the 17 restored** (`a3fe320be^` content): `js-generators`, `js-structural-control`,
+      `js-tagged-templates`, `jsx-tsx-components`, `ts-generics`, `tsx-small`, `typescript-small`. All 36
+      tests across the six suites that use them stay green, so this is pure strengthening: they now prove
+      the engine promotes a **maximal** rename on Baker-corroborated anchor mass rather than proving two
+      near-identical files match. `typescript-small` went from a two-identifier difference to a total
+      bijection — `nearly_identical, fused 0.81` carried by `rename_consistency 0.90` while `agreement` is
+      only 0.35 — and `js-generators` now promotes at `agreement 0.07`. Those numbers are legible only
+      because #344 put the evidence on the wire.
+- [ ] **The other 10 files (7 families): adjudicated, and they pin three distinct engine defects.** Seven
+      independent judges plus an adversarial reviewer read both sides of every pair and re-measured. The
+      claim that `[REPAIR-RENAME-ANCHOR-MASS]` unblocked all 17 is half true — but the reason the remaining
+      seven demote is **not** that their renames are unprovable. Ranked by rename purity:
 
-## 3. Close gap 1 — content evidence before admission
+      | family | maximal `rename` | blocking term | verdict |
+      |---|---|---|---|
+      | `ts-qualified-type-rename` | 0.6667 | anchor mass alone — `coverage` and `literal_preservation` are both **1.0** | false negative ([#410](https://github.com/Nimblesite/Deslop/issues/410)) |
+      | `ts-decorators` | 0.5467 | `literal_preservation` 3/5 — two strings that are the *same* substitutions | false negative ([#409](https://github.com/Nimblesite/Deslop/issues/409)) |
+      | `ts-enums` | 0.5507 | `literal_preservation` 6/9 — three labels renamed with their members | false negative ([#409](https://github.com/Nimblesite/Deslop/issues/409)) |
+      | `jsx-entity-invariance` | 0.3889 | `literal_preservation` 1/2 — the entity the fixture exists to prove invariant | false negative ([#409](https://github.com/Nimblesite/Deslop/issues/409)) |
+      | `ts-comment-literal-invariance` | 0.2571 | `literal_preservation` 2/6 — two of them genuinely behavioural | weakest; pins the incoherence |
+      | `javascript-type3` / `typescript-type3` | 0.4286 | not the content gate at all — shape identity broken by one inserted statement | [#408](https://github.com/Nimblesite/Deslop/issues/408) |
 
-- [ ] Decide whether content evidence can be measured cheaply enough to gate **admission** rather than
-      render, and pin the answer either way. It is one walk per member over already-normalised trees, so
-      the cost argument has to be measured, not assumed.
-- [ ] Whichever way that lands, pin the consequence: a shape-only family that the gate demotes at render
-      must not have been *ranked* above a real clone on its way there. `[RANK-STRUCTURAL-ONLY]` currently
-      carries this on the render side only.
+      **Restoring them is the right call, and it produces red tests, which CLAUDE.md calls a correct
+      outcome.** Two caveats before doing it: the two `*-type3` assertions must be **re-aimed** first —
+      restored, the only cluster is an 8-node `if`-statement fragment, so the current `nearly_identical`
+      assertion would assert something untrue; and no floor, threshold or assertion may be moved to make any
+      of them green.
 
-## 4. False positives — open reports, none re-verified against the shipped gate
+      The reviewer explicitly **rejected** quarantining `content.rs:321` with a `panic!`. That line is
+      load-bearing precision machinery — measured, the #197 family already renders three visible
+      `nearly_identical` clusters carried by `agreement` with `rename_consistency` at 0.31–0.50, so removing
+      the literal term raises them rather than lowering them. The defect is the *blindness* of the count,
+      not the term's existence, so it is a scoped design fix ([#409](https://github.com/Nimblesite/Deslop/issues/409)) rather than a quarantine.
 
-All seven predate `[FUSION-CONTENT-GATE]` and were attributed to the sum-then-clamp fusion that no longer
-exists. **None has been re-run against the engine as it stands**, so the first task in each group is
-measurement, not a fix.
+- [ ] **[#409](https://github.com/Nimblesite/Deslop/issues/409) is a recall defect, one-sided.** The issue
+      originally claimed `literal_preservation`'s blind count was wrong in *both* directions. I re-measured
+      the precision half myself and it does not hold, so it is withdrawn: two files identical except
+      `* 0.9` vs `* 0.75` render `nearly_identical` at `fused 0.9762`, and that is the **right** answer —
+      97.6% identical code differing by one constant is textbook parameterise-me duplication, and the
+      rendered text already says "small differences may matter (Type-3 near-miss)". The audit's own control,
+      a genuinely unrelated same-shape pair, measured `rename 0.000 / agreement 0.000 / fused 0.000` —
+      correctly annihilated. Nothing shows unrelated code being promoted.
 
-**None is closeable until the corpus can express a precision assertion.** No manifest field today says
-*"these two things are not duplicates"* — see section A of [`corpus-assertion.md`](corpus-assertion.md).
+      What stands is the recall half, measured: a literal renamed *alongside the symbol it names* is counted
+      as disproof of the rename. `"OrderService"`→`"UserService"` costs `ts-decorators` 0.368 of
+      `rename_consistency` while costing `agreement` 0.045. That makes the fix narrower and safer than first
+      described — there is no precision case to trade against — but it must still be re-measured against
+      `dart_issue_197_single_file_structural_only.rs` and the F# data-table corpus, because
+      `literal_preservation` is what holds those families out of the act-now band.
 
-- [ ] **Assertion-idiom FPs** — [#71](https://github.com/Nimblesite/Deslop/issues/71) (same HTTP verb +
-      status), [#103](https://github.com/Nimblesite/Deslop/issues/103) (pytest `monkeypatch` chains, fixture
-      call-sites), [#285](https://github.com/Nimblesite/Deslop/issues/285) (TDBIN diagnostic tests grouped
-      by assertion idiom). `python_issue_72_monkeypatch.rs` and the `python_dict_assert_*` suites already
-      cover neighbouring idioms — re-measure before writing anything new.
-- [ ] **Data-table / object-literal FPs** — [#283](https://github.com/Nimblesite/Deslop/issues/283) and
-      [#284](https://github.com/Nimblesite/Deslop/issues/284) (unrelated object-literal tables, TDBIN
-      scenarios). The language-agnostic data-table classifier shipped for
-      [#336](https://github.com/Nimblesite/Deslop/issues/336) (`fsharp_issue_336_data_table_category.rs`),
-      so these two may already be labelled `data` and policy-controllable — check before treating them as
-      open.
-- [ ] **Helper-call-site FPs** — [#79](https://github.com/Nimblesite/Deslop/issues/79), call sites
-      distinguished only by literal arguments. `python_literal_variation_calls.rs` is the nearest existing
-      pin.
-- [ ] **[#362](https://github.com/Nimblesite/Deslop/issues/362)** `[RANK-STRUCTURAL-ONLY]` — a two-file run
-      of unrelated const declarations reports as the repository's single largest cluster, 344 LOC.
+      **Pinned** by `crates/deslop/tests/rename_literal_monotonicity.rs` (red on purpose) with two minimal
+      fixtures differing by exactly one string literal — `ts-rename-literal-consistent` renames
+      `"OrderService"` → `"UserService"` with its symbol, `ts-rename-literal-inconsistent` leaves it behind.
+      The score is **inverted**, not merely low: the thorough rename renders `structural_only, fused 0.3833,
+      rename 0.4259`; the half-finished one renders `nearly_identical, fused 0.7714, rename 0.8571`. Finishing
+      a rename drops the pair below the reuse line, so the tool advises worse the more carefully the developer
+      renamed. The load-bearing assertion is the monotonicity one — *a more complete rename can never be
+      weaker evidence of a rename than a less complete one* — because it is true independently of where any
+      floor sits and therefore cannot be satisfied by moving one. This single test replaces restoring five
+      softened fixtures that would all have pinned the same root cause.
 
-## 5. Coverage directions the shipped repairs never closed
+## 3. Re-verify the fused false positives
 
-Each row adds the *direction* the current tests do not cover — the half of the contract that would still
-pass if the fix silently inverted.
+These reports predate `[FUSION-CONTENT-GATE]`; measure before changing code. None is closeable until the
+corpus can express *"these two things are not duplicates"* — section A of
+[`corpus-assertion.md`](corpus-assertion.md).
 
-- [ ] `[REPAIR-SNAPSHOT-PATH-ORDER]` — add the reverse determinism cycle to
-      `deslop-lsp/tests/history_determinism.rs` (add A→B, remove both, re-add B→A).
-- [ ] `[REPAIR-SNAPSHOT-PATH-ORDER]` — make a `per_file` entry with no `live_paths` entry a hard
-      `CoreError`, never a silent drop. A bookkeeping bug must not become a false negative.
-- [ ] `[REPAIR-WATCH-EXCLUSION]` — assert the **negative** direction: with no opt-in, a new `node_modules`
-      file must not enter the live report; and that artefact directories stay excluded regardless of the
-      dependency opt-in.
-- [ ] `[REPAIR-WATCH-EXCLUSION]` — config reactivity: flip `include_dependencies` in `.deslop.toml`, assert
-      the live report converges with no restart.
-- [ ] `[REPAIR-ADMISSION-PIN]` — end-to-end calibration above the unit pin: cosine **0.86** clusters and is
-      visible; **0.82** (every axis below 0.85, old sum above it) yields `cluster_count == 0` **and**
-      `clusters_hidden == 0`, because hidden-but-present means admission still happened. Blocked behind
-      #369 — it needs a trustworthy embeddings-on run.
+- [ ] **Assertion idioms:** #71, #103 and #285. Nearest pins:
+      `python_issue_72_monkeypatch.rs` and the `python_dict_assert_*` suites.
+- [ ] **Data-table/object-literal families:** #283 and #284. Recheck the language-agnostic data category
+      shipped for #336 before treating them as open detector defects.
+- [ ] **Helper call sites:** #79. Nearest pin: `python_literal_variation_calls.rs`.
+- [ ] **#362 / `[RANK-STRUCTURAL-ONLY]`:** two unrelated const-declaration files must not become the
+      repository's largest ranked finding.
 
-## 6. Measurements nobody has taken
+## 4. Fused close-outs
 
-- [ ] Record the **first embeddings-on corpus measurement**. Blocked on #356 and #369: a measurement taken
-      now would record those defects as the baseline, which is what #347 exists to prevent.
-- [ ] `workflow_dispatch` the corpus gate; close #331 and #336 only on a green run CI has seen.
-
-## 7. Close-outs — evidence first, never on a run CI has not seen
-
-Fixed and pinned; open only because nobody closed them. Each needs one verification pass **naming the
-assertion**, not the run.
-
-- [ ] **#339** — F# `token_jaccard` was byte-offset luck: two byte-identical windows at shifted offsets fell
-      through to `blake3(hash, byte_range)` and shared nothing. Offset-invariant sibling-window signatures
-      shipped in #392; `signatures::tests::issue_339_sibling_window_signature_is_offset_invariant`,
-      `fsharp_issue_339_sibling_window_rename` (2) and `fsharp_issue_339_token_fallback_rename` are green.
-      Re-measure F# `token_jaccard` on the corpus, then close — **before** #336, which is measured against
-      that signal.
-- [ ] **#343** — `bounded_fused()` is the only fusion; `pair_admission_bounded_max.rs` pins the arithmetic
-      at admission and `issue_343_sum_clamp_saturation.rs` at render (its embeddings-on case is #369).
-- [ ] **#351** — `add_embedding_pairs` calls `record_cosine` unconditionally; no quarantine `panic!` and no
-      `clippy::panic` suppression survives anywhere in `crates/`.
-- [ ] **#372** — `f32` cosine drift, fixed by #384 (`cosine_from_parts`, `f64` accumulation); pinned by
-      `issue_372_identical_snippet_cosine.rs` and the unit tests beside the function.
-- [ ] **#345** — doc drift; every row done, verify against the tree then close.
-- [ ] **#336** — both halves are pinned at fixture level (`issue_331_336_shape_only_saturation.rs` for the
-      saturation half, `fsharp_issue_336_data_table_category.rs` for the categorisation half). What is left
-      is the curated `dotnet/fsharp` run, sections C and D of [`corpus-assertion.md`](corpus-assertion.md).
-- [ ] **#331** — closed on *synthetic* evidence. Its real-repository confirmation rests on a check
-      [`corpus-assertion.md`](corpus-assertion.md) shows is unsound. Re-verify, **reopen** if it does not
-      survive.
-- [ ] **#347** — corpus gate close-out: three consecutive green runs, closed by naming the runs.
-- [ ] **#355** — the Dart single-file delegating-method family. `dart_issue_197_single_file_structural_only`
-      carries no `#[ignore]` and every original assertion passes; verify, then close.
-- [ ] **#394** — add a YAML-parsed event-matrix test proving a Dependabot **security** PR to `main` retains
-      CI, dependency review, CodeQL and Action self-test, while routine version updates stay on
-      `dependabot-upgrades`.
-- [ ] **#395** — the plan marked the same work both open and fixed. This rewrite is the fix; close when it
-      stays true.
-- [ ] **#397** — repo duplication back to 12.5%. `.deslop.toml` is at `max_duplication_percent = 14.5`,
-      raised twice because the *detector* got more honest (row-4 routing in every language, #390), never
-      because duplication was added; each raise carries its measurement in the file. The remaining distance
-      is a flat tail in the coarse E2E suites. Ratchet down as that work lands; never pay for it by
-      re-hiding clusters.
+- [ ] **#339:** re-measure the F# token score on the curated corpus, then close only if the offset-invariant
+      signature pins still agree.
+- [ ] **#343:** `pair_admission_bounded_max.rs` pins admission arithmetic; use the active
+      `fused_golden_invariants.rs` assertions for rendered bounds before closing.
+- [ ] **#345:** verify the public fusion docs against the tree, then close.
+- [ ] **#336:** fixture-level saturation and data categorisation are pinned; the curated F# run remains.
+- [ ] **#331:** re-verify the real-repository claim through the repaired corpus assertion; reopen if it
+      does not survive.
+- [ ] **#347:** require three consecutive green corpus runs and name them when closing.
+- [ ] **#355:** verify `dart_issue_197_single_file_structural_only` with no ignored assertions, then close.
 
 ## Order
 
 ```
-#369 / #370 / #356  ──►  embeddings-on is measurable  ──►  first corpus measurement, #5 calibration
-#344 (evidence on the wire)  ──►  #4 FP re-measurement  ──►  gap 1 (evidence before admission)
-             corpus-assertion.md A–E  ──────────────────────┘   (supplies the precision pins)
+pre-content subsumption regression and repair ──► #344 remaining readers
+                                              └──► fused false-positive re-measurement
+corpus-assertion.md A–E ─────────────────────────► supplies the precision pins
 ```
-
-The false-positive work waits on the corpus gaining a precision surface: until it has one, a fix and a
-regression look identical on a real repository.
 
 ---
 
 # Ledger
 
-Kept only because these IDs are cited from test module docs and would otherwise dangle. One line each; the
-reasoning lives in [`fusion.md`](../specs/fusion.md) and in each pinning test.
+Kept only for fused repair IDs cited from tests or specifications.
 
-| ID | What it fixed | Owned by |
+| ID | What it fixed | Held by |
 |---|---|---|
-| `[REPAIR-PURGE-QUARANTINE]` | Three functions that existed only to `panic!`, deleted whole | `grep -rn QUARANTINED crates/` returns nothing |
-| `[REPAIR-COSINE-MERGE]` (#351) | A cosine was discarded for any pair already in the candidate map, so discovery order decided whether a duplicate was visible | `issue_93_embedding_uniqueness.rs`, `embedding_route_invariance.rs` |
-| `[REPAIR-CLUSTER-SIGNAL-TRUTH]` | Cluster signals were averaged over the closure's discovery edges | `[FUSION-CLUSTER-SIGNALS]` |
-| `[REPAIR-SNAPSHOT-PATH-ORDER]` (#301) | Snapshot order followed `FileId`, so edit history changed the report | `deslop-lsp/tests/history_determinism.rs` |
-| `[REPAIR-WATCH-EXCLUSION]` | The watcher was built with `ExclusionConfig::empty()`, so live and batch disagreed | `deslop-lsp/tests/dependency_reactivity.rs` |
-| `[REPAIR-VECTOR-FINITE]` | Non-finite vector components failed *open* through every cosine floor | `embedding_non_finite.rs` |
-| `[REPAIR-ADMISSION-PIN]` (#343) | Admission arithmetic was unpinned — only rendered confidence was | `pair_admission_bounded_max.rs` |
-| `[REPAIR-DECLARATION-FAMILY]` | The sibling-boilerplate filter could not tell scaffolding from real duplication in **either** configuration | `dart_issue_197_single_file_structural_only.rs` + `declaration_family_plurality.rs` + `declaration_family_mixed_component.rs` + `refactor_merge` + `issue_190_data_table_demote.rs`, required together |
-| `[REPAIR-PY-DICT-ASSERT-DEPTH]` | The pytest dict-assert idiom was recognised at one AST depth only, so the module-wide view survived subsumption | `python_issue_107_chained_dict_assert.rs` |
-| `[REPAIR-DOC-TRUTH]` (#345) | Public docs still taught the deleted sum-and-clamp fusion | `[FUSION-STRATEGY-BOUNDED-MAX]` |
-| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A four-literal cliff zeroed rename evidence below it, rendering a maximal one-literal Type-2 clone at `fused = 0.0588`; replaced by Baker corroborated anchor mass (`[TECH-PMATCH-BAKER]`), elected over the substituted pairs alone so a homonym byte-string cannot make one role veto the other | `type2_rename_anchor_floor.rs`, the `rename_lean` scenarios in `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs` |
-| `[QUARANTINE-EMBED-REFRESH-COMPLETE]` (#370) | 🛑 **Live quarantine — code replaced by `panic!`, not repaired.** `live::api::commit_background_refresh` swapped a refreshed report over the last good one and called `job.report_complete()` without ever reading `report.embedding_provenance` — it logged that provenance in the same block that declared success. A refresh in which the provider rejected *every* subtree (measured: `indexed 0 / attempted 851 / failed 851`) was committed and announced `phase = "complete", done = 851`. Every clone needing the semantic axis silently vanishes from a report claiming that axis ran. The one-shot CLI is not implicated — `run_embedding_pass` records the truth and `ollama_failures.rs` holds it | `deslop-lsp/tests/embedding_failure_progress.rs` (red, unignored) |
-| `[REPAIR-CONTENT-FRONTIER]` | Collapsed *non-leaf* nodes were emitted alongside the collapsed descendants they span, so an interpolated string re-tested the same bytes as a whole-node literal and manufactured an unpreserved literal at every interpolation a rename touched | `js_language_features.rs` (template literals), `fused_golden_invariants.rs` |
-
-The branch regression audit (RA-01…RA-09, REG-01…REG-11) is fully discharged: RA-06/#393 closed, RA-07/#394
-and RA-08/#395 carried above, everything else fixed and pinned. The six once-skipped VSIX tests are restored
-with zero skips left.
+| `[REPAIR-PURGE-QUARANTINE]` | Deleted functions that existed only to abort | no remaining quarantine marker under `crates/` |
+| `[REPAIR-ADMISSION-PIN]` (#343) | Pinned bounded-max arithmetic at admission | `pair_admission_bounded_max.rs` |
+| `[REPAIR-DECLARATION-FAMILY]` | Bounded sibling-boilerplate filtering in both configurations | `dart_issue_197_single_file_structural_only.rs`, `declaration_family_plurality.rs`, `declaration_family_mixed_component.rs`, `refactor_merge`, `issue_190_data_table_demote.rs` |
+| `[REPAIR-PY-DICT-ASSERT-DEPTH]` | Recognised the pytest dict-assert idiom at every relevant AST depth | `python_issue_107_chained_dict_assert.rs` |
+| `[REPAIR-DOC-TRUTH]` (#345) | Removed the obsolete sum-and-clamp public contract | `[FUSION-STRATEGY-BOUNDED-MAX]` |
+| `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | Replaced a four-literal cliff with smoothly weighted Baker-corroborated anchor mass | `type2_rename_anchor_floor.rs`, `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs` |
+| `[REPAIR-CONTENT-FRONTIER]` | Stopped collapsed non-leaves from re-testing bytes already represented by descendants | `js_language_features.rs`, `fused_golden_invariants.rs` |

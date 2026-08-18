@@ -9,6 +9,7 @@ import {
   findClusterContaining,
 } from "../../commands/register";
 import { ReportCluster } from "../../types/report";
+import { bucketSignals } from "../signals.helpers";
 
 async function mkDoc(content: string): Promise<vscode.TextDocument> {
   return await vscode.workspace.openTextDocument({ content, language: "plaintext" });
@@ -21,7 +22,7 @@ function cluster(path: string, start: number, end: number): ReportCluster {
     size: 1,
     canonical_node_count: 0,
     bucket: "identical",
-    signals: { structural: 1, token_jaccard: 1, embedding_cos: 0, fused: 1 },
+    signals: bucketSignals("identical"),
     occurrences: [{ path, start_byte: start, end_byte: end, hidden: false }],
     occurrences_total: 0,
     occurrences_truncated: false,

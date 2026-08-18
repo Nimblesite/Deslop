@@ -151,12 +151,13 @@ fn write_cluster(out: &mut String, idx: usize, cluster: &ReportCluster) {
     };
     let _ = writeln!(
         out,
-        "#{rank} [{id}]{chip} weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}",
+        "#{rank} [{id}]{chip} weight={weight:.2} size={size} nodes={nodes}\n  {summary}\n  :: {interpretation}\n  content evidence: {evidence}",
         rank = idx.saturating_add(1),
         id = cluster.id,
         weight = cluster.weight,
         size = cluster.size,
         nodes = cluster.canonical_node_count,
         summary = cluster.summary,
+        evidence = crate::render::signals::evidence_summary(cluster.signals),
     );
 }

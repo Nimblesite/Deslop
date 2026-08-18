@@ -18,14 +18,14 @@ use crate::{
     buckets::{
         bucket_labels, classify_signals, content_gated_signals, has_saturating_shape_evidence,
         is_lsh_only_nearmiss, ClusterKind, CONTENT_PROMOTE_FLOOR, CONTENT_SUPPORT_FLOOR,
-        LITERAL_TABLE_MIN_FRACTION, STRUCTURAL_ONLY_MAX_SUPPORT,
+        LITERAL_TABLE_MIN_FRACTION,
     },
     cluster::Cluster,
     cluster_filters::ParseCache,
     config::ExclusionConfig,
     content::ContentEvidence,
     fingerprint::Fingerprint,
-    pair::PairScore,
+    pair::{PairScore, EMBEDDING_SUPPORT_FLOOR},
     report::{ReportCluster, ReportOccurrence, ReportSignals},
     report_location::format_occurrence,
     state::{FileId, FileRegistry},
@@ -362,7 +362,17 @@ fn route_shape_identical(
     }
     // Semantic backing is content-independent evidence; the embedding
     // pass measured behaviour, not shape, so the gate keeps its verdict.
-    if signals.embedding_cos >= STRUCTURAL_ONLY_MAX_SUPPORT {
+    // Backing means the cosine *vouches* for the cluster
+    // ([`EMBEDDING_SUPPORT_FLOOR`]) — never merely that one was
+    // measured. This bar used to be `STRUCTURAL_ONLY_MAX_SUPPORT`, which
+    // is the ceiling *below* which a signal counts as absent; read as a
+    // floor it let a cosine of 0.05 — a model reporting no relationship
+    // — overrule the measured content evidence, so the gate's verdict
+    // turned on whether the embedding pass ran rather than on the code.
+    // `csharp-type3` published the identical two occurrences as
+    // `structural_only` at cosine 0.00 and `nearly_identical` at 0.61
+    // (gh #356, `deslop::embedding_route_invariance`).
+    if signals.embedding_cos >= EMBEDDING_SUPPORT_FLOOR {
         return kind;
     }
     // Promotion rescues real clones from the demoted tier: pooled raw
@@ -699,6 +709,9 @@ mod tests {
             token_jaccard: 1.0,
             embedding_cos: 0.0,
             fused: 1.0,
+            agreement: 0.0,
+            rename_consistency: 0.0,
+            literal_fraction: 0.0,
         }
     }
 }
