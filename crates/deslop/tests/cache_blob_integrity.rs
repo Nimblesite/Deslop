@@ -2,7 +2,7 @@
 //! the address that selected them ([PIPELINE-INCREMENTAL-INTEGRITY]).
 //!
 //! Pins the blob-trust regressions from the incremental persistence
-//! audit (`docs/incremental-persistence-regression-audit.md`):
+//! audit in `docs/plans/incremental-analysis-plan.md`:
 //!
 //! - a blob whose signature payload was corrupted decoded cleanly and
 //!   was served as a valid hit, changing `token_jaccard` — a report

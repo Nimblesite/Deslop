@@ -8,8 +8,9 @@
 //! borrows the flat slices as they are. The audited alternative —
 //! re-flattening an owned copy of the whole corpus on every render —
 //! duplicated ~157 MiB of signature bytes alone on the pinned
-//! benchmark corpus, the +241 MB warm-RSS regression recorded in
-//! `docs/incremental-persistence-regression-audit.md` §5.
+//! benchmark corpus, the +241 MB warm-RSS regression recorded as
+//! finding 5 of the regression audit in
+//! `docs/plans/incremental-analysis-plan.md`.
 
 use std::path::{Path, PathBuf};
 
