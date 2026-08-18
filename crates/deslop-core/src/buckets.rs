@@ -227,24 +227,24 @@ pub fn is_structural_only_signals(signals: ReportSignals) -> bool {
         && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
 }
 
-/// Lowest content agreement a shape-identical cluster may show while
-/// still counting as a Type-2/3 clone rather than shape-only
-/// scaffolding ([FUSION-CONTENT-GATE]). Genuine renamed
-/// copies change a handful of collapsed-leaf positions and stay well
-/// above this floor; framework-mandated declarations and data tables
-/// change most positions and fall well below it. The 0.7 operating
-/// point matches the [TECH-TOKEN-SOURCERERCC] Type-3 overlap cutoff.
+/// Content agreement at which a *cross-file* shape-identical cluster
+/// holds an act-now `nearly_identical` verdict ([FUSION-CONTENT-GATE]).
+/// Shape saturation makes the token axis an echo of the structural one
+/// — the honest #339 sibling-window signatures made that echo universal
+/// — so measured content is the only discriminating evidence left. The
+/// 0.7 operating point matches the [TECH-TOKEN-SOURCERERCC] Type-3
+/// overlap cutoff: a genuine renamed copy keeps most collapsed-leaf
+/// positions byte-equal and clears it comfortably.
 pub const CONTENT_SUPPORT_FLOOR: f64 = 0.7;
 
-/// Content agreement required to *promote* a shape-identical cluster
-/// into the act-now `nearly_identical` bucket when the token layer lost
-/// its signature to the fingerprint-scoped fallback. Between
-/// [`CONTENT_SUPPORT_FLOOR`] and this bar the legacy signal routing
-/// stands: real-world sibling families such as the #197 REST
-/// settings surface measure 0.72–0.80 (shared plumbing, differing
-/// endpoint literals) and must keep their demoted verdict, while a
-/// genuine near-miss window shares nearly every position (≥ 0.85 — the
-/// same act-now grade as [FUSED-THRESHOLD]).
+/// Content agreement required for a *single-file* shape-identical
+/// cluster to hold the act-now verdict ([FUSION-CONTENT-GATE]). In-class
+/// sibling-method families such as the #197 REST settings surface
+/// measure 0.72–0.80 (shared plumbing, differing endpoint literals) and
+/// are API surface, not extract-worthy duplication — they must keep
+/// their demoted verdict — while a genuine same-file near-miss window
+/// shares nearly every position (≥ 0.85, the same act-now grade as
+/// [FUSED-THRESHOLD]).
 pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 
 /// Literal fraction at which a shape-identical cluster counts as a data
@@ -255,20 +255,6 @@ pub const CONTENT_PROMOTE_FLOOR: f64 = 0.85;
 /// ([RANK-CATEGORY]) instead of the scaffolding hide, so they stay
 /// labelled and policy-controllable rather than silently vanishing.
 pub const LITERAL_TABLE_MIN_FRACTION: f64 = 0.8;
-
-/// True when a shape-identical cluster's only real evidence is its
-/// shape: neither content population vouches for it — the pooled raw
-/// bytes mostly disagree, no consistent literal-anchored rename explains
-/// the differences ([`ContentEvidence::support`]), and no semantic
-/// signal supports it ([FUSION-CONTENT-GATE]). Such clusters join the
-/// [`is_structural_only_signals`] routing so the bucket label and the
-/// ranking demotion stay in lockstep.
-#[must_use]
-pub fn lacks_content_support(signals: ReportSignals, content: ContentEvidence) -> bool {
-    has_saturating_shape_evidence(signals)
-        && content.support() < CONTENT_SUPPORT_FLOOR
-        && signals.embedding_cos < STRUCTURAL_ONLY_MAX_SUPPORT
-}
 
 /// True when a cluster's deterministic signals are shape echoes that
 /// saturate by construction ([FUSION-CONTENT-GATE]): an exact Merkle

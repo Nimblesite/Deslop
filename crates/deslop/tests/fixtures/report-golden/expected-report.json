@@ -82,10 +82,10 @@
   "embedding_provenance": null,
   "clusters": [
     {
-      "id": "4874ca0d497c02cb",
-      "weight": 116.0,
+      "id": "43d86a84310253d5",
+      "weight": 120.0,
       "size": 3,
-      "canonical_node_count": 58,
+      "canonical_node_count": 60,
       "signals": {
         "structural": 1.0,
         "token_jaccard": 1.0,
@@ -97,7 +97,7 @@
       "occurrences": [
         {
           "path": "alpha.rs",
-          "start_byte": 178,
+          "start_byte": 171,
           "end_byte": 508,
           "start_line": 6,
           "end_line": 20,
@@ -105,7 +105,7 @@
         },
         {
           "path": "beta.rs",
-          "start_byte": 160,
+          "start_byte": 153,
           "end_byte": 490,
           "start_line": 6,
           "end_line": 20,
@@ -113,7 +113,7 @@
         },
         {
           "path": "gamma.rs",
-          "start_byte": 182,
+          "start_byte": 175,
           "end_byte": 512,
           "start_line": 9,
           "end_line": 23,
@@ -122,7 +122,7 @@
       ],
       "occurrences_total": 3,
       "occurrences_truncated": false,
-      "summary": "3 copies of a 58-node subtree at alpha.rs:6:8, beta.rs:6:8, gamma.rs:9:8 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
+      "summary": "3 copies of a 60-node subtree at alpha.rs:6:1, beta.rs:6:1, gamma.rs:9:1 [structural=1.00, token_jaccard=1.00, embedding_cos=0.00]",
       "interpretation": "Identical code. Safe to extract — every copy is the same. (Type-1 or Type-2 exact clone)"
     },
     {

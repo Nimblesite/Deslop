@@ -145,7 +145,7 @@ fn build_fused_cluster<S: BuildHasher>(
     embedding_vectors: &HashMap<usize, Vec<f32>, S>,
     fused: &FusedCluster,
 ) -> Option<Cluster> {
-    let occurrence_indices = collapsed_member_indices(fingerprints, fused);
+    let occurrence_indices = collapse_overlapping_per_file(fused, fingerprints);
     if occurrence_indices.len() < MIN_REPORTABLE_MEMBERS {
         return None;
     }
@@ -160,20 +160,6 @@ fn build_fused_cluster<S: BuildHasher>(
         .filter_map(|index| fingerprints.get(*index).cloned())
         .collect();
     Some(materialize_cluster(members, measured))
-}
-
-/// Collects valid fingerprint indices for one fused cluster and
-/// collapses overlapping same-file artifacts. Indices (not cloned
-/// fingerprints) survive the collapse so signal measurement can reach
-/// each rendered occurrence's signature and embedding vector.
-fn collapsed_member_indices(fingerprints: &[Fingerprint], fused: &FusedCluster) -> Vec<usize> {
-    let raw_members: Vec<usize> = fused
-        .members
-        .iter()
-        .copied()
-        .filter(|index| *index < fingerprints.len())
-        .collect();
-    collapse_overlapping_per_file(raw_members, fingerprints)
 }
 
 /// Builds the final reportable cluster from already-filtered members.
@@ -254,11 +240,14 @@ fn cluster_id_source(members: &[Fingerprint]) -> [u8; 32] {
 /// files never collapse, no matter how their byte ranges relate. Two
 /// non-overlapping occurrences inside the same file also survive —
 /// only a transitively overlapping chain collapses to one canonical
-/// member (the widest window, i.e. the largest byte span).
+/// member. Within a run, the member carrying the strongest cross-file
+/// discovery edge always beats a wider, more weakly matched one; width
+/// only breaks ties between peers (see [`cross_file_edge_strengths`]).
 #[must_use]
-fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprint]) -> Vec<usize> {
+fn collapse_overlapping_per_file(fused: &FusedCluster, fingerprints: &[Fingerprint]) -> Vec<usize> {
+    let strengths = cross_file_edge_strengths(fused, fingerprints);
     let mut by_file: BTreeMap<FileId, Vec<(usize, Fingerprint)>> = BTreeMap::new();
-    for index in members {
+    for index in fused.members.iter().copied() {
         let Some(member) = fingerprints.get(index) else {
             continue;
         };
@@ -269,7 +258,7 @@ fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprin
     }
     let mut out: Vec<usize> = Vec::new();
     for bucket in by_file.into_values() {
-        out.extend(collapse_overlapping_single_file(bucket));
+        out.extend(collapse_overlapping_single_file(bucket, &strengths));
     }
     // Corpus-index order, not `FileId` order: ids encode registration
     // history (a removed-and-restored file gets a fresh id), while the
@@ -280,11 +269,48 @@ fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprin
     out
 }
 
+/// The strongest surviving-edge strength each member holds to a member
+/// in a *different file*, from the component's discovery edges.
+///
+/// This is what the same-file overlap collapse ranks representatives
+/// by. A transitive-closure component can chain several views of one
+/// region together — an exact sibling-window match and a whole-file
+/// root that merely token-matched the window in the other file — and
+/// the collapse must keep the occurrence that carries the strongest
+/// cross-file evidence (#339). Choosing by width alone let the weakly
+/// matched root displace the exact window, drop the cluster's measured
+/// `structural` from 1.0 to 0.0, and hand subsumption a reason to
+/// delete the only view of the duplicate. Same-file edges deliberately
+/// do not count: they describe within-file duplication, which never
+/// needs to survive a *same-file* collapse to stay reported.
+fn cross_file_edge_strengths(
+    fused: &FusedCluster,
+    fingerprints: &[Fingerprint],
+) -> HashMap<usize, f64> {
+    let mut strengths: HashMap<usize, f64> = HashMap::new();
+    for edge in &fused.edges {
+        let (Some(left), Some(right)) = (fingerprints.get(edge.left), fingerprints.get(edge.right))
+        else {
+            continue;
+        };
+        if left.file_id == right.file_id {
+            continue;
+        }
+        for index in [edge.left, edge.right] {
+            let best = strengths.entry(index).or_insert(0.0);
+            *best = best.max(edge.strength);
+        }
+    }
+    strengths
+}
+
 /// Greedy sweep over one file's occurrences: sort by `(start, -end)`
-/// and keep one canonical member per overlapping run, choosing the
-/// member with the widest byte range (largest physical clone) as the
-/// representative. Equal-width ties keep the first-encountered member
-/// so the result stays deterministic across runs.
+/// and keep one canonical member per overlapping run. The member with
+/// the strongest cross-file discovery edge wins
+/// ([`cross_file_edge_strengths`]); between equals the widest byte
+/// range (largest physical clone) wins, and equal-width ties keep the
+/// first-encountered member so the result stays deterministic across
+/// runs.
 ///
 /// The run's frontier is tracked separately from its representative
 /// ([PIPELINE-CLUSTER-EXACT]). Overlap is transitive, and the window
@@ -294,7 +320,10 @@ fn collapse_overlapping_per_file(members: Vec<usize>, fingerprints: &[Fingerprin
 /// finds `[105,200]` disjoint and publishes one physical region as two
 /// occurrences — inflating the cluster size, the occurrence list and the
 /// duplication percentage.
-fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Vec<usize> {
+fn collapse_overlapping_single_file(
+    mut bucket: Vec<(usize, Fingerprint)>,
+    strengths: &HashMap<usize, f64>,
+) -> Vec<usize> {
     bucket.sort_by_key(|(_, member)| {
         (
             member.byte_range.start,
@@ -303,9 +332,10 @@ fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Ve
     });
     let mut runs: Vec<OverlapRun> = Vec::with_capacity(bucket.len());
     for candidate in bucket {
+        let strength = strengths.get(&candidate.0).copied().unwrap_or(0.0);
         match runs.last_mut() {
-            Some(run) if run.reaches(&candidate.1) => run.absorb(candidate),
-            _ => runs.push(OverlapRun::start(candidate)),
+            Some(run) if run.reaches(&candidate.1) => run.absorb(candidate, strength),
+            _ => runs.push(OverlapRun::start(candidate, strength)),
         }
     }
     runs.into_iter().map(|run| run.representative).collect()
@@ -315,11 +345,16 @@ fn collapse_overlapping_single_file(mut bucket: Vec<(usize, Fingerprint)>) -> Ve
 /// the reported location plus the frontier the next window is tested
 /// against.
 struct OverlapRun {
-    /// Fingerprint index of the widest member so far — the occurrence
+    /// Fingerprint index of the best member so far — the occurrence
     /// the report publishes for this run.
     representative: usize,
     /// Byte width of the representative, for the width contest.
     width: usize,
+    /// The representative's strongest cross-file edge strength
+    /// ([`cross_file_edge_strengths`]). A representative is only
+    /// displaced by a candidate with strictly stronger cross-file
+    /// evidence, or equal evidence over a wider byte span.
+    strength: f64,
     /// Highest end byte anywhere in the run, which is not always the
     /// representative's end.
     end: usize,
@@ -327,10 +362,11 @@ struct OverlapRun {
 
 impl OverlapRun {
     /// Opens a run at `member`.
-    fn start((index, member): (usize, Fingerprint)) -> Self {
+    fn start((index, member): (usize, Fingerprint), strength: f64) -> Self {
         Self {
             representative: index,
             width: member.byte_range.len(),
+            strength,
             end: member.byte_range.end,
         }
     }
@@ -342,13 +378,24 @@ impl OverlapRun {
         candidate.byte_range.start < self.end
     }
 
-    /// Extends the run, promoting `member` to representative when it is
-    /// strictly wider than the incumbent.
-    fn absorb(&mut self, (index, member): (usize, Fingerprint)) {
+    /// Extends the run, promoting `member` to representative when it
+    /// outranks the incumbent ([`Self::displaces`]).
+    fn absorb(&mut self, (index, member): (usize, Fingerprint), strength: f64) {
         self.end = self.end.max(member.byte_range.end);
-        if member.byte_range.len() > self.width {
+        if self.displaces(strength, member.byte_range.len()) {
             self.representative = index;
             self.width = member.byte_range.len();
+            self.strength = strength;
+        }
+    }
+
+    /// Strictly stronger cross-file evidence displaces the incumbent;
+    /// between equals, only a strictly wider byte span wins.
+    fn displaces(&self, candidate_strength: f64, candidate_width: usize) -> bool {
+        match candidate_strength.total_cmp(&self.strength) {
+            std::cmp::Ordering::Greater => true,
+            std::cmp::Ordering::Less => false,
+            std::cmp::Ordering::Equal => candidate_width > self.width,
         }
     }
 }

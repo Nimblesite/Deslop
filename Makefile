@@ -9,7 +9,7 @@
 # human entry points and are the only ones `make help` lists.
 # =============================================================================
 
-.PHONY: build test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
+.PHONY: build dup-gate test test-ollama lint fmt clean ci ci-ollama setup help deployment-verify vsix-package vsix-rebuild android-studio-rebuild android-studio-rebuild-reinstall typediagram-gen _delete-path-binaries _kill-deslop-processes _vsix-install _vsix-build _vsix-test _vsix-test-ollama _vsix-coverage _vsix-webview-coverage _vsix-playwright-html _vsix-install-code _vsix-clean _vsix-stage-bundled-binaries _vsix-stage-and-package _jetbrains-build _jetbrains-verify _jetbrains-package _jetbrains-test _jetbrains-real-binary-test _android-studio-install _android-studio-uninstall
 
 _JETBRAINS_DIR := clients/jetbrains
 
@@ -141,11 +141,13 @@ lint: typediagram-gen
 	@echo "==> Linting..."
 	cargo clippy --release --all-targets --workspace -- -D warnings
 	@bash scripts/taxonomy-gate.sh
-	@echo "==> VSIX stub-provider packaging gate (unit)..."
-	@node --test clients/vscode/scripts/stub-gate.test.mjs
+	@echo "==> VSIX harness + packaging script gates (unit)..."
+	@node --test clients/vscode/scripts/*.test.mjs
 	@echo "==> PATH/env injection gate ([ACTION-ENVPATH])..."
 	@node --test scripts/verify-env-path-writes.test.mjs
 	@node scripts/verify-env-path-writes.mjs
+	@echo "==> Docs installer snippet fail-closed gate ([DEPLOY-DOCS-INSTALLER-FAILCLOSED])..."
+	@node --test scripts/installer-snippet.test.mjs
 
 ## fmt: Format all code in-place. Pass CHECK=1 for read-only check (CI use).
 ##      Depends on typediagram-gen because rustfmt walks the module tree
@@ -178,6 +180,7 @@ ci:
 	@$(MAKE) lint
 	@$(MAKE) test
 	@$(MAKE) build
+	@$(MAKE) dup-gate
 	@$(MAKE) deployment-verify
 	@$(MAKE) _vsix-coverage
 	@$(MAKE) _vsix-test
@@ -247,6 +250,18 @@ test-corpus-ci:
 # `make test-corpus` locally, or dispatch the workflow with `full`.
 CORPUS_REPOS ?= tokio nest
 CORPUS_TESTS ?= corpus_tokio_rust corpus_nest_typescript corpus_determinism_nest_typescript
+
+# [CI-DESLOP] Self-hosted duplication gate. Runs the release binary built by
+#   `build` against this repo, so the gate is always the CURRENT detector, never
+#   a released or PATH-installed one. Reads `[threshold] max_duplication_percent`
+#   from `.deslop.toml` — the single source of truth — and exits 3 when repo-wide
+#   duplication climbs past it. `make ci` runs this, so a green local run means a
+#   green gate in CI; the workflow calls this same target rather than repeating
+#   the command, so the two can never drift.
+## dup-gate: Fail when this repo's own duplication exceeds .deslop.toml.
+dup-gate: build
+	@echo "==> Duplication gate (.deslop.toml [threshold])..."
+	./target/release/deslop . --no-color
 
 # [DEPLOY-CI-GATES] CI/release deployment-drift gate: manifest schema, binary
 #   version contracts, release-workflow gates, and the verifier proof suite.

@@ -10,28 +10,20 @@ import {
   resolveWorkspaceRoot,
   surfaceStartupFailure,
   syncEmbeddingSettingsToLsp,
-  wireNotifications,
 } from "../../extension";
+import { wireNotifications } from "../../notifications";
 import { LifecyclePhase, ReportStore } from "../../reportStore";
 import { AnalysisState, Report } from "../../types/report";
-import { repoMetrics } from "./report.helpers";
+import { emptyReport, repoMetrics } from "./report.helpers";
 
 function reportWithEmbedding(
   embedding: Report["embedding_provenance"] = undefined,
 ): Report {
-  return {
+  return emptyReport({
     tool_version: "v",
-    min_nodes: 30,
-    files_analysed: 0,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
     metrics: repoMetrics(),
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
     embedding_provenance: embedding,
-    clusters: [],
-  };
+  });
 }
 
 async function setEmbeddingConfig(values: {

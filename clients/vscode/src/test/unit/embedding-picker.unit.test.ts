@@ -14,7 +14,7 @@ import {
 } from "../../commands/embeddingPicker";
 import { ReportStore } from "../../reportStore";
 import { EmbeddingModelInfo, ReportDelta } from "../../types/report";
-import { repoMetrics } from "./report.helpers";
+import { emptyReport, repoMetrics } from "./report.helpers";
 
 function newStore(embedding?: {
   provider_id: string;
@@ -24,16 +24,9 @@ function newStore(embedding?: {
 }): ReportStore {
   const store = new ReportStore();
   store.setSnapshot(
-    {
+    emptyReport({
       tool_version: "x",
-      min_nodes: 30,
-      files_analysed: 0,
-      clusters_hidden: 0,
-      cache_stats: { hits: 0, misses: 0 },
       metrics: repoMetrics(),
-      schema_doc: "",
-      action_hints: [],
-      boilerplate_hints: [],
       embedding_provenance: embedding
         ? {
             attempted_subtrees: 0,
@@ -42,8 +35,7 @@ function newStore(embedding?: {
             ...embedding,
           }
         : undefined,
-      clusters: [],
-    },
+    }),
     0,
   );
   return store;
@@ -192,14 +184,7 @@ suite("embeddingPicker helpers", () => {
     const client = {
       sendRequest: () => Promise.reject(new Error("boom")),
     } as unknown as LanguageClient;
-    await setModel(client, {
-      provider_id: "ollama",
-      model_id: "nomic-embed-text",
-      model_version: "0",
-      dimensions: 768,
-      recommended: false,
-      reachable: true,
-    });
+    await setModel(client, model("ollama", "nomic-embed-text"));
   });
 
   test("setModel happy path persists the workspace config", async () => {
@@ -210,14 +195,7 @@ suite("embeddingPicker helpers", () => {
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
-    await setModel(client, {
-      provider_id: "ollama",
-      model_id: "nomic-embed-code",
-      model_version: "0",
-      dimensions: 768,
-      recommended: false,
-      reachable: true,
-    });
+    await setModel(client, model("ollama", "nomic-embed-code"));
     const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
     assert.equal(calls[0]?.method, "deslop/embeddingSetModel");
@@ -238,14 +216,7 @@ suite("embeddingPicker helpers", () => {
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
-    await setModel(client, {
-      provider_id: "ollama",
-      model_id: "nomic-embed-text",
-      model_version: "0",
-      dimensions: 768,
-      recommended: false,
-      reachable: true,
-    });
+    await setModel(client, model("ollama", "nomic-embed-text"));
     const swap = calls.find((call) => call.method === "deslop/embeddingSetModel");
     const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `setModel must dispatch exactly one RPC: ${JSON.stringify(calls)}`);
@@ -276,14 +247,7 @@ suite("embeddingPicker helpers", () => {
         return Promise.resolve(undefined);
       },
     } as unknown as LanguageClient;
-    await setModelFromPicker(client, store, {
-      provider_id: "ollama",
-      model_id: "nomic-embed-text",
-      model_version: "0",
-      dimensions: 768,
-      recommended: false,
-      reachable: true,
-    });
+    await setModelFromPicker(client, store, model("ollama", "nomic-embed-text"));
     const cfg = vscode.workspace.getConfiguration("deslop");
     assert.equal(calls.length, 1, `expected one RPC call, got ${JSON.stringify(calls)}`);
     assert.equal(calls[0]?.method, "deslop/embeddingSetModel");

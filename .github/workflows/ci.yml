@@ -36,24 +36,22 @@ jobs:
       - name: Classify changed paths
         id: classify
         env:
-          ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          # Dependabot PRs are swept into `dependabot-upgrades` by
-          # dependabot-automerge.yml and never merge into main directly, so the
-          # heavy matrix would only burn minutes on a bump we discard. CI runs
-          # once, on the `dependabot-upgrades -> main` consolidation PR.
-          # ([GITHUB-DEPENDABOT])
-          if [ "$ACTOR" = "dependabot[bot]" ]; then
-            {
-              echo "code=false"
-              echo "site=false"
-            } >> "$GITHUB_OUTPUT"
-            echo "Dependabot PR — skipping the code matrix and site build."
-            exit 0
-          fi
+          # No Dependabot short-circuit here, deliberately. This workflow
+          # triggers on `pull_request: [main]` only, and Dependabot's routine
+          # version updates all carry `target-branch: dependabot-upgrades`
+          # ([GITHUB-DEPENDABOT]) — so they never reach this workflow to be
+          # skipped. The ONLY Dependabot PR that ever lands here is a SECURITY
+          # update, which GitHub always opens against the default branch
+          # regardless of `target-branch`, and which the sweep leaves in place
+          # (its base filter is `dependabot-upgrades` only). An actor skip
+          # therefore saved nothing on the routine bumps it was written for and
+          # cost exactly one thing: the vulnerability fix reaching `main` was
+          # the single PR class that merged without a build, a test, or a
+          # dependency review.
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
           echo "Changed files in this PR:"
           printf '%s\n' "$changed"
@@ -141,7 +139,7 @@ jobs:
         run: npm install -g typediagram@0.11.0
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2.85.5
+        uses: taiki-e/install-action@v2.85.13
         with:
           tool: cargo-llvm-cov
 
@@ -181,13 +179,16 @@ jobs:
       - name: Build
         run: make build
 
-      # Duplication gate ([CI-DESLOP]). Self-hosted: run the release binary
-      # built by the step above against this repo. It reads the ratcheted
-      # [threshold] max_duplication_percent from .deslop.toml and exits 3
-      # (failing CI) the moment repo-wide duplication climbs past it. The
-      # threshold is the single source of truth — never hardcoded here.
+      # Duplication gate ([CI-DESLOP]). Self-hosted: runs the release binary
+      # built by the step above against this repo, so the gate is always the
+      # CURRENT detector. It reads the ratcheted [threshold]
+      # max_duplication_percent from .deslop.toml and exits 3 (failing CI) the
+      # moment repo-wide duplication climbs past it. The threshold is the single
+      # source of truth — never hardcoded here. The command lives in `make
+      # dup-gate`, which `make ci` also runs, so a green local run cannot
+      # disagree with this step.
       - name: Duplication gate (deslop)
-        run: ./target/release/deslop . --no-color
+        run: make dup-gate
 
       - name: Deployment manifest and binary gates
         run: make deployment-verify
@@ -366,7 +367,7 @@ jobs:
       - name: Install typediagram
         run: npm install -g typediagram@0.11.0
 
-      - uses: actions/setup-java@v5.6.0
+      - uses: actions/setup-java@v5.7.0
         with:
           distribution: temurin
           java-version: "21"
@@ -423,6 +424,15 @@ jobs:
       - name: Taxonomy content gate
         run: bash scripts/taxonomy-gate.sh
 
+      # Installer fail-closed contract ([DEPLOY-DOCS-INSTALLER-FAILCLOSED]).
+      # The snippet under test IS site content (site/src/docs/index.md and
+      # its zh twin), so a site-only PR can change it while the `ci` job —
+      # where `make lint` normally runs this — is skipped. The one test
+      # written to protect the security-sensitive snippet must run wherever
+      # that snippet can change.
+      - name: Installer snippet contract
+        run: node --test scripts/installer-snippet.test.mjs
+
       - name: Install site dependencies
         working-directory: site
         run: npm ci
@@ -438,11 +448,11 @@ jobs:
   # it only runs on pull_request events (this workflow's trigger).
   security:
     name: security
-    # Skipped for Dependabot, like every other job here: the bump is swept into
-    # `dependabot-upgrades` and reviewed once at the consolidation PR, where this
-    # gate does run. Reviewing a vuln-fix bump for vulnerabilities it is fixing
-    # is pure noise. ([GITHUB-DEPENDABOT])
-    if: github.actor != 'dependabot[bot]'
+    # Runs for Dependabot too. A Dependabot PR only reaches this workflow when
+    # it is a SECURITY update against `main` (see the classifier above), and
+    # that is precisely the PR whose dependency graph needs reviewing — the fix
+    # bump can pull a transitive dependency the advisory said nothing about.
+    # ([GITHUB-DEPENDABOT])
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

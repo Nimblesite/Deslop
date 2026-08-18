@@ -44,9 +44,14 @@
 use std::{path::Path, time::Duration};
 
 use anyhow::{anyhow, Result};
-use deslop_test_support::corpus::{
-    baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
-    reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+use deslop_test_support::{
+    corpus::{
+        baseline_mode, classify, clone_dir, cluster_paths, first_occurrence_text, manifest,
+        reports_clone_spanning, scan, string_field, u64_field, Baseline, CorpusRun, Failure,
+    },
+    corpus_confidence::{
+        check_fused_bounded_max, check_type2_curated_recall, check_type2_gate_liveness,
+    },
 };
 use serde_json::Value;
 
@@ -174,6 +179,9 @@ const GATE_CHECKS: &[&str] = &[
     "recall",
     "boilerplate_rank",
     "data_table_rank",
+    "fused_bounded_max",
+    "type2_gate_liveness",
+    "type2_recall",
     "wall",
     "memory",
 ];
@@ -193,6 +201,15 @@ fn gate(name: &str) -> Result<()> {
     check_recall(&manifest, &run, &mut failures);
     check_boilerplate_not_ranked_first(&manifest, &root, &run, &mut failures)?;
     check_data_tables_not_ranked_as_logic(&root, &run, &mut failures)?;
+    // [CORPUS-BASELINE] The confidence checks. The first two read no
+    // manifest — they judge the *shape* of the rendered report, so they run
+    // on every repository including the ones whose recall is not yet
+    // curated. The third is the curated Type-2 recall assertion
+    // ([CORPUS-RECALL]): it reads `must_find_type2` and asserts nothing
+    // where the manifest curates nothing.
+    check_fused_bounded_max(&run.report, &mut failures);
+    check_type2_gate_liveness(&run.report, &mut failures);
+    check_type2_curated_recall(&manifest, &run.report, &mut failures);
     check_ceilings(&manifest, &run, &mut failures)?;
 
     fail_on(name, GATE_CHECKS, &failures)
@@ -240,7 +257,8 @@ fn report_measurements(name: &str, manifest: &Value, run: &CorpusRun) {
 /// green result is never mistaken for evidence that Deslop is accurate on it.
 /// Such a run has proven only that the scan fit inside its resource budget.
 fn warn_when_accuracy_unasserted(name: &str, manifest: &Value) {
-    let no_recall = array(manifest, "must_find").is_empty();
+    let no_recall =
+        array(manifest, "must_find").is_empty() && array(manifest, "must_find_type2").is_empty();
     let no_precision = manifest.get("must_not_rank_first").is_none();
     if no_recall && no_precision {
         println!(

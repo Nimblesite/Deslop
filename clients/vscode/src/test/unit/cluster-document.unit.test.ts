@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 
 import { clusterDocumentContent } from "../../clusterDocument";
 import type { Report, ReportCluster } from "../../types/report";
+import { emptyReport, repoMetrics } from "./report.helpers";
 
 function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
   return {
@@ -47,27 +48,12 @@ function cluster(overrides: Partial<ReportCluster> = {}): ReportCluster {
 }
 
 function report(clusters: ReportCluster[] = [cluster()]): Report {
-  return {
+  return emptyReport({
     tool_version: "test",
-    min_nodes: 30,
     files_analysed: 2,
-    clusters_hidden: 0,
-    cache_stats: { hits: 0, misses: 0 },
-    metrics: {
-      analysed_loc: 0,
-      duplicated_loc: 0,
-      duplication_percent: 0,
-      clusters_total: clusters.length,
-      duplicated_files: 0,
-      threshold: { percent: 0, breached: false, source: "none" },
-      per_file: [],
-    },
-    schema_doc: "",
-    action_hints: [],
-    boilerplate_hints: [],
-    embedding_provenance: undefined,
+    metrics: repoMetrics({ clusters_total: clusters.length }),
     clusters,
-  };
+  });
 }
 
 suite("cluster document", () => {

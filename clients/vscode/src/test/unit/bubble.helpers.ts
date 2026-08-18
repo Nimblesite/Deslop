@@ -4,10 +4,11 @@
 
 import * as assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { LiveBubble } from "../../bubble/live";
+import type { LanguageClient } from "vscode-languageclient/node";
+import { BudgetScheduler, LiveBubble } from "../../bubble/live";
 import { ReportStore } from "../../reportStore";
 import { Bucket, Report, ReportCluster } from "../../types/report";
-import { reportWithClusters } from "./report.helpers";
+import { repoMetrics, reportWithClusters } from "./report.helpers";
 
 export interface ClusterSignalOptions {
   // Engine-routed wire bucket. `resolveBucket` prefers it over
@@ -142,9 +143,21 @@ function activeCall(calls: DecorationCall[]): DecorationCall {
   return { texts: [], hovers: [] };
 }
 
+// A single line of known content so `probe()` can compute ranges and UTF-8
+// byte offsets deterministically against the capturing editor.
+const FAKE_DOCUMENT_LINE = "0123456789abcdefghijklmnopqrstuvwxyz";
+
 function fakeDocument(file: string): vscode.TextDocument {
   return {
     uri: vscode.Uri.file(file),
+    version: 1,
+    offsetAt: (position: vscode.Position) => position.character,
+    positionAt: (offset: number) =>
+      new vscode.Position(0, Math.min(offset, FAKE_DOCUMENT_LINE.length)),
+    getText: (range?: vscode.Range) =>
+      range
+        ? FAKE_DOCUMENT_LINE.slice(range.start.character, range.end.character)
+        : FAKE_DOCUMENT_LINE,
     lineAt: () => ({
       range: new vscode.Range(
         new vscode.Position(0, 0),
@@ -154,10 +167,87 @@ function fakeDocument(file: string): vscode.TextDocument {
   } as unknown as vscode.TextDocument;
 }
 
+// The content-change event `onEdit` hands to `probe`: an insertion of
+// `text` at `startChar` on the fake document's single line.
+export function editAt(
+  startChar: number,
+  text: string,
+): vscode.TextDocumentContentChangeEvent {
+  const start = new vscode.Position(0, startChar);
+  return {
+    range: new vscode.Range(start, start),
+    rangeOffset: startChar,
+    rangeLength: 0,
+    text,
+  };
+}
+
+export interface DeferredProbeRequest {
+  params: { path: string; start_byte: number; end_byte: number };
+  token: vscode.CancellationToken;
+  resolve(clusters: ReportCluster[]): void;
+  reject(error: Error): void;
+}
+
+// A fake LSP client whose findSimilar responses are deferred promises the
+// test settles by hand — the deterministic way to stage out-of-order probe
+// completions. No timers, no sleeps: the test holds each probe() promise
+// and awaits it only after settling that probe's deferred response.
+export function deferredProbeClient(): {
+  client: LanguageClient;
+  requests: DeferredProbeRequest[];
+} {
+  const requests: DeferredProbeRequest[] = [];
+  const client = {
+    sendRequest: (
+      _method: string,
+      params: DeferredProbeRequest["params"],
+      token: vscode.CancellationToken,
+    ) =>
+      new Promise((resolve, reject) => {
+        requests.push({ params, token, resolve, reject });
+      }),
+  } as unknown as LanguageClient;
+  return { client, requests };
+}
+
+export async function resolveProbe(
+  request: DeferredProbeRequest | undefined,
+  probe: Promise<void>,
+  cancellationExpected?: boolean,
+  clusters: ReportCluster[] = [probeCluster("c-a", 10, 0.95)],
+): Promise<void> {
+  assert.ok(request !== undefined, "probe request must exist");
+  if (cancellationExpected !== undefined) {
+    assert.equal(
+      request.token.isCancellationRequested,
+      cancellationExpected,
+      `request cancellation must be ${cancellationExpected}`,
+    );
+  }
+  request.resolve(clusters);
+  await probe;
+}
+
 export interface BubbleFixture {
   store: ReportStore;
   capture: BubbleCapture;
   bubble: LiveBubble;
+}
+
+export async function openLiveDocument(content: string): Promise<{
+  doc: vscode.TextDocument;
+  editor: vscode.TextEditor;
+  store: ReportStore;
+}> {
+  const doc = await vscode.workspace.openTextDocument({
+    content,
+    language: "csharp",
+  });
+  const editor = await vscode.window.showTextDocument(doc);
+  const store = new ReportStore();
+  store.setSnapshot(probeReport(), 0);
+  return { doc, editor, store };
 }
 
 // One assembled live-bubble rig: a store seeded with `snapshot` (pass
@@ -170,6 +260,8 @@ export async function bubbleFixture(
     snapshot?: Report | null;
     generation?: number;
     mode?: "inline" | "ghost";
+    client?: LanguageClient;
+    budget?: BudgetScheduler;
   } = {},
 ): Promise<BubbleFixture> {
   const store = new ReportStore();
@@ -180,7 +272,7 @@ export async function bubbleFixture(
   return {
     store,
     capture: capturingEditor(),
-    bubble: new LiveBubble(store, () => undefined),
+    bubble: new LiveBubble(store, () => options.client, options.budget),
   };
 }
 
@@ -199,6 +291,35 @@ export function assertBubbleShows(
     `${context}: expected the ${title} title`,
   );
   return visible ?? "";
+}
+
+export function renderFullConfidenceBubble(
+  capture: BubbleCapture,
+  bubble: LiveBubble,
+  startChar: number,
+  clusterId: string,
+): string {
+  bubble.render(capture.editor, span(startChar), [
+    probeCluster(clusterId, 10, 0.95),
+  ]);
+  return assertBubbleShows(
+    capture,
+    "Identical code",
+    `expected ${clusterId} at character ${startChar}`,
+  );
+}
+
+export function retractCluster(store: ReportStore, clusterId: string): void {
+  store.applyDelta({
+    from_generation: 1,
+    to_generation: 2,
+    clusters_added: [],
+    clusters_removed: [clusterId],
+    clusters_updated: [],
+    metrics: repoMetrics({ analysed_loc: 10 }),
+    cache_stats: { hits: 0, misses: 0 },
+    tool_version: "v2",
+  });
 }
 
 export function capturingEditor(file = "/tmp/A.cs"): BubbleCapture {

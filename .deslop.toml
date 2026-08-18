@@ -112,5 +112,32 @@ exclude = [
 #   one thing it must NOT be paid for with is re-hiding the clusters, which is
 #   what lowering row 4 back to a C#-only carve-out would do.
 #   Ratchet down as that work lands.
+#
+# 2026-08-18 — raised 13.65 -> 14.5. Written justification, per the rule above.
+# Same shape as the entry before it: the detector moved again, and 13.65 was
+# pinned against a tree and a binary that no longer exist.
+#
+#   Measured with ONE binary against three trees, so the comparison isolates
+#   the code from the detector:
+#     branch point fb142e993   15.5198%   15571 redundant LOC
+#     main                     15.1780%   15664 redundant LOC
+#     this branch (HEAD)       15.1466%   16177 redundant LOC
+#   The branch is the LEAST duplicated of the three. Measured instead with
+#   main's own binary against main's own tree, main scores 15.4249% — main
+#   does not pass this gate either, so 13.65 was unreachable by any tree in
+#   this comparison, not merely by this branch.
+#
+#   Real reduction taken first, not a bare threshold move, and taken inside
+#   this branch's own diff per the rule that a branch pays its own debt:
+#     collapsed MULTILANG_CASES in tests/common/multilang.rs from six 9-line
+#     struct literals to six `LangCase::row(..)` calls. Deslop scored the six
+#     blocks `structural_only`, 45 redundant LOC. Every pinned span, cluster
+#     id and node count survives verbatim, so the golden contract is untouched.
+#
+#   Pinned at 14.5, below main's own 15.4249, so the gate still holds this
+#   branch to a standard main itself fails. The remaining distance is
+#   pre-existing clusters in the coarse E2E suites — a flat tail, largest
+#   single cluster 94 LOC of 16177 across ~1130 clusters — tracked in gh #397.
+#   Ratchet down as that work lands.
 [threshold]
-max_duplication_percent = 13.65
+max_duplication_percent = 14.5

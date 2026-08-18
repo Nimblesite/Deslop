@@ -1,6 +1,8 @@
 # Severity model
 
-> **Status: ⏳ Planned (#177).** Today the LSP publishes every cluster using bucket severity (`Identical → Error`, others `→ Warning`) with no master gate or percentile floor, while the VSIX colours by rank percentile. This file specifies the target configurable maps, off-by-default gate, and percentile floors; see [LSP-SEVERITY-BUCKET](lsp.md#lsp-severity-bucket).
+> **Status: ⏳ Partly shipped, remainder planned (#177).** [SEVERITY-DESLOP-MAP] and [SEVERITY-COLOR] **ship**: `clients/vscode/src/severity.ts::resolveSeverity` resolves the two channels and every VSIX paint surface consumes it. What remains planned is the *configurability* — the `deslop.severity.*` / `deslop.diagnostics.severity.*` settings, the master gate, and the percentile floors; today the LSP publishes every cluster at its bucket default with no gate. See [LSP-SEVERITY-BUCKET](lsp.md#lsp-severity-bucket).
+>
+> **The VSIX previously coloured by rank percentile, and that was a defect, not a staging decision.** Colour and glyph density are two channels ([SEVERITY-COLOR]); driving both from the ranking left the colour channel carrying no bucket information at all. On a report whose top cluster was a content-gated `StructuralOnly` family, the paint came out *inverted*: the demoted family rendered crimson — the "safe to extract" colour — while the byte-proven `Identical` clone one rank below it rendered blue. Pinned by `severity.unit.test.ts::a demoted shape-only family is not painted with act-now severity`.
 
 Deslop owns a **severity** concept that is independent of any one editor surface. A cluster's severity is derived from its **bucket** ([taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets)) through user-configurable maps, and is then **projected** onto two surfaces that consume it differently. This file is the single source of truth for that model; [lsp.md §LSP-SEVERITY](lsp.md#lsp-severity) describes the diagnostic projection and [vsix.md §VSIX-SEVERITY-CONTROL](vsix.md#vsix-severity-control) describes the in-panel UI that drives it.
 
@@ -26,9 +28,12 @@ Every bucket resolves to one of four levels. There is **no `none`** here: colour
 | `Identical` | `error` | red |
 | `NearlyIdentical` | `warning` | amber |
 | `LooselySimilar` | `information` | blue |
+| `StructuralOnly` | `hint` | muted |
 | `SameBehavior` | `hint` | grey |
 
-Configurable per bucket via `deslop.severity.identical` / `.nearlyIdentical` / `.looselySimilar` / `.sameBehavior`. Lowering `Identical` to `hint` greys its bubble; raising `SameBehavior` to `error` paints its bubble red. The map only changes presentation — it never reorders the worst-first ranking ([pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)).
+**`error` is reserved for `Identical` and is the only level that says "act now".** `StructuralOnly` sits at `hint` with the muted/outline band [taxonomy.md §CLONE-BUCKETS](taxonomy.md#clone-buckets) already assigns it: its own action sentence is *"Verify before extracting"*, so a family the content gate demoted ([FUSION-CONTENT-GATE](fusion.md)) must never wear the paint that means the opposite — however heavily it ranks. `severity.unit.test.ts::only act-now buckets may wear an act-now colour` asserts the reservation directly, so a future remap cannot hand crimson back to an unvouched bucket.
+
+Configurable per bucket via `deslop.severity.identical` / `.nearlyIdentical` / `.looselySimilar` / `.structuralOnly` / `.sameBehavior`. Lowering `Identical` to `hint` greys its bubble; raising `SameBehavior` to `error` paints its bubble red. The map only changes presentation — it never reorders the worst-first ranking ([pipeline.md §PIPELINE-RANK-WORST-FIRST](pipeline.md#pipeline-rank-worst-first)).
 
 ### [SEVERITY-DIAGNOSTICS] Diagnostic severity — drives the Problems panel, off by default
 
@@ -64,7 +69,9 @@ Two visual channels carry two orthogonal facts on every cluster row and bubble:
 - **Colour** = the cluster's Deslop severity ([SEVERITY-DESLOP-MAP]). Answers *how alarming is this kind of duplicate*: red / amber / blue / grey.
 - **Glyph density** = the cluster's weight percentile ([lsp.md §LSP-SEVERITY-PERCENTILE](lsp.md#lsp-severity-percentile)). Answers *how big an offender is this specific cluster*: `●●` (worst) · `●` (top 10%) · `◐` (top 50%) · `○` (rest).
 
-A faint identical clone therefore renders as a red `○`, while a high-impact loosely-similar cluster renders as a blue `●●`. `resolveSeverity(bucket, percentile)` in `clients/vscode/src/severity.ts` is the single resolver for every visual surface ([VSIX-PRINCIPLES] principle 6).
+A faint identical clone therefore renders as a red `○`, while a high-impact loosely-similar cluster renders as a blue `●●`. `resolveSeverity(bucket, percentile)` in `clients/vscode/src/severity.ts` is the single resolver for every visual surface ([VSIX-PRINCIPLES] principle 6). It returns **both** channels together — `{ level, band }` — precisely so a caller cannot reach for one and silently render the other fact.
+
+**Neither channel may answer for the other, and the percentile channel structurally cannot.** The band is monotonic down the ranking by construction, so any answer it gives for one demoted cluster it must give for every cluster below it too; asking it to also encode the bucket is unsatisfiable, not merely unimplemented. That is why the demotion evidence lives in colour. A content-gated family topping the report renders as a muted `●●`: loud about *impact*, quiet about *kind*. Pinned by `severity.unit.test.ts` — `severity never brightens as rank worsens, at any confidence` (band) and `the colour channel is a pure function of the bucket, at every rank` (level) hold simultaneously only because the channels are separate.
 
 ### [SEVERITY-CONFIG] Configuration surface
 

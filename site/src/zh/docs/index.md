@@ -40,7 +40,7 @@ lang: zh
 
 > **离线或隔离网络环境？** 从[发布页](/zh/releases/)或[最新的 GitHub release](https://github.com/Nimblesite/Deslop/releases/latest) 获取 `.vsix`，并通过**扩展面板 → `…` 菜单 → 从 VSIX 安装…**进行安装。
 
-## 仅安装 CLI（Homebrew / Scoop）
+## 仅安装 CLI（Homebrew / Scoop / curl）
 
 ### macOS / Linux（Homebrew）
 
@@ -60,6 +60,41 @@ deslop --version
 ```
 
 Bucket 源：[github.com/Nimblesite/scoop-bucket](https://github.com/Nimblesite/scoop-bucket)。
+
+### macOS / Linux（curl）
+
+没有 Homebrew？直接从最新的 GitHub release 拉取归档文件。以下脚本会解析最新版本号，选择对应平台，校验官方发布的 SHA-256 校验和，并安装与 Homebrew formula 相同的三个二进制文件（`deslop`、`deslop-lsp`、`deslop-mcp`）。脚本采用失败即终止的方式：下载或校验和验证失败时，不会解压也不会安装任何内容：
+
+```bash
+(
+  set -euo pipefail
+  base="${DESLOP_RELEASE_BASE:-https://github.com/Nimblesite/Deslop/releases}"
+  tag="${DESLOP_TAG:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${base}/latest")}"
+  tag="${tag##*/}"      # 例如 v1.2.3
+  version="${tag#v}"    # 例如 1.2.3
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64)  platform=linux-x64 ;;
+    Linux-aarch64) platform=linux-arm64 ;;
+    Darwin-arm64)  platform=macos-arm64 ;;
+    Darwin-x86_64) platform=macos-x64 ;;
+    *) echo "unsupported platform: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+  esac
+  archive="deslop-${version}-${platform}.tar.gz"
+  workdir="$(mktemp -d)"
+  trap 'rm -rf "$workdir"' EXIT
+  cd "$workdir"
+  curl -fsSLO "${base}/download/${tag}/${archive}"
+  curl -fsSLO "${base}/download/${tag}/${archive}.sha256"
+  if command -v sha256sum >/dev/null; then sha256sum -c "${archive}.sha256"; else shasum -a 256 -c "${archive}.sha256"; fi
+  tar -xzf "$archive"
+  sudo install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} /usr/local/bin/
+  deslop --version
+)
+```
+
+若想安装到用户目录，可将 `sudo install` 那一行换成 `mkdir -p ~/.local/bin && install -m 755 "deslop-${version}-${platform}"/deslop{,-lsp,-mcp} ~/.local/bin/`（无需 `sudo`），并确保 `~/.local/bin` 在你的 `PATH` 中。
+
+若要固定某个特定版本而非最新版，可在运行脚本前于环境中设置 `DESLOP_TAG=vX.Y.Z`。
 
 ### 直接下载
 

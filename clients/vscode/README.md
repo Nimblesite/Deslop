@@ -16,7 +16,7 @@ Every panel refreshes as you type, and the same live report backs the MCP tools 
 
 ## Features
 
-- **Live duplication bubble.** The moment you type code that matches an existing cluster, a severity-coloured label — **Identical code**, **Nearly identical code**, **Same shape, different content**, **Loosely similar code**, or **Same behavior, different code** (AI match) — appears at the end of the line, with a signal strip showing how structural, token, and embedding similarity scored.
+- **Live duplication bubble.** The moment you type code that matches an existing cluster, a severity-coloured label — **Identical code**, **Nearly identical code**, **Same shape, different content**, **Loosely similar code**, or **Same behavior, different code** (AI match) — appears at the end of the line, with a signal strip showing how shape, semantic, and content-gated confidence scored.
 - **Worst-first activity-bar view.** The **Top Offenders** view always has cluster `#1` — the single highest-impact offender in the whole workspace — one click away. No drilling.
 - **Ollama-powered semantic matches.** Plug in any local embedding model (`nomic-embed-code`, `nomic-embed-text`, `unixcoder`, your own) via the built-in picker. Stays loopback-only.
 - **Live report webview.** Sorted worst-first, filterable by language / severity / path, refreshes as you type via Preact Signals.

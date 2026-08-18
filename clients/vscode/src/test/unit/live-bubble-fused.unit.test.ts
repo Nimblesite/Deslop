@@ -8,14 +8,13 @@
 // These tests pin what the user must see on the live surface as a result.
 
 import * as assert from "node:assert/strict";
-import { LiveBubble, signalStrip } from "../../bubble/live";
-import { ReportStore } from "../../reportStore";
+import { signalStrip } from "../../bubble/live";
 import { FUSED_THRESHOLD, bucketLabels } from "../../types/report";
 import {
   BubbleCapture,
   assertBubbleShows,
   bubbleCluster,
-  capturingEditor,
+  bubbleFixture,
   setBubbleMode,
   span,
 } from "./bubble.helpers";
@@ -43,15 +42,13 @@ function assertShowing(
 }
 
 suite("LiveBubble fused confidence", () => {
-  // 🛑 SKIPPED — DEFECT A. This test is correct and the code is wrong.
-  // `bestBubbleCluster` gates on a UI-local `fused >= FUSED_THRESHOLD`
-  // instead of the engine's bucket, so act-now clusters below 0.85 are
-  // silently withheld from the flagship live surface. Skipped under an
-  // explicit owner mandate to unblock the release — NOT because the
-  // assertion is wrong. Do not delete it, do not weaken it: un-skip it as
-  // part of the fix.
+  // DEFECT A — restored. `bestBubbleCluster` gated on a UI-local
+  // `fused >= FUSED_THRESHOLD` instead of the engine's bucket, so act-now
+  // clusters below 0.85 were silently withheld from the flagship live
+  // surface. `bubbleAdmits` now takes the engine's verdict for an act-now
+  // bucket and keeps the fused cutoff for everything below it.
   // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
-  test.skip("an act-now near miss below the fused cutoff still reaches the bubble", async () => {
+  test("an act-now near miss below the fused cutoff still reaches the bubble", async () => {
     // A genuine Type-3 near miss: identical shape, real edits, so
     // positional agreement is ~0.8 and the gate renders fused = 0.80
     // while the engine still routes `nearly_identical`. The bubble must
@@ -63,11 +60,9 @@ suite("LiveBubble fused confidence", () => {
       token: 1,
       occurrenceTotal: 3,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([near]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([near]),
+    });
 
     try {
       // 1. The user's cursor lands on the near miss.
@@ -143,11 +138,9 @@ suite("LiveBubble fused confidence", () => {
       structural: 1,
       token: 1,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([shapeOnly, proven]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([shapeOnly, proven]),
+    });
 
     try {
       // 1. The probe returns both; the heavier demoted family must lose.
@@ -200,11 +193,9 @@ suite("LiveBubble fused confidence", () => {
       token: 0.3,
     });
     const staleProbe = bubbleCluster("c-x", 50, 0.99, { bucket: "identical" });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([demotedInReport]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { store, capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([demotedInReport]),
+    });
 
     try {
       // 1. An over-confident probe cannot override a demoted report entry.
@@ -247,14 +238,13 @@ suite("LiveBubble fused confidence", () => {
     }
   });
 
-  // 🛑 SKIPPED — DEFECT C. This test is correct and the code is wrong.
-  // `signalStrip` draws structural/token/embedding and never draws the
-  // fused confidence, so a verbatim copy and a proven rename both render
-  // "██▁" — the user cannot tell "safe to extract" from "identifiers
-  // differ". Skipped under an explicit owner mandate to unblock the
-  // release. Do not delete, do not weaken: un-skip it as part of the fix.
+  // DEFECT C — restored. `signalStrip` drew structural/token/embedding, so
+  // a verbatim copy and a proven rename both rendered "█▁█" and the user
+  // could not tell "safe to extract" from "identifiers differ". The strip
+  // is still three bars — shape, semantic, confidence — because the two
+  // shape views are one piece of evidence and only `fused` separates them.
   // → docs/plans/fused-score-followups.md § "Skipped VSIX tests to restore"
-  test.skip("the signal strip distinguishes a proven rename from a verbatim copy", () => {
+  test("the signal strip distinguishes a proven rename from a verbatim copy", () => {
     // Both render structural 1.0 and token 1.0 — the rename's token
     // signal is corrected upward by the Merkle argument (#232) — so the
     // three-bar strip collapses them. The only thing separating a "safe
@@ -299,6 +289,44 @@ suite("LiveBubble fused confidence", () => {
     );
   });
 
+  test("the full block is reserved for proof, so 0.96 and 1.00 stay apart", () => {
+    // The band the 0.90 fixture above never reached. `bar()` rounded
+    // `value * 7`, which handed `█` to everything from ~0.929 up — so the
+    // third bar, added precisely to separate proof from near-proof, drew the
+    // same glyph for both. These are real rendered values: a scan of two F#
+    // modules one identifier apart renders `nearly_identical` at fused 0.956
+    // beside `identical` at 1.00.
+    const proven = bubbleCluster("p", 10, 1.0, { bucket: "identical" });
+    const nearly = bubbleCluster("n", 10, 0.956, { bucket: "nearly_identical" });
+
+    assert.notEqual(
+      signalStrip(proven),
+      signalStrip(nearly),
+      `fused 1.00 and 0.956 must not render the same strip; both drew ` +
+        `"${signalStrip(nearly)}" before the top glyph was reserved`,
+    );
+    assert.ok(
+      signalStrip(proven).endsWith("█"),
+      "an exact 1.0 earns the full block",
+    );
+    assert.equal(
+      signalStrip(nearly).endsWith("█"),
+      false,
+      "and anything short of proof must not",
+    );
+
+    // The reservation is on the value, not on the bucket: every band below
+    // 1.0 has to stay off the top glyph, however close it sits.
+    for (const value of [0.929, 0.95, 0.99, 0.999]) {
+      const cluster = bubbleCluster("x", 10, value, { bucket: "nearly_identical" });
+      assert.equal(
+        signalStrip(cluster).endsWith("█"),
+        false,
+        `fused ${value} is not proof and must not draw the proof glyph`,
+      );
+    }
+  });
+
   test("a sub-threshold hint bucket stays off the live surface at the exact cutoff", async () => {
     // Below the act-now bands the fused cutoff is the right gate: a weak
     // LSH hint is worth showing only once it clears FUSED_THRESHOLD.
@@ -312,11 +340,9 @@ suite("LiveBubble fused confidence", () => {
       structural: 0.4,
       token: 0.9,
     });
-    const store = new ReportStore();
-    store.setSnapshot(reportWithClusters([atCutoff, underCutoff]), 0);
-    await setBubbleMode("inline");
-    const capture = capturingEditor();
-    const bubble = new LiveBubble(store, () => undefined);
+    const { capture, bubble } = await bubbleFixture({
+      snapshot: reportWithClusters([atCutoff, underCutoff]),
+    });
 
     try {
       // 1. Just under the cutoff: nothing.

@@ -147,7 +147,7 @@ pub(crate) fn assert_all_refused_with(
 ) -> Result<()> {
     let plans = merge_plans(fixture_name, file_name)?;
     ensure!(!plans.is_empty(), "{fixture_name} produces clusters");
-    let mut matched = false;
+    let mut reasons = Vec::new();
     for plan in plans {
         let MergeVerdict::AiOrHuman { reason } = plan.verdict else {
             return Err(anyhow!(
@@ -155,9 +155,13 @@ pub(crate) fn assert_all_refused_with(
                 plan.cluster_id
             ));
         };
-        matched = matched || reason.contains(needle);
+        reasons.push(format!("{}: {reason}", plan.cluster_id));
     }
-    ensure!(matched, "{fixture_name}: some refusal names `{needle}`");
+    ensure!(
+        reasons.iter().any(|reason| reason.contains(needle)),
+        "{fixture_name}: some refusal names `{needle}`; actual refusals:\n{}",
+        reasons.join("\n")
+    );
     Ok(())
 }
 
