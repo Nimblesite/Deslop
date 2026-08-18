@@ -105,6 +105,10 @@ Embedding refreshes are always low priority with bounded batches and yield state
 
 Progress is observable: `queued`, `starting`, `running`, `complete`, `failed`.
 
+The terminal phase is a function of **the embeddings the pass produced**, never of whether the pipeline returned a report. A refresh that indexed no subtrees while attempting some has produced no semantic axis at all: it terminates `failed`, with `done = 0` and a message naming the provider failure, and `latest_report` keeps the last good generation. Committing that embeddings-off snapshot and announcing `complete` would tell the user the semantic pass ran while every clone that needed it is missing from the report — a false negative with no surface on which to notice it. Pinned by `deslop-lsp/tests/embedding_failure_progress.rs`; the code that violated it is quarantined under `[QUARANTINE-EMBED-REFRESH-COMPLETE]`.
+
+The one-shot CLI is a different contract: it renders whatever the pass measured, and `EmbeddingProvenance` carries `attempted_subtrees` / `indexed_subtrees` / `failed_subtrees` so a wholly failed pass is visible in the report rather than suppressed (`deslop/tests/ollama_failures.rs`).
+
 A user-approved model switch from either live surface writes the shared workspace embedding settings (`.vscode/settings.json` keys `deslop.embedding.*`). The MCP must not hold a successful model change in process memory only — it writes the settings file so LSP picks it up on config reload.
 
 ### [LIVE-STATE] In-process state

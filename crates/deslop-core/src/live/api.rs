@@ -352,7 +352,9 @@ async fn commit_background_refresh(
     }
 }
 
-/// 🛑 ACCURACY QUARANTINE (GH #370). Do not repair this without the test.
+/// 🛑 ACCURACY QUARANTINE `[QUARANTINE-EMBED-REFRESH-COMPLETE]` (GH #370),
+/// against the terminal-phase rule in [LIVE-EMBEDDING-CONSENT]. Do not
+/// repair this without the test.
 ///
 /// **What the deleted code did.** [`commit_background_refresh`] swapped
 /// the refreshed report over the last good one and then called

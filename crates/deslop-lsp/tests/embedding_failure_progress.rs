@@ -1,9 +1,19 @@
-//! Real-LSP regression for failed background embedding refreshes.
+//! Real-LSP regression for failed background embedding refreshes
+//! ([LIVE-EMBEDDING-CONSENT], terminal-phase rule).
 //!
 //! Explicit model selection is a user-requested operation. A provider that
 //! rejects every real embedding must emit terminal `failed` progress and
 //! leave the last good report untouched — never commit an embeddings-off
 //! snapshot and call it `complete`.
+//!
+//! This assertion is **red on purpose**. It exposed a live false negative
+//! the moment GH #370's stderr deadlock stopped hiding it: the refresh
+//! announced `phase = "complete", done = 851` after the provider rejected
+//! all 851 subtrees. The code that did so is quarantined under
+//! `[QUARANTINE-EMBED-REFRESH-COMPLETE]` in
+//! `deslop-core/src/live/api.rs`, which now panics rather than announce a
+//! refresh that produced no embeddings as a success. Do not weaken this
+//! test to make the tree green.
 
 #[path = "../../deslop/tests/cli/mock_ollama.rs"]
 mod mock_ollama;
