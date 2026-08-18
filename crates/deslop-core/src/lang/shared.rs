@@ -31,17 +31,19 @@ pub const IDENTIFIER_KIND: &str = "__ident__";
 /// constant edits do not perturb the fingerprint.
 pub const LITERAL_KIND: &str = "__literal__";
 
-/// Maximum nesting depth of a normalised AST. Files whose tree-sitter
-/// tree nests deeper than this are rejected with [`CoreError::AstTooDeep`]
-/// so the deep structure never reaches the pipeline's recursive tree
-/// walks (fingerprinting, sibling windows, token extraction), which would
-/// otherwise overflow the stack and abort the whole run.
+/// Maximum nesting depth of a normalised AST. Files whose tree-sitter tree
+/// nests deeper than this are rejected with [`CoreError::AstTooDeep`], so a
+/// pathologically deep file is skipped rather than analysed (#168).
 ///
-/// Real source ASTs are at most low-hundreds deep, so this leaves ample
-/// headroom while staying well under the overflow threshold on both the
-/// CLI's 8 MB main thread and the LSP/MCP server's ~2 MB async worker
-/// threads (the fingerprint walk, the actual overflow site, runs only on
-/// accepted files at depth `< MAX_AST_DEPTH`).
+/// This is a bound on work, not a stack-safety mechanism, and it must not be
+/// used as one. It was: the merkle walk recursed with a ~1.9 KB
+/// `blake3::Hasher` live per frame, so ~450 accepted levels exhausted a 1 MB
+/// stack and killed the process — the guard sat *above* the overflow point
+/// and admitted exactly the files that crashed. Lowering it to 150 hid that
+/// by skipping 36 real `dotnet/fsharp` files, converting a crash into silent
+/// false negatives. The walks are iterative instead
+/// ([`crate::fingerprint`]), so depth no longer consumes stack and this
+/// value is free to bound work alone.
 pub const MAX_AST_DEPTH: usize = 500;
 
 /// Parses `source` with `language` and returns the tree-sitter
