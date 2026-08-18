@@ -15,15 +15,19 @@ use std::{
 use crate::{
     cluster::Cluster,
     config::ExclusionConfig,
+    diff_scope::DiffScope,
     report_render::relative_to_scan_root,
     state::{FileId, FileRegistry},
 };
 
-// `RepoMetrics`, `ThresholdSummary`, and `ThresholdSource` are generated
-// from `docs/models/live-ipc.td` by `scripts/typediagram-gen.mjs`. The
-// data shapes live in `crate::wire_generated`; the constructors and
-// `Default` impl below stay here.
-pub use crate::wire_generated::{FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary};
+// `RepoMetrics`, `DiffMetrics`, `ThresholdSummary`, and
+// `ThresholdSource` are generated from `docs/models/live-ipc.td` by
+// `scripts/typediagram-gen.mjs`. The data shapes live in
+// `crate::wire_generated`; the constructors and `Default` impl below
+// stay here.
+pub use crate::wire_generated::{
+    DiffMetrics, FileMetric, RepoMetrics, ThresholdSource, ThresholdSummary,
+};
 
 impl RepoMetrics {
     /// Returns an empty metrics block (all counters zero, threshold
@@ -39,6 +43,7 @@ impl RepoMetrics {
             duplicated_files: 0,
             threshold: ThresholdSummary::none(),
             per_file: Vec::new(),
+            diff: None,
         }
     }
 
@@ -116,6 +121,10 @@ pub struct MetricsInputs<'a, S: BuildHasher> {
     /// metrics rows carry the same path form as occurrence rows
     ///.
     pub scan_root: &'a Path,
+    /// Verified diff scope when the run carried `--diff`. Drives the
+    /// [METRICS-DIFF-SCOPE] added-line block; `None` leaves
+    /// `RepoMetrics.diff` absent and every mechanical field untouched.
+    pub diff: Option<&'a DiffScope>,
 }
 
 /// Computes [`RepoMetrics`] for a finished analysis pass. The returned
@@ -149,6 +158,37 @@ pub fn compute_repo_metrics<S: BuildHasher>(inputs: &MetricsInputs<'_, S>) -> Re
         duplicated_files,
         threshold: ThresholdSummary::none(),
         per_file: per_file_metrics(&per_file_lines, inputs),
+        diff: inputs
+            .diff
+            .map(|scope| diff_metrics(&per_file_lines, inputs, scope)),
+    }
+}
+
+/// Builds the [METRICS-DIFF-SCOPE] added-line block. The numerator is
+/// the intersection of the *same* per-file duplicated-line projection
+/// `duplicated_loc` counts with the diff's added spans — computed here,
+/// beside it, from the same `per_file_lines` sets, so the two figures
+/// can never diverge in projection. Threshold stays `none()`; the CLI
+/// resolves it only under `--only-changed`.
+fn diff_metrics<S: BuildHasher>(
+    per_file_lines: &HashMap<FileId, BTreeSet<u64>>,
+    inputs: &MetricsInputs<'_, S>,
+    scope: &DiffScope,
+) -> DiffMetrics {
+    let added_loc = scope.added_line_total();
+    let duplicated_added_loc: u64 = per_file_lines
+        .iter()
+        .filter_map(|(file_id, lines)| {
+            let path = relative_to_scan_root(inputs.registry.path(*file_id)?, inputs.scan_root);
+            let inside = lines.iter().filter(|line| scope.contains(&path, **line));
+            u64::try_from(inside.count()).ok()
+        })
+        .sum();
+    DiffMetrics {
+        added_loc,
+        duplicated_added_loc,
+        duplication_percent: percent(duplicated_added_loc, added_loc),
+        threshold: ThresholdSummary::none(),
     }
 }
 

@@ -109,6 +109,10 @@ pub(crate) fn cluster_to_report<S: BuildHasher>(
         occurrences_truncated: false,
         summary,
         interpretation,
+        // Stamped by `diff_scope::tag_clusters` after rendering when a
+        // verified diff is in scope; absent otherwise.
+        intersects_diff: None,
+        is_newly_introduced: None,
     }
 }
 
@@ -139,6 +143,9 @@ pub(crate) fn occurrence<S: BuildHasher>(
         start_line,
         end_line,
         hidden,
+        // Stamped by `diff_scope::tag_clusters` after rendering when a
+        // verified diff is in scope; absent otherwise.
+        in_diff: None,
     }
 }
 

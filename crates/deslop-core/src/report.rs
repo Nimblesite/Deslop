@@ -147,6 +147,11 @@ pub struct ReportInputs<'a, S: BuildHasher> {
     pub analysed_lines: &'a AnalysedLines,
     /// Import/prologue ranges suppressed before clustering.
     pub boilerplate_ranges: &'a [BoilerplateRange],
+    /// Verified diff scope when the run carried `--diff`
+    /// ([CLI-ARG-DIFF]). Drives occurrence/cluster tagging
+    /// ([OUTPUT-SCHEMA-DIFF-TAGS]) and `metrics.diff`
+    /// ([METRICS-DIFF-SCOPE]); `None` leaves every diff field absent.
+    pub diff: Option<&'a crate::diff_scope::DiffScope>,
 }
 
 /// Converts the internal representation into a report ready for
@@ -191,7 +196,14 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         exclusion: inputs.exclusion,
         analysed_lines: inputs.analysed_lines,
         scan_root: inputs.scan_root,
+        diff: inputs.diff,
     });
+    // [OUTPUT-SCHEMA-DIFF-TAGS] Tags are stamped on the exact cluster
+    // list the report carries — after hiding and reweighing — so a
+    // tagged report and an untagged one always list identical clusters.
+    if let Some(scope) = inputs.diff {
+        crate::diff_scope::tag_clusters(&mut visible_clusters, scope);
+    }
     // Resolve the [EXIT-CODES] duplication gate here so every surface that
     // renders through this path carries the breach verdict — the live
     // LSP/MCP servers, not just the CLI. `compute_repo_metrics` leaves it
@@ -217,6 +229,9 @@ pub fn render_report<S: BuildHasher>(inputs: ReportInputs<'_, S>) -> Report {
         boilerplate_hints,
         embedding_provenance: inputs.embedding_provenance,
         clusters: visible_clusters,
+        // Set by `diff_scope::apply_only_changed` when the CLI filters;
+        // absent otherwise ([CLI-ARG-ONLY-CHANGED]).
+        clusters_outside_diff: None,
     }
 }
 

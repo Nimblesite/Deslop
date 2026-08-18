@@ -107,6 +107,7 @@ impl PipelineSession {
             sources: &self.sources,
             analysed_lines: &self.analysed_lines,
             boilerplate_ranges: &self.boilerplate_ranges,
+            diff: self.diff_scope.as_ref(),
         }))
     }
 }

@@ -97,6 +97,33 @@ pub enum CoreError {
         path: PathBuf,
     },
 
+    /// A `--diff` input is not well-formed unified diff text
+    /// ([CLI-ARG-DIFF]). Carries the 1-indexed line of the diff text
+    /// (not of any source file) so the user can find the defect.
+    #[error("invalid unified diff at line {line}: {message}")]
+    DiffParse {
+        /// 1-indexed line within the diff text that failed to parse.
+        line: usize,
+        /// What the parser expected or refused.
+        message: String,
+    },
+
+    /// A `--diff` input parsed but does not byte-match the scanned
+    /// tree ([CLI-ARG-DIFF]): a context or added line disagrees with
+    /// the file content at its new-side line number. Tagging against a
+    /// stale diff would mislabel every downstream population, so the
+    /// run is refused.
+    #[error(
+        "diff does not match the scanned tree: {path} differs at line {line}; \
+         regenerate the diff against the analysed revision"
+    )]
+    DiffStale {
+        /// Scan-root-relative path of the mismatching file.
+        path: PathBuf,
+        /// 1-indexed new-side line number where the bytes disagree.
+        line: u64,
+    },
+
     /// A source file's AST nests deeper than
     /// [`crate::lang::shared::MAX_AST_DEPTH`]. Pathological or
     /// machine-generated nesting (e.g. thousands of nested collection
