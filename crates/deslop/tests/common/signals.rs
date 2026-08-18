@@ -13,8 +13,8 @@ use deslop_core::buckets::{SATURATING_TOKEN_FLOOR, STRUCTURAL_ONLY_MAX_SUPPORT};
 use serde_json::Value;
 
 use super::{
-    cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_texts, signal,
-    Result,
+    approx, cluster_bucket, cluster_file_set, cluster_size, clusters, field, occurrence_texts,
+    occurrences, signal, Result,
 };
 
 /// The agent-facing act-now line ([FUSED-THRESHOLD]): at or above this a
@@ -132,4 +132,103 @@ pub(crate) fn distinct_texts(scan_root: &Path, cluster: &Value) -> Result<BTreeS
 pub(crate) fn has_verbatim_pair(scan_root: &Path, cluster: &Value) -> Result<bool> {
     let texts = occurrence_texts(scan_root, cluster)?;
     Ok(distinct_texts(scan_root, cluster)?.len() < texts.len())
+}
+
+/// Asserts the full **proven-rename** contract ([FUSION-CONTENT-GATE],
+/// [TECH-PMATCH-BAKER], `[REPAIR-RENAME-ANCHOR-MASS]`) — the mirror of
+/// [`assert_structural_only_contract`], and the reason both live here.
+///
+/// The two contracts describe the same signal triple. A maximal Type-2
+/// rename and an anchor-poor scaffolding family both render
+/// `structural = 1.00, token_jaccard = 1.00`: the token LSH pass hashes
+/// the normalised representation the structural pass already collapsed,
+/// so neither deterministic axis can tell them apart. Only the measured
+/// content evidence separates them, and it is not on the report wire
+/// (#344) — so a suite asserting one verdict is really asserting *which
+/// side of the content gate* the fixture falls on. Stating both
+/// contracts once, here, is what stops two suites drifting into
+/// asserting opposite verdicts about the same evidence, which is exactly
+/// what the pre-`[REPAIR-RENAME-ANCHOR-MASS]` literal-anchor cliff
+/// produced.
+///
+/// Demotion is the failure mode this guards: a renamed copy of real
+/// logic that lands in `HONEST_SHAPE_ONLY_BUCKETS`, or below
+/// [`REUSE_FUSED`], is a false negative at the agent surface — the
+/// recipe tells the agent to write the copy anyway.
+pub(crate) fn assert_proven_rename_contract(
+    scan_root: &Path,
+    cluster: &Value,
+    label: &str,
+) -> Result<()> {
+    assert_rename_shape(cluster, label);
+    assert_rename_verdict(cluster, label);
+    assert_rename_is_not_a_copy(scan_root, cluster, label)
+}
+
+/// Shape half of the proven-rename contract: identifier normalisation
+/// makes a rename structurally identical, and the normalised k-gram
+/// stream is rename-invariant by construction.
+fn assert_rename_shape(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    assert!(
+        approx(signal(cluster, "structural"), 1.0),
+        "{label}: identifier normalisation makes a rename structurally \
+         identical — {dump}"
+    );
+    assert!(
+        approx(signal(cluster, "token_jaccard"), 1.0),
+        "{label}: the normalised k-gram stream is rename-invariant by \
+         construction — {dump}"
+    );
+}
+
+/// Verdict half: the bucket and the fused confidence a rename whose
+/// identifier mapping is proven must carry.
+fn assert_rename_verdict(cluster: &Value, label: &str) {
+    let dump = signal_dump(cluster);
+    assert!(
+        !HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
+        "{label}: a Type-2 rename of real logic is duplication, not \
+         shape-only evidence — demoting it is a false negative — {dump}"
+    );
+    assert_eq!(
+        cluster_bucket(cluster),
+        "nearly_identical",
+        "{label}: same shape, same logic, renamed identifiers is the \
+         textbook `nearly_identical` clone — {dump}"
+    );
+    let fused = signal(cluster, "fused");
+    assert!(
+        fused >= REUSE_FUSED,
+        "{label}: a renamed copy of real logic must stay at or above the \
+         reuse-bias line ({REUSE_FUSED}) — below it the agent recipe tells \
+         the agent to write the copy anyway — {dump}"
+    );
+    assert!(
+        fused < 1.0,
+        "{label}: only a byte-identical copy may saturate the confidence \
+         — {dump}"
+    );
+}
+
+/// Occurrence half: every occurrence must differ in raw bytes, or the
+/// promotion proves nothing about renames, and none may be hidden — a
+/// clone the report will not show is a false negative whatever its
+/// bucket says.
+fn assert_rename_is_not_a_copy(scan_root: &Path, cluster: &Value, label: &str) -> Result<()> {
+    let dump = signal_dump(cluster);
+    assert_eq!(
+        distinct_texts(scan_root, cluster)?.len(),
+        occurrences(cluster).len(),
+        "{label}: every occurrence must differ in raw bytes, or this is a \
+         Type-1 copy proving nothing about rename evidence — {dump}"
+    );
+    assert!(
+        occurrences(cluster)
+            .iter()
+            .all(|occurrence| occurrence.get("hidden") != Some(&Value::Bool(true))),
+        "{label}: a proven Type-2 clone may not have a hidden occurrence \
+         — {dump}"
+    );
+    Ok(())
 }

@@ -440,7 +440,9 @@ fn read_slice<'a>(cursor: &mut Cursor<&'a [u8]>, len: usize) -> io::Result<&'a [
     let bytes = (*cursor.get_ref())
         .get(start..end)
         .ok_or_else(|| invalid_data("cache record exceeds the bytes remaining"))?;
-    cursor.set_position(u64::try_from(end).unwrap_or(u64::MAX));
+    let position = u64::try_from(end)
+        .map_err(|_| invalid_data("cache cursor position exceeds the blob format"))?;
+    cursor.set_position(position);
     Ok(bytes)
 }
 

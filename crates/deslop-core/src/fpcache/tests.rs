@@ -7,7 +7,6 @@
 //! `crates/deslop/tests/cache_blob_integrity.rs`.
 
 use std::path::PathBuf;
-use std::time::Instant;
 
 use super::{
     blob::{
@@ -50,7 +49,14 @@ fn sample(file_id: FileId) -> CachedFile {
             node_count: 1,
         },
     ];
-    let signatures = vec![[1_u64; SIGNATURE_LEN], [2_u64; SIGNATURE_LEN]];
+    let signatures = vec![
+        std::array::from_fn(|index| u64::try_from(index).unwrap_or(u64::MAX)),
+        std::array::from_fn(|index| {
+            u64::try_from(index)
+                .unwrap_or(u64::MAX)
+                .saturating_add(10_000)
+        }),
+    ];
     CachedFile {
         tree,
         fingerprints,
@@ -95,14 +101,17 @@ fn assert_rejected(blob: &[u8], binding: &BlobBinding<'_>, file_id: FileId, labe
 // signatures positionally 1:1 with fingerprints.
 #[test]
 fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
-    let file_id = registered_file_id();
+    let mut registry = FileRegistry::new();
+    let stored_file_id = registry.register(PathBuf::from("stored.rs"));
+    let requested_file_id = registry.register(PathBuf::from("requested.rs"));
     let hash = bytes_hash(SOURCE);
     let binding = source_binding(&hash);
-    let original = sample(file_id);
-    let decoded = decode(&encode(&original, &binding), &binding, file_id)?;
+    let original = sample(stored_file_id);
+    let expected = sample(requested_file_id);
+    let decoded = decode(&encode(&original, &binding), &binding, requested_file_id)?;
     assert_eq!(
-        decoded.fingerprints, original.fingerprints,
-        "decoded fingerprints must match the encoded records exactly"
+        decoded.fingerprints, expected.fingerprints,
+        "decoded fingerprints must preserve their records and bind to the requested file"
     );
     assert_eq!(
         decoded.signatures, original.signatures,
@@ -118,14 +127,22 @@ fn round_trip_preserves_tree_fingerprints_and_signatures() -> io::Result<()> {
         "decoded tree root must keep its byte range"
     );
     assert_eq!(
+        decoded.tree.file_id, requested_file_id,
+        "decoded tree nodes must bind to the requested file"
+    );
+    assert_eq!(
         decoded.tree.children.len(),
         1,
         "decoded tree must keep its child structure"
     );
     assert_eq!(
-        decoded.tree.children.first().map(|child| child.kind),
-        Some("identifier"),
-        "decoded child must keep its normalised kind"
+        decoded
+            .tree
+            .children
+            .first()
+            .map(|child| (child.kind, child.file_id)),
+        Some(("identifier", requested_file_id)),
+        "decoded children must preserve their kind and bind to the requested file"
     );
     Ok(())
 }
@@ -293,6 +310,14 @@ fn corrupt_node_lengths_are_rejected_before_any_allocation() {
     child_bomb.extend_from_slice(&u32::MAX.to_le_bytes()); // child count
     let blob = blob_with_valid_digest(&child_bomb, &binding);
     assert_rejected(&blob, &binding, file_id, "child count bomb");
+
+    let mut invalid_kind = 1_u32.to_le_bytes().to_vec();
+    invalid_kind.push(0xFF);
+    invalid_kind.extend_from_slice(&0_u64.to_le_bytes());
+    invalid_kind.extend_from_slice(&12_u64.to_le_bytes());
+    invalid_kind.extend_from_slice(&0_u32.to_le_bytes());
+    let blob = blob_with_valid_digest(&invalid_kind, &binding);
+    assert_rejected(&blob, &binding, file_id, "invalid UTF-8 node kind");
 }
 
 // [PIPELINE-INCREMENTAL-INTEGRITY] A blob file past the size bound is
@@ -434,47 +459,5 @@ fn the_cache_serves_its_own_address_and_refuses_a_copied_one() -> io::Result<()>
         cache.get(other_source, file_id).is_none(),
         "a blob copied under another source's address must be refused"
     );
-    Ok(())
-}
-
-#[test]
-#[ignore = "manual fpcache decode benchmark"]
-fn benchmark_digest_verified_signature_decode() -> io::Result<()> {
-    const RECORDS: usize = 50_000;
-    const ROUNDS: u32 = 20;
-    let file_id = registered_file_id();
-    let hash = bytes_hash(SOURCE);
-    let binding = source_binding(&hash);
-    let mut cached = sample(file_id);
-    cached.fingerprints = (0..RECORDS)
-        .map(|index| Fingerprint {
-            hash: [u8::try_from(index % 251).unwrap_or_default(); 32],
-            file_id,
-            byte_range: ByteRange {
-                start: index,
-                end: index.saturating_add(1),
-            },
-            node_count: 1,
-        })
-        .collect();
-    cached.signatures = vec![[7_u64; SIGNATURE_LEN]; RECORDS];
-    let blob = encode(&cached, &binding);
-    let started = Instant::now();
-    for _ in 0..ROUNDS {
-        let decoded = std::hint::black_box(decode(&blob, &binding, file_id)?);
-        assert_eq!(decoded.signatures.len(), RECORDS);
-    }
-    let elapsed = started.elapsed();
-    let output =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/fpcache-bench/decode-ms.txt");
-    fs::write(
-        output,
-        format!(
-            "total_ms={:.3}\nper_round_ms={:.3}\nblob_bytes={}\nrecords={RECORDS}\n",
-            elapsed.as_secs_f64() * 1_000.0,
-            elapsed.as_secs_f64() * 1_000.0 / f64::from(ROUNDS),
-            blob.len(),
-        ),
-    )?;
     Ok(())
 }

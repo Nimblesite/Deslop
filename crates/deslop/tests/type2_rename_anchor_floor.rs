@@ -73,49 +73,12 @@ fn a_maximal_rename_with_few_literals_is_still_a_type2_clone() -> Result<()> {
         2,
         "the rename has exactly two occurrences — {dump}"
     );
-    assert_eq!(
-        distinct_texts(&root, cluster)?.len(),
-        2,
-        "the two occurrences must differ in raw bytes, or this is a Type-1 copy — {dump}"
-    );
-    assert!(
-        occurrences(cluster)
-            .iter()
-            .all(|occurrence| occurrence.get("hidden") != Some(&Value::Bool(true))),
-        "a proven Type-2 clone may not have a hidden occurrence — {dump}"
-    );
-
-    assert!(
-        approx(signal(cluster, "structural"), 1.0),
-        "identifier normalisation makes a rename structurally identical — {dump}"
-    );
-    assert!(
-        approx(signal(cluster, "token_jaccard"), 1.0),
-        "the normalised k-gram stream is rename-invariant by construction — {dump}"
-    );
-
-    assert!(
-        !HONEST_SHAPE_ONLY_BUCKETS.contains(&cluster_bucket(cluster)),
-        "a Type-2 rename of real logic is duplication, not shape-only evidence — \
-         demoting it is a false negative — {dump}"
-    );
-    assert_eq!(
-        cluster_bucket(cluster),
-        "nearly_identical",
-        "same shape, same logic, renamed identifiers is the textbook \
-         `nearly_identical` clone — {dump}"
-    );
-
-    let fused = signal(cluster, "fused");
-    assert!(
-        fused >= REUSE_FUSED,
-        "a renamed copy of real logic must stay at or above the reuse-bias line \
-         ({REUSE_FUSED}) — below it the agent recipe tells the agent to write the \
-         copy anyway — {dump}"
-    );
-    assert!(
-        fused < 1.0,
-        "only a byte-identical copy may saturate the confidence — {dump}"
-    );
-    Ok(())
+    // Every remaining assertion this suite was written to make — bytes
+    // differ, nothing hidden, saturating shape, an act-now bucket that is
+    // not shape-only, fused inside the reuse band — is the shared
+    // proven-rename contract. It is stated once in `common::signals` so
+    // the anchor-starved fixture here and the anchor-rich fixtures in
+    // `js_ts_clone_buckets.rs` are judged by literally the same code:
+    // scarce anchors weaken the proof, they do not change the contract.
+    assert_proven_rename_contract(&root, cluster, "type2-rename-few-literals")
 }

@@ -4,19 +4,28 @@
 //!
 //! These pin where the new languages land on the Type-1 / Type-2 / Type-3
 //! axis. A byte-identical pair must reach the actionable `identical`
-//! bucket. Renamed copies split on content evidence per
-//! [FUSION-CONTENT-GATE]: a rename that preserves enough positional literal
-//! anchors to prove its identifier mapping is promoted to the act-now
-//! `nearly_identical` bucket, while an anchor-poor rename carries no
-//! content proof in either direction and stays conservatively
-//! `structural_only` (#134). Near-miss edits surface either a
-//! content-supported `nearly_identical` cluster or a `structural_only`
-//! shared subtree.
+//! bucket. Renamed copies split on **measured content evidence** per
+//! [FUSION-CONTENT-GATE]: a rename whose identifier mapping is
+//! corroborated — Baker anchor mass, preserved literals plus explained
+//! identifier positions ([TECH-PMATCH-BAKER],
+//! `[REPAIR-RENAME-ANCHOR-MASS]`) — is promoted to the act-now
+//! `nearly_identical` bucket, while a family whose collapsed leaves
+//! genuinely disagree carries no such proof and stays conservatively
+//! `structural_only` (#134, the `js-classes` delegating-method family in
+//! `js_language_features.rs`).
+//!
+//! Anchor *scarcity* is not the discriminator and never was: the
+//! superseded four-literal cliff zeroed rename evidence outright and
+//! demoted these renamed-loop fixtures, which is a false negative by the
+//! contract `type2_rename_anchor_floor.rs` states. Every promoted case
+//! here is held to the shared `assert_proven_rename_contract`, so the two
+//! suites cannot drift back into asserting opposite verdicts about the
+//! same signal triple.
 
 use anyhow::Result;
 
 mod common;
-use crate::common::{signals::assert_structural_only_contract, *};
+use crate::common::{signals::assert_proven_rename_contract, *};
 
 #[test]
 fn javascript_byte_identical_pair_is_identical_bucket() -> Result<()> {
@@ -39,26 +48,39 @@ fn typescript_byte_identical_pair_is_identical_bucket() -> Result<()> {
 }
 
 #[test]
-fn javascript_renamed_loop_clone_routes_to_structural_only() -> Result<()> {
-    let report = run_report(&fixture("js-type2-loop"), 10)?;
-    // Same loop-with-guards routine, every identifier renamed. It is a real
-    // Type-2 clone (structural==1.0, cross-file) but, anchor-poor, it
-    // carries no content proof of the rename, so it lands in the demoted
-    // `structural_only` bucket — the conservative routing from #134.
+fn javascript_renamed_loop_clone_is_a_proven_rename() -> Result<()> {
+    // The same loop-with-guards routine on both sides, every identifier
+    // renamed (`lineItems`→`stockRows`, `taxRate`→`shrinkageRate`,
+    // `amount`→`value`, and eight more). Eleven substitutions corroborate
+    // each other across the pair and three literals survive in position,
+    // so the identifier mapping is proven and the pair is duplication a
+    // developer must act on — not shape-only evidence.
+    let root = fixture("js-type2-loop");
+    let report = run_report(&root, 10)?;
     let clone = expect_cluster_spanning(&report, &["inventory_gamma.js", "tax_alpha.js"])?;
-    assert_eq!(cluster_bucket(clone), "structural_only");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert_structural_only_contract(clone, "js-type2-loop");
+    assert_proven_rename_contract(&root, clone, "js-type2-loop")?;
+    assert_eq!(
+        cluster_size(clone),
+        2,
+        "the renamed loop has exactly two occurrences: {report:#}"
+    );
     Ok(())
 }
 
 #[test]
-fn typescript_renamed_loop_clone_routes_to_structural_only() -> Result<()> {
-    let report = run_report(&fixture("ts-type2-loop"), 12)?;
+fn typescript_renamed_loop_clone_is_a_proven_rename() -> Result<()> {
+    // The TypeScript side of the same rename, annotations included. The
+    // two grammars are separate but share one normalisation, so the
+    // verdict must not depend on which one parsed the clone.
+    let root = fixture("ts-type2-loop");
+    let report = run_report(&root, 12)?;
     let clone = expect_cluster_spanning(&report, &["inventory_gamma.ts", "tax_alpha.ts"])?;
-    assert_eq!(cluster_bucket(clone), "structural_only");
-    assert!(approx(signal(clone, "structural"), 1.0));
-    assert_structural_only_contract(clone, "ts-type2-loop");
+    assert_proven_rename_contract(&root, clone, "ts-type2-loop")?;
+    assert_eq!(
+        cluster_size(clone),
+        2,
+        "the renamed loop has exactly two occurrences: {report:#}"
+    );
     Ok(())
 }
 
@@ -80,11 +102,24 @@ fn javascript_renamed_map_reduce_arrow_is_nearly_identical() -> Result<()> {
 }
 
 #[test]
-fn javascript_near_miss_extra_guard_clusters_structural_only() -> Result<()> {
-    let report = run_report(&fixture("js-type3-guard"), 10)?;
+fn javascript_near_miss_extra_guard_is_a_proven_rename() -> Result<()> {
+    // A four-way rename (`records`→`entries`, `flagged`→`alerts`,
+    // `record`→`entry`, `level`→`available`) carrying one extra
+    // `continue` guard on one side — a Type-3 near miss on top of a
+    // Type-2 rename. Six property names survive the rename (`onHand`,
+    // `reserved`, `reorderPoint`, `sku`, `deficit`, `push`), so the
+    // mapping is corroborated and the extra guard costs confidence
+    // without costing the verdict.
+    let root = fixture("js-type3-guard");
+    let report = run_report(&root, 10)?;
     let clone = expect_cluster_spanning(&report, &["inventoryScan.js", "stockScan.js"])?;
-    assert_eq!(cluster_bucket(clone), "structural_only");
-    assert!(approx(signal(clone, "structural"), 1.0));
+    assert_proven_rename_contract(&root, clone, "js-type3-guard")?;
+    assert!(
+        clusters(&report)
+            .iter()
+            .all(|cluster| !cluster_file_set(cluster).contains("formatLabel.js")),
+        "the unrelated label formatter must never join the near-miss cluster: {report:#}"
+    );
     Ok(())
 }
 
