@@ -86,7 +86,7 @@ Once cost tracks change size, revisit the parse store on its own merits rather t
 
 - **Embedding/ANN reuse.** Approximate stage, different risk profile, bounded separately by [FUSION-EMBED-PROVIDER]. The embedding cache already handles the expensive part (inference).
 - **Any accuracy change.** If a phase makes a report better, that is a bug in the phase — the change belongs in its own test-first work stream with its own corpus measurement.
-- **Cross-run report diffing.** Persisting reports to answer "what is new since the base commit" is [gh #381](https://github.com/Nimblesite/Deslop/issues/381) and [gh #364](https://github.com/Nimblesite/Deslop/issues/364), and rides on `ReportDelta` and stable cluster ids, both of which already exist. Unrelated to making a run cheaper.
+- **Diff-scoped reporting.** "What is new in this change" is [gh #364](https://github.com/Nimblesite/Deslop/issues/364), designed in [diff-scoped-reporting-plan.md](diff-scoped-reporting-plan.md) — scoped by the change's unified diff, not by persisting prior reports. The GH-action cache step is [gh #381](https://github.com/Nimblesite/Deslop/issues/381). Both unrelated to making a run cheaper.
 
 ## Spec IDs
 

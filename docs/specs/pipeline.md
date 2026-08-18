@@ -122,6 +122,14 @@ An **incremental pass** is one that is given the set of files whose content chan
 
 **Corpus membership never comes from reuse.** As with the parse cache, every pass performs a fresh discovery walk. Files added or removed while nothing was watching are picked up regardless of what state was carried forward.
 
+### [PIPELINE-DIFF-INGEST] Unified-diff ingestion and verification
+
+> **Status: specified, not shipped.** Lands with gh #364 per [diff-scoped-reporting-plan.md](../plans/diff-scoped-reporting-plan.md).
+
+`--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) is consumed by a strict line-oriented parser — exact structural prefixes and integer parsing, never pattern matching; an unrecognised construct rejects the whole diff (exit `2`) rather than guessing at spans. Recognised grammar: `diff --git` headers, `---`/`+++` file targets with `a/`/`b/` prefixes and C-quoted paths, rename/copy/similarity and `Binary files` lines, `@@ -l[,n] +l[,n] @@` hunks, and ` `/`+`/`-`/`\` body lines. Only new-side **added** lines produce spans — context and deletions scope nothing, so a pure rename or a deletion-only hunk tags nothing. Spans are merged and sorted per file. Paths resolve against the working directory, then re-relativise to the scan root — the same form `ReportOccurrence.path` carries; diff files outside the corpus are ignored for tagging and counted on the `diff ingested` tracing event, since a repo-root diff legitimately touches files the scan never sees.
+
+**The diff must describe the scanned tree.** Every context and added line of every hunk must byte-match the scanned file at the claimed new-side line number (line terminator excluded). The first mismatch aborts with exit `2` naming the file and line: a stale diff would tag the wrong occurrences, and under `--only-changed` a mis-tag is a silent false negative in a merge gate.
+
 ### [PIPELINE-RANK-WORST-FIRST] Ranking: worst offenders first
 Before ranking, each cluster's occurrences are reduced to one member per **transitively overlapping run** per file. Fingerprinting emits one subtree per AST node, so a duplicated region yields a nest of overlapping windows over the same bytes; publishing more than one inflates the occurrence count, the cluster size, and the duplication percentage. Overlap is transitive, so the run's frontier is tracked separately from its representative: for `[0,100]`, `[90,110]`, `[105,200]` the bridging window is the narrowest and loses the width contest, and a sweep that tests the next window against the representative alone reports one region as two. The widest window of each run is the reported location; a cluster left with one location is not a duplicate and is dropped. Pinned by `crates/deslop-core/tests/cluster_overlap_collapse.rs`.
 
@@ -301,9 +309,21 @@ Top level:
 - `interpretation: String` (new in v2) — one-line synthesis computed from the signal combination ("Type-1 exact clone, safe to extract", "Type-3 near-miss, review before merging", "Low-information LSH-only match, treat as hint"). Derived, so rendering is deterministic.
 - `occurrences: Vec<ReportOccurrence>` — each with `path`, `start_byte`, `end_byte`, and `hidden: bool` (true when the occurrence matched a `report_hide` pattern per [EXCLUSION-CONFIG]).
 
-`--from-report <file.json>` skips analysis and re-renders the text + HTML views from a canonical JSON report. Keeps the rendering pipeline testable in isolation and makes re-formatting a cached report free.
+Default output paths, the format suppressors, and `--from-report` re-rendering are invocation behaviour, owned by [cli.md §OUTPUT-FORMAT-DERIVED](cli.md).
 
-The default invocation writes all three formats to disk (`.deslop/deslop-report.{json,txt,html}` under the scan root per [OUTPUT-DIR], or `<path>.{json,txt,html}` when `--output <path>` is given). `--nojson`, `--notext`, `--nohtml` suppress individual formats; at least one must remain enabled.
+#### [OUTPUT-SCHEMA-DIFF-TAGS] Diff-scope tags
+
+> **Status: specified, not shipped.** Lands with gh #364 per [diff-scoped-reporting-plan.md](../plans/diff-scoped-reporting-plan.md).
+
+Under `--diff` ([cli.md §CLI-ARG-DIFF](cli.md)) the report carries the diff verdicts; without it every field below is **absent**, never defaulted `false` — a run given no diff asserts nothing about one. Intersection is closed-interval over the 1-indexed `start_line`/`end_line` the occurrence already carries; one added line inside an occurrence tags it, because touching a clone counts as touching the clone. Cluster rollups ignore `hidden` occurrences, matching the [METRICS-REPO] projection.
+
+- `ReportOccurrence.in_diff: Option<bool>` — the occurrence's lines intersect an added span for its path.
+- `ReportCluster.intersects_diff: Option<bool>` — ≥ 1 non-hidden occurrence in diff.
+- `ReportCluster.is_newly_introduced: Option<bool>` — **all** non-hidden occurrences in diff.
+- `clusters_outside_diff: Option<usize>` (top level) — clusters `--only-changed` omitted from `clusters`.
+- `metrics.diff: Option<DiffMetrics>` — [METRICS-DIFF-SCOPE].
+
+Modelled in [live-ipc.td](../models/live-ipc.td), regenerated, never hand-written; live/LSP/MCP sessions carry `None` throughout. Text and HTML derive from the tags: occurrence badges (`[in diff]` / `[existing]`) through the one shared occurrence renderer, a CSS-only "only diff-affected" toggle in HTML, and the `--only-changed` stderr delta summary ([cli.md §CLI-ARG-ONLY-CHANGED](cli.md)).
 
 ### [OUTPUT-DIR] Workspace output directory
 Everything Deslop writes for a scanned workspace lands under a single `.deslop/` directory at the **scan root**, so a user has exactly one path to gitignore, inspect, or delete, and the three surfaces never disagree about where a workspace's artefacts live:
@@ -391,6 +411,14 @@ Deliberate non-metrics:
 
 The text renderer prints a one-line header: `repo: 12.4% duplicated (1 843 / 14 876 LOC, 27 clusters across 11 files)`. Once [METRICS-REPO-WEIGHTED] ships, the header carries the companion figure in the same line — `repo: 12.4% duplicated, 8.1% evidence-weighted (…)` — and never one without the other. HTML surfaces the same line in the report header and colours it by the fail-over threshold (green < threshold, red ≥ threshold, neutral when no threshold is set); when both gates are set, the breached one names itself. JSON is canonical; both renderers read from `metrics`.
 
+#### [METRICS-DIFF-SCOPE] Diff-scoped duplication percentage
+
+> **Status: specified, not shipped.** Lands with gh #364.
+
+Under `--diff`, `RepoMetrics` gains `diff: DiffMetrics { added_loc: u64, duplicated_added_loc: u64, duplication_percent: f64, threshold: ThresholdSummary }` — absent without the flag. Numerator: added lines covered by the same non-hidden, non-literal-family occurrence projection as `duplicated_loc`. Denominator: added lines in analysed files. Same clamp, rounding, and zero-denominator rules as the mechanical percentage. The mechanical fields are byte-identical with and without `--diff` — the [METRICS-REPO-WEIGHTED] invariant applies: no knob may ever change `duplication_percent`.
+
+Under `--only-changed` the [EXIT-CODES] mechanical gate reads `diff.duplication_percent` against the same threshold sources, and the report header names the scope (`threshold: 10.00% of added lines (ok)`). Without `--only-changed` the gate is untouched even when `--diff` is present — tagging alone must not move a CI verdict.
+
 ### [EXIT-CODES] CLI exit codes and fail-over threshold
 
 Deslop's default exit code is `0` on a successful analysis regardless of how much duplication exists — the tool is diagnostic, not opinionated. Opt-in CI gating is expressed through a single flag and a single config key.
@@ -400,7 +428,7 @@ Exit codes:
 - `0` — analysis succeeded; no enabled gate breached.
 - `1` — unexpected runtime error (parse failure, I/O error, cache corruption that couldn't be recovered). Pre-existing behaviour; unchanged by this spec.
 - `2` — invalid CLI invocation (bad flag, incompatible combination, missing required argument). Pre-existing behaviour; unchanged.
-- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` — or, once [METRICS-REPO-WEIGHTED] ships, `weighted_duplication_percent > weighted threshold` ([EXIT-CODES-WEIGHTED]) — after a successful analysis. The report is still written to disk in full so CI can surface the offenders.
+- `3` — **duplication threshold breached.** `metrics.duplication_percent > threshold` — or, once [METRICS-REPO-WEIGHTED] ships, `weighted_duplication_percent > weighted threshold` ([EXIT-CODES-WEIGHTED]) — after a successful analysis. Under `--only-changed` the mechanical gate reads the diff-scoped percentage instead ([METRICS-DIFF-SCOPE]). The report is still written to disk in full so CI can surface the offenders.
 
 Threshold sources, highest precedence first:
 
