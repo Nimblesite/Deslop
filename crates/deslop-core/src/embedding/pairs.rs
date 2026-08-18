@@ -14,12 +14,6 @@ use crate::fingerprint::Fingerprint;
 /// the pair stream is later unioned with the structural + LSH pairs;
 /// recall comes from the union, not from the ANN fan-out alone.
 const TOP_K: usize = 5;
-/// Maximum corpus size where exact pair scoring is cheaper and more
-/// reliable than ANN recall. Small fixture and edited-file runs can have
-/// many near-tied subtree embeddings; exact scoring prevents top-k
-/// neighbour truncation from dropping the only declaration-level Type-4
-/// pair.
-const EXACT_PAIR_LIMIT: usize = 256;
 /// Minimum cosine similarity required for a pair to count as an
 /// embedding candidate. The fused threshold in [`crate::pair`] still
 /// applies; this gate keeps noisy low-cosine neighbours out of the
@@ -55,13 +49,7 @@ pub fn embedding_pairs(
     if embeddings.len() != fingerprints.len() || embeddings.len() < 2 {
         return Vec::new();
     }
-    let ann_pairs = ann_embedding_pairs(embeddings);
-    if embeddings.len() <= EXACT_PAIR_LIMIT {
-        let mut pairs = ann_pairs;
-        pairs.extend(exact_embedding_pairs(embeddings));
-        return dedupe(pairs);
-    }
-    ann_pairs
+    ann_embedding_pairs(embeddings)
 }
 
 /// Retrieves top-k ANN neighbours for every embedding.
@@ -79,47 +67,6 @@ fn ann_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
         collect_neighbours(&map, &probe, query_index, &mut search, &mut pairs);
     }
     dedupe(pairs)
-}
-
-/// Scores every pair exactly for small corpora where ANN top-k recall is
-/// more fragile than the quadratic work is expensive.
-fn exact_embedding_pairs(embeddings: &[Vec<f32>]) -> Vec<EmbeddingPair> {
-    let norms: Vec<f64> = embeddings.iter().map(|vector| norm(vector)).collect();
-    let mut pairs = Vec::new();
-    for left in 0..embeddings.len() {
-        collect_exact_pairs_from(left, embeddings, &norms, &mut pairs);
-    }
-    pairs
-}
-
-/// Appends exact embedding candidates for one left endpoint.
-///
-/// `norms` is precomputed once per vector by the caller. Deriving them
-/// inside this loop would re-walk both endpoints for every pair, widening
-/// an already `O(N^2 * D)` pass to three passes over every component.
-fn collect_exact_pairs_from(
-    left: usize,
-    embeddings: &[Vec<f32>],
-    norms: &[f64],
-    pairs: &mut Vec<EmbeddingPair>,
-) {
-    let (Some(left_vector), Some(left_norm)) = (embeddings.get(left), norms.get(left)) else {
-        return;
-    };
-    for right in left.saturating_add(1)..embeddings.len() {
-        let (Some(right_vector), Some(right_norm)) = (embeddings.get(right), norms.get(right))
-        else {
-            continue;
-        };
-        let cosine = cosine_from_parts(left_vector, right_vector, left_norm * right_norm);
-        if admits_cosine(cosine) {
-            pairs.push(EmbeddingPair {
-                left,
-                right,
-                cosine,
-            });
-        }
-    }
 }
 
 /// Returns the cosine similarity of two raw vectors in `[0, 1]`.

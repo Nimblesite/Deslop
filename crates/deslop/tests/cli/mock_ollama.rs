@@ -15,6 +15,7 @@
 #![allow(dead_code)]
 
 use std::{
+    collections::BTreeSet,
     io::{ErrorKind, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{
@@ -318,23 +319,45 @@ fn context_length_error() -> String {
     )
 }
 
-/// Returns a 4-lane deterministic vector seeded by `text` length and
-/// first byte. Stable across runs so cache round-trip tests keep
-/// converging.
-///
-/// This measures length residues, not content: two constant lanes floor
-/// every pair near 1.0 and `sin` aliases over length, so a 67-byte
-/// parameter list and an 865-byte arithmetic chain score 0.99997 while
-/// the near-verbatim clone they were drawn from scores lower. Every
-/// `embedding_cos` assertion in the suite is calibrated against that
-/// noise. Replacing it with a content-similarity vector is GH #369 —
-/// the replacement works but makes the `O(N^2 * D)` exact pair pass
-/// intractable at the width it needs (GH #366).
+/// Width of the deterministic content-sensitive test embedding.
+pub(crate) const MOCK_EMBEDDING_DIMENSIONS: usize = 128;
+
+/// Byte width of one content shingle.
+const MOCK_SHINGLE_WIDTH: usize = 5;
+/// Stable FNV-1a offset basis for shingle hashing.
+const FNV_OFFSET_BASIS: u64 = 14_695_981_039_346_656_037;
+/// Stable FNV-1a prime for shingle hashing.
+const FNV_PRIME: u64 = 1_099_511_628_211;
+
+/// Returns a deterministic signed feature hash of the snippet's distinct
+/// five-byte shingles. Content overlap now drives cosine: renamed clones
+/// stay close while unrelated snippets of coincidentally similar length do
+/// not inherit the near-unit floor of the deleted four-lane vector (#369).
 fn embed_vector(text: &str) -> Vec<f32> {
-    let len_bits = u16::try_from(text.len() & 0xffff).unwrap_or(0);
-    let len = f32::from(len_bits);
-    let first = f32::from(text.bytes().next().unwrap_or(0));
-    vec![len.sin(), first.cos(), 0.5_f32, -0.5_f32]
+    let mut vector = vec![0.0_f32; MOCK_EMBEDDING_DIMENSIONS];
+    for shingle in distinct_shingles(text) {
+        let hash = shingle_hash(shingle);
+        let lane = usize::from(u8::try_from(hash & 0x7F).unwrap_or_default());
+        let sign = if hash & 0x80 == 0 { 1.0_f32 } else { -1.0_f32 };
+        vector[lane] += sign;
+    }
+    vector
+}
+
+/// Distinct byte shingles, with one whole-text feature for short inputs.
+fn distinct_shingles(text: &str) -> BTreeSet<&[u8]> {
+    let bytes = text.as_bytes();
+    if bytes.len() < MOCK_SHINGLE_WIDTH {
+        return std::iter::once(bytes).collect();
+    }
+    bytes.windows(MOCK_SHINGLE_WIDTH).collect()
+}
+
+/// Stable 64-bit FNV-1a hash of one shingle.
+fn shingle_hash(shingle: &[u8]) -> u64 {
+    shingle.iter().fold(FNV_OFFSET_BASIS, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(FNV_PRIME)
+    })
 }
 
 fn is_dimension_probe(body: &str) -> bool {

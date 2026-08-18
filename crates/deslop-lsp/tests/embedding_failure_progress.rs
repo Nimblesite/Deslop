@@ -29,13 +29,6 @@ const SET_MODEL: &str = "deslop/embeddingSetModel";
 const PROGRESS: &str = "deslop/embeddingProgress";
 
 #[test]
-#[ignore = "GH #370: hangs indefinitely — 14m41s locally before being killed, \
-            and it consumed the whole CI Test budget twice. The stall is in \
-            the unbounded `recv_response` read, upstream of this file's 20s \
-            REPORT_TIMEOUT, so the server appears never to emit a terminal \
-            progress frame on the rejection path. Pre-existing; every earlier \
-            CI run died at GH #369 before reaching this binary. Assertions \
-            are intact — run with `-- --ignored`."]
 fn rejected_embedding_refresh_reports_failure_and_preserves_last_good_report() -> Result<()> {
     let server = MockOllama::spawn_with(MockBehavior::RejectAllEmbeds)?;
     let workspace = common::copy_fixture("ts-mixed-band")?;

@@ -63,15 +63,16 @@ Not history — each is a property of the code as it stands today.
 
 # TODO
 
-## 1. Eight assertions are `#[ignore]`d — every one is a live accuracy defect
+## 1. Seven assertions are `#[ignore]`d — every one is a live accuracy defect
 
 Nothing is deleted or weakened: each carries an `#[ignore = "…"]` naming its issue and runs under
 `cargo test … -- --ignored`. This is the top of the list because **every embeddings-on assertion in the
 workspace is currently switched off**, which is why gap 3 above cannot be measured, let alone closed.
 Measured 18 Aug: `cargo test --workspace --all-targets --features deslop-core/live -- --skip ollama_
---skip corpus_` exits 0 across 170 test binaries with exactly these 8 ignored — the tree is otherwise
-green. Work them #370 first — its hang poisons any embeddings-on run with a quarter-hour stall — then
-#356, #369, #357, #358.
+--skip corpus_` exited 0 across 170 test binaries with exactly 8 ignored. #370 is now discharged, leaving
+7, and the assertion it unblocked is **deliberately red** against
+`[QUARANTINE-EMBED-REFRESH-COMPLETE]` — a sweep that stops there is reporting the quarantine, not a
+regression. Work order for the rest: #356, #369, #357, #358.
 
 - [ ] **[#369](https://github.com/Nimblesite/Deslop/issues/369)** — three ignores.
       `issue_343_sum_clamp_saturation::mid_band_cluster_confidence_never_exceeds_its_strongest_axis` renders
@@ -80,11 +81,16 @@ green. Work them #370 first — its hang poisons any embeddings-on run with a qu
       `pair_size_coherence::an_embedding_only_pair_does_not_join_occurrences_of_different_size` and
       `lsp_embedding_determinism::lsp_embedding_refresh_is_bounded_and_reproducible` fail on the same
       mechanism. The known fix has an O(N²·D) blowup — that is the part to solve.
-- [ ] **[#370](https://github.com/Nimblesite/Deslop/issues/370)** — `embedding_failure_progress` hangs
-      indefinitely (14m41s locally, two whole CI Test budgets). The stall is in the unbounded
-      `recv_response` read, upstream of the file's own 20s timeout: the server appears never to emit a
-      terminal progress frame on the rejection path. The fix is the protocol — a terminal frame on
-      every path, including rejection — never the test's timeout.
+- [x] **[#370](https://github.com/Nimblesite/Deslop/issues/370)** — hang fixed and its `#[ignore]`
+      removed. The stall was **not** a missing terminal frame. Measured with `sample(1)` against the wedged
+      server: the main thread sat in `Stderr::write_all` → `pthread_mutex_lock_wait`. The harness piped the
+      child's stderr and held the read end open without ever reading it, so the pipe buffer filled, the next
+      `tracing` event blocked its thread while holding the subscriber's stderr lock, and the `tower-lsp`
+      serve loop queued behind that lock and stopped answering. The rejection path hits it first because it
+      logs per failed subtree and per bisect retry. `common::StderrDrain` now reads the child's stderr to
+      EOF on a background thread; the binary went from 14m41s to 9.5s, and every LSP test in the tree loses
+      the same latent deadlock. **The unignored test then exposed a live false negative** — see
+      `[QUARANTINE-EMBED-REFRESH-COMPLETE]` below; it is red on purpose and stays red.
 - [ ] **[#356](https://github.com/Nimblesite/Deslop/issues/356)** — two ignores in
       `embedding_route_invariance`, the blast-radius pins for `[REPAIR-COSINE-MERGE]`. `csharp-type3`
       publishes two `structural_only` clusters at `structural 1.0` with embeddings off and **one**
@@ -255,6 +261,7 @@ reasoning lives in [`fusion.md`](../specs/fusion.md) and in each pinning test.
 | `[REPAIR-PY-DICT-ASSERT-DEPTH]` | The pytest dict-assert idiom was recognised at one AST depth only, so the module-wide view survived subsumption | `python_issue_107_chained_dict_assert.rs` |
 | `[REPAIR-DOC-TRUTH]` (#345) | Public docs still taught the deleted sum-and-clamp fusion | `[FUSION-STRATEGY-BOUNDED-MAX]` |
 | `[REPAIR-RENAME-ANCHOR-MASS]` (#405) | A four-literal cliff zeroed rename evidence below it, rendering a maximal one-literal Type-2 clone at `fused = 0.0588`; replaced by Baker corroborated anchor mass (`[TECH-PMATCH-BAKER]`), elected over the substituted pairs alone so a homonym byte-string cannot make one role veto the other | `type2_rename_anchor_floor.rs`, the `rename_lean` scenarios in `fused_golden_bands.rs`, `js_language_features.rs`, `js_ts_clone_buckets.rs` |
+| `[QUARANTINE-EMBED-REFRESH-COMPLETE]` (#370) | 🛑 **Live quarantine — code replaced by `panic!`, not repaired.** `live::api::commit_background_refresh` swapped a refreshed report over the last good one and called `job.report_complete()` without ever reading `report.embedding_provenance` — it logged that provenance in the same block that declared success. A refresh in which the provider rejected *every* subtree (measured: `indexed 0 / attempted 851 / failed 851`) was committed and announced `phase = "complete", done = 851`. Every clone needing the semantic axis silently vanishes from a report claiming that axis ran. The one-shot CLI is not implicated — `run_embedding_pass` records the truth and `ollama_failures.rs` holds it | `deslop-lsp/tests/embedding_failure_progress.rs` (red, unignored) |
 | `[REPAIR-CONTENT-FRONTIER]` | Collapsed *non-leaf* nodes were emitted alongside the collapsed descendants they span, so an interpolated string re-tested the same bytes as a whole-node literal and manufactured an unpreserved literal at every interpolation a rename touched | `js_language_features.rs` (template literals), `fused_golden_invariants.rs` |
 
 The branch regression audit (RA-01…RA-09, REG-01…REG-11) is fully discharged: RA-06/#393 closed, RA-07/#394

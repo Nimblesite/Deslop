@@ -102,7 +102,11 @@ fn mid_band_cluster_confidence_never_exceeds_its_strongest_axis() -> Result<()> 
         "both seeded ledgers must be read"
     );
     assert_eq!(cluster_count(&report), 1, "exactly one visible cluster");
-    assert_eq!(clusters_hidden(&report), 0, "nothing routed to hidden");
+    assert_eq!(
+        clusters_hidden(&report),
+        0,
+        "nothing routed to hidden: {report:#}"
+    );
     let cluster = expect_cluster_spanning(&report, &["ledger_a.ts", "ledger_c.ts"])?;
     assert_eq!(cluster_bucket(cluster), "same_behavior", "routing bucket");
     assert_eq!(

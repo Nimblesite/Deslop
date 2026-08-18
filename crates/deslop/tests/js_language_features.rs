@@ -6,11 +6,12 @@
 //! optional chaining, destructuring, and regex literals — proving the
 //! feature parses through `tree-sitter-javascript` and that identifier and
 //! literal normalisation keeps the clone detectable across the rename. The
-//! bucket asserted for each follows [FUSION-CONTENT-GATE]: a rename that
-//! preserves enough literal anchors to prove its identifier mapping (regex,
-//! destructuring) reaches the act-now `nearly_identical` bucket; anchor-poor
-//! shapes carry no content proof in either direction and stay honestly
-//! `structural_only` (#134).
+//! bucket asserted for each follows [FUSION-CONTENT-GATE]: measured
+//! content evidence decides. A rename whose surviving content corroborates
+//! its identifier mapping (regex, destructuring) reaches the act-now
+//! `nearly_identical` bucket; a family whose content disagrees at nearly
+//! every collapsed position (`js-classes` — every literal differs) is
+//! refused by the gate and stays honestly `structural_only` (#134).
 
 use anyhow::Result;
 
@@ -78,8 +79,9 @@ fn javascript_optional_chaining_clone_is_detected() -> Result<()> {
     // Anchor-rich: `3000`, `5` and "default" are preserved, and so is every
     // accessed property name (`network`, `timeout`, `retries`, `max`,
     // `meta`, `name`, `trim`) — only the bound locals are renamed. Pooled
-    // content agreement therefore vouches for the pair even though the
-    // literal count alone sits under the rename-anchor floor.
+    // content agreement therefore vouches for the pair; no literal-count
+    // threshold is involved ([REPAIR-RENAME-ANCHOR-MASS] deleted the
+    // anchor floor).
     assert_bucketed_clone(
         "js-optional-chaining",
         8,

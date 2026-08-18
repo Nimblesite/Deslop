@@ -333,6 +333,7 @@ async fn commit_background_refresh(
     job: EmbeddingRefreshJob,
     report: Report,
 ) {
+    reject_embeddingless_refresh(&report);
     let committed = {
         let mut guard = inner.lock().await;
         guard.commit_embedding_refresh(&job, report)
@@ -349,6 +350,65 @@ async fn commit_background_refresh(
             "embedding refresh committed",
         );
     }
+}
+
+/// 🛑 ACCURACY QUARANTINE (GH #370). Do not repair this without the test.
+///
+/// **What the deleted code did.** [`commit_background_refresh`] swapped
+/// the refreshed report over the last good one and then called
+/// `job.report_complete()` — announcing `phase = "complete", done = total`
+/// — without ever reading `report.embedding_provenance`. It went as far as
+/// *logging* that provenance in the same block that declared success, so a
+/// refresh in which the provider rejected every single subtree
+/// (`indexed_subtrees = 0`, `failed_subtrees = attempted`) was committed
+/// and announced as a completed embedding pass.
+///
+/// **Why it is deleted.** The terminal phase was derived from "the
+/// pipeline returned a report" instead of "the pass produced embeddings".
+/// A user selects a model, every embed request is rejected — wrong model,
+/// exhausted context, misconfigured server — and the tool reports that the
+/// semantic pass completed while committing an embeddings-off snapshot
+/// over the last good report. Every clone that needed the semantic axis
+/// silently disappears from a report that claims that axis ran. The user
+/// has no surface on which to discover it: a false negative by
+/// construction, which is exactly the outcome
+/// [FUSION-SIGNALS-THREE-LAYER] forbids and which the one measure —
+/// every real duplicate is reported — rules out.
+///
+/// **What pins it.**
+/// `deslop-lsp/tests/embedding_failure_progress.rs::rejected_embedding_refresh_reports_failure_and_preserves_last_good_report`
+/// drives the real binary against a provider that rejects every embed and
+/// asserts `phase = "failed"`, `done = 0`, a non-empty explanatory
+/// message, and a byte-identical previous report. It failed
+/// `left: "complete", right: "failed"` the moment the GH #370 stderr
+/// deadlock stopped hiding it, with `done: 851, total: 851` — all 851
+/// counted as done, all 851 rejected.
+///
+/// The one-shot CLI path is *not* implicated: `run_embedding_pass` records
+/// the truth (`attempted 851 / indexed 0 / failed 851`) and the CLI renders
+/// it, which `deslop/tests/ollama_failures.rs::mock_provider_rejected_subtrees_are_reported`
+/// holds. Only this live-refresh announcement laundered it into success.
+#[allow(clippy::panic)]
+fn reject_embeddingless_refresh(report: &Report) {
+    let Some(provenance) = report.embedding_provenance.as_ref() else {
+        return;
+    };
+    if provenance.indexed_subtrees > 0 || provenance.failed_subtrees == 0 {
+        return;
+    }
+    panic!(
+        "GH #370 accuracy quarantine: an embedding refresh that indexed 0 of \
+         {attempted} subtrees ({failed} rejected by {provider}/{model}) was \
+         about to be committed over the last good report and announced as \
+         `complete`. Announcing a refresh that produced no embeddings as a \
+         success hides every clone the semantic axis would have found. Pinned \
+         by embedding_failure_progress::\
+         rejected_embedding_refresh_reports_failure_and_preserves_last_good_report",
+        attempted = provenance.attempted_subtrees,
+        failed = provenance.failed_subtrees,
+        provider = provenance.provider_id,
+        model = provenance.model_id,
+    );
 }
 
 /// Emits progress and logs for a failed background refresh.
