@@ -36,20 +36,19 @@ do not weaken it without moving that suite with it.
 | Content evidence tests each byte position once through the collapsed frontier | `tokens::collapsed_leaves`, the template-literal and optional-chaining cases in `js_language_features.rs` |
 | Every rendered component stays in `[0,1]`; only byte-proven duplication saturates | `fused_golden_invariants.rs`, swept over 21 corpora |
 
-## The two fused gaps
+## The remaining fused gap
 
-1. **Destructive cross-cluster subsumption runs before content measurement.**
-   `build_ranked_fused_clusters` materialises clusters with
-   `ContentEvidence::unmeasured()`, sorts them by raw geometry, and calls
-   `collapse_cross_cluster_overlap`. Only the survivors reach `attach_content_evidence` in
-   [`session/render.rs`](../../crates/deslop-core/src/pipeline/session/render.rs). The final report does
-   reweight and sort with content-gated confidence, but it cannot recover a stronger view already deleted
-   by subsumption.
-2. **#344 is only partly in front of readers.** `ReportSignals` now carries `agreement`,
-   `rename_consistency` and `literal_fraction`; `content_gated_signals` populates them, and the HTML,
-   Markdown and text renderers expose them. The VSIX signal strip/help bubble, LSP diagnostics and
-   refactor preconditions still cannot show or consume the complete confidence explanation. Code lenses
-   expose raw axes but not fused confidence or content evidence.
+**Destructive cross-cluster subsumption runs before content measurement.**
+`build_ranked_fused_clusters` materialises clusters with
+`ContentEvidence::unmeasured()`, sorts them by raw geometry, and calls
+`collapse_cross_cluster_overlap`. Only the survivors reach `attach_content_evidence` in
+[`session/render.rs`](../../crates/deslop-core/src/pipeline/session/render.rs). The final report does
+reweight and sort with content-gated confidence, but it cannot recover a stronger view already deleted
+by subsumption.
+
+The #344 reader gap is closed. Every decision surface — HTML, Markdown, CLI text, the VSIX cluster panel,
+LSP diagnostics, code lenses, and the refactor preconditions — now shows or consumes the same seven-field
+confidence explanation, through one renderer per language runtime. Section 2 records what each got.
 
 ---
 
@@ -84,9 +83,10 @@ meaning as well as their cost.
 
 ## 2. Finish #344 — one confidence explanation on every decision surface
 
-Already present: generated wire fields, core population, and HTML/Markdown/text rendering — the last three
-through one shared [`render/signals.rs`](../../crates/deslop-core/src/render/signals.rs), so no surface
-restates the field list and they cannot drift.
+Every surface is landed. Two renderers hold the whole field list — one per language runtime:
+[`render/signals.rs`](../../crates/deslop-core/src/render/signals.rs) for the CLI, Markdown, HTML and LSP
+surfaces, and [`src/types/signals.ts`](../../clients/vscode/src/types/signals.ts) for the VS Code ones. No
+surface restates the fields, so they cannot drift.
 
 Putting the evidence on the wire also paid for itself in the test vocabulary. `assert_structural_only_contract`
 (`crates/deslop/tests/common/signals.rs`) previously stood in a single blanket bound —
@@ -99,11 +99,30 @@ its own entry condition against the measured `agreement` / `rename_consistency`,
 assertive: the content-gated branch now proves the gate actually refused. Mutation-verified — disabling that
 branch reddens `js-classes` (support 0.18) and `js-async` (support 0.29).
 
-- [ ] Render `agreement`, `rename_consistency` and `literal_fraction` in the VSIX `SignalStrip` and
-      `HelpBubble`.
-- [ ] Carry fused confidence plus the three content fields through LSP diagnostics and code lenses.
-- [ ] Make refactor preconditions consume the same measured confidence explanation rather than only a
-      bucket plus byte proof.
+- [x] **VSIX `SignalStrip` and `HelpBubble` render all seven fields.** The four confidence axes, then a
+      helped `CONTENT EVIDENCE` heading over `agreement` / `rename` / `literal`, then one plain-English
+      reading of the shape score against that evidence — grounded only in the numbers already on screen,
+      never re-deriving the engine's bucket. `signal-evidence.unit.test.ts` asserts the exact rendered
+      sentence for four families and then parses both components with the TypeScript AST to prove neither
+      reaches into a signal field itself, which is what a second formatter would look like. Nine tests, and
+      the spec caught up: [webview-runtime.md §VSIX-WEBVIEW](../specs/webview-runtime.md) still said "four
+      tiny bars".
+- [x] **LSP diagnostics and code lenses carry the whole explanation.** Both now end in
+      `render::signals::plain_explanation` — all seven fields, markup-free, one rendering shared with the
+      report, because a client renders a diagnostic message and a lens title verbatim and a Markdown code
+      span would show as a literal backtick. Pinned black-box by `editor_non_interference.rs`, which spells
+      the expected string out itself instead of borrowing the renderer, so a surface that quietly drops the
+      fused score or a content field fails the test rather than agreeing with itself. Six tests green;
+      `lsp.md` [LSP-DIAGNOSTICS] / [LSP-CODE-LENS] say the same.
+- [x] **Refactor preconditions consume the measured evidence, not just the bucket.**
+      `preconditions::content_refusal` refuses any cluster whose shape saturates while
+      `max(agreement, rename_consistency)` sits below the content floor, and quotes the shared explanation as
+      its reason, so a user comparing an LSP refusal against the report reads the same numbers said the same
+      way. It only ever refuses *more*: two exemptions stand where stronger proof already does — `Identical`,
+      awarded on raw-source byte equality, and the anchor-free row-4 near-miss, whose members do not align
+      position for position so neither content population can evaluate them. Pinned in both directions by
+      `refactor_content_gate.rs` (6 tests) — `no_genuine_clone_fixture_is_convicted_by_the_content_gate` is
+      the false-negative half.
 - [x] **7 of the 17 restored** (`a3fe320be^` content): `js-generators`, `js-structural-control`,
       `js-tagged-templates`, `jsx-tsx-components`, `ts-generics`, `tsx-small`, `typescript-small`. All 36
       tests across the six suites that use them stay green, so this is pure strengthening: they now prove

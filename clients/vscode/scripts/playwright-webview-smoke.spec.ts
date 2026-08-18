@@ -273,6 +273,7 @@ const sampleReport = {
     model_version: "smoke",
     dimensions: 768,
     attempted_subtrees: 12,
+    succeeded_subtrees: 12,
     indexed_subtrees: 12,
     failed_subtrees: 0,
   },
